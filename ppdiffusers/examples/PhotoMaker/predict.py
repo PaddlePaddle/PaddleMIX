@@ -8,10 +8,9 @@ from ppdiffusers import EulerDiscreteScheduler
 from photomaker import PhotoMakerStableDiffusionXLPipeline
 from aistudio_sdk.hub import download
 
-base_model_path = 'SG161222/RealVisXL_V3.0'
-photomaker_ckpt = download(repo_id="168825/PhotoMaker", filename="photomaker-v1.pdparams")
-photomaker_path = photomaker_ckpt["path"]
-photomaker_model = paddle.load(photomaker_path)
+base_model_path = "SG161222/RealVisXL_V3.0"
+photomaker_path = "TencentARC/PhotoMaker"
+photomaker_ckpt = "photomaker-v1.bin"
 
 ### Load base model
 pipe = PhotoMakerStableDiffusionXLPipeline.from_pretrained(
@@ -24,9 +23,11 @@ pipe = PhotoMakerStableDiffusionXLPipeline.from_pretrained(
 
 ### Load PhotoMaker checkpoint
 pipe.load_photomaker_adapter(
-    photomaker_model,
+    photomaker_path,
     subfolder="",
-    weight_name=os.path.basename(photomaker_path),
+    weight_name=os.path.basename(photomaker_ckpt),
+    from_hf_hub=True,
+    from_diffusers=True,
     trigger_word="img"  # define the trigger word
 )
 

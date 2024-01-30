@@ -47,15 +47,7 @@ cd /PaddleMIX/ppdiffusers/examples/PhotoMaker/
 
 本项目需要在GPU硬件平台上运行，需要显存 ≥12GB（推荐16GB及以上），如果本地机器不符合要求，建议前往 [AI Studio](https://aistudio.baidu.com/index) 运行。
 
-## 4. 下载模型
-
-```python
-from aistudio_sdk.hub import download
-
-photomaker_ckpt = download(repo_id="168825/PhotoMaker", filename="photomaker-v1.pdparams")
-```
-
-## 5. 模型推理
+## 4. 模型推理
 
 - 加载模型
 
@@ -68,10 +60,11 @@ import paddle
 from ppdiffusers.utils import load_image
 from ppdiffusers import EulerDiscreteScheduler
 from photomaker import PhotoMakerStableDiffusionXLPipeline
+from aistudio_sdk.hub import download
 
-base_model_path = 'SG161222/RealVisXL_V3.0'
-photomaker_path = photomaker_ckpt["path"]
-photomaker_model = paddle.load(photomaker_path)
+base_model_path = "SG161222/RealVisXL_V3.0"
+photomaker_path = "TencentARC/PhotoMaker"
+photomaker_ckpt = "photomaker-v1.bin"
 
 ### Load base model
 pipe = PhotoMakerStableDiffusionXLPipeline.from_pretrained(
@@ -84,9 +77,11 @@ pipe = PhotoMakerStableDiffusionXLPipeline.from_pretrained(
 
 ### Load PhotoMaker checkpoint
 pipe.load_photomaker_adapter(
-    photomaker_model,
+    photomaker_path,
     subfolder="",
-    weight_name=os.path.basename(photomaker_path),
+    weight_name=os.path.basename(photomaker_ckpt),
+    from_hf_hub=True,
+    from_diffusers=True,
     trigger_word="img"  # define the trigger word
 )
 

@@ -1,17 +1,35 @@
 import paddle
 from typing import Any, Callable, Dict, List, Optional, Union, Tuple
 import PIL
+from safetensors import safe_open
 from ppdiffusers import StableDiffusionXLPipeline
 from ppdiffusers.pipelines.stable_diffusion_xl import StableDiffusionXLPipelineOutput
-from ppdiffusers.transformers.clip import CLIPImageProcessor
+from ppdiffusers.transformers.clip import CLIPImageProcessor, CLIPVisionModelWithProjection
+from ppdiffusers.utils import (
+    DIFFUSERS_CACHE,
+    FROM_AISTUDIO,
+    FROM_DIFFUSERS,
+    FROM_HF_HUB,
+    HF_HUB_OFFLINE,
+    PPDIFFUSERS_CACHE,
+    _get_model_file,
+    logging,
+    torch_load
+)
+from ppdiffusers.utils.load_utils import convert_to_paddle
+from ppdiffusers.models.modeling_utils import faster_set_state_dict
+from ppdiffusers.models.modeling_pytorch_paddle_utils import convert_pytorch_state_dict_to_paddle
 
 from . import PhotoMakerIDEncoder
 from . import rescale_noise_cfg
+
+logger = logging.get_logger(__name__)
 
 device = paddle.device.get_device()
 
 PipelineImageInput = Union[PIL.Image.Image, paddle.Tensor,
                            List[PIL.Image.Image], List[paddle.Tensor]]
+
 
 class PhotoMakerStableDiffusionXLPipeline(StableDiffusionXLPipeline):
 
@@ -33,43 +51,145 @@ class PhotoMakerStableDiffusionXLPipeline(StableDiffusionXLPipeline):
                       the Hub.
                     - A path to a *directory* (for example `./my_model_directory`) containing the model weights saved
                       with [`ModelMixin.save_pretrained`].
-                    - A paddle state dict.
+                    - A [torch state
+                      dict](https://pytorch.org/tutorials/beginner/saving_loading_models.html#what-is-a-state-dict).
 
-            weight_name (`str`):
-                The weight name NOT the path to the weight.
-
-            subfolder (`str`, defaults to `""`):
+            cache_dir (`Union[str, os.PathLike]`, *optional*):
+                Path to a directory where a downloaded pretrained model configuration is cached if the standard cache
+                is not used.
+            force_download (`bool`, *optional*, defaults to `False`):
+                Whether or not to force the (re-)download of the model weights and configuration files, overriding the
+                cached versions if they exist.
+            resume_download (`bool`, *optional*, defaults to `False`):
+                Whether or not to resume downloading the model weights and configuration files. If set to `False`, any
+                incompletely downloaded files are deleted.
+            proxies (`Dict[str, str]`, *optional*):
+                A dictionary of proxy servers to use by protocol or endpoint, for example, `{'http': 'foo.bar:3128',
+                'http://hostname': 'foo.bar:4012'}`. The proxies are used on each request.
+            local_files_only (`bool`, *optional*, defaults to `False`):
+                Whether to only load local model weights and configuration files or not. If set to `True`, the model
+                won't be downloaded from the Hub.
+            use_auth_token (`str` or *bool*, *optional*):
+                The token to use as HTTP bearer authorization for remote files. If `True`, the token generated from
+                `diffusers-cli login` (stored in `~/.huggingface`) is used.
+            revision (`str`, *optional*, defaults to `"main"`):
+                The specific model version to use. It can be a branch name, a tag name, a commit id, or any identifier
+                allowed by Git.
+            subfolder (`str`, *optional*, defaults to `""`):
                 The subfolder location of a model file within a larger model repository on the Hub or locally.
-
             trigger_word (`str`, *optional*, defaults to `"img"`):
                 The trigger word is used to identify the position of class word in the text prompt, 
                 and it is recommended not to set it as a common word. 
                 This trigger word must be placed after the class word when used, otherwise, it will affect the performance of the personalized generation.           
         """
 
+        from_hf_hub = kwargs.pop("from_hf_hub", FROM_HF_HUB)
+        from_aistudio = kwargs.pop("from_aistudio", FROM_AISTUDIO)
+        cache_dir = kwargs.pop("cache_dir", None)
+        if cache_dir is None:
+            if from_aistudio:
+                cache_dir = None
+            elif from_hf_hub:
+                cache_dir = DIFFUSERS_CACHE
+            else:
+                cache_dir = PPDIFFUSERS_CACHE
+        from_diffusers = kwargs.pop("from_diffusers", FROM_DIFFUSERS)
+        force_download = kwargs.pop("force_download", False)
+        resume_download = kwargs.pop("resume_download", False)
+        proxies = kwargs.pop("proxies", None)
+        local_files_only = kwargs.pop("local_files_only", HF_HUB_OFFLINE)
+        use_auth_token = kwargs.pop("use_auth_token", None)
+        revision = kwargs.pop("revision", None)
+        if subfolder is None:
+            subfolder = ""
+        user_agent = {
+            "file_type": "attn_procs_weights",
+            "framework": "pytorch" if from_diffusers else "paddle",
+        }
         if not isinstance(pretrained_model_name_or_path_or_dict, dict):
-            state_dict = paddle.load(pretrained_model_name_or_path_or_dict)
+            model_file = _get_model_file(
+                pretrained_model_name_or_path_or_dict,
+                weights_name=weight_name,
+                cache_dir=cache_dir,
+                force_download=force_download,
+                resume_download=resume_download,
+                proxies=proxies,
+                local_files_only=local_files_only,
+                use_auth_token=use_auth_token,
+                revision=revision,
+                subfolder=subfolder,
+                user_agent=user_agent,
+                from_hf_hub=from_hf_hub,
+                from_aistudio=from_aistudio,
+            )
+            if weight_name.endswith(".safetensors"):
+                state_dict = {"id_encoder": {}, "lora_weights": {}}
+                with safe_open(model_file, framework="np") as f:
+                    metadata = f.metadata()
+                    if metadata is None:
+                        metadata = {}
+                    if metadata.get("format", "pt") not in ["pt", "pd", "np"]:
+                        raise OSError(
+                            f"The safetensors archive passed at {model_file} does not contain the valid metadata. Make sure "
+                            "you save your model with the `save_pretrained` method."
+                        )
+                    data_format = metadata.get("format", "pt")
+                    if data_format == "pt" and not from_diffusers:
+                        logger.warning(
+                            "Detect the weight is in diffusers format, but currently, `from_diffusers` is set to `False`. To proceed, we will change the value of `from_diffusers` to `True`!"
+                        )
+                        from_diffusers = True
+                    for key in f.keys():
+                        if key.startswith("id_encoder."):
+                            state_dict["id_encoder"][key.replace(
+                                "id_encoder.", "")] = f.get_tensor(key)
+                        elif key.startswith("lora_weights."):
+                            state_dict["lora_weights"][key.replace(
+                                "lora_weights.", "")] = f.get_tensor(key)
+            else:
+                state_dict = torch_load(model_file)
+                state_dict["id_encoder"] = convert_to_paddle(
+                    state_dict["id_encoder"])
+                state_dict["lora_weights"] = convert_to_paddle(
+                    state_dict["lora_weights"])
+                if not from_diffusers:
+                    logger.warning(
+                        "Detect the weight is in diffusers format, but currently, `from_diffusers` is set to `False`. To proceed, we will change the value of `from_diffusers` to `True`!"
+                    )
+                    from_diffusers = True
         else:
             state_dict = pretrained_model_name_or_path_or_dict
 
         keys = list(state_dict.keys())
-        if keys != ["id_encoder", "lora_weights"]:
+        if sorted(keys) != ["id_encoder", "lora_weights"]:
             raise ValueError(
                 "Required keys are (`id_encoder` and `lora_weights`) missing from the state dict."
             )
-        self.trigger_word = trigger_word
 
-
-        id_encoder = PhotoMakerIDEncoder()
-        id_encoder.set_state_dict(state_dict=state_dict["id_encoder"],
-                                  use_structured_name=True)
-
-        self.id_encoder = id_encoder.to(dtype=self.unet.dtype)
+        if not isinstance(pretrained_model_name_or_path_or_dict, dict):
+            logger.info(
+                f"loading id_encoder from {pretrained_model_name_or_path_or_dict}"
+            )
+            
+            with paddle.dtype_guard(self.dtype):
+                id_encoder = PhotoMakerIDEncoder().to(device)
+            
+            convert_pytorch_state_dict_to_paddle(id_encoder, state_dict["id_encoder"])
+            faster_set_state_dict(id_encoder, state_dict["id_encoder"])
+            self.id_encoder = id_encoder
+        else:
+            raise ValueError(
+                "`id_encoder` cannot be None when using Photomaker Adapters.")
 
         self.id_image_processor = CLIPImageProcessor()
 
+        # load adapter into unet
 
-        self.load_lora_weights(state_dict["lora_weights"], adapter_name="photomaker", from_diffusers=True)
+        self.load_lora_weights(state_dict["lora_weights"],
+                               adapter_name="photomaker",
+                               from_diffusers=True)
+
+        self.trigger_word = trigger_word
 
         if self.tokenizer is not None:
             self.tokenizer.add_tokens([self.trigger_word], special_tokens=True)
@@ -313,13 +433,17 @@ class PhotoMakerStableDiffusionXLPipeline(StableDiffusionXLPipeline):
         # release graphics memory
         self.id_encoder.to("cpu")
         paddle.device.cuda.empty_cache()
-        
-        prompt_embeds = prompt_embeds.cast(dtype=self.id_encoder.dtype)
-        prompt_embeds = prompt_embeds.tile(repeat_times=[1, num_images_per_prompt, 1])
 
-        prompt_embeds = prompt_embeds.reshape([bs_embed * num_images_per_prompt, seq_len, -1])
-        pooled_prompt_embeds = pooled_prompt_embeds.cast(dtype=self.id_encoder.dtype)
-        pooled_prompt_embeds = pooled_prompt_embeds.tile(repeat_times=[1, num_images_per_prompt]).reshape(
+        prompt_embeds = prompt_embeds.cast(dtype=self.id_encoder.dtype)
+        prompt_embeds = prompt_embeds.tile(
+            repeat_times=[1, num_images_per_prompt, 1])
+
+        prompt_embeds = prompt_embeds.reshape(
+            [bs_embed * num_images_per_prompt, seq_len, -1])
+        pooled_prompt_embeds = pooled_prompt_embeds.cast(
+            dtype=self.id_encoder.dtype)
+        pooled_prompt_embeds = pooled_prompt_embeds.tile(
+            repeat_times=[1, num_images_per_prompt]).reshape(
                 [bs_embed * num_images_per_prompt, -1])
 
         self.scheduler.set_timesteps(num_inference_steps)
@@ -341,7 +465,7 @@ class PhotoMakerStableDiffusionXLPipeline(StableDiffusionXLPipeline):
             text_encoder_projection_dim = int(pooled_prompt_embeds.shape[-1])
         else:
             text_encoder_projection_dim = self.text_encoder_2.config.projection_dim
-        
+
         add_time_ids = self._get_add_time_ids(
             original_size,
             crops_coords_top_left,
@@ -350,16 +474,17 @@ class PhotoMakerStableDiffusionXLPipeline(StableDiffusionXLPipeline):
             text_encoder_projection_dim=text_encoder_projection_dim,
         )
         add_time_ids = paddle.concat(x=[add_time_ids, add_time_ids], axis=0)
-        add_time_ids = add_time_ids.tile(repeat_times=[batch_size * num_images_per_prompt,1])
+        add_time_ids = add_time_ids.tile(
+            repeat_times=[batch_size * num_images_per_prompt, 1])
 
         # release graphics memory
         self.text_encoder.to("cpu")
         self.text_encoder_2.to("cpu")
         paddle.device.cuda.empty_cache()
-        
+
         num_warmup_steps = len(
             timesteps) - num_inference_steps * self.scheduler.order
-        
+
         self.unet.to(device)
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
@@ -373,17 +498,20 @@ class PhotoMakerStableDiffusionXLPipeline(StableDiffusionXLPipeline):
                         x=[negative_prompt_embeds, prompt_embeds_text_only],
                         axis=0)
                     add_text_embeds = paddle.concat(
-                        x=[negative_pooled_prompt_embeds,pooled_prompt_embeds_text_only],
+                        x=[
+                            negative_pooled_prompt_embeds,
+                            pooled_prompt_embeds_text_only
+                        ],
                         axis=0,
                     )
                 else:
                     current_prompt_embeds = paddle.concat(
-                        x=[negative_prompt_embeds, prompt_embeds], 
-                        axis=0)
-                    add_text_embeds = paddle.concat(
-                        x=[negative_pooled_prompt_embeds, pooled_prompt_embeds], 
-                        axis=0)
-                
+                        x=[negative_prompt_embeds, prompt_embeds], axis=0)
+                    add_text_embeds = paddle.concat(x=[
+                        negative_pooled_prompt_embeds, pooled_prompt_embeds
+                    ],
+                                                    axis=0)
+
                 # predict the noise residual
                 added_cond_kwargs = {
                     "text_embeds": add_text_embeds,
@@ -397,7 +525,7 @@ class PhotoMakerStableDiffusionXLPipeline(StableDiffusionXLPipeline):
                     added_cond_kwargs=added_cond_kwargs,
                     return_dict=False,
                 )[0]
-                
+
                 if do_classifier_free_guidance:
                     noise_pred_uncond, noise_pred_text = noise_pred.chunk(
                         chunks=2)
@@ -414,7 +542,7 @@ class PhotoMakerStableDiffusionXLPipeline(StableDiffusionXLPipeline):
                                               **extra_step_kwargs,
                                               return_dict=False)[0]
                 if (i == len(timesteps) - 1 or i + 1 > num_warmup_steps and
-                        (i + 1) % self.scheduler.order == 0):
+                    (i + 1) % self.scheduler.order == 0):
                     progress_bar.update()
                     if callback is not None and i % callback_steps == 0:
                         callback(i, t, latents)
@@ -427,7 +555,8 @@ class PhotoMakerStableDiffusionXLPipeline(StableDiffusionXLPipeline):
             self.upcast_vae()
 
         if not output_type == "latent":
-            image = self.vae.decode(latents / self.vae.config.scaling_factor,return_dict=False)[0]
+            image = self.vae.decode(latents / self.vae.config.scaling_factor,
+                                    return_dict=False)[0]
         else:
             image = latents
             return StableDiffusionXLPipelineOutput(images=image)
@@ -436,7 +565,8 @@ class PhotoMakerStableDiffusionXLPipeline(StableDiffusionXLPipeline):
         # if self.watermark is not None:
         #     image = self.watermark.apply_watermark(image)
 
-        image = self.image_processor.postprocess(image,output_type=output_type)
+        image = self.image_processor.postprocess(image,
+                                                 output_type=output_type)
 
         if not return_dict:
             return (image, )
