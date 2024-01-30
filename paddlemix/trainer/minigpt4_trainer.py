@@ -13,33 +13,21 @@
 # limitations under the License.
 import contextlib
 import inspect
-import json
-import os
 import sys
-import time
-from typing import Any, Dict, List, Optional, Tuple, Union
 
 import paddle
 import paddle.amp.auto_cast as autocast
-import paddle.nn as nn
 from paddle.distributed import fleet
-from paddle.io import DataLoader, Dataset
 from paddlenlp.trainer.trainer import Trainer
 from paddlenlp.trainer.trainer_callback import DefaultFlowCallback, ProgressCallback
-from paddlenlp.trainer.trainer_utils import (  # set_hyrbid_parallel_seed,
-    EvalLoopOutput,
-    IterableDatasetShard,
-    ShardingOption,
-    has_length,
-    speed_metrics,
-)
+from paddlenlp.trainer.trainer_utils import ShardingOption
 from paddlenlp.transformers.model_utils import unwrap_model
 from paddlenlp.utils import device_guard
-from paddlenlp.utils.import_utils import is_datasets_available
 from paddlenlp.utils.log import logger
 
 import paddlemix
-from paddlemix.examples.blip2.utils import VQA, VQAEval, coco_caption_eval, save_result
+
+# from paddlemix.examples.blip2.utils import VQA, VQAEval, coco_caption_eval, save_result
 from paddlemix.optimization import FilterParamsName
 
 DEFAULT_CALLBACKS = [DefaultFlowCallback]
@@ -53,8 +41,8 @@ OPTIMIZER_NAME = "optimizer.pdopt"
 SCHEDULER_NAME = "scheduler.pdparams"
 SCALER_NAME = "scaler.pdparams"
 
-if is_datasets_available():
-    import datasets
+# if is_datasets_available():
+#     import datasets
 
 try:
     from paddle.distributed.fleet.utils import mix_precision_utils
@@ -74,12 +62,12 @@ def is_dp_group_support_in_group_sharded_parallel():
     return "dp_group" in set(inspect.signature(paddle.distributed.sharding.group_sharded_parallel).parameters.keys())
 
 
-__all__ = ["BLIP2Trainer"]
+__all__ = ["MiniGPT4Trainer"]
 
 
 class MiniGPT4Trainer(Trainer):
     """
-    BLIP2Trainer is a feature-complete training and eval loop for BLIP2.
+    MiniGPT4Trainer is a feature-complete training and eval loop for BLIP2.
 
     Args:
     processor: (`Blip2Processor`) low level data processors to convert input text to PaddleNLP Datasets.
@@ -140,9 +128,7 @@ class MiniGPT4Trainer(Trainer):
         if training and self.do_grad_scaling:  # self.args.fp16_opt_level=="O2":
             # model, self.optimizer
             if hasattr(model, "language_model"):
-                model, optimizer = paddle.amp.decorate(
-                    models=model, optimizers=self.optimizer, level="O1"
-            )
+                model, optimizer = paddle.amp.decorate(models=model, optimizers=self.optimizer, level="O1")
                 # model.visual_encoder, model.language_model = decorated[0]
             # else:
             #     decorated = paddle.amp.decorate(models=[model.visual_encoder], optimizers=self.optimizer, level="O2")

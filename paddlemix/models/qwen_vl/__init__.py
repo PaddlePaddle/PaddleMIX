@@ -13,4 +13,4 @@
 # limitations under the License.
 
 from .modeling import *
-from .tokenization import *
+from .tokenizer import *

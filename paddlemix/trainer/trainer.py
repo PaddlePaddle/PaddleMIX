@@ -17,7 +17,20 @@ from paddle.io import DataLoader
 from paddlenlp.trainer.trainer import Trainer
 from tensorboardX import SummaryWriter
 
+from paddlemix.datasets.collator import (
+    CLIPCollator,
+    EVA02Collator,
+    MiniGPT4Collator,
+    QwenVLCollator,
+    VisualglmCollator,
+)
+from paddlemix.metrics.clip_zero_shot import ClipZeroShot
+from paddlemix.models.blip2.utils import BlipCollator
 from paddlemix.models.clip.utils import clip_grad_norm
+from paddlemix.optimization import create_optimizer_simple
+from paddlemix.trainer.blip2_trainer import BLIP2Trainer
+from paddlemix.trainer.eva02_finetune_trainer import EVA02FinetuneTrainer
+from paddlemix.trainer.minigpt4_trainer import MiniGPT4Trainer
 
 
 class CLIPTrainer(Trainer):
@@ -107,4 +120,102 @@ class CLIPTrainer(Trainer):
             num_workers=self.args.dataloader_num_workers,
             prefetch_factor=1,
             shuffle=False,
+        )
+
+    def create_optimizer_and_scheduler(self, num_training_steps: int):
+        """
+        Setup the optimizer and the learning rate scheduler.
+        We provide a reasonable default that works well. If you want to use something else, you can pass a tuple in the
+        Trainer's init through `optimizers`, or subclass and override this method (or `create_optimizer` and/or
+        `create_scheduler`) in a subclass.
+        """
+        self.lr_scheduler = paddle.optimizer.lr.CosineAnnealingDecay(
+            self.args.learning_rate,
+            num_training_steps - self.args.warmup_steps,
+            last_epoch=self.args.last_epoch,
+        )
+        if self.args.warmup_steps > 0:
+            self.lr_scheduler = paddle.optimizer.lr.LinearWarmup(
+                self.lr_scheduler,
+                self.args.warmup_steps,
+                0,
+                1.0,
+                last_epoch=self.args.last_epoch,
+            )
+        self.optimizer = create_optimizer_simple(self.args, self.model, self.lr_scheduler)
+
+
+def get_trainer(
+    pretrained_model_name_or_path,
+    model,
+    args,
+    tokenizer,
+    train_dataset,
+    eval_dataset=None,
+    train_processor=None,
+    eval_processor=None,
+    mixtokens=False,
+):
+    """
+    Returns the trainer according to model.base_model_prefix
+    Returns:
+        Trainer: a trainer instance
+    """
+    pretrained_model_name_or_path = pretrained_model_name_or_path.lower().replace("-", "_")
+    if "clip" in pretrained_model_name_or_path or "coca" in pretrained_model_name_or_path:
+        zeroshot = ClipZeroShot(model, args)
+        return CLIPTrainer(
+            model=model,
+            args=args,
+            train_dataset=train_dataset,
+            eval_dataset=eval_dataset,
+            data_collator=CLIPCollator(train_processor),
+            compute_metrics=zeroshot.zero_shot_eval,
+        )
+    elif "blip2" in pretrained_model_name_or_path:
+        blip_collator = BlipCollator(train_processor)
+        blip_eval_collator = BlipCollator(eval_processor, mode="test")
+        return BLIP2Trainer(
+            model=model,
+            args=args,
+            train_dataset=train_dataset,
+            eval_dataset=eval_dataset,
+            data_collator=blip_collator,
+            eval_collator=blip_eval_collator,
+            processor=train_processor,
+            eval_processor=eval_processor,
+            tokenizer=tokenizer,
+        )
+    elif "eva02" in pretrained_model_name_or_path:
+        collator = EVA02Collator(train_processor, mode="train")
+        return EVA02FinetuneTrainer(
+            model=model,
+            args=args,
+            train_dataset=train_dataset,
+            data_collator=collator,
+        )
+    elif "minigpt4" in pretrained_model_name_or_path:
+        return MiniGPT4Trainer(
+            model=model,
+            args=args,
+            train_dataset=train_dataset,
+            data_collator=MiniGPT4Collator(train_processor),
+            processor=train_processor,
+            tokenizer=tokenizer,
+        )
+    else:
+        if "qwen_vl" in pretrained_model_name_or_path:
+            collator = QwenVLCollator(train_processor, mode="train", mixtokens=mixtokens)
+        elif "visualglm" in pretrained_model_name_or_path:
+            collator = VisualglmCollator(train_processor, mode="train")
+        else:
+            collator = None
+
+        return Trainer(
+            model=model,
+            args=args,
+            train_dataset=train_dataset,
+            eval_dataset=eval_dataset,
+            tokenizer=tokenizer,
+            data_collator=collator,
         )

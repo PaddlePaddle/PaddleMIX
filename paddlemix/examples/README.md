@@ -7,7 +7,7 @@ paddlemix `examples` 目录下提供模型的一站式体验，包括模型推�
 | Model | Inference |Pretrain | SFT | LoRA | Deploy |
 | --- | --- | --- | --- | --- | --- |
 | [qwen_vl](./qwen_vl/) | ✅  | ❌  | ✅  | ✅  | 🚧  |
-| [blip2](./blip2/) | ✅  | ✅ | ✅  | ❌ | ✅  |
+| [blip2](./blip2/) | ✅  | ✅ | ✅  | ✅ | ✅  |
 | [clip](./clip) | ✅  | ✅ | ❌ | ❌ | ❌ |
 | [coca](./coca/) |  ✅  | ✅ | ❌ | ❌ | ❌ |
 | [eva02](./eva02/)|    ✅  |  ✅  |  ✅  |  ❌   | ❌   |
@@ -16,7 +16,7 @@ paddlemix `examples` 目录下提供模型的一站式体验，包括模型推�
 | [imagebind](./imagebind/) |   ✅  |  ❌   |  ❌  | ❌ | ❌ |
 | [minigpt4](./minigpt4) | ✅ | ✅ | ✅   |  ❌  | ✅  |
 | [sam](./sam/) | ✅ | ❌ | ❌ | ❌ | ✅  |
-| [visualglm](./visualglm/) | ✅ | ❌ |🚧 | 🚧 | ❌ |
+| [visualglm](./visualglm/) | ✅ | ❌ | ✅ | ✅ | ❌ |
 
 * ✅: Supported
 * 🚧: In Progress

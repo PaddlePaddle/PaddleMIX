@@ -182,9 +182,9 @@ class Attention(nn.Layer):
     def forward(self, x, rel_pos_bias=None):
         N, C = x.shape[1:]
         if self.use_flash_attn:
-            qkv = self.qkv(x).reshape((-1, N, 3, self.num_heads, C //self.num_heads)).transpose((2, 0, 1, 3, 4))
+            qkv = self.qkv(x).reshape((-1, N, 3, self.num_heads, C // self.num_heads)).transpose((2, 0, 1, 3, 4))
         else:
-            qkv = self.qkv(x).reshape((-1, N, 3, self.num_heads, C //self.num_heads)).transpose((2, 0, 3, 1, 4))
+            qkv = self.qkv(x).reshape((-1, N, 3, self.num_heads, C // self.num_heads)).transpose((2, 0, 3, 1, 4))
         q, k, v = qkv[0], qkv[1], qkv[2]
         if self.use_flash_attn:
             x, _ = flash_attention(q, k, v, dropout=self.proj_drop.p, causal=False, return_softmax=False)
@@ -419,6 +419,11 @@ class VisionTransformer(Blip2PretrainedModel):
         elif isinstance(m, nn.LayerNorm):
             zeros_(m.bias)
             ones_(m.weight)
+
+    def train(self, mode=True):
+        """Overwrite model.train with this function to make sure train/eval mode
+        does not change anymore."""
+        return self
 
     def forward_features(self, x):
         # B = x.shape[0]

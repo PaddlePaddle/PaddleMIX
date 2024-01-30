@@ -1594,6 +1594,56 @@ class VisualGLMForConditionalGeneration(VisualGLMPretrainedModel):
 
         return language_model_inputs
 
+    def forward(
+        self,
+        input_ids: Optional[paddle.Tensor] = None,
+        labels: Optional[paddle.Tensor] = None,
+        images: Optional[paddle.Tensor] = None,
+        return_dict: Optional[bool] = None,
+    ):
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+
+        attention_mask = self.language_model.get_masks(input_ids)
+        position_ids = self.language_model.generate_inputs_position_ids(input_ids)
+        inputs_embeds_batch = None
+        if images is not None:
+            bos_pos = [
+                paddle.where(input_ids[i] == self.config.vision_config["image_start_id"])[0]
+                for i in range(input_ids.shape[0])
+            ]
+
+            image_features = self.encode_images(images)
+            dtype = image_features.dtype
+            inputs_embeds_batch = []
+            image_index = 0
+            for i, pos in enumerate(bos_pos):
+                inputs_embeds = []
+
+                for j in range(pos.shape[0]):
+                    a = pos[j]
+                    b = pos[j + 1] if j + 1 < pos.shape[0] else input_ids.shape[-1]
+                    pre_ids, pad_ids, post_ids = paddle.split(input_ids[i][a:b], num_or_sections=[1, 32, -1], axis=0)
+                    pre_txt_emb = self.language_model.chatglm.transformer.word_embeddings(pre_ids)
+                    post_txt_emb = self.language_model.chatglm.transformer.word_embeddings(post_ids)
+                    inputs_embed = paddle.concat([pre_txt_emb, image_features[image_index], post_txt_emb], axis=0)
+                    inputs_embeds.append(inputs_embed)
+                image_index += pos.shape[0]
+                inputs_embeds = paddle.concat(inputs_embeds, axis=0)
+                inputs_embeds_batch.append(inputs_embeds)
+
+            inputs_embeds_batch = paddle.to_tensor(inputs_embeds_batch, dtype=dtype)
+
+        outputs = self.language_model.forward(
+            input_ids=input_ids,
+            position_ids=position_ids,
+            attention_mask=attention_mask,
+            inputs_embeds=inputs_embeds_batch,
+            labels=labels,
+            return_dict=return_dict,
+        )
+
+        return outputs
+
     @paddle.no_grad()
     def generate(
         self,

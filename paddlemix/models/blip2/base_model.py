@@ -118,6 +118,7 @@ class Blip2PretrainedModel(MixPretrainedModel):
     @classmethod
     def refine_state_dict(self, model, state_dict):
         from paddlemix.models.blip2.eva_vit import interpolate_pos_embed
+
         interpolate_pos_embed(model, state_dict)
 
     def get_expected_keys(self, model_state_dict, name=None):
