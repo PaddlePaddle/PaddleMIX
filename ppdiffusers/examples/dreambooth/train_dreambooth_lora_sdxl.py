@@ -1650,7 +1650,7 @@ def main(args):
                     unet=accelerator.unwrap_model(unet),
                     revision=args.revision,
                     variant=args.variant,
-                    paddle_dtype=weight_dtype,
+                    # paddle_dtype=weight_dtype,
                 )
 
                 # We train on the simplified learning objective. If we were previously predicting a variance, we need the scheduler to ignore it
@@ -1675,6 +1675,7 @@ def main(args):
                 pipeline_args = {"prompt": args.validation_prompt}
 
                 # with paddle.amp.auto_cast():
+                # westfish: add auto_cast; or got different data type, run type protmotion automatically, this may cause data type been changed.
                 # with paddle.amp.auto_cast(enable=True, custom_white_list=None, custom_black_list=None, level="O2"):
                 images = [
                     pipeline(**pipeline_args, generator=generator).images[0] for _ in range(args.num_validation_images)
