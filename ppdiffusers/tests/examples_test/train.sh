@@ -112,7 +112,7 @@ python -u -m paddle.distributed.launch --gpus "0,1" train_dreambooth_lora.py \
 export OUTPUT_DIR="dreambooth_lora_sdxl_danka"
 export MODEL_NAME="stabilityai/stable-diffusion-xl-base-1.0"
 
-python -u -m paddle.distributed.launch --gpus "0" train_dreambooth_lora_sdxl.py \
+python train_dreambooth_lora_sdxl.py \
   --pretrained_model_name_or_path=$MODEL_NAME  \
   --instance_data_dir=$INSTANCE_DIR \
   --output_dir=$OUTPUT_DIR \
@@ -222,6 +222,80 @@ python -u -m paddle.distributed.launch --gpus "0,1" train_text_to_image_lora.py 
   --noise_offset=1 \
   --validation_epochs 1 \
   --enable_xformers_memory_efficient_attention
+
+# sdxl
+export MODEL_NAME="stabilityai/stable-diffusion-xl-base-1.0"
+export VAE_NAME="madebyollin/sdxl-vae-fp16-fix"
+export DATASET_NAME="lambdalabs/pokemon-blip-captions"
+RESOLUTION=768
+export OUTPUT_DIR="sd-pokemon-model-sdxl"
+
+python -u train_text_to_image_sdxl.py \
+  --pretrained_model_name_or_path=$MODEL_NAME \
+  --pretrained_vae_model_name_or_path=$VAE_NAME \
+  --dataset_name=$DATASET_NAME \
+  --enable_xformers_memory_efficient_attention \
+  --resolution=${RESOLUTION} --center_crop --random_flip \
+  --proportion_empty_prompts=0.2 \
+  --train_batch_size=1 \
+  --gradient_accumulation_steps=1 --gradient_checkpointing \
+  --max_train_steps=50 \
+  --learning_rate=1e-06 --lr_scheduler="constant" --lr_warmup_steps=0 \
+  --mixed_precision="fp16" \
+  --report_to="visualdl" \
+  --validation_prompt="a cute Sundar Pichai creature" --validation_epochs 1 \
+  --checkpointing_steps=20 \
+  --output_dir=${OUTPUT_DIR}
+
+
+export OUTPUT_DIR="sd-pokemon-model-sdxl-duoka"
+python -u -m paddle.distributed.launch --gpus "0,1" train_text_to_image_sdxl.py \
+  --pretrained_model_name_or_path=$MODEL_NAME \
+  --pretrained_vae_model_name_or_path=$VAE_NAME \
+  --dataset_name=$DATASET_NAME \
+  --enable_xformers_memory_efficient_attention \
+  --resolution=${RESOLUTION} --center_crop --random_flip \
+  --proportion_empty_prompts=0.2 \
+  --train_batch_size=1 \
+  --gradient_accumulation_steps=1 --gradient_checkpointing \
+  --max_train_steps=50 \
+  --learning_rate=1e-06 --lr_scheduler="constant" --lr_warmup_steps=0 \
+  --mixed_precision="fp16" \
+  --report_to="visualdl" \
+  --validation_prompt="a cute Sundar Pichai creature" --validation_epochs 1 \
+  --checkpointing_steps=20 \
+  --output_dir=${OUTPUT_DIR}
+
+
+export OUTPUT_DIR="sd-pokemon-model-lora-sdxl"
+python -u train_text_to_image_lora_sdxl.py \
+  --pretrained_model_name_or_path=$MODEL_NAME \
+  --pretrained_vae_model_name_or_path=$VAE_NAME \
+  --dataset_name=$DATASET_NAME --caption_column="text" \
+  --resolution=${RESOLUTION} --random_flip \
+  --train_batch_size=1 \
+  --max_train_steps=50 --checkpointing_steps=20 \
+  --learning_rate=1e-04 --lr_scheduler="constant" --lr_warmup_steps=0 \
+  --mixed_precision="fp16" \
+  --seed=42 \
+  --output_dir=${OUTPUT_DIR} --validation_epochs 1 \
+  --train_text_encoder \
+  --validation_prompt="cute dragon creature" --report_to="visualdl"
+
+export OUTPUT_DIR="sd-pokemon-model-lora-sdxl-duoka"
+python -u -m paddle.distributed.launch --gpus "0,1" train_text_to_image_lora_sdxl.py \
+  --pretrained_model_name_or_path=$MODEL_NAME \
+  --pretrained_vae_model_name_or_path=$VAE_NAME \
+  --dataset_name=$DATASET_NAME --caption_column="text" \
+  --resolution=${RESOLUTION} --random_flip \
+  --train_batch_size=1 \
+  --max_train_steps=50 --checkpointing_steps=20 \
+  --learning_rate=1e-04 --lr_scheduler="constant" --lr_warmup_steps=0 \
+  --mixed_precision="fp16" \
+  --seed=42 \
+  --output_dir=${OUTPUT_DIR} --validation_epochs 1 \
+  --train_text_encoder \
+  --validation_prompt="cute dragon creature" --report_to="visualdl"
   
 cd -
 
@@ -554,3 +628,208 @@ python -u -m paddle.distributed.launch --gpus "0,1" train_t2i_adapter_trainer.py
     --use_paddle_conv_init False \
     --overwrite_output_dir \
     --timestep_sample_schedule cubic
+
+cd -
+
+
+# test ip_adapter
+cd ../../examples/ip_adapter
+
+export BATCH_SIZE=2
+export MAX_ITER=50
+
+python train_ip_adapter.py \
+    --do_train \
+    --output_dir "outputs_ip_adapter" \
+    --per_device_train_batch_size ${BATCH_SIZE} \
+    --gradient_accumulation_steps 1 \
+    --learning_rate 1e-4 \
+    --weight_decay 0.01 \
+    --max_steps ${MAX_ITER} \
+    --lr_scheduler_type "constant" \
+    --warmup_steps 0 \
+    --image_logging_steps 20 \
+    --logging_steps 1 \
+    --resolution 512 \
+    --save_steps 25 \
+    --save_total_limit 1000 \
+    --seed 23 \
+    --dataloader_num_workers 4 \
+    --pretrained_model_name_or_path runwayml/stable-diffusion-v1-5 \
+    --image_encoder_name_or_path h94/IP-Adapter/models/image_encoder \
+    --file_list ./data/filelist/train.filelist.list \
+    --model_max_length 77 \
+    --max_grad_norm -1 \
+    --disable_tqdm True \
+    --overwrite_output_dir \
+    --fp16 True \
+    --fp16_opt_level O2
+
+python -u -m paddle.distributed.launch --gpus "0,1" train_ip_adapter.py \
+    --do_train \
+    --output_dir "outputs_ip_adapter_n1c2" \
+    --per_device_train_batch_size ${BATCH_SIZE} \
+    --gradient_accumulation_steps 1 \
+    --learning_rate 1e-4 \
+    --weight_decay 0.01 \
+    --max_steps ${MAX_ITER} \
+    --lr_scheduler_type "constant" \
+    --warmup_steps 0 \
+    --image_logging_steps 20 \
+    --logging_steps 1 \
+    --resolution 512 \
+    --save_steps 25 \
+    --save_total_limit 1000 \
+    --seed 23 \
+    --dataloader_num_workers 4 \
+    --pretrained_model_name_or_path runwayml/stable-diffusion-v1-5 \
+    --image_encoder_name_or_path h94/IP-Adapter/models/image_encoder \
+    --file_list ./data/filelist/train.filelist.list \
+    --model_max_length 77 \
+    --max_grad_norm -1 \
+    --disable_tqdm True \
+    --overwrite_output_dir \
+    --fp16 True \
+    --fp16_opt_level O2
+  
+cd -
+
+
+# test consistency_distillation/lcm_trainer
+cd ../../examples/consistency_distillation/lcm_trainer
+
+MAX_ITER=50
+MODEL_NAME_OR_PATH="runwayml/stable-diffusion-v1-5"
+IS_SDXL=False
+RESOLUTION=512
+
+python train_lcm.py \
+    --do_train \
+    --output_dir "lcm_lora_outputs" \
+    --per_device_train_batch_size 2 \
+    --gradient_accumulation_steps 1 \
+    --learning_rate 1e-4 \
+    --weight_decay 0.0 \
+    --max_steps ${MAX_ITER} \
+    --lr_scheduler_type "constant" \
+    --warmup_steps 0 \
+    --image_logging_steps 20 \
+    --logging_steps 1 \
+    --resolution ${RESOLUTION} \
+    --save_steps 25 \
+    --save_total_limit 20 \
+    --seed 23 \
+    --dataloader_num_workers 4 \
+    --pretrained_model_name_or_path ${MODEL_NAME_OR_PATH} \
+    --file_list ./data/filelist/train.filelist.list \
+    --model_max_length 77 \
+    --max_grad_norm 1 \
+    --disable_tqdm True \
+    --overwrite_output_dir \
+    --recompute True \
+    --loss_type "huber" \
+    --lora_rank 64 \
+    --is_sdxl ${IS_SDXL} \
+    --is_lora True \
+    --overwrite_output_dir \
+    --fp16 True \
+    --fp16_opt_level O2
+
+python -u -m paddle.distributed.launch --gpus "0,1" train_lcm.py \
+    --do_train \
+    --output_dir "lcm_lora_n1c2_outputs" \
+    --per_device_train_batch_size 2 \
+    --gradient_accumulation_steps 1 \
+    --learning_rate 1e-4 \
+    --weight_decay 0.0 \
+    --max_steps ${MAX_ITER} \
+    --lr_scheduler_type "constant" \
+    --warmup_steps 0 \
+    --image_logging_steps 20 \
+    --logging_steps 1 \
+    --resolution ${RESOLUTION} \
+    --save_steps 25 \
+    --save_total_limit 20 \
+    --seed 23 \
+    --dataloader_num_workers 4 \
+    --pretrained_model_name_or_path ${MODEL_NAME_OR_PATH} \
+    --file_list ./data/filelist/train.filelist.list \
+    --model_max_length 77 \
+    --max_grad_norm 1 \
+    --disable_tqdm True \
+    --overwrite_output_dir \
+    --recompute True \
+    --loss_type "huber" \
+    --lora_rank 64 \
+    --is_sdxl ${IS_SDXL} \
+    --is_lora True \
+    --overwrite_output_dir \
+    --fp16 True \
+    --fp16_opt_level O2
+
+
+MAX_ITER=50
+MODEL_NAME_OR_PATH="stabilityai/stable-diffusion-xl-base-1.0"
+IS_SDXL=True
+RESOLUTION=512
+
+python train_lcm.py \
+    --do_train \
+    --output_dir "lcm_sdxl_lora_outputs" \
+    --per_device_train_batch_size 1 \
+    --gradient_accumulation_steps 1 \
+    --learning_rate 1e-4 \
+    --weight_decay 0.0 \
+    --max_steps ${MAX_ITER} \
+    --lr_scheduler_type "constant" \
+    --warmup_steps 0 \
+    --image_logging_steps 2000000 \
+    --logging_steps 1 \
+    --resolution ${RESOLUTION} \
+    --save_steps 25 \
+    --save_total_limit 20 \
+    --seed 23 \
+    --dataloader_num_workers 4 \
+    --pretrained_model_name_or_path ${MODEL_NAME_OR_PATH} \
+    --file_list ./data/filelist/train.filelist.list \
+    --model_max_length 77 \
+    --max_grad_norm 1 \
+    --disable_tqdm True \
+    --overwrite_output_dir \
+    --recompute True \
+    --loss_type "huber" \
+    --lora_rank 64 \
+    --is_sdxl ${IS_SDXL} \
+    --is_lora True \
+    --overwrite_output_dir
+
+
+python -u -m paddle.distributed.launch --gpus "0,1" train_lcm.py \
+    --do_train \
+    --output_dir "lcm_sdxl_lora_n1c2_outputs" \
+    --per_device_train_batch_size 1 \
+    --gradient_accumulation_steps 1 \
+    --learning_rate 1e-4 \
+    --weight_decay 0.0 \
+    --max_steps ${MAX_ITER} \
+    --lr_scheduler_type "constant" \
+    --warmup_steps 0 \
+    --image_logging_steps 2000000 \
+    --logging_steps 1 \
+    --resolution ${RESOLUTION} \
+    --save_steps 25 \
+    --save_total_limit 20 \
+    --seed 23 \
+    --dataloader_num_workers 4 \
+    --pretrained_model_name_or_path ${MODEL_NAME_OR_PATH} \
+    --file_list ./data/filelist/train.filelist.list \
+    --model_max_length 77 \
+    --max_grad_norm 1 \
+    --disable_tqdm True \
+    --overwrite_output_dir \
+    --recompute True \
+    --loss_type "huber" \
+    --lora_rank 64 \
+    --is_sdxl ${IS_SDXL} \
+    --is_lora True \
+    --overwrite_output_dir

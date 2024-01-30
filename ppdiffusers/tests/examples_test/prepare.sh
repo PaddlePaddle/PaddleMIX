@@ -37,6 +37,8 @@ rm -rf data
 tar -zxvf laion400m_demo_data.tar.gz
 cp laion400m_demo_data.tar.gz ../stable_diffusion
 cp laion400m_demo_data.tar.gz ../autoencoder/vae
+cp laion400m_demo_data.tar.gz ../consistency_distillation/lcm_trainer
+cp laion400m_demo_data.tar.gz ../ip_adapter
 cd -
 
 cd ../../examples/stable_diffusion
@@ -57,3 +59,15 @@ cd -
 cd ../../examples/t2i-adapter
 wget https://paddlenlp.bj.bcebos.com/models/community/westfish/t2i-adapter/openpose_data_demo.tar.gz
 tar -zxvf openpose_data_demo.tar.gz
+cd -
+
+cd ../../examples/consistency_distillation/lcm_trainer
+rm -rf data
+tar -zxvf laion400m_demo_data.tar.gz
+cd -
+
+
+cd ../../examples/ip_adapter
+rm -rf data
+tar -zxvf laion400m_demo_data.tar.gz
+cd -
