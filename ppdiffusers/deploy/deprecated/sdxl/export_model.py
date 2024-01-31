@@ -18,18 +18,17 @@ from pathlib import Path
 from types import MethodType
 
 import paddle
-from paddle_stable_diffusion_xl_housing import (
-    PaddleInferStableDiffusionXLPipelineHousing,
+from fd_stable_diffusion_xl_housing import (
+    FastDeploySFastDeployStableDiffusionXLPipelineHousing,
 )
 from text_encoder_2_housing import CLIPTextModelWithProjectionHousing
 from text_encoder_housing import CLIPTextModelHousing
 from unet_2d_condition_housing import UNet2DConditionModelSDXLHousing
 
-from ppdiffusers import PaddleInferRuntimeModel
-from ppdiffusers.pipelines import StableDiffusionXLPipeline
+from ppdiffusers import FastDeployRuntimeModel, StableDiffusionXLPipeline
 
 
-def convert_ppdiffusers_pipeline_to_paddleinfer_pipeline(
+def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
     model_path: str,
     output_path: str,
     sample: bool = False,
@@ -162,21 +161,20 @@ def convert_ppdiffusers_pipeline_to_paddleinfer_pipeline(
     print(f"Save vae_decoder model in {save_path} successfully.")
     del pipeline.vae
 
-    paddle_infer_pipe_cls = PaddleInferStableDiffusionXLPipelineHousing
-    paddle_infer_pipeline = paddle_infer_pipe_cls(
-        vae_encoder=PaddleInferRuntimeModel.from_pretrained(output_path / "vae_encoder"),
-        vae_decoder=PaddleInferRuntimeModel.from_pretrained(output_path / "vae_decoder"),
-        unet=PaddleInferRuntimeModel.from_pretrained(output_path / "unet"),
-        text_encoder=PaddleInferRuntimeModel.from_pretrained(output_path / "text_encoder"),
-        text_encoder_2=PaddleInferRuntimeModel.from_pretrained(output_path / "text_encoder_2"),
+    fd_pipe_cls = FastDeploySFastDeployStableDiffusionXLPipelineHousing
+    fastdeploy_pipeline = fd_pipe_cls(
+        vae_encoder=FastDeployRuntimeModel.from_pretrained(output_path / "vae_encoder"),
+        vae_decoder=FastDeployRuntimeModel.from_pretrained(output_path / "vae_decoder"),
+        unet=FastDeployRuntimeModel.from_pretrained(output_path / "unet"),
+        text_encoder=FastDeployRuntimeModel.from_pretrained(output_path / "text_encoder"),
+        text_encoder_2=FastDeployRuntimeModel.from_pretrained(output_path / "text_encoder_2"),
         tokenizer=pipeline.tokenizer,
         tokenizer_2=pipeline.tokenizer_2,
         scheduler=pipeline.scheduler,
     )
     print("start saving")
-    output_path = str(output_path)
-    paddle_infer_pipeline.save_pretrained(output_path)
-    print("PaddleInfer pipeline saved to", output_path)
+    fastdeploy_pipeline.save_pretrained(str(output_path))
+    print("FastDeploy pipeline saved to", output_path)
 
 
 if __name__ == "__main__":
@@ -196,6 +194,6 @@ if __name__ == "__main__":
     parser.add_argument("--width", type=int, default=None, help="The width of output images. Default: None")
     args = parser.parse_args()
 
-    convert_ppdiffusers_pipeline_to_paddleinfer_pipeline(
+    convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
         args.pretrained_model_name_or_path, args.output_path, args.sample, args.height, args.width
     )

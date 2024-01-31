@@ -263,15 +263,6 @@ def main(args):
             disable_paddle_pass=paddle_delete_passes.get("unet", []),
             tune=False,
         ),
-        image_encoder=create_paddle_inference_runtime(
-            model_dir=args.model_dir,
-            model_name="image_encoder",
-            use_trt=args.use_trt,
-            precision_mode=paddle_infer.PrecisionType.Half,
-            device_id=args.device_id,
-            disable_paddle_pass=paddle_delete_passes.get("image_encoder", []),
-            tune=False,
-        ),
     )
     pipe = PaddleInferStableDiffusionMegaPipeline.from_pretrained(
         args.model_dir,
@@ -309,14 +300,11 @@ def main(args):
             prompt = "a photo of an astronaut riding a horse on mars"
             time_costs = []
             # warmup
-            img_url = "https://paddlenlp.bj.bcebos.com/models/community/examples/images/load_neg_embed.png"
-            ip_image = load_image(img_url)
             pipe.text2img(
                 prompt,
                 num_inference_steps=20,
                 height=height,
                 width=width,
-                ip_adapter_image=ip_image,
                 parse_prompt_type=parse_prompt_type,
                 infer_op_dict=infer_op_dict,
             )
@@ -330,7 +318,6 @@ def main(args):
                     num_inference_steps=args.inference_steps,
                     height=height,
                     width=width,
-                    ip_adapter_image=ip_image,
                     parse_prompt_type=parse_prompt_type,
                     infer_op_dict=infer_op_dict,
                 ).images
@@ -347,7 +334,6 @@ def main(args):
             # img2img
             img_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/sketch-mountains-input.png"
             init_image = load_image(img_url)
-            ip_image = load_image(img_url)
             prompt = "A fantasy landscape, trending on artstation"
             time_costs = []
             # warmup
@@ -357,7 +343,6 @@ def main(args):
                 num_inference_steps=20,
                 height=height,
                 width=width,
-                ip_adapter_image=ip_image,
                 parse_prompt_type=parse_prompt_type,
                 infer_op_dict=infer_op_dict,
             )
@@ -371,7 +356,6 @@ def main(args):
                     num_inference_steps=args.inference_steps,
                     height=height,
                     width=width,
-                    ip_adapter_image=init_image,
                     parse_prompt_type=parse_prompt_type,
                     infer_op_dict=infer_op_dict,
                 ).images
@@ -389,7 +373,6 @@ def main(args):
                 "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations.png"
             )
             mask_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations-mask.png"
-            ip_image = load_image(img_url)
             init_image = load_image(img_url)
             mask_image = load_image(mask_url)
             prompt = "Face of a yellow cat, high resolution, sitting on a park bench"
@@ -408,7 +391,6 @@ def main(args):
                 num_inference_steps=20,
                 height=height,
                 width=width,
-                ip_adapter_image=ip_image,
                 parse_prompt_type=parse_prompt_type,
                 infer_op_dict=infer_op_dict,
             )
@@ -423,7 +405,6 @@ def main(args):
                     num_inference_steps=args.inference_steps,
                     height=height,
                     width=width,
-                    ip_adapter_image=ip_image,
                     parse_prompt_type=parse_prompt_type,
                     infer_op_dict=infer_op_dict,
                 ).images

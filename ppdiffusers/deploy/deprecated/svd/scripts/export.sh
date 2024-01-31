@@ -1,4 +1,4 @@
-# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,12 +13,7 @@
 # limitations under the License.
 
 export FLAGS_use_cuda_managed_memory=true
+export CUDA_VISIBLE_DEVICES=1
 
-# text2img
-python infer.py --model_dir static_model/stable-diffusion-xl-base-1.0-ipadapter --scheduler "ddim" --backend paddle --device gpu --task_name text2img
-
-# img2img
-python infer.py --model_dir static_model/stable-diffusion-xl-base-1.0-ipadapter/ --scheduler "ddim" --backend paddle --device gpu --task_name img2img
-
-# # inpaint
-python infer.py --model_dir static_model/stable-diffusion-xl-base-1.0-ipadapter/ --scheduler "ddim" --backend paddle --device gpu --task_name inpaint
+export USE_PPXFORMERS=False
+python export_model.py --pretrained_model_name_or_path stabilityai/stable-video-diffusion-img2vid-xt --output_path static_model/stable-video-diffusion-img2vid-xt

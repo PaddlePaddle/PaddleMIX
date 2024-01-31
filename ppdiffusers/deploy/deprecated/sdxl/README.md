@@ -1,4 +1,4 @@
-# PaddleInfer Stable Diffusion XL 模型高性能部署
+# FastDeploy Stable Diffusion XL 模型高性能部署
 
  **目录**
    * [环境依赖](#环境依赖)
@@ -7,16 +7,16 @@
        * [文本引导的图像变换（Image-to-Image Text-Guided Generation）](#文本引导的图像变换)
        * [文本引导的图像编辑（Text-Guided Image Inpainting）](#文本引导的图像编辑)
 
-⚡️[PaddleInfer]是一款全场景、易用灵活、极致高效的AI推理部署工具，为开发者提供多硬件、多推理引擎后端的部署能力。开发者只需调用一行代码即可随意切换硬件、推理引擎后端。本示例展现如何通过 PaddleInfer 将我们 PPDiffusers 训练好的 Stable Diffusion XL模型进行多硬件、多推理引擎后端高性能部署。
+⚡️[FastDeploy](https://github.com/PaddlePaddle/FastDeploy)是一款全场景、易用灵活、极致高效的AI推理部署工具，为开发者提供多硬件、多推理引擎后端的部署能力。开发者只需调用一行代码即可随意切换硬件、推理引擎后端。本示例展现如何通过 FastDeploy 将我们 PPDiffusers 训练好的 Stable Diffusion XL模型进行多硬件、多推理引擎后端高性能部署。
 
 <a name="环境依赖"></a>
 
 ## 环境依赖
 
-在示例中使用了 PaddleInfer，需要执行以下命令安装依赖。
+在示例中使用了 FastDeploy，需要执行以下命令安装依赖。
 
 ```shell
-python -m pip install paddlepaddle-gpu==2.6.0.post112 -f https://www.paddlepaddle.org.cn/whl/linux/mkl/avx/stable.html
+pip install fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
 ```
 
 <a name="快速体验"></a>

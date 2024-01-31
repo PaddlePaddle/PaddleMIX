@@ -12,13 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-export FLAGS_use_cuda_managed_memory=true
-
 # text2img
-python infer.py --model_dir static_model/stable-diffusion-xl-base-1.0-ipadapter --scheduler "ddim" --backend paddle --device gpu --task_name text2img
+python infer.py --model_dir static_model/stable-diffusion-xl-base-1.0/ --scheduler "ddim" --backend paddle --device gpu --task_name text2img
 
 # img2img
-python infer.py --model_dir static_model/stable-diffusion-xl-base-1.0-ipadapter/ --scheduler "ddim" --backend paddle --device gpu --task_name img2img
+python infer.py --model_dir static_model/stable-diffusion-xl-base-1.0/ --scheduler "ddim" --backend paddle --device gpu --task_name img2img
 
-# # inpaint
-python infer.py --model_dir static_model/stable-diffusion-xl-base-1.0-ipadapter/ --scheduler "ddim" --backend paddle --device gpu --task_name inpaint
+# inpaint
+python infer.py --model_dir static_model/stable-diffusion-xl-base-1.0/ --scheduler "ddim" --backend paddle --device gpu --task_name inpaint

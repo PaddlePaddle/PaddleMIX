@@ -12,13 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-export FLAGS_use_cuda_managed_memory=true
+export FLAGS_use_cuda_managed_memory=False
 
-# text2img
-python infer.py --model_dir static_model/stable-diffusion-xl-base-1.0-ipadapter --scheduler "ddim" --backend paddle --device gpu --task_name text2img
+export USE_PPXFORMERS=False
 
-# img2img
-python infer.py --model_dir static_model/stable-diffusion-xl-base-1.0-ipadapter/ --scheduler "ddim" --backend paddle --device gpu --task_name img2img
-
-# # inpaint
-python infer.py --model_dir static_model/stable-diffusion-xl-base-1.0-ipadapter/ --scheduler "ddim" --backend paddle --device gpu --task_name inpaint
+# python infer.py --model_dir static_model/stable-video-diffusion-img2vid-xt --scheduler "euler" --backend paddle --width 576 --height 576 --device gpu --task_name img2video
+python infer.py --model_dir static_model/stable-video-diffusion-img2vid-xt --scheduler "euler" --backend paddle_tensorrt --width 256 --height 256 --device gpu --task_name img2video

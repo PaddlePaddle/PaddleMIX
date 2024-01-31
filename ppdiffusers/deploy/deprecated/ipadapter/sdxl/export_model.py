@@ -18,19 +18,21 @@ from pathlib import Path
 from types import MethodType
 
 import paddle
-from paddle_stable_diffusion_xl_housing import (
-    PaddleInferStableDiffusionXLPipelineHousing,
+from fd_stable_diffusion_xl_housing import (
+    FastDeploySFastDeployStableDiffusionXLPipelineHousing,
 )
 from text_encoder_2_housing import CLIPTextModelWithProjectionHousing
 from text_encoder_housing import CLIPTextModelHousing
 from unet_2d_condition_housing import UNet2DConditionModelSDXLHousing
 
-from ppdiffusers import PaddleInferRuntimeModel
-from ppdiffusers.pipelines import StableDiffusionXLPipeline
+from ppdiffusers import FastDeployRuntimeModel, StableDiffusionXLPipeline
 
 
-def convert_ppdiffusers_pipeline_to_paddleinfer_pipeline(
+def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
     model_path: str,
+    ipadapter_pretrained_model_name_or_path: str,
+    ipadapter_subfolder: str,
+    ipadapter_weight_name: str,
     output_path: str,
     sample: bool = False,
     height: int = None,
@@ -48,11 +50,15 @@ def convert_ppdiffusers_pipeline_to_paddleinfer_pipeline(
         text_encoder=text_encoder_model,
         text_encoder_2=text_encoder_2_model,
         safety_checker=None,
-        feature_extractor=None,
     ).to(paddle_dtype="float32")
+    pipeline.load_ip_adapter(
+        ipadapter_pretrained_model_name_or_path,
+        subfolder=ipadapter_subfolder,
+        weight_name=ipadapter_weight_name,
+    )
+    # pipeline.set_ip_adapter_scale(0.75)
 
     # make sure we disable xformers
-    pipeline.unet.set_default_attn_processor()
     pipeline.vae.set_default_attn_processor()
     output_path = Path(output_path)
     # calculate latent's H and W
@@ -102,10 +108,13 @@ def convert_ppdiffusers_pipeline_to_paddleinfer_pipeline(
             paddle.static.InputSpec(
                 shape=[None, None, cross_attention_dim], dtype="float32", name="encoder_hidden_states"
             ),  # encoder_hidden_states
-            paddle.static.InputSpec(
-                shape=[None, 1280], dtype="float32", name="text_embeds"
-            ),  # added_cond_kwargs_text_embeds
+            paddle.static.InputSpec(shape=[None, 1280], dtype="float32", name="text_embeds"),  # text_embeds
             paddle.static.InputSpec(shape=[None, 6], dtype="float32", name="time_ids"),  # added_cond_kwargs_time_ids
+            paddle.static.InputSpec(
+                shape=[None, 1280],
+                dtype="float32",
+                name="image_embeds",
+            ),  # image_embeds
         ],
     )
     save_path = os.path.join(args.output_path, "unet", "inference")
@@ -156,27 +165,46 @@ def convert_ppdiffusers_pipeline_to_paddleinfer_pipeline(
             ),  # latent_sample
         ],
     )
+
+    # 5. Convert image encoder
+    image_encoder = paddle.jit.to_static(
+        pipeline.image_encoder,
+        input_spec=[
+            paddle.static.InputSpec(
+                shape=[None, 3, 224, 224],
+                dtype="float32",
+                name="image",  # N, C, H, W
+            ),  # image
+        ],
+    )
+    # Save image_encoder in static graph model.
+    save_path = os.path.join(args.output_path, "image_encoder", "inference")
+    paddle.jit.save(image_encoder, save_path)
+    print(f"Save image_encoder model in {save_path} successfully.")
+    del pipeline.image_encoder
+
     # Save vae_decoder in static graph model.
     save_path = os.path.join(args.output_path, "vae_decoder", "inference")
     paddle.jit.save(vae_decoder, save_path)
     print(f"Save vae_decoder model in {save_path} successfully.")
     del pipeline.vae
 
-    paddle_infer_pipe_cls = PaddleInferStableDiffusionXLPipelineHousing
-    paddle_infer_pipeline = paddle_infer_pipe_cls(
-        vae_encoder=PaddleInferRuntimeModel.from_pretrained(output_path / "vae_encoder"),
-        vae_decoder=PaddleInferRuntimeModel.from_pretrained(output_path / "vae_decoder"),
-        unet=PaddleInferRuntimeModel.from_pretrained(output_path / "unet"),
-        text_encoder=PaddleInferRuntimeModel.from_pretrained(output_path / "text_encoder"),
-        text_encoder_2=PaddleInferRuntimeModel.from_pretrained(output_path / "text_encoder_2"),
+    fd_pipe_cls = FastDeploySFastDeployStableDiffusionXLPipelineHousing
+    fastdeploy_pipeline = fd_pipe_cls(
+        vae_encoder=FastDeployRuntimeModel.from_pretrained(output_path / "vae_encoder"),
+        vae_decoder=FastDeployRuntimeModel.from_pretrained(output_path / "vae_decoder"),
+        unet=FastDeployRuntimeModel.from_pretrained(output_path / "unet"),
+        text_encoder=FastDeployRuntimeModel.from_pretrained(output_path / "text_encoder"),
+        text_encoder_2=FastDeployRuntimeModel.from_pretrained(output_path / "text_encoder_2"),
         tokenizer=pipeline.tokenizer,
         tokenizer_2=pipeline.tokenizer_2,
         scheduler=pipeline.scheduler,
+        feature_extractor=pipeline.feature_extractor,
+        image_encoder=FastDeployRuntimeModel.from_pretrained(output_path / "image_encoder"),
     )
     print("start saving")
-    output_path = str(output_path)
-    paddle_infer_pipeline.save_pretrained(output_path)
-    print("PaddleInfer pipeline saved to", output_path)
+    fastdeploy_pipeline.save_pretrained(str(output_path))
+    print("FastDeploy pipeline saved to", output_path)
 
 
 if __name__ == "__main__":
@@ -188,6 +216,24 @@ if __name__ == "__main__":
         required=True,
         help="Path to the `ppdiffusers` checkpoint to convert (either a local directory or on the bos).",
     )
+    parser.add_argument(
+        "--ipadapter_pretrained_model_name_or_path",
+        type=str,
+        required=True,
+        help="Path to the `ppdiffusers`'s ip-adapter checkpoint to convert (either a local directory or on the bos).Example: h94/IP-Adapter",
+    )
+    parser.add_argument(
+        "--ipadapter_model_subfolder",
+        type=str,
+        required=True,
+        help="Path to the `ppdiffusers`'s ip-adapter checkpoint to convert (either a local directory or on the bos).Example: models",
+    )
+    parser.add_argument(
+        "--ipadapter_weight_name",
+        type=str,
+        required=True,
+        help="Name of the weight to convert.Example: ip-adapter_sd15.safetensors",
+    )
     parser.add_argument("--output_path", type=str, required=True, help="Path to the output model.")
     parser.add_argument(
         "--sample", action="store_true", default=False, help="Export the vae encoder in mode or sample"
@@ -196,6 +242,13 @@ if __name__ == "__main__":
     parser.add_argument("--width", type=int, default=None, help="The width of output images. Default: None")
     args = parser.parse_args()
 
-    convert_ppdiffusers_pipeline_to_paddleinfer_pipeline(
-        args.pretrained_model_name_or_path, args.output_path, args.sample, args.height, args.width
+    convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
+        args.pretrained_model_name_or_path,
+        args.ipadapter_pretrained_model_name_or_path,
+        args.ipadapter_model_subfolder,
+        args.ipadapter_weight_name,
+        args.output_path,
+        args.sample,
+        args.height,
+        args.width,
     )

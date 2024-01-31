@@ -16,10 +16,13 @@ from typing import Optional, Tuple
 
 import paddle
 
-from ppdiffusers.transformers.clip.modeling import CLIPTextModel
+from ppdiffusers.transformers.clip.modeling import (
+    CLIPTextModelOutput,
+    CLIPTextModelWithProjection,
+)
 
 
-class CLIPTextModelHousing(CLIPTextModel):
+class CLIPTextModelWithProjectionHousing(CLIPTextModelWithProjection):
     def forward(
         self,
         input_ids: Optional[paddle.Tensor] = None,
@@ -29,7 +32,8 @@ class CLIPTextModelHousing(CLIPTextModel):
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
     ) -> Tuple[paddle.Tensor, paddle.Tensor]:
-        output = self.text_model(
+
+        text_outputs = self.text_model(
             input_ids=input_ids,
             attention_mask=attention_mask,
             position_ids=position_ids,
@@ -37,7 +41,17 @@ class CLIPTextModelHousing(CLIPTextModel):
             output_hidden_states=True,
             return_dict=True,
         )
-        # breakpoint()
+
+        pooled_output = text_outputs[1]
+
+        text_embeds = self.text_projection(pooled_output)
+
+        output = CLIPTextModelOutput(
+            text_embeds=text_embeds,
+            last_hidden_state=text_outputs.last_hidden_state,
+            hidden_states=text_outputs.hidden_states,
+            attentions=text_outputs.attentions,
+        )
 
         pooled_prompt_embeds = output[0]
         prompt_embeds = output.hidden_states[-2]

@@ -12,13 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-export FLAGS_use_cuda_managed_memory=true
-
-# text2img
-python infer.py --model_dir static_model/stable-diffusion-xl-base-1.0-ipadapter --scheduler "ddim" --backend paddle --device gpu --task_name text2img
-
-# img2img
-python infer.py --model_dir static_model/stable-diffusion-xl-base-1.0-ipadapter/ --scheduler "ddim" --backend paddle --device gpu --task_name img2img
-
-# # inpaint
-python infer.py --model_dir static_model/stable-diffusion-xl-base-1.0-ipadapter/ --scheduler "ddim" --backend paddle --device gpu --task_name inpaint
+export USE_PPXFORMERS=False
+python export_model.py --pretrained_model_name_or_path stabilityai/stable-diffusion-xl-base-1.0 \
+ --ipadapter_pretrained_model_name_or_path h94/IP-Adapter \
+ --ipadapter_model_subfolder sdxl_models \
+ --ipadapter_weight_name ip-adapter_sdxl.safetensors \
+ --output_path static_model/stable-diffusion-xl-base-1.0-ipadapter

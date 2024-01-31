@@ -27,7 +27,7 @@ from tqdm.auto import trange
 
 from ppdiffusers import (  # noqa
     DiffusionPipeline,
-    PaddleInferStableDiffusionXLMegaPipeline,
+    PaddleInferStableVideoDiffusionPipeline,
 )
 from ppdiffusers.utils import load_image
 
@@ -43,7 +43,7 @@ def parse_arguments():
     parser.add_argument(
         "--inference_steps",
         type=int,
-        default=50,
+        default=20,
         help="The number of unet inference steps.",
     )
     parser.add_argument(
@@ -79,21 +79,11 @@ def parse_arguments():
         default="text2img",
         choices=[
             "text2img",
-            "img2img",
+            "img2video",
             "inpaint",
             "all",
         ],
-        help="The task can be one of [text2img, img2img, inpaint, pix2pix, all]. ",
-    )
-    parser.add_argument(
-        "--parse_prompt_type",
-        type=str,
-        default="lpw",
-        choices=[
-            "raw",
-            "lpw",
-        ],
-        help="The parse_prompt_type can be one of [raw, lpw]. ",
+        help="The task can be one of [text2img, img2video, inpaint, pix2pix, all]. ",
     )
     parser.add_argument("--use_fp16", type=strtobool, default=True, help="Wheter to use FP16 mode")
     parser.add_argument("--use_bf16", type=strtobool, default=False, help="Wheter to use BF16 mode")
@@ -132,7 +122,7 @@ def parse_arguments():
         help="The type of infer op.",
     )
     parser.add_argument("--height", type=int, default=1024, help="Height of input image")
-    parser.add_argument("--width", type=int, default=1024, help="Width of input image")
+    parser.add_argument("--width", type=int, default=576, help="Width of input image")
 
     return parser.parse_args()
 
@@ -160,6 +150,8 @@ def create_paddle_inference_runtime(
     for pass_name in disable_paddle_pass:
         config.delete_pass(pass_name)
     if use_trt:
+        if not os.path.exists(shape_file):
+            config.collect_shape_range_info(shape_file)
         config.enable_tensorrt_engine(
             workspace_size=workspace,
             precision_mode=precision_mode,
@@ -169,14 +161,13 @@ def create_paddle_inference_runtime(
         )
         config.enable_tensorrt_memory_optim()
         config.enable_tuned_tensorrt_dynamic_shape(shape_file, True)
-        cache_file = os.path.join(model_dir, model_name, "_opt_cache/")
-        config.set_optim_cache_dir(cache_file)
         if precision_mode != paddle_infer.PrecisionType.Half:
             only_fp16_passes = [
                 "trt_cross_multihead_matmul_fuse_pass",
                 "trt_flash_multihead_matmul_fuse_pass",
                 "preln_elementwise_groupnorm_act_pass",
                 "elementwise_groupnorm_act_pass",
+                "conv_elementwise_add_fuse_pass",
             ]
             for curr_pass in only_fp16_passes:
                 config.delete_pass(curr_pass)
@@ -189,37 +180,32 @@ def main(args):
     else:
         paddle.set_device(f"gpu:{args.device_id}")
     seed = 1024
-    min_image_size = 1024
-    max_image_size = 1024
-    max_image_size = max(min_image_size, max_image_size)
 
-    # 4. Init runtime
-    disable_paddle_pass = ["auto_mixed_precision_pass"]
+    disable_paddle_pass = [
+        "auto_mixed_precision_pass",
+        "conv_elementwise_add_fuse_pass",
+        "gpu_cpu_map_matmul_to_mul_pass",
+    ]
+    # only_fp16_passes = [
+    #     "trt_cross_multihead_matmul_fuse_pass",
+    #     "trt_flash_multihead_matmul_fuse_pass",
+    #     "preln_elementwise_groupnorm_act_pass",
+    #     "elementwise_groupnorm_act_pass",
+    # ]
+    no_need_passes = [
+        "trt_prompt_tuning_embedding_eltwise_layernorm_fuse_pass",
+        "add_support_int8_pass",
+        "auto_mixed_precision_pass",
+        # "conv_elementwise_add_fuse_pass",
+    ]
+    # conv_bias_mkldnn_fuse_pass,
     args.use_trt = args.backend == "paddle_tensorrt"
     infer_configs = dict(
-        text_encoder=create_paddle_inference_runtime(
-            model_dir=args.model_dir,
-            use_trt=False,
-            model_name="text_encoder",
-            precision_mode=paddle_infer.PrecisionType.Half,
-            device_id=args.device_id,
-            disable_paddle_trt_ops=["range", "lookup_table_v2"],
-            tune=False,
-        ),
-        text_encoder_2=create_paddle_inference_runtime(
-            model_dir=args.model_dir,
-            use_trt=False,
-            model_name="text_encoder_2",
-            precision_mode=paddle_infer.PrecisionType.Half,
-            device_id=args.device_id,
-            disable_paddle_trt_ops=["range", "lookup_table_v2"],
-            tune=False,
-        ),
         vae_encoder=create_paddle_inference_runtime(
             model_dir=args.model_dir,
             model_name="vae_encoder",
             use_trt=False,
-            precision_mode=paddle_infer.PrecisionType.Float32,
+            precision_mode=paddle_infer.PrecisionType.Half,
             device_id=args.device_id,
             tune=False,
         ),
@@ -227,7 +213,7 @@ def main(args):
             model_dir=args.model_dir,
             model_name="vae_decoder",
             use_trt=False,
-            precision_mode=paddle_infer.PrecisionType.Float32,
+            precision_mode=paddle_infer.PrecisionType.Half,
             device_id=args.device_id,
             disable_paddle_pass=disable_paddle_pass,
             tune=False,
@@ -238,17 +224,25 @@ def main(args):
             use_trt=args.use_trt,
             precision_mode=paddle_infer.PrecisionType.Half,
             device_id=args.device_id,
+            disable_paddle_pass=no_need_passes,
+            tune=False,
+        ),
+        image_encoder=create_paddle_inference_runtime(
+            model_dir=args.model_dir,
+            model_name="image_encoder",
+            use_trt=False,
+            precision_mode=paddle_infer.PrecisionType.Half,
+            device_id=args.device_id,
             tune=False,
         ),
     )
-    pipe = PaddleInferStableDiffusionXLMegaPipeline.from_pretrained(
+    pipe = PaddleInferStableVideoDiffusionPipeline.from_pretrained(
         args.model_dir,
         infer_configs=infer_configs,
-        use_optim_cache=True,
+        use_optim_cache=False,
     )
-    pipe.set_progress_bar_config(disable=True)
-    pipe.change_scheduler(args.scheduler)
-    parse_prompt_type = args.parse_prompt_type
+    pipe.set_progress_bar_config(disable=False)
+    # pipe.change_scheduler(args.scheduler)
     width = args.width
     height = args.height
 
@@ -263,112 +257,32 @@ def main(args):
     for infer_op in infer_op_list:
         folder = f"infer_op_{infer_op}_fp16" if args.use_fp16 else f"infer_op_{infer_op}_fp32"
         os.makedirs(folder, exist_ok=True)
-        if args.task_name in ["text2img", "all"]:
-            # text2img
-            prompt = "a photo of an astronaut riding a horse on mars"
-            time_costs = []
-            # warmup
-            pipe.text2img(
-                prompt,
-                num_inference_steps=20,
-                height=height,
-                width=width,
-                parse_prompt_type=parse_prompt_type,
-                # infer_op_dict=infer_op_dict,
-            )
-            print("==> Test text2img performance.")
-            for step in trange(args.benchmark_steps):
-                start = time.time()
-                paddle.seed(seed)
-                images = pipe.text2img(
-                    prompt,
-                    output_type="pil",
-                    num_inference_steps=args.inference_steps,
-                    height=height,
-                    width=width,
-                    parse_prompt_type=parse_prompt_type,
-                    # infer_op_dict=infer_op_dict,
-                ).images
-                latency = time.time() - start
-                time_costs += [latency]
-                # print(f"No {step:3d} time cost: {latency:2f} s")
-            print(
-                f"Mean latency: {np.mean(time_costs):2f} s, p50 latency: {np.percentile(time_costs, 50):2f} s, "
-                f"p90 latency: {np.percentile(time_costs, 90):2f} s, p95 latency: {np.percentile(time_costs, 95):2f} s."
-            )
-            images[0].save(f"{folder}/text2img.png")
 
-        if args.task_name in ["img2img", "all"]:
-            # img2img
-            img_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/sketch-mountains-input.png"
-            init_image = load_image(img_url)
-            prompt = "A fantasy landscape, trending on artstation"
-            time_costs = []
-            # warmup
-            pipe.img2img(
-                prompt,
-                image=init_image,
-                num_inference_steps=20,
-                height=height,
-                width=width,
-                # parse_prompt_type=parse_prompt_type,
-                # infer_op_dict=infer_op_dict,
-            )
-            print("==> Test img2img performance.")
-            for step in trange(args.benchmark_steps):
-                start = time.time()
-                paddle.seed(seed)
-                images = pipe.img2img(
-                    prompt,
-                    image=init_image,
-                    num_inference_steps=args.inference_steps,
-                    height=height,
-                    width=width,
-                    # parse_prompt_type=parse_prompt_type,
-                    # infer_op_dict=infer_op_dict,
-                ).images
-                latency = time.time() - start
-                time_costs += [latency]
-                # print(f"No {step:3d} time cost: {latency:2f} s")
-            print(
-                f"Mean latency: {np.mean(time_costs):2f} s, p50 latency: {np.percentile(time_costs, 50):2f} s, "
-                f"p90 latency: {np.percentile(time_costs, 90):2f} s, p95 latency: {np.percentile(time_costs, 95):2f} s."
-            )
-            images[0].save(f"{folder}/img2img.png")
-
-        if args.task_name in ["inpaint", "all"]:
+        if args.task_name in ["img2video", "all"]:
+            # img2video
             img_url = (
-                "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations.png"
+                "https://paddlenlp.bj.bcebos.com/models/community/hf-internal-testing/diffusers-images/rocket.png"
             )
-            mask_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations-mask.png"
             init_image = load_image(img_url)
-            mask_image = load_image(mask_url)
-            prompt = "Face of a yellow cat, high resolution, sitting on a park bench"
             time_costs = []
-            pipe.inpaint(
-                prompt,
+            # warmup
+            print("==> Warmup.")
+            pipe(
                 image=init_image,
-                mask_image=mask_image,
-                num_inference_steps=20,
+                num_inference_steps=3,
                 height=height,
                 width=width,
-                # parse_prompt_type=parse_prompt_type,
-                # infer_op_dict=infer_op_dict,
             )
-            print("==> Test inpaint performance.")
+            print("==> Test img2video performance.")
             for step in trange(args.benchmark_steps):
                 start = time.time()
                 paddle.seed(seed)
-                images = pipe.inpaint(
-                    prompt,
+                frames = pipe(
                     image=init_image,
-                    mask_image=mask_image,
                     num_inference_steps=args.inference_steps,
                     height=height,
                     width=width,
-                    # parse_prompt_type=parse_prompt_type,
-                    # infer_op_dict=infer_op_dict,
-                ).images
+                ).frames
                 latency = time.time() - start
                 time_costs += [latency]
                 # print(f"No {step:3d} time cost: {latency:2f} s")
@@ -376,8 +290,7 @@ def main(args):
                 f"Mean latency: {np.mean(time_costs):2f} s, p50 latency: {np.percentile(time_costs, 50):2f} s, "
                 f"p90 latency: {np.percentile(time_costs, 90):2f} s, p95 latency: {np.percentile(time_costs, 95):2f} s."
             )
-
-            images[0].save(f"{folder}/inpaint.png")
+            frames[0][0].save("test_svd.gif", save_all=True, append_images=frames[0][1:], loop=0)
 
 
 if __name__ == "__main__":
