@@ -19,14 +19,26 @@ from .utils import (
     PPDIFFUSERS_SLOW_IMPORT,
     OptionalDependencyNotAvailable,
     _LazyModule,
+    is_einops_available,
     is_fastdeploy_available,
+    is_inflect_available,
     is_k_diffusion_available,
+    is_k_diffusion_version,
     is_librosa_available,
     is_note_seq_available,
+    is_onnx_available,
     is_paddle_available,
+    is_paddle_version,
     is_paddlenlp_available,
+    is_paddlenlp_version,
     is_paddlesde_available,
+    is_pp_invisible_watermark_available,
+    is_ppxformers_available,
     is_scipy_available,
+    is_torch_available,
+    is_transformers_available,
+    is_unidecode_available,
+    logging,
 )
 from .version import VERSION as __version__
 
@@ -35,7 +47,7 @@ from .version import VERSION as __version__
 
 # When adding a new object to this init, please add it to `_import_structure`. The `_import_structure` is a dictionary submodule to list of object names,
 # and is used to defer the actual importing for when the objects are requested.
-# This way `import diffusers` provides the names in the namespace without actually importing anything (and especially none of the backends).
+# This way `import ppdiffusers` provides the names in the namespace without actually importing anything (and especially none of the backends).
 
 _import_structure = {
     "configuration_utils": ["ConfigMixin"],
@@ -60,6 +72,7 @@ _import_structure = {
         "is_paddlenlp_version",
         "is_unidecode_available",
         # NEW ADD
+        "is_ppxformers_available",
         "is_einops_available",
         "is_torch_available",
         "is_transformers_available",
@@ -116,7 +129,9 @@ else:
             "UNetMotionModel",
             "UNetSpatioTemporalConditionModel",
             "VQModel",
-            "PaddleInferRuntimeModel",
+            # new add
+            "LVDMAutoencoderKL",
+            "LVDMUNet3DModel",
         ]
     )
 
@@ -322,20 +337,9 @@ else:
             "WuerstchenCombinedPipeline",
             "WuerstchenDecoderPipeline",
             "WuerstchenPriorPipeline",
-            "PaddleInferCycleDiffusionPipeline",
-            "PaddleInferStableDiffusionControlNetPipeline",
-            "PaddleInferStableDiffusionImg2ImgPipeline",
-            "PaddleInferStableDiffusionInpaintPipeline",
-            "PaddleInferStableDiffusionInpaintPipelineLegacy",
-            "PaddleInferStableDiffusionMegaPipeline",
-            "PaddleInferStableDiffusionPipeline",
-            "PaddleInferStableDiffusionUpscalePipeline",
-            "PaddleInferStableDiffusionXLImg2ImgPipeline",
-            "PaddleInferStableDiffusionXLInpaintPipeline",
-            "PaddleInferStableDiffusionXLInstructPix2PixPipeline",
-            "PaddleInferStableDiffusionXLPipeline",
-            "PaddleInferStableDiffusionControlNetPipeline",
-            "PaddleInferStableVideoDiffusionPipeline",
+            # new add
+            "LVDMTextToVideoPipeline",
+            "LVDMUncondPipeline",
         ]
     )
 
@@ -438,7 +442,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
     except OptionalDependencyNotAvailable:
         from .utils.dummy_paddle_objects import *  # noqa F403
     else:
-        from .models import (
+        from .models import (  # new add
             AsymmetricAutoencoderKL,
             AutoencoderKL,
             AutoencoderKLTemporalDecoder,
@@ -446,10 +450,11 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             ConsistencyDecoderVAE,
             ControlNetModel,
             Kandinsky3UNet,
+            LVDMAutoencoderKL,
+            LVDMUNet3DModel,
             ModelMixin,
             MotionAdapter,
             MultiAdapter,
-            PaddleInferRuntimeModel,
             PriorTransformer,
             T2IAdapter,
             T5FilmDecoder,
@@ -547,7 +552,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
     except OptionalDependencyNotAvailable:
         from .utils.dummy_paddle_and_paddlenlp_objects import *  # noqa F403
     else:
-        from .pipelines import (
+        from .pipelines import (  # new add
             AltDiffusionImg2ImgPipeline,
             AltDiffusionPipeline,
             AnimateDiffPipeline,
@@ -586,20 +591,9 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             LatentConsistencyModelImg2ImgPipeline,
             LatentConsistencyModelPipeline,
             LDMTextToImagePipeline,
+            LVDMTextToVideoPipeline,
+            LVDMUncondPipeline,
             MusicLDMPipeline,
-            PaddleInferCycleDiffusionPipeline,
-            PaddleInferStableDiffusionControlNetPipeline,
-            PaddleInferStableDiffusionImg2ImgPipeline,
-            PaddleInferStableDiffusionInpaintPipeline,
-            PaddleInferStableDiffusionInpaintPipelineLegacy,
-            PaddleInferStableDiffusionMegaPipeline,
-            PaddleInferStableDiffusionPipeline,
-            PaddleInferStableDiffusionUpscalePipeline,
-            PaddleInferStableDiffusionXLImg2ImgPipeline,
-            PaddleInferStableDiffusionXLInpaintPipeline,
-            PaddleInferStableDiffusionXLInstructPix2PixPipeline,
-            PaddleInferStableDiffusionXLPipeline,
-            PaddleInferStableVideoDiffusionPipeline,
             PaintByExamplePipeline,
             PixArtAlphaPipeline,
             SemanticStableDiffusionPipeline,

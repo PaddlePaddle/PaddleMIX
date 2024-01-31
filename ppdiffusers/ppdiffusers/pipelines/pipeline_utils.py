@@ -64,7 +64,6 @@ if is_paddlenlp_available():
     #     SAFE_WEIGHTS_INDEX_NAME as PPNLP_SAFE_WEIGHTS_INDEX_NAME,
     # )
 
-from ..models.paddleinfer_runtime import PaddleInferRuntimeModel
 from .fastdeploy_utils import FastDeployRuntimeModel
 
 TORCH_INDEX_FILE = "diffusion_pytorch_model.bin"
@@ -84,7 +83,6 @@ LOADABLE_CLASSES = {
         "SchedulerMixin": ["save_pretrained", "from_pretrained"],
         "DiffusionPipeline": ["save_pretrained", "from_pretrained"],
         "FastDeployRuntimeModel": ["save_pretrained", "from_pretrained"],
-        "PaddleInferRuntimeModel": ["save_pretrained", "from_pretrained"],
     },
     "ppdiffusers.transformers": {
         "PretrainedTokenizer": ["save_pretrained", "from_pretrained"],
@@ -309,8 +307,6 @@ def load_sub_model(
     pipeline_class: Any,
     paddle_dtype: paddle.dtype,
     runtime_options: Any,
-    infer_configs: Any,
-    use_optim_cache: bool,
     model_variants: Dict[str, str],
     name: str,
     from_diffusers: bool,
@@ -322,6 +318,7 @@ def load_sub_model(
     from_aistudio: bool = False,
     cache_dir: Union[str, os.PathLike] = None,
     variant: str = None,
+    use_safetensors: bool = False,
 ):
     """Helper method to load the module `name` from `library_name` and `class_name`"""
     # retrieve class candidates
@@ -366,19 +363,13 @@ def load_sub_model(
         )
         loading_kwargs["is_onnx_model"] = is_onnx_model
 
-    # PaddleInferRuntimeModel
-    if issubclass(class_obj, PaddleInferRuntimeModel):
-        loading_kwargs["infer_configs"] = (
-            infer_configs.get(name, None) if isinstance(infer_configs, dict) else infer_configs
-        )
-        loading_kwargs["use_optim_cache"] = use_optim_cache
-
     is_ppdiffusers_model = issubclass(class_obj, ppdiffusers_module.ModelMixin)
     is_paddlenlp_model = issubclass(class_obj, PretrainedModel)
 
     # PaddleNLP or PPDiffusers Model
     if is_ppdiffusers_model or is_paddlenlp_model:
         loading_kwargs["variant"] = model_variants.pop(name, variant)
+        loading_kwargs["use_safetensors"] = use_safetensors
         if is_paddlenlp_model:
             loading_kwargs["convert_from_torch"] = from_diffusers
             loading_kwargs["dtype"] = (
@@ -402,10 +393,7 @@ def load_sub_model(
         loading_kwargs["from_hf_hub"] = from_hf_hub
         loading_kwargs["from_aistudio"] = from_aistudio
         loading_kwargs["cache_dir"] = cache_dir
-        if from_hf_hub is True or from_aistudio is True:
-            loading_kwargs["subfolder"] = name
-        else:
-            cached_folder = os.path.join(cached_folder, name)
+        loading_kwargs["subfolder"] = name
         # else load from the root directory
         loaded_sub_model = load_method(cached_folder, **loading_kwargs)
 
@@ -784,7 +772,7 @@ class DiffusionPipeline(ConfigMixin):
 
         ```
         Some weights of UNet2DConditionModel were not initialized from the model checkpoint at runwayml/stable-diffusion-v1-5 and are newly initialized because the shapes did not match:
-        - conv_in.weight: found shape torch.Size([320, 4, 3, 3]) in the checkpoint and torch.Size([320, 9, 3, 3]) in the model instantiated
+        - conv_in.weight: found shape [320, 4, 3, 3] in the checkpoint and [320, 9, 3, 3] in the model instantiated
         You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
         ```
 
@@ -953,8 +941,6 @@ class DiffusionPipeline(ConfigMixin):
         use_onnx = kwargs.pop("use_onnx", None)  # noqa: F841
         use_fastdeploy = kwargs.pop("use_fastdeploy", None)  # noqa: F841
         runtime_options = kwargs.pop("runtime_options", None)
-        infer_configs = kwargs.pop("infer_configs", None)
-        use_optim_cache = kwargs.pop("use_optim_cache", False)
         load_connected_pipeline = kwargs.pop("load_connected_pipeline", False)  # noqa: F841
         model_variants = kwargs.pop("model_variants", {})
 
@@ -1097,8 +1083,6 @@ class DiffusionPipeline(ConfigMixin):
                     pipeline_class=pipeline_class,
                     paddle_dtype=paddle_dtype,
                     runtime_options=runtime_options,
-                    infer_configs=infer_configs,
-                    use_optim_cache=use_optim_cache,
                     model_variants=model_variants,
                     name=name,
                     from_diffusers=from_diffusers,
@@ -1110,6 +1094,7 @@ class DiffusionPipeline(ConfigMixin):
                     from_aistudio=from_aistudio,
                     cache_dir=cache_dir,
                     variant=variant,
+                    use_safetensors=use_safetensors,
                 )
                 logger.info(
                     f"Loaded {name} as {class_name} from `{name}` subfolder of {pretrained_model_name_or_path}."

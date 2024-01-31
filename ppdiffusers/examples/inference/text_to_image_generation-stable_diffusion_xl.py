@@ -20,5 +20,7 @@ pipe = StableDiffusionXLPipeline.from_pretrained(
     "stabilityai/stable-diffusion-xl-base-1.0", paddle_dtype=paddle.float16
 )
 prompt = "a photo of an astronaut riding a horse on mars"
-image = pipe(prompt).images[0]
-image.save("text_to_image_generation-stable_diffusion_xl-result.png")
+images = pipe(prompt, num_images_per_prompt=2).images
+
+images[0].save("text_to_image_generation-stable_diffusion_xl-result-0.png")
+images[1].save("text_to_image_generation-stable_diffusion_xl-result-1.png")

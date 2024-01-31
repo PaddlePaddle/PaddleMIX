@@ -103,7 +103,6 @@ else:
             "StableDiffusionXLControlNetImg2ImgPipeline",
             "StableDiffusionXLControlNetInpaintPipeline",
             "StableDiffusionXLControlNetPipeline",
-            "PaddleInferStableDiffusionControlNetPipeline",
         ]
     )
     _import_structure["deepfloyd_if"] = [
@@ -175,27 +174,16 @@ else:
             "StableDiffusionUpscalePipeline",
             "StableUnCLIPImg2ImgPipeline",
             "StableUnCLIPPipeline",
-            "PaddleInferStableDiffusionXLImg2ImgPipeline",
-            "PaddleInferStableDiffusionXLInpaintPipeline",
-            "PaddleInferStableDiffusionXLMegaPipeline",
-            "PaddleInferStableDiffusionXLPipeline",
         ]
     )
     _import_structure["stable_diffusion_safe"] = ["StableDiffusionPipelineSafe"]
-    _import_structure["stable_video_diffusion"] = [
-        "StableVideoDiffusionPipeline",
-        "PaddleInferStableVideoDiffusionPipeline",
-    ]
+    _import_structure["stable_video_diffusion"] = ["StableVideoDiffusionPipeline"]
     _import_structure["stable_diffusion_xl"].extend(
         [
             "StableDiffusionXLImg2ImgPipeline",
             "StableDiffusionXLInpaintPipeline",
             "StableDiffusionXLInstructPix2PixPipeline",
             "StableDiffusionXLPipeline",
-            "PaddleInferStableDiffusionXLImg2ImgPipeline",
-            "PaddleInferStableDiffusionXLInpaintPipeline",
-            "PaddleInferStableDiffusionXLMegaPipeline",
-            "PaddleInferStableDiffusionXLPipeline",
         ]
     )
     _import_structure["t2i_adapter"] = [
@@ -226,6 +214,11 @@ else:
         "WuerstchenCombinedPipeline",
         "WuerstchenDecoderPipeline",
         "WuerstchenPriorPipeline",
+    ]
+    _import_structure["lvdm"] = [
+        "LVDMTextToVideoPipeline",
+        "LVDMUncondPipeline",
+        "VideoPipelineOutput",
     ]
 try:
     if not is_fastdeploy_available():
@@ -352,7 +345,6 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         from .blip_diffusion import BlipDiffusionPipeline
         from .controlnet import (
             BlipDiffusionControlNetPipeline,
-            PaddleInferStableDiffusionControlNetPipeline,
             StableDiffusionControlNetImg2ImgPipeline,
             StableDiffusionControlNetInpaintPipeline,
             StableDiffusionControlNetPipeline,
@@ -395,12 +387,18 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             LatentConsistencyModelPipeline,
         )
         from .latent_diffusion import LDMTextToImagePipeline
+
+        # new add
+        from .lvdm import (
+            LVDMTextToVideoPipeline,
+            LVDMUncondPipeline,
+            VideoPipelineOutput,
+        )
         from .musicldm import MusicLDMPipeline
         from .paint_by_example import PaintByExamplePipeline
         from .pixart_alpha import PixArtAlphaPipeline
         from .semantic_stable_diffusion import SemanticStableDiffusionPipeline
         from .shap_e import ShapEImg2ImgPipeline, ShapEPipeline
-        from .stable_diffusion import *
         from .stable_diffusion import (
             CLIPImageProjection,
             CycleDiffusionPipeline,
@@ -428,20 +426,12 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         )
         from .stable_diffusion_safe import StableDiffusionPipelineSafe
         from .stable_diffusion_xl import (
-            PaddleInferStableDiffusionXLImg2ImgPipeline,
-            PaddleInferStableDiffusionXLInpaintPipeline,
-            PaddleInferStableDiffusionXLMegaPipeline,
-            PaddleInferStableDiffusionXLPipeline,
             StableDiffusionXLImg2ImgPipeline,
             StableDiffusionXLInpaintPipeline,
             StableDiffusionXLInstructPix2PixPipeline,
             StableDiffusionXLPipeline,
         )
-        from .stable_video_diffusion import (
-            PaddleInferStableVideoDiffusionPipeline,
-            StableVideoDiffusionPipeline,
-            StableVideoDiffusionPipelineOutput,
-        )
+        from .stable_video_diffusion import StableVideoDiffusionPipeline
         from .t2i_adapter import (
             StableDiffusionAdapterPipeline,
             StableDiffusionXLAdapterPipeline,

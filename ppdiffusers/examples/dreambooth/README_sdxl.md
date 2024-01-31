@@ -16,7 +16,7 @@ pip install -r requirements.txt
 ### 示例
 首先需要获取示例数据集。在这个示例中，我们将使用一些狗的图像：https://paddlenlp.bj.bcebos.com/models/community/westfish/develop-sdxl/dog.zip 。
 
-解压数据集后，使用以下命令启动训练：
+解压数据集``unzip dog.zip``后，使用以下命令启动训练：
 ```bash
 export MODEL_NAME="stabilityai/stable-diffusion-xl-base-1.0"
 export INSTANCE_DIR="dog"
@@ -27,8 +27,6 @@ python train_dreambooth_lora_sdxl.py \
   --instance_data_dir=$INSTANCE_DIR \
   --output_dir=$OUTPUT_DIR \
   --instance_prompt="a photo of sks dog" \
-  --height=512 \
-  --width=512 \
   --train_batch_size=1 \
   --gradient_accumulation_steps=4 \
   --learning_rate=1e-4 \
@@ -40,7 +38,9 @@ python train_dreambooth_lora_sdxl.py \
   --validation_epochs=25 \
   --seed="0" \
   --checkpointing_steps=100 \
-  --enable_xformers_memory_efficient_attention
+  --enable_xformers_memory_efficient_attention \
+  --mixed_precision="fp16" \
+  --resolution=512
 ```
 
 #### 推理
@@ -53,7 +53,7 @@ from ppdiffusers import DDIMScheduler
 import paddle
 
 pipe = DiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-xl-base-1.0", paddle_dtype=paddle.float16)
-pipe.load_lora_weights("paddle_lora_weights.pdparams")
+pipe.load_lora_weights("paddle_lora_weights.safetensors")
 
 pipe.scheduler = DDIMScheduler.from_config(pipe.scheduler.config)
 image = pipe("A picture of a sks dog in a bucket", num_inference_steps=25).images[0]

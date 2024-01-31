@@ -74,8 +74,6 @@ ONNX_WEIGHTS_NAME = "model.onnx"
 ONNX_EXTERNAL_WEIGHTS_NAME = "weights.pb"
 FASTDEPLOY_WEIGHTS_NAME = "inference.pdiparams"
 FASTDEPLOY_MODEL_NAME = "inference.pdmodel"
-PADDLE_INFER_WEIGHTS_NAME = "inference.pdiparams"
-PADDLE_INFER_MODEL_NAME = "inference.pdmodel"
 
 HUGGINGFACE_CO_RESOLVE_ENDPOINT = os.environ.get("HF_ENDPOINT", "https://huggingface.co")
 PPDIFFUSERS_CACHE = ppdiffusers_default_cache_path

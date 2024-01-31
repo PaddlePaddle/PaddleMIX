@@ -34,8 +34,9 @@ from ppdiffusers.utils import logging
 
 try:
     from ligo.segments import segment
-    from paddlenlp.transformers import CLIPFeatureExtractor  # CLIPTextModel,
-    from paddlenlp.transformers import CLIPTokenizer
+
+    from ppdiffusers.transformers import CLIPFeatureExtractor  # CLIPTextModel,
+    from ppdiffusers.transformers import CLIPTokenizer
 except ImportError:
     raise ImportError("Please install paddlenlp and ligo-segments to use the mixture pipeline")
 logger = logging.get_logger(__name__)

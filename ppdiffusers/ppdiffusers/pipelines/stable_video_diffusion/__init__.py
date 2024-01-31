@@ -41,9 +41,6 @@ else:
                 "StableVideoDiffusionPipeline",
                 "StableVideoDiffusionPipelineOutput",
             ],
-            "pipeline_paddleinfer_stable_video_diffusion": [
-                "PaddleInferStableVideoDiffusionPipeline",
-            ],
         }
     )
 
@@ -55,9 +52,6 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
     except OptionalDependencyNotAvailable:
         from ...utils.dummy_paddle_and_paddlenlp_objects import *
     else:
-        from .pipeline_paddleinfer_stable_video_diffusion import (
-            PaddleInferStableVideoDiffusionPipeline,
-        )
         from .pipeline_stable_video_diffusion import (
             StableVideoDiffusionPipeline,
             StableVideoDiffusionPipelineOutput,

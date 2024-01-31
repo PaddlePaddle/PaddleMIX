@@ -424,3 +424,31 @@ class CLIPConfig(PretrainedConfig):
         output["vision_config"] = self.vision_config.to_dict()
         output["model_type"] = self.__class__.model_type
         return output
+
+    @classmethod
+    def from_pretrained(cls, pretrained_model_name_or_path, **kwargs) -> "PretrainedConfig":
+        config_dict, kwargs = cls.get_config_dict(pretrained_model_name_or_path, **kwargs)
+        model_type = config_dict.get("model_type", "clip")
+
+        if model_type == "clip_vision_model":
+            architectures = config_dict.pop("architectures", [])
+            vision_config = CLIPVisionConfig.from_dict(config_dict)
+            text_config = CLIPTextConfig(
+                hidden_size=768,
+                dropout=0.0,
+                intermediate_size=3072,
+                num_attention_heads=12,
+                projection_dim=vision_config.projection_dim,
+            )
+            config_dict = cls.from_text_vision_configs(
+                text_config=text_config,
+                vision_config=vision_config,
+                architectures=architectures,
+                projection_dim=vision_config.projection_dim,
+            ).to_dict()
+            str_architectures = ", ".join(architectures)
+            logger.warning(
+                f"You are using a legacy config file to load {str_architectures}. "
+                f"This will be deprecated in the near future."
+            )
+        return cls.from_dict(config_dict, **kwargs)

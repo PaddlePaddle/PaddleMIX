@@ -50,7 +50,6 @@ class ModelArguments:
     enable_xformers_memory_efficient_attention: bool = field(
         default=False, metadata={"help": "enable_xformers_memory_efficient_attention."}
     )
-    to_static: bool = field(default=False, metadata={"help": "Whether or not to_static"})
     prediction_type: Optional[str] = field(
         default="epsilon",
         metadata={

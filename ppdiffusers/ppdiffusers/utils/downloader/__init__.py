@@ -24,9 +24,17 @@ from huggingface_hub.utils import (
 )
 from requests import HTTPError
 
-from .aistudio_hub.download import aistudio_hub_download, aistudio_hub_file_exists
-from .bos.download import bos_download, bos_file_exists
-from .hf_hub.download import hf_hub_download, hf_hub_file_exists
+from .aistudio_hub_download import (
+    aistudio_hub_download,
+    aistudio_hub_file_exists,
+    aistudio_hub_try_to_load_from_cache,
+)
+from .bos_download import bos_download, bos_file_exists, bos_try_to_load_from_cache
+from .hf_hub_download import (
+    hf_hub_download,
+    hf_hub_file_exists,
+    hf_hub_try_to_load_from_cache,
+)
 
 
 def bos_aistudio_hf_download(
@@ -180,3 +188,31 @@ def bos_aistudio_hf_file_exist(
             endpoint=endpoint,
         )
     return out
+
+
+def bos_aistudio_hf_try_to_load_from_cache(
+    repo_id: str,
+    filename: str,
+    cache_dir: Union[str, Path, None] = None,
+    subfolder: str = None,
+    revision: Optional[str] = None,
+    repo_type: Optional[str] = None,
+    from_bos: bool = True,
+    from_aistudio: bool = False,
+    from_hf_hub: bool = False,
+):
+    if subfolder is None:
+        subfolder = ""
+    load_kwargs = dict(
+        repo_id=repo_id,
+        filename=os.path.join(subfolder, filename),
+        cache_dir=cache_dir,
+        revision=revision,
+        repo_type=repo_type,
+    )
+    if from_aistudio:
+        return aistudio_hub_try_to_load_from_cache(**load_kwargs)
+    elif from_hf_hub:
+        return hf_hub_try_to_load_from_cache(**load_kwargs)
+    else:
+        return bos_try_to_load_from_cache(**load_kwargs)

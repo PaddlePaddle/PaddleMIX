@@ -19,7 +19,6 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import numpy as np
 import paddle
 import PIL.Image
-from paddlenlp.transformers import CLIPImageProcessor, CLIPTextModel, CLIPTokenizer
 
 from ppdiffusers.image_processor import VaeImageProcessor
 from ppdiffusers.loaders import LoraLoaderMixin, TextualInversionLoaderMixin
@@ -33,6 +32,7 @@ from ppdiffusers.pipelines.stable_diffusion.safety_checker import (
     StableDiffusionSafetyChecker,
 )
 from ppdiffusers.schedulers import KarrasDiffusionSchedulers
+from ppdiffusers.transformers import CLIPImageProcessor, CLIPTextModel, CLIPTokenizer
 from ppdiffusers.utils import (
     check_min_version,
     deprecate,

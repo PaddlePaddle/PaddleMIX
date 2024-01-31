@@ -11,7 +11,9 @@
 |AUTOMATIC1111 WebUI Stable Diffusion| 与AUTOMATIC1111的WebUI基本一致的Pipeline |[AUTOMATIC1111 WebUI Stable Diffusion](#automatic1111-webui-stable-diffusion)||
 |Stable Diffusion with High Resolution Fixing| 使用高分辨率修复功能进行文图生成|[Stable Diffusion with High Resolution Fixing](#stable-diffusion-with-high-resolution-fixing)||
 |ControlNet Reference Only| 基于参考图片生成与图片相似的图片|[ControlNet Reference Only](#controlnet-reference-only)||
+|Stable Diffusion XL Reference| 基于参考图片，利用stable diffusion xl 生成与图片相似的图片|[Stable Diffusion XL Reference](#Stable Diffusion XL Reference)||
 |Stable Diffusion Mixture Tiling| 基于Mixture机制的多文本大图生成Stable Diffusion Pipeline|[Stable Diffusion Mixture Tiling](#stable-diffusion-mixture-tiling)||
+|Stable Diffusion Mixture Canvas| 基于Mixture机制的文本引导大图生成Stable Diffusion Pipeline|[Stable Diffusion Mixture Canvas](#stable-diffusion-mixture-canvas)||
 |CLIP Guided Images Mixing Stable Diffusion Pipeline| 一个用于图片融合的Stable Diffusion Pipeline|[CLIP Guided Images Mixing Using Stable Diffusion](#clip-guided-images-mixing-with-stable-diffusion)||
 |EDICT Image Editing Pipeline| 一个用于文本引导的图像编辑的 Stable Diffusion Pipeline|[EDICT Image Editing Pipeline](#edict_pipeline)||
 |FABRIC - Stable Diffusion with feedback Pipeline| 一个用于喜欢图片和不喜欢图片的反馈 Pipeline|[FABRIC - Stable Diffusion with feedback Pipeline](#fabric_pipeline)||
@@ -30,7 +32,7 @@ import os
 import paddle
 from clip_guided_stable_diffusion import CLIPGuidedStableDiffusion
 
-from paddlenlp.transformers import CLIPFeatureExtractor, CLIPModel
+from ppdiffusers.transformers import CLIPFeatureExtractor, CLIPModel
 
 feature_extractor = CLIPFeatureExtractor.from_pretrained(
     "laion/CLIP-ViT-B-32-laion2B-s34B-b79K")
@@ -524,6 +526,38 @@ for control_name in ["none", "reference_only", "reference_adain", "reference_ada
 [reference_adain]: https://github.com/PaddlePaddle/PaddleNLP/assets/50394665/266968c7-5065-4589-9bd8-47515d50c6de
 [reference_adain+attn]: https://github.com/PaddlePaddle/PaddleNLP/assets/50394665/73d53a4f-e601-4969-9cb8-e3fdf719ae0c
 
+### Stable Diffusion XL Reference
+[Stable Diffusion XL Reference](https://github.com/Mikubill/sd-webui-controlnet#reference-only-control) 是一种基于stable diffusion xl不需要任何控制模型就可以直接使用图像作为参考来引导生成图像的方法。它使用方式如下所示：
+
+```python
+import paddle
+from PIL import Image
+from ppdiffusers.utils import load_image
+from pipline_stable_diffusion_xl_reference import StableDiffusionXLReferencePipeline
+from ppdiffusers.schedulers import UniPCMultistepScheduler
+
+input_image = load_image("https://github.com/PaddlePaddle/PaddleMIX/assets/68105073/9c8e5c53-dc9a-46bb-9504-3d75a7c22ed2")
+
+pipe = StableDiffusionXLReferencePipeline.from_pretrained(
+    "stabilityai/stable-diffusion-xl-base-1.0",
+    use_safetensors=True,
+    variant="fp16")
+
+pipe.scheduler = UniPCMultistepScheduler.from_config(pipe.scheduler.config)
+
+result_img = pipe(ref_image=input_image,
+      prompt="a dog running on grassland, best quality",
+      num_inference_steps=20,
+      reference_attn=True,
+      reference_adain=False).images[0]
+
+result_img.save("output.png")
+```
+参考图片：
+<center><img src="https://github.com/PaddlePaddle/PaddleMIX/assets/68105073/9c8e5c53-dc9a-46bb-9504-3d75a7c22ed2" width=100%></center>
+
+生成的图片如下所示：
+<center><img src="https://github.com/PaddlePaddle/PaddleMIX/assets/68105073/05cfede7-a07d-48ef-84e1-2f6239a3fd6f" width=100%></center>
 
 ### Stable Diffusion Mixture Tiling
 `StableDiffusionTilingPipeline`是一个基于Mixture机制的多文本大图生成Stable Diffusion Pipeline。使用方式如下所示：
@@ -555,6 +589,61 @@ image.save('mixture_tiling' + ".png")
 生成的图片如下所示：
 <center><img src="https://user-images.githubusercontent.com/20476674/250050184-c3d26d20-dbdf-42f6-9723-5f35f628f68e.png" width=100%></center>
 
+
+### Stable Diffusion Mixture Canvas
+`StableDiffusionCanvasPipeline`是一个基于Mixture机制的文本引导大图生成Stable Diffusion Pipeline。使用方式如下所示：
+
+```python
+from PIL import Image
+from ppdiffusers import LMSDiscreteScheduler
+from mixture_canvas import (
+    StableDiffusionCanvasPipeline,
+    Text2ImageRegion,
+    Image2ImageRegion,
+    preprocess_image,
+)
+
+# Load and preprocess guide image
+iic_image = preprocess_image(Image.open("input_image.png").convert("RGB"))
+
+# Creater scheduler and model (similar to StableDiffusionPipeline)
+scheduler = LMSDiscreteScheduler(
+    beta_start=0.00085,
+    beta_end=0.012,
+    beta_schedule="scaled_linear",
+    num_train_timesteps=1000,
+)
+pipeline = StableDiffusionCanvasPipeline.from_pretrained("CompVis/stable-diffusion-v1-4", scheduler=scheduler)
+
+# Mixture of Diffusers generation
+output = pipeline(
+    canvas_height=800,
+    canvas_width=352,
+    regions=[
+        Text2ImageRegion(
+            0,
+            800,
+            0,
+            352,
+            guidance_scale=8,
+            prompt=f"best quality, masterpiece, WLOP, sakimichan, art contest winner on pixiv, 8K, intricate details, wet effects, rain drops, ethereal, mysterious, futuristic, UHD, HDR, cinematic lighting, in a beautiful forest, rainy day, award winning, trending on artstation, beautiful confident cheerful young woman, wearing a futuristic sleeveless dress, ultra beautiful detailed  eyes, hyper-detailed face, complex,  perfect, model,  textured,  chiaroscuro, professional make-up, realistic, figure in frame, ",
+        ),
+        Image2ImageRegion(
+            800 - 352, 800, 0, 352, reference_image=iic_image, strength=1.0
+        ),
+    ],
+    num_inference_steps=100,
+    seed=5525475061,
+)["images"][0]
+
+output.save("output_image.png")
+```
+输入图像和生成图片如下所示：
+
+![Input_Image](https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/b449a867-2dfb-4016-b5fd-75fc41bcf4ab)
+![mixture_canvas_results](https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/57ee99bf-98a3-49c3-8c9b-021c02115372)
+
+
 ### CLIP Guided Images Mixing With Stable Diffusion
 `CLIPGuidedImagesMixingStableDiffusion` 基于Stable Diffusion来针对输入的两个图片进行融合：
 ```python
@@ -566,7 +655,7 @@ import paddle
 import open_clip
 from open_clip import SimpleTokenizer
 from ppdiffusers import DiffusionPipeline
-from paddlenlp.transformers import CLIPFeatureExtractor, CLIPModel
+from ppdiffusers.transformers import CLIPFeatureExtractor, CLIPModel
 
 
 def download_image(url):
@@ -642,7 +731,7 @@ import paddle
 import PIL
 import requests
 from IPython.display import display
-from paddlenlp.transformers import CLIPTextModel
+from ppdiffusers.transformers import CLIPTextModel
 
 from ppdiffusers import DDIMScheduler, DiffusionPipeline
 from ppdiffusers.utils.testing_utils import get_examples_pipeline

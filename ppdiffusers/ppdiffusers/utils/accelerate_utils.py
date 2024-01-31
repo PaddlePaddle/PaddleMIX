@@ -14,12 +14,12 @@
 """
 Accelerate utilities: Utilities related to accelerate
 """
-import paddle  # noqa
-from packaging import version  # noqa
 
-from ppdiffusers.accelerate import __version__  # noqa
+from packaging import version
 
-from .import_utils import is_accelerate_available  # noqa
+from ppdiffusers.accelerate import __version__
+
+from .import_utils import is_accelerate_available
 
 
 def apply_forward_hook(method):
@@ -32,19 +32,15 @@ def apply_forward_hook(method):
 
     :param method: The method to decorate. This method should be a method of a PyTorch module.
     """
-    # TODO: (laixinlu) fix this in static model export
-    # if not is_accelerate_available():
-    #     return method
-    # accelerate_version = version.parse(__version__).base_version
-    # if version.parse(accelerate_version) < version.parse("0.17.0"):
-    #     return method
+    if not is_accelerate_available():
+        return method
+    accelerate_version = version.parse(__version__).base_version
+    if version.parse(accelerate_version) < version.parse("0.17.0"):
+        return method
 
-    # with paddle.jit.not_to_static():
-    #     def wrapper(self, *args, **kwargs):
-    #         if hasattr(self, "_pp_hook") and hasattr(self._pp_hook, "pre_forward"):
-    #             self._pp_hook.pre_forward(self)
-    #         return method(self, *args, **kwargs)
+    def wrapper(self, *args, **kwargs):
+        if hasattr(self, "_pp_hook") and hasattr(self._pp_hook, "pre_forward"):
+            self._pp_hook.pre_forward(self)
+        return method(self, *args, **kwargs)
 
-    #     return wrapper
-
-    return method
+    return wrapper

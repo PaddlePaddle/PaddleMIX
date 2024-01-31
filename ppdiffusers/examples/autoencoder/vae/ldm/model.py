@@ -20,7 +20,6 @@ import paddle.nn as nn
 import paddle.nn.functional as F
 
 from ppdiffusers.configuration_utils import ConfigMixin, register_to_config
-from ppdiffusers.initializer import reset_initialized_parameter
 from ppdiffusers.models.autoencoder_kl import (
     AutoencoderKLOutput,
     Decoder,
@@ -31,6 +30,7 @@ from ppdiffusers.models.autoencoder_kl import (
 
 # from ppdiffusers.models.ema import LitEma
 from ppdiffusers.models.modeling_utils import ModelMixin
+from ppdiffusers.utils.initializer_utils import reset_initialized_parameter
 
 from .losses import LPIPSWithDiscriminator
 

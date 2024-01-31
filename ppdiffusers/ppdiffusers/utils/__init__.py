@@ -20,6 +20,7 @@ from packaging import version
 from ..version import VERSION as __version__
 from . import initializer_utils
 from .accelerate_utils import apply_forward_hook
+from .constants import TEXT_ENCODER_ATTN_MODULE  # deprecate
 from .constants import (  # fastdeploy; NEW; DIFFUSERS; PPDIFFUSERS; TRANSFORMERS; PADDLENLP
     CONFIG_NAME,
     DEPRECATED_REVISION_ARGS,
@@ -38,8 +39,6 @@ from .constants import (  # fastdeploy; NEW; DIFFUSERS; PPDIFFUSERS; TRANSFORMER
     NEG_INF,
     ONNX_EXTERNAL_WEIGHTS_NAME,
     ONNX_WEIGHTS_NAME,
-    PADDLE_INFER_MODEL_NAME,
-    PADDLE_INFER_WEIGHTS_NAME,
     PADDLE_SAFETENSORS_WEIGHTS_NAME,
     PADDLE_SAFETENSORS_WEIGHTS_NAME_INDEX_NAME,
     PADDLE_WEIGHTS_NAME,
