@@ -56,6 +56,10 @@ else:
         "FastDeployStableDiffusionControlNetPipeline"
     ]
 
+_import_structure["pipeline_paddleinfer_stable_diffusion_controlnet"] = [
+    "PaddleInferStableDiffusionControlNetPipeline",
+]
+
 
 if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
     try:
@@ -92,6 +96,9 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             FastDeployStableDiffusionControlNetPipeline,
         )
 
+    from .pipeline_paddleinfer_stable_diffusion_controlnet import (
+        PaddleInferStableDiffusionControlNetPipeline,
+    )
 
 else:
     import sys
