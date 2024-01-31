@@ -14,11 +14,16 @@ from ppdiffusers.utils import (
     PPDIFFUSERS_CACHE,
     _get_model_file,
     logging,
-    torch_load
+    smart_load
 )
 from ppdiffusers.utils.load_utils import convert_to_paddle
 from ppdiffusers.models.modeling_utils import faster_set_state_dict
 from ppdiffusers.models.modeling_pytorch_paddle_utils import convert_pytorch_state_dict_to_paddle
+from ppdiffusers.models.modeling_utils import ContextManagers, faster_set_state_dict  
+try:  
+    from paddlenlp.transformers.model_utils import no_init_weights  
+except ImportError:  
+    from ppdiffusers.utils.paddle_utils import no_init_weights
 
 from . import PhotoMakerIDEncoder
 from . import rescale_noise_cfg
@@ -80,7 +85,10 @@ class PhotoMakerStableDiffusionXLPipeline(StableDiffusionXLPipeline):
             trigger_word (`str`, *optional*, defaults to `"img"`):
                 The trigger word is used to identify the position of class word in the text prompt, 
                 and it is recommended not to set it as a common word. 
-                This trigger word must be placed after the class word when used, otherwise, it will affect the performance of the personalized generation.           
+                This trigger word must be placed after the class word when used, otherwise, it will affect the performance of the personalized generation.        
+            low_gpu_mem_usage (`bool`, *optional*, defaults to `True`):
+                Whether to use low memory usage mode.
+                if True, some modules will be released from GPU to CPU when computing, that will require less GPU memory.
         """
 
         from_hf_hub = kwargs.pop("from_hf_hub", FROM_HF_HUB)
@@ -102,6 +110,7 @@ class PhotoMakerStableDiffusionXLPipeline(StableDiffusionXLPipeline):
         revision = kwargs.pop("revision", None)
         if subfolder is None:
             subfolder = ""
+        self.low_gpu_mem_usage = kwargs.pop("low_gpu_mem_usage", True)
         user_agent = {
             "file_type": "attn_procs_weights",
             "framework": "pytorch" if from_diffusers else "paddle",
@@ -147,11 +156,8 @@ class PhotoMakerStableDiffusionXLPipeline(StableDiffusionXLPipeline):
                             state_dict["lora_weights"][key.replace(
                                 "lora_weights.", "")] = f.get_tensor(key)
             else:
-                state_dict = torch_load(model_file)
-                state_dict["id_encoder"] = convert_to_paddle(
-                    state_dict["id_encoder"])
-                state_dict["lora_weights"] = convert_to_paddle(
-                    state_dict["lora_weights"])
+                state_dict = smart_load(model_file)
+
                 if not from_diffusers:
                     logger.warning(
                         "Detect the weight is in diffusers format, but currently, `from_diffusers` is set to `False`. To proceed, we will change the value of `from_diffusers` to `True`!"
@@ -170,11 +176,19 @@ class PhotoMakerStableDiffusionXLPipeline(StableDiffusionXLPipeline):
             logger.info(
                 f"loading id_encoder from {pretrained_model_name_or_path_or_dict}"
             )
-            
-            with paddle.dtype_guard(self.dtype):
-                id_encoder = PhotoMakerIDEncoder().to(device)
-            
-            convert_pytorch_state_dict_to_paddle(id_encoder, state_dict["id_encoder"])
+        
+            # model init
+            init_contexts = []  
+            init_contexts.append(paddle.dtype_guard(self.dtype))  
+            init_contexts.append(no_init_weights(_enable=True))  
+            if hasattr(paddle, "LazyGuard"):  
+                init_contexts.append(paddle.LazyGuard())  
+            with ContextManagers(init_contexts):
+                id_encoder = PhotoMakerIDEncoder()
+ 
+            if from_diffusers:
+                convert_pytorch_state_dict_to_paddle(id_encoder, state_dict["id_encoder"])
+
             faster_set_state_dict(id_encoder, state_dict["id_encoder"])
             self.id_encoder = id_encoder
         else:
@@ -187,7 +201,7 @@ class PhotoMakerStableDiffusionXLPipeline(StableDiffusionXLPipeline):
 
         self.load_lora_weights(state_dict["lora_weights"],
                                adapter_name="photomaker",
-                               from_diffusers=True)
+                               from_diffusers=from_diffusers)
 
         self.trigger_word = trigger_word
 
@@ -430,10 +444,6 @@ class PhotoMakerStableDiffusionXLPipeline(StableDiffusionXLPipeline):
                                         class_tokens_mask)
         bs_embed, seq_len, _ = prompt_embeds.shape
 
-        # release graphics memory
-        self.id_encoder.to("cpu")
-        paddle.device.cuda.empty_cache()
-
         prompt_embeds = prompt_embeds.cast(dtype=self.id_encoder.dtype)
         prompt_embeds = prompt_embeds.tile(
             repeat_times=[1, num_images_per_prompt, 1])
@@ -477,15 +487,17 @@ class PhotoMakerStableDiffusionXLPipeline(StableDiffusionXLPipeline):
         add_time_ids = add_time_ids.tile(
             repeat_times=[batch_size * num_images_per_prompt, 1])
 
-        # release graphics memory
-        self.text_encoder.to("cpu")
-        self.text_encoder_2.to("cpu")
-        paddle.device.cuda.empty_cache()
-
         num_warmup_steps = len(
             timesteps) - num_inference_steps * self.scheduler.order
 
-        self.unet.to(device)
+        if self.low_gpu_mem_usage:
+            # release graphics memory
+            self.id_encoder.to("cpu")
+            #self.text_encoder.to("cpu")
+            #self.text_encoder_2.to("cpu")
+            paddle.device.cuda.empty_cache()
+            self.unet.to(device)
+
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 latent_model_input = (paddle.concat(
@@ -547,9 +559,10 @@ class PhotoMakerStableDiffusionXLPipeline(StableDiffusionXLPipeline):
                     if callback is not None and i % callback_steps == 0:
                         callback(i, t, latents)
 
-        # release graphics memory
-        self.unet.to("cpu")
-        paddle.device.cuda.empty_cache()
+        if self.low_gpu_mem_usage:
+            # release graphics memory
+            self.unet.to("cpu")
+            paddle.device.cuda.empty_cache()
 
         if self.vae.dtype == "float16" and self.vae.config.force_upcast:
             self.upcast_vae()
