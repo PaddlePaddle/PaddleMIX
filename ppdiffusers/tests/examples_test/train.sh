@@ -118,8 +118,7 @@ python train_dreambooth_lora_sdxl.py \
   --instance_data_dir=$INSTANCE_DIR \
   --output_dir=$OUTPUT_DIR \
   --instance_prompt="a photo of sks dog" \
-  --height=512 \
-  --width=512 \
+  --resolution=512 \
   --train_batch_size=1 \
   --gradient_accumulation_steps=4 \
   --learning_rate=1e-4 \

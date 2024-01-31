@@ -16,6 +16,7 @@
 
 import argparse
 import contextlib
+import copy
 import gc
 import itertools
 import logging
@@ -1613,7 +1614,32 @@ def main(args):
                                     shutil.rmtree(removing_checkpoint)
 
                         save_path = os.path.join(args.output_dir, f"checkpoint-{global_step}")
-                        accelerator.save_state(save_path)
+                        # westfish: save_state substitute
+                        # accelerator.save_state(save_path)
+                        models = []
+                        if args.train_text_encoder:
+                            models.append(copy.deepcopy(unet))
+                            models.append(copy.deepcopy(text_encoder_one))
+                            models.append(copy.deepcopy(text_encoder_two))
+                        else:
+                            models.append(copy.deepcopy(unet))
+                        weights = []
+
+                        def get_state_dict(model):
+                            state_dict = model.state_dict()
+                            if state_dict is not None:
+                                for k in state_dict:
+                                    if getattr(state_dict[k], "dtype", None) == paddle.float16:
+                                        state_dict[k] = state_dict[k]._to(dtype="float32")
+
+                            return state_dict
+
+                        for i, model in enumerate(models):
+                            weights.append(get_state_dict(model))
+                        save_model_hook(models, weights, save_path)
+                        del models, weights
+                        gc.collect()
+                        paddle.device.cuda.empty_cache()
                         logger.info(f"Saved state to {save_path}")
             logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_lr()}
             progress_bar.set_postfix(**logs)
@@ -1650,7 +1676,7 @@ def main(args):
                     unet=accelerator.unwrap_model(unet),
                     revision=args.revision,
                     variant=args.variant,
-                    paddle_dtype=weight_dtype,
+                    # paddle_dtype=weight_dtype,
                 )
 
                 # We train on the simplified learning objective. If we were previously predicting a variance, we need the scheduler to ignore it
@@ -1675,6 +1701,7 @@ def main(args):
                 pipeline_args = {"prompt": args.validation_prompt}
 
                 # with paddle.amp.auto_cast():
+                # westfish: add auto_cast; or got different data type, run type protmotion automatically, this may cause data type been changed.
                 # with paddle.amp.auto_cast(enable=True, custom_white_list=None, custom_black_list=None, level="O2"):
                 images = [
                     pipeline(**pipeline_args, generator=generator).images[0] for _ in range(args.num_validation_images)
