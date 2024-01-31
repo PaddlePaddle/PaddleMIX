@@ -829,10 +829,10 @@ def url_or_path_join(*path_list):
     return os.path.join(*path_list) if os.path.isdir(os.path.join(*path_list)) else "/".join(path_list)
 
 
-def patch_from_pretrained(cls):
-    raw_from_pretrained = cls.from_pretrained.__func__
-    num_inputs = len(inspect.signature(cls.from_pretrained).parameters.keys())
-    if cls.__name__ in ["ImageProcessingMixin", "FeatureExtractionMixin"]:
+def patch_from_pretrained(patched_class):
+    raw_from_pretrained = patched_class.from_pretrained.__func__
+    num_inputs = len(inspect.signature(patched_class.from_pretrained).parameters.keys())
+    if patched_class.__name__ in ["ImageProcessingMixin", "FeatureExtractionMixin"]:
 
         @classmethod
         def new_from_pretrained(cls, pretrained_model_name_or_path, **kwargs):
@@ -882,7 +882,6 @@ def patch_from_pretrained(cls):
                     )
             return cls.from_dict(image_processor_dict, **kwargs)
 
-        return new_from_pretrained
     elif num_inputs == 2:
 
         @classmethod
@@ -911,7 +910,6 @@ def patch_from_pretrained(cls):
                 **kwargs,
             )
 
-        return new_from_pretrained
     elif num_inputs == 3:
 
         @classmethod
@@ -971,6 +969,8 @@ def patch_from_pretrained(cls):
                 **kwargs,
             )
 
+    else:
+        raise ValueError(f"{patched_class} Invalid number of arguments")
     return new_from_pretrained
 
 
