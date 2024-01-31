@@ -54,15 +54,6 @@ class ModuleUtilsMixin:
     A few utilities for `nn.Layer`, to be used as a mixin.
     """
 
-    def to(self=None, device=None, dtype=None, blocking=None):
-        return self._to_impl(
-            device=device,
-            dtype=dtype,
-            blocking=blocking,
-            include_sublayers=True,
-            floating_only=True,
-        )
-
     @property
     def device(self):
         """

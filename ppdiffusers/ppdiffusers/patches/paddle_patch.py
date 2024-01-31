@@ -344,6 +344,19 @@ if not hasattr(nn.Layer, "get_sublayer"):
 
     nn.Layer.get_sublayer = get_sublayer
 
+
+def to(self=None, device=None, dtype=None, blocking=None):
+    return self._to_impl(
+        device=device,
+        dtype=dtype,
+        blocking=blocking,
+        include_sublayers=True,
+        floating_only=True,
+    )
+
+
+nn.Layer.to = to
+
 from ..utils.import_utils import is_ppxformers_available
 
 if is_ppxformers_available():
