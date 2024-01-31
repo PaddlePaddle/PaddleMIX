@@ -28,7 +28,7 @@ PhotoMaker 要求以下环境和依赖项：
 
 ```bash
 # 克隆 PaddleMIX 仓库
-git clone https://github.com/PaddlePaddle/PaddleMIX 
+git clone https://github.com/PaddlePaddle/PaddleMIX
 
 # 安装PaddleNLP和PPDiffusers
 pip install https://paddlenlp.bj.bcebos.com/models/community/junnyu/wheels/ppdiffusers-0.24.0-py3-none-any.whl
@@ -75,8 +75,7 @@ pipe = PhotoMakerStableDiffusionXLPipeline.from_pretrained(
 ### Load PhotoMaker checkpoint
 pipe.load_photomaker_adapter(
     photomaker_path,
-    subfolder="",
-    weight_name=os.path.basename(photomaker_ckpt),
+    weight_name=photomaker_ckpt,
     from_hf_hub=True,
     from_diffusers=True,
     trigger_word="img"  # define the trigger word
