@@ -98,9 +98,6 @@ class PhotoMakerStableDiffusionXLPipeline(StableDiffusionXLPipeline):
                 The trigger word is used to identify the position of class word in the text prompt,
                 and it is recommended not to set it as a common word.
                 This trigger word must be placed after the class word when used, otherwise, it will affect the performance of the personalized generation.
-            low_gpu_mem_usage (`bool`, *optional*, defaults to `True`):
-                Whether to use low memory usage mode.
-                if True, some modules will be released from GPU to CPU when computing, that will require less GPU memory.
         """
 
         from_hf_hub = kwargs.pop("from_hf_hub", FROM_HF_HUB)
@@ -122,7 +119,6 @@ class PhotoMakerStableDiffusionXLPipeline(StableDiffusionXLPipeline):
         revision = kwargs.pop("revision", None)
         if subfolder is None:
             subfolder = ""
-        self.low_gpu_mem_usage = kwargs.pop("low_gpu_mem_usage", True)
         user_agent = {
             "file_type": "attn_procs_weights",
             "framework": "pytorch" if from_diffusers else "paddle",
@@ -325,6 +321,7 @@ class PhotoMakerStableDiffusionXLPipeline(StableDiffusionXLPipeline):
         class_tokens_mask: Optional[paddle.Tensor] = None,
         prompt_embeds_text_only: Optional[paddle.Tensor] = None,
         pooled_prompt_embeds_text_only: Optional[paddle.Tensor] = None,
+        low_gpu_mem_usage: Optional[bool] = True,
     ):
         """
         Function invoked when calling the pipeline for generation.
@@ -342,7 +339,9 @@ class PhotoMakerStableDiffusionXLPipeline(StableDiffusionXLPipeline):
             pooled_prompt_embeds_text_only (`paddle.Tensor`, *optional*):
                 Pre-generated pooled text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt weighting.
                 If not provided, pooled text embeddings will be generated from `prompt` input argument.
-
+            low_gpu_mem_usage (`bool`, *optional*, defaults to `True`):
+                Whether to use low memory usage mode.
+                if True, some modules will be released from GPU to CPU when computing, that will require less GPU memory.
         Returns:
             [`~pipelines.stable_diffusion_xl.StableDiffusionXLPipelineOutput`] or `tuple`:
             [`~pipelines.stable_diffusion_xl.StableDiffusionXLPipelineOutput`] if `return_dict` is True, otherwise a
@@ -404,7 +403,7 @@ class PhotoMakerStableDiffusionXLPipeline(StableDiffusionXLPipeline):
         tokens_text_only["input_ids"].remove(trigger_word_token)
         prompt_text_only = self.tokenizer.decode(tokens_text_only["input_ids"], add_special_tokens=False)
 
-        if self.low_gpu_mem_usage:
+        if low_gpu_mem_usage:
             self.text_encoder.to(paddle.get_device())
             self.text_encoder_2.to(paddle.get_device())
         (
@@ -424,7 +423,7 @@ class PhotoMakerStableDiffusionXLPipeline(StableDiffusionXLPipeline):
             pooled_prompt_embeds=pooled_prompt_embeds_text_only,
             negative_pooled_prompt_embeds=negative_pooled_prompt_embeds,
         )
-        if self.low_gpu_mem_usage:
+        if low_gpu_mem_usage:
             self.text_encoder.to("cpu")
             self.text_encoder_2.to("cpu")
 
@@ -433,10 +432,10 @@ class PhotoMakerStableDiffusionXLPipeline(StableDiffusionXLPipeline):
 
         id_pixel_values = id_pixel_values.unsqueeze(axis=0)
 
-        if self.low_gpu_mem_usage:
+        if low_gpu_mem_usage:
             self.id_encoder.to(paddle.get_device())
         prompt_embeds = self.id_encoder(id_pixel_values, prompt_embeds, class_tokens_mask)
-        if self.low_gpu_mem_usage:
+        if low_gpu_mem_usage:
             self.id_encoder.to("cpu")
             paddle.device.cuda.empty_cache()
 
@@ -483,7 +482,7 @@ class PhotoMakerStableDiffusionXLPipeline(StableDiffusionXLPipeline):
 
         num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
 
-        if self.low_gpu_mem_usage:
+        if low_gpu_mem_usage:
             self.unet.to(paddle.get_device())
 
         with self.progress_bar(total=num_inference_steps) as progress_bar:
@@ -525,7 +524,7 @@ class PhotoMakerStableDiffusionXLPipeline(StableDiffusionXLPipeline):
                     if callback is not None and i % callback_steps == 0:
                         callback(i, t, latents)
 
-        if self.low_gpu_mem_usage:
+        if low_gpu_mem_usage:
             # release graphics memory
             self.unet.to("cpu")
             paddle.device.cuda.empty_cache()
