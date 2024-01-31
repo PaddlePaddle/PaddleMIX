@@ -182,7 +182,7 @@ For stylization, you could use our other gradio demo [PhotoMaker-Style](https://
 
 article = r"""
 
-If PhotoMaker is helpful, please help to ⭐ the <a href='https://github.com/TencentARC/PhotoMaker' target='_blank'>Github Repo</a>. Thanks! # noqa: W291 
+If PhotoMaker is helpful, please help to ⭐ the <a href='https://github.com/TencentARC/PhotoMaker' target='_blank'>Github Repo</a>. Thanks!
 [![GitHub Stars](https://img.shields.io/github/stars/TencentARC/PhotoMaker?style=social)](https://github.com/TencentARC/PhotoMaker)
 ---
 📝 **Citation**
