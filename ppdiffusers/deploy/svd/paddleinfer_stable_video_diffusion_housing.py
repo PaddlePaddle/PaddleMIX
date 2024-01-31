@@ -28,7 +28,6 @@ logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 class PaddleInferStableVideoDiffusionPipelineHousing(
     DiffusionPipeline,
     PaddleInferDiffusionPipelineMixin,
-    # PaddleInferDiffusionXLPipelineMixin
 ):
     r"""
     Pipeline to generate video from an input image using Stable Video Diffusion.
@@ -69,5 +68,3 @@ class PaddleInferStableVideoDiffusionPipelineHousing(
             scheduler=scheduler,
             feature_extractor=feature_extractor,
         )
-        # self.register_to_config(force_zeros_for_empty_prompt=force_zeros_for_empty_prompt, dtype="float32")
-        # self.post_init()

@@ -749,7 +749,12 @@ class UNetMidBlock2DCrossAttn(nn.Layer):
         lora_scale = cross_attention_kwargs.get("scale", 1.0) if cross_attention_kwargs is not None else 1.0
         hidden_states = self.resnets[0](hidden_states, temb, scale=lora_scale)
         for attn, resnet in zip(self.attentions, self.resnets[1:]):
-            if self.gradient_checkpointing and not hidden_states.stop_gradient and not use_old_recompute():
+            if (
+                self.training
+                and self.gradient_checkpointing
+                and not hidden_states.stop_gradient
+                and not use_old_recompute()
+            ):
 
                 def create_custom_forward(module, return_dict=None):
                     def custom_forward(*inputs):
@@ -1143,7 +1148,7 @@ class CrossAttnDownBlock2D(nn.Layer):
         blocks = list(zip(self.resnets, self.attentions))
 
         for i, (resnet, attn) in enumerate(blocks):
-            if self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
 
                 def create_custom_forward(module, return_dict=None):
                     def custom_forward(*inputs):
@@ -1268,7 +1273,7 @@ class DownBlock2D(nn.Layer):
         output_states = ()
 
         for resnet in self.resnets:
-            if self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
 
                 def create_custom_forward(module):
                     def custom_forward(*inputs):
@@ -1700,7 +1705,7 @@ class ResnetDownsampleBlock2D(nn.Layer):
         output_states = ()
 
         for resnet in self.resnets:
-            if self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
 
                 def create_custom_forward(module):
                     def custom_forward(*inputs):
@@ -1843,7 +1848,7 @@ class SimpleCrossAttnDownBlock2D(nn.Layer):
             mask = attention_mask
 
         for resnet, attn in zip(self.resnets, self.attentions):
-            if self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
 
                 def create_custom_forward(module, return_dict=None):
                     def custom_forward(*inputs):
@@ -1935,7 +1940,7 @@ class KDownBlock2D(nn.Layer):
         output_states = ()
 
         for resnet in self.resnets:
-            if self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
 
                 def create_custom_forward(module):
                     def custom_forward(*inputs):
@@ -2035,7 +2040,7 @@ class KCrossAttnDownBlock2D(nn.Layer):
         lora_scale = cross_attention_kwargs.get("scale", 1.0) if cross_attention_kwargs is not None else 1.0
 
         for resnet, attn in zip(self.resnets, self.attentions):
-            if self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
 
                 def create_custom_forward(module, return_dict=None):
                     def custom_forward(*inputs):
@@ -2333,7 +2338,7 @@ class CrossAttnUpBlock2D(nn.Layer):
 
             hidden_states = paddle.concat([hidden_states, res_hidden_states], axis=1)
 
-            if self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
 
                 def create_custom_forward(module, return_dict=None):
                     def custom_forward(*inputs):
@@ -2476,7 +2481,7 @@ class UpBlock2D(nn.Layer):
 
             hidden_states = paddle.concat([hidden_states, res_hidden_states], axis=1)
 
-            if self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
 
                 def create_custom_forward(module):
                     def custom_forward(*inputs):
@@ -2960,7 +2965,7 @@ class ResnetUpsampleBlock2D(nn.Layer):
             res_hidden_states_tuple = res_hidden_states_tuple[:-1]
             hidden_states = paddle.concat([hidden_states, res_hidden_states], axis=1)
 
-            if self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
 
                 def create_custom_forward(module):
                     def custom_forward(*inputs):
@@ -3109,7 +3114,7 @@ class SimpleCrossAttnUpBlock2D(nn.Layer):
             res_hidden_states_tuple = res_hidden_states_tuple[:-1]
             hidden_states = paddle.concat([hidden_states, res_hidden_states], axis=1)
 
-            if self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
 
                 def create_custom_forward(module, return_dict=None):
                     def custom_forward(*inputs):
@@ -3208,7 +3213,7 @@ class KUpBlock2D(nn.Layer):
             hidden_states = paddle.concat([hidden_states, res_hidden_states_tuple], axis=1)
 
         for resnet in self.resnets:
-            if self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
 
                 def create_custom_forward(module):
                     def custom_forward(*inputs):
@@ -3331,7 +3336,7 @@ class KCrossAttnUpBlock2D(nn.Layer):
 
         lora_scale = cross_attention_kwargs.get("scale", 1.0) if cross_attention_kwargs is not None else 1.0
         for resnet, attn in zip(self.resnets, self.attentions):
-            if self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
 
                 def create_custom_forward(module, return_dict=None):
                     def custom_forward(*inputs):

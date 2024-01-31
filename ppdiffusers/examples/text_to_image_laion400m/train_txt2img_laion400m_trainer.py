@@ -72,8 +72,7 @@ def main():
         tokenizer=model.tokenizer,
     )
 
-    # paddlenlp >= 2.7.0 `training_args`` has `to_static` attribute
-    if getattr(training_args, "to_static", False):
+    if model_args.to_static:
         input_ids = paddle.static.InputSpec(name="input_ids", shape=[-1, model_args.model_max_length], dtype="int64")
         pixel_values = paddle.static.InputSpec(
             name="pixel_values",

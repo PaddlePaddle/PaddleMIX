@@ -165,7 +165,6 @@ class TextImagePair(IterableDataset):
                             clip_image = self.clip_image_processor(images=image, return_tensors="pd").pixel_values[0]
                             drop_image_embed = 0
                             rand_num = random.random()
-                            text = data["caption"]
                             if rand_num < self.i_drop_rate:
                                 drop_image_embed = 1
                             elif rand_num < (self.i_drop_rate + self.t_drop_rate):
@@ -173,6 +172,8 @@ class TextImagePair(IterableDataset):
                             elif rand_num < (self.i_drop_rate + self.t_drop_rate + self.ti_drop_rate):
                                 text = ""
                                 drop_image_embed = 1
+                            else:
+                                text = data["caption"]
                             yield {
                                 "pixel_values": self.image_processing(image),
                                 "input_ids": self.text_processing(text),

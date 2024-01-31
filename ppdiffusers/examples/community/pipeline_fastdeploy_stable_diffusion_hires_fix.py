@@ -19,6 +19,7 @@ from typing import Callable, Dict, List, Optional, Union
 import paddle
 import paddle.nn.functional as F
 import PIL
+from paddlenlp.transformers import CLIPImageProcessor, CLIPTokenizer
 
 from ppdiffusers import DiffusionPipeline
 from ppdiffusers.pipelines.fastdeploy_utils import (
@@ -27,7 +28,6 @@ from ppdiffusers.pipelines.fastdeploy_utils import (
 )
 from ppdiffusers.pipelines.stable_diffusion import StableDiffusionPipelineOutput
 from ppdiffusers.schedulers import KarrasDiffusionSchedulers
-from ppdiffusers.transformers import CLIPImageProcessor, CLIPTokenizer
 from ppdiffusers.utils import logging, randn_tensor
 
 logger = logging.get_logger(__name__)

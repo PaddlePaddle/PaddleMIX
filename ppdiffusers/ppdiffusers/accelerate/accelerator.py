@@ -827,9 +827,7 @@ class Accelerator:
         with contextlib.ExitStack() as cm_stack:
             for m in models:
                 do_gradient_checkpointing = (
-                    gradient_checkpointing
-                    if gradient_checkpointing is not None
-                    else getattr(m, "do_gradient_checkpointing", False)
+                    gradient_checkpointing if gradient_checkpointing is not None else m.do_gradient_checkpointing
                 )
                 cm_stack.enter_context(
                     self.no_sync(m)

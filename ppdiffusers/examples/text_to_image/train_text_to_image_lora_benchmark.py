@@ -899,8 +899,14 @@ def main():
     if args.gradient_checkpointing:
         unet.enable_gradient_checkpointing()
         if args.train_text_encoder:
-            if hasattr(text_encoder, "gradient_checkpointing_enable"):
-                text_encoder.gradient_checkpointing_enable()
+
+            def fn(layer):
+                if hasattr(layer, "enable_recompute") and (
+                    layer.enable_recompute is False or layer.enable_recompute == 0
+                ):
+                    layer.enable_recompute = True
+
+            text_encoder.apply(fn)
 
     if num_processes > 1:
         unet = paddle.DataParallel(unet)
@@ -1165,7 +1171,7 @@ def main():
             "train epoch: %d, epoch_cost: %.5f s" % (epoch, train_epoch_cost),
         )
         if is_main_process:
-            if args.validation_prompt is not None and epoch % args.validation_epochs == 0 and epoch > 0:
+            if args.validation_prompt is not None and epoch % args.validation_epochs == 0:
                 logger.info(
                     f"Running validation... \n Generating {args.num_validation_images} images with prompt:"
                     f" {args.validation_prompt}."

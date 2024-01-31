@@ -28,8 +28,7 @@ from ppdiffusers.utils import logging
 
 try:
     from ligo.segments import segment
-
-    from ppdiffusers.transformers import (
+    from paddlenlp.transformers import (
         CLIPFeatureExtractor,
         CLIPTextModel,
         CLIPTokenizer,

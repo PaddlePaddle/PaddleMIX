@@ -28,9 +28,9 @@ ToMe for SD 生成的图像有着如下优势：
 - 数据集：ImageNet-1k
 
 ## 使用例子
-安装develop版本(或者2.5.2版本)的`paddlepaddle`。2.6.0版本的paddle存在bug，会导致`put_along_axis`算子结果错误。
+安装develop版本的ppdiffusers
 ```sh
-pip install "ppdiffusers>=0.20.4"
+pip install "ppdiffusers>=0.16.1"
 ```
 
 下面是 StableDiffusion + ToME 技术的例子

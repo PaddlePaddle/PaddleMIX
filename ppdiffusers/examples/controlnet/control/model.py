@@ -19,6 +19,7 @@ import os
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
+from paddlenlp.transformers import AutoTokenizer, CLIPTextModel
 from paddlenlp.utils.log import logger
 
 from ppdiffusers import (
@@ -26,14 +27,13 @@ from ppdiffusers import (
     ControlNetModel,
     DDIMScheduler,
     DDPMScheduler,
+    LDMBertModel,
     UNet2DConditionModel,
     is_ppxformers_available,
 )
+from ppdiffusers.initializer import reset_initialized_parameter
 from ppdiffusers.models.ema import LitEma
-from ppdiffusers.pipelines.latent_diffusion import LDMBertModel
 from ppdiffusers.training_utils import freeze_params
-from ppdiffusers.transformers import AutoTokenizer, CLIPTextModel
-from ppdiffusers.utils.initializer_utils import reset_initialized_parameter
 
 
 def read_json(file):
@@ -239,7 +239,7 @@ class ControlNet(nn.Layer):
                 uncond_embeddings = self.text_encoder(uncond_input.input_ids)[0]
                 text_embeddings = paddle.concat([uncond_embeddings, text_embeddings], axis=0)
 
-            latents = paddle.randn((input_ids.shape[0], self.unet.config.in_channels, height // 8, width // 8))
+            latents = paddle.randn((input_ids.shape[0], self.unet.in_channels, height // 8, width // 8))
             # ddim donot use this
             latents = latents * self.eval_scheduler.init_noise_sigma
 

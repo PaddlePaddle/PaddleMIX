@@ -280,7 +280,7 @@ def get_cached_module_file(
                 proxies=proxies,
                 resume_download=resume_download,
                 local_files_only=local_files_only,
-                token=False,
+                use_auth_token=False,
             )
             submodule = "git"
             module_file = pretrained_model_name_or_path + ".py"
@@ -298,7 +298,7 @@ def get_cached_module_file(
                 proxies=proxies,
                 resume_download=resume_download,
                 local_files_only=local_files_only,
-                token=use_auth_token,
+                use_auth_token=use_auth_token,
             )
             submodule = os.path.join("local", "--".join(pretrained_model_name_or_path.split("/")))
         except EnvironmentError:

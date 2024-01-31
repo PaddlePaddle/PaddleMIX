@@ -402,7 +402,10 @@ def load_sub_model(
         loading_kwargs["from_hf_hub"] = from_hf_hub
         loading_kwargs["from_aistudio"] = from_aistudio
         loading_kwargs["cache_dir"] = cache_dir
-        loading_kwargs["subfolder"] = name
+        if from_hf_hub is True or from_aistudio is True:
+            loading_kwargs["subfolder"] = name
+        else:
+            cached_folder = os.path.join(cached_folder, name)
         # else load from the root directory
         loaded_sub_model = load_method(cached_folder, **loading_kwargs)
 

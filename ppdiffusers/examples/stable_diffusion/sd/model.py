@@ -27,12 +27,12 @@ from ppdiffusers import (
     UNet2DConditionModel,
     is_ppxformers_available,
 )
+from ppdiffusers.initializer import reset_initialized_parameter, zeros_
 from ppdiffusers.models.ema import LitEma
 from ppdiffusers.models.resnet import ResnetBlock2D
 from ppdiffusers.models.transformer_2d import Transformer2DModel
 from ppdiffusers.training_utils import freeze_params
 from ppdiffusers.transformers import AutoTokenizer, CLIPTextModel
-from ppdiffusers.utils.initializer_utils import reset_initialized_parameter, zeros_
 
 
 class StableDiffusionModel(nn.Layer):

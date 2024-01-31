@@ -305,7 +305,7 @@ class FromSingleFileMixin:
                         resume_download=resume_download,
                         proxies=proxies,
                         local_files_only=local_files_only,
-                        token=use_auth_token,
+                        use_auth_token=use_auth_token,
                         revision=revision,
                         force_download=force_download,
                     )
@@ -513,7 +513,7 @@ class FromOriginalVAEMixin:
                         resume_download=resume_download,
                         proxies=proxies,
                         local_files_only=local_files_only,
-                        token=use_auth_token,
+                        use_auth_token=use_auth_token,
                         revision=revision,
                         force_download=force_download,
                     )
@@ -722,7 +722,7 @@ class FromOriginalControlnetMixin:
                         resume_download=resume_download,
                         proxies=proxies,
                         local_files_only=local_files_only,
-                        token=use_auth_token,
+                        use_auth_token=use_auth_token,
                         revision=revision,
                         force_download=force_download,
                     )

@@ -245,25 +245,20 @@ class UNetMotionModelTests(ModelTesterMixin, UNetTesterMixin, unittest.TestCase)
         paddle.seed(0)
         model = self.model_class(**init_dict)
         model.eval()
-        if hasattr(model, "set_default_attn_processor"):
-            model.set_default_attn_processor()
 
         with tempfile.TemporaryDirectory() as tmpdirname:
             model.save_pretrained(tmpdirname, variant="fp16", safe_serialization=False)
 
             paddle.seed(0)
             new_model = self.model_class.from_pretrained(tmpdirname, variant="fp16")
-            if hasattr(new_model, "set_default_attn_processor"):
-                new_model.set_default_attn_processor()
-
             # TOFXI
             # non-variant cannot be loaded
             # with self.assertRaises(OSError) as error_context:
             #     self.model_class.from_pretrained(tmpdirname)
             # make sure that error message states what keys are missing
             # assert "Error no file named model_state.pdparams found in directory" in str(error_context.exception)
-            # model = self.model_class.from_pretrained(tmpdirname)
-            # self.assertIsNotNone(model)
+            model = self.model_class.from_pretrained(tmpdirname)
+            self.assertIsNotNone(model)
 
         with paddle.no_grad():
             image = model(**inputs_dict)

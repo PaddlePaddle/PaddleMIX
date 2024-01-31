@@ -8,13 +8,8 @@
 import paddle
 import paddle.nn as nn
 from fastcore.all import patch_to
-
-from ppdiffusers.transformers import BlipForConditionalGeneration, BlipProcessor
-
-try:
-    from paddlenlp.transformers.generation_utils import BeamHypotheses
-except ImportError:
-    from paddlenlp.generation.utils import BeamHypotheses
+from paddlenlp.transformers import BlipForConditionalGeneration, BlipProcessor
+from paddlenlp.transformers.generation_utils import BeamHypotheses
 
 
 @patch_to(BeamHypotheses)

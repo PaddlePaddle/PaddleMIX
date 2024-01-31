@@ -22,6 +22,7 @@ import numpy as np
 import paddle
 import paddle.nn as nn
 from einops import rearrange
+from paddlenlp.transformers import AutoTokenizer, CLIPTextModel
 from paddlenlp.utils.log import logger
 
 from ppdiffusers import (
@@ -45,7 +46,6 @@ from ppdiffusers.models.lvdm_attention_temporal import (
 )
 from ppdiffusers.models.lvdm_distributions import DiagonalGaussianDistribution
 from ppdiffusers.training_utils import freeze_params
-from ppdiffusers.transformers import AutoTokenizer, CLIPTextModel
 
 
 def set_seed(seed: int = 1234, args=None):

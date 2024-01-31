@@ -34,7 +34,7 @@ except OptionalDependencyNotAvailable:
 
     _dummy_objects.update(get_objects_from_module(dummy_paddle_and_paddlenlp_objects))
 else:
-    _import_structure["modeling_roberta_series"] = ["RobertaSeriesModelWithTransformation", "RobertaSeriesConfig"]
+    _import_structure["modeling_roberta_series"] = ["RobertaSeriesModelWithTransformation"]
     _import_structure["pipeline_alt_diffusion"] = ["AltDiffusionPipeline"]
     _import_structure["pipeline_alt_diffusion_img2img"] = ["AltDiffusionImg2ImgPipeline"]
 
@@ -48,10 +48,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         from ...utils.dummy_paddle_and_paddlenlp_objects import *
 
     else:
-        from .modeling_roberta_series import (
-            RobertaSeriesConfig,
-            RobertaSeriesModelWithTransformation,
-        )
+        from .modeling_roberta_series import RobertaSeriesModelWithTransformation
         from .pipeline_alt_diffusion import AltDiffusionPipeline
         from .pipeline_alt_diffusion_img2img import AltDiffusionImg2ImgPipeline
         from .pipeline_output import AltDiffusionPipelineOutput

@@ -21,22 +21,22 @@ import numpy as np
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
+from paddlenlp.transformers import AutoTokenizer, CLIPTextModel
 from paddlenlp.utils.log import logger
 
 from ppdiffusers import (
     AutoencoderKL,
     DDIMScheduler,
     DDPMScheduler,
+    LDMBertModel,
     T2IAdapter,
     UNet2DConditionModel,
     is_ppxformers_available,
 )
 
-# from ppdiffusers.utils.initializer_utils import reset_initialized_parameter
+# from ppdiffusers.initializer import reset_initialized_parameter
 from ppdiffusers.models.ema import LitEma
-from ppdiffusers.pipelines.latent_diffusion import LDMBertModel
 from ppdiffusers.training_utils import freeze_params
-from ppdiffusers.transformers import AutoTokenizer, CLIPTextModel
 
 from .annotator_utils import create_annotator
 
@@ -293,7 +293,7 @@ class AdapterLDM(nn.Layer):
             if self.use_preconfig_latents:
                 latents = self.preconfig_latents
             else:
-                latents = paddle.randn((input_ids.shape[0], self.unet.config.in_channels, height // 8, width // 8))
+                latents = paddle.randn((input_ids.shape[0], self.unet.in_channels, height // 8, width // 8))
             # ddim donot use this
             latents = latents * self.eval_scheduler.init_noise_sigma
 
@@ -340,5 +340,9 @@ class AdapterLDM(nn.Layer):
         return image.cast("float32").numpy().round()
 
     def set_recompute(self, value=False):
-        if value:
-            self.unet.enable_gradient_checkpointing()
+        def fn(layer):
+            if hasattr(layer, "gradient_checkpointing"):
+                layer.gradient_checkpointing = value
+                print("Set", layer.__class__, "recompute", layer.gradient_checkpointing)
+
+        self.adapter.apply(fn)

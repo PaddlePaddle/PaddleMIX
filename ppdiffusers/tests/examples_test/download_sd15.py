@@ -12,17 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from datasets import load_dataset
-
 from ppdiffusers import DiffusionPipeline
 
 # CompVis/stable-diffusion-v1-5
 p = DiffusionPipeline.from_pretrained("runwayml/stable-diffusion-v1-5")
-
-# stabilityai/stable-diffusion-xl-base-1.0
-p = DiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-xl-base-1.0")
-
-# "lambdalabs/pokemon-blip-captions"
-dataset = load_dataset(
-    "lambdalabs/pokemon-blip-captions",
-)

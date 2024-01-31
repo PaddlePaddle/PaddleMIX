@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-export FLAGS_use_cuda_managed_memory=true
+export FLAGS_use_cuda_managed_memory=False
 
 export USE_PPXFORMERS=False
-# python infer.py --pretrained_model_name_or_path static_model/stable-video-diffusion-img2vid-xt
+
 # python infer.py --model_dir static_model/stable-video-diffusion-img2vid-xt --scheduler "euler" --backend paddle --width 576 --height 576 --device gpu --task_name img2video
-python infer.py --model_dir static_model/stable-video-diffusion-img2vid-xt --scheduler "euler" --backend paddle --width 256 --height 256 --device gpu --task_name img2video
+python infer.py --model_dir static_model/stable-video-diffusion-img2vid-xt --scheduler "euler" --backend paddle_tensorrt --width 256 --height 256 --device gpu --task_name img2video

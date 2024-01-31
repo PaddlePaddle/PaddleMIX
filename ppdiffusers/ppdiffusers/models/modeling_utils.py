@@ -230,6 +230,15 @@ class ModelMixin(nn.Layer):
     def __init__(self):
         super().__init__()
 
+    def to(self=None, device=None, dtype=None, blocking=None):
+        return self._to_impl(
+            device=device,
+            dtype=dtype,
+            blocking=blocking,
+            include_sublayers=True,
+            floating_only=True,
+        )
+
     def __getattr__(self, name: str) -> Any:
         """The only reason we overwrite `getattr` here is to gracefully deprecate accessing
         config attributes directly. See https://github.com/huggingface/diffusers/pull/3129 We need to overwrite
@@ -824,8 +833,6 @@ class ModelMixin(nn.Layer):
         index_file = None
 
         variant_list = [variant]
-        if None not in variant_list:
-            variant_list.append(None)
         if "fp16" not in variant_list:
             variant_list.append("fp16")
         if "fp32" not in variant_list:
@@ -963,12 +970,9 @@ class ModelMixin(nn.Layer):
                         "Please note that this might not be the desired variant."
                     )
                 break
-        variant_str = ", ".join(map(lambda x: "`" + str(x) + "`", variant_list))
         assert len(resolved_model_files) > 0, (
-            f"We are attempting to load the variant in [{variant_str}]. "
-            f"But unfortunately, no model files were found in the path {pretrained_model_name_or_path}. "
-            "Please check if the provided path is correct and ensure that it contains the necessary model files. "
-            "If the issue persists, consider redownloading the model files or contacting the model provider for assistance."
+            f"Could not find any model files in `{pretrained_model_name_or_path}`. "
+            "Please check the provided path and make sure it contains the necessary model files."
         )
         init_contexts = []
 

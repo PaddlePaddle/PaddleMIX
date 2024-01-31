@@ -263,25 +263,25 @@ class Attention(nn.Layer):
             if is_lora:
                 # TODO (sayakpaul): should we throw a warning if someone wants to use the xformers
                 # variant when using PT 2.0 now that we have LoRAAttnProcessor2_5?
-                with paddle.dtype_guard(self.dtype):
-                    # we must cast dtype
-                    processor = LoRAXFormersAttnProcessor(
-                        hidden_size=self.processor.hidden_size,
-                        cross_attention_dim=self.processor.cross_attention_dim,
-                        rank=self.processor.rank,
-                        attention_op=attention_op,
-                    )
+                processor = LoRAXFormersAttnProcessor(
+                    hidden_size=self.processor.hidden_size,
+                    cross_attention_dim=self.processor.cross_attention_dim,
+                    rank=self.processor.rank,
+                    attention_op=attention_op,
+                )
+                # we must cast dtype
+                processor.to(dtype=self.dtype)
                 processor.load_dict(self.processor.state_dict())
             elif is_custom_diffusion:
-                with paddle.dtype_guard(self.dtype):
-                    # we must cast dtype
-                    processor = CustomDiffusionXFormersAttnProcessor(
-                        train_kv=self.processor.train_kv,
-                        train_q_out=self.processor.train_q_out,
-                        hidden_size=self.processor.hidden_size,
-                        cross_attention_dim=self.processor.cross_attention_dim,
-                        attention_op=attention_op,
-                    )
+                processor = CustomDiffusionXFormersAttnProcessor(
+                    train_kv=self.processor.train_kv,
+                    train_q_out=self.processor.train_q_out,
+                    hidden_size=self.processor.hidden_size,
+                    cross_attention_dim=self.processor.cross_attention_dim,
+                    attention_op=attention_op,
+                )
+                # we must cast dtype
+                processor.to(dtype=self.dtype)
                 processor.load_dict(self.processor.state_dict())
             elif is_added_kv_processor:
                 # TODO(Patrick, Suraj, William) - currently xformers doesn't work for UnCLIP
@@ -297,26 +297,26 @@ class Attention(nn.Layer):
         else:
             if is_lora:
                 attn_processor_class = LoRAAttnProcessor2_5 if is_ppxformers_available() else LoRAAttnProcessor
-                with paddle.dtype_guard(self.dtype):
-                    # we must cast dtype
-                    processor = attn_processor_class(
-                        hidden_size=self.processor.hidden_size,
-                        cross_attention_dim=self.processor.cross_attention_dim,
-                        rank=self.processor.rank,
-                    )
+                processor = attn_processor_class(
+                    hidden_size=self.processor.hidden_size,
+                    cross_attention_dim=self.processor.cross_attention_dim,
+                    rank=self.processor.rank,
+                )
+                # we must cast dtype
+                processor.to(dtype=self.dtype)
                 processor.load_dict(self.processor.state_dict())
             elif is_custom_diffusion:
                 attn_processor_class = (
                     CustomDiffusionAttnProcessor2_5 if is_ppxformers_available() else CustomDiffusionAttnProcessor
                 )
-                with paddle.dtype_guard(self.dtype):
-                    # we must cast dtype
-                    processor = attn_processor_class(
-                        train_kv=self.processor.train_kv,
-                        train_q_out=self.processor.train_q_out,
-                        hidden_size=self.processor.hidden_size,
-                        cross_attention_dim=self.processor.cross_attention_dim,
-                    )
+                processor = attn_processor_class(
+                    train_kv=self.processor.train_kv,
+                    train_q_out=self.processor.train_q_out,
+                    hidden_size=self.processor.hidden_size,
+                    cross_attention_dim=self.processor.cross_attention_dim,
+                )
+                # we must cast dtype
+                processor.to(dtype=self.dtype)
                 processor.load_dict(self.processor.state_dict())
             else:
                 # set attention processor
@@ -446,20 +446,19 @@ class Attention(nn.Layer):
 
             if hasattr(self.processor, "attention_op"):
                 kwargs["attention_op"] = self.processor.attention_op
-            with paddle.dtype_guard(self.dtype):
-                lora_processor = lora_processor_cls(hidden_size, **kwargs)
+
+            lora_processor = lora_processor_cls(hidden_size, **kwargs)
             lora_processor.to_q_lora.load_dict(self.to_q.lora_layer.state_dict())
             lora_processor.to_k_lora.load_dict(self.to_k.lora_layer.state_dict())
             lora_processor.to_v_lora.load_dict(self.to_v.lora_layer.state_dict())
             lora_processor.to_out_lora.load_dict(self.to_out[0].lora_layer.state_dict())
         elif lora_processor_cls == LoRAAttnAddedKVProcessor:
-            with paddle.dtype_guard(self.dtype):
-                lora_processor = lora_processor_cls(
-                    hidden_size,
-                    cross_attention_dim=self.add_k_proj.weight.shape[0],
-                    rank=self.to_q.lora_layer.rank,
-                    network_alpha=self.to_q.lora_layer.network_alpha,
-                )
+            lora_processor = lora_processor_cls(
+                hidden_size,
+                cross_attention_dim=self.add_k_proj.weight.shape[0],
+                rank=self.to_q.lora_layer.rank,
+                network_alpha=self.to_q.lora_layer.network_alpha,
+            )
             lora_processor.to_q_lora.load_dict(self.to_q.lora_layer.state_dict())
             lora_processor.to_k_lora.load_dict(self.to_k.lora_layer.state_dict())
             lora_processor.to_v_lora.load_dict(self.to_v.lora_layer.state_dict())
@@ -627,8 +626,8 @@ class Attention(nn.Layer):
             if attention_mask.shape[0] < batch_size * num_heads:
                 attention_mask = attention_mask.repeat_interleave(num_heads, axis=0)
         elif out_dim == 4:
-            if attention_mask.shape[0] < batch_size * num_heads:
-                attention_mask = attention_mask.repeat_interleave(num_heads, axis=0)
+            attention_mask = attention_mask.unsqueeze(1)
+            attention_mask = attention_mask.repeat_interleave(num_heads, axis=1)
             attention_mask = attention_mask.reshape([batch_size, num_heads, -1, attention_mask.shape[-1]])
 
         # do not need transpose

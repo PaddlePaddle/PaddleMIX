@@ -1,4 +1,4 @@
-paddlenlp>=2.7.2
+paddlenlp>=2.6.0rc0
 safetensors>=0.3.1
 ftfy
 regex

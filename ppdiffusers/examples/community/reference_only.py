@@ -20,6 +20,7 @@ import numpy as np
 import paddle
 import PIL
 from packaging import version
+from paddlenlp.transformers import CLIPImageProcessor, CLIPTextModel, CLIPTokenizer
 from PIL import Image
 
 from ppdiffusers.configuration_utils import FrozenDict
@@ -37,7 +38,6 @@ from ppdiffusers.pipelines.stable_diffusion.safety_checker import (
     StableDiffusionSafetyChecker,
 )
 from ppdiffusers.schedulers import KarrasDiffusionSchedulers
-from ppdiffusers.transformers import CLIPImageProcessor, CLIPTextModel, CLIPTokenizer
 from ppdiffusers.utils import (
     PIL_INTERPOLATION,
     check_min_version,
@@ -173,7 +173,7 @@ def transformer_2d_model_forward(
     attention_mask=None,
     encoder_attention_mask=None,
     return_dict: bool = True,
-    **kwargs,  # dummmy for comptability
+    **kwargs, # dummmy for comptability
 ):
     x = self.original_forward(
         hidden_states,
@@ -184,7 +184,7 @@ def transformer_2d_model_forward(
         attention_mask=attention_mask,
         encoder_attention_mask=encoder_attention_mask,
         return_dict=return_dict,
-        **kwargs,  # dummmy for comptability
+        **kwargs, # dummmy for comptability
     )[0]
     output = None
     if getattr(self, "enable_gn", False):

@@ -20,6 +20,12 @@ import paddle
 from paddle import nn
 from paddle.nn import functional as F
 from paddle.vision import transforms
+from paddlenlp.transformers import (
+    CLIPFeatureExtractor,
+    CLIPModel,
+    CLIPTextModel,
+    CLIPTokenizer,
+)
 
 from ppdiffusers import (
     AutoencoderKL,
@@ -30,12 +36,6 @@ from ppdiffusers import (
     UNet2DConditionModel,
 )
 from ppdiffusers.pipelines.stable_diffusion import StableDiffusionPipelineOutput
-from ppdiffusers.transformers import (
-    CLIPFeatureExtractor,
-    CLIPModel,
-    CLIPTextModel,
-    CLIPTokenizer,
-)
 from ppdiffusers.utils import logging
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name

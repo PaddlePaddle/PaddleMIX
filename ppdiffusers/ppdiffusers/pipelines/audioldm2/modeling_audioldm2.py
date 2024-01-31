@@ -1099,7 +1099,7 @@ class CrossAttnDownBlock2D(nn.Layer):
         )
 
         for i in range(num_layers):
-            if self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
 
                 def create_custom_forward(module, return_dict=None):
                     def custom_forward(*inputs):
@@ -1278,7 +1278,7 @@ class UNetMidBlock2DCrossAttn(nn.Layer):
         )
 
         for i in range(len(self.resnets[1:])):
-            if self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
 
                 def create_custom_forward(module, return_dict=None):
                     def custom_forward(*inputs):
@@ -1453,7 +1453,7 @@ class CrossAttnUpBlock2D(nn.Layer):
             res_hidden_states_tuple = res_hidden_states_tuple[:-1]
             hidden_states = paddle.concat([hidden_states, res_hidden_states], axis=1)
 
-            if self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
 
                 def create_custom_forward(module, return_dict=None):
                     def custom_forward(*inputs):

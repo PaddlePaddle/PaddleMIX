@@ -24,10 +24,9 @@ from typing import List
 import numpy as np
 import paddle
 from paddle.vision import transforms
+from paddlenlp.transformers import CLIPModel, CLIPProcessor
 from PIL import Image
 from tqdm import tqdm
-
-from ppdiffusers.transformers import CLIPModel, CLIPProcessor
 
 from .blip_decoder import BLIP_Decoder
 
