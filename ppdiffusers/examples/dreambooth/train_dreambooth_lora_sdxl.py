@@ -915,6 +915,7 @@ def main(args):
                     image.save(image_filename)
 
             del pipeline
+            gc.collect()
             if paddle.device.cuda.device_count() >= 1:
                 paddle.device.cuda.empty_cache()
 
@@ -1090,6 +1091,9 @@ def main(args):
                 text_encoder_lora_layers=text_encoder_one_lora_layers_to_save,
                 text_encoder_2_lora_layers=text_encoder_two_lora_layers_to_save,
             )
+            del unet_lora_layers_to_save, text_encoder_one_lora_layers_to_save, text_encoder_two_lora_layers_to_save
+            gc.collect()
+            paddle.device.cuda.empty_cache()
 
     def load_model_hook(models, input_dir):
         unet_ = None
@@ -1465,7 +1469,7 @@ def main(args):
                 model_input = vae.encode(pixel_values).latent_dist.sample()
                 model_input = model_input * vae.config.scaling_factor
                 if args.pretrained_vae_model_name_or_path is None:
-                    model_input = model_input.to(weight_dtype)
+                    model_input = model_input.astype(weight_dtype)
 
                 # Sample noise that we'll add to the latents
                 noise = paddle.randn(shape=model_input.shape, dtype=model_input.dtype)
@@ -1638,7 +1642,8 @@ def main(args):
                             weights.append(get_state_dict(model))
                         save_model_hook(models, weights, save_path)
                         del models, weights
-                        gc.collect()
+                        for _ in range(3):
+                            gc.collect()
                         paddle.device.cuda.empty_cache()
                         logger.info(f"Saved state to {save_path}")
             logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_lr()}
@@ -1722,20 +1727,21 @@ def main(args):
                         )
 
                 del pipeline
+                gc.collect()
                 paddle.device.cuda.empty_cache()
 
     # Save the lora layers
     accelerator.wait_for_everyone()
     if accelerator.is_main_process:
         unet = accelerator.unwrap_model(unet)
-        unet = unet.to(paddle.float32)
+        unet = unet.to(dtype=paddle.float32)
         unet_lora_layers = unet_lora_state_dict(unet)
 
         if args.train_text_encoder:
             text_encoder_one = accelerator.unwrap_model(text_encoder_one)
-            text_encoder_lora_layers = text_encoder_lora_state_dict(text_encoder_one.to(paddle.float32))
+            text_encoder_lora_layers = text_encoder_lora_state_dict(text_encoder_one.to(dtype=paddle.float32))
             text_encoder_two = accelerator.unwrap_model(text_encoder_two)
-            text_encoder_2_lora_layers = text_encoder_lora_state_dict(text_encoder_two.to(paddle.float32))
+            text_encoder_2_lora_layers = text_encoder_lora_state_dict(text_encoder_two.to(dtype=paddle.float32))
         else:
             text_encoder_lora_layers = None
             text_encoder_2_lora_layers = None
@@ -1754,14 +1760,14 @@ def main(args):
             subfolder="vae" if args.pretrained_vae_model_name_or_path is None else None,
             revision=args.revision,
             variant=args.variant,
-            torch_dtype=weight_dtype,
+            paddle_dtype=weight_dtype,
         )
         pipeline = StableDiffusionXLPipeline.from_pretrained(
             args.pretrained_model_name_or_path,
             vae=vae,
             revision=args.revision,
             variant=args.variant,
-            torch_dtype=weight_dtype,
+            paddle_dtype=weight_dtype,
         )
 
         # We train on the simplified learning objective. If we were previously predicting a variance, we need the scheduler to ignore it
