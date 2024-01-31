@@ -493,8 +493,6 @@ class PhotoMakerStableDiffusionXLPipeline(StableDiffusionXLPipeline):
         if self.low_gpu_mem_usage:
             # release graphics memory
             self.id_encoder.to("cpu")
-            #self.text_encoder.to("cpu")
-            #self.text_encoder_2.to("cpu")
             paddle.device.cuda.empty_cache()
             self.unet.to(device)
 
