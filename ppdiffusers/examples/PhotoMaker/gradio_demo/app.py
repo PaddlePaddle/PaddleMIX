@@ -1,10 +1,6 @@
 import numpy as np
 import random
 import os
-os.system("pip install ./whl/ppdiffusers-0.24.0-py3-none-any.whl")
-os.system("pip install ./whl/paddlenlp-2.7.1.post0-py3-none-any.whl")
-os.system("pip install -r requirements.txt")
-
 import paddle
 
 from ppdiffusers.utils import load_image

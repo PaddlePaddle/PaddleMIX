@@ -23,8 +23,7 @@ pipe = PhotoMakerStableDiffusionXLPipeline.from_pretrained(
 ### Load PhotoMaker checkpoint
 pipe.load_photomaker_adapter(
     photomaker_path,
-    subfolder="",
-    weight_name=os.path.basename(photomaker_ckpt),
+    weight_name=photomaker_ckpt,
     from_hf_hub=True,
     from_diffusers=True,
     trigger_word="img"  # define the trigger word
