@@ -14,7 +14,12 @@
 
 import paddle
 
-from paddlemix import QWenLMHeadModel, QWenTokenizer, QwenVLProcessor
+from paddlemix.auto import (
+    AutoConfigMIX,
+    AutoModelMIX,
+    AutoProcessorMIX,
+    AutoTokenizerMIX,
+)
 from paddlemix.utils.log import logger
 
 paddle.seed(1234)
@@ -23,9 +28,11 @@ if not paddle.amp.is_bfloat16_supported():
     logger.warning("bfloat16 is not supported on your device,change to float32")
     dtype = "float32"
 
-tokenizer = QWenTokenizer.from_pretrained("qwen-vl/qwen-vl-chat-7b", dtype=dtype)
-processor = QwenVLProcessor(tokenizer=tokenizer)
-model = QWenLMHeadModel.from_pretrained("qwen-vl/qwen-vl-chat-7b", dtype=dtype)
+model_name_or_path = "qwen-vl/qwen-vl-chat-7b"
+tokenizer = AutoTokenizerMIX.from_pretrained(model_name_or_path)
+processor, _ = AutoProcessorMIX.from_pretrained(model_name_or_path)
+model_config = AutoConfigMIX.from_pretrained(model_name_or_path, dtype=dtype)
+model = AutoModelMIX.from_pretrained(model_name_or_path, config=model_config, dtype=dtype)
 model.eval()
 
 # 第一轮对话

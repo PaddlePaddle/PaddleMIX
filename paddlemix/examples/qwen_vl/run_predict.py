@@ -21,7 +21,7 @@ import requests
 from paddlenlp.trainer import PdArgumentParser
 from PIL import Image, ImageDraw, ImageFont
 
-from paddlemix import QWenLMHeadModel, QWenTokenizer, QwenVLProcessor
+from paddlemix import QWenLMHeadModel, QwenVLProcessor, QWenVLTokenizer
 from paddlemix.utils.log import logger
 
 
@@ -121,7 +121,7 @@ def main():
         model_args.dtype = "float32"
 
     # build tokenizer
-    tokenizer = QWenTokenizer.from_pretrained(model_args.model_name_or_path, dtype=model_args.dtype)
+    tokenizer = QWenVLTokenizer.from_pretrained(model_args.model_name_or_path, dtype=model_args.dtype)
     processor = QwenVLProcessor(tokenizer=tokenizer)
     # build model
     logger.info("model: {},dtypes: {}".format(model_args.model_name_or_path, model_args.dtype))

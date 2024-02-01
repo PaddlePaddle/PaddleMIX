@@ -41,7 +41,7 @@ from paddle.utils.download import _get_unique_endpoints
 
 from paddlemix.utils.env import DATA_HOME
 
-__all__ = ["MapDataset", "DatasetBuilder", "IterDataset", "load_dataset"]
+__all__ = ["MapDataset", "DatasetBuilder", "IterDataset", "load_dataset", "MixDataset"]
 
 DATASETS_MODULE_PATH = "paddlemix.datasets."
 
@@ -195,7 +195,6 @@ def load_dataset(path_or_read_func, name=None, data_files=None, splits=None, laz
             datasets = load_from_hf(path_or_read_func, name=name, splits=splits, **kwargs)
         else:
             reader_instance = reader_cls(lazy=lazy, name=name, **kwargs)
-
             # Check if selected name and split is valid in this DatasetBuilder
             if hasattr(reader_instance, "BUILDER_CONFIGS"):
                 if name in reader_cls.BUILDER_CONFIGS.keys():
@@ -699,12 +698,13 @@ class DatasetBuilder:
 
             # We need to check if the example contains label column and confirm its name.
             # For now we only allow `label` or `labels` to be the name of label column.
-            if "labels" in examples[0].keys():
-                label_col = "labels"
-            elif "label" in examples[0].keys():
-                label_col = "label"
-            else:
-                label_col = None
+            if isinstance(examples[0], dict):
+                if "labels" in examples[0].keys():
+                    label_col = "labels"
+                elif "label" in examples[0].keys():
+                    label_col = "label"
+                else:
+                    label_col = None
 
             # Convert class label to label ids.
             if label_list is not None and examples[0].get(label_col, None):
@@ -1144,3 +1144,26 @@ class ConcatDataset(Dataset):
             "cummulative_sizes attribute is renamed to " "cumulative_sizes", DeprecationWarning, stacklevel=2
         )
         return self.cumulative_sizes
+
+
+class MixDataset(Dataset):
+    datasets_names: List[Dict]
+
+    def __init__(self, datasets_names) -> None:
+        super().__init__()
+        self.datasets_names = list(datasets_names)
+        self.datasets = []
+        for d in self.datasets_names:
+            name = d["name"]
+            data_files = d["data_files"] if "data_files" in d else None
+            splits = d["splits"] if "splits" in d else None
+            chat_template = d["chat_template"] if "chat_template" in d else None
+            self.datasets.append(load_dataset(name, data_files=data_files, splits=splits, chat_template=chat_template))
+
+        self.datasets = ConcatDataset(self.datasets)
+
+    def __len__(self):
+        return len(self.datasets)
+
+    def __getitem__(self, idx):
+        return self.datasets[idx]
