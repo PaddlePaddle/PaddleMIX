@@ -213,7 +213,10 @@ def bos_download(
             ENDPOINT_v2
         ), f"URL must start with {ENDPOINT} or {ENDPOINT_v2}"
         if repo_id is None:
-            repo_id = "/".join(url[len(ENDPOINT) + 1 :].split("/")[:-1])
+            if url.startswith(ENDPOINT):
+                repo_id = "/".join(url[len(ENDPOINT) + 1 :].split("/")[:-1])
+            else:
+                repo_id = "/".join(url[len(ENDPOINT_v2) + 1 :].split("/")[:-1])
         if filename is None:
             filename = url.split("/")[-1]
         subfolder = None

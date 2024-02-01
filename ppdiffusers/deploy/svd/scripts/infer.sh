@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-export FLAGS_use_cuda_managed_memory=True
+export FLAGS_use_cuda_managed_memory=False
 
 export USE_PPXFORMERS=False
 

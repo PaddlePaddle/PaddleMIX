@@ -15,22 +15,22 @@
 Accelerate utilities: Utilities related to accelerate
 """
 
-from packaging import version
+# from packaging import version
 
-from ppdiffusers.accelerate import __version__
+# from ppdiffusers.accelerate import __version__
 
-from .import_utils import is_accelerate_available
+# from .import_utils import is_accelerate_available
 
 
 def apply_forward_hook(method):
     """
     Decorator that applies a registered CpuOffload hook to an arbitrary function rather than `forward`. This is useful
-    for cases where a PyTorch module provides functions other than `forward` that should trigger a move to the
+    for cases where a Paddle module provides functions other than `forward` that should trigger a move to the
     appropriate acceleration device. This is the case for `encode` and `decode` in [`AutoencoderKL`].
 
     This decorator looks inside the internal `_pp_hook` property to find a registered offload hook.
 
-    :param method: The method to decorate. This method should be a method of a PyTorch module.
+    :param method: The method to decorate. This method should be a method of a Paddle module.
     """
     # if not is_accelerate_available():
     #     return method
