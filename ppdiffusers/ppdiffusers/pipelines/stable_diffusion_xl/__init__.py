@@ -53,6 +53,7 @@ else:
     ]
     _import_structure["pipeline_paddleinfer_stable_diffusion_xl_mega"] = ["PaddleInferStableDiffusionXLMegaPipeline"]
 
+
 # fastdeploy
 try:
     if not (is_paddle_available() and is_paddlenlp_available() and is_fastdeploy_available()):
@@ -82,6 +83,16 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         from ...utils.dummy_paddle_and_paddlenlp_objects import *  # noqa F403
     else:
         from .pipeline_output import StableDiffusionXLPipelineOutput
+        from .pipeline_stable_diffusion_xl import StableDiffusionXLPipeline
+        from .pipeline_stable_diffusion_xl_img2img import (
+            StableDiffusionXLImg2ImgPipeline,
+        )
+        from .pipeline_stable_diffusion_xl_inpaint import (
+            StableDiffusionXLInpaintPipeline,
+        )
+        from .pipeline_stable_diffusion_xl_instruct_pix2pix import (
+            StableDiffusionXLInstructPix2PixPipeline,
+        )
         from .pipeline_paddleinfer_stable_diffusion_xl import (
             PaddleInferStableDiffusionXLPipeline,
         )
@@ -93,16 +104,6 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         )
         from .pipeline_paddleinfer_stable_diffusion_xl_mega import (
             PaddleInferStableDiffusionXLMegaPipeline,
-        )
-        from .pipeline_stable_diffusion_xl import StableDiffusionXLPipeline
-        from .pipeline_stable_diffusion_xl_img2img import (
-            StableDiffusionXLImg2ImgPipeline,
-        )
-        from .pipeline_stable_diffusion_xl_inpaint import (
-            StableDiffusionXLInpaintPipeline,
-        )
-        from .pipeline_stable_diffusion_xl_instruct_pix2pix import (
-            StableDiffusionXLInstructPix2PixPipeline,
         )
 
     try:
