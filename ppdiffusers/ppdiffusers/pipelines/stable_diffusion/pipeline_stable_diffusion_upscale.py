@@ -195,7 +195,10 @@ class StableDiffusionUpscalePipeline(
         )
 
         # concatenate for backwards comp
-        prompt_embeds = paddle.concat([prompt_embeds_tuple[1], prompt_embeds_tuple[0]])
+        if prompt_embeds_tuple[1] is None:
+            prompt_embeds = prompt_embeds_tuple[0]
+        else:
+            prompt_embeds = paddle.concat([prompt_embeds_tuple[1], prompt_embeds_tuple[0]])
 
         return prompt_embeds
 

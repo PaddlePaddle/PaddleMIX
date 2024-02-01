@@ -178,7 +178,7 @@ class AudioLDMPipeline(DiffusionPipeline):
             # additional L_2 normalization over each hidden-state
             prompt_embeds = F.normalize(prompt_embeds, axis=-1)
 
-        prompt_embeds = prompt_embeds.cast(dtype=self.text_encoder.dtype)
+        prompt_embeds = prompt_embeds.cast(dtype=self.unet.dtype)
 
         (
             bs_embed,
@@ -234,7 +234,7 @@ class AudioLDMPipeline(DiffusionPipeline):
             # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
             seq_len = negative_prompt_embeds.shape[1]
 
-            negative_prompt_embeds = negative_prompt_embeds.cast(dtype=self.text_encoder.dtype)
+            negative_prompt_embeds = negative_prompt_embeds.cast(dtype=self.unet.dtype)
 
             negative_prompt_embeds = negative_prompt_embeds.tile([1, num_waveforms_per_prompt])
             negative_prompt_embeds = negative_prompt_embeds.reshape([batch_size * num_waveforms_per_prompt, seq_len])

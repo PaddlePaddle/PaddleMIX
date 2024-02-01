@@ -52,7 +52,7 @@ class DifferentiableProjectiveCamera:
         """
         pixel_indices = paddle.arange(self.height * self.width)
         coords = paddle.stack(
-            [pixel_indices % self.width, paddle.floor_divide(pixel_indices, self.width)],  # rounding_mode="trunc")
+            [pixel_indices % self.width, paddle.floor_divide(pixel_indices, paddle.to_tensor(self.width))],  # rounding_mode="trunc")
             axis=1,
         )
         return coords

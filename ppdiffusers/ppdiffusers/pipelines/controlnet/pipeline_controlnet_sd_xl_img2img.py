@@ -1243,9 +1243,9 @@ class StableDiffusionXLControlNetImg2ImgPipeline(
 
         # 7.2 Prepare added time ids & embeddings
         if isinstance(control_image, list):
-            original_size = original_size or control_image[0].shape[-2:]
+            original_size = original_size or tuple(control_image[0].shape[-2:])
         else:
-            original_size = original_size or control_image.shape[-2:]
+            original_size = original_size or tuple(control_image.shape[-2:])
         target_size = target_size or (height, width)
 
         if negative_original_size is None:
@@ -1288,7 +1288,8 @@ class StableDiffusionXLControlNetImg2ImgPipeline(
                 latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
                 added_cond_kwargs = {"text_embeds": add_text_embeds, "time_ids": add_time_ids}
-
+                breakpoint()
+                
                 # controlnet(s) inference
                 if guess_mode and self.do_classifier_free_guidance:
                     # Infer ControlNet only for the conditional batch.
