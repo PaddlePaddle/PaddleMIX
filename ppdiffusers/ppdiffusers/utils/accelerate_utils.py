@@ -32,15 +32,16 @@ def apply_forward_hook(method):
 
     :param method: The method to decorate. This method should be a method of a PyTorch module.
     """
-    if not is_accelerate_available():
-        return method
-    accelerate_version = version.parse(__version__).base_version
-    if version.parse(accelerate_version) < version.parse("0.17.0"):
-        return method
+    # if not is_accelerate_available():
+    #     return method
+    # accelerate_version = version.parse(__version__).base_version
+    # if version.parse(accelerate_version) < version.parse("0.17.0"):
+    #     return method
 
-    def wrapper(self, *args, **kwargs):
-        if hasattr(self, "_pp_hook") and hasattr(self._pp_hook, "pre_forward"):
-            self._pp_hook.pre_forward(self)
-        return method(self, *args, **kwargs)
+    # def wrapper(self, *args, **kwargs):
+    #     if hasattr(self, "_pp_hook") and hasattr(self._pp_hook, "pre_forward"):
+    #         self._pp_hook.pre_forward(self)
+    #     return method(self, *args, **kwargs)
 
-    return wrapper
+    # return wrapper
+    return method
