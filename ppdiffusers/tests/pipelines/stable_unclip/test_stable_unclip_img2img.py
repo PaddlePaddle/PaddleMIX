@@ -18,14 +18,6 @@ import unittest
 
 import numpy as np
 import paddle
-from ppdiffusers.transformers import (
-    CLIPImageProcessor,
-    CLIPTextConfig,
-    CLIPTextModel,
-    CLIPTokenizer,
-    CLIPVisionConfig,
-    CLIPVisionModelWithProjection,
-)
 
 from ppdiffusers import (
     AutoencoderKL,
@@ -37,6 +29,14 @@ from ppdiffusers import (
 from ppdiffusers.pipelines.pipeline_utils import DiffusionPipeline
 from ppdiffusers.pipelines.stable_diffusion.stable_unclip_image_normalizer import (
     StableUnCLIPImageNormalizer,
+)
+from ppdiffusers.transformers import (
+    CLIPImageProcessor,
+    CLIPTextConfig,
+    CLIPTextModel,
+    CLIPTokenizer,
+    CLIPVisionConfig,
+    CLIPVisionModelWithProjection,
 )
 from ppdiffusers.utils.import_utils import is_ppxformers_available
 from ppdiffusers.utils.testing_utils import enable_full_determinism, floats_tensor
@@ -154,7 +154,7 @@ class StableUnCLIPImg2ImgPipelineFastTests(
 
         assert image.shape == (1, 32, 32, 3)
         expected_slice = np.array(
-            [0.32624978, 1., 0.6784719, 0.49968353, 0.3055676, 0.68758565, 0.22666395, 0.56942415, 0.70596904]
+            [0.32624978, 1.0, 0.6784719, 0.49968353, 0.3055676, 0.68758565, 0.22666395, 0.56942415, 0.70596904]
         )
 
         assert np.abs(image_slice.flatten() - expected_slice).mean() < 1e-2
@@ -193,6 +193,10 @@ class StableUnCLIPImg2ImgPipelineFastTests(
 
     def test_progress_bar(self):
         pass
+
+    def test_float16_inference(self):
+        pass
+
 
 # @slow
 # @require_paddle_gpu
