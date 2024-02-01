@@ -438,6 +438,7 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline, FromSingleFileMixi
                 latent_model_input = paddle.concat([latents] * 2) if do_classifier_free_guidance else latents
                 scaled_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
+                image_cond = image_cond.cast(scaled_model_input.dtype)
                 scaled_model_input = paddle.concat([scaled_model_input, image_cond], axis=1)
                 # preconditioning parameter based on  Karras et al. (2022) (table 1)
                 timestep = paddle.log(sigma) * 0.25

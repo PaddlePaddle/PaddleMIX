@@ -196,7 +196,7 @@ class StableUnCLIPImg2ImgPipeline(DiffusionPipeline, TextualInversionLoaderMixin
         generator,
         image_embeds,
     ):
-        dtype = next(self.image_encoder.parameters()).dtype
+        dtype = self.image_encoder.dtype
 
         if isinstance(image, PIL.Image.Image):
             # the image embedding should repeated so it matches the total batch size of the prompt
@@ -747,7 +747,7 @@ class StableUnCLIPImg2ImgPipeline(DiffusionPipeline, TextualInversionLoaderMixin
             prompt_embeds = paddle.concat([negative_prompt_embeds, prompt_embeds])
 
         # 4. Encoder input image
-        noise_level = paddle.to_tensor([noise_level])
+        # noise_level = paddle.to_tensor([noise_level])
         image_embeds = self._encode_image(
             image=image,
             batch_size=batch_size,
@@ -761,6 +761,7 @@ class StableUnCLIPImg2ImgPipeline(DiffusionPipeline, TextualInversionLoaderMixin
         # 5. Prepare timesteps
         self.scheduler.set_timesteps(num_inference_steps)
         timesteps = self.scheduler.timesteps
+        timesteps = paddle.to_tensor([timesteps])
 
         # 6. Prepare latent variables
         num_channels_latents = self.unet.config.in_channels
@@ -778,7 +779,11 @@ class StableUnCLIPImg2ImgPipeline(DiffusionPipeline, TextualInversionLoaderMixin
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
 
         # 8. Denoising loop
-        for i, t in enumerate(self.progress_bar(timesteps)):
+        # timesteps: Tensor(shape=[1, 2], dtype=int64, place=Place(gpu:0), stop_gradient=True, [[501, 1  ]])
+        if isinstance(timesteps, paddle.Tensor) and len(timesteps.shape) == 2:
+            timesteps = timesteps.flatten()
+            
+        for i, t in self.progress_bar(zip(range(num_inference_steps), timesteps)):
             latent_model_input = paddle.concat([latents] * 2) if do_classifier_free_guidance else latents
             latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 

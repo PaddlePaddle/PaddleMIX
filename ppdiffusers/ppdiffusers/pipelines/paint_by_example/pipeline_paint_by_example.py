@@ -574,6 +574,7 @@ class PaintByExamplePipeline(DiffusionPipeline):
 
                 # concat latents, mask, masked_image_latents in the channel dimension
                 latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
+                latent_model_input = latent_model_input.cast(masked_image_latents.dtype)
                 latent_model_input = paddle.concat([latent_model_input, masked_image_latents, mask], axis=1)
 
                 # predict the noise residual

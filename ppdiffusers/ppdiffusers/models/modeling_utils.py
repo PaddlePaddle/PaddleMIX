@@ -230,6 +230,15 @@ class ModelMixin(nn.Layer):
     def __init__(self):
         super().__init__()
 
+    def to(self=None, device=None, dtype=None, blocking=None):
+        return self._to_impl(
+            device=device,
+            dtype=dtype,
+            blocking=blocking,
+            include_sublayers=True,
+            floating_only=True,
+        )
+
     def __getattr__(self, name: str) -> Any:
         """The only reason we overwrite `getattr` here is to gracefully deprecate accessing
         config attributes directly. See https://github.com/huggingface/diffusers/pull/3129 We need to overwrite

@@ -78,9 +78,7 @@ class XLMRobertaEmbeddings(nn.Layer):
         # position_ids (1, len position emb) is contiguous in memory and exported when serialized
         self.position_embedding_type = getattr(config, "position_embedding_type", "absolute")
         self.register_buffer(
-            "position_ids",
-            paddle.arange(config.max_position_embeddings, dtype=paddle.int64).expand((1, -1)),
-            persistable=False,
+            "position_ids", paddle.arange(config.max_position_embeddings).expand((1, -1)), persistable=False
         )
         self.register_buffer(
             "token_type_ids", paddle.zeros(self.position_ids.shape, dtype=paddle.int64), persistable=False
@@ -124,7 +122,7 @@ class XLMRobertaEmbeddings(nn.Layer):
 
         if inputs_embeds is None:
             inputs_embeds = self.word_embeddings(input_ids)
-        token_type_embeddings = self.token_type_embeddings(token_type_ids)
+        token_type_embeddings = self.token_type_embeddings(token_type_ids.cast(dtype=paddle.int64))
 
         embeddings = inputs_embeds + token_type_embeddings
         if self.position_embedding_type == "absolute":
@@ -191,6 +189,7 @@ class XLMRobertaSelfAttention(nn.Layer):
         self,
         hidden_states: paddle.Tensor,
         attention_mask: Optional[paddle.Tensor] = None,
+        head_mask: Optional[paddle.Tensor] = None,
         encoder_hidden_states: Optional[paddle.Tensor] = None,
         encoder_attention_mask: Optional[paddle.Tensor] = None,
         past_key_value: Optional[Tuple[Tuple[paddle.Tensor]]] = None,
@@ -278,6 +277,9 @@ class XLMRobertaSelfAttention(nn.Layer):
         # seem a bit unusual, but is taken from the original Transformer paper.
         attention_probs = self.dropout(attention_probs)
 
+        # Mask heads if we want to
+        if head_mask is not None:
+            attention_probs = attention_probs * head_mask
         context_layer = paddle.matmul(attention_probs, value_layer)
 
         context_layer = context_layer.transpose([0, 2, 1, 3])
@@ -317,6 +319,7 @@ class XLMRobertaAttention(nn.Layer):
         self,
         hidden_states: paddle.Tensor,
         attention_mask: Optional[paddle.Tensor] = None,
+        head_mask: Optional[paddle.Tensor] = None,
         encoder_hidden_states: Optional[paddle.Tensor] = None,
         encoder_attention_mask: Optional[paddle.Tensor] = None,
         past_key_value: Optional[Tuple[Tuple[paddle.Tensor]]] = None,
@@ -325,6 +328,7 @@ class XLMRobertaAttention(nn.Layer):
         self_outputs = self.self(
             hidden_states,
             attention_mask,
+            head_mask,
             encoder_hidden_states,
             encoder_attention_mask,
             past_key_value,
@@ -383,6 +387,7 @@ class XLMRobertaLayer(nn.Layer):
         self,
         hidden_states: paddle.Tensor,
         attention_mask: Optional[paddle.Tensor] = None,
+        head_mask: Optional[paddle.Tensor] = None,
         encoder_hidden_states: Optional[paddle.Tensor] = None,
         encoder_attention_mask: Optional[paddle.Tensor] = None,
         past_key_value: Optional[Tuple[Tuple[paddle.Tensor]]] = None,
@@ -393,6 +398,7 @@ class XLMRobertaLayer(nn.Layer):
         self_attention_outputs = self.attention(
             hidden_states,
             attention_mask,
+            head_mask,
             output_attentions=output_attentions,
             past_key_value=self_attn_past_key_value,
         )
@@ -418,6 +424,7 @@ class XLMRobertaLayer(nn.Layer):
             cross_attention_outputs = self.crossattention(
                 attention_output,
                 attention_mask,
+                head_mask,
                 encoder_hidden_states,
                 encoder_attention_mask,
                 cross_attn_past_key_value,
@@ -458,6 +465,7 @@ class XLMRobertaEncoder(nn.Layer):
         self,
         hidden_states: paddle.Tensor,
         attention_mask: Optional[paddle.Tensor] = None,
+        head_mask: Optional[paddle.Tensor] = None,
         encoder_hidden_states: Optional[paddle.Tensor] = None,
         encoder_attention_mask: Optional[paddle.Tensor] = None,
         past_key_values: Optional[Tuple[Tuple[paddle.Tensor]]] = None,
@@ -482,6 +490,7 @@ class XLMRobertaEncoder(nn.Layer):
             if output_hidden_states:
                 all_hidden_states = all_hidden_states + (hidden_states,)
 
+            layer_head_mask = head_mask[i] if head_mask is not None else None
             past_key_value = past_key_values[i] if past_key_values is not None else None
 
             if self.gradient_checkpointing and not hidden_states.stop_gradient:
@@ -489,6 +498,7 @@ class XLMRobertaEncoder(nn.Layer):
                     layer_module.__call__,
                     hidden_states,
                     attention_mask,
+                    layer_head_mask,
                     encoder_hidden_states,
                     encoder_attention_mask,
                     past_key_value,
@@ -498,6 +508,7 @@ class XLMRobertaEncoder(nn.Layer):
                 layer_outputs = layer_module(
                     hidden_states,
                     attention_mask,
+                    layer_head_mask,
                     encoder_hidden_states,
                     encoder_attention_mask,
                     past_key_value,
@@ -738,6 +749,7 @@ class XLMRobertaModel(XLMRobertaPreTrainedModel):
         attention_mask: Optional[paddle.Tensor] = None,
         token_type_ids: Optional[paddle.Tensor] = None,
         position_ids: Optional[paddle.Tensor] = None,
+        head_mask: Optional[paddle.Tensor] = None,
         inputs_embeds: Optional[paddle.Tensor] = None,
         encoder_hidden_states: Optional[paddle.Tensor] = None,
         encoder_attention_mask: Optional[paddle.Tensor] = None,
@@ -823,6 +835,12 @@ class XLMRobertaModel(XLMRobertaPreTrainedModel):
         else:
             encoder_extended_attention_mask = None
 
+        # Prepare head mask if needed
+        # 1.0 in head_mask indicate we keep the head
+        # attention_probs has shape bsz x n_heads x N x N
+        # input head_mask has shape [num_heads] or [num_hidden_layers x num_heads]
+        # and head_mask is converted to shape [num_hidden_layers x batch x num_heads x seq_length x seq_length]
+        head_mask = self.get_head_mask(head_mask, self.config.num_hidden_layers)
         embedding_output = self.embeddings(
             input_ids=input_ids,
             position_ids=position_ids,
@@ -833,6 +851,7 @@ class XLMRobertaModel(XLMRobertaPreTrainedModel):
         encoder_outputs = self.encoder(
             embedding_output,
             attention_mask=extended_attention_mask,
+            head_mask=head_mask,
             encoder_hidden_states=encoder_hidden_states,
             encoder_attention_mask=encoder_extended_attention_mask,
             past_key_values=past_key_values,
@@ -897,6 +916,7 @@ class XLMRobertaForCausalLM(XLMRobertaPreTrainedModel):
         attention_mask: Optional[paddle.Tensor] = None,
         token_type_ids: Optional[paddle.Tensor] = None,
         position_ids: Optional[paddle.Tensor] = None,
+        head_mask: Optional[paddle.Tensor] = None,
         inputs_embeds: Optional[paddle.Tensor] = None,
         encoder_hidden_states: Optional[paddle.Tensor] = None,
         encoder_attention_mask: Optional[paddle.Tensor] = None,
@@ -959,6 +979,7 @@ class XLMRobertaForCausalLM(XLMRobertaPreTrainedModel):
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
             position_ids=position_ids,
+            head_mask=head_mask,
             inputs_embeds=inputs_embeds,
             encoder_hidden_states=encoder_hidden_states,
             encoder_attention_mask=encoder_attention_mask,
@@ -1072,6 +1093,7 @@ class XLMRobertaForMaskedLM(XLMRobertaPreTrainedModel):
         attention_mask: Optional[paddle.Tensor] = None,
         token_type_ids: Optional[paddle.Tensor] = None,
         position_ids: Optional[paddle.Tensor] = None,
+        head_mask: Optional[paddle.Tensor] = None,
         inputs_embeds: Optional[paddle.Tensor] = None,
         encoder_hidden_states: Optional[paddle.Tensor] = None,
         encoder_attention_mask: Optional[paddle.Tensor] = None,
@@ -1095,6 +1117,7 @@ class XLMRobertaForMaskedLM(XLMRobertaPreTrainedModel):
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
             position_ids=position_ids,
+            head_mask=head_mask,
             inputs_embeds=inputs_embeds,
             encoder_hidden_states=encoder_hidden_states,
             encoder_attention_mask=encoder_attention_mask,
@@ -1179,6 +1202,7 @@ class XLMRobertaForSequenceClassification(XLMRobertaPreTrainedModel):
         attention_mask: Optional[paddle.Tensor] = None,
         token_type_ids: Optional[paddle.Tensor] = None,
         position_ids: Optional[paddle.Tensor] = None,
+        head_mask: Optional[paddle.Tensor] = None,
         inputs_embeds: Optional[paddle.Tensor] = None,
         labels: Optional[paddle.Tensor] = None,
         output_attentions: Optional[bool] = None,
@@ -1198,6 +1222,7 @@ class XLMRobertaForSequenceClassification(XLMRobertaPreTrainedModel):
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
             position_ids=position_ids,
+            head_mask=head_mask,
             inputs_embeds=inputs_embeds,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
@@ -1260,6 +1285,7 @@ class XLMRobertaForMultipleChoice(XLMRobertaPreTrainedModel):
         attention_mask: Optional[paddle.Tensor] = None,
         labels: Optional[paddle.Tensor] = None,
         position_ids: Optional[paddle.Tensor] = None,
+        head_mask: Optional[paddle.Tensor] = None,
         inputs_embeds: Optional[paddle.Tensor] = None,
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
@@ -1293,6 +1319,7 @@ class XLMRobertaForMultipleChoice(XLMRobertaPreTrainedModel):
             position_ids=flat_position_ids,
             token_type_ids=flat_token_type_ids,
             attention_mask=flat_attention_mask,
+            head_mask=head_mask,
             inputs_embeds=flat_inputs_embeds,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
@@ -1343,6 +1370,7 @@ class XLMRobertaForTokenClassification(XLMRobertaPreTrainedModel):
         attention_mask: Optional[paddle.Tensor] = None,
         token_type_ids: Optional[paddle.Tensor] = None,
         position_ids: Optional[paddle.Tensor] = None,
+        head_mask: Optional[paddle.Tensor] = None,
         inputs_embeds: Optional[paddle.Tensor] = None,
         labels: Optional[paddle.Tensor] = None,
         output_attentions: Optional[bool] = None,
@@ -1360,6 +1388,7 @@ class XLMRobertaForTokenClassification(XLMRobertaPreTrainedModel):
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
             position_ids=position_ids,
+            head_mask=head_mask,
             inputs_embeds=inputs_embeds,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
@@ -1438,6 +1467,7 @@ class XLMRobertaForQuestionAnswering(XLMRobertaPreTrainedModel):
         attention_mask: Optional[paddle.Tensor] = None,
         token_type_ids: Optional[paddle.Tensor] = None,
         position_ids: Optional[paddle.Tensor] = None,
+        head_mask: Optional[paddle.Tensor] = None,
         inputs_embeds: Optional[paddle.Tensor] = None,
         start_positions: Optional[paddle.Tensor] = None,
         end_positions: Optional[paddle.Tensor] = None,
@@ -1462,6 +1492,7 @@ class XLMRobertaForQuestionAnswering(XLMRobertaPreTrainedModel):
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
             position_ids=position_ids,
+            head_mask=head_mask,
             inputs_embeds=inputs_embeds,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,

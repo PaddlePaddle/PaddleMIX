@@ -800,6 +800,7 @@ class ControlNetModel(ModelMixin, ConfigMixin, FromOriginalControlnetMixin):
 
                 add_embeds = paddle.concat([text_embeds, time_embeds], axis=-1)
                 add_embeds = add_embeds.cast(emb.dtype)
+                # breakpoint()
                 aug_emb = self.add_embedding(add_embeds)
 
         emb = emb + aug_emb if aug_emb is not None else emb

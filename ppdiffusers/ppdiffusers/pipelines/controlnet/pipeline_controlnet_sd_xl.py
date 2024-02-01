@@ -705,7 +705,12 @@ class StableDiffusionXLControlNetPipeline(
     def _get_add_time_ids(
         self, original_size, crops_coords_top_left, target_size, dtype, text_encoder_projection_dim=None
     ):
+        # breakpoint()
+        # original_size = list(original_size)
+        # crops_coords_top_left = list(crops_coords_top_left)
+        # target_size = list(target_size)
         add_time_ids = list(original_size + crops_coords_top_left + target_size)
+        print("###########", len(add_time_ids))
 
         passed_add_embed_dim = (
             self.unet.config.addition_time_embed_dim * len(add_time_ids) + text_encoder_projection_dim
@@ -1142,9 +1147,9 @@ class StableDiffusionXLControlNetPipeline(
 
         # 7.2 Prepare added time ids & embeddings
         if isinstance(image, list):
-            original_size = original_size or image[0].shape[-2:]
+            original_size = original_size or tuple(image[0].shape[-2:])
         else:
-            original_size = original_size or image.shape[-2:]
+            original_size = original_size or tuple(image.shape[-2:])
         target_size = target_size or (height, width)
 
         add_text_embeds = pooled_prompt_embeds
@@ -1176,6 +1181,8 @@ class StableDiffusionXLControlNetPipeline(
             prompt_embeds = paddle.concat([negative_prompt_embeds, prompt_embeds], axis=0)
             add_text_embeds = paddle.concat([negative_pooled_prompt_embeds, add_text_embeds], axis=0)
             add_time_ids = paddle.concat([negative_add_time_ids, add_time_ids], axis=0)
+        
+        add_time_ids = add_time_ids.tile([batch_size * num_images_per_prompt, 1])
 
         # 8. Denoising loop
         num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
