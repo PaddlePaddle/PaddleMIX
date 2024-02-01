@@ -302,7 +302,7 @@ cd -
 # test textual_inversion
 cd ../../examples/textual_inversion
 export DATA_DIR="cat-toy"
-
+export MODEL_NAME=runwayml/stable-diffusion-v1-5
 
 export OUTPUT_DIR="textual_inversion_cat"
 python -u train_textual_inversion.py \
