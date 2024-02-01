@@ -178,6 +178,7 @@ class LDMSuperResolutionPipeline(DiffusionPipeline):
 
         for t in self.progress_bar(timesteps_tensor):
             # concat latents and low resolution image in the channel dimension.
+            image = image.cast(latents.dtype)
             latents_input = paddle.concat([latents, image], axis=1)
             latents_input = self.scheduler.scale_model_input(latents_input, t)
             # predict the noise residual

@@ -39,14 +39,14 @@ class StableUnCLIPImageNormalizer(ModelMixin, ConfigMixin):
         self.mean = nn.Parameter(paddle.zeros([1, embedding_dim]))
         self.std = nn.Parameter(paddle.ones([1, embedding_dim]))
 
-    def to(
-        self,
-        paddle_device: Optional[str] = None,
-        paddle_dtype: Optional[paddle.dtype] = None,
-    ):
-        self.mean._to(device=paddle_device, dtype=paddle_dtype)
-        self.std._to(device=paddle_device, dtype=paddle_dtype)
-        return self
+    # def to(
+    #     self,
+    #     paddle_device: Optional[str] = None,
+    #     paddle_dtype: Optional[paddle.dtype] = None,
+    # ):
+    #     self.mean._to(device=paddle_device, dtype=paddle_dtype)
+    #     self.std._to(device=paddle_device, dtype=paddle_dtype)
+    #     return self
 
     def scale(self, embeds):
         embeds = (embeds - self.mean) * 1.0 / self.std

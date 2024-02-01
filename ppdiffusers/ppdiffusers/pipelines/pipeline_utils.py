@@ -322,7 +322,6 @@ def load_sub_model(
     from_aistudio: bool = False,
     cache_dir: Union[str, os.PathLike] = None,
     variant: str = None,
-    use_safetensors: bool = False,
 ):
     """Helper method to load the module `name` from `library_name` and `class_name`"""
     # retrieve class candidates
@@ -380,7 +379,6 @@ def load_sub_model(
     # PaddleNLP or PPDiffusers Model
     if is_ppdiffusers_model or is_paddlenlp_model:
         loading_kwargs["variant"] = model_variants.pop(name, variant)
-        loading_kwargs["use_safetensors"] = use_safetensors
         if is_paddlenlp_model:
             loading_kwargs["convert_from_torch"] = from_diffusers
             loading_kwargs["dtype"] = (
@@ -738,6 +736,7 @@ class DiffusionPipeline(ConfigMixin):
         modules = [getattr(self, n, None) for n in module_names]
         modules = [m for m in modules if isinstance(m, nn.Layer)]
 
+        # error when test stable_unclip
         for module in modules:
             module.to(device=device, dtype=dtype)
 
@@ -783,7 +782,7 @@ class DiffusionPipeline(ConfigMixin):
 
         ```
         Some weights of UNet2DConditionModel were not initialized from the model checkpoint at runwayml/stable-diffusion-v1-5 and are newly initialized because the shapes did not match:
-        - conv_in.weight: found shape [320, 4, 3, 3] in the checkpoint and [320, 9, 3, 3] in the model instantiated
+        - conv_in.weight: found shape torch.Size([320, 4, 3, 3]) in the checkpoint and torch.Size([320, 9, 3, 3]) in the model instantiated
         You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
         ```
 
@@ -1109,7 +1108,6 @@ class DiffusionPipeline(ConfigMixin):
                     from_aistudio=from_aistudio,
                     cache_dir=cache_dir,
                     variant=variant,
-                    use_safetensors=use_safetensors,
                 )
                 logger.info(
                     f"Loaded {name} as {class_name} from `{name}` subfolder of {pretrained_model_name_or_path}."

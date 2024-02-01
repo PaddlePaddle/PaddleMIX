@@ -132,7 +132,6 @@ else:
             # new add
             "LVDMAutoencoderKL",
             "LVDMUNet3DModel",
-            "PaddleInferRuntimeModel"
         ]
     )
 
@@ -341,21 +340,6 @@ else:
             # new add
             "LVDMTextToVideoPipeline",
             "LVDMUncondPipeline",
-            "PaddleInferCycleDiffusionPipeline",
-            "PaddleInferStableDiffusionControlNetPipeline",
-            "PaddleInferStableDiffusionImg2ImgPipeline",
-            "PaddleInferStableDiffusionInpaintPipeline",
-            "PaddleInferStableDiffusionInpaintPipelineLegacy",
-            "PaddleInferStableDiffusionMegaPipeline",
-            "PaddleInferStableDiffusionPipeline",
-            "PaddleInferStableDiffusionUpscalePipeline",
-            "PaddleInferStableDiffusionXLImg2ImgPipeline",
-            "PaddleInferStableDiffusionXLInpaintPipeline",
-            "PaddleInferStableDiffusionXLInstructPix2PixPipeline",
-            "PaddleInferStableDiffusionXLPipeline",
-            "PaddleInferStableDiffusionControlNetPipeline",
-            "PaddleInferStableVideoDiffusionPipeline",
-
         ]
     )
 
@@ -482,7 +466,6 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             UNetMotionModel,
             UNetSpatioTemporalConditionModel,
             VQModel,
-            PaddleInferRuntimeModel,
         )
         from .optimization import (
             get_constant_schedule,
@@ -668,20 +651,6 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             WuerstchenCombinedPipeline,
             WuerstchenDecoderPipeline,
             WuerstchenPriorPipeline,
-            # new add
-            PaddleInferCycleDiffusionPipeline,
-            PaddleInferStableDiffusionControlNetPipeline,
-            PaddleInferStableDiffusionImg2ImgPipeline,
-            PaddleInferStableDiffusionInpaintPipeline,
-            PaddleInferStableDiffusionInpaintPipelineLegacy,
-            PaddleInferStableDiffusionMegaPipeline,
-            PaddleInferStableDiffusionPipeline,
-            PaddleInferStableDiffusionUpscalePipeline,
-            PaddleInferStableDiffusionXLImg2ImgPipeline,
-            PaddleInferStableDiffusionXLInpaintPipeline,
-            PaddleInferStableDiffusionXLInstructPix2PixPipeline,
-            PaddleInferStableDiffusionXLPipeline,
-            PaddleInferStableVideoDiffusionPipeline,
         )
 
     try:

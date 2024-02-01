@@ -556,8 +556,8 @@ class StableDiffusionXLInstructPix2PixPipeline(
     def _get_add_time_ids(
         self, original_size, crops_coords_top_left, target_size, dtype, text_encoder_projection_dim=None
     ):
+        # breakpoint()
         add_time_ids = list(original_size + crops_coords_top_left + target_size)
-
         passed_add_embed_dim = (
             self.unet.config.addition_time_embed_dim * len(add_time_ids) + text_encoder_projection_dim
         )
@@ -883,6 +883,7 @@ class StableDiffusionXLInstructPix2PixPipeline(
 
                 # concat latents, image_latents in the channel dimension
                 scaled_latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
+                image_latents = image_latents.cast(scaled_latent_model_input.dtype)
                 scaled_latent_model_input = paddle.concat([scaled_latent_model_input, image_latents], axis=1)
 
                 # predict the noise residual

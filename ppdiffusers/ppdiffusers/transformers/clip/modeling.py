@@ -966,6 +966,10 @@ class CLIPVisionModel(CLIPPreTrainedModel):
         # Initialize weights and apply final processing
         self.post_init()
 
+    @property
+    def dtype(self) -> Union[str, paddle.dtype]:
+        return self.vision_model.embeddings.word_embedding.weight.dtype
+
     def get_input_embeddings(self) -> nn.Layer:
         return self.vision_model.embeddings.patch_embedding
 

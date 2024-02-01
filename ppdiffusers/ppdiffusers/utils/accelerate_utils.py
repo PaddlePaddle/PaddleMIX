@@ -14,34 +14,37 @@
 """
 Accelerate utilities: Utilities related to accelerate
 """
+import paddle  # noqa
+from packaging import version  # noqa
 
-# from packaging import version
+from ppdiffusers.accelerate import __version__  # noqa
 
-# from ppdiffusers.accelerate import __version__
-
-# from .import_utils import is_accelerate_available
+from .import_utils import is_accelerate_available  # noqa
 
 
 def apply_forward_hook(method):
     """
     Decorator that applies a registered CpuOffload hook to an arbitrary function rather than `forward`. This is useful
-    for cases where a Paddle module provides functions other than `forward` that should trigger a move to the
+    for cases where a PyTorch module provides functions other than `forward` that should trigger a move to the
     appropriate acceleration device. This is the case for `encode` and `decode` in [`AutoencoderKL`].
 
     This decorator looks inside the internal `_pp_hook` property to find a registered offload hook.
 
-    :param method: The method to decorate. This method should be a method of a Paddle module.
+    :param method: The method to decorate. This method should be a method of a PyTorch module.
     """
+    # TODO: (laixinlu) fix this in static model export
     # if not is_accelerate_available():
     #     return method
     # accelerate_version = version.parse(__version__).base_version
     # if version.parse(accelerate_version) < version.parse("0.17.0"):
     #     return method
 
-    # def wrapper(self, *args, **kwargs):
-    #     if hasattr(self, "_pp_hook") and hasattr(self._pp_hook, "pre_forward"):
-    #         self._pp_hook.pre_forward(self)
-    #     return method(self, *args, **kwargs)
+    # with paddle.jit.not_to_static():
+    #     def wrapper(self, *args, **kwargs):
+    #         if hasattr(self, "_pp_hook") and hasattr(self._pp_hook, "pre_forward"):
+    #             self._pp_hook.pre_forward(self)
+    #         return method(self, *args, **kwargs)
 
-    # return wrapper
+    #     return wrapper
+
     return method

@@ -344,19 +344,6 @@ if not hasattr(nn.Layer, "get_sublayer"):
 
     nn.Layer.get_sublayer = get_sublayer
 
-
-def to(self=None, device=None, dtype=None, blocking=None):
-    return self._to_impl(
-        device=device,
-        dtype=dtype,
-        blocking=blocking,
-        include_sublayers=True,
-        floating_only=True,
-    )
-
-
-nn.Layer.to = to
-
 from ..utils.import_utils import is_ppxformers_available
 
 if is_ppxformers_available():
@@ -795,44 +782,33 @@ def patch_to(cls, as_prop=False, cls_method=False):
     return _inner
 
 
-# NOTE(yujun06): patches will be removed in the future.
-# patches start
+# NOTE: this patch_from_pretrained will be removed in the future.
 import inspect
-import json
 
-from aistudio_sdk.hub import Hub
-from paddlenlp.transformers.aistudio_utils import aistudio_download
-
-from ppdiffusers.utils import DIFFUSERS_CACHE, PPDIFFUSERS_CACHE
-
-old_hub_download = Hub.download
-
-
-def new_hub_download(self, **kwargs):
-    repo_id = kwargs.pop("repo_id", None)
-    filename = kwargs.pop("filename", None)
-    data = repo_id.split("/")
-    if len(data) > 2:
-        subfolder = "/".join(data[2:])
-        repo_id = "/".join(data[:2])
-        filename = url_or_path_join(subfolder, filename)
-    kwargs["repo_id"] = repo_id
-    kwargs["filename"] = filename
-    res = old_hub_download(self, **kwargs)
-    return res
-
-
-Hub.download = new_hub_download
+from paddlenlp.transformers import (
+    AutoConfig,
+    AutoModel,
+    AutoProcessor,
+    AutoTokenizer,
+    FeatureExtractionMixin,
+    ImageProcessingMixin,
+    PretrainedConfig,
+    PretrainedModel,
+    PretrainedTokenizer,
+)
 
 
 def url_or_path_join(*path_list):
     return os.path.join(*path_list) if os.path.isdir(os.path.join(*path_list)) else "/".join(path_list)
 
 
-def patch_from_pretrained(patched_class):
-    raw_from_pretrained = patched_class.from_pretrained.__func__
-    num_inputs = len(inspect.signature(patched_class.from_pretrained).parameters.keys())
-    if patched_class.__name__ in ["ImageProcessingMixin", "FeatureExtractionMixin"]:
+from ppdiffusers.utils import DIFFUSERS_CACHE, PPDIFFUSERS_CACHE
+
+
+def patch_from_pretrained(cls):
+    raw_from_pretrained = cls.from_pretrained.__func__
+    num_inputs = len(inspect.signature(cls.from_pretrained).parameters.keys())
+    if num_inputs == 2:
 
         @classmethod
         def new_from_pretrained(cls, pretrained_model_name_or_path, **kwargs):
@@ -848,57 +824,7 @@ def patch_from_pretrained(patched_class):
                 else:
                     cache_dir = PPDIFFUSERS_CACHE
                 kwargs["cache_dir"] = cache_dir
-            if from_hf_hub:
-                pass
-            else:
-                subfolder = kwargs.pop("subfolder", None)
-                if subfolder is not None:
-                    pretrained_model_name_or_path = url_or_path_join(pretrained_model_name_or_path, subfolder)
-
-            if from_aistudio:
-                resolved_image_processor_file = aistudio_download(
-                    pretrained_model_name_or_path, "preprocessor_config.json"
-                )
-                kwargs.pop("cache_dir", None)
-                kwargs.pop("from_hf_hub", False)
-                kwargs.pop("subfolder", None)
-                try:
-                    # Load image_processor dict
-                    with open(resolved_image_processor_file, "r", encoding="utf-8") as reader:
-                        text = reader.read()
-                    image_processor_dict = json.loads(text)
-                except json.JSONDecodeError:
-                    raise EnvironmentError(
-                        f"It looks like the config file at '{resolved_image_processor_file}' is not a valid JSON file."
-                    )
-            else:
-                if hasattr(cls, "get_image_processor_dict"):
-                    image_processor_dict, kwargs = cls.get_image_processor_dict(
-                        pretrained_model_name_or_path, **kwargs
-                    )
-                else:
-                    image_processor_dict, kwargs = cls.get_feature_extractor_dict(
-                        pretrained_model_name_or_path, **kwargs
-                    )
-            return cls.from_dict(image_processor_dict, **kwargs)
-
-    elif num_inputs == 2:
-
-        @classmethod
-        def new_from_pretrained(cls, pretrained_model_name_or_path, **kwargs):
-            # NOTE: NEW ADD, will be removed in the future.
-            from_hf_hub = kwargs.get("from_hf_hub", False)
-            from_aistudio = kwargs.get("from_aistudio", False)
-            cache_dir = kwargs.get("cache_dir", None)
-            if cache_dir is None:
-                if from_hf_hub:
-                    cache_dir = DIFFUSERS_CACHE
-                elif from_aistudio:
-                    cache_dir = None
-                else:
-                    cache_dir = PPDIFFUSERS_CACHE
-                kwargs["cache_dir"] = cache_dir
-            if from_hf_hub:
+            if from_hf_hub or from_aistudio:
                 pass
             else:
                 subfolder = kwargs.pop("subfolder", None)
@@ -910,6 +836,7 @@ def patch_from_pretrained(patched_class):
                 **kwargs,
             )
 
+        return new_from_pretrained
     elif num_inputs == 3:
 
         @classmethod
@@ -926,7 +853,7 @@ def patch_from_pretrained(patched_class):
                 else:
                     cache_dir = PPDIFFUSERS_CACHE
                 kwargs["cache_dir"] = cache_dir
-            if from_hf_hub:
+            if from_hf_hub or from_aistudio:
                 pass
             else:
                 subfolder = kwargs.pop("subfolder", None)
@@ -955,7 +882,7 @@ def patch_from_pretrained(patched_class):
                 else:
                     cache_dir = PPDIFFUSERS_CACHE
                 kwargs["cache_dir"] = cache_dir
-            if from_hf_hub:
+            if from_hf_hub or from_aistudio:
                 pass
             else:
                 subfolder = kwargs.pop("subfolder", None)
@@ -969,22 +896,8 @@ def patch_from_pretrained(patched_class):
                 **kwargs,
             )
 
-    else:
-        raise ValueError(f"{patched_class} Invalid number of arguments")
     return new_from_pretrained
 
-
-from paddlenlp.transformers import (
-    AutoConfig,
-    AutoModel,
-    AutoProcessor,
-    AutoTokenizer,
-    FeatureExtractionMixin,
-    ImageProcessingMixin,
-    PretrainedConfig,
-    PretrainedModel,
-    PretrainedTokenizer,
-)
 
 for cls in [
     AutoConfig,
@@ -1000,4 +913,3 @@ for cls in [
     if not getattr(cls, "is_patch", False):
         setattr(cls, "from_pretrained", patch_from_pretrained(cls))
         setattr(cls, "is_patch", True)
-# patches end
