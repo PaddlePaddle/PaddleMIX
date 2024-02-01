@@ -64,6 +64,7 @@ if is_paddlenlp_available():
     #     SAFE_WEIGHTS_INDEX_NAME as PPNLP_SAFE_WEIGHTS_INDEX_NAME,
     # )
 
+from ..models.paddleinfer_runtime import PaddleInferRuntimeModel
 from .fastdeploy_utils import FastDeployRuntimeModel
 
 TORCH_INDEX_FILE = "diffusion_pytorch_model.bin"
@@ -83,6 +84,7 @@ LOADABLE_CLASSES = {
         "SchedulerMixin": ["save_pretrained", "from_pretrained"],
         "DiffusionPipeline": ["save_pretrained", "from_pretrained"],
         "FastDeployRuntimeModel": ["save_pretrained", "from_pretrained"],
+        "PaddleInferRuntimeModel": ["save_pretrained", "from_pretrained"],
     },
     "ppdiffusers.transformers": {
         "PretrainedTokenizer": ["save_pretrained", "from_pretrained"],
@@ -307,6 +309,8 @@ def load_sub_model(
     pipeline_class: Any,
     paddle_dtype: paddle.dtype,
     runtime_options: Any,
+    infer_configs: Any,
+    use_optim_cache: bool,
     model_variants: Dict[str, str],
     name: str,
     from_diffusers: bool,
@@ -362,6 +366,13 @@ def load_sub_model(
             runtime_options.get(name, None) if isinstance(runtime_options, dict) else runtime_options
         )
         loading_kwargs["is_onnx_model"] = is_onnx_model
+
+    # PaddleInferRuntimeModel
+    if issubclass(class_obj, PaddleInferRuntimeModel):
+        loading_kwargs["infer_configs"] = (
+            infer_configs.get(name, None) if isinstance(infer_configs, dict) else infer_configs
+        )
+        loading_kwargs["use_optim_cache"] = use_optim_cache
 
     is_ppdiffusers_model = issubclass(class_obj, ppdiffusers_module.ModelMixin)
     is_paddlenlp_model = issubclass(class_obj, PretrainedModel)
@@ -941,6 +952,8 @@ class DiffusionPipeline(ConfigMixin):
         use_onnx = kwargs.pop("use_onnx", None)  # noqa: F841
         use_fastdeploy = kwargs.pop("use_fastdeploy", None)  # noqa: F841
         runtime_options = kwargs.pop("runtime_options", None)
+        infer_configs = kwargs.pop("infer_configs", None)
+        use_optim_cache = kwargs.pop("use_optim_cache", False)
         load_connected_pipeline = kwargs.pop("load_connected_pipeline", False)  # noqa: F841
         model_variants = kwargs.pop("model_variants", {})
 
@@ -1083,6 +1096,8 @@ class DiffusionPipeline(ConfigMixin):
                     pipeline_class=pipeline_class,
                     paddle_dtype=paddle_dtype,
                     runtime_options=runtime_options,
+                    infer_configs=infer_configs,
+                    use_optim_cache=use_optim_cache,
                     model_variants=model_variants,
                     name=name,
                     from_diffusers=from_diffusers,

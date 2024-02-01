@@ -148,6 +148,10 @@ class PaddleInferRuntimeModel:
         if infer_config is None:
             infer_config = paddle_infer.Config()
 
+        # 使用新pir + 执行器
+        paddle.set_flags({"FLAGS_enable_pir_in_executor": 1})
+        infer_config.enable_new_executor()
+
         if use_optim_cache:
             # 首次运行，自动生成优化模型
             params_dir = os.path.dirname(params_path)
