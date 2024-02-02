@@ -237,11 +237,15 @@ def set_peft_model_state_dict(model, peft_model_state_dict, adapter_name="defaul
     else:
         raise NotImplementedError
     with warnings.catch_warnings():
-        warnings.resetwarnings()
-        warnings.filterwarnings("ignore", message=r".*is not found in the provided dict.*")
-        load_result = model.set_state_dict(
-            peft_model_state_dict,
-        )
+        from ppdiffusers.models.modeling_utils import faster_set_state_dict
+
+        # warnings.resetwarnings()
+        # warnings.filterwarnings("ignore", message=r".*is not found in the provided dict.*")
+        faster_set_state_dict(model, peft_model_state_dict)
+        load_result = ""
+        # load_result = model.set_state_dict(
+        #     peft_model_state_dict,
+        # )
     if config.is_prompt_learning:
         model.prompt_encoder[adapter_name].embedding.set_state_dict(
             {"weight": peft_model_state_dict["prompt_embeddings"]},
