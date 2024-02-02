@@ -197,10 +197,7 @@ def load_lora(
             continue
 
         if "text" in key:
-            tmp_layer_infos = key.split(".")[0].split(LORA_PREFIX_TEXT_ENCODER + "_")[-1].split("_")
-            layer_infos = []
-            for layer_info in tmp_layer_infos:
-                layer_infos.append(layer_info)
+            layer_infos = key.split(".")[0].split(LORA_PREFIX_TEXT_ENCODER + "_")[-1].split("_")
             curr_layer: paddle.nn.Linear = pipeline.text_encoder
         else:
             layer_infos = key.split(".")[0].split(LORA_PREFIX_UNET + "_")[-1].split("_")
