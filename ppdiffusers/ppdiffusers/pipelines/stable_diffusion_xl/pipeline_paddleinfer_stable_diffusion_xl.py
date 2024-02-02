@@ -15,6 +15,10 @@
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import paddle
+from ppdiffusers.transformers import (
+    CLIPTokenizer,
+    CLIPImageProcessor,
+)
 
 from ...image_processor import PipelineImageInput
 from ...loaders import IPAdapterMixin
@@ -93,11 +97,11 @@ class PaddleInferStableDiffusionXLPipeline(DiffusionPipeline, PaddleInferDiffusi
         vae_decoder: PaddleInferRuntimeModel,
         text_encoder: PaddleInferRuntimeModel,
         text_encoder_2: PaddleInferRuntimeModel,
-        tokenizer: ppdiffusers.transformers.CLIPTokenizer,
-        tokenizer_2: ppdiffusers.transformers.CLIPTokenizer,
+        tokenizer: CLIPTokenizer,
+        tokenizer_2: CLIPTokenizer,
         unet: PaddleInferRuntimeModel,
         image_encoder: PaddleInferRuntimeModel,
-        feature_extractor: ppdiffusers.transformers.CLIPImageProcessor,
+        feature_extractor: CLIPImageProcessor,
         scheduler: KarrasDiffusionSchedulers,
         force_zeros_for_empty_prompt: bool = True,
     ):

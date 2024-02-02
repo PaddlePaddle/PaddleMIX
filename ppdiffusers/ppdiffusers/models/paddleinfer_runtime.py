@@ -99,7 +99,7 @@ class PaddleInferRuntimeModel:
         for k, v in kwargs.items():
             if isinstance(v, int):
                 v = paddle.to_tensor(v)
-            if k == "timestep":
+            if k == "timestep" or k == "num_frames":
                 if v.ndim == 0:
                     # fix 0D tensor error
                     v = v.reshape((1,))

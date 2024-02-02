@@ -342,7 +342,6 @@ else:
             "LVDMTextToVideoPipeline",
             "LVDMUncondPipeline",
             "PaddleInferCycleDiffusionPipeline",
-            "PaddleInferStableDiffusionControlNetPipeline",
             "PaddleInferStableDiffusionImg2ImgPipeline",
             "PaddleInferStableDiffusionInpaintPipeline",
             "PaddleInferStableDiffusionInpaintPipelineLegacy",
