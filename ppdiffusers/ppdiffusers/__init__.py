@@ -132,7 +132,7 @@ else:
             # new add
             "LVDMAutoencoderKL",
             "LVDMUNet3DModel",
-            "PaddleInferRuntimeModel"
+            "PaddleInferRuntimeModel",
         ]
     )
 
@@ -348,13 +348,13 @@ else:
             "PaddleInferStableDiffusionMegaPipeline",
             "PaddleInferStableDiffusionPipeline",
             "PaddleInferStableDiffusionUpscalePipeline",
+            "PaddleInferStableDiffusionXLPipeline",
             "PaddleInferStableDiffusionXLImg2ImgPipeline",
             "PaddleInferStableDiffusionXLInpaintPipeline",
             "PaddleInferStableDiffusionXLInstructPix2PixPipeline",
-            "PaddleInferStableDiffusionXLPipeline",
+            "PaddleInferStableDiffusionXLMegaPipeline",
             "PaddleInferStableDiffusionControlNetPipeline",
             "PaddleInferStableVideoDiffusionPipeline",
-
         ]
     )
 
@@ -470,6 +470,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             ModelMixin,
             MotionAdapter,
             MultiAdapter,
+            PaddleInferRuntimeModel,
             PriorTransformer,
             T2IAdapter,
             T5FilmDecoder,
@@ -481,7 +482,6 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             UNetMotionModel,
             UNetSpatioTemporalConditionModel,
             VQModel,
-            PaddleInferRuntimeModel,
         )
         from .optimization import (
             get_constant_schedule,
@@ -610,6 +610,20 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             LVDMTextToVideoPipeline,
             LVDMUncondPipeline,
             MusicLDMPipeline,
+            PaddleInferCycleDiffusionPipeline,
+            PaddleInferStableDiffusionControlNetPipeline,
+            PaddleInferStableDiffusionImg2ImgPipeline,
+            PaddleInferStableDiffusionInpaintPipeline,
+            PaddleInferStableDiffusionInpaintPipelineLegacy,
+            PaddleInferStableDiffusionMegaPipeline,
+            PaddleInferStableDiffusionPipeline,
+            PaddleInferStableDiffusionUpscalePipeline,
+            PaddleInferStableDiffusionXLImg2ImgPipeline,
+            PaddleInferStableDiffusionXLInpaintPipeline,
+            PaddleInferStableDiffusionXLInstructPix2PixPipeline,
+            PaddleInferStableDiffusionXLMegaPipeline,
+            PaddleInferStableDiffusionXLPipeline,
+            PaddleInferStableVideoDiffusionPipeline,
             PaintByExamplePipeline,
             PixArtAlphaPipeline,
             SemanticStableDiffusionPipeline,
@@ -667,20 +681,6 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             WuerstchenCombinedPipeline,
             WuerstchenDecoderPipeline,
             WuerstchenPriorPipeline,
-            # new add
-            PaddleInferCycleDiffusionPipeline,
-            PaddleInferStableDiffusionControlNetPipeline,
-            PaddleInferStableDiffusionImg2ImgPipeline,
-            PaddleInferStableDiffusionInpaintPipeline,
-            PaddleInferStableDiffusionInpaintPipelineLegacy,
-            PaddleInferStableDiffusionMegaPipeline,
-            PaddleInferStableDiffusionPipeline,
-            PaddleInferStableDiffusionUpscalePipeline,
-            PaddleInferStableDiffusionXLImg2ImgPipeline,
-            PaddleInferStableDiffusionXLInpaintPipeline,
-            PaddleInferStableDiffusionXLInstructPix2PixPipeline,
-            PaddleInferStableDiffusionXLPipeline,
-            PaddleInferStableVideoDiffusionPipeline,
         )
 
     try:
