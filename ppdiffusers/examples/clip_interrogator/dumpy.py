@@ -63,12 +63,12 @@ def inference(image, mode, best_max_flavors=32):
 
 
 inputs = [
-    gr.inputs.Image(type="pil"),
+    gr.Image(type="pil"),
     gr.Radio(["best", "fast", "classic"], label="", value="best"),
     gr.Number(value=16, label="best mode max flavors"),
 ]
 outputs = [
-    gr.outputs.Textbox(label="Output"),
+    gr.Textbox(label="Output"),
 ]
 
 io = gr.Interface(
