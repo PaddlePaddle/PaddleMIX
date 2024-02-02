@@ -43,6 +43,7 @@ from .common import (
     DEFALUT_LOCAL_DIR_AUTO_SYMLINK_THRESHOLD,
     DEFAULT_ETAG_TIMEOUT,
     DEFAULT_REQUEST_TIMEOUT,
+    REPO_ID_SEPARATOR,
     AistudioBosFileMetadata,
     OfflineModeIsEnabled,
     _as_int,
@@ -56,8 +57,19 @@ from .common import (
     _to_local_dir,
     http_get,
     raise_for_status,
-    repo_folder_name,
 )
+
+
+def repo_folder_name(*, repo_id: str, repo_type: str) -> str:
+    """Return a serialized version of a aistudio repo name and type, safe for disk storage
+    as a single non-nested folder.
+
+    Example: models--julien-c--EsperBERTo-small
+    """
+    # remove all `/` occurrences to correctly convert repo to directory name
+    parts = [f"{repo_type}", *repo_id.split("/")]
+    return REPO_ID_SEPARATOR.join(parts)
+
 
 ENDPOINT = os.getenv("PPNLP_ENDPOINT", "https://bj.bcebos.com/paddlenlp")
 ENDPOINT_v2 = "https://paddlenlp.bj.bcebos.com"
