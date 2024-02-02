@@ -661,7 +661,7 @@ class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline, TextualInversion
         while loss > target_loss:
             iteration += 1
 
-            latents.requires_grad_(True)
+            latents = latents.clone().detach().requires_grad_(True)
             self.unet(latents, t, encoder_hidden_states=text_embeddings).sample
             self.unet.clear_gradients()
 
@@ -683,7 +683,7 @@ class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline, TextualInversion
 
         # Run one more time but don't compute gradients and update the latents.
         # We just need to compute the new loss - the grad update will occur below
-        latents.requires_grad_(True)
+        latents = latents.clone().detach().requires_grad_(True)
         _ = self.unet(latents, t, encoder_hidden_states=text_embeddings).sample
         self.unet.clear_gradients()
 
@@ -915,7 +915,7 @@ class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline, TextualInversion
             for i, t in enumerate(timesteps):
                 # Attend and excite process
                 with paddle.enable_grad():
-                    latents.requires_grad_(True)
+                    latents = latents.clone().detach().requires_grad_(True)
                     updated_latents = []
                     for latent, index, text_embedding in zip(latents, indices, text_embeddings):
                         # Forward pass of denoising with text conditioning

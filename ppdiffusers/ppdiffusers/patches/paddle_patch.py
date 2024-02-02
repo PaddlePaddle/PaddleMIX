@@ -120,12 +120,15 @@ if not hasattr(paddle.nn.Layer, "requires_grad_"):
         for v in self.parameters():
             v.stop_gradient = not value
 
+        return self
+
     paddle.nn.Layer.requires_grad_ = requires_grad_
 
 if not hasattr(paddle.Tensor, "requires_grad_"):
 
     def requires_grad_(self, value=True):
         self.stop_gradient = not value
+        return self
 
     paddle.Tensor.requires_grad_ = requires_grad_
 
