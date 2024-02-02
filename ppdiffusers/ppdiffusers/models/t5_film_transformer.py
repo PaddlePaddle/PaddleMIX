@@ -87,7 +87,7 @@ class T5FilmDecoder(ModelMixin, ConfigMixin):
         self.spec_out = nn.Linear(d_model, input_dims, bias_attr=False)
 
     def encoder_decoder_mask(self, query_input: paddle.Tensor, key_input: paddle.Tensor) -> paddle.Tensor:
-        mask = paddle.multiply(query_input.unsqueeze(-1), key_input.unsqueeze(-2).cast(dtype=query_input.dtype))
+        mask = paddle.multiply(query_input.unsqueeze(-1), key_input.unsqueeze(-2))
         return mask.unsqueeze(-3)
 
     def forward(self, encodings_and_masks, decoder_input_tokens, decoder_noise_time):

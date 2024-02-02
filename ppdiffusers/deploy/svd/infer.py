@@ -272,6 +272,8 @@ def main(args):
                 num_inference_steps=3,
                 height=height,
                 width=width,
+                fps=7,
+                decode_chunk_size=2,
             )
             print("==> Test img2video performance.")
             for step in trange(args.benchmark_steps):
@@ -282,6 +284,8 @@ def main(args):
                     num_inference_steps=args.inference_steps,
                     height=height,
                     width=width,
+                    fps=7,
+                    decode_chunk_size=2,
                 ).frames
                 latency = time.time() - start
                 time_costs += [latency]
