@@ -437,8 +437,6 @@ class LoRACompatibleLinear(nn.Linear):
 
     def forward(self, hidden_states: paddle.Tensor, scale: float = 1.0) -> paddle.Tensor:
         if self.lora_layer is None:
-            if hidden_states.dtype != self.weight.dtype:
-                hidden_states = hidden_states.cast(self.weight.dtype)
             return nn.functional.linear(
                 hidden_states,
                 self.weight,
