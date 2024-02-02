@@ -160,6 +160,9 @@ def create_paddle_inference_runtime(
     for pass_name in disable_paddle_pass:
         config.delete_pass(pass_name)
     if use_trt:
+        if not os.path.exists(shape_file):
+            config.collect_shape_range_info(shape_file)
+
         config.enable_tensorrt_engine(
             workspace_size=workspace,
             precision_mode=precision_mode,
@@ -244,7 +247,7 @@ def main(args):
     pipe = PaddleInferStableDiffusionXLMegaPipeline.from_pretrained(
         args.model_dir,
         infer_configs=infer_configs,
-        use_optim_cache=True,
+        use_optim_cache=False,
     )
     pipe.set_progress_bar_config(disable=True)
     pipe.change_scheduler(args.scheduler)

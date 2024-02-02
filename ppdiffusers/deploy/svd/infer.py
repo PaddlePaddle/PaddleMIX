@@ -152,6 +152,7 @@ def create_paddle_inference_runtime(
     if use_trt:
         if not os.path.exists(shape_file):
             config.collect_shape_range_info(shape_file)
+
         config.enable_tensorrt_engine(
             workspace_size=workspace,
             precision_mode=precision_mode,

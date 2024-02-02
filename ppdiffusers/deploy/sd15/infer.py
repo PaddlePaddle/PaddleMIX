@@ -267,7 +267,7 @@ def main(args):
     pipe = PaddleInferStableDiffusionMegaPipeline.from_pretrained(
         args.model_dir,
         infer_configs=infer_configs,
-        use_optim_cache=True,
+        use_optim_cache=False,
     )
     pipe.set_progress_bar_config(disable=True)
     pipe.change_scheduler(args.scheduler)
