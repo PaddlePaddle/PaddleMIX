@@ -778,10 +778,7 @@ class StableUnCLIPImg2ImgPipeline(DiffusionPipeline, TextualInversionLoaderMixin
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
 
         # 8. Denoising loop
-        # if isinstance(timesteps, paddle.Tensor) and len(timesteps.shape) == 2:
-        #     timesteps = timesteps.flatten()
-            
-        for i, t in self.progress_bar(zip(range(num_inference_steps), timesteps)):
+        for i, t in enumerate(self.progress_bar(timesteps)):
             latent_model_input = paddle.concat([latents] * 2) if do_classifier_free_guidance else latents
             latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
