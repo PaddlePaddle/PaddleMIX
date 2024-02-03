@@ -42,9 +42,9 @@ class PerceiverAttention(nn.Layer):
     def forward(self, x, latents):
         """
         Args:
-            x (torch.Tensor): image features
+            x (paddle.Tensor): image features
                 shape (b, n1, D)
-            latent (torch.Tensor): latent features
+            latent (paddle.Tensor): latent features
                 shape (b, n2, D)
         """
         x = self.norm1(x)

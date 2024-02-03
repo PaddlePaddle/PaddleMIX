@@ -13,11 +13,16 @@ from ppdiffusers.loaders import IPAdapterMixin
 from ppdiffusers.image_processor import PipelineImageInput
 from ppdiffusers.pipelines.controlnet.multicontrolnet import MultiControlNetModel
 from ppdiffusers.pipelines.stable_diffusion_xl import StableDiffusionXLPipelineOutput
+from ppdiffusers.models.attention_processor import (
+    AttnProcessor,
+    AttnProcessor2_5,
+    IPAdapterAttnProcessor,
+    IPAdapterAttnProcessor2_5
+)
 from ppdiffusers.models.modeling_pytorch_paddle_utils import (
     convert_pytorch_state_dict_to_paddle,
 )
 from ppdiffusers.models.modeling_utils import ContextManagers, faster_set_state_dict
-from ppdiffusers.models.attention_processor import IPAdapterAttnProcessor
 from ppdiffusers.utils import (
     DIFFUSERS_CACHE,
     FROM_AISTUDIO,
@@ -37,8 +42,6 @@ except ImportError:
 from safetensors import safe_open
 
 from resampler import Resampler
-
-from attention_processor import AttnProcessor
 
 logger = logging.get_logger(__name__)
 
@@ -178,7 +181,8 @@ class StableDiffusionXLInstantIDPipeline(StableDiffusionXLControlNetPipeline, IP
         if hasattr(paddle, "LazyGuard"):
             init_contexts.append(paddle.LazyGuard())
         with ContextManagers(init_contexts):
-            self.image_proj_model = image_proj_model.to("cpu", dtype=self.dtype)
+            self.image_proj_model = image_proj_model
+        self.image_proj_model.to(dtype=self.dtype)
 
         if from_diffusers:
             convert_pytorch_state_dict_to_paddle(self.image_proj_model, state_dict["image_proj"])
@@ -188,6 +192,20 @@ class StableDiffusionXLInstantIDPipeline(StableDiffusionXLControlNetPipeline, IP
         self.image_proj_model_in_features = image_emb_dim
 
         # Unet
+        class AttnProcessor_Layer(nn.Layer):
+            def __init__(self):
+                super().__init__()
+
+            __call__ = AttnProcessor.__call__
+
+        class AttnProcessor2_5_Layer(nn.Layer):
+            def __init__(self, attention_op=None):
+                super().__init__()
+                assert attention_op in [None, "math", "auto", "flash", "cutlass", "memory_efficient"]
+                self.attention_op = attention_op
+
+            __call__ = AttnProcessor2_5.__call__
+
         attn_procs = {}
         for name in self.unet.attn_processors.keys():
             cross_attention_dim = None if name.endswith('attn1.processor') else self.unet.config.cross_attention_dim
@@ -200,8 +218,9 @@ class StableDiffusionXLInstantIDPipeline(StableDiffusionXLControlNetPipeline, IP
                 block_id = int(name[len('down_blocks.')])
                 hidden_size = self.unet.config.block_out_channels[block_id]
             if cross_attention_dim is None:
-                attn_procs[name] = AttnProcessor().to(dtype=self.dtype)
+                attn_procs[name] = AttnProcessor2_5_Layer() if is_ppxformers_available() else AttnProcessor_Layer()
             else:
+                IPAdapterAttnProcessor = IPAdapterAttnProcessor2_5 if is_ppxformers_available() else IPAdapterAttnProcessor
                 attn_procs[name] = IPAdapterAttnProcessor(
                                     hidden_size=hidden_size,
                                     cross_attention_dim=cross_attention_dim, scale=scale,
@@ -213,7 +232,7 @@ class StableDiffusionXLInstantIDPipeline(StableDiffusionXLControlNetPipeline, IP
             convert_pytorch_state_dict_to_paddle(ip_layers, state_dict["ip_adapter"])
 
         faster_set_state_dict(ip_layers, state_dict["ip_adapter"])
-        self.unet.to("cpu", dtype=self.dtype)
+        self.unet.to(dtype=self.dtype)
 
     def set_ip_adapter_scale(self, scale):
         unet = getattr(self, self.unet_name) if not hasattr(self, 'unet') else self.unet
@@ -232,7 +251,7 @@ class StableDiffusionXLInstantIDPipeline(StableDiffusionXLControlNetPipeline, IP
         else:
             prompt_image_emb = paddle.to_tensor(data=prompt_image_emb)
         
-        prompt_image_emb = prompt_image_emb.to(dtype=self.dtype)
+        prompt_image_emb = prompt_image_emb.cast(dtype=self.image_proj_model.latents.dtype)
         prompt_image_emb = prompt_image_emb.reshape([1, -1, self.image_proj_model_in_features])
         
         if do_classifier_free_guidance:
@@ -452,7 +471,7 @@ class StableDiffusionXLInstantIDPipeline(StableDiffusionXLControlNetPipeline, IP
 
         # 5. Prepare timesteps
         self.scheduler.set_timesteps(num_inference_steps)
-        timesteps = self.scheduler.timesteps.to(self.dtype)
+        timesteps = self.scheduler.timesteps
         self._num_timesteps = len(timesteps)
 
         # 6. Prepare latent variables
@@ -530,8 +549,8 @@ class StableDiffusionXLInstantIDPipeline(StableDiffusionXLControlNetPipeline, IP
             add_time_ids = paddle.concat(x=[negative_add_time_ids,
                 add_time_ids], axis=0)
         
-        prompt_embeds = prompt_embeds.to(self.dtype)
-        add_text_embeds = add_text_embeds.to(self.dtype)
+        prompt_embeds = prompt_embeds.cast(self.dtype)
+        add_text_embeds = add_text_embeds.cast(self.dtype)
         add_time_ids = add_time_ids.tile(repeat_times=([batch_size * num_images_per_prompt, 1]))
         encoder_hidden_states = paddle.concat(x=[prompt_embeds, prompt_image_emb], axis=1)
 
@@ -639,11 +658,12 @@ class StableDiffusionXLInstantIDPipeline(StableDiffusionXLControlNetPipeline, IP
             paddle.device.cuda.empty_cache()
 
         if not output_type == 'latent':
-            needs_upcasting = (self.vae.dtype == 'float16' and self.vae.config.force_upcast)
-            
+            needs_upcasting = (self.vae.dtype == paddle.float16 and self.vae.config.force_upcast)
+
             if needs_upcasting:
                 self.upcast_vae()
-                latents = latents.to(next(iter(self.vae.post_quant_conv.parameters())).dtype)
+                latents = latents.to(next(iter(self.vae.post_quant_conv.named_parameters()))[1].dtype)
+
             image = self.vae.decode(latents / self.vae.config.scaling_factor, return_dict=False)[0]
 
         else:

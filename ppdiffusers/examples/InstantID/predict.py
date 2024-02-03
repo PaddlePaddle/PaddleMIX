@@ -52,10 +52,11 @@ if __name__ == '__main__':
     vae = AutoencoderKL.from_pretrained(base_model_path, subfolder="vae")
     pipe = StableDiffusionXLInstantIDPipeline.from_pretrained(base_model_path,
                                                     controlnet=controlnet,
+                                                    vae=vae,
                                                     paddle_dtype=paddle.float16,
                                                     variant="fp16",
                                                     low_cpu_mem_usage=True)
-    pipe.vae = vae
+    pipe.vae = vae.to(dtype=paddle.float32)
     pipe.load_ip_adapter_instantid(face_adapter, 
                                    weight_name=os.path.basename("face_adapter"),
                                    from_diffusers=True)
