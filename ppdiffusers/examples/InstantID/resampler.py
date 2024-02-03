@@ -6,8 +6,9 @@ import math
 def FeedForward(dim, mult=4):
     inner_dim = int(dim * mult)
     return nn.Sequential(nn.LayerNorm(normalized_shape=dim),
-                        nn.Linear(in_features=dim, out_features=inner_dim, bias_attr=False), paddle.nn.GELU(), paddle.nn.Linear(in_features=inner_dim,
-                                                                                                                                               out_features=dim, bias_attr=False))
+                         nn.Linear(in_features=dim, out_features=inner_dim, bias_attr=False), paddle.nn.GELU(),
+                         paddle.nn.Linear(in_features=inner_dim,
+                                          out_features=dim, bias_attr=False))
 
 
 def reshape_tensor(x, heads):
@@ -44,7 +45,7 @@ class PerceiverAttention(nn.Layer):
         Args:
             x (paddle.Tensor): image features
                 shape (b, n1, D)
-            latent (paddle.Tensor): latent features
+            latents (paddle.Tensor): latent features
                 shape (b, n2, D)
         """
         x = self.norm1(x)
@@ -75,22 +76,22 @@ class PerceiverAttention(nn.Layer):
 
 class Resampler(nn.Layer):
 
-    def __init__(self, 
-                 dim=1024, 
-                 depth=8, 
-                 dim_head=64, 
+    def __init__(self,
+                 dim=1024,
+                 depth=8,
+                 dim_head=64,
                  heads=16,
-                 num_queries=8, 
-                 embedding_dim=768, 
-                 output_dim=1024, 
+                 num_queries=8,
+                 embedding_dim=768,
+                 output_dim=1024,
                  ff_mult=4
-    ):
+                 ):
         super().__init__()
-        self.latents = nn.Parameter(paddle.randn([1, num_queries, dim]) / dim**0.5)
-        self.proj_in = nn.Linear(in_features=embedding_dim,out_features=dim)
+        self.latents = nn.Parameter(paddle.randn([1, num_queries, dim]) / dim ** 0.5)
+        self.proj_in = nn.Linear(in_features=embedding_dim, out_features=dim)
         self.proj_out = nn.Linear(in_features=dim, out_features=output_dim)
         self.norm_out = nn.LayerNorm(normalized_shape=output_dim)
-        
+
         self.layers = nn.LayerList(sublayers=[])
         for _ in range(depth):
             self.layers.append(
