@@ -80,6 +80,52 @@ class UniDiffuserTextDecoder(ModelMixin, ConfigMixin, ModuleUtilsMixin):
     # _keys_to_ignore_on_load_unexpected = [r"h\.\d+\.attn\.bias", r"h\.\d+\.attn\.masked_bias"]
     _keys_to_ignore_on_load_unexpected = ["h\\.\\d+\\.attn\\.bias", "h\\.\\d+\\.attn\\.masked_bias"]
 
+    # TODO, use ppdiffusers.transformers.GPT2LMHeadModel
+    # _deprecated_dict = {
+    #     "key": ".self_attn.q_proj.",
+    #     "action": [{".attn.c_attn.": "concat"}],
+    #     "name_mapping": {
+    #         # common
+    #         "gpt.": "transformer.",
+    #         "decoder.layers.": "h.",
+    #         "decoder.norm.": "ln_f.",
+    #         # embeddings
+    #         "embeddings.word_embeddings.": "wte.",
+    #         "embeddings.position_embeddings.": "wpe.",
+    #         # transformer
+    #         ".self_attn.q_proj.": ".attn.c_attn.",  # need concat
+    #         ".self_attn.k_proj.": ".attn.c_attn.",  # need concat
+    #         ".self_attn.v_proj.": ".attn.c_attn.",  # need concat
+    #         ".self_attn.out_proj.": ".attn.c_proj.",
+    #         # other
+    #         ".norm1.": ".ln_1.",
+    #         ".linear1.": ".mlp.c_fc.",
+    #         ".linear2.": ".mlp.c_proj.",
+    #         ".norm2.": ".ln_2.",
+    #     },
+    # }
+    # @classmethod
+    # def _update_deprecated_state_dict(cls, state_dict, loaded_keys=None, model=None):
+    #     _deprecated_dict = getattr(cls, "_deprecated_dict", None)
+    #     from_deprecated_state_dict = _deprecated_dict is not None and any(
+    #         cls._deprecated_dict.get("key", "NONE") in all_key for all_key in state_dict.keys()
+    #     )
+    #     if from_deprecated_state_dict:
+    #         logger.warning(
+    #             "Loading from deprecated state_dict, please load new state_dict via setting `use_safetensors=True`."
+    #         )
+    #         for name in list(state_dict.keys()):
+    #             deprecated_name = name
+    #             for old_name, new_name in cls._deprecated_dict.get("name_mapping", {}).items():
+    #                 name = name.replace(old_name, new_name)
+
+    #             if ".attn.c_attn." in name and name in state_dict:
+    #                 state_dict[name] = paddle.concat([state_dict[name], state_dict.pop(deprecated_name)], axis=-1)
+    #             else:
+    #                 state_dict[name] = state_dict.pop(deprecated_name)
+    #         loaded_keys = list(state_dict.keys())
+    #     return loaded_keys
+
     @register_to_config
     def __init__(
         self,
