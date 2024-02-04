@@ -306,7 +306,7 @@ class KandinskyPriorPipeline(DiffusionPipeline):
             return_tensors="pd",
         )
         text_input_ids = text_inputs.input_ids
-        text_mask = text_inputs.attention_mask.bool()
+        text_mask = text_inputs.attention_mask
 
         untruncated_ids = self.tokenizer(prompt, padding="longest", return_tensors="pd").input_ids
 
@@ -356,7 +356,7 @@ class KandinskyPriorPipeline(DiffusionPipeline):
                 truncation=True,
                 return_tensors="pd",
             )
-            uncond_text_mask = uncond_input.attention_mask.bool()
+            uncond_text_mask = uncond_input.attention_mask
             negative_prompt_embeds_text_encoder_output = self.text_encoder(uncond_input.input_ids)
 
             negative_prompt_embeds = negative_prompt_embeds_text_encoder_output.text_embeds
