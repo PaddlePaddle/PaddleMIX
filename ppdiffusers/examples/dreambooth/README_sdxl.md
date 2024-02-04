@@ -21,6 +21,7 @@ pip install -r requirements.txt
 export MODEL_NAME="stabilityai/stable-diffusion-xl-base-1.0"
 export INSTANCE_DIR="dog"
 export OUTPUT_DIR="lora-trained-xl"
+```
 
 ```
 python train_dreambooth_lora_sdxl.py \
@@ -42,6 +43,7 @@ python train_dreambooth_lora_sdxl.py \
   --seed="0" \
   --checkpointing_steps=100
 ```
+
 
 #### 推理
 训练完成后，我们可以执行推理，如下所示：
