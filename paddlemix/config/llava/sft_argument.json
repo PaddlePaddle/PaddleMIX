@@ -1,0 +1,29 @@
+{
+  "model_name_or_path": "/paddle/models/llava-v1.5-7b",
+  "dataset": {
+    "train":[{"name": "chatml", "data_files": "/paddle/code/LLaVA/playground/data/llava_train_part.json"}]
+  },
+  "mixtoken": false,
+  "output_dir": "./checkpoints/llava_sft_ckpts",
+  "overwrite_output_dir": true,
+  "recompute": true,
+  "per_device_train_batch_size": 1,
+  "gradient_accumulation_steps":1,
+  "per_device_eval_batch_size": 1,
+  "eval_accumulation_steps":16,
+  "num_train_epochs": 1,
+  "learning_rate": 2e-05,
+  "warmup_ratio": 0.03,
+  "lr_scheduler_type": "cosine",
+  "logging_steps": 1,
+  "save_steps": 100,
+  "evaluation_strategy": "steps",
+  "save_strategy": "steps",
+  "max_length": 2048,
+  "fp16": false,
+  "fp16_opt_level": "O1",
+  "do_train": true,
+  "do_eval": false,
+  "disable_tqdm": true,
+  "save_total_limit": 1
+}

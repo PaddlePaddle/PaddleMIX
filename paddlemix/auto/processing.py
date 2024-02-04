@@ -130,7 +130,9 @@ class AutoProcessorMIX:
                     else:
                         class_name = attr + "_class"
                         class_name = getattr(processor_class["processor"], class_name)
-                        attributes_dict[attr] = import_module(f"paddlenlp.transformers.{class_name}")
+                        attributes_dict[attr] = import_module(f"paddlenlp.transformers.{class_name}").from_pretrained(
+                            name_or_path, **kwargs
+                        )
 
                 if "tokenizer" in attributes:
                     tokenizer = AutoTokenizerMIX.from_pretrained(text_model_name_or_path, **kwargs)
