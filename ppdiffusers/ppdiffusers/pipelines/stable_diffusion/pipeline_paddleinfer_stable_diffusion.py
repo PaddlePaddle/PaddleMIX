@@ -303,7 +303,6 @@ class PaddleInferStableDiffusionPipeline(DiffusionPipeline, PaddleInferDiffusion
                     unet_inputs["image_embeds"] = image_embeds
 
                 # predict the noise residual
-                # breakpoint()
                 noise_pred_unet = self.unet(**unet_inputs)[0]
 
                 # perform guidance
