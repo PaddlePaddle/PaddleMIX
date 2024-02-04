@@ -31,7 +31,7 @@ from ppdiffusers import (
     PNDMScheduler,
     UNet2DConditionModel,
 )
-from ppdiffusers.loaders import FromCkptMixin
+from ppdiffusers.loaders import FromSingleFileMixin
 from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion import (
     StableDiffusionPipelineOutput,
 )
@@ -103,7 +103,7 @@ def set_requires_grad(model, value):
         param.stop_gradient = not value
 
 
-class CLIPGuidedImagesMixingStableDiffusion(DiffusionPipeline, FromCkptMixin):
+class CLIPGuidedImagesMixingStableDiffusion(DiffusionPipeline, FromSingleFileMixin):
     # _optional_components = ["safety_checker", "feature_extractor"]
     def __init__(
         self,

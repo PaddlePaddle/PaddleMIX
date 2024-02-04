@@ -13,20 +13,32 @@
 # limitations under the License.
 
 import argparse
+import json
 import os
 from pathlib import Path
 from types import MethodType
 
 import paddle
-from fd_stable_video_diffusion_housing import (
-    FastDeployStableVideoDiffusionPipelineHousing,
+from paddleinfer_stable_video_diffusion_housing import (
+    PaddleInferStableVideoDiffusionPipelineHousing,
 )
 
-from ppdiffusers import FastDeployRuntimeModel, StableVideoDiffusionPipeline
+from ppdiffusers import PaddleInferRuntimeModel, StableVideoDiffusionPipeline
+from ppdiffusers.configuration_utils import FrozenDict
 from ppdiffusers.models import UNetSpatioTemporalConditionModel
 
 
-def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
+def save_model_config(model, save_path):
+    config_path = os.path.join(save_path, "config.json")
+    if not isinstance(model.config, FrozenDict):
+        model.config.to_json_file(config_path)
+    else:
+        config = dict(model.config)
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(config, f, indent=2)
+
+
+def convert_ppdiffusers_pipeline_to_paddleinfer_pipeline(
     model_path: str,
     output_path: str,
     sample: bool = False,
@@ -66,6 +78,9 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
 
     # 1. Convert image_encoder
     image_encoder = pipeline.image_encoder
+    image_encoder.vision_model.embeddings.position_ids = image_encoder.vision_model.embeddings.position_ids.cast(
+        "int64"
+    )
     image_encoder = paddle.jit.to_static(
         image_encoder,
         input_spec=[
@@ -76,6 +91,8 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
     )
     save_path = os.path.join(args.output_path, "image_encoder", "inference")
     paddle.jit.save(image_encoder, save_path)
+    config_save_path = os.path.join(args.output_path, "image_encoder")
+    save_model_config(image_encoder, config_save_path)
     print(f"Save image_encoder model in {save_path} successfully.")
     del pipeline.image_encoder
 
@@ -97,6 +114,8 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
     )
     save_path = os.path.join(args.output_path, "unet", "inference")
     paddle.jit.save(unet, save_path)
+    config_save_path = os.path.join(args.output_path, "unet")
+    save_model_config(unet, config_save_path)
     print(f"Save unet model in {save_path} successfully.")
     del pipeline.unet
 
@@ -126,6 +145,8 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
     # Save vae_encoder in static graph model.
     save_path = os.path.join(args.output_path, "vae_encoder", "inference")
     paddle.jit.save(vae_encoder, save_path)
+    config_save_path = os.path.join(args.output_path, "vae_encoder")
+    save_model_config(vae_encoder, config_save_path)
     print(f"Save vae_encoder model in {save_path} successfully.")
 
     # 4. Convert vae decoder
@@ -147,21 +168,23 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
     # Save vae_decoder in static graph model.
     save_path = os.path.join(args.output_path, "vae_decoder", "inference")
     paddle.jit.save(vae_decoder, save_path)
+    config_save_path = os.path.join(args.output_path, "vae_decoder")
+    save_model_config(vae_decoder, config_save_path)
     print(f"Save vae_decoder model in {save_path} successfully.")
     del pipeline.vae
 
-    fd_pipe_cls = FastDeployStableVideoDiffusionPipelineHousing
-    fastdeploy_pipeline = fd_pipe_cls(
-        vae_encoder=FastDeployRuntimeModel.from_pretrained(output_path / "vae_encoder"),
-        vae_decoder=FastDeployRuntimeModel.from_pretrained(output_path / "vae_decoder"),
-        unet=FastDeployRuntimeModel.from_pretrained(output_path / "unet"),
-        image_encoder=FastDeployRuntimeModel.from_pretrained(output_path / "image_encoder"),
+    fd_pipe_cls = PaddleInferStableVideoDiffusionPipelineHousing
+    paddleinfer_pipeline = fd_pipe_cls(
+        vae_encoder=PaddleInferRuntimeModel.from_pretrained(output_path / "vae_encoder"),
+        vae_decoder=PaddleInferRuntimeModel.from_pretrained(output_path / "vae_decoder"),
+        unet=PaddleInferRuntimeModel.from_pretrained(output_path / "unet"),
+        image_encoder=PaddleInferRuntimeModel.from_pretrained(output_path / "image_encoder"),
         scheduler=pipeline.scheduler,
         feature_extractor=pipeline.feature_extractor,
     )
     print("start saving")
-    fastdeploy_pipeline.save_pretrained(str(output_path))
-    print("FastDeploy pipeline saved to", output_path)
+    paddleinfer_pipeline.save_pretrained(str(output_path))
+    print("PaddleInfer pipeline saved to", output_path)
 
 
 if __name__ == "__main__":
@@ -188,6 +211,6 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
+    convert_ppdiffusers_pipeline_to_paddleinfer_pipeline(
         args.pretrained_model_name_or_path, args.output_path, args.sample, args.height, args.width
     )

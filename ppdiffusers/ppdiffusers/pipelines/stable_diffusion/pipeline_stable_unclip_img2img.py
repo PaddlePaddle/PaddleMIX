@@ -56,7 +56,7 @@ EXAMPLE_DOC_STRING = """
         >>> from ppdiffusers import StableUnCLIPImg2ImgPipeline
 
         >>> pipe = StableUnCLIPImg2ImgPipeline.from_pretrained(
-        ...     "fusing/stable-unclip-2-1-l-img2img", paddle_dtype=paddle.float16
+        ...     "radames/stable-diffusion-2-1-unclip-img2img", paddle_dtype=paddle.float16
         ... )  # TODO update model path
 
         >>> url = "https://raw.githubusercontent.com/CompVis/stable-diffusion/main/assets/stable-samples/img2img/sketch-mountains-input.jpg"
