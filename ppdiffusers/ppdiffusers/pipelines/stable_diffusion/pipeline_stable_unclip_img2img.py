@@ -196,7 +196,7 @@ class StableUnCLIPImg2ImgPipeline(DiffusionPipeline, TextualInversionLoaderMixin
         generator,
         image_embeds,
     ):
-        dtype = next(self.image_encoder.parameters()).dtype
+        dtype = self.image_encoder.dtype
 
         if isinstance(image, PIL.Image.Image):
             # the image embedding should repeated so it matches the total batch size of the prompt
@@ -747,7 +747,7 @@ class StableUnCLIPImg2ImgPipeline(DiffusionPipeline, TextualInversionLoaderMixin
             prompt_embeds = paddle.concat([negative_prompt_embeds, prompt_embeds])
 
         # 4. Encoder input image
-        noise_level = paddle.to_tensor([noise_level])
+        # noise_level = paddle.to_tensor([noise_level])
         image_embeds = self._encode_image(
             image=image,
             batch_size=batch_size,

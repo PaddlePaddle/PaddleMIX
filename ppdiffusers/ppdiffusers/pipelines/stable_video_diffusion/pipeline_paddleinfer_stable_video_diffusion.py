@@ -503,7 +503,6 @@ class PaddleInferStableVideoDiffusionPipeline(DiffusionPipeline):
                     encoder_hidden_states=image_embeddings,
                     added_time_ids=added_time_ids,
                 )[0]
-                # breakpoint()
                 # perform guidance
                 if do_classifier_free_guidance:
                     noise_pred_uncond, noise_pred_cond = noise_pred.chunk(2)

@@ -175,10 +175,11 @@ else:
             "StableDiffusionUpscalePipeline",
             "StableUnCLIPImg2ImgPipeline",
             "StableUnCLIPPipeline",
-            "PaddleInferStableDiffusionXLImg2ImgPipeline",
-            "PaddleInferStableDiffusionXLInpaintPipeline",
-            "PaddleInferStableDiffusionXLMegaPipeline",
-            "PaddleInferStableDiffusionXLPipeline",
+            "PaddleInferStableDiffusionPipeline",
+            "PaddleInferStableDiffusionImg2ImgPipeline",
+            "PaddleInferStableDiffusionInpaintPipeline",
+            "PaddleInferStableDiffusionInpaintPipelineLegacy",
+            "PaddleInferStableDiffusionMegaPipeline",
         ]
     )
     _import_structure["stable_diffusion_safe"] = ["StableDiffusionPipelineSafe"]
@@ -357,13 +358,13 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         from .blip_diffusion import BlipDiffusionPipeline
         from .controlnet import (
             BlipDiffusionControlNetPipeline,
+            PaddleInferStableDiffusionControlNetPipeline,
             StableDiffusionControlNetImg2ImgPipeline,
             StableDiffusionControlNetInpaintPipeline,
             StableDiffusionControlNetPipeline,
             StableDiffusionXLControlNetImg2ImgPipeline,
             StableDiffusionXLControlNetInpaintPipeline,
             StableDiffusionXLControlNetPipeline,
-            PaddleInferStableDiffusionControlNetPipeline,
         )
         from .deepfloyd_if import (
             IFImg2ImgPipeline,
@@ -412,10 +413,14 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         from .pixart_alpha import PixArtAlphaPipeline
         from .semantic_stable_diffusion import SemanticStableDiffusionPipeline
         from .shap_e import ShapEImg2ImgPipeline, ShapEPipeline
-        from .stable_diffusion import *
         from .stable_diffusion import (
             CLIPImageProjection,
             CycleDiffusionPipeline,
+            PaddleInferStableDiffusionImg2ImgPipeline,
+            PaddleInferStableDiffusionInpaintPipeline,
+            PaddleInferStableDiffusionInpaintPipelineLegacy,
+            PaddleInferStableDiffusionMegaPipeline,
+            PaddleInferStableDiffusionPipeline,
             StableDiffusionAttendAndExcitePipeline,
             StableDiffusionDepth2ImgPipeline,
             StableDiffusionDiffEditPipeline,
@@ -440,19 +445,19 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         )
         from .stable_diffusion_safe import StableDiffusionPipelineSafe
         from .stable_diffusion_xl import (
-            StableDiffusionXLImg2ImgPipeline,
-            StableDiffusionXLInpaintPipeline,
-            StableDiffusionXLInstructPix2PixPipeline,
-            StableDiffusionXLPipeline,
             PaddleInferStableDiffusionXLImg2ImgPipeline,
             PaddleInferStableDiffusionXLInpaintPipeline,
             PaddleInferStableDiffusionXLMegaPipeline,
             PaddleInferStableDiffusionXLPipeline,
+            StableDiffusionXLImg2ImgPipeline,
+            StableDiffusionXLInpaintPipeline,
+            StableDiffusionXLInstructPix2PixPipeline,
+            StableDiffusionXLPipeline,
         )
         from .stable_video_diffusion import (
+            PaddleInferStableVideoDiffusionPipeline,
             StableVideoDiffusionPipeline,
             StableVideoDiffusionPipelineOutput,
-            PaddleInferStableVideoDiffusionPipeline,
         )
         from .t2i_adapter import (
             StableDiffusionAdapterPipeline,

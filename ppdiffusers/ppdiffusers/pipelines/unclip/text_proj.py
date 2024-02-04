@@ -66,7 +66,7 @@ class UnCLIPTextProjModel(ModelMixin, ConfigMixin):
             classifier_free_guidance_embeddings = classifier_free_guidance_embeddings.expand(
                 [image_embeddings_batch_size, -1]
             )
-            image_embeddings = paddle.concat([classifier_free_guidance_embeddings, image_embeddings], axis=0)
+            image_embeddings = paddle.concat([classifier_free_guidance_embeddings, image_embeddings.cast(classifier_free_guidance_embeddings.dtype)], axis=0)
 
         # The image embeddings batch size and the text embeddings batch size are equal
         assert image_embeddings.shape[0] == prompt_embeds.shape[0]

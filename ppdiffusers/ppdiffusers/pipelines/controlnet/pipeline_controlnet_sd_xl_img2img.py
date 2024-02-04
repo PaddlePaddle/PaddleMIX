@@ -1243,9 +1243,9 @@ class StableDiffusionXLControlNetImg2ImgPipeline(
 
         # 7.2 Prepare added time ids & embeddings
         if isinstance(control_image, list):
-            original_size = original_size or control_image[0].shape[-2:]
+            original_size = original_size or tuple(control_image[0].shape[-2:])
         else:
-            original_size = original_size or control_image.shape[-2:]
+            original_size = original_size or tuple(control_image.shape[-2:])
         target_size = target_size or (height, width)
 
         if negative_original_size is None:

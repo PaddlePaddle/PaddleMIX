@@ -957,7 +957,7 @@ class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline, TextualInversion
                                     loss=loss,
                                     step_size=step_size[i],
                                 )
-                            logger.info(f"Iteration {i} | Loss: {loss:0.4f}")
+                            # logger.info(f"Iteration {i} | Loss: {loss:0.4f}")
 
                         updated_latents.append(latent)
 

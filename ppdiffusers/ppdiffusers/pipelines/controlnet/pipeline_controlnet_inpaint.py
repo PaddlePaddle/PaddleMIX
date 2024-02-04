@@ -1346,7 +1346,7 @@ class StableDiffusionControlNetInpaintPipeline(
 
                 # predict the noise residual
                 if num_channels_unet == 9:
-                    latent_model_input = paddle.concat([latent_model_input, mask, masked_image_latents], axis=1)
+                    latent_model_input = paddle.concat([latent_model_input, mask.cast(latent_model_input.dtype), masked_image_latents.cast(latent_model_input.dtype)], axis=1)
 
                 noise_pred = self.unet(
                     latent_model_input,

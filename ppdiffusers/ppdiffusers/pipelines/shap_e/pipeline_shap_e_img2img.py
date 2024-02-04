@@ -137,7 +137,7 @@ class ShapEImg2ImgPipeline(DiffusionPipeline):
         if not isinstance(image, paddle.Tensor):
             image = self.image_processor(image, return_tensors="pd").pixel_values[0].unsqueeze(0)
 
-        image = image.cast(dtype=self.image_encoder.dtype)
+        # image = image.cast(dtype=self.image_encoder.dtype)
 
         image_embeds = self.image_encoder(image)["last_hidden_state"]
         image_embeds = image_embeds[:, 1:, :]  # .contiguous()  # batch_size, dim, 256
