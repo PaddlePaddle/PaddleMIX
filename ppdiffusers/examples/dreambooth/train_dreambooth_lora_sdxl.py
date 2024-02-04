@@ -1733,6 +1733,10 @@ def main(args):
     # Save the lora layers
     accelerator.wait_for_everyone()
     if accelerator.is_main_process:
+        # del models, weights
+        # for _ in range(3):
+        #     gc.collect()
+        # paddle.device.cuda.empty_cache()
         unet = accelerator.unwrap_model(unet)
         unet = unet.to(dtype=paddle.float32)
         unet_lora_layers = unet_lora_state_dict(unet)
