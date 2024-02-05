@@ -584,7 +584,7 @@ class MLPNeRSTFModel(ModelMixin, ConfigMixin):
         output_widths = mlp_widths + [n_output]
         if insert_direction_at is not None:
             input_widths[insert_direction_at] += d_posenc_dir
-        self.mlps = paddle.nn.LayerList(
+        self.mlp = paddle.nn.LayerList(
             sublayers=[
                 paddle.nn.Linear(in_features=d_in, out_features=d_out)
                 for d_in, d_out in zip(input_widths, output_widths)
@@ -617,14 +617,14 @@ class MLPNeRSTFModel(ModelMixin, ConfigMixin):
         h_preact = h
         h_directionless = None
 
-        for i, layer in enumerate(self.mlps):
+        for i, layer in enumerate(self.mlp):
             if i == self.config.insert_direction_at:
                 h_directionless = h_preact
                 h_direction = encode_direction(position, direction=direction)
                 h = paddle.concat(x=[h, h_direction], axis=-1)
             h = layer(h)
             h_preact = h
-            if i < len(self.mlps) - 1:
+            if i < len(self.mlp) - 1:
                 h = self.activation(h)
         h_final = h
         if h_directionless is None:
@@ -660,7 +660,7 @@ class ChannelsProj(paddle.nn.Layer):
 
     def forward(self, x: paddle.Tensor) -> paddle.Tensor:
         x_bvd = x
-        w_vcd = self.proj.weight.reshape([self.vectors, self.channels, self.d_latent])
+        w_vcd = self.proj.weight.T.reshape([self.vectors, self.channels, self.d_latent])
 
         b_vc = self.proj.bias.reshape([1, self.vectors, self.channels])
         h = paddle.einsum("bvd,vcd->bvc", x_bvd, w_vcd.cast(x.dtype))
@@ -821,7 +821,7 @@ class ShapERenderer(ModelMixin, ConfigMixin):
         # update the mlp layers of the renderer
         for name, param in self.mlp.state_dict().items():
             if f"nerstf.{name}" in projected_params.keys():
-                paddle.assign(projected_params[f"nerstf.{name}"].squeeze(axis=0), output=param)
+                param.copy_(projected_params[f"nerstf.{name}"].squeeze(axis=0).cast(param.dtype).T, False)
 
         # create cameras object
         camera = create_pan_cameras(size)
@@ -852,7 +852,7 @@ class ShapERenderer(ModelMixin, ConfigMixin):
         # 2. update the mlp layers of the renderer
         for name, param in self.mlp.state_dict().items():
             if f"nerstf.{name}" in projected_params.keys():
-                paddle.assign(projected_params[f"nerstf.{name}"].squeeze(axis=0), output=param)
+                param.copy_(projected_params[f"nerstf.{name}"].squeeze(axis=0).cast(param.dtype).T, False)
 
         # 3. decoding with STF rendering
         # 3.1 query the SDF values at vertices along a regular 128**3 grid
