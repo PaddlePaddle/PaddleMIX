@@ -75,6 +75,7 @@ class QwenVLProcessor(ProcessorMixin):
         return inputs
 
     def train_preprocess(self, sources, system_message: str = "You are a helpful assistant."):
+
         IGNORE_TOKEN_ID = -100
         im_start = self.tokenizer.im_start_id
         im_end = self.tokenizer.im_end_id
@@ -121,8 +122,8 @@ class QwenVLProcessor(ProcessorMixin):
         assert len(input_id) == len(target)
 
         inputs = dict(
-            input_ids=input_id,
-            labels=target,
+            input_ids=input_id[: self.max_len],
+            labels=target[1 : self.max_len],
         )
         if len(image_path) > 0:
             inputs["images"] = self.image_processor(image_path)
