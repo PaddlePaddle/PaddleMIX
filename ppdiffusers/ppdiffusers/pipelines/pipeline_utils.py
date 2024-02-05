@@ -979,9 +979,20 @@ class DiffusionPipeline(ConfigMixin):
         # pop out "_ignore_files" as it is only needed for download
         ignore_filenames = config_dict.pop("_ignore_files", [])  # noqa: F841
 
+        custom_class_name = None
+        if os.path.isfile(os.path.join(cached_folder, f"{custom_pipeline}.py")):
+            custom_pipeline = os.path.join(cached_folder, f"{custom_pipeline}.py")
+        elif isinstance(config_dict["_class_name"], (list, tuple)) and os.path.isfile(
+            os.path.join(cached_folder, f"{config_dict['_class_name'][0]}.py")
+        ):
+            custom_pipeline = os.path.join(cached_folder, f"{config_dict['_class_name'][0]}.py")
+            custom_class_name = config_dict["_class_name"][1]
+
         pipeline_class = _get_pipeline_class(
             cls,
             config_dict,
+            custom_pipeline=custom_pipeline,
+            class_name=custom_class_name,
             cache_dir=cache_dir,
             revision=custom_revision,
         )

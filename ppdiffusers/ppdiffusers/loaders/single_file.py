@@ -761,3 +761,6 @@ class FromOriginalControlnetMixin:
             controlnet.to(paddle_dtype=paddle_dtype)
 
         return controlnet
+
+
+FromCkptMixin = FromSingleFileMixin
