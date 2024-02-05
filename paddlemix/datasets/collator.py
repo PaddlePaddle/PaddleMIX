@@ -124,7 +124,7 @@ class QwenVLCollator:
         images = []
         IGNORE_TOKEN_ID = -100
         for query in data_list:
-            if isinstance(query, list):
+            if isinstance(query, dict):
                 raw_data = self.processor(query=query, mode=self.mode)
             else:
                 raw_data = query
