@@ -464,7 +464,7 @@ class FastDeployStableDiffusionTilingPipeline(
                 latents = self.scheduler.step(noise_pred, t, latents).prev_sample
             if i == len(self.scheduler.timesteps) - 1:
                 # sync for accuracy it/s measure
-                paddle.device.cuda.synchronize()
+                paddle.device.synchronize()
 
         # scale and decode the image latents with vae
         image = self._decode_vae_latents(latents)
