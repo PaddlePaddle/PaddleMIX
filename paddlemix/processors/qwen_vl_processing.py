@@ -121,8 +121,8 @@ class QwenVLProcessor(ProcessorMixin):
         assert len(input_id) == len(target)
 
         inputs = dict(
-            input_ids=input_id,
-            labels=target,
+            input_ids=input_id[: self.max_len],
+            labels=target[: self.max_len],
         )
         if len(image_path) > 0:
             inputs["images"] = self.image_processor(image_path)
