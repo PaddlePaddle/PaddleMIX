@@ -61,7 +61,7 @@ EXAMPLE_DOC_STRING = """
 
         >>> # download an image
         >>> image = load_image(
-        ...     "https://hf.co/datasets/huggingface/documentation-images/resolve/main/diffusers/input_image_vermeer.png"
+        ...     "https://hf-mirror.com/datasets/huggingface/documentation-images/resolve/main/diffusers/input_image_vermeer.png"
         ... )
         >>> image = np.array(image)
 

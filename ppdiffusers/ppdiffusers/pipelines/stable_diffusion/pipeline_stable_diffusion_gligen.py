@@ -55,7 +55,7 @@ EXAMPLE_DOC_STRING = """
         ... )
 
         >>> input_image = load_image(
-        ...     "https://hf.co/datasets/huggingface/documentation-images/resolve/main/diffusers/gligen/livingroom_modern.png"
+        ...     "https://hf-mirror.com/datasets/huggingface/documentation-images/resolve/main/diffusers/gligen/livingroom_modern.png"
         ... )
         >>> prompt = "a birthday cake"
         >>> boxes = [[0.2676, 0.6088, 0.4773, 0.7183]]
