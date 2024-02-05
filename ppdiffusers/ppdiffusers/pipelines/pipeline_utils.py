@@ -249,6 +249,9 @@ def get_class_obj_and_candidates(
         class_obj = getattr(library, class_name)
         class_candidates = {c: getattr(library, c, None) for c in importable_classes.keys()}
 
+    # we will use PPNLP PretrainedModel
+    if "PretrainedModel" in class_candidates:
+        class_candidates["PretrainedModel"] = PretrainedModel
     return class_obj, class_candidates
 
 
