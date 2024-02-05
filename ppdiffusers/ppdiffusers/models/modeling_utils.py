@@ -1042,6 +1042,8 @@ class ModelMixin(nn.Layer):
                 tensor_parallel_split_mapping=tensor_parallel_split_mapping,
                 ignore_keys=ignore_keys,
             )
+            # NOTE: new add support old state_dict
+            model._update_deprecated_state_dict(state_dict)
             # NOTE: convert old model state dict!
             model._convert_deprecated_attention_blocks(state_dict)
 
@@ -1049,7 +1051,7 @@ class ModelMixin(nn.Layer):
             if from_diffusers or data_format in ["pt"]:
                 convert_pytorch_state_dict_to_paddle(model, state_dict)
 
-            original_loaded_keys = state_dict.keys()
+            original_loaded_keys = list(state_dict.keys())
             loaded_keys.extend(original_loaded_keys)
 
             # Make sure we are able to load base models as well as derived models (with heads)
@@ -1289,3 +1291,21 @@ class ModelMixin(nn.Layer):
             del module.key
             del module.value
             del module.proj_attn
+
+    @classmethod
+    def _update_deprecated_state_dict(cls, state_dict, loaded_keys=None, model=None):
+        _deprecated_dict = getattr(cls, "_deprecated_dict", None)
+        from_deprecated_state_dict = _deprecated_dict is not None and any(
+            cls._deprecated_dict.get("key", "NONE") in all_key for all_key in state_dict.keys()
+        )
+        if from_deprecated_state_dict:
+            logger.warning(
+                "Loading from deprecated state_dict, please load new state_dict via setting `use_safetensors=True`."
+            )
+            for name in list(state_dict.keys()):
+                deprecated_name = name
+                for old_name, new_name in cls._deprecated_dict.get("name_mapping", {}).items():
+                    name = name.replace(old_name, new_name)
+                state_dict[name] = state_dict.pop(deprecated_name)
+            loaded_keys = list(state_dict.keys())
+        return loaded_keys

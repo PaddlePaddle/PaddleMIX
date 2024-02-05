@@ -582,8 +582,8 @@ class StableDiffusionAdapterPipeline(DiffusionPipeline):
             elif isinstance(image, paddle.Tensor):
                 height = image.shape[-2]
 
-            # round down to nearest multiple of `self.adapter.downscale_factor`
-            height = (height // self.adapter.downscale_factor) * self.adapter.downscale_factor
+            # round down to nearest multiple of `self.adapter.config.downscale_factor`
+            height = (height // self.adapter.config.downscale_factor) * self.adapter.config.downscale_factor
 
         if width is None:
             if isinstance(image, PIL.Image.Image):
@@ -591,8 +591,8 @@ class StableDiffusionAdapterPipeline(DiffusionPipeline):
             elif isinstance(image, paddle.Tensor):
                 width = image.shape[-1]
 
-            # round down to nearest multiple of `self.adapter.downscale_factor`
-            width = (width // self.adapter.downscale_factor) * self.adapter.downscale_factor
+            # round down to nearest multiple of `self.adapter.config.downscale_factor`
+            width = (width // self.adapter.config.downscale_factor) * self.adapter.config.downscale_factor
 
         return height, width
 

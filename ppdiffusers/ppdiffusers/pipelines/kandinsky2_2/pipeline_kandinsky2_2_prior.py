@@ -70,11 +70,11 @@ EXAMPLE_INTERPOLATE_DOC_STRING = """
         ...     "kandinsky-community/kandinsky-2-2-prior", paddle_dtype=paddle.float16
         ... )
         >>> img1 = load_image(
-        ...     "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main"
+        ...     "https://hf-mirror.com/datasets/hf-internal-testing/diffusers-images/resolve/main"
         ...     "/kandinsky/cat.png"
         ... )
         >>> img2 = load_image(
-        ...     "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main"
+        ...     "https://hf-mirror.com/datasets/hf-internal-testing/diffusers-images/resolve/main"
         ...     "/kandinsky/starry_night.jpeg"
         ... )
         >>> images_texts = ["a cat", img1, img2]
@@ -531,6 +531,7 @@ class KandinskyV22PriorPipeline(DiffusionPipeline):
                 text_mask = callback_outputs.pop("text_mask", text_mask)
 
         latents = self.prior.post_process_latents(latents)
+        latents = latents.cast(dtype=self.image_encoder.dtype)
 
         image_embeddings = latents
 

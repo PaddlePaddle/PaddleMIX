@@ -354,7 +354,7 @@ class FastDeployStableDiffusionImg2ImgPipeline(DiffusionPipeline, FastDeployDiff
                         callback(i, t, latents)
                     if i == len(timesteps) - 1:
                         # sync for accuracy it/s measure
-                        paddle.device.cuda.synchronize()
+                        paddle.device.synchronize()
 
         if not output_type == "latent":
             image = self._decode_vae_latents(

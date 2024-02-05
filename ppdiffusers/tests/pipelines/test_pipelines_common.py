@@ -125,10 +125,10 @@ class PipelineLatentTesterMixin:
 
         return inputs
 
-    def test_pt_np_pil_outputs_equivalent(self, expected_max_diff=1e-2):
-        self._test_pt_np_pil_outputs_equivalent(expected_max_diff=expected_max_diff)
+    def test_pd_np_pil_outputs_equivalent(self, expected_max_diff=1e-2):
+        self._test_pd_np_pil_outputs_equivalent(expected_max_diff=expected_max_diff)
 
-    def _test_pt_np_pil_outputs_equivalent(self, expected_max_diff=1e-2, input_image_type="pd"):
+    def _test_pd_np_pil_outputs_equivalent(self, expected_max_diff=1e-2, input_image_type="pd"):
         components = self.get_dummy_components()
         pipe = self.pipeline_class(**components)
         pipe.set_progress_bar_config(disable=None)
@@ -139,13 +139,13 @@ class PipelineLatentTesterMixin:
 
         max_diff = np.abs(output_pt.cpu().numpy().transpose(0, 2, 3, 1) - output_np).max()
         self.assertLess(
-            max_diff, expected_max_diff, "`output_type=='pt'` generate different results from `output_type=='np'`"
+            max_diff, expected_max_diff, "`output_type=='pd'` generate different results from `output_type=='np'`"
         )
 
         max_diff = np.abs(np.array(output_pil[0]) - (output_np * 255).round()).max()
         self.assertLess(max_diff, 2.0, "`output_type=='pil'` generate different results from `output_type=='np'`")
 
-    def test_pt_np_pil_inputs_equivalent(self):
+    def test_pd_np_pil_inputs_equivalent(self):
         if len(self.image_params) == 0:
             return
 
@@ -158,10 +158,10 @@ class PipelineLatentTesterMixin:
         out_input_pil = pipe(**self.get_dummy_inputs_by_type(input_image_type="pil"))[0]
 
         max_diff = np.abs(out_input_pt - out_input_np).max()
-        self.assertLess(max_diff, 1e-2, "`input_type=='pt'` generate different result from `input_type=='np'`")
+        self.assertLess(max_diff, 1e-2, "`input_type=='pd'` generate different result from `input_type=='np'`")
         max_diff = np.abs(out_input_pil - out_input_np).max()
-        # self.assertLess(max_diff, 1e-2, "`input_type=='pt'` generate different result from `input_type=='np'`")
-        self.assertLess(max_diff, 5e-2, "`input_type=='pt'` generate different result from `input_type=='np'`")
+        # self.assertLess(max_diff, 1e-2, "`input_type=='pd'` generate different result from `input_type=='np'`")
+        self.assertLess(max_diff, 5e-2, "`input_type=='pd'` generate different result from `input_type=='np'`")
 
     def test_latents_input(self):
         if len(self.image_latents_params) == 0:
@@ -699,11 +699,19 @@ class PipelineTesterMixin:
         pipe.set_progress_bar_config(disable=None)
 
         pipe.to(dtype=paddle.float32)
-        model_dtypes = [component.dtype for component in components.values() if hasattr(component, "dtype") and component.dtype is not None]
+        model_dtypes = [
+            component.dtype
+            for component in components.values()
+            if hasattr(component, "dtype") and component.dtype is not None
+        ]
         self.assertTrue(all(dtype == paddle.float32 for dtype in model_dtypes))
 
         pipe.to(dtype=paddle.float16)
-        model_dtypes = [component.dtype for component in components.values() if hasattr(component, "dtype") and component.dtype is not None]
+        model_dtypes = [
+            component.dtype
+            for component in components.values()
+            if hasattr(component, "dtype") and component.dtype is not None
+        ]
         self.assertTrue(all(dtype == paddle.float16 for dtype in model_dtypes))
 
     def test_attention_slicing_forward_pass(self, expected_max_diff=1e-2):

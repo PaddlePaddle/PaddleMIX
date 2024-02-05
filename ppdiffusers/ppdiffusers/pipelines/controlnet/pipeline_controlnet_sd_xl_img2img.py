@@ -111,7 +111,7 @@ EXAMPLE_DOC_STRING = """
 
         >>> prompt = "A robot, 4k photo"
         >>> image = load_image(
-        ...     "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main"
+        ...     "https://hf-mirror.com/datasets/hf-internal-testing/diffusers-images/resolve/main"
         ...     "/kandinsky/cat.png"
         ... ).resize((1024, 1024))
         >>> controlnet_conditioning_scale = 0.5  # recommended for good generalization

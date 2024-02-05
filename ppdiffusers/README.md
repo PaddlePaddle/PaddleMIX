@@ -153,7 +153,7 @@ pipe = StableDiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-2",
 ```python
 from ppdiffusers import StableDiffusionPipeline
 # 可输入网址 或 本地ckpt、safetensors文件
-pipe = StableDiffusionPipeline.from_pretrained_original_ckpt("https://paddlenlp.bj.bcebos.com/models/community/junnyu/develop/ppdiffusers/chilloutmix_NiPrunedFp32Fix.safetensors")
+pipe = StableDiffusionPipeline.from_single_file("https://paddlenlp.bj.bcebos.com/models/community/junnyu/develop/ppdiffusers/chilloutmix_NiPrunedFp32Fix.safetensors")
 ```
 
 ### 加载HF LoRA权重
@@ -172,7 +172,10 @@ pipe.load_lora_weights("stabilityai/stable-diffusion-xl-base-1.0",
 from ppdiffusers import StableDiffusionPipeline
 pipe = StableDiffusionPipeline.from_pretrained("TASUKU2023/Chilloutmix")
 # 加载lora权重
-pipe.apply_lora("https://paddlenlp.bj.bcebos.com/models/community/junnyu/develop/ppdiffusers/Moxin_10.safetensors")
+pipe.load_lora_weights("./",
+    weight_name="Moxin_10.safetensors",
+    from_diffusers=True)
+pipe.fuse_lora()
 ```
 
 ### XFormers加速
@@ -847,7 +850,7 @@ pipe = KandinskyV22Img2ImgPipeline.from_pretrained(
 )
 
 init_image = load_image(
-    "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main" "/kandinsky/frog.png"
+    "https://hf-mirror.com/datasets/hf-internal-testing/diffusers-images/resolve/main/kandinsky/frog.png"
 )
 image = pipe(
     image=init_image,

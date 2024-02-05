@@ -249,6 +249,9 @@ def get_class_obj_and_candidates(
         class_obj = getattr(library, class_name)
         class_candidates = {c: getattr(library, c, None) for c in importable_classes.keys()}
 
+    # we will use PPNLP PretrainedModel
+    if "PretrainedModel" in class_candidates:
+        class_candidates["PretrainedModel"] = PretrainedModel
     return class_obj, class_candidates
 
 
@@ -365,6 +368,9 @@ def load_sub_model(
         loading_kwargs["runtime_options"] = (
             runtime_options.get(name, None) if isinstance(runtime_options, dict) else runtime_options
         )
+        # HACK, this is only for fd onnx model
+        if "melgan" in name:
+            is_onnx_model = True
         loading_kwargs["is_onnx_model"] = is_onnx_model
 
     # PaddleInferRuntimeModel
@@ -979,9 +985,20 @@ class DiffusionPipeline(ConfigMixin):
         # pop out "_ignore_files" as it is only needed for download
         ignore_filenames = config_dict.pop("_ignore_files", [])  # noqa: F841
 
+        custom_class_name = None
+        if os.path.isfile(os.path.join(cached_folder, f"{custom_pipeline}.py")):
+            custom_pipeline = os.path.join(cached_folder, f"{custom_pipeline}.py")
+        elif isinstance(config_dict["_class_name"], (list, tuple)) and os.path.isfile(
+            os.path.join(cached_folder, f"{config_dict['_class_name'][0]}.py")
+        ):
+            custom_pipeline = os.path.join(cached_folder, f"{config_dict['_class_name'][0]}.py")
+            custom_class_name = config_dict["_class_name"][1]
+
         pipeline_class = _get_pipeline_class(
             cls,
             config_dict,
+            custom_pipeline=custom_pipeline,
+            class_name=custom_class_name,
             cache_dir=cache_dir,
             revision=custom_revision,
         )
@@ -1070,6 +1087,10 @@ class DiffusionPipeline(ConfigMixin):
                 library_name = "ppdiffusers.transformers"
 
             class_name = class_name[4:] if class_name.startswith("Flax") else class_name
+            # support HF fast tokenizer
+            class_name = (
+                class_name[:-4] if class_name.endswith("Fast") and "tokenizer" in class_name.lower() else class_name
+            )
 
             # 6.2 Define all importable classes
             is_pipeline_module = hasattr(pipelines, library_name)

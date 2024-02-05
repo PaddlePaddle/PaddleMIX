@@ -43,7 +43,7 @@ EXAMPLE_DOC_STRING = """
         >>> pipe = DiffusionPipeline.from_pretrained(repo, paddle_dtype=paddle.float16)
 
         >>> guidance_scale = 3.0
-        >>> image_url = "https://hf.co/datasets/diffusers/docs-images/resolve/main/shap-e/corgi.png"
+        >>> image_url = "https://hf-mirror.com/datasets/diffusers/docs-images/resolve/main/shap-e/corgi.png"
         >>> image = load_image(image_url).convert("RGB")
 
         >>> images = pipe(
