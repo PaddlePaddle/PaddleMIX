@@ -644,6 +644,9 @@ class LVDMUNet3DModel(ModelMixin, ConfigMixin):
         :param y: an [N] Tensor of labels, if class-conditional.
         :return: an [N x C x ...] Tensor of outputs.
         """
+        # Fix 0D tensor bug
+        if timesteps.ndim == 0:
+            timesteps = timesteps.unsqueeze(0)
         hs = []
         if time_emb_replace is None:
             t_emb = timestep_embedding(timesteps, self.model_channels, repeat_only=False)
@@ -685,6 +688,9 @@ class FrameInterpPredUNet(LVDMUNet3DModel):
             pass
 
     def forward(self, x, timesteps, context=None, y=None, s=None, mask=None, **kwargs):
+        # Fix 0D tensor bug
+        if timesteps.ndim == 0:
+            timesteps = timesteps.unsqueeze(0)
         if s is not None:
             s_emb = timestep_embedding(s, self.model_channels, repeat_only=False)
             s_emb = self.time_embed_cond(s_emb)
