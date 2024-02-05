@@ -509,6 +509,7 @@ class KandinskyPriorPipeline(DiffusionPipeline):
             ).prev_sample
 
         latents = self.prior.post_process_latents(latents)
+        latents = latents.cast(self.image_encoder.dtype)
 
         image_embeddings = latents
 
