@@ -215,6 +215,7 @@ class CMStochasticIterativeScheduler(SchedulerMixin, ConfigMixin):
         timesteps = self.sigma_to_t(sigmas)
 
         sigmas = np.concatenate([sigmas, [self.sigma_min]]).astype(np.float32)
+        self.sigmas = paddle.to_tensor(sigmas)
 
         self.timesteps = paddle.to_tensor(timesteps)
 
