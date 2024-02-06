@@ -114,9 +114,13 @@ def rand_cosine_interpolated(
 
 
 def rand_log_normal(shape, loc=0.0, scale=1.0, dtype=paddle.float32):
-    """Draws samples from an lognormal distribution."""
-    u = paddle.rand(shape, dtype=dtype) * (1 - 2e-7) + 1e-7
-    return paddle.distribution.Normal(loc, scale).icdf(u).exp()
+    """Draws samples from a lognormal distribution without using icdf."""
+    # westfish: paddle do not have icdf, so we use normal distribution to generate lognormal
+    # u = torch.rand(shape, dtype=dtype, device=device) * (1 - 2e-7) + 1e-7
+    # return torch.distributions.Normal(loc, scale).icdf(u).exp()
+    normal_samples = paddle.normal(mean=loc, std=scale, shape=shape)
+    log_normal_samples = paddle.exp(normal_samples)
+    return log_normal_samples
 
 
 # min_value = 0.002
@@ -307,7 +311,7 @@ def _filter2d(input, kernel):
 
     # kernel and input tensor reshape to align element-wise or batch-wise params
     tmp_kernel = tmp_kernel.reshape([-1, 1, height, width])
-    input = input.reshape([-1, tmp_kernel.shape[0], input.shape(-2), input.shape(-1)])
+    input = input.reshape([-1, tmp_kernel.shape[0], input.shape[-2], input.shape[-1]])
 
     # convolve the tensor with the kernel.
     output = paddle.nn.functional.conv2d(input, tmp_kernel, groups=tmp_kernel.shape[0], padding=0, stride=1)
@@ -988,8 +992,10 @@ def main():
     ):
         add_time_ids = [fps, motion_bucket_id, noise_aug_strength]
 
-        passed_add_embed_dim = unet.module.config.addition_time_embed_dim * len(add_time_ids)
-        expected_add_embed_dim = unet.module.add_embedding.linear_1.weight.shape[0]
+        # passed_add_embed_dim = unet.module.config.addition_time_embed_dim * len(add_time_ids)
+        # expected_add_embed_dim = unet.module.add_embedding.linear_1.weight.shape[0]
+        passed_add_embed_dim = unet.config.addition_time_embed_dim * len(add_time_ids)
+        expected_add_embed_dim = unet.add_embedding.linear_1.weight.shape[0]
 
         if expected_add_embed_dim != passed_add_embed_dim:
             raise ValueError(
@@ -997,7 +1003,7 @@ def main():
             )
 
         add_time_ids = paddle.to_tensor([add_time_ids], dtype=dtype)
-        add_time_ids = add_time_ids.repeat(batch_size, 1)
+        add_time_ids = add_time_ids.tile([batch_size, 1])
         return add_time_ids
 
     # Potentially load in the weights and states from a previous save
@@ -1029,6 +1035,9 @@ def main():
     progress_bar = tqdm(range(global_step, args.max_train_steps), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Steps")
 
+    # westfish: add amp
+    scaler = paddle.amp.GradScaler(init_loss_scaling=1024)
+    unet = paddle.amp.decorate(models=unet.to(dtype=paddle.float32), level="O2")
     for epoch in range(first_epoch, args.num_train_epochs):
         unet.train()
         train_loss = 0.0
@@ -1079,7 +1088,8 @@ def main():
                 # (this is the forward diffusion process)
                 sigmas = sigmas[:, None, None, None, None]
                 noisy_latents = latents + noise * sigmas
-                timesteps = paddle.to_tensor([0.25 * sigma.log() for sigma in sigmas])
+                # westfish: paddle.Tensor donot support list input
+                timesteps = paddle.Tensor(np.array([0.25 * sigma.log().squeeze() for sigma in sigmas]))
 
                 inp_noisy_latents = noisy_latents / ((sigmas**2 + 1) ** 0.5)
 
@@ -1100,7 +1110,7 @@ def main():
                 # Conditioning dropout to support classifier-free guidance during inference. For more details
                 # check out the section 3.2.1 of the original paper https://arxiv.org/abs/2211.09800.
                 if args.conditioning_dropout_prob is not None:
-                    random_p = paddle.rand(bsz, generator=generator)
+                    random_p = paddle.rand([bsz], generator=generator)
                     # Sample masks for the edit prompts.
                     prompt_mask = random_p < 2 * args.conditioning_dropout_prob
                     prompt_mask = prompt_mask.reshape([bsz, 1, 1])
@@ -1120,14 +1130,19 @@ def main():
                     conditional_latents = image_mask * conditional_latents
 
                 # Concatenate the `conditional_latents` with the `noisy_latents`.
-                conditional_latents = conditional_latents.unsqueeze(1).repeat(1, noisy_latents.shape[1], 1, 1, 1)
-                inp_noisy_latents = paddle.concat([inp_noisy_latents, conditional_latents], axis=2)
+                conditional_latents = conditional_latents.unsqueeze(1).tile([1, noisy_latents.shape[1], 1, 1, 1])
+                inp_noisy_latents = paddle.concat(
+                    [inp_noisy_latents, conditional_latents.astype(inp_noisy_latents.dtype)], axis=2
+                )
 
                 # check https://arxiv.org/abs/2206.00364(the EDM-framework) for more details.
                 target = latents
-                model_pred = unet(
-                    inp_noisy_latents, timesteps, encoder_hidden_states, added_time_ids=added_time_ids
-                ).sample
+
+                # westfish: add amp
+                with paddle.amp.auto_cast(enable=True, custom_white_list=None, custom_black_list=None, level="O2"):
+                    model_pred = unet(
+                        inp_noisy_latents, timesteps, encoder_hidden_states, added_time_ids=added_time_ids
+                    ).sample
 
                 # Denoise the latents
                 c_out = -sigmas / ((sigmas**2 + 1) ** 0.5)
@@ -1146,16 +1161,20 @@ def main():
                 loss = loss.mean()
 
                 # Gather the losses across all processes for logging (if we use distributed training).
-                avg_loss = accelerator.gather(loss.repeat(args.per_gpu_batch_size)).mean()
+                avg_loss = accelerator.gather(loss.tile([args.per_gpu_batch_size])).mean()
                 train_loss += avg_loss.item() / args.gradient_accumulation_steps
 
                 # Backpropagate
-                accelerator.backward(loss)
+                # accelerator.backward(loss)
+                scaled = scaler.scale(loss)
+                scaled.backward()
+                scaler.step(optimizer)
+                scaler.update()
                 # if accelerator.sync_gradients:
                 #     accelerator.clip_grad_norm_(unet.parameters(), args.max_grad_norm)
                 optimizer.step()
                 lr_scheduler.step()
-                optimizer.zero_grad()
+                optimizer.clear_grad()
 
             # Checks if the accelerator has performed an optimization step behind the scenes
             if accelerator.sync_gradients:
@@ -1237,9 +1256,10 @@ def main():
                         if not os.path.exists(val_save_dir):
                             os.makedirs(val_save_dir)
 
-                        with paddle.amp.auto_cast(
-                            enable=True, custom_white_list=None, custom_black_list=None, level="O2"
-                        ):
+                        # with paddle.amp.auto_cast(
+                        #     enable=True, custom_white_list=None, custom_black_list=None, level="O2"
+                        # ):
+                        if True:
                             for val_img_idx in range(args.num_validation_images):
                                 num_frames = args.num_frames
                                 video_frames = pipeline(
@@ -1271,7 +1291,7 @@ def main():
                         del pipeline
                         paddle.device.cuda.empty_cache()
 
-            logs = {"step_loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
+            logs = {"step_loss": loss.detach().item(), "lr": lr_scheduler.get_lr()}
             progress_bar.set_postfix(**logs)
 
             if global_step >= args.max_train_steps:
