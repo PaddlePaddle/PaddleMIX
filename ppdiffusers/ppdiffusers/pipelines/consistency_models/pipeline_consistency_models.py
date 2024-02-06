@@ -119,7 +119,7 @@ class ConsistencyModelPipeline(DiffusionPipeline):
         sample = self.numpy_to_pil(sample)
         return sample
 
-    def prepare_class_labels(self, batch_size, device, class_labels=None):
+    def prepare_class_labels(self, batch_size, class_labels=None):
         if self.unet.config.num_class_embeds is not None:
             if isinstance(class_labels, list):
                 class_labels = paddle.to_tensor(class_labels, dtype=paddle.int64)

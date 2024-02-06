@@ -699,7 +699,7 @@ class GPT2Model(GPT2PretrainedModel):
             if output_hidden_states:
                 all_hidden_states = all_hidden_states + (hidden_states,)
 
-            if self.gradient_checkpointing and self.training and not hidden_states.stop_gradient:
+            if self.gradient_checkpointing and not hidden_states.stop_gradient:
                 outputs = self._gradient_checkpointing_func(
                     block.__call__,
                     hidden_states,

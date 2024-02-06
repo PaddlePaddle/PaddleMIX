@@ -719,7 +719,7 @@ class LDMBertEncoder(LDMBertPreTrainedModel):
         for idx, encoder_layer in enumerate(self.layers):
             if output_hidden_states:
                 encoder_states = encoder_states + (hidden_states,)
-            if self.gradient_checkpointing and self.training and not hidden_states.stop_gradient:
+            if self.gradient_checkpointing and not hidden_states.stop_gradient:
 
                 def create_custom_forward(module):
                     def custom_forward(*inputs):

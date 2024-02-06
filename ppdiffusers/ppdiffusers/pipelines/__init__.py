@@ -103,6 +103,7 @@ else:
             "StableDiffusionXLControlNetImg2ImgPipeline",
             "StableDiffusionXLControlNetInpaintPipeline",
             "StableDiffusionXLControlNetPipeline",
+            "PaddleInferStableDiffusionControlNetPipeline",
         ]
     )
     _import_structure["deepfloyd_if"] = [
@@ -174,16 +175,28 @@ else:
             "StableDiffusionUpscalePipeline",
             "StableUnCLIPImg2ImgPipeline",
             "StableUnCLIPPipeline",
+            "PaddleInferStableDiffusionPipeline",
+            "PaddleInferStableDiffusionImg2ImgPipeline",
+            "PaddleInferStableDiffusionInpaintPipeline",
+            "PaddleInferStableDiffusionInpaintPipelineLegacy",
+            "PaddleInferStableDiffusionMegaPipeline",
         ]
     )
     _import_structure["stable_diffusion_safe"] = ["StableDiffusionPipelineSafe"]
-    _import_structure["stable_video_diffusion"] = ["StableVideoDiffusionPipeline"]
+    _import_structure["stable_video_diffusion"] = [
+        "StableVideoDiffusionPipeline",
+        "PaddleInferStableVideoDiffusionPipeline",
+    ]
     _import_structure["stable_diffusion_xl"].extend(
         [
             "StableDiffusionXLImg2ImgPipeline",
             "StableDiffusionXLInpaintPipeline",
             "StableDiffusionXLInstructPix2PixPipeline",
             "StableDiffusionXLPipeline",
+            "PaddleInferStableDiffusionXLImg2ImgPipeline",
+            "PaddleInferStableDiffusionXLInpaintPipeline",
+            "PaddleInferStableDiffusionXLMegaPipeline",
+            "PaddleInferStableDiffusionXLPipeline",
         ]
     )
     _import_structure["t2i_adapter"] = [
@@ -345,6 +358,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         from .blip_diffusion import BlipDiffusionPipeline
         from .controlnet import (
             BlipDiffusionControlNetPipeline,
+            PaddleInferStableDiffusionControlNetPipeline,
             StableDiffusionControlNetImg2ImgPipeline,
             StableDiffusionControlNetInpaintPipeline,
             StableDiffusionControlNetPipeline,
@@ -402,6 +416,11 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         from .stable_diffusion import (
             CLIPImageProjection,
             CycleDiffusionPipeline,
+            PaddleInferStableDiffusionImg2ImgPipeline,
+            PaddleInferStableDiffusionInpaintPipeline,
+            PaddleInferStableDiffusionInpaintPipelineLegacy,
+            PaddleInferStableDiffusionMegaPipeline,
+            PaddleInferStableDiffusionPipeline,
             StableDiffusionAttendAndExcitePipeline,
             StableDiffusionDepth2ImgPipeline,
             StableDiffusionDiffEditPipeline,
@@ -426,12 +445,20 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         )
         from .stable_diffusion_safe import StableDiffusionPipelineSafe
         from .stable_diffusion_xl import (
+            PaddleInferStableDiffusionXLImg2ImgPipeline,
+            PaddleInferStableDiffusionXLInpaintPipeline,
+            PaddleInferStableDiffusionXLMegaPipeline,
+            PaddleInferStableDiffusionXLPipeline,
             StableDiffusionXLImg2ImgPipeline,
             StableDiffusionXLInpaintPipeline,
             StableDiffusionXLInstructPix2PixPipeline,
             StableDiffusionXLPipeline,
         )
-        from .stable_video_diffusion import StableVideoDiffusionPipeline
+        from .stable_video_diffusion import (
+            PaddleInferStableVideoDiffusionPipeline,
+            StableVideoDiffusionPipeline,
+            StableVideoDiffusionPipelineOutput,
+        )
         from .t2i_adapter import (
             StableDiffusionAdapterPipeline,
             StableDiffusionXLAdapterPipeline,

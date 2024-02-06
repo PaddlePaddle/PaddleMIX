@@ -148,6 +148,8 @@ def check_imports(filename):
         try:
             importlib.import_module(imp)
         except ImportError:
+            if imp == "ligo":
+                imp = "ligo-segments"
             missing_packages.append(imp)
 
     if len(missing_packages) > 0:

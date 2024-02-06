@@ -230,15 +230,6 @@ class ModelMixin(nn.Layer):
     def __init__(self):
         super().__init__()
 
-    def to(self=None, device=None, dtype=None, blocking=None):
-        return self._to_impl(
-            device=device,
-            dtype=dtype,
-            blocking=blocking,
-            include_sublayers=True,
-            floating_only=True,
-        )
-
     def __getattr__(self, name: str) -> Any:
         """The only reason we overwrite `getattr` here is to gracefully deprecate accessing
         config attributes directly. See https://github.com/huggingface/diffusers/pull/3129 We need to overwrite
@@ -833,6 +824,8 @@ class ModelMixin(nn.Layer):
         index_file = None
 
         variant_list = [variant]
+        if None not in variant_list:
+            variant_list.append(None)
         if "fp16" not in variant_list:
             variant_list.append("fp16")
         if "fp32" not in variant_list:
@@ -970,9 +963,12 @@ class ModelMixin(nn.Layer):
                         "Please note that this might not be the desired variant."
                     )
                 break
+        variant_str = ", ".join(map(lambda x: "`" + str(x) + "`", variant_list))
         assert len(resolved_model_files) > 0, (
-            f"Could not find any model files in `{pretrained_model_name_or_path}`. "
-            "Please check the provided path and make sure it contains the necessary model files."
+            f"We are attempting to load the variant in [{variant_str}]. "
+            f"But unfortunately, no model files were found in the path {pretrained_model_name_or_path}. "
+            "Please check if the provided path is correct and ensure that it contains the necessary model files. "
+            "If the issue persists, consider redownloading the model files or contacting the model provider for assistance."
         )
         init_contexts = []
 
@@ -1046,6 +1042,8 @@ class ModelMixin(nn.Layer):
                 tensor_parallel_split_mapping=tensor_parallel_split_mapping,
                 ignore_keys=ignore_keys,
             )
+            # NOTE: new add support old state_dict
+            model._update_deprecated_state_dict(state_dict)
             # NOTE: convert old model state dict!
             model._convert_deprecated_attention_blocks(state_dict)
 
@@ -1053,7 +1051,7 @@ class ModelMixin(nn.Layer):
             if from_diffusers or data_format in ["pt"]:
                 convert_pytorch_state_dict_to_paddle(model, state_dict)
 
-            original_loaded_keys = state_dict.keys()
+            original_loaded_keys = list(state_dict.keys())
             loaded_keys.extend(original_loaded_keys)
 
             # Make sure we are able to load base models as well as derived models (with heads)
@@ -1293,3 +1291,21 @@ class ModelMixin(nn.Layer):
             del module.key
             del module.value
             del module.proj_attn
+
+    @classmethod
+    def _update_deprecated_state_dict(cls, state_dict, loaded_keys=None, model=None):
+        _deprecated_dict = getattr(cls, "_deprecated_dict", None)
+        from_deprecated_state_dict = _deprecated_dict is not None and any(
+            cls._deprecated_dict.get("key", "NONE") in all_key for all_key in state_dict.keys()
+        )
+        if from_deprecated_state_dict:
+            logger.warning(
+                "Loading from deprecated state_dict, please load new state_dict via setting `use_safetensors=True`."
+            )
+            for name in list(state_dict.keys()):
+                deprecated_name = name
+                for old_name, new_name in cls._deprecated_dict.get("name_mapping", {}).items():
+                    name = name.replace(old_name, new_name)
+                state_dict[name] = state_dict.pop(deprecated_name)
+            loaded_keys = list(state_dict.keys())
+        return loaded_keys

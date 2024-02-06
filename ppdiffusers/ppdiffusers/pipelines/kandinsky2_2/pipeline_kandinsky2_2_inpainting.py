@@ -51,7 +51,7 @@ EXAMPLE_DOC_STRING = """
         ... )
 
         >>> init_image = load_image(
-        ...     "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main"
+        ...     "https://hf-mirror.com/datasets/hf-internal-testing/diffusers-images/resolve/main"
         ...     "/kandinsky/cat.png"
         ... )
 
@@ -457,6 +457,7 @@ class KandinskyV22InpaintPipeline(DiffusionPipeline):
 
         self._num_timesteps = len(timesteps)
         for i, t in enumerate(self.progress_bar(timesteps)):
+            latents = latents.cast(dtype=self.unet.dtype)
             # expand the latents if we are doing classifier free guidance
             latent_model_input = paddle.concat([latents] * 2) if self.do_classifier_free_guidance else latents
             latent_model_input = paddle.concat([latent_model_input, masked_image, mask_image], axis=1)
@@ -498,7 +499,7 @@ class KandinskyV22InpaintPipeline(DiffusionPipeline):
             if i < len(timesteps) - 1:
                 noise_timestep = timesteps[i + 1]
                 init_latents_proper = self.scheduler.add_noise(
-                    init_latents_proper, noise, paddle.tensor([noise_timestep])
+                    init_latents_proper, noise, paddle.to_tensor([noise_timestep])
                 )
 
             latents = init_mask * init_latents_proper + (1 - init_mask) * latents

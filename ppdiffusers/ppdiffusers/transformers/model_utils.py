@@ -33,7 +33,7 @@ from ppdiffusers.utils import (
     recompute_use_reentrant,
 )
 
-from ..utils import DIFFUSERS_CACHE, PPDIFFUSERS_CACHE, logging
+from ..utils import logging
 from .peft_utils import PeftAdapterMixin
 
 logger = logging.get_logger(__name__)
@@ -53,15 +53,6 @@ class ModuleUtilsMixin:
     """
     A few utilities for `nn.Layer`, to be used as a mixin.
     """
-
-    def to(self=None, device=None, dtype=None, blocking=None):
-        return self._to_impl(
-            device=device,
-            dtype=dtype,
-            blocking=blocking,
-            include_sublayers=True,
-            floating_only=True,
-        )
 
     @property
     def device(self):
@@ -350,14 +341,6 @@ class PretrainedModel(PPNLPPretrainedModel, ModuleUtilsMixin, PeftAdapterMixin):
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path, *args, **kwargs):
         from_diffusers = kwargs.pop("from_diffusers", None)
-        if kwargs.get("cache_dir", None) is None:
-            if kwargs.get("from_hf_hub", False):
-                cache_dir = DIFFUSERS_CACHE
-            elif kwargs.get("from_aistudio", False):
-                cache_dir = None
-            else:
-                cache_dir = PPDIFFUSERS_CACHE
-            kwargs["cache_dir"] = cache_dir
         revision = kwargs.pop("revision", None)  # noqa: F841
         if from_diffusers is not None:
             kwargs["convert_from_torch"] = from_diffusers

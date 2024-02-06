@@ -49,7 +49,7 @@ EXAMPLE_DOC_STRING = """
         ... )
 
         >>> init_image = load_image(
-        ...     "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main"
+        ...     "https://hf-mirror.com/datasets/hf-internal-testing/diffusers-images/resolve/main"
         ...     "/kandinsky/frog.png"
         ... )
 

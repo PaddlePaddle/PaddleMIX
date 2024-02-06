@@ -28,7 +28,7 @@ import paddle
 import PIL
 import requests_mock
 import safetensors.torch
-from paddlenlp.transformers import (
+from ppdiffusers.transformers import (
     CLIPImageProcessor,
     CLIPModel,
     CLIPTextConfig,

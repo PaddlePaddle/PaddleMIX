@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
 """Script to fine-tune Stable Video Diffusion."""
 import argparse
 import copy
@@ -34,7 +33,7 @@ import PIL
 from einops import rearrange
 
 # from huggingface_hub import create_repo, upload_folder
-from paddle.io.DataLoader import Dataset, RandomSampler
+from paddle.io import Dataset, RandomSampler
 from PIL import Image
 from tqdm.auto import tqdm
 
@@ -126,6 +125,48 @@ def rand_log_normal(shape, loc=0.0, scale=1.0, dtype=paddle.float32):
 # noise_d_low = 32
 # noise_d_high = 64
 # sigma_data = 0.5
+
+# westfish
+class DataLoader(paddle.io.DataLoader):
+    def __init__(
+        self,
+        dataset,
+        batch_size=1,
+        shuffle=False,
+        sampler=None,
+        batch_sampler=None,
+        num_workers=0,
+        collate_fn=None,
+        pin_memory=False,
+        drop_last=False,
+        timeout=0,
+        worker_init_fn=None,
+        multiprocessing_context=None,
+        generator=None,
+    ):
+        if isinstance(dataset[0], (tuple, list)):
+            return_list = True
+        else:
+            return_list = False
+
+        super().__init__(
+            dataset,
+            feed_list=None,
+            places=None,
+            return_list=return_list,
+            batch_sampler=batch_sampler,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            drop_last=drop_last,
+            collate_fn=collate_fn,
+            num_workers=num_workers,
+            use_buffer_reader=True,
+            use_shared_memory=False,
+            timeout=timeout,
+            worker_init_fn=worker_init_fn,
+        )
+        if sampler is not None:
+            self.batch_sampler.sampler = sampler
 
 
 class DummyDataset(Dataset):
@@ -612,16 +653,6 @@ def parse_args():
         default=128,
         help=("The dimension of the LoRA update matrices."),
     )
-
-    args = parser.parse_args()
-    env_local_rank = int(os.environ.get("LOCAL_RANK", -1))
-    if env_local_rank != -1 and env_local_rank != args.local_rank:
-        args.local_rank = env_local_rank
-
-    # default to using the same revision for the non-ema model if not specified
-    if args.non_ema_revision is None:
-        args.non_ema_revision = args.revision
-
     # westfish
     parser.add_argument(
         "--train_data_dir",
@@ -635,6 +666,15 @@ def parse_args():
         default="demo.jpg",
         help=("The directory containing the validation data. "),
     )
+
+    args = parser.parse_args()
+    env_local_rank = int(os.environ.get("LOCAL_RANK", -1))
+    if env_local_rank != -1 and env_local_rank != args.local_rank:
+        args.local_rank = env_local_rank
+
+    # default to using the same revision for the non-ema model if not specified
+    if args.non_ema_revision is None:
+        args.non_ema_revision = args.revision
 
     return args
 
@@ -863,7 +903,8 @@ def main():
         width=args.width, height=args.height, sample_frames=args.num_frames, train_data_dir=args.train_data_dir
     )
     sampler = RandomSampler(train_dataset)
-    train_dataloader = paddle.io.data.DataLoader(
+    # westfish: add sampler to self defined dataloader
+    train_dataloader = DataLoader(
         train_dataset,
         sampler=sampler,
         batch_size=args.per_gpu_batch_size,

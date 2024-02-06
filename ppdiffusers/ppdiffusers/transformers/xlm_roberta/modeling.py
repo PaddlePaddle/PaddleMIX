@@ -78,7 +78,9 @@ class XLMRobertaEmbeddings(nn.Layer):
         # position_ids (1, len position emb) is contiguous in memory and exported when serialized
         self.position_embedding_type = getattr(config, "position_embedding_type", "absolute")
         self.register_buffer(
-            "position_ids", paddle.arange(config.max_position_embeddings).expand((1, -1)), persistable=False
+            "position_ids",
+            paddle.arange(config.max_position_embeddings, dtype=paddle.int64).expand((1, -1)),
+            persistable=False,
         )
         self.register_buffer(
             "token_type_ids", paddle.zeros(self.position_ids.shape, dtype=paddle.int64), persistable=False
@@ -482,7 +484,7 @@ class XLMRobertaEncoder(nn.Layer):
 
             past_key_value = past_key_values[i] if past_key_values is not None else None
 
-            if self.gradient_checkpointing and self.training and not hidden_states.stop_gradient:
+            if self.gradient_checkpointing and not hidden_states.stop_gradient:
                 layer_outputs = self._gradient_checkpointing_func(
                     layer_module.__call__,
                     hidden_states,

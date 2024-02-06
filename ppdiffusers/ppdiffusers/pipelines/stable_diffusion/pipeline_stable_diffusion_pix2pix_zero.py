@@ -96,8 +96,8 @@ EXAMPLE_DOC_STRING = """
         >>> pipeline.scheduler = DDIMScheduler.from_config(pipeline.scheduler.config)
 
         >>> prompt = "a high resolution painting of a cat in the style of van gough"
-        >>> source_emb_url = "https://hf.co/datasets/sayakpaul/sample-datasets/resolve/main/cat.pt"
-        >>> target_emb_url = "https://hf.co/datasets/sayakpaul/sample-datasets/resolve/main/dog.pt"
+        >>> source_emb_url = "https://hf-mirror.com/datasets/sayakpaul/sample-datasets/resolve/main/cat.pt"
+        >>> target_emb_url = "https://hf-mirror.com/datasets/sayakpaul/sample-datasets/resolve/main/dog.pt"
 
         >>> for url in [source_emb_url, target_emb_url]:
         ...     download(url, url.split("/")[-1])

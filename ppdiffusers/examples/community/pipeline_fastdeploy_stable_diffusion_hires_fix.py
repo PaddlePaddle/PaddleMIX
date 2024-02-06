@@ -462,7 +462,7 @@ class FastStableDiffusionHiresFixPipeline(DiffusionPipeline, FastDeployDiffusion
                         callback(i, t, latents)
                     if i == len(timesteps) - 1:
                         # sync for accuracy it/s measure
-                        paddle.device.cuda.synchronize()
+                        paddle.device.synchronize()
 
         # start to apply hires.fix on initial latents
         if enable_hr:
@@ -574,7 +574,7 @@ class FastStableDiffusionHiresFixPipeline(DiffusionPipeline, FastDeployDiffusion
                             callback(i, t, latents)
                     if i == len(timesteps) - 1:
                         # sync for accuracy it/s measure
-                        paddle.device.cuda.synchronize()
+                        paddle.device.synchronize()
 
         if not output_type == "latent":
             image = self._decode_vae_latents(

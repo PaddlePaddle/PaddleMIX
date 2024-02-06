@@ -132,6 +132,7 @@ else:
             # new add
             "LVDMAutoencoderKL",
             "LVDMUNet3DModel",
+            "PaddleInferRuntimeModel",
         ]
     )
 
@@ -340,6 +341,20 @@ else:
             # new add
             "LVDMTextToVideoPipeline",
             "LVDMUncondPipeline",
+            "PaddleInferCycleDiffusionPipeline",
+            "PaddleInferStableDiffusionImg2ImgPipeline",
+            "PaddleInferStableDiffusionInpaintPipeline",
+            "PaddleInferStableDiffusionInpaintPipelineLegacy",
+            "PaddleInferStableDiffusionMegaPipeline",
+            "PaddleInferStableDiffusionPipeline",
+            "PaddleInferStableDiffusionUpscalePipeline",
+            "PaddleInferStableDiffusionXLPipeline",
+            "PaddleInferStableDiffusionXLImg2ImgPipeline",
+            "PaddleInferStableDiffusionXLInpaintPipeline",
+            "PaddleInferStableDiffusionXLInstructPix2PixPipeline",
+            "PaddleInferStableDiffusionXLMegaPipeline",
+            "PaddleInferStableDiffusionControlNetPipeline",
+            "PaddleInferStableVideoDiffusionPipeline",
         ]
     )
 
@@ -455,6 +470,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             ModelMixin,
             MotionAdapter,
             MultiAdapter,
+            PaddleInferRuntimeModel,
             PriorTransformer,
             T2IAdapter,
             T5FilmDecoder,
@@ -594,6 +610,20 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             LVDMTextToVideoPipeline,
             LVDMUncondPipeline,
             MusicLDMPipeline,
+            PaddleInferCycleDiffusionPipeline,
+            PaddleInferStableDiffusionControlNetPipeline,
+            PaddleInferStableDiffusionImg2ImgPipeline,
+            PaddleInferStableDiffusionInpaintPipeline,
+            PaddleInferStableDiffusionInpaintPipelineLegacy,
+            PaddleInferStableDiffusionMegaPipeline,
+            PaddleInferStableDiffusionPipeline,
+            PaddleInferStableDiffusionUpscalePipeline,
+            PaddleInferStableDiffusionXLImg2ImgPipeline,
+            PaddleInferStableDiffusionXLInpaintPipeline,
+            PaddleInferStableDiffusionXLInstructPix2PixPipeline,
+            PaddleInferStableDiffusionXLMegaPipeline,
+            PaddleInferStableDiffusionXLPipeline,
+            PaddleInferStableVideoDiffusionPipeline,
             PaintByExamplePipeline,
             PixArtAlphaPipeline,
             SemanticStableDiffusionPipeline,

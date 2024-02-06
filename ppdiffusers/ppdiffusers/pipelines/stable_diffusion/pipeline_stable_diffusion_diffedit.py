@@ -1009,11 +1009,11 @@ class StableDiffusionDiffEditPipeline(DiffusionPipeline, TextualInversionLoaderM
         # TODO: Consider smoothing mask guidance map
         mask_guidance_map = (
             paddle.abs(noise_pred_target - noise_pred_source)
-            .reshape(batch_size, num_maps_per_mask, *noise_pred_target.shape[-3:])
+            .reshape([batch_size, num_maps_per_mask, *noise_pred_target.shape[-3:]])
             .mean([1, 2])
         )
         clamp_magnitude = mask_guidance_map.mean() * mask_thresholding_ratio
-        semantic_mask_image = mask_guidance_map.clamp(0, clamp_magnitude) / clamp_magnitude
+        semantic_mask_image = mask_guidance_map.clip(0, clamp_magnitude) / clamp_magnitude
         semantic_mask_image = paddle.where(semantic_mask_image <= 0.5, 0, 1)
         mask_image = semantic_mask_image.cpu().numpy()
 
@@ -1432,7 +1432,8 @@ class StableDiffusionDiffEditPipeline(DiffusionPipeline, TextualInversionLoaderM
             )
         if image_latents.ndim == 4:
             image_latents = image_latents.reshape([batch_size, len(timesteps), *latent_shape])
-        if image_latents.shape[:2] != (batch_size, len(timesteps)):
+        
+        if image_latents.shape[:2] != [batch_size, len(timesteps)]:
             raise ValueError(
                 f"`image_latents` must have batch size {batch_size} with latent images from {len(timesteps)}"
                 f" timesteps, but has batch size {image_latents.shape[0]} with latent images from"

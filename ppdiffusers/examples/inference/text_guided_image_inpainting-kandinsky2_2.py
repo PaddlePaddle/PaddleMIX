@@ -27,7 +27,7 @@ pipe = KandinskyV22InpaintPipeline.from_pretrained(
     "kandinsky-community/kandinsky-2-2-decoder-inpaint", paddle_dtype=paddle.float16
 )
 init_image = load_image(
-    "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/kandinsky/cat.png"
+    "https://hf-mirror.com/datasets/hf-internal-testing/diffusers-images/resolve/main/kandinsky/cat.png"
 )
 mask = np.zeros((768, 768), dtype=np.float32)
 mask[:250, 250:-250] = 1

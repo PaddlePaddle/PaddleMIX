@@ -20,8 +20,8 @@ from typing import List, Optional, Tuple, Union
 import paddle
 from tqdm.auto import tqdm
 
+from ppdiffusers import DiffusionPipeline
 from ppdiffusers.models import AutoencoderKL, UNet2DConditionModel
-from ppdiffusers.pipeline_utils import DiffusionPipeline
 from ppdiffusers.pipelines.stable_diffusion import StableDiffusionSafetyChecker
 from ppdiffusers.schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
 from ppdiffusers.utils import logging

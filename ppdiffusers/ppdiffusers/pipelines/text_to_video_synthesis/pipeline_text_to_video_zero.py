@@ -328,7 +328,15 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
         requires_safety_checker: bool = True,
     ):
         super().__init__(
-            vae, text_encoder, tokenizer, unet, scheduler, safety_checker, feature_extractor, requires_safety_checker
+            vae,
+            text_encoder,
+            tokenizer,
+            unet,
+            scheduler,
+            safety_checker,
+            feature_extractor,
+            None,  # fix this initialization
+            requires_safety_checker,
         )
         processor = (
             CrossFrameAttnProcessor2_5(batch_size=2)

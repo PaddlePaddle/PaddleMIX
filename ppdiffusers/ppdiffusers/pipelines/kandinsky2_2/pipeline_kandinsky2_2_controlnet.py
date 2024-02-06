@@ -57,7 +57,7 @@ EXAMPLE_DOC_STRING = """
 
 
         >>> img = load_image(
-        ...     "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main"
+        ...     "https://hf-mirror.com/datasets/hf-internal-testing/diffusers-images/resolve/main"
         ...     "/kandinsky/cat.png"
         ... ).resize((768, 768))
 
