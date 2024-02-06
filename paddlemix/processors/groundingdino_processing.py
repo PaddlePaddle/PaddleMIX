@@ -27,17 +27,17 @@ from .processing_utils import BaseImageProcessor, BaseTextProcessor
 from .utils import _max_by_axis
 
 __all__ = [
-    "GroudingDinoProcessor",
-    "GroudingDinoImageProcessor",
-    "GroudingDinoTextProcessor",
+    "GroundingDinoProcessor",
+    "GroundingDinoImageProcessor",
+    "GroundingDinoTextProcessor",
 ]
 
 
-class GroudingDinoProcessor(ProcessorMixin):
+class GroundingDinoProcessor(ProcessorMixin):
 
     attributes = ["image_processor", "text_processor", "tokenizer"]
-    image_processor_class = "GroudingDinoImageProcessor"
-    text_processor_class = "GroudingDinoTextProcessor"
+    image_processor_class = "GroundingDinoImageProcessor"
+    text_processor_class = "GroundingDinoTextProcessor"
     tokenizer_class = "AutoTokenizer"
 
     def __init__(self, image_processor, text_processor, tokenizer):
@@ -83,9 +83,9 @@ class GroudingDinoProcessor(ProcessorMixin):
         return list(dict.fromkeys(tokenizer_input_names + image_processor_input_names))
 
 
-class GroudingDinoTextProcessor(BaseTextProcessor):
+class GroundingDinoTextProcessor(BaseTextProcessor):
     r"""
-    Constructs a GroudingDino text processor.
+    Constructs a GroundingDino text processor.
     """
 
     def __init__(
@@ -183,9 +183,9 @@ class GroudingDinoTextProcessor(BaseTextProcessor):
         return attention_mask, position_ids.cast(paddle.int64), cate_to_token_mask_list
 
 
-class GroudingDinoImageProcessor(BaseImageProcessor):
+class GroundingDinoImageProcessor(BaseImageProcessor):
     r"""
-    Constructs a GroudingDino image processor.
+    Constructs a GroundingDino image processor.
     """
 
     model_input_names = ["pixel_values"]
