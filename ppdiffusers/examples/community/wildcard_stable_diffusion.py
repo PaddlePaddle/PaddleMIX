@@ -22,9 +22,9 @@ from typing import Callable, Dict, List, Optional, Union
 
 import paddle
 
+from ppdiffusers import DiffusionPipeline
 from ppdiffusers.configuration_utils import FrozenDict
 from ppdiffusers.models import AutoencoderKL, UNet2DConditionModel
-from ppdiffusers.pipeline_utils import DiffusionPipeline
 from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion import (
     StableDiffusionPipelineOutput,
 )

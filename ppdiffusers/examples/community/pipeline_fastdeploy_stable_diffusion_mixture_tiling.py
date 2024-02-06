@@ -22,7 +22,7 @@ import paddle
 from tqdm.auto import tqdm
 
 # from ppdiffusers.models import AutoencoderKL, UNet2DConditionModel
-from ppdiffusers.pipeline_utils import DiffusionPipeline
+from ppdiffusers import DiffusionPipeline
 from ppdiffusers.pipelines.fastdeploy_utils import (
     FastDeployDiffusionPipelineMixin,
     FastDeployRuntimeModel,

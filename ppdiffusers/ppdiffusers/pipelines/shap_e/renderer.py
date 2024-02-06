@@ -348,7 +348,7 @@ class StratifiedRaySampler(paddle.nn.Layer):
         upper = paddle.concat(x=[mids, t1], axis=-1)
         lower = paddle.concat(x=[t0, mids], axis=-1)
         # yiyi notes: add a random seed here for testing, don't forget to remove
-        paddle.seed(seed=0)
+        # paddle.seed(seed=0)
         t_rand = paddle.rand(shape=ts.shape, dtype=ts.dtype)
         ts = lower + (upper - lower) * t_rand
         return ts.unsqueeze(axis=-1)
@@ -483,9 +483,9 @@ class MeshDecoder(paddle.nn.Layer):
         # done later based on the used edge midpoints).
         edge_midpoints = paddle.concat(
             x=[
-                ((corner_coords[:-1] + corner_coords[1:]) / 2).reshape(-1, 3),
-                ((corner_coords[:, :-1] + corner_coords[:, 1:]) / 2).reshape(-1, 3),
-                ((corner_coords[:, :, :-1] + corner_coords[:, :, 1:]) / 2).reshape(-1, 3),
+                ((corner_coords[:-1] + corner_coords[1:]) / 2).reshape([-1, 3]),
+                ((corner_coords[:, :-1] + corner_coords[:, 1:]) / 2).reshape([-1, 3]),
+                ((corner_coords[:, :, :-1] + corner_coords[:, :, 1:]) / 2).reshape([-1, 3]),
             ],
             axis=0,
         )
@@ -494,31 +494,49 @@ class MeshDecoder(paddle.nn.Layer):
         cube_indices[(range(grid_size[0] - 1)), :, :, (0)] = paddle.arange(end=grid_size[0] - 1)[:, (None), (None)]
         cube_indices[:, (range(grid_size[1] - 1)), :, (1)] = paddle.arange(end=grid_size[1] - 1)[:, (None)]
         cube_indices[:, :, (range(grid_size[2] - 1)), (2)] = paddle.arange(end=grid_size[2] - 1)
-        flat_cube_indices = cube_indices.reshape(-1, 3)
+        flat_cube_indices = cube_indices.reshape([-1, 3])
         # Create a flat array mapping each cube to 12 global edge indices.
         edge_indices = _create_flat_edge_indices(flat_cube_indices, grid_size)
         # Apply the LUT to figure out the triangles.
-        flat_bitmasks = bitmasks.reshape(-1).astype(
+        flat_bitmasks = bitmasks.reshape([-1]).astype(
             dtype="int64"
         )  # must cast to long for indexing to believe this not a mask
         local_tris = cases[flat_bitmasks]
         local_masks = masks[flat_bitmasks]
         # Compute the global edge indices for the triangles.
         global_tris = paddle.take_along_axis(
-            arr=edge_indices, axis=1, indices=local_tris.reshape(local_tris.shape[0], -1)
+            arr=edge_indices, axis=1, indices=local_tris.reshape([local_tris.shape[0], -1])
         ).reshape(local_tris.shape)
         # Select the used triangles for each cube.
-        selected_tris = global_tris.reshape(-1, 3)[local_masks.reshape(-1)]
+        selected_tris = global_tris.reshape([-1, 3])[
+            local_masks.reshape(
+                [
+                    -1,
+                ]
+            )
+        ]
 
         # Now we have a bunch of indices into the full list of possible vertices,
         # but we want to reduce this list to only the used vertices.
-        used_vertex_indices = paddle.unique(x=selected_tris.reshape([-1]))
+        used_vertex_indices = paddle.unique(
+            x=selected_tris.reshape(
+                [
+                    -1,
+                ]
+            )
+        )
         used_edge_midpoints = edge_midpoints[used_vertex_indices]
         old_index_to_new_index = paddle.zeros(shape=len(edge_midpoints), dtype="int64")
         old_index_to_new_index[used_vertex_indices] = paddle.arange(end=len(used_vertex_indices)).astype("int64")
         # Rewrite the triangles to use the new indices
         faces = paddle.take_along_axis(
-            arr=old_index_to_new_index, axis=0, indices=selected_tris.reshape([-1])
+            arr=old_index_to_new_index,
+            axis=0,
+            indices=selected_tris.reshape(
+                [
+                    -1,
+                ]
+            ),
         ).reshape(selected_tris.shape)
 
         # Compute the actual interpolated coordinates corresponding to edge midpoints.
@@ -566,7 +584,7 @@ class MLPNeRSTFModel(ModelMixin, ConfigMixin):
         output_widths = mlp_widths + [n_output]
         if insert_direction_at is not None:
             input_widths[insert_direction_at] += d_posenc_dir
-        self.mlps = paddle.nn.LayerList(
+        self.mlp = paddle.nn.LayerList(
             sublayers=[
                 paddle.nn.Linear(in_features=d_in, out_features=d_out)
                 for d_in, d_out in zip(input_widths, output_widths)
@@ -599,14 +617,14 @@ class MLPNeRSTFModel(ModelMixin, ConfigMixin):
         h_preact = h
         h_directionless = None
 
-        for i, layer in enumerate(self.mlps):
+        for i, layer in enumerate(self.mlp):
             if i == self.config.insert_direction_at:
                 h_directionless = h_preact
                 h_direction = encode_direction(position, direction=direction)
                 h = paddle.concat(x=[h, h_direction], axis=-1)
             h = layer(h)
             h_preact = h
-            if i < len(self.mlps) - 1:
+            if i < len(self.mlp) - 1:
                 h = self.activation(h)
         h_final = h
         if h_directionless is None:
@@ -642,10 +660,10 @@ class ChannelsProj(paddle.nn.Layer):
 
     def forward(self, x: paddle.Tensor) -> paddle.Tensor:
         x_bvd = x
-        w_vcd = self.proj.weight.reshape([self.vectors, self.channels, self.d_latent])
+        w_vcd = self.proj.weight.reshape([self.d_latent, self.vectors, self.channels])
 
         b_vc = self.proj.bias.reshape([1, self.vectors, self.channels])
-        h = paddle.einsum("bvd,vcd->bvc", x_bvd, w_vcd.cast(x.dtype))
+        h = paddle.einsum("bvd,dvc->bvc", x_bvd, w_vcd.cast(x.dtype))
         h = h.cast(b_vc.dtype)
         h = self.norm(h)
         h = h + b_vc
@@ -803,7 +821,7 @@ class ShapERenderer(ModelMixin, ConfigMixin):
         # update the mlp layers of the renderer
         for name, param in self.mlp.state_dict().items():
             if f"nerstf.{name}" in projected_params.keys():
-                paddle.assign(projected_params[f"nerstf.{name}"].squeeze(axis=0), output=param)
+                param.copy_(projected_params[f"nerstf.{name}"].squeeze(axis=0).cast(param.dtype).T, False)
 
         # create cameras object
         camera = create_pan_cameras(size)
@@ -834,7 +852,7 @@ class ShapERenderer(ModelMixin, ConfigMixin):
         # 2. update the mlp layers of the renderer
         for name, param in self.mlp.state_dict().items():
             if f"nerstf.{name}" in projected_params.keys():
-                paddle.assign(projected_params[f"nerstf.{name}"].squeeze(axis=0), output=param)
+                param.copy_(projected_params[f"nerstf.{name}"].squeeze(axis=0).cast(param.dtype).T, False)
 
         # 3. decoding with STF rendering
         # 3.1 query the SDF values at vertices along a regular 128**3 grid
@@ -858,7 +876,7 @@ class ShapERenderer(ModelMixin, ConfigMixin):
 
         # create grid 128 x 128 x 128
         # - force a negative border around the SDFs to close off all the models.
-        fields = fields.reshape(1, *([grid_size] * 3))
+        fields = fields.reshape([1, *([grid_size] * 3)])
         full_grid = paddle.zeros(shape=[1, grid_size + 2, grid_size + 2, grid_size + 2], dtype=fields.dtype)
         full_grid.fill_(value=-1.0)
         full_grid[:, 1:-1, 1:-1, 1:-1] = fields

@@ -564,6 +564,7 @@ class KandinskyInpaintPipeline(DiffusionPipeline):
 
         for i, t in enumerate(self.progress_bar(timesteps_tensor)):
             # expand the latents if we are doing classifier free guidance
+            latents = latents.cast(self.unet.dtype)
             latent_model_input = paddle.concat([latents] * 2) if do_classifier_free_guidance else latents
             latent_model_input = paddle.concat([latent_model_input, masked_image, mask_image], axis=1)
 

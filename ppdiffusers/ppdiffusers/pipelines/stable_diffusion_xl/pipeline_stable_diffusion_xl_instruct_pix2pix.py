@@ -66,7 +66,7 @@ EXAMPLE_DOC_STRING = """
 
         >>> resolution = 768
         >>> image = load_image(
-        ...     "https://hf.co/datasets/diffusers/diffusers-images-docs/resolve/main/mountain.png"
+        ...     "https://hf-mirror.com/datasets/diffusers/diffusers-images-docs/resolve/main/mountain.png"
         ... ).resize((resolution, resolution))
         >>> edit_instruction = "Turn sky into a cloudy one"
 

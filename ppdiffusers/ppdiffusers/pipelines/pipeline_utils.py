@@ -249,6 +249,9 @@ def get_class_obj_and_candidates(
         class_obj = getattr(library, class_name)
         class_candidates = {c: getattr(library, c, None) for c in importable_classes.keys()}
 
+    # we will use PPNLP PretrainedModel
+    if "PretrainedModel" in class_candidates:
+        class_candidates["PretrainedModel"] = PretrainedModel
     return class_obj, class_candidates
 
 
@@ -365,6 +368,9 @@ def load_sub_model(
         loading_kwargs["runtime_options"] = (
             runtime_options.get(name, None) if isinstance(runtime_options, dict) else runtime_options
         )
+        # HACK, this is only for fd onnx model
+        if "melgan" in name:
+            is_onnx_model = True
         loading_kwargs["is_onnx_model"] = is_onnx_model
 
     # PaddleInferRuntimeModel
@@ -1081,6 +1087,10 @@ class DiffusionPipeline(ConfigMixin):
                 library_name = "ppdiffusers.transformers"
 
             class_name = class_name[4:] if class_name.startswith("Flax") else class_name
+            # support HF fast tokenizer
+            class_name = (
+                class_name[:-4] if class_name.endswith("Fast") and "tokenizer" in class_name.lower() else class_name
+            )
 
             # 6.2 Define all importable classes
             is_pipeline_module = hasattr(pipelines, library_name)

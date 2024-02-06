@@ -530,7 +530,8 @@ class KandinskyV22PriorPipeline(DiffusionPipeline):
                 )
                 text_mask = callback_outputs.pop("text_mask", text_mask)
 
-        latents = self.prior.post_process_latents(latents).cast(dtype=self.image_encoder.dtype)
+        latents = self.prior.post_process_latents(latents)
+        latents = latents.cast(dtype=self.image_encoder.dtype)
 
         image_embeddings = latents
 
