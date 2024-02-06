@@ -660,10 +660,10 @@ class ChannelsProj(paddle.nn.Layer):
 
     def forward(self, x: paddle.Tensor) -> paddle.Tensor:
         x_bvd = x
-        w_vcd = self.proj.weight.T.reshape([self.vectors, self.channels, self.d_latent])
+        w_vcd = self.proj.weight.reshape([self.d_latent, self.vectors, self.channels])
 
         b_vc = self.proj.bias.reshape([1, self.vectors, self.channels])
-        h = paddle.einsum("bvd,vcd->bvc", x_bvd, w_vcd.cast(x.dtype))
+        h = paddle.einsum("bvd,dvc->bvc", x_bvd, w_vcd.cast(x.dtype))
         h = h.cast(b_vc.dtype)
         h = self.norm(h)
         h = h + b_vc
