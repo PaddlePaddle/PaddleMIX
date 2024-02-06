@@ -48,7 +48,7 @@ class Predictor:
     
 def main(model_args,data_args):
 
-    #bulid model
+    #build model
     logger.info("imagebind_model: {}".format(model_args.model_name_or_path))
     url = (data_args.input_image)
     if os.path.isfile(url):
