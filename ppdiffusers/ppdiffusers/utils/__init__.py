@@ -173,6 +173,7 @@ from .state_dict_utils import (
 )
 from .testing_utils import (  # load_image,
     floats_tensor,
+    get_examples_pipeline,
     image_grid,
     load_hf_numpy,
     load_numpy,

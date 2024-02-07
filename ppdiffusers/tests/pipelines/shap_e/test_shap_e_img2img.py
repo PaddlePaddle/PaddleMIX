@@ -18,14 +18,18 @@ import unittest
 
 import numpy as np
 import paddle
-from paddlenlp.transformers import CLIPImageProcessor, CLIPVisionConfig, CLIPVisionModel
 
 from ppdiffusers import HeunDiscreteScheduler, PriorTransformer, ShapEImg2ImgPipeline
 from ppdiffusers.pipelines.shap_e import ShapERenderer
-from ppdiffusers.utils import floats_tensor, load_image, load_numpy, slow
+from ppdiffusers.transformers import (
+    CLIPImageProcessor,
+    CLIPVisionConfig,
+    CLIPVisionModel,
+)
+from ppdiffusers.utils import floats_tensor, slow
 from ppdiffusers.utils.testing_utils import require_paddle_gpu
 
-from ..test_pipelines_common import PipelineTesterMixin, assert_mean_pixel_difference
+from ..test_pipelines_common import PipelineTesterMixin
 
 
 class ShapEImg2ImgPipelineFastTests(PipelineTesterMixin, unittest.TestCase):

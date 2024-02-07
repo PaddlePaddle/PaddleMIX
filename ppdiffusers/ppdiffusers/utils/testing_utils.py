@@ -794,3 +794,18 @@ def disable_full_determinism():
     os.environ["FLAGS_cudnn_deterministic"] = "False"
     os.environ["FLAGS_cpu_deterministic"] = "False"
     os.environ["NVIDIA_TF32_OVERRIDE"] = "1"
+
+
+def get_examples_pipeline(name=None):
+    """
+    Args:
+        name: The pipeline name.
+    Return:
+        The full path to pipeline, or just name.
+    """
+    ppdiffusers_dir = os.path.dirname(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
+    pipeline_file = os.path.join(ppdiffusers_dir, "examples", "community", name + ".py")
+    if os.path.exists(pipeline_file):
+        return pipeline_file
+    else:
+        return name

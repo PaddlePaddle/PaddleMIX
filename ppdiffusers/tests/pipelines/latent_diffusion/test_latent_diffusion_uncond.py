@@ -17,9 +17,9 @@ import unittest
 
 import numpy as np
 import paddle
-from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel
 
 from ppdiffusers import DDIMScheduler, LDMPipeline, UNet2DModel, VQModel
+from ppdiffusers.transformers import CLIPTextConfig, CLIPTextModel
 from ppdiffusers.utils.testing_utils import (
     enable_full_determinism,
     require_paddle,

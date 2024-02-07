@@ -133,6 +133,12 @@ else:
             "LVDMAutoencoderKL",
             "LVDMUNet3DModel",
             "PaddleInferRuntimeModel",
+            # new add
+            "AutoencoderKL_imgtovideo",
+            "GaussianDiffusion",
+            "GaussianDiffusion_SDEdit",
+            "STUNetModel",
+            "Vid2VidSTUNet",
         ]
     )
 
@@ -355,6 +361,9 @@ else:
             "PaddleInferStableDiffusionXLMegaPipeline",
             "PaddleInferStableDiffusionControlNetPipeline",
             "PaddleInferStableVideoDiffusionPipeline",
+            # new add
+            "ImgToVideoSDPipeline",
+            "VideoToVideoModelscopePipeline",
         ]
     )
 
@@ -460,10 +469,13 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         from .models import (  # new add
             AsymmetricAutoencoderKL,
             AutoencoderKL,
+            AutoencoderKL_imgtovideo,
             AutoencoderKLTemporalDecoder,
             AutoencoderTiny,
             ConsistencyDecoderVAE,
             ControlNetModel,
+            GaussianDiffusion,
+            GaussianDiffusion_SDEdit,
             Kandinsky3UNet,
             LVDMAutoencoderKL,
             LVDMUNet3DModel,
@@ -472,6 +484,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             MultiAdapter,
             PaddleInferRuntimeModel,
             PriorTransformer,
+            STUNetModel,
             T2IAdapter,
             T5FilmDecoder,
             Transformer2DModel,
@@ -481,6 +494,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             UNet3DConditionModel,
             UNetMotionModel,
             UNetSpatioTemporalConditionModel,
+            Vid2VidSTUNet,
             VQModel,
         )
         from .optimization import (
@@ -492,7 +506,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             get_polynomial_decay_schedule_with_warmup,
             get_scheduler,
         )
-        from .pipelines import (
+        from .pipelines import (  # new add
             AudioPipelineOutput,
             AutoPipelineForImage2Image,
             AutoPipelineForInpainting,
@@ -506,12 +520,14 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             DiffusionPipeline,
             DiTPipeline,
             ImagePipelineOutput,
+            ImgToVideoSDPipeline,
             KarrasVePipeline,
             LDMPipeline,
             LDMSuperResolutionPipeline,
             PNDMPipeline,
             RePaintPipeline,
             ScoreSdeVePipeline,
+            VideoToVideoModelscopePipeline,
         )
         from .schedulers import (
             CMStochasticIterativeScheduler,
@@ -617,7 +633,6 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             PaddleInferStableDiffusionInpaintPipelineLegacy,
             PaddleInferStableDiffusionMegaPipeline,
             PaddleInferStableDiffusionPipeline,
-            PaddleInferStableDiffusionUpscalePipeline,
             PaddleInferStableDiffusionXLImg2ImgPipeline,
             PaddleInferStableDiffusionXLInpaintPipeline,
             PaddleInferStableDiffusionXLInstructPix2PixPipeline,
