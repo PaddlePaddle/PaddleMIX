@@ -17,18 +17,18 @@ import unittest
 
 import numpy as np
 import paddle
-from paddlenlp.transformers import (
+
+from ppdiffusers import HeunDiscreteScheduler, PriorTransformer, ShapEPipeline
+from ppdiffusers.pipelines.shap_e import ShapERenderer
+from ppdiffusers.transformers import (
     CLIPTextConfig,
     CLIPTextModelWithProjection,
     CLIPTokenizer,
 )
-
-from ppdiffusers import HeunDiscreteScheduler, PriorTransformer, ShapEPipeline
-from ppdiffusers.pipelines.shap_e import ShapERenderer
-from ppdiffusers.utils import load_numpy, slow
+from ppdiffusers.utils import slow
 from ppdiffusers.utils.testing_utils import require_paddle_gpu
 
-from ..test_pipelines_common import PipelineTesterMixin, assert_mean_pixel_difference
+from ..test_pipelines_common import PipelineTesterMixin
 
 
 class ShapEPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
@@ -152,7 +152,7 @@ class ShapEPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
             "generator": generator,
             "num_inference_steps": 1,
             "frame_size": 32,
-            "output_type": "np",
+            "output_type": "latent",  # random state in ShapERenderer, we need output latent
         }
         return inputs
 
@@ -160,7 +160,9 @@ class ShapEPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         components = self.get_dummy_components()
         pipe = self.pipeline_class(**components)
         pipe.set_progress_bar_config(disable=None)
-        output = pipe(**self.get_dummy_inputs())
+        inputs = self.get_dummy_inputs()
+        inputs["output_type"] = "np"
+        output = pipe(**inputs)
         image = output.images[0]
         image_slice = image[(0), -3:, -3:, (-1)]
         assert image.shape == (20, 32, 32, 3)
@@ -203,7 +205,9 @@ class ShapEPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         assert images.shape[0] == batch_size * num_images_per_prompt
 
     def test_save_load_float16(self):
+        # fix this in 0.0.0 paddlepaddle
         pass
+
 
 @slow
 @require_paddle_gpu

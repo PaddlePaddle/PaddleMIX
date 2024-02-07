@@ -18,7 +18,6 @@ import unittest
 
 import numpy as np
 import paddle
-from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
 
 from ppdiffusers import (
     Transformer2DModel,
@@ -29,7 +28,8 @@ from ppdiffusers import (
 from ppdiffusers.pipelines.vq_diffusion.pipeline_vq_diffusion import (
     LearnedClassifierFreeSamplingEmbeddings,
 )
-from ppdiffusers.utils import load_numpy, slow
+from ppdiffusers.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
+from ppdiffusers.utils import slow
 from ppdiffusers.utils.testing_utils import require_paddle_gpu
 
 

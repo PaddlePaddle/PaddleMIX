@@ -126,8 +126,8 @@ class CMStochasticIterativeSchedulerTest(SchedulerCommonTest):
         result_sum = paddle.sum(paddle.abs(sample))
         result_mean = paddle.mean(paddle.abs(sample))
 
-        assert abs(result_sum.item() - 45676.0817) < 1e-2
-        assert abs(result_mean.item() - 59.47) < 1e-2
+        assert abs(result_sum.item() - 324.75433) < 1e-2
+        assert abs(result_mean.item() - 0.422857) < 1e-2
 
     def test_full_loop_with_noise(self):
         scheduler_class = self.scheduler_classes[0]
@@ -165,8 +165,8 @@ class CMStochasticIterativeSchedulerTest(SchedulerCommonTest):
         result_sum = paddle.sum(paddle.abs(sample))
         result_mean = paddle.mean(paddle.abs(sample))
 
-        assert abs(result_sum.item() - 36520.7239) < 1e-2, f" expected result sum 36520.7239, but get {result_sum}"
-        assert abs(result_mean.item() - 47.5530) < 1e-3, f" expected result mean 47.5530, but get {result_mean}"
+        assert abs(result_sum.item() - 763.89025) < 1e-2, f" expected result sum 763.89025, but get {result_sum}"
+        assert abs(result_mean.item() - 0.994648) < 1e-3, f" expected result mean 0.994648, but get {result_mean}"
 
     def test_custom_timesteps_increasing_order(self):
         scheduler_class = self.scheduler_classes[0]

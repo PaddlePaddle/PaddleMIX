@@ -252,7 +252,7 @@ class SpectrogramDiffusionPipeline(DiffusionPipeline):
             )
 
         if output_type == "numpy":
-            output = self.melgan(input_features=full_pred_mel.astype(np.float32))
+            output = self.melgan(input_features=full_pred_mel.astype(np.float32))[0]
         else:
             output = full_pred_mel
 

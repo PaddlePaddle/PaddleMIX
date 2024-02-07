@@ -1,0 +1,4 @@
+insightface
+onnxruntime
+paddlenlp==2.7.2
+gradio==4.16.0

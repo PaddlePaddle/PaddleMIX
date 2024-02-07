@@ -1,0 +1,2 @@
+paddlenlp==2.7.2
+gradio>=4.0.0

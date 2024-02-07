@@ -65,6 +65,10 @@ else:
     _import_structure["repaint"] = ["RePaintPipeline"]
     _import_structure["score_sde_ve"] = ["ScoreSdeVePipeline"]
     _import_structure["stochastic_karras_ve"] = ["KarrasVePipeline"]
+    # new add
+    _import_structure["img_to_video"] = ["ImgToVideoSDPipelineOutput", "ImgToVideoSDPipeline"]
+    _import_structure["video_to_video"] = ["VideoToVideoModelscopePipelineOutput", "VideoToVideoModelscopePipeline"]
+
 try:
     if not (is_paddle_available() and is_librosa_available()):
         raise OptionalDependencyNotAvailable()
@@ -175,6 +179,7 @@ else:
             "StableDiffusionUpscalePipeline",
             "StableUnCLIPImg2ImgPipeline",
             "StableUnCLIPPipeline",
+            "PaddleInferCycleDiffusionPipeline",
             "PaddleInferStableDiffusionPipeline",
             "PaddleInferStableDiffusionImg2ImgPipeline",
             "PaddleInferStableDiffusionInpaintPipeline",
@@ -197,6 +202,7 @@ else:
             "PaddleInferStableDiffusionXLInpaintPipeline",
             "PaddleInferStableDiffusionXLMegaPipeline",
             "PaddleInferStableDiffusionXLPipeline",
+            "PaddleInferStableDiffusionXLInstructPix2PixPipeline",
         ]
     )
     _import_structure["t2i_adapter"] = [
@@ -374,6 +380,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             IFPipeline,
             IFSuperResolutionPipeline,
         )
+        from .img_to_video import ImgToVideoSDPipeline, ImgToVideoSDPipelineOutput
         from .kandinsky import (
             KandinskyCombinedPipeline,
             KandinskyImg2ImgCombinedPipeline,
@@ -416,6 +423,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         from .stable_diffusion import (
             CLIPImageProjection,
             CycleDiffusionPipeline,
+            PaddleInferCycleDiffusionPipeline,
             PaddleInferStableDiffusionImg2ImgPipeline,
             PaddleInferStableDiffusionInpaintPipeline,
             PaddleInferStableDiffusionInpaintPipelineLegacy,
@@ -447,6 +455,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         from .stable_diffusion_xl import (
             PaddleInferStableDiffusionXLImg2ImgPipeline,
             PaddleInferStableDiffusionXLInpaintPipeline,
+            PaddleInferStableDiffusionXLInstructPix2PixPipeline,
             PaddleInferStableDiffusionXLMegaPipeline,
             PaddleInferStableDiffusionXLPipeline,
             StableDiffusionXLImg2ImgPipeline,
@@ -481,6 +490,10 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             VersatileDiffusionImageVariationPipeline,
             VersatileDiffusionPipeline,
             VersatileDiffusionTextToImagePipeline,
+        )
+        from .video_to_video import (
+            VideoToVideoModelscopePipeline,
+            VideoToVideoModelscopePipelineOutput,
         )
         from .vq_diffusion import VQDiffusionPipeline
         from .wuerstchen import (

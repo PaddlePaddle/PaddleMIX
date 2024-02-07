@@ -52,6 +52,9 @@ else:
         "PaddleInferStableDiffusionXLPix2PixPipeline"
     ]
     _import_structure["pipeline_paddleinfer_stable_diffusion_xl_mega"] = ["PaddleInferStableDiffusionXLMegaPipeline"]
+    _import_structure["pipeline_paddleinfer_stable_diffusion_xl_instruct_pix2pix"] = [
+        "PaddleInferStableDiffusionXLInstructPix2PixPipeline"
+    ]
 
 
 # fastdeploy
@@ -83,16 +86,6 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         from ...utils.dummy_paddle_and_paddlenlp_objects import *  # noqa F403
     else:
         from .pipeline_output import StableDiffusionXLPipelineOutput
-        from .pipeline_stable_diffusion_xl import StableDiffusionXLPipeline
-        from .pipeline_stable_diffusion_xl_img2img import (
-            StableDiffusionXLImg2ImgPipeline,
-        )
-        from .pipeline_stable_diffusion_xl_inpaint import (
-            StableDiffusionXLInpaintPipeline,
-        )
-        from .pipeline_stable_diffusion_xl_instruct_pix2pix import (
-            StableDiffusionXLInstructPix2PixPipeline,
-        )
         from .pipeline_paddleinfer_stable_diffusion_xl import (
             PaddleInferStableDiffusionXLPipeline,
         )
@@ -102,8 +95,21 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         from .pipeline_paddleinfer_stable_diffusion_xl_inpaint import (
             PaddleInferStableDiffusionXLInpaintPipeline,
         )
+        from .pipeline_paddleinfer_stable_diffusion_xl_instruct_pix2pix import (
+            PaddleInferStableDiffusionXLInstructPix2PixPipeline,
+        )
         from .pipeline_paddleinfer_stable_diffusion_xl_mega import (
             PaddleInferStableDiffusionXLMegaPipeline,
+        )
+        from .pipeline_stable_diffusion_xl import StableDiffusionXLPipeline
+        from .pipeline_stable_diffusion_xl_img2img import (
+            StableDiffusionXLImg2ImgPipeline,
+        )
+        from .pipeline_stable_diffusion_xl_inpaint import (
+            StableDiffusionXLInpaintPipeline,
+        )
+        from .pipeline_stable_diffusion_xl_instruct_pix2pix import (
+            StableDiffusionXLInstructPix2PixPipeline,
         )
 
     try:
@@ -142,4 +148,3 @@ else:
         setattr(sys.modules[__name__], name, value)
     for name, value in _additional_imports.items():
         setattr(sys.modules[__name__], name, value)
-        
