@@ -160,9 +160,6 @@ def create_paddle_inference_runtime(
     for pass_name in disable_paddle_pass:
         config.delete_pass(pass_name)
     if use_trt:
-        if not os.path.exists(shape_file):
-            config.collect_shape_range_info(shape_file)
-
         config.enable_tensorrt_engine(
             workspace_size=workspace,
             precision_mode=precision_mode,
@@ -197,8 +194,27 @@ def main(args):
     max_image_size = max(min_image_size, max_image_size)
 
     # 4. Init runtime
-    disable_paddle_pass = ["auto_mixed_precision_pass"]
+    only_fp16_passes = [
+        "trt_cross_multihead_matmul_fuse_pass",
+        "trt_flash_multihead_matmul_fuse_pass",
+        "preln_elementwise_groupnorm_act_pass",
+        "elementwise_groupnorm_act_pass",
+    ]
+    no_need_passes = [
+        "trt_prompt_tuning_embedding_eltwise_layernorm_fuse_pass",
+        "add_support_int8_pass",
+        "auto_mixed_precision_pass",
+    ]
+    paddle_delete_passes = dict(  # noqa
+        text_encoder=only_fp16_passes + no_need_passes if not args.use_fp16 else no_need_passes,
+        text_encoder_2=only_fp16_passes + no_need_passes if not args.use_fp16 else no_need_passes,
+        vae_encoder=only_fp16_passes + [] if args.use_fp16 else [],
+        vae_decoder=only_fp16_passes + no_need_passes if not args.use_fp16 else no_need_passes,
+        unet=only_fp16_passes + no_need_passes if not args.use_fp16 else no_need_passes,
+        image_encoder=only_fp16_passes + no_need_passes if not args.use_fp16 else no_need_passes,
+    )
     args.use_trt = args.backend == "paddle_tensorrt"
+    precision_mode = paddle_infer.PrecisionType.Half if args.use_fp16 else paddle_infer.PrecisionType.Float32
     infer_configs = dict(
         text_encoder=create_paddle_inference_runtime(
             model_dir=args.model_dir,
@@ -232,16 +248,17 @@ def main(args):
             use_trt=False,
             precision_mode=paddle_infer.PrecisionType.Float32,
             device_id=args.device_id,
-            disable_paddle_pass=disable_paddle_pass,
+            disable_paddle_pass=["auto_mixed_precision_pass"],
             tune=False,
         ),
         unet=create_paddle_inference_runtime(
             model_dir=args.model_dir,
             model_name="unet",
             use_trt=args.use_trt,
-            precision_mode=paddle_infer.PrecisionType.Half,
+            precision_mode=precision_mode,
             device_id=args.device_id,
-            tune=False,
+            disable_paddle_pass=paddle_delete_passes.get("unet", []),
+            tune=args.tune,
         ),
     )
     pipe = PaddleInferStableDiffusionXLMegaPipeline.from_pretrained(

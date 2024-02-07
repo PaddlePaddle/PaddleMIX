@@ -1179,8 +1179,6 @@ class StableDiffusionXLControlNetPipeline(
         
         add_time_ids = add_time_ids.tile([batch_size * num_images_per_prompt, 1])
 
-        add_time_ids = add_time_ids.tile([batch_size * num_images_per_prompt, 1])
-
         # 8. Denoising loop
         num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
 

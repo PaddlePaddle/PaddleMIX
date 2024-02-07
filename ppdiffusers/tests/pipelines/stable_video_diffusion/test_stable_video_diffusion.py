@@ -496,11 +496,10 @@ class StableVideoDiffusionPipelineSlowTests(unittest.TestCase):
 
     def test_sd_video(self):
         pipe = StableVideoDiffusionPipeline.from_pretrained(
-            "stabilityai/stable-video-diffusion-img2vid",
+            "stabilityai/stable-video-diffusion-img2vid-xt",
             variant="fp16",
             paddle_dtype=paddle.float16,
         )
-        pipe.enable_model_cpu_offload()
         pipe.set_progress_bar_config(disable=None)
         image = load_image(
             "https://paddlenlp.bj.bcebos.com/models/community/hf-internal-testing/diffusers-images/cat_6.png"
