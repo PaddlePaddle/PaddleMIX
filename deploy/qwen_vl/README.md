@@ -39,7 +39,7 @@ export CUDA_VISIBLE_DEVICES=0
 export PYTHONPATH=/path/to/PaddleNLP/:/path/to/PaddleMIX
 
 python deploy/qwen_vl/export_image_encoder.py \
-    --model_name_or_path "qwen-vl/qwen-vl-7b-static/" \
+    --model_name_or_path "qwen-vl/qwen-vl-7b-static" \
     --save_path "./checkpoints/encode_image/vision"
 ```
 
@@ -54,7 +54,7 @@ export CUDA_VISIBLE_DEVICES=0
 export PYTHONPATH=/path/to/PaddleNLP/:/path/to/PaddleMIX
 
 python export_model.py \
-    --model_name_or_path "/path/to/.paddlenlp/models/qwen-vl/qwen-vl-7b-static/" \
+    --model_name_or_path "qwen-vl/qwen-vl-7b-static" \
     --output_path ./checkpoints/encode_text/ \
     --dtype float16 \
     --inference_model \
