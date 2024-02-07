@@ -76,9 +76,10 @@ class MIXTokenMapDataset(MIXToken, Dataset):
 
     """
 
-    def __init__(self, data, max_length, processor=None, mode="train"):
+    def __init__(self, data, max_length, processor=None, tokenizer=None, mode="train"):
         self.max_length = max_length
         self.processor = processor
+        self.tokenizer = tokenizer
         self.mode = mode
         self.new_data = self._create_intokens_data(data)
 
@@ -94,12 +95,17 @@ class MIXTokenMapDataset(MIXToken, Dataset):
             if self.processor:
                 record = self.processor(record=record, mode=self.mode)
 
+            if getattr(self.tokenizer, "image_token_span", None) is not None and record["images"] is not None:
+                image_token_span = self.tokenizer.image_token_span - 1  # image token
+            else:
+                image_token_span = 0
+
             max_len = max(max_len, len(record["input_ids"]))
-            to_append = (cur_len_so_far + len(record["input_ids"])) <= self.max_length
+            to_append = (cur_len_so_far + int(image_token_span) + len(record["input_ids"])) <= self.max_length
 
             if to_append:
                 batch_records.append(record)
-                cur_len_so_far += len(record["input_ids"])
+                cur_len_so_far += len(record["input_ids"]) + image_token_span
             else:
                 # exceed max length
                 padded_list = self._pad_batch_records(batch_records)
@@ -109,7 +115,7 @@ class MIXTokenMapDataset(MIXToken, Dataset):
                 cur_len_so_far = 0
                 # append current data
                 batch_records.append(record)
-                cur_len_so_far += len(record["input_ids"])
+                cur_len_so_far += len(record["input_ids"]) + image_token_span
 
         # remaining data
         if batch_records:

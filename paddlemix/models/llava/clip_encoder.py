@@ -15,7 +15,7 @@
 import os
 
 import paddle
-from paddlenlp.transformers import CLIPImageProcessor, CLIPVisionConfig, CLIPVisionModel
+from paddlenlp.transformers import CLIPVisionConfig, CLIPVisionModel
 
 __all__ = ["CLIPVisionTower"]
 
@@ -33,7 +33,6 @@ class CLIPVisionTower(paddle.nn.Layer):
             self.cfg_only = CLIPVisionConfig.from_pretrained(self.vision_tower_name)
 
     def load_model(self):
-        self.image_processor = CLIPImageProcessor.from_pretrained(self.vision_tower_name)
         self.vision_tower = CLIPVisionModel.from_pretrained(self.vision_tower_name)
         for param in self.vision_tower.parameters():
             param.stop_gradient = True

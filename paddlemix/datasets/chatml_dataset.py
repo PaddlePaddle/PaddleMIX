@@ -36,12 +36,15 @@ class ChatMLDataset(DatasetBuilder, ChatTemplateMixin):
         annotations = raw_data
 
         for ann in annotations:
-            yield_data = None
+            yield_data = {}
             conversations = ann["conversations"]
-            if "chat_template" in self.config:
+            if self.config["chat_template"] is not None:
                 conversations.append([""])
-                yield_data = self.apply_chat_template(conversations, tokenize=False)
+                yield_data["conversations"] = self.apply_chat_template(conversations, tokenize=False)
             else:
-                yield_data = conversations
+                yield_data["conversations"] = conversations
+
+            if "image" in ann.keys():
+                yield_data["image"] = ann["image"]
 
             yield yield_data

@@ -21,6 +21,7 @@ from paddle.distributed import fleet
 from paddlenlp.transformers import LlamaConfig, LlamaForCausalLM, LlamaModel
 from paddlenlp.transformers.llama.modeling import ConcatSePMaskedLoss, LlamaLMHead
 from paddlenlp.transformers.model_outputs import CausalLMOutputWithPast
+from paddlenlp.transformers.utils import get_scale_by_dtype
 
 from .base_model import LlavaMetaForCausalLM, LlavaMetaModel
 from .configuration import LlavaConfig
@@ -40,6 +41,7 @@ class LlavaLlamaModel(LlavaMetaModel, LlamaModel):
 
 class LlavaLlamaForCausalLM(LlamaForCausalLM, LlavaMetaForCausalLM):
     config_class = LlavaConfig
+    base_model_prefix = "llava"
 
     def __init__(self, config):
         super(LlamaForCausalLM, self).__init__(config)
@@ -48,6 +50,13 @@ class LlavaLlamaForCausalLM(LlamaForCausalLM, LlavaMetaForCausalLM):
         self.vocab_size = config.vocab_size
         self.lm_head = LlamaLMHead(config)
         self.criterion = LlavaCriterion(config)
+
+        if self.training:
+            self.init_train()
+
+    def init_train(self):
+        self.get_model().initialize_vision_modules(self.config)
+        self.config.use_cache = False
 
     def get_model(self):
         return self.llama
@@ -101,18 +110,18 @@ class LlavaLlamaForCausalLM(LlamaForCausalLM, LlavaMetaForCausalLM):
             _inputs["images"] = images
         return _inputs
 
-    # def prepare_attention_mask_for_generation(self, input_ids, pad_token_id, eos_token_id):
-    #     is_pad_token_in_inputs_ids = (pad_token_id is not None) and paddle.any(input_ids == pad_token_id).item()
-    #     is_pad_token_not_equal_to_eos_token_id = (eos_token_id is None) or (
-    #         (eos_token_id is not None) and (pad_token_id != eos_token_id)
-    #     )
-    #     if is_pad_token_in_inputs_ids and is_pad_token_not_equal_to_eos_token_id:
-    #         attention_mask = (input_ids == pad_token_id).astype(paddle.get_default_dtype()) * get_scale_by_dtype(
-    #             return_positive=False
-    #         )
-    #     else:
-    #         attention_mask = paddle.ones_like(input_ids, dtype=paddle.get_default_dtype())
-    #     return attention_mask
+    def prepare_attention_mask_for_generation(self, input_ids, pad_token_id, eos_token_id):
+        is_pad_token_in_inputs_ids = (pad_token_id is not None) and paddle.any(input_ids == pad_token_id).item()
+        is_pad_token_not_equal_to_eos_token_id = (eos_token_id is None) or (
+            (eos_token_id is not None) and (pad_token_id != eos_token_id)
+        )
+        if is_pad_token_in_inputs_ids and is_pad_token_not_equal_to_eos_token_id:
+            attention_mask = (input_ids == pad_token_id).astype(paddle.get_default_dtype()) * get_scale_by_dtype(
+                return_positive=False
+            )
+        else:
+            attention_mask = paddle.ones_like(input_ids, dtype=paddle.get_default_dtype())
+        return attention_mask
 
 
 class LlavaCriterion(paddle.nn.Layer):

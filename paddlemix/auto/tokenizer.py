@@ -34,6 +34,7 @@ class AutoTokenizerMIX(AutoTokenizer):
     def _update_name_mapping(cls):
         cls._name_mapping["QWenVLTokenizer"] = "qwen_vl"
         cls._name_mapping["SimpleTokenizer"] = "processors"
+        cls._name_mapping["LLavaTokenizer"] = "llava"
 
     @classmethod
     def _get_tokenizer_class_from_config(cls, pretrained_model_name_or_path, config_file_path, use_fast):

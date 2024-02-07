@@ -14,3 +14,4 @@
 
 from .mm_utils import *
 from .modeling import *
+from .tokenizer import *

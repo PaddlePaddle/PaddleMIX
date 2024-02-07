@@ -20,6 +20,7 @@ from tensorboardX import SummaryWriter
 from paddlemix.datasets.collator import (
     CLIPCollator,
     EVA02Collator,
+    LLaVACollator,
     MiniGPT4Collator,
     QwenVLCollator,
     VisualglmCollator,
@@ -30,6 +31,7 @@ from paddlemix.models.clip.utils import clip_grad_norm
 from paddlemix.optimization import create_optimizer_simple
 from paddlemix.trainer.blip2_trainer import BLIP2Trainer
 from paddlemix.trainer.eva02_finetune_trainer import EVA02FinetuneTrainer
+from paddlemix.trainer.llava_trainer import LLaVATrainer
 from paddlemix.trainer.minigpt4_trainer import MiniGPT4Trainer
 
 
@@ -202,6 +204,17 @@ def get_trainer(
             data_collator=MiniGPT4Collator(train_processor),
             processor=train_processor,
             tokenizer=tokenizer,
+        )
+    elif "llava" in pretrained_model_name_or_path:
+        model.config.tokenizer_padding_side = tokenizer.padding_side
+        model.config.tokenizer_model_max_length = tokenizer.model_max_length
+        return LLaVATrainer(
+            model=model,
+            args=args,
+            train_dataset=train_dataset,
+            eval_dataset=eval_dataset,
+            tokenizer=tokenizer,
+            data_collator=LLaVACollator(train_processor, mode="train"),
         )
     else:
         if "qwen_vl" in pretrained_model_name_or_path:

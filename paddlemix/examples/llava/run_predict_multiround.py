@@ -97,7 +97,8 @@ def main(args):
             conv.append_message(conv.roles[0], inp)
         conv.append_message(conv.roles[1], None)
         prompt = conv.get_prompt()
-        data_dict = processor(image_paths=[args.image_file], prompt=prompt)
+        record = {"image": args.image_file, "conversations": prompt}
+        data_dict = processor(record=record)
         input_ids = data_dict["input_ids"]
         stop_str = conv.sep if conv.sep_style != SeparatorStyle.TWO else conv.sep2
         keywords = [stop_str]

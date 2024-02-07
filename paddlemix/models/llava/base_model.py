@@ -41,11 +41,12 @@ class LlavaMetaModel:
         return vision_tower
 
     def initialize_vision_modules(self, model_args, fsdp=None):
-        vision_tower = model_args.vision_tower
+        vision_tower = model_args.mm_vision_tower
         mm_vision_select_layer = model_args.mm_vision_select_layer
         mm_vision_select_feature = model_args.mm_vision_select_feature
         pretrain_mm_mlp_adapter = model_args.pretrain_mm_mlp_adapter
         self.config.mm_vision_tower = vision_tower
+
         if self.get_vision_tower() is None:
             vision_tower = build_vision_tower(model_args)
             if fsdp is not None and len(fsdp) > 0:
@@ -57,7 +58,9 @@ class LlavaMetaModel:
                 vision_tower = self.vision_tower[0]
             else:
                 vision_tower = self.vision_tower
+
             vision_tower.load_model()
+
         self.config.use_mm_proj = True
         self.config.mm_projector_type = getattr(model_args, "mm_projector_type", "linear")
         self.config.mm_hidden_size = vision_tower.hidden_size
@@ -90,7 +93,6 @@ class LlavaMetaForCausalLM:
         self, input_ids, position_ids, attention_mask, past_key_values, labels, images
     ):
         vision_tower = self.get_vision_tower()
-
         if vision_tower is None or images is None or input_ids.shape[1] == 1:
             if (
                 past_key_values is not None
@@ -158,17 +160,21 @@ class LlavaMetaForCausalLM:
                 + paddle.where(cur_input_ids == IMAGE_TOKEN_INDEX)[0].squeeze(axis=1).tolist()
                 + [cur_input_ids.shape[0]]
             )
+
             cur_input_ids_noim = []
             cur_labels = labels[batch_idx]
             cur_labels_noim = []
+
             for i in range(len(image_token_indices) - 1):
                 cur_input_ids_noim.append(cur_input_ids[image_token_indices[i] + 1 : image_token_indices[i + 1]])
                 cur_labels_noim.append(cur_labels[image_token_indices[i] + 1 : image_token_indices[i + 1]])
             split_sizes = [x.shape[0] for x in cur_labels_noim]
             cur_input_embeds = self.get_model().embed_tokens(paddle.concat(x=cur_input_ids_noim))
             cur_input_embeds_no_im = paddle.split(x=cur_input_embeds, num_or_sections=split_sizes, axis=0)
+
             cur_new_input_embeds = []
             cur_new_labels = []
+
             for i in range(num_images + 1):
                 cur_new_input_embeds.append(cur_input_embeds_no_im[i])
                 cur_new_labels.append(cur_labels_noim[i])
@@ -181,14 +187,18 @@ class LlavaMetaForCausalLM:
                             shape=(cur_image_features.shape[0],), fill_value=IGNORE_INDEX, dtype=cur_labels.dtype
                         )
                     )
+
             cur_new_input_embeds = paddle.concat(x=cur_new_input_embeds)
             cur_new_labels = paddle.concat(x=cur_new_labels)
             new_input_embeds.append(cur_new_input_embeds)
             new_labels.append(cur_new_labels)
+
         tokenizer_model_max_length = getattr(self.config, "tokenizer_model_max_length", None)
+
         if tokenizer_model_max_length is not None:
             new_input_embeds = [x[:tokenizer_model_max_length] for x in new_input_embeds]
             new_labels = [x[:tokenizer_model_max_length] for x in new_labels]
+
         max_len = max(x.shape[0] for x in new_input_embeds)
         batch_size = len(new_input_embeds)
         new_input_embeds_padded = []

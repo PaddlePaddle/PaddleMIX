@@ -41,7 +41,7 @@ class QwenVLProcessor(ProcessorMixin):
     def __init__(self, tokenizer, **kwargs):
         super().__init__(tokenizer)
         self.image_start_id = kwargs.get("image_start_id", 151857)
-        self.max_len = kwargs.get("max_len", 2048)
+        self.max_len = kwargs.get("max_length", 2048)
         self.image_processor = QwenVLImageProcessor()
 
     def __call__(

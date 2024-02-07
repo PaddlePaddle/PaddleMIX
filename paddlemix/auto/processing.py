@@ -135,6 +135,8 @@ class AutoProcessorMIX:
                         )
 
                 if "tokenizer" in attributes:
+                    if "max_length" in kwargs:
+                        kwargs["model_max_length"] = kwargs.get("max_length", None)
                     tokenizer = AutoTokenizerMIX.from_pretrained(text_model_name_or_path, **kwargs)
                     attributes_dict["tokenizer"] = tokenizer
 

@@ -14,6 +14,7 @@
 
 import base64
 import copy
+import re
 from io import BytesIO
 from typing import Dict, Optional, Sequence
 
@@ -27,6 +28,8 @@ from paddlenlp.generation import (
 from paddlenlp.transformers import PretrainedTokenizer
 from PIL import Image
 
+import paddlemix.models.llava.conversation as conversation_lib
+
 from .constants import (
     DEFAULT_IM_END_TOKEN,
     DEFAULT_IM_START_TOKEN,
@@ -34,7 +37,6 @@ from .constants import (
     IGNORE_INDEX,
     IMAGE_TOKEN_INDEX,
 )
-from .conversation import Conversation as conversation_lib
 
 __all__ = [
     "load_image",
@@ -59,8 +61,9 @@ def load_image_from_base64(image):
 
 
 def load_image(image_file):
+    proxies = {"http": "http://10.162.37.16:8128", "https": "http://10.162.37.16:8128"}
     if image_file.startswith("http://") or image_file.startswith("https://"):
-        response = requests.get(image_file)
+        response = requests.get(image_file, proxies=proxies)
         image = Image.open(BytesIO(response.content)).convert("RGB")
     else:
         image = Image.open(image_file).convert("RGB")
@@ -226,15 +229,26 @@ def preprocess_v1(sources, tokenizer: PretrainedTokenizer, has_image: bool = Fal
     conv = conversation_lib.default_conversation.copy()
     roles = {"human": conv.roles[0], "gpt": conv.roles[1]}
     conversations = []
-    for i, source in enumerate(sources):
-        if roles[source[0]["from"]] != conv.roles[0]:
-            source = source[1:]
-        conv.messages = []
-        for j, sentence in enumerate(source):
-            role = roles[sentence["from"]]
-            assert role == conv.roles[j % 2], f"{i}"
-            conv.append_message(role, sentence["value"])
-        conversations.append(conv.get_prompt())
+
+    pattern_role_human = roles["human"]
+    match_role_human = [m.start() for m in re.finditer(pattern_role_human, sources)]
+
+    pattern_role_gpt = roles["gpt"]
+    match_role_gpt = [n.start() for n in re.finditer(pattern_role_gpt, sources)]
+
+    assert len(match_role_human) == len(match_role_gpt)
+    conv.messages = []
+    for i in range(len(match_role_human)):
+        human_start = match_role_human[i]
+        human_end = match_role_gpt[i]
+        gpt_start = human_end
+        gpt_end = match_role_human[i + 1] if i + 1 < len(match_role_human) else len(sources)
+        query = sources[human_start + len(roles["human"]) : human_end]
+        conv.append_message(conv.roles[0], query)
+        ans = sources[gpt_start + len(roles["gpt"]) : gpt_end]
+        conv.append_message(conv.roles[1], ans)
+    conversations.append(conv.get_prompt())
+
     if has_image:
         input_ids = paddle.stack(
             x=[tokenizer_image_token(prompt, tokenizer, return_tensors="pd") for prompt in conversations], axis=0
@@ -305,15 +319,9 @@ def get_conversation(sources: Sequence[str], tokenizer: PretrainedTokenizer, has
     """
     if conversation_lib.default_conversation.sep_style == conversation_lib.SeparatorStyle.PLAIN:
         return preprocess_plain(sources, tokenizer)
-    if conversation_lib.default_conversation.sep_style == conversation_lib.SeparatorStyle.LLAMA_2:
+    elif conversation_lib.default_conversation.sep_style == conversation_lib.SeparatorStyle.LLAMA_2:
         return preprocess_llama_2(sources, tokenizer, has_image=has_image)
-    if conversation_lib.default_conversation.version.startswith("v1"):
+    elif conversation_lib.default_conversation.version.startswith("v1"):
         return preprocess_v1(sources, tokenizer, has_image=has_image)
-
-    # conversations = []
-    # for source in sources:
-    #     header = f"{conversation_lib.default_conversation.system}\n\n"
-    #     conversation = _add_speaker_and_signal(header, source)
-    #     conversations.append(conversation)
-
-    # return conversations
+    else:
+        raise NotImplementedError

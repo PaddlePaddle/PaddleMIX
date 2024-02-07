@@ -12,8 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
-from typing import List, Optional
+from typing import Optional
 
 import paddle
 
@@ -22,7 +21,6 @@ from ..models.llava.mm_utils import (
     expand2square,
     get_conversation,
     load_image,
-    preprocess_multimodal,
     tokenizer_image_token,
 )
 from .base_processing import ProcessorMixin
@@ -37,14 +35,18 @@ class LlavaProcessor(ProcessorMixin):
 
     def __init__(self, image_processor, tokenizer, **kwargs):
         super().__init__(image_processor, tokenizer)
+        self.max_len = kwargs.get("max_length", 2048)
 
     def __call__(
         self,
-        image_paths: List[str] = None,
-        prompt: Optional[str] = None,
+        record: Optional[dict] = None,
         mode=None,
         **kwargs,
     ):
+        if record is not None:
+            image_paths = [record["image"]] if "image" in record.keys() else []
+            prompt = record["conversations"] if "conversations" in record.keys() else None
+
         image_aspect_ratio = kwargs.get("image_aspect_ratio", "pad")
         data_dict = {}
         images = []
@@ -57,17 +59,19 @@ class LlavaProcessor(ProcessorMixin):
             images.append(image)
 
         if mode == "train":
+
+            data_dict = get_conversation(prompt, self.tokenizer, has_image=len(images) > 0)
+            data_dict = dict(
+                input_ids=data_dict["input_ids"][0][: self.max_len].tolist(),
+                labels=data_dict["labels"][0][: self.max_len].tolist(),
+            )
+
             if len(images) > 0:
-                sources = preprocess_multimodal(copy.deepcopy([e["conversations"] for e in prompt]), self.data_args)
+                images = paddle.stack(x=images, axis=0)
                 data_dict["images"] = images
             else:
-                sources = copy.deepcopy([e["conversations"] for e in sources])
-                data_dict["images"] = paddle.zeros(shape=[3, "crop_size[height]", "crop_size[width]"])
-
-            data_dict = get_conversation(sources, self.tokenizer, has_image=len(images) > 0)
-            data_dict = dict(
-                input_ids=data_dict["input_ids"][0], labels=data_dict["labels"][0], images=data_dict["images"]
-            )
+                crop_size = self.image_processor.crop_size
+                data_dict["images"] = paddle.zeros(shape=[3, crop_size["height"], crop_size["width"]])
 
         else:
             if len(images) > 0:
@@ -78,6 +82,6 @@ class LlavaProcessor(ProcessorMixin):
                 prompt, self.tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pd"
             ).unsqueeze(0)
 
-            data_dict["input_ids"] = input_ids
+            data_dict["input_ids"] = input_ids[: self.max_len]
 
         return data_dict
