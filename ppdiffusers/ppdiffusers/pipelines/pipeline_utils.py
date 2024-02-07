@@ -1155,14 +1155,27 @@ class DiffusionPipeline(ConfigMixin):
             if isinstance(_module, nn.Layer):
                 _module.eval()
                 if paddle_dtype is not None:
-                    _module.to(dtype=paddle_dtype)
+                    if str(paddle_dtype) in ["paddle.float32", "float32"]:
+                        _module.to(dtype="float32")
+                    else:
+                        paddle.amp.decorate(
+                            _module,
+                            level="O2",
+                            dtype=str(paddle_dtype).replace("paddle.", ""),
+                        )
             elif isinstance(_module, (tuple, list)):
                 for _submodule in _module:
                     if isinstance(_submodule, nn.Layer):
                         _submodule.eval()
                         if paddle_dtype is not None:
-                            _submodule.to(dtype=paddle_dtype)
-
+                            if str(paddle_dtype) in ["paddle.float32", "float32"]:
+                                _module.to(dtype="float32")
+                            else:
+                                paddle.amp.decorate(
+                                    _submodule,
+                                    level="O2",
+                                    dtype=str(paddle_dtype).replace("paddle.", ""),
+                                )
         # 8. Instantiate the pipeline
         model = pipeline_class(**init_kwargs)
 
