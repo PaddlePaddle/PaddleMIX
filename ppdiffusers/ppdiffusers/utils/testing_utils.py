@@ -27,7 +27,6 @@ import time
 import unittest
 import urllib.parse
 from contextlib import contextmanager
-from distutils.util import strtobool
 from io import BytesIO, StringIO
 from pathlib import Path
 from typing import List, Optional, Union
@@ -48,6 +47,7 @@ from .import_utils import (
     is_paddle_version,
     is_paddlesde_available,
     is_torch_available,
+    str2bool,
 )
 from .logging import get_logger
 
@@ -148,7 +148,7 @@ def parse_flag_from_env(key, default=False):
     else:
         # KEY is set, convert it to True or False.
         try:
-            _value = strtobool(value)
+            _value = str2bool(value)
         except ValueError:
             # More values are supported, but let's keep the message simple.
             raise ValueError(f"If set, {key} must be yes or no.")
@@ -770,7 +770,6 @@ class CaptureLogger:
 def enable_full_determinism():
     """
     Helper function for reproducible behavior during distributed training. See
-    - https://pytorch.org/docs/stable/notes/randomness.html
     - https://www.paddlepaddle.org.cn/documentation/docs/zh/develop/dev_guides/api_contributing_guides/new_cpp_op_cn.html#suanzishuzhiwendingxingwenti
     """
     #  Enable deterministic mode. This potentially requires either the environment
@@ -782,6 +781,7 @@ def enable_full_determinism():
 
     # Enable CUDNN deterministic mode
     os.environ["FLAGS_cudnn_deterministic"] = "True"
+    os.environ["FLAGS_embedding_deterministic"] = "True"
     os.environ["FLAGS_cpu_deterministic"] = "True"
     os.environ["NVIDIA_TF32_OVERRIDE"] = "0"
 
@@ -792,6 +792,7 @@ def disable_full_determinism():
 
     # Disable CUDNN deterministic mode
     os.environ["FLAGS_cudnn_deterministic"] = "False"
+    os.environ["FLAGS_embedding_deterministic"] = "False"
     os.environ["FLAGS_cpu_deterministic"] = "False"
     os.environ["NVIDIA_TF32_OVERRIDE"] = "1"
 

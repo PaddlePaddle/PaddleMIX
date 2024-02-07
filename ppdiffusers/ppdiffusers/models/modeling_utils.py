@@ -99,7 +99,9 @@ def faster_set_state_dict(model, state_dict):
                 # with device_guard(): donot do device guard
                 if isinstance(v_new, np.ndarray):
                     v_new = paddle.Tensor(v_new, zero_copy=True)
-                v.copy_(v_new._to(dtype=v.dtype), False)
+                if v.dtype != v_new.dtype:
+                    v_new = v_new.cast(v.dtype)
+                v.copy_(v_new, False)
             else:
                 if "undefined" in str(v.place):
                     v.initialize()
