@@ -1,32 +1,40 @@
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import os
 import sys
 
-sys.path.append('..')
-os.environ['USE_PEFT_BACKEND'] = 'True'
+sys.path.append("..")
 
-import cv2
+import argparse
 import math
 import random
-import paddle
-import numpy as np
-import argparse
 from typing import Tuple
 
-import PIL
-from PIL import Image
-
-from ppdiffusers.utils import load_image
-from ppdiffusers.models import ControlNetModel
-from ppdiffusers import (AutoencoderKL,
-                         LCMScheduler,
-                         EulerDiscreteScheduler)
-
-from insightface.app import FaceAnalysis
-
-from style_template import styles
-from pipeline_stable_diffusion_xl_instantid import StableDiffusionXLInstantIDPipeline
-
+import cv2
 import gradio as gr
+import numpy as np
+import paddle
+import PIL
+from insightface.app import FaceAnalysis
+from PIL import Image
+from pipeline_stable_diffusion_xl_instantid import StableDiffusionXLInstantIDPipeline
+from style_template import styles
+
+from ppdiffusers import AutoencoderKL, EulerDiscreteScheduler, LCMScheduler
+from ppdiffusers.models import ControlNetModel
+from ppdiffusers.utils import load_image
 
 # global variable
 MAX_SEED = np.iinfo(np.int32).max
@@ -35,37 +43,36 @@ STYLE_NAMES = list(styles.keys())
 DEFAULT_STYLE_NAME = "Watercolor"
 
 # Load face encoder
-app = FaceAnalysis(name='antelopev2', root='../', providers=['CUDAExecutionProvider', 'CPUExecutionProvider'])
+app = FaceAnalysis(name="antelopev2", root="../", providers=["CUDAExecutionProvider", "CPUExecutionProvider"])
 app.prepare(ctx_id=0, det_size=(640, 640))
 
 # Path to InstantID models
-face_adapter = f'../checkpoints/ip-adapter.bin'
-controlnet_path = f'../checkpoints/ControlNetModel'
-lora_state_dict = f'../checkpoints/pytorch_lora_weights.safetensors'
+face_adapter = "../checkpoints/ip-adapter.bin"
+controlnet_path = "../checkpoints/ControlNetModel"
+lora_state_dict = "../checkpoints/pytorch_lora_weights.safetensors"
 
 # Load pipeline
-controlnet = ControlNetModel.from_pretrained(controlnet_path,
-                                             paddle_dtype=paddle.float16,
-                                             use_safetensors=True,
-                                             from_hf_hub=True,
-                                             from_diffusers=True)
+controlnet = ControlNetModel.from_pretrained(
+    controlnet_path, paddle_dtype=paddle.float16, use_safetensors=True, from_hf_hub=True, from_diffusers=True
+)
 
 
 def main(pretrained_model_name_or_path="wangqixun/YamerMIX_v8", enable_lcm_arg=False):
-    vae = AutoencoderKL.from_pretrained(pretrained_model_name_or_path, subfolder="vae", from_hf_hub=True,
-                                        from_diffusers=True)
-    pipe = StableDiffusionXLInstantIDPipeline.from_pretrained(pretrained_model_name_or_path,
-                                                              controlnet=controlnet,
-                                                              vae=vae,
-                                                              paddle_dtype=paddle.float16,
-                                                              from_diffusers=True,
-                                                              from_hf_hub=True,
-                                                              low_cpu_mem_usage=True)
+    vae = AutoencoderKL.from_pretrained(
+        pretrained_model_name_or_path, subfolder="vae", from_hf_hub=True, from_diffusers=True
+    )
+    pipe = StableDiffusionXLInstantIDPipeline.from_pretrained(
+        pretrained_model_name_or_path,
+        controlnet=controlnet,
+        vae=vae,
+        paddle_dtype=paddle.float16,
+        from_diffusers=True,
+        from_hf_hub=True,
+        low_cpu_mem_usage=True,
+    )
     pipe.vae = vae.to(dtype=paddle.float32)
 
-    pipe.load_ip_adapter_instantid(face_adapter,
-                                   weight_name=os.path.basename("face_adapter"),
-                                   from_diffusers=True)
+    pipe.load_ip_adapter_instantid(face_adapter, weight_name=os.path.basename("face_adapter"), from_diffusers=True)
     pipe.load_lora_weights(lora_state_dict, from_diffusers=True, adapter_name="lcm")
     pipe.set_adapters("lcm")
 
@@ -73,12 +80,12 @@ def main(pretrained_model_name_or_path="wangqixun/YamerMIX_v8", enable_lcm_arg=F
         if value:
             return (
                 gr.update(minimum=0, maximum=100, step=1, value=5),
-                gr.update(minimum=0.1, maximum=20.0, step=0.1, value=1.5)
+                gr.update(minimum=0.1, maximum=20.0, step=0.1, value=1.5),
             )
         else:
             return (
                 gr.update(minimum=5, maximum=100, step=1, value=30),
-                gr.update(minimum=0.1, maximum=20.0, step=0.1, value=5)
+                gr.update(minimum=0.1, maximum=20.0, step=0.1, value=5),
             )
 
     def randomize_seed_fn(seed: int, randomize_seed: bool) -> int:
@@ -92,7 +99,7 @@ def main(pretrained_model_name_or_path="wangqixun/YamerMIX_v8", enable_lcm_arg=F
     def get_example():
         case = [
             [
-                '../examples/yann-lecun_resize.jpg',
+                "../examples/yann-lecun_resize.jpg",
                 "a man",
                 "Snow",
                 "(lowres, low quality, worst quality:1.2), (text:1.2), watermark, (frame:1.2), deformed, ugly, deformed eyes, blur, out of focus, blurry, deformed cat, deformed, photo, anthropomorphic cat, monochrome, photo, pet collar, gun, weapon, blue, 3d, drones, drone, buildings in background, green",
@@ -125,8 +132,9 @@ def main(pretrained_model_name_or_path="wangqixun/YamerMIX_v8", enable_lcm_arg=F
             y = kps[index][:, 1]
             length = ((x[0] - x[1]) ** 2 + (y[0] - y[1]) ** 2) ** 0.5
             angle = math.degrees(math.atan2(y[0] - y[1], x[0] - x[1]))
-            polygon = cv2.ellipse2Poly((int(np.mean(x)), int(np.mean(y))), (int(length / 2), stickwidth), int(angle), 0,
-                                       360, 1)
+            polygon = cv2.ellipse2Poly(
+                (int(np.mean(x)), int(np.mean(y))), (int(length / 2), stickwidth), int(angle), 0, 360, 1
+            )
             out_img = cv2.fillConvexPoly(out_img.copy(), polygon, color)
         out_img = (out_img * 0.6).astype(np.uint8)
 
@@ -138,8 +146,15 @@ def main(pretrained_model_name_or_path="wangqixun/YamerMIX_v8", enable_lcm_arg=F
         out_img_pil = Image.fromarray(out_img.astype(np.uint8))
         return out_img_pil
 
-    def resize_img(input_image, max_side=1280, min_side=1024, size=None,
-                   pad_to_max_side=False, mode=PIL.Image.BILINEAR, base_pixel_number=64):
+    def resize_img(
+        input_image,
+        max_side=1280,
+        min_side=1024,
+        size=None,
+        pad_to_max_side=False,
+        mode=PIL.Image.BILINEAR,
+        base_pixel_number=64,
+    ):
 
         w, h = input_image.size
         if size is not None:
@@ -157,17 +172,29 @@ def main(pretrained_model_name_or_path="wangqixun/YamerMIX_v8", enable_lcm_arg=F
             res = np.ones([max_side, max_side, 3], dtype=np.uint8) * 255
             offset_x = (max_side - w_resize_new) // 2
             offset_y = (max_side - h_resize_new) // 2
-            res[offset_y:offset_y + h_resize_new, offset_x:offset_x + w_resize_new] = np.array(input_image)
+            res[offset_y : offset_y + h_resize_new, offset_x : offset_x + w_resize_new] = np.array(input_image)
             input_image = Image.fromarray(res)
         return input_image
 
     def apply_style(style_name: str, positive: str, negative: str = "") -> Tuple[str, str]:
         p, n = styles.get(style_name, styles[DEFAULT_STYLE_NAME])
-        return p.replace("{prompt}", positive), n + ' ' + negative
+        return p.replace("{prompt}", positive), n + " " + negative
 
-    def generate_image(face_image_path, pose_image_path, prompt, negative_prompt, style_name, num_steps,
-                       identitynet_strength_ratio, adapter_strength_ratio, guidance_scale, seed, enable_LCM,
-                       enhance_face_region, progress=gr.Progress(track_tqdm=True)):
+    def generate_image(
+        face_image_path,
+        pose_image_path,
+        prompt,
+        negative_prompt,
+        style_name,
+        num_steps,
+        identitynet_strength_ratio,
+        adapter_strength_ratio,
+        guidance_scale,
+        seed,
+        enable_LCM,
+        enhance_face_region,
+        progress=gr.Progress(track_tqdm=True),
+    ):
         if enable_LCM:
             pipe.enable_lora()
             pipe.scheduler = LCMScheduler.from_config(pipe.scheduler.config)
@@ -176,7 +203,7 @@ def main(pretrained_model_name_or_path="wangqixun/YamerMIX_v8", enable_lcm_arg=F
             pipe.scheduler = EulerDiscreteScheduler.from_config(pipe.scheduler.config)
 
         if face_image_path is None:
-            raise gr.Error(f"Cannot find any input face image! Please upload the face image")
+            raise gr.Error("Cannot find any input face image! Please upload the face image")
 
         if prompt is None:
             prompt = "a person"
@@ -193,12 +220,13 @@ def main(pretrained_model_name_or_path="wangqixun/YamerMIX_v8", enable_lcm_arg=F
         face_info = app.get(face_image_cv2)
 
         if len(face_info) == 0:
-            raise gr.Error(f"Cannot find any face in the image! Please upload another person image")
+            raise gr.Error("Cannot find any face in the image! Please upload another person image")
 
-        face_info = sorted(face_info, key=lambda x: (x['bbox'][2] - x['bbox'][0]) * x['bbox'][3] - x['bbox'][1])[
-            -1]  # only use the maximum face
-        face_emb = face_info['embedding']
-        face_kps = draw_kps(convert_from_cv2_to_image(face_image_cv2), face_info['kps'])
+        face_info = sorted(face_info, key=lambda x: (x["bbox"][2] - x["bbox"][0]) * x["bbox"][3] - x["bbox"][1])[
+            -1
+        ]  # only use the maximum face
+        face_emb = face_info["embedding"]
+        face_kps = draw_kps(convert_from_cv2_to_image(face_image_cv2), face_info["kps"])
 
         if pose_image_path is not None:
             pose_image = load_image(pose_image_path)
@@ -208,10 +236,10 @@ def main(pretrained_model_name_or_path="wangqixun/YamerMIX_v8", enable_lcm_arg=F
             face_info = app.get(pose_image_cv2)
 
             if len(face_info) == 0:
-                raise gr.Error(f"Cannot find any face in the reference image! Please upload another person image")
+                raise gr.Error("Cannot find any face in the reference image! Please upload another person image")
 
             face_info = face_info[-1]
-            face_kps = draw_kps(pose_image, face_info['kps'])
+            face_kps = draw_kps(pose_image, face_info["kps"])
 
             width, height = face_kps.size
 
@@ -241,12 +269,12 @@ def main(pretrained_model_name_or_path="wangqixun/YamerMIX_v8", enable_lcm_arg=F
             guidance_scale=guidance_scale,
             height=height,
             width=width,
-            generator=generator
+            generator=generator,
         ).images
 
         return images[0], gr.update(visible=True)
 
-    ### Description
+    # Description
     title = r"""
     <h1 align="center">InstantID: Zero-shot Identity-Preserving Generation in Seconds</h1>
     """
@@ -282,15 +310,15 @@ def main(pretrained_model_name_or_path="wangqixun/YamerMIX_v8", enable_lcm_arg=F
 
     tips = r"""
     ### Usage tips of InstantID
-    1. If you're not satisfied with the similarity, try increasing the weight of "IdentityNet Strength" and "Adapter Strength."    
+    1. If you're not satisfied with the similarity, try increasing the weight of "IdentityNet Strength" and "Adapter Strength."
     2. If you feel that the saturation is too high, first decrease the Adapter strength. If it remains too high, then decrease the IdentityNet strength.
     3. If you find that text control is not as expected, decrease Adapter strength.
     4. If you find that realistic style is not good enough, go for our Github repo and use a more realistic base model.
     """
 
-    css = '''
+    css = """
     .gradio-container {width: 85% !important}
-    '''
+    """
     with gr.Blocks(css=css) as demo:
 
         # description
@@ -306,15 +334,18 @@ def main(pretrained_model_name_or_path="wangqixun/YamerMIX_v8", enable_lcm_arg=F
                 pose_file = gr.Image(label="Upload a reference pose image (optional)", type="filepath")
 
                 # prompt
-                prompt = gr.Textbox(label="Prompt",
-                                    info="Give simple prompt is enough to achieve good face fidelity",
-                                    placeholder="A photo of a person",
-                                    value="")
+                prompt = gr.Textbox(
+                    label="Prompt",
+                    info="Give simple prompt is enough to achieve good face fidelity",
+                    placeholder="A photo of a person",
+                    value="",
+                )
 
                 submit = gr.Button("Submit", variant="primary")
 
                 enable_LCM = gr.Checkbox(
-                    label="Enable Fast Inference with LCM", value=enable_lcm_arg,
+                    label="Enable Fast Inference with LCM",
+                    value=enable_lcm_arg,
                     info="LCM speeds up the inference step, the trade-off is the quality of the generated image. It performs better with portrait face images rather than distant faces",
                 )
                 style = gr.Dropdown(label="Style template", choices=STYLE_NAMES, value=DEFAULT_STYLE_NAME)
@@ -369,10 +400,7 @@ def main(pretrained_model_name_or_path="wangqixun/YamerMIX_v8", enable_lcm_arg=F
                 gallery = gr.Image(label="Generated Images")
                 usage_tips = gr.Markdown(label="Usage tips of InstantID", value=tips, visible=False)
 
-            submit.click(
-                fn=remove_tips,
-                outputs=usage_tips,
-            ).then(
+            submit.click(fn=remove_tips, outputs=usage_tips,).then(
                 fn=randomize_seed_fn,
                 inputs=[seed, randomize_seed],
                 outputs=seed,
@@ -380,9 +408,21 @@ def main(pretrained_model_name_or_path="wangqixun/YamerMIX_v8", enable_lcm_arg=F
                 api_name=False,
             ).then(
                 fn=generate_image,
-                inputs=[face_file, pose_file, prompt, negative_prompt, style, num_steps, identitynet_strength_ratio,
-                        adapter_strength_ratio, guidance_scale, seed, enable_LCM, enhance_face_region],
-                outputs=[gallery, usage_tips]
+                inputs=[
+                    face_file,
+                    pose_file,
+                    prompt,
+                    negative_prompt,
+                    style,
+                    num_steps,
+                    identitynet_strength_ratio,
+                    adapter_strength_ratio,
+                    guidance_scale,
+                    seed,
+                    enable_LCM,
+                    enhance_face_region,
+                ],
+                outputs=[gallery, usage_tips],
             )
 
             enable_LCM.input(fn=toggle_lcm_ui, inputs=[enable_LCM], outputs=[num_steps, guidance_scale], queue=False)

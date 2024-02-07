@@ -1,28 +1,41 @@
-import cv2
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import math
-import numpy as np
-import PIL.Image
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
+import cv2
+import numpy as np
 import paddle
+import PIL.Image
 from paddle import nn
 
-from ppdiffusers.utils.import_utils import is_ppxformers_available
 from ppdiffusers import ControlNetModel, StableDiffusionXLControlNetPipeline
-from ppdiffusers.loaders import IPAdapterMixin
 from ppdiffusers.image_processor import PipelineImageInput
-from ppdiffusers.pipelines.controlnet.multicontrolnet import MultiControlNetModel
-from ppdiffusers.pipelines.stable_diffusion_xl import StableDiffusionXLPipelineOutput
+from ppdiffusers.loaders import IPAdapterMixin
 from ppdiffusers.models.attention_processor import (
     AttnProcessor,
     AttnProcessor2_5,
     IPAdapterAttnProcessor,
-    IPAdapterAttnProcessor2_5
+    IPAdapterAttnProcessor2_5,
 )
 from ppdiffusers.models.modeling_pytorch_paddle_utils import (
     convert_pytorch_state_dict_to_paddle,
 )
 from ppdiffusers.models.modeling_utils import ContextManagers, faster_set_state_dict
+from ppdiffusers.pipelines.controlnet.multicontrolnet import MultiControlNetModel
+from ppdiffusers.pipelines.stable_diffusion_xl import StableDiffusionXLPipelineOutput
 from ppdiffusers.utils import (
     DIFFUSERS_CACHE,
     FROM_AISTUDIO,
@@ -34,15 +47,15 @@ from ppdiffusers.utils import (
     logging,
     smart_load,
 )
+from ppdiffusers.utils.import_utils import is_ppxformers_available
 
 try:
     from paddlenlp.transformers.model_utils import no_init_weights
 except ImportError:
     from ppdiffusers.utils.paddle_utils import no_init_weights
 
-from safetensors import safe_open
-
 from resampler import Resampler
+from safetensors import safe_open
 
 logger = logging.get_logger(__name__)
 
@@ -63,9 +76,9 @@ def draw_kps(image_pil, kps, color_list=[(255, 0, 0), (0, 255, 0), (0, 0, 255), 
         y = kps[index][:, 1]
         length = ((x[0] - x[1]) ** 2 + (y[0] - y[1]) ** 2) ** 0.5
         angle = math.degrees(math.atan2(y[0] - y[1], x[0] - x[1]))
-        polygon = cv2.ellipse2Poly((int(np.mean(x)), int(np.mean(y))), (int
-                                                                        (length / 2), stickwidth), int(angle), 0, 360,
-                                   1)
+        polygon = cv2.ellipse2Poly(
+            (int(np.mean(x)), int(np.mean(y))), (int(length / 2), stickwidth), int(angle), 0, 360, 1
+        )
         out_img = cv2.fillConvexPoly(out_img.copy(), polygon, color)
     out_img = (out_img * 0.6).astype(np.uint8)
 
@@ -78,16 +91,16 @@ def draw_kps(image_pil, kps, color_list=[(255, 0, 0), (0, 255, 0), (0, 0, 255), 
 
 
 class StableDiffusionXLInstantIDPipeline(StableDiffusionXLControlNetPipeline, IPAdapterMixin):
-
     def load_ip_adapter_instantid(
-            self,
-            pretrained_model_name_or_path_or_dict: Union[str, Dict[str, paddle.Tensor]],
-            subfolder: str = "",
-            weight_name: str = None,
-            image_emb_dim: int = 512,
-            num_tokens: int = 16,
-            scale: float = 0.5,
-            **kwargs):
+        self,
+        pretrained_model_name_or_path_or_dict: Union[str, Dict[str, paddle.Tensor]],
+        subfolder: str = "",
+        weight_name: str = None,
+        image_emb_dim: int = 512,
+        num_tokens: int = 16,
+        scale: float = 0.5,
+        **kwargs
+    ):
         # Load the main state dict first.
         from_hf_hub = kwargs.pop("from_hf_hub", FROM_HF_HUB)
         from_aistudio = kwargs.pop("from_aistudio", FROM_AISTUDIO)
@@ -177,7 +190,8 @@ class StableDiffusionXLInstantIDPipeline(StableDiffusionXLControlNetPipeline, IP
             num_queries=num_tokens,
             embedding_dim=image_emb_dim,
             output_dim=self.unet.config.cross_attention_dim,
-            ff_mult=4)
+            ff_mult=4,
+        )
 
         init_contexts = []
         init_contexts.append(paddle.dtype_guard(self.dtype))
@@ -186,7 +200,6 @@ class StableDiffusionXLInstantIDPipeline(StableDiffusionXLControlNetPipeline, IP
             init_contexts.append(paddle.LazyGuard())
         with ContextManagers(init_contexts):
             self.image_proj_model = image_proj_model
-        self.image_proj_model.to(dtype=self.dtype)
 
         if from_diffusers:
             convert_pytorch_state_dict_to_paddle(self.image_proj_model, state_dict["image_proj"])
@@ -212,23 +225,27 @@ class StableDiffusionXLInstantIDPipeline(StableDiffusionXLControlNetPipeline, IP
 
         attn_procs = {}
         for name in self.unet.attn_processors.keys():
-            cross_attention_dim = None if name.endswith('attn1.processor') else self.unet.config.cross_attention_dim
-            if name.startswith('mid_block'):
+            cross_attention_dim = None if name.endswith("attn1.processor") else self.unet.config.cross_attention_dim
+            if name.startswith("mid_block"):
                 hidden_size = self.unet.config.block_out_channels[-1]
-            elif name.startswith('up_blocks'):
-                block_id = int(name[len('up_blocks.')])
+            elif name.startswith("up_blocks"):
+                block_id = int(name[len("up_blocks.")])
                 hidden_size = list(reversed(self.unet.config.block_out_channels))[block_id]
-            elif name.startswith('down_blocks'):
-                block_id = int(name[len('down_blocks.')])
+            elif name.startswith("down_blocks"):
+                block_id = int(name[len("down_blocks.")])
                 hidden_size = self.unet.config.block_out_channels[block_id]
             if cross_attention_dim is None:
                 attn_procs[name] = AttnProcessor2_5_Layer() if is_ppxformers_available() else AttnProcessor_Layer()
             else:
-                IPAdapterAttnProcessor = IPAdapterAttnProcessor2_5 if is_ppxformers_available() else IPAdapterAttnProcessor
-                attn_procs[name] = IPAdapterAttnProcessor(
+                attn_processor_class = (
+                    IPAdapterAttnProcessor2_5 if is_ppxformers_available() else IPAdapterAttnProcessor
+                )
+                attn_procs[name] = attn_processor_class(
                     hidden_size=hidden_size,
-                    cross_attention_dim=cross_attention_dim, scale=scale,
-                    num_tokens=num_tokens).to(dtype=self.dtype)
+                    cross_attention_dim=cross_attention_dim,
+                    scale=scale,
+                    num_tokens=num_tokens,
+                ).to(dtype=self.dtype)
         self.unet.set_attn_processor(attn_procs)
 
         ip_layers = nn.LayerList(sublayers=self.unet.attn_processors.values())
@@ -239,16 +256,12 @@ class StableDiffusionXLInstantIDPipeline(StableDiffusionXLControlNetPipeline, IP
         self.unet.to(dtype=self.dtype)
 
     def set_ip_adapter_scale(self, scale):
-        unet = getattr(self, self.unet_name) if not hasattr(self, 'unet') else self.unet
+        unet = getattr(self, self.unet_name) if not hasattr(self, "unet") else self.unet
         for attn_processor in unet.attn_processors.values():
             if isinstance(attn_processor, IPAdapterAttnProcessor):
                 attn_processor.scale = scale
 
-    def _encode_prompt_image_emb(
-            self,
-            prompt_image_emb,
-            num_images_per_prompt,
-            do_classifier_free_guidance):
+    def _encode_prompt_image_emb(self, prompt_image_emb, num_images_per_prompt, do_classifier_free_guidance):
 
         if isinstance(prompt_image_emb, paddle.Tensor):
             prompt_image_emb = prompt_image_emb.copy()
@@ -270,44 +283,46 @@ class StableDiffusionXLInstantIDPipeline(StableDiffusionXLControlNetPipeline, IP
         return prompt_image_emb
 
     @paddle.no_grad()
-    def __call__(self,
-                 prompt: Union[str, List[str]] = None,
-                 prompt_2: Optional[Union[str, List[str]]] = None,
-                 image: PipelineImageInput = None,
-                 height: Optional[int] = None,
-                 width: Optional[int] = None,
-                 num_inference_steps: int = 50,
-                 guidance_scale: float = 5.0,
-                 negative_prompt: Optional[Union[str, List[str]]] = None,
-                 negative_prompt_2: Optional[Union[str, List[str]]] = None,
-                 num_images_per_prompt: Optional[int] = 1,
-                 eta: float = 0.0,
-                 generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
-                 latents: Optional[paddle.Tensor] = None,
-                 prompt_embeds: Optional[paddle.Tensor] = None,
-                 negative_prompt_embeds: Optional[paddle.Tensor] = None,
-                 pooled_prompt_embeds: Optional[paddle.Tensor] = None,
-                 negative_pooled_prompt_embeds: Optional[paddle.Tensor] = None,
-                 image_embeds: Optional[paddle.Tensor] = None,
-                 output_type: Optional[str] = 'pil',
-                 return_dict: bool = True,
-                 cross_attention_kwargs: Optional[Dict[str, Any]] = None,
-                 controlnet_conditioning_scale: Union[float, List[float]] = 1.0,
-                 guess_mode: bool = False,
-                 control_guidance_start: Union[float, List[float]] = 0.0,
-                 control_guidance_end: Union[float, List[float]] = 1.0,
-                 original_size: Tuple[int, int] = None,
-                 crops_coords_top_left: Tuple[int, int] = (0, 0),
-                 target_size: Tuple[int, int] = None,
-                 negative_original_size: Optional[Tuple[int, int]] = None,
-                 negative_crops_coords_top_left: Tuple[int, int] = (0, 0),
-                 negative_target_size: Optional[Tuple[int, int]] = None,
-                 clip_skip: Optional[int] = None,
-                 callback_on_step_end: Optional[Callable[[int, int, Dict], None]] = None,
-                 callback_on_step_end_tensor_inputs: List[str] = ['latents'],
-                 ip_adapter_scale=None,
-                 low_gpu_mem_usage: bool = True,
-                 **kwargs):
+    def __call__(
+        self,
+        prompt: Union[str, List[str]] = None,
+        prompt_2: Optional[Union[str, List[str]]] = None,
+        image: PipelineImageInput = None,
+        height: Optional[int] = None,
+        width: Optional[int] = None,
+        num_inference_steps: int = 50,
+        guidance_scale: float = 5.0,
+        negative_prompt: Optional[Union[str, List[str]]] = None,
+        negative_prompt_2: Optional[Union[str, List[str]]] = None,
+        num_images_per_prompt: Optional[int] = 1,
+        eta: float = 0.0,
+        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        latents: Optional[paddle.Tensor] = None,
+        prompt_embeds: Optional[paddle.Tensor] = None,
+        negative_prompt_embeds: Optional[paddle.Tensor] = None,
+        pooled_prompt_embeds: Optional[paddle.Tensor] = None,
+        negative_pooled_prompt_embeds: Optional[paddle.Tensor] = None,
+        image_embeds: Optional[paddle.Tensor] = None,
+        output_type: Optional[str] = "pil",
+        return_dict: bool = True,
+        cross_attention_kwargs: Optional[Dict[str, Any]] = None,
+        controlnet_conditioning_scale: Union[float, List[float]] = 1.0,
+        guess_mode: bool = False,
+        control_guidance_start: Union[float, List[float]] = 0.0,
+        control_guidance_end: Union[float, List[float]] = 1.0,
+        original_size: Tuple[int, int] = None,
+        crops_coords_top_left: Tuple[int, int] = (0, 0),
+        target_size: Tuple[int, int] = None,
+        negative_original_size: Optional[Tuple[int, int]] = None,
+        negative_crops_coords_top_left: Tuple[int, int] = (0, 0),
+        negative_target_size: Optional[Tuple[int, int]] = None,
+        clip_skip: Optional[int] = None,
+        callback_on_step_end: Optional[Callable[[int, int, Dict], None]] = None,
+        callback_on_step_end_tensor_inputs: List[str] = ["latents"],
+        ip_adapter_scale=None,
+        low_gpu_mem_usage: bool = True,
+        **kwargs
+    ):
         """
         Function invoked when calling the pipeline for generation.
         Only the parameters introduced by InstantID are discussed here.
@@ -345,8 +360,8 @@ class StableDiffusionXLInstantIDPipeline(StableDiffusionXLControlNetPipeline, IP
                 otherwise a `tuple` is returned containing the output images.
         """
 
-        callback = kwargs.pop('callback', None)
-        callback_steps = kwargs.pop('callback_steps', None)
+        callback = kwargs.pop("callback", None)
+        callback_steps = kwargs.pop("callback_steps", None)
 
         controlnet = self.controlnet
 
@@ -359,7 +374,7 @@ class StableDiffusionXLInstantIDPipeline(StableDiffusionXLControlNetPipeline, IP
             mult = len(controlnet.nets) if isinstance(controlnet, MultiControlNetModel) else 1
             control_guidance_start, control_guidance_end = (
                 mult * [control_guidance_start],
-                mult * [control_guidance_end]
+                mult * [control_guidance_end],
             )
 
         # 0. set ip_adapter_scale
@@ -367,20 +382,22 @@ class StableDiffusionXLInstantIDPipeline(StableDiffusionXLControlNetPipeline, IP
             self.set_ip_adapter_scale(ip_adapter_scale)
 
         # 1. Check inputs. Raise error if not correct
-        self.check_inputs(prompt,
-                          prompt_2,
-                          image,
-                          callback_steps,
-                          negative_prompt,
-                          negative_prompt_2,
-                          prompt_embeds,
-                          negative_prompt_embeds,
-                          pooled_prompt_embeds,
-                          negative_pooled_prompt_embeds,
-                          controlnet_conditioning_scale,
-                          control_guidance_start,
-                          control_guidance_end,
-                          callback_on_step_end_tensor_inputs)
+        self.check_inputs(
+            prompt,
+            prompt_2,
+            image,
+            callback_steps,
+            negative_prompt,
+            negative_prompt_2,
+            prompt_embeds,
+            negative_prompt_embeds,
+            pooled_prompt_embeds,
+            negative_pooled_prompt_embeds,
+            controlnet_conditioning_scale,
+            control_guidance_start,
+            control_guidance_end,
+            callback_on_step_end_tensor_inputs,
+        )
 
         self._guidance_scale = guidance_scale
         self._clip_skip = clip_skip
@@ -406,14 +423,15 @@ class StableDiffusionXLInstantIDPipeline(StableDiffusionXLControlNetPipeline, IP
         guess_mode = guess_mode or global_pool_conditions
 
         # 3.1 Encode input prompt
-        text_encoder_lora_scale = self.cross_attention_kwargs.get('scale',
-                                                                  None) if self.cross_attention_kwargs is not None else None
+        text_encoder_lora_scale = (
+            self.cross_attention_kwargs.get("scale", None) if self.cross_attention_kwargs is not None else None
+        )
 
         (
             prompt_embeds,
             negative_prompt_embeds,
             pooled_prompt_embeds,
-            negative_pooled_prompt_embeds
+            negative_pooled_prompt_embeds,
         ) = self.encode_prompt(
             prompt=prompt,
             prompt_2=prompt_2,
@@ -426,7 +444,7 @@ class StableDiffusionXLInstantIDPipeline(StableDiffusionXLControlNetPipeline, IP
             pooled_prompt_embeds=pooled_prompt_embeds,
             negative_pooled_prompt_embeds=negative_pooled_prompt_embeds,
             lora_scale=text_encoder_lora_scale,
-            clip_skip=self.clip_skip
+            clip_skip=self.clip_skip,
         )
 
         if low_gpu_mem_usage:
@@ -434,9 +452,8 @@ class StableDiffusionXLInstantIDPipeline(StableDiffusionXLControlNetPipeline, IP
 
         # 3.2 Encode image prompt
         prompt_image_emb = self._encode_prompt_image_emb(
-            image_embeds,
-            num_images_per_prompt,
-            self.do_classifier_free_guidance)
+            image_embeds, num_images_per_prompt, self.do_classifier_free_guidance
+        )
 
         if low_gpu_mem_usage:
             self.image_proj_model.to("cpu")
@@ -452,7 +469,7 @@ class StableDiffusionXLInstantIDPipeline(StableDiffusionXLControlNetPipeline, IP
                 num_images_per_prompt=num_images_per_prompt,
                 dtype=controlnet.dtype,
                 do_classifier_free_guidance=self.do_classifier_free_guidance,
-                guess_mode=guess_mode
+                guess_mode=guess_mode,
             )
             height, width = image.shape[-2:]
         elif isinstance(controlnet, MultiControlNetModel):
@@ -466,7 +483,7 @@ class StableDiffusionXLInstantIDPipeline(StableDiffusionXLControlNetPipeline, IP
                     num_images_per_prompt=num_images_per_prompt,
                     dtype=controlnet.dtype,
                     do_classifier_free_guidance=self.do_classifier_free_guidance,
-                    guess_mode=guess_mode
+                    guess_mode=guess_mode,
                 )
                 images.append(image_)
             image = images
@@ -489,17 +506,18 @@ class StableDiffusionXLInstantIDPipeline(StableDiffusionXLControlNetPipeline, IP
             width,
             prompt_embeds.dtype,
             generator,
-            latents)
+            latents,
+        )
 
         # 6.1 Optionally get Guidance Scale Embedding
         timestep_cond = None
         if self.unet.config.time_cond_proj_dim is not None:
             guidance_scale_tensor = paddle.to_tensor(data=self.guidance_scale - 1).tile(
-                repeat_times=([batch_size * num_images_per_prompt]))
+                repeat_times=([batch_size * num_images_per_prompt])
+            )
             timestep_cond = self.get_guidance_scale_embedding(
-                guidance_scale_tensor,
-                embedding_dim=self.unet.config.
-                time_cond_proj_dim)
+                guidance_scale_tensor, embedding_dim=self.unet.config.time_cond_proj_dim
+            )
 
         # 7. Prepare extra step kwargs
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
@@ -507,11 +525,11 @@ class StableDiffusionXLInstantIDPipeline(StableDiffusionXLControlNetPipeline, IP
         # 7.1 Create tensor stating which controlnets to keep
         controlnet_keep = []
         for i in range(len(timesteps)):
-            keeps = [(1.0 - float(i / len(timesteps) < s or (i + 1) / len(
-                timesteps) > e)) for s, e in zip(control_guidance_start,
-                                                 control_guidance_end)]
-            controlnet_keep.append(keeps[0] if isinstance(controlnet,
-                                                          ControlNetModel) else keeps)
+            keeps = [
+                (1.0 - float(i / len(timesteps) < s or (i + 1) / len(timesteps) > e))
+                for s, e in zip(control_guidance_start, control_guidance_end)
+            ]
+            controlnet_keep.append(keeps[0] if isinstance(controlnet, ControlNetModel) else keeps)
 
         # 7.2 Prepare added time ids & embeddings
         if isinstance(image, list):
@@ -525,7 +543,7 @@ class StableDiffusionXLInstantIDPipeline(StableDiffusionXLControlNetPipeline, IP
         if self.text_encoder_2 is None:
             text_encoder_projection_dim = int(pooled_prompt_embeds.shape[-1])
         else:
-            text_encoder_projection_dim = (self.text_encoder_2.config.projection_dim)
+            text_encoder_projection_dim = self.text_encoder_2.config.projection_dim
 
         original_size = tuple(original_size)
         add_time_ids = self._get_add_time_ids(
@@ -533,7 +551,7 @@ class StableDiffusionXLInstantIDPipeline(StableDiffusionXLControlNetPipeline, IP
             crops_coords_top_left,
             target_size,
             dtype=prompt_embeds.dtype,
-            text_encoder_projection_dim=text_encoder_projection_dim
+            text_encoder_projection_dim=text_encoder_projection_dim,
         )
 
         if negative_original_size is not None and negative_target_size is not None:
@@ -542,18 +560,15 @@ class StableDiffusionXLInstantIDPipeline(StableDiffusionXLControlNetPipeline, IP
                 negative_crops_coords_top_left,
                 negative_target_size,
                 dtype=prompt_embeds.dtype,
-                text_encoder_projection_dim=text_encoder_projection_dim
+                text_encoder_projection_dim=text_encoder_projection_dim,
             )
         else:
             negative_add_time_ids = add_time_ids
 
         if self.do_classifier_free_guidance:
-            prompt_embeds = paddle.concat(x=[negative_prompt_embeds,
-                                             prompt_embeds], axis=0)
-            add_text_embeds = paddle.concat(x=[
-                negative_pooled_prompt_embeds, add_text_embeds], axis=0)
-            add_time_ids = paddle.concat(x=[negative_add_time_ids,
-                                            add_time_ids], axis=0)
+            prompt_embeds = paddle.concat(x=[negative_prompt_embeds, prompt_embeds], axis=0)
+            add_text_embeds = paddle.concat(x=[negative_pooled_prompt_embeds, add_text_embeds], axis=0)
+            add_time_ids = paddle.concat(x=[negative_add_time_ids, add_time_ids], axis=0)
 
         prompt_embeds = prompt_embeds.cast(self.dtype)
         add_text_embeds = add_text_embeds.cast(self.dtype)
@@ -572,21 +587,17 @@ class StableDiffusionXLInstantIDPipeline(StableDiffusionXLControlNetPipeline, IP
                 latent_model_input = paddle.concat(x=[latents] * 2) if self.do_classifier_free_guidance else latents
                 latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
-                added_cond_kwargs = {
-                    'text_embeds': add_text_embeds,
-                    'time_ids': add_time_ids
-                }
+                added_cond_kwargs = {"text_embeds": add_text_embeds, "time_ids": add_time_ids}
 
                 # controlnet(s) inference
                 if guess_mode and self.do_classifier_free_guidance:
                     # Infer ControlNet only for the conditional batch.
                     control_model_input = latents
-                    control_model_input = self.scheduler.scale_model_input(
-                        control_model_input, t)
+                    control_model_input = self.scheduler.scale_model_input(control_model_input, t)
                     controlnet_prompt_embeds = prompt_embeds.chunk(chunks=2)[1]
                     controlnet_added_cond_kwargs = {
-                        'text_embeds': add_text_embeds.chunk(chunks=2)[1],
-                        'time_ids': add_time_ids.chunk(chunks=2)[1]
+                        "text_embeds": add_text_embeds.chunk(chunks=2)[1],
+                        "time_ids": add_time_ids.chunk(chunks=2)[1],
                     }
                 else:
                     control_model_input = latent_model_input
@@ -594,8 +605,7 @@ class StableDiffusionXLInstantIDPipeline(StableDiffusionXLControlNetPipeline, IP
                     controlnet_added_cond_kwargs = added_cond_kwargs
 
                 if isinstance(controlnet_keep[i], list):
-                    cond_scale = [(c * s) for c, s in zip(
-                        controlnet_conditioning_scale, controlnet_keep[i])]
+                    cond_scale = [(c * s) for c, s in zip(controlnet_conditioning_scale, controlnet_keep[i])]
                 else:
                     controlnet_cond_scale = controlnet_conditioning_scale
                     if isinstance(controlnet_cond_scale, list):
@@ -610,17 +620,19 @@ class StableDiffusionXLInstantIDPipeline(StableDiffusionXLControlNetPipeline, IP
                     conditioning_scale=cond_scale,
                     guess_mode=guess_mode,
                     added_cond_kwargs=controlnet_added_cond_kwargs,
-                    return_dict=False
+                    return_dict=False,
                 )
 
                 if guess_mode and self.do_classifier_free_guidance:
                     # Infered ControlNet only for the conditional batch.
                     # To apply the output of ControlNet to both the unconditional and conditional batches,
                     # add 0 to the unconditional batch to keep it unchanged.
-                    down_block_res_samples = [paddle.concat(x=[paddle.zeros_like(x=d), d]) for d in
-                                              down_block_res_samples]
+                    down_block_res_samples = [
+                        paddle.concat(x=[paddle.zeros_like(x=d), d]) for d in down_block_res_samples
+                    ]
                     mid_block_res_sample = paddle.concat(
-                        x=[paddle.zeros_like(x=mid_block_res_sample), mid_block_res_sample])
+                        x=[paddle.zeros_like(x=mid_block_res_sample), mid_block_res_sample]
+                    )
 
                 # predict the noise residual
                 noise_pred = self.unet(
@@ -632,7 +644,7 @@ class StableDiffusionXLInstantIDPipeline(StableDiffusionXLControlNetPipeline, IP
                     down_block_additional_residuals=down_block_res_samples,
                     mid_block_additional_residual=mid_block_res_sample,
                     added_cond_kwargs=added_cond_kwargs,
-                    return_dict=False
+                    return_dict=False,
                 )[0]
 
                 # perform guidance
@@ -641,43 +653,43 @@ class StableDiffusionXLInstantIDPipeline(StableDiffusionXLControlNetPipeline, IP
                     noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
 
                 # compute the previous noisy sample x_t -> x_t-1
-                latents = self.scheduler.step(noise_pred, t, latents, **
-                extra_step_kwargs, return_dict=False)[0].to(self.dtype)
+                latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs, return_dict=False)[0].cast(
+                    self.dtype
+                )
 
                 if callback_on_step_end is not None:
                     callback_kwargs = {}
                     for k in callback_on_step_end_tensor_inputs:
                         callback_kwargs[k] = locals()[k]
-                    callback_outputs = callback_on_step_end(self, i, t,
-                                                            callback_kwargs)
-                    latents = callback_outputs.pop('latents', latents)
-                    prompt_embeds = callback_outputs.pop('prompt_embeds', prompt_embeds)
-                    negative_prompt_embeds = callback_outputs.pop('negative_prompt_embeds', negative_prompt_embeds)
+                    callback_outputs = callback_on_step_end(self, i, t, callback_kwargs)
+                    latents = callback_outputs.pop("latents", latents)
+                    prompt_embeds = callback_outputs.pop("prompt_embeds", prompt_embeds)
+                    negative_prompt_embeds = callback_outputs.pop("negative_prompt_embeds", negative_prompt_embeds)
 
                 # call the callback, if provided
                 if i == len(timesteps) - 1 or i + 1 > num_warmup_steps and (i + 1) % self.scheduler.order == 0:
                     progress_bar.update()
                     if callback is not None and i % callback_steps == 0:
-                        step_idx = i // getattr(self.scheduler, 'order', 1)
+                        step_idx = i // getattr(self.scheduler, "order", 1)
                         callback(step_idx, t, latents)
 
         if low_gpu_mem_usage:
             self.unet.to("cpu")
             paddle.device.cuda.empty_cache()
 
-        if not output_type == 'latent':
-            needs_upcasting = (self.vae.dtype == paddle.float16 and self.vae.config.force_upcast)
+        if not output_type == "latent":
+            needs_upcasting = self.vae.dtype == paddle.float16 and self.vae.config.force_upcast
 
             if needs_upcasting:
                 self.upcast_vae()
-                latents = latents.to(next(iter(self.vae.post_quant_conv.named_parameters()))[1].dtype)
+                latents = latents.cast(next(iter(self.vae.post_quant_conv.named_parameters()))[1].dtype)
 
             image = self.vae.decode(latents / self.vae.config.scaling_factor, return_dict=False)[0]
 
         else:
             image = latents
 
-        if not output_type == 'latent':
+        if not output_type == "latent":
             # apply watermark if available
             if self.watermark is not None:
                 image = self.watermark.apply_watermark(image)
@@ -687,5 +699,5 @@ class StableDiffusionXLInstantIDPipeline(StableDiffusionXLControlNetPipeline, IP
         self.maybe_free_model_hooks()
 
         if not return_dict:
-            return image,
+            return (image,)
         return StableDiffusionXLPipelineOutput(images=image)
