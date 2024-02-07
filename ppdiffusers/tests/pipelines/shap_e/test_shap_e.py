@@ -205,6 +205,7 @@ class ShapEPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         assert images.shape[0] == batch_size * num_images_per_prompt
 
     def test_save_load_float16(self):
+        # fix this in 0.0.0 paddlepaddle
         pass
 
 
