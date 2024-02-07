@@ -525,8 +525,11 @@ class AudioLDM2Pipeline(DiffusionPipeline):
             list(resampled_audio), return_tensors="pd", sampling_rate=self.feature_extractor.sampling_rate
         ).input_features.cast(dtype=dtype)
 
-        # compute the audio-text similarity score using the CLAP model
-        logits_per_text = self.text_encoder(**inputs).logits_per_text
+        if get_parameter_dtype(self.text_encoder) != paddle.float32:
+            self.text_encoder.to(dtype="float32")
+        with paddle.amp.auto_cast(True, level="O2"):
+            # compute the audio-text similarity score using the CLAP model
+            logits_per_text = self.text_encoder(**inputs).logits_per_text
         # sort by the highest matching generations per prompt
         indices = paddle.argsort(logits_per_text, axis=1, descending=True)[:, :num_waveforms_per_prompt]
         audio = paddle.index_select(
