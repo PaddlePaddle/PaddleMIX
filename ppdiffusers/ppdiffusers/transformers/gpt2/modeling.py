@@ -414,7 +414,9 @@ class GPT2PretrainedModel(PretrainedModel):
     }
 
     @classmethod
-    def _update_deprecated_state_dict(cls, state_dict, loaded_keys=None, model=None):
+    def _update_deprecated_state_dict(cls, state_dict=None, loaded_keys=None, model=None):
+        if state_dict is None:
+            return loaded_keys
         _deprecated_dict = getattr(cls, "_deprecated_dict", None)
         from_deprecated_state_dict = _deprecated_dict is not None and any(
             cls._deprecated_dict.get("key", "NONE") in all_key for all_key in state_dict.keys()
