@@ -36,9 +36,6 @@ CLIP_PRETRAINED_MODEL_ARCHIVE_LIST = [
     # See all CLIP models at https://huggingface.co/models?filter=clip
 ]
 
-# LinearClass = nn.TorchLinear
-LinearClass = nn.Linear
-
 
 def _expand_mask(mask: paddle.Tensor, dtype, tgt_len: Optional[int] = None):
     """
@@ -250,10 +247,10 @@ class CLIPAttention(nn.Layer):
         self.scale = self.head_dim**-0.5
         self.dropout = config.attention_dropout
 
-        self.k_proj = LinearClass(self.embed_dim, self.embed_dim)
-        self.v_proj = LinearClass(self.embed_dim, self.embed_dim)
-        self.q_proj = LinearClass(self.embed_dim, self.embed_dim)
-        self.out_proj = LinearClass(self.embed_dim, self.embed_dim)
+        self.k_proj = nn.Linear(self.embed_dim, self.embed_dim)
+        self.v_proj = nn.Linear(self.embed_dim, self.embed_dim)
+        self.q_proj = nn.Linear(self.embed_dim, self.embed_dim)
+        self.out_proj = nn.Linear(self.embed_dim, self.embed_dim)
 
     def _shape(self, tensor: paddle.Tensor, seq_len: int, bsz: int):
         return tensor.reshape([bsz, seq_len, self.num_heads, self.head_dim]).transpose([0, 2, 1, 3])
@@ -342,8 +339,8 @@ class CLIPMLP(nn.Layer):
         super().__init__()
         self.config = config
         self.activation_fn = ACT2FN[config.hidden_act]
-        self.fc1 = LinearClass(config.hidden_size, config.intermediate_size)
-        self.fc2 = LinearClass(config.intermediate_size, config.hidden_size)
+        self.fc1 = nn.Linear(config.hidden_size, config.intermediate_size)
+        self.fc2 = nn.Linear(config.intermediate_size, config.hidden_size)
 
     def forward(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
         hidden_states = self.fc1(hidden_states)
@@ -624,7 +621,7 @@ class CLIPPretrainedModel(PretrainedModel):
         if isinstance(module, nn.LayerNorm):
             module.bias.zero_()
             nn.init.ones_(module.weight)
-        if isinstance(module, LinearClass) and module.bias is not None:
+        if isinstance(module, nn.Linear) and module.bias is not None:
             module.bias.zero_()
 
 
@@ -1036,8 +1033,8 @@ class CLIPModel(CLIPPretrainedModel):
         self.text_model = CLIPTextTransformer(text_config)
         self.vision_model = CLIPVisionTransformer(vision_config)
 
-        self.visual_projection = LinearClass(self.vision_embed_dim, self.projection_dim, bias_attr=False)
-        self.text_projection = LinearClass(self.text_embed_dim, self.projection_dim, bias_attr=False)
+        self.visual_projection = nn.Linear(self.vision_embed_dim, self.projection_dim, bias_attr=False)
+        self.text_projection = nn.Linear(self.text_embed_dim, self.projection_dim, bias_attr=False)
         self.logit_scale = nn.Parameter(paddle.to_tensor(self.config.logit_scale_init_value))
 
         # Initialize weights and apply final processing
@@ -1240,7 +1237,7 @@ class CLIPTextModelWithProjection(CLIPPretrainedModel):
 
         self.text_model = CLIPTextTransformer(config)
 
-        self.text_projection = LinearClass(config.hidden_size, config.projection_dim, bias_attr=False)
+        self.text_projection = nn.Linear(config.hidden_size, config.projection_dim, bias_attr=False)
         # self.text_projection = paddle.create_parameter(
         #     (config.hidden_size, config.projection_dim), paddle.get_default_dtype()
         # )
@@ -1315,7 +1312,7 @@ class CLIPVisionModelWithProjection(CLIPPretrainedModel):
 
         self.vision_model = CLIPVisionTransformer(config)
 
-        self.visual_projection = LinearClass(config.hidden_size, config.projection_dim, bias_attr=False)
+        self.visual_projection = nn.Linear(config.hidden_size, config.projection_dim, bias_attr=False)
 
         # Initialize weights and apply final processing
         self.post_init()

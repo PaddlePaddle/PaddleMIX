@@ -39,9 +39,6 @@ from paddlenlp.transformers.model_outputs import (
 from paddlenlp.transformers.model_utils import register_base_model
 from paddlenlp.utils.converter import StateDictNameMapping
 
-# LinearClass = nn.TorchLinear
-LinearClass = nn.Linear
-
 
 @dataclass
 class NextSentencePredictorOutput(ModelOutput):
@@ -191,9 +188,9 @@ class BertSelfAttention(nn.Layer):
         self.attention_head_size = int(config.hidden_size / config.num_attention_heads)
         self.all_head_size = self.num_attention_heads * self.attention_head_size
 
-        self.query = LinearClass(config.hidden_size, self.all_head_size)
-        self.key = LinearClass(config.hidden_size, self.all_head_size)
-        self.value = LinearClass(config.hidden_size, self.all_head_size)
+        self.query = nn.Linear(config.hidden_size, self.all_head_size)
+        self.key = nn.Linear(config.hidden_size, self.all_head_size)
+        self.value = nn.Linear(config.hidden_size, self.all_head_size)
 
         self.dropout = nn.Dropout(config.attention_probs_dropout_prob)
         self.position_embedding_type = position_embedding_type or getattr(
@@ -320,7 +317,7 @@ class BertSelfAttention(nn.Layer):
 class BertSelfOutput(nn.Layer):
     def __init__(self, config):
         super().__init__()
-        self.dense = LinearClass(config.hidden_size, config.hidden_size)
+        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
         self.LayerNorm = nn.LayerNorm(config.hidden_size, epsilon=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
@@ -362,7 +359,7 @@ class BertAttention(nn.Layer):
 class BertIntermediate(nn.Layer):
     def __init__(self, config):
         super().__init__()
-        self.dense = LinearClass(config.hidden_size, config.intermediate_size)
+        self.dense = nn.Linear(config.hidden_size, config.intermediate_size)
         if isinstance(config.hidden_act, str):
             self.intermediate_act_fn = ACT2FN[config.hidden_act]
         else:
@@ -377,7 +374,7 @@ class BertIntermediate(nn.Layer):
 class BertOutput(nn.Layer):
     def __init__(self, config):
         super().__init__()
-        self.dense = LinearClass(config.intermediate_size, config.hidden_size)
+        self.dense = nn.Linear(config.intermediate_size, config.hidden_size)
         self.LayerNorm = nn.LayerNorm(config.hidden_size, epsilon=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
@@ -563,7 +560,7 @@ class BertEncoder(nn.Layer):
 class BertPooler(nn.Layer):
     def __init__(self, config):
         super().__init__()
-        self.dense = LinearClass(config.hidden_size, config.hidden_size)
+        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
         pooler_act = getattr(config, "pooler_act", "tanh")
         self.activation = ACT2FN[pooler_act]
 
@@ -579,7 +576,7 @@ class BertPooler(nn.Layer):
 class BertPredictionHeadTransform(nn.Layer):
     def __init__(self, config):
         super().__init__()
-        self.dense = LinearClass(config.hidden_size, config.hidden_size)
+        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
         if isinstance(config.hidden_act, str):
             self.transform_act_fn = ACT2FN[config.hidden_act]
         else:
@@ -601,7 +598,7 @@ class BertLMPredictionHead(nn.Layer):
         if input_embeddings is None:
             # The output weights are the same as the input embeddings, but there is
             # an output-only bias for each token.
-            self.decoder = LinearClass(config.hidden_size, config.vocab_size, bias_attr=False)
+            self.decoder = nn.Linear(config.hidden_size, config.vocab_size, bias_attr=False)
             self.bias = nn.Parameter(paddle.zeros((config.vocab_size,)))
             # Need a link between the two variables so that the bias is correctly resized with `resize_token_embeddings`
             self.decoder.bias = self.bias
@@ -629,7 +626,7 @@ class BertOnlyMLMHead(nn.Layer):
 class BertOnlyNSPHead(nn.Layer):
     def __init__(self, config):
         super().__init__()
-        self.seq_relationship = LinearClass(config.hidden_size, 2)
+        self.seq_relationship = nn.Linear(config.hidden_size, 2)
 
     def forward(self, pooled_output):
         seq_relationship_score = self.seq_relationship(pooled_output)
@@ -640,7 +637,7 @@ class BertPreTrainingHeads(nn.Layer):
     def __init__(self, config, input_embeddings=None):
         super().__init__()
         self.predictions = BertLMPredictionHead(config, input_embeddings=input_embeddings)
-        self.seq_relationship = LinearClass(config.hidden_size, 2)
+        self.seq_relationship = nn.Linear(config.hidden_size, 2)
 
     def forward(self, sequence_output, pooled_output):
         prediction_scores = self.predictions(sequence_output)
@@ -1463,7 +1460,7 @@ class BertForSequenceClassification(BertPretrainedModel):
             config.classifier_dropout if config.classifier_dropout is not None else config.hidden_dropout_prob
         )
         self.dropout = nn.Dropout(classifier_dropout)
-        self.classifier = LinearClass(config.hidden_size, config.num_labels)
+        self.classifier = nn.Linear(config.hidden_size, config.num_labels)
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -1547,7 +1544,7 @@ class BertForMultipleChoice(BertPretrainedModel):
             config.classifier_dropout if config.classifier_dropout is not None else config.hidden_dropout_prob
         )
         self.dropout = nn.Dropout(classifier_dropout)
-        self.classifier = LinearClass(config.hidden_size, 1)
+        self.classifier = nn.Linear(config.hidden_size, 1)
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -1627,7 +1624,7 @@ class BertForTokenClassification(BertPretrainedModel):
             config.classifier_dropout if config.classifier_dropout is not None else config.hidden_dropout_prob
         )
         self.dropout = nn.Dropout(classifier_dropout)
-        self.classifier = LinearClass(config.hidden_size, config.num_labels)
+        self.classifier = nn.Linear(config.hidden_size, config.num_labels)
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -1696,7 +1693,7 @@ class BertForQuestionAnswering(BertPretrainedModel):
         self.num_labels = config.num_labels
 
         self.bert = BertModel(config, add_pooling_layer=False)
-        self.qa_outputs = LinearClass(config.hidden_size, config.num_labels)
+        self.qa_outputs = nn.Linear(config.hidden_size, config.num_labels)
 
         # Initialize weights and apply final processing
         self.post_init()
