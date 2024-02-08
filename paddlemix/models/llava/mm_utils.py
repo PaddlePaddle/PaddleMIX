@@ -61,9 +61,8 @@ def load_image_from_base64(image):
 
 
 def load_image(image_file):
-    proxies = {"http": "http://10.162.37.16:8128", "https": "http://10.162.37.16:8128"}
     if image_file.startswith("http://") or image_file.startswith("https://"):
-        response = requests.get(image_file, proxies=proxies)
+        response = requests.get(image_file)
         image = Image.open(BytesIO(response.content)).convert("RGB")
     else:
         image = Image.open(image_file).convert("RGB")
