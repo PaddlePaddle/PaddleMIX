@@ -14,6 +14,7 @@
 import paddle
 from paddle import nn
 from paddlenlp.utils.converter import StateDictNameMapping
+from paddlenlp.utils.log import logger as ppnlp_logger
 
 from ppdiffusers.transformers import (
     CLIPPretrainedModel,
@@ -29,6 +30,32 @@ logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
 class PaintByExampleImageEncoder(CLIPPretrainedModel):
     config_class = CLIPVisionConfig
+
+    @classmethod
+    def _update_deprecated_state_dict(cls, state_dict=None, loaded_keys=None, model=None):
+        if state_dict is None:
+            return loaded_keys
+        _deprecated_dict = getattr(cls, "_deprecated_dict", None)
+        from_deprecated_state_dict = _deprecated_dict is not None and any(
+            cls._deprecated_dict.get("key", "NONE") in all_key for all_key in state_dict.keys()
+        )
+        if from_deprecated_state_dict:
+            ppnlp_logger.warning(
+                "Loading from deprecated state_dict, please load new state_dict via setting `use_safetensors=True`."
+            )
+            for name in list(state_dict.keys()):
+                # if name start with prefix "model.", we will convert it
+                if name.startswith("model."):
+                    deprecated_name = name
+                    for old_name, new_name in cls._deprecated_dict.get("name_mapping", {}).items():
+                        name = name.replace(old_name, new_name)
+
+                    if ".attn.c_attn." in name and name in state_dict:
+                        state_dict[name] = paddle.concat([state_dict[name], state_dict.pop(deprecated_name)], axis=-1)
+                    else:
+                        state_dict[name] = state_dict.pop(deprecated_name)
+            loaded_keys = list(state_dict.keys())
+        return loaded_keys
 
     @classmethod
     def _get_name_mappings(cls, config: CLIPVisionConfig):
