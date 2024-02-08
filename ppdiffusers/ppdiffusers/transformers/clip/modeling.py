@@ -402,7 +402,7 @@ class CLIPEncoderLayer(nn.Layer):
         return outputs
 
 
-class CLIPPreTrainedModel(PretrainedModel):
+class CLIPPretrainedModel(PretrainedModel):
     """
     An abstract class to handle weights initialization and a simple interface for downloading and loading pretrained
     models.
@@ -844,7 +844,7 @@ class CLIPTextTransformer(nn.Layer):
         return mask
 
 
-class CLIPTextModel(CLIPPreTrainedModel):
+class CLIPTextModel(CLIPPretrainedModel):
     config_class = CLIPTextConfig
 
     _no_split_modules = ["CLIPTextEmbeddings", "CLIPEncoderLayer"]
@@ -955,7 +955,7 @@ class CLIPVisionTransformer(nn.Layer):
         )
 
 
-class CLIPVisionModel(CLIPPreTrainedModel):
+class CLIPVisionModel(CLIPPretrainedModel):
     config_class = CLIPVisionConfig
     main_input_name = "pixel_values"
     _no_split_modules = ["CLIPEncoderLayer"]
@@ -1008,7 +1008,7 @@ class CLIPVisionModel(CLIPPreTrainedModel):
         )
 
 
-class CLIPModel(CLIPPreTrainedModel):
+class CLIPModel(CLIPPretrainedModel):
     config_class = CLIPConfig
 
     def __init__(self, config: CLIPConfig):
@@ -1230,7 +1230,7 @@ class CLIPModel(CLIPPreTrainedModel):
         )
 
 
-class CLIPTextModelWithProjection(CLIPPreTrainedModel):
+class CLIPTextModelWithProjection(CLIPPretrainedModel):
     config_class = CLIPTextConfig
 
     _no_split_modules = ["CLIPTextEmbeddings", "CLIPEncoderLayer"]
@@ -1306,7 +1306,7 @@ class CLIPTextModelWithProjection(CLIPPreTrainedModel):
         )
 
 
-class CLIPVisionModelWithProjection(CLIPPreTrainedModel):
+class CLIPVisionModelWithProjection(CLIPPretrainedModel):
     config_class = CLIPVisionConfig
     main_input_name = "pixel_values"
 

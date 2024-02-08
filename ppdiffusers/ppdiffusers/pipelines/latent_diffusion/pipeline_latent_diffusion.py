@@ -510,7 +510,7 @@ class LDMBertEncoderLayer(nn.Layer):
         return outputs
 
 
-class LDMBertPreTrainedModel(PretrainedModel):
+class LDMBertPretrainedModel(PretrainedModel):
     config_class = LDMBertConfig
     base_model_prefix = "model"
     supports_gradient_checkpointing = True
@@ -606,7 +606,7 @@ class LDMBertPreTrainedModel(PretrainedModel):
         return dummy_inputs
 
 
-class LDMBertEncoder(LDMBertPreTrainedModel):
+class LDMBertEncoder(LDMBertPretrainedModel):
     """
     Transformer encoder consisting of *config.encoder_layers* self attention layers. Each layer is a
     [`LDMBertEncoderLayer`].
@@ -756,7 +756,7 @@ class LDMBertEncoder(LDMBertPreTrainedModel):
         )
 
 
-class LDMBertModel(LDMBertPreTrainedModel):
+class LDMBertModel(LDMBertPretrainedModel):
     _no_split_modules = []
 
     def __init__(self, config: LDMBertConfig):

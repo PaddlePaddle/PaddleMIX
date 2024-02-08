@@ -37,7 +37,7 @@ from ...utils import logging
 logger = logging.get_logger(__name__)
 
 
-class Blip2PreTrainedModel(PretrainedModel):
+class Blip2PretrainedModel(PretrainedModel):
     """
     An abstract class to handle weights initialization and a simple interface for downloading and loading pretrained
     models.
@@ -396,7 +396,7 @@ class ProjLayer(nn.Layer):
 
 
 # Copy-pasted from transformers.models.blip.modeling_blip.BlipVisionModel with Blip->Blip2, BLIP->BLIP_2
-class Blip2VisionModel(Blip2PreTrainedModel):
+class Blip2VisionModel(Blip2PretrainedModel):
     main_input_name = "pixel_values"
     config_class = Blip2VisionConfig
 
@@ -460,7 +460,7 @@ class Blip2VisionModel(Blip2PreTrainedModel):
 
 
 # Qformer model, used to get multimodal embeddings from the text and image inputs
-class Blip2QFormerModel(Blip2PreTrainedModel):
+class Blip2QFormerModel(Blip2PretrainedModel):
     """
     Querying Transformer (Q-Former), used in BLIP-2.
     """

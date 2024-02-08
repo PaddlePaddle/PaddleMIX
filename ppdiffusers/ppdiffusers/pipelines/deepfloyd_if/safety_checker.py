@@ -19,7 +19,7 @@ from paddlenlp.utils.converter import StateDictNameMapping
 
 from ppdiffusers.transformers import (
     CLIPConfig,
-    CLIPPreTrainedModel,
+    CLIPPretrainedModel,
     CLIPVisionModelWithProjection,
 )
 
@@ -28,7 +28,7 @@ from ...utils import logging
 logger = logging.get_logger(__name__)
 
 
-class IFSafetyChecker(CLIPPreTrainedModel):
+class IFSafetyChecker(CLIPPretrainedModel):
     config_class = CLIPConfig
 
     _no_split_modules = ["CLIPEncoderLayer"]

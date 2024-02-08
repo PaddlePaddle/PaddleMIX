@@ -37,6 +37,7 @@ NEW_MAPPING_NAMES = OrderedDict(
         ("T5Encoder", "t5"),
         ("T5", "t5"),
         ("Bert", "bert"),
+        ("Roberta", "roberta"),
         ("XLMRoberta", "xlm_roberta"),
         ("GPT2", "gpt2"),
     ]

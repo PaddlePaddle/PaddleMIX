@@ -13,12 +13,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Paddle BERT model."""
-
+"""Paddle RoBERTa model."""
 
 import math
-import warnings
-from dataclasses import dataclass
 from typing import List, Optional, Tuple, Union
 
 import paddle
@@ -30,88 +27,40 @@ from paddlenlp.transformers.model_outputs import (
     BaseModelOutputWithPoolingAndCrossAttentions,
     CausalLMOutputWithCrossAttentions,
     MaskedLMOutput,
-    ModelOutput,
     MultipleChoiceModelOutput,
     QuestionAnsweringModelOutput,
     SequenceClassifierOutput,
     TokenClassifierOutput,
 )
-from paddlenlp.transformers.model_utils import register_base_model
+from paddlenlp.transformers.model_utils import (
+    apply_chunking_to_forward,
+    register_base_model,
+)
 from paddlenlp.utils.converter import StateDictNameMapping
-
-# LinearClass = nn.TorchLinear
-LinearClass = nn.Linear
-
-
-@dataclass
-class NextSentencePredictorOutput(ModelOutput):
-    """
-    Base class for outputs of models predicting if two sentences are consecutive or not.
-
-    Args:
-        loss (`paddle.Tensor` of shape `(1,)`, *optional*, returned when `next_sentence_label` is provided):
-            Next sequence prediction (classification) loss.
-        logits (`paddle.Tensor` of shape `(batch_size, 2)`):
-            Prediction scores of the next sequence prediction (classification) head (scores of True/False continuation
-            before SoftMax).
-        hidden_states (`tuple(paddle.Tensor)`, *optional*, returned when `output_hidden_states=True` is passed or when `config.output_hidden_states=True`):
-            Tuple of `paddle.Tensor` (one for the output of the embeddings, if the model has an embedding layer, +
-            one for the output of each layer) of shape `(batch_size, sequence_length, hidden_size)`.
-
-            Hidden-states of the model at the output of each layer plus the optional initial embedding outputs.
-        attentions (`tuple(paddle.Tensor)`, *optional*, returned when `output_attentions=True` is passed or when `config.output_attentions=True`):
-            Tuple of `paddle.Tensor` (one for each layer) of shape `(batch_size, num_heads, sequence_length,
-            sequence_length)`.
-
-            Attentions weights after the attention softmax, used to compute the weighted average in the self-attention
-            heads.
-    """
-
-    loss: Optional[paddle.Tensor] = None
-    logits: paddle.Tensor = None
-    hidden_states: Optional[Tuple[paddle.Tensor]] = None
-    attentions: Optional[Tuple[paddle.Tensor]] = None
-
-
-from paddlenlp.transformers.model_utils import apply_chunking_to_forward
 
 from ...utils import logging
 from ..model_utils import PretrainedModel
-from .configuration import BertConfig
+from .configuration import RobertaConfig
 
 logger = logging.get_logger(__name__)
 
-
-BERT_PRETRAINED_MODEL_ARCHIVE_LIST = [
-    "bert-base-uncased",
-    "bert-large-uncased",
-    "bert-base-cased",
-    "bert-large-cased",
-    "bert-base-multilingual-uncased",
-    "bert-base-multilingual-cased",
-    "bert-base-chinese",
-    "bert-base-german-cased",
-    "bert-large-uncased-whole-word-masking",
-    "bert-large-cased-whole-word-masking",
-    "bert-large-uncased-whole-word-masking-finetuned-squad",
-    "bert-large-cased-whole-word-masking-finetuned-squad",
-    "bert-base-cased-finetuned-mrpc",
-    "bert-base-german-dbmdz-cased",
-    "bert-base-german-dbmdz-uncased",
-    "cl-tohoku/bert-base-japanese",
-    "cl-tohoku/bert-base-japanese-whole-word-masking",
-    "cl-tohoku/bert-base-japanese-char",
-    "cl-tohoku/bert-base-japanese-char-whole-word-masking",
-    "TurkuNLP/bert-base-finnish-cased-v1",
-    "TurkuNLP/bert-base-finnish-uncased-v1",
-    "wietsedv/bert-base-dutch-cased",
-    # See all BERT models at https://huggingface.co/models?filter=bert
+ROBERTA_PRETRAINED_MODEL_ARCHIVE_LIST = [
+    "roberta-base",
+    "roberta-large",
+    "roberta-large-mnli",
+    "distilroberta-base",
+    "roberta-base-openai-detector",
+    "roberta-large-openai-detector",
+    # See all RoBERTa models at https://huggingface.co/models?filter=roberta
 ]
 
 
-class BertEmbeddings(nn.Layer):
-    """Construct the embeddings from word, position and token_type embeddings."""
+class RobertaEmbeddings(nn.Layer):
+    """
+    Same as BertEmbeddings with a tiny tweak for positional embeddings indexing.
+    """
 
+    # Copied from transformers.models.bert.modeling_bert.BertEmbeddings.__init__
     def __init__(self, config):
         super().__init__()
         self.word_embeddings = nn.Embedding(
@@ -136,23 +85,30 @@ class BertEmbeddings(nn.Layer):
             "token_type_ids", paddle.zeros(self.position_ids.shape, dtype=paddle.int64), persistable=False
         )
 
+        # End copy
+        self.padding_idx = config.pad_token_id
+        self.position_embeddings = nn.Embedding(
+            config.max_position_embeddings,
+            config.hidden_size,  # padding_idx=self.padding_idx
+        )
+        self.position_embeddings.padding_idx = config.pad_token_id
+
     def forward(
-        self,
-        input_ids: Optional[paddle.Tensor] = None,
-        token_type_ids: Optional[paddle.Tensor] = None,
-        position_ids: Optional[paddle.Tensor] = None,
-        inputs_embeds: Optional[paddle.Tensor] = None,
-        past_key_values_length: int = 0,
-    ) -> paddle.Tensor:
+        self, input_ids=None, token_type_ids=None, position_ids=None, inputs_embeds=None, past_key_values_length=0
+    ):
+        if position_ids is None:
+            if input_ids is not None:
+                # Create the position ids from the input token ids. Any padded tokens remain padded.
+                position_ids = create_position_ids_from_input_ids(input_ids, self.padding_idx, past_key_values_length)
+            else:
+                position_ids = self.create_position_ids_from_inputs_embeds(inputs_embeds)
+
         if input_ids is not None:
             input_shape = input_ids.shape
         else:
             input_shape = inputs_embeds.shape[:-1]
 
         seq_length = input_shape[1]
-
-        if position_ids is None:
-            position_ids = self.position_ids[:, past_key_values_length : seq_length + past_key_values_length]
 
         # Setting the token_type_ids to the registered buffer in constructor where it is all zeros, which usually occurs
         # when its auto-generated, registered buffer helps users when tracing the model without passing token_type_ids, solves
@@ -177,8 +133,28 @@ class BertEmbeddings(nn.Layer):
         embeddings = self.dropout(embeddings)
         return embeddings
 
+    def create_position_ids_from_inputs_embeds(self, inputs_embeds):
+        """
+        We are provided embeddings directly. We cannot infer which are padded so just generate sequential position ids.
 
-class BertSelfAttention(nn.Layer):
+        Args:
+            inputs_embeds: paddle.Tensor
+
+        Returns: paddle.Tensor
+        """
+        input_shape = inputs_embeds.shape[:-1]
+        sequence_length = input_shape[1]
+
+        position_ids = paddle.arange(
+            self.padding_idx + 1,
+            sequence_length + self.padding_idx + 1,
+            dtype=paddle.int64,
+        )
+        return position_ids.unsqueeze(0).expand(input_shape)
+
+
+# Copied from transformers.models.bert.modeling_bert.BertSelfAttention with Bert->Roberta
+class RobertaSelfAttention(nn.Layer):
     def __init__(self, config, position_embedding_type=None):
         super().__init__()
         if config.hidden_size % config.num_attention_heads != 0 and not hasattr(config, "embedding_size"):
@@ -191,9 +167,9 @@ class BertSelfAttention(nn.Layer):
         self.attention_head_size = int(config.hidden_size / config.num_attention_heads)
         self.all_head_size = self.num_attention_heads * self.attention_head_size
 
-        self.query = LinearClass(config.hidden_size, self.all_head_size)
-        self.key = LinearClass(config.hidden_size, self.all_head_size)
-        self.value = LinearClass(config.hidden_size, self.all_head_size)
+        self.query = nn.Linear(config.hidden_size, self.all_head_size)
+        self.key = nn.Linear(config.hidden_size, self.all_head_size)
+        self.value = nn.Linear(config.hidden_size, self.all_head_size)
 
         self.dropout = nn.Dropout(config.attention_probs_dropout_prob)
         self.position_embedding_type = position_embedding_type or getattr(
@@ -292,7 +268,7 @@ class BertSelfAttention(nn.Layer):
 
         attention_scores = attention_scores / self.scale
         if attention_mask is not None:
-            # Apply the attention mask is (precomputed for all layers in BertModel forward() function)
+            # Apply the attention mask is (precomputed for all layers in XLMRobertaModel forward() function)
             attention_scores = attention_scores + attention_mask
 
         # Normalize the attention scores to probabilities.
@@ -317,10 +293,11 @@ class BertSelfAttention(nn.Layer):
         return outputs
 
 
-class BertSelfOutput(nn.Layer):
+# Copied from transformers.models.bert.modeling_bert.BertSelfOutput
+class RobertaSelfOutput(nn.Layer):
     def __init__(self, config):
         super().__init__()
-        self.dense = LinearClass(config.hidden_size, config.hidden_size)
+        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
         self.LayerNorm = nn.LayerNorm(config.hidden_size, epsilon=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
@@ -331,11 +308,12 @@ class BertSelfOutput(nn.Layer):
         return hidden_states
 
 
-class BertAttention(nn.Layer):
+# Copied from transformers.models.bert.modeling_bert.BertAttention with Bert->Roberta
+class RobertaAttention(nn.Layer):
     def __init__(self, config, position_embedding_type=None):
         super().__init__()
-        self.self = BertSelfAttention(config, position_embedding_type=position_embedding_type)
-        self.output = BertSelfOutput(config)
+        self.self = RobertaSelfAttention(config, position_embedding_type=position_embedding_type)
+        self.output = RobertaSelfOutput(config)
 
     def forward(
         self,
@@ -359,10 +337,11 @@ class BertAttention(nn.Layer):
         return outputs
 
 
-class BertIntermediate(nn.Layer):
+# Copied from transformers.models.bert.modeling_bert.BertIntermediate
+class RobertaIntermediate(nn.Layer):
     def __init__(self, config):
         super().__init__()
-        self.dense = LinearClass(config.hidden_size, config.intermediate_size)
+        self.dense = nn.Linear(config.hidden_size, config.intermediate_size)
         if isinstance(config.hidden_act, str):
             self.intermediate_act_fn = ACT2FN[config.hidden_act]
         else:
@@ -374,10 +353,11 @@ class BertIntermediate(nn.Layer):
         return hidden_states
 
 
-class BertOutput(nn.Layer):
+# Copied from transformers.models.bert.modeling_bert.BertOutput
+class RobertaOutput(nn.Layer):
     def __init__(self, config):
         super().__init__()
-        self.dense = LinearClass(config.intermediate_size, config.hidden_size)
+        self.dense = nn.Linear(config.intermediate_size, config.hidden_size)
         self.LayerNorm = nn.LayerNorm(config.hidden_size, epsilon=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
@@ -388,20 +368,21 @@ class BertOutput(nn.Layer):
         return hidden_states
 
 
-class BertLayer(nn.Layer):
+# Copied from transformers.models.bert.modeling_bert.BertLayer with Bert->Roberta
+class RobertaLayer(nn.Layer):
     def __init__(self, config):
         super().__init__()
         self.chunk_size_feed_forward = config.chunk_size_feed_forward
         self.seq_len_dim = 1
-        self.attention = BertAttention(config)
+        self.attention = RobertaAttention(config)
         self.is_decoder = config.is_decoder
         self.add_cross_attention = config.add_cross_attention
         if self.add_cross_attention:
             if not self.is_decoder:
                 raise ValueError(f"{self} should be used as a decoder model if cross attention is added")
-            self.crossattention = BertAttention(config, position_embedding_type="absolute")
-        self.intermediate = BertIntermediate(config)
-        self.output = BertOutput(config)
+            self.crossattention = RobertaAttention(config, position_embedding_type="absolute")
+        self.intermediate = RobertaIntermediate(config)
+        self.output = RobertaOutput(config)
 
     def forward(
         self,
@@ -471,11 +452,12 @@ class BertLayer(nn.Layer):
         return layer_output
 
 
-class BertEncoder(nn.Layer):
+# Copied from transformers.models.bert.modeling_bert.BertEncoder with Bert->Roberta
+class RobertaEncoder(nn.Layer):
     def __init__(self, config):
         super().__init__()
         self.config = config
-        self.layer = nn.LayerList([BertLayer(config) for _ in range(config.num_hidden_layers)])
+        self.layer = nn.LayerList([RobertaLayer(config) for _ in range(config.num_hidden_layers)])
         self.gradient_checkpointing = False
 
     def forward(
@@ -560,10 +542,11 @@ class BertEncoder(nn.Layer):
         )
 
 
-class BertPooler(nn.Layer):
+# Copied from transformers.models.bert.modeling_bert.BertPooler
+class RobertaPooler(nn.Layer):
     def __init__(self, config):
         super().__init__()
-        self.dense = LinearClass(config.hidden_size, config.hidden_size)
+        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
         pooler_act = getattr(config, "pooler_act", "tanh")
         self.activation = ACT2FN[pooler_act]
 
@@ -576,87 +559,16 @@ class BertPooler(nn.Layer):
         return pooled_output
 
 
-class BertPredictionHeadTransform(nn.Layer):
-    def __init__(self, config):
-        super().__init__()
-        self.dense = LinearClass(config.hidden_size, config.hidden_size)
-        if isinstance(config.hidden_act, str):
-            self.transform_act_fn = ACT2FN[config.hidden_act]
-        else:
-            self.transform_act_fn = config.hidden_act
-        self.LayerNorm = nn.LayerNorm(config.hidden_size, epsilon=config.layer_norm_eps)
-
-    def forward(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
-        hidden_states = self.dense(hidden_states)
-        hidden_states = self.transform_act_fn(hidden_states)
-        hidden_states = self.LayerNorm(hidden_states)
-        return hidden_states
-
-
-class BertLMPredictionHead(nn.Layer):
-    def __init__(self, config, input_embeddings=None):
-        super().__init__()
-        self.transform = BertPredictionHeadTransform(config)
-
-        if input_embeddings is None:
-            # The output weights are the same as the input embeddings, but there is
-            # an output-only bias for each token.
-            self.decoder = LinearClass(config.hidden_size, config.vocab_size, bias_attr=False)
-            self.bias = nn.Parameter(paddle.zeros((config.vocab_size,)))
-            # Need a link between the two variables so that the bias is correctly resized with `resize_token_embeddings`
-            self.decoder.bias = self.bias
-        else:
-            self.bias = nn.Parameter(paddle.zeros((config.vocab_size,)))
-            decoder_weight = input_embeddings.weight if hasattr(input_embeddings, "weight") else input_embeddings
-            self.decoder = lambda x: paddle.matmul(x, decoder_weight, transpose_y=True) + self.bias
-
-    def forward(self, hidden_states):
-        hidden_states = self.transform(hidden_states)
-        hidden_states = self.decoder(hidden_states)
-        return hidden_states
-
-
-class BertOnlyMLMHead(nn.Layer):
-    def __init__(self, config, input_embeddings=None):
-        super().__init__()
-        self.predictions = BertLMPredictionHead(config, input_embeddings=input_embeddings)
-
-    def forward(self, sequence_output: paddle.Tensor) -> paddle.Tensor:
-        prediction_scores = self.predictions(sequence_output)
-        return prediction_scores
-
-
-class BertOnlyNSPHead(nn.Layer):
-    def __init__(self, config):
-        super().__init__()
-        self.seq_relationship = LinearClass(config.hidden_size, 2)
-
-    def forward(self, pooled_output):
-        seq_relationship_score = self.seq_relationship(pooled_output)
-        return seq_relationship_score
-
-
-class BertPreTrainingHeads(nn.Layer):
-    def __init__(self, config, input_embeddings=None):
-        super().__init__()
-        self.predictions = BertLMPredictionHead(config, input_embeddings=input_embeddings)
-        self.seq_relationship = LinearClass(config.hidden_size, 2)
-
-    def forward(self, sequence_output, pooled_output):
-        prediction_scores = self.predictions(sequence_output)
-        seq_relationship_score = self.seq_relationship(pooled_output)
-        return prediction_scores, seq_relationship_score
-
-
-class BertPretrainedModel(PretrainedModel):
+class RobertaPretrainedModel(PretrainedModel):
     """
     An abstract class to handle weights initialization and a simple interface for downloading and loading pretrained
     models.
     """
 
-    config_class = BertConfig
-    base_model_prefix = "bert"
+    config_class = RobertaConfig
+    base_model_prefix = "roberta"
     supports_gradient_checkpointing = True
+    _no_split_modules = ["RobertaEmbeddings", "RobertaSelfAttention"]
 
     _deprecated_dict = {
         "key": ".self_attn.q_proj.",
@@ -674,8 +586,6 @@ class BertPretrainedModel(PretrainedModel):
             ".linear1.": ".intermediate.dense.",
             ".linear2.": ".output.dense.",
             ".norm2.": ".output.LayerNorm.",
-            "LayerNorm.gamma": "LayerNorm.weight",
-            "LayerNorm.beta": "LayerNorm.bias",
         },
     }
 
@@ -685,7 +595,6 @@ class BertPretrainedModel(PretrainedModel):
     @classmethod
     def _get_name_mappings(cls, config):
         architectures = config.architectures + [cls.__name__]
-
         mappings = []
         model_mappings = [
             ["embeddings.word_embeddings.weight", "embeddings.word_embeddings.weight"],
@@ -724,76 +633,60 @@ class BertPretrainedModel(PretrainedModel):
                     ]
                 )
 
-        # base-model prefix "BertModel"
+        # base-model prefix "RobertaModel"
         torch_prefix = ""
         paddle_prefix = ""
-        if "BertModel" not in config.architectures:
-            torch_prefix = "bert."
-        if "BertModel" not in [cls.__name__]:
-            paddle_prefix = "bert."
+        if "RobertaModel" not in config.architectures:
+            torch_prefix = "roberta."
+        if "RobertaModel" not in [cls.__name__]:
+            paddle_prefix = "roberta."
 
         # add prefix
         for mapping in model_mappings:
             mapping[0] = torch_prefix + mapping[0]
             mapping[1] = paddle_prefix + mapping[1]
 
-        if (
-            "BertForPreTraining" in architectures
-            or "BertLMHeadModel" in architectures
-            or "BertForMaskedLM" in architectures
-        ):
+        if "RobertaForCausalLM" in architectures:
             model_mappings.extend(
                 [
-                    ["cls.predictions.bias", "cls.predictions.bias"],
-                    ["cls.predictions.transform.LayerNorm.weight", "cls.predictions.transform.LayerNorm.weight"],
-                    ["cls.predictions.transform.LayerNorm.bias", "cls.predictions.transform.LayerNorm.bias"],
-                    ["cls.predictions.transform.dense.weight", "cls.predictions.transform.dense.weight", "transpose"],
-                    ["cls.predictions.transform.dense.bias", "cls.predictions.transform.dense.bias"],
-                ]
-            )
-
-        if "BertForPreTraining" in architectures or "BertForNextSentencePrediction" in architectures:
-            model_mappings.extend(
-                [
-                    ["cls.seq_relationship.weight", "cls.seq_relationship.weight", "transpose"],
-                    ["cls.seq_relationship.bias", "cls.seq_relationship.bias"],
+                    ["lm_head.dense.weight", "lm_head.dense.weight", "transpose"],
+                    ["lm_head.dense.bias", "lm_head.dense.bias"],
+                    ["lm_head.layer_norm.weight", "lm_head.layer_norm.weight"],
+                    ["lm_head.layer_norm.bias", "lm_head.layer_norm.bias"],
+                    ["lm_head.bias", "lm_head.bias"],
                 ]
             )
 
         # downstream mappings
-        if "BertForQuestionAnswering" in architectures:
+        if "RobertForQuestionAnswering" in architectures:
             model_mappings.extend(
                 [
                     ["qa_outputs.weight", "qa_outputs.weight", "transpose"],
                     ["qa_outputs.bias", "qa_outputs.bias"],
                 ]
             )
-        if (
-            "BertForMultipleChoice" in architectures
-            or "BertForSequenceClassification" in architectures
-            or "BertForTokenClassification" in architectures
-        ):
+        if "RobertaForSequenceClassification" in architectures:
+            model_mappings.extend(
+                [
+                    ["classifier.dense.weight", "classifier.dense.weight", "transpose"],
+                    ["classifier.dense.bias", "classifier.dense.bias"],
+                    ["classifier.out_proj.weight", "classifier.out_proj.weight", "transpose"],
+                    ["classifier.out_proj.bias", "classifier.out_proj.bias"],
+                ]
+            )
+
+        if "RobertaForMultipleChoice" in architectures or "RobertaForTokenClassification" in architectures:
             model_mappings.extend(
                 [
                     ["classifier.weight", "classifier.weight", "transpose"],
                     ["classifier.bias", "classifier.bias"],
                 ]
             )
-        # deperated_mappings will be removed
-        deperated_mappings = []
-        for mapping in model_mappings:
-            first_name = mapping[0].lower()
-            if "norm.weight" in first_name:
-                deperated_mappings.append([mapping[0].replace(".weight", ".gamma"), mapping[1]])
-            elif "norm.bias" in first_name:
-                deperated_mappings.append([mapping[0].replace(".bias", ".beta"), mapping[1]])
 
-        mappings = [
-            StateDictNameMapping(*mapping, index=index)
-            for index, mapping in enumerate(model_mappings + deperated_mappings)
-        ]
+        mappings = [StateDictNameMapping(*mapping, index=index) for index, mapping in enumerate(model_mappings)]
         return mappings
 
+    # Copied from transformers.models.bert.modeling_bert.BertPretrainedModel._init_weights
     @paddle.no_grad()
     def _init_weights(self, module):
         """Initialize the weights"""
@@ -812,62 +705,32 @@ class BertPretrainedModel(PretrainedModel):
             module.weight.fill_(1.0)
 
 
-@dataclass
-class BertForPreTrainingOutput(ModelOutput):
-    """
-    Output type of [`BertForPreTraining`].
-
-    Args:
-        loss (*optional*, returned when `labels` is provided, `paddle.Tensor` of shape `(1,)`):
-            Total loss as the sum of the masked language modeling loss and the next sequence prediction
-            (classification) loss.
-        prediction_logits (`paddle.Tensor` of shape `(batch_size, sequence_length, config.vocab_size)`):
-            Prediction scores of the language modeling head (scores for each vocabulary token before SoftMax).
-        seq_relationship_logits (`paddle.Tensor` of shape `(batch_size, 2)`):
-            Prediction scores of the next sequence prediction (classification) head (scores of True/False continuation
-            before SoftMax).
-        hidden_states (`tuple(paddle.Tensor)`, *optional*, returned when `output_hidden_states=True` is passed or when `config.output_hidden_states=True`):
-            Tuple of `paddle.Tensor` (one for the output of the embeddings + one for the output of each layer) of
-            shape `(batch_size, sequence_length, hidden_size)`.
-
-            Hidden-states of the model at the output of each layer plus the initial embedding outputs.
-        attentions (`tuple(paddle.Tensor)`, *optional*, returned when `output_attentions=True` is passed or when `config.output_attentions=True`):
-            Tuple of `paddle.Tensor` (one for each layer) of shape `(batch_size, num_heads, sequence_length,
-            sequence_length)`.
-
-            Attentions weights after the attention softmax, used to compute the weighted average in the self-attention
-            heads.
-    """
-
-    loss: Optional[paddle.Tensor] = None
-    prediction_logits: paddle.Tensor = None
-    seq_relationship_logits: paddle.Tensor = None
-    hidden_states: Optional[Tuple[paddle.Tensor]] = None
-    attentions: Optional[Tuple[paddle.Tensor]] = None
-
-
 @register_base_model
-class BertModel(BertPretrainedModel):
+class RobertaModel(RobertaPretrainedModel):
     """
 
     The model can behave as an encoder (with only self-attention) as well as a decoder, in which case a layer of
-    cross-attention is added between the self-attention layers, following the architecture described in [Attention is
-    all you need](https://arxiv.org/abs/1706.03762) by Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit,
-    Llion Jones, Aidan N. Gomez, Lukasz Kaiser and Illia Polosukhin.
+    cross-attention is added between the self-attention layers, following the architecture described in *Attention is
+    all you need*_ by Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Lukasz
+    Kaiser and Illia Polosukhin.
 
     To behave as an decoder the model needs to be initialized with the `is_decoder` argument of the configuration set
     to `True`. To be used in a Seq2Seq model, the model needs to initialized with both `is_decoder` argument and
     `add_cross_attention` set to `True`; an `encoder_hidden_states` is then expected as an input to the forward pass.
+
+    .. _*Attention is all you need*: https://arxiv.org/abs/1706.03762
+
     """
 
+    # Copied from transformers.models.bert.modeling_bert.BertModel.__init__ with Bert->Roberta
     def __init__(self, config, add_pooling_layer=True):
         super().__init__(config)
         self.config = config
 
-        self.embeddings = BertEmbeddings(config)
-        self.encoder = BertEncoder(config)
+        self.embeddings = RobertaEmbeddings(config)
+        self.encoder = RobertaEncoder(config)
 
-        self.pooler = BertPooler(config) if add_pooling_layer else None
+        self.pooler = RobertaPooler(config) if add_pooling_layer else None
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -878,6 +741,7 @@ class BertModel(BertPretrainedModel):
     def set_input_embeddings(self, value):
         self.embeddings.word_embeddings = value
 
+    # Copied from transformers.models.bert.modeling_bert.BertModel.forward
     def forward(
         self,
         input_ids: Optional[paddle.Tensor] = None,
@@ -1003,127 +867,39 @@ class BertModel(BertPretrainedModel):
         )
 
 
-class BertForPreTraining(BertPretrainedModel):
-    _tied_weights_keys = ["predictions.decoder.bias", "cls.predictions.decoder.weight"]
-
-    def __init__(self, config):
-        super().__init__(config)
-
-        self.bert = BertModel(config)
-        self.cls = BertPreTrainingHeads(config, input_embeddings=self.bert.embeddings.word_embeddings.weight)
-
-        # Initialize weights and apply final processing
-        self.post_init()
-
-    def forward(
-        self,
-        input_ids: Optional[paddle.Tensor] = None,
-        attention_mask: Optional[paddle.Tensor] = None,
-        token_type_ids: Optional[paddle.Tensor] = None,
-        position_ids: Optional[paddle.Tensor] = None,
-        inputs_embeds: Optional[paddle.Tensor] = None,
-        labels: Optional[paddle.Tensor] = None,
-        next_sentence_label: Optional[paddle.Tensor] = None,
-        output_attentions: Optional[bool] = None,
-        output_hidden_states: Optional[bool] = None,
-        return_dict: Optional[bool] = None,
-    ) -> Union[Tuple[paddle.Tensor], BertForPreTrainingOutput]:
-        r"""
-            labels (`paddle.Tensor` of shape `(batch_size, sequence_length)`, *optional*):
-                Labels for computing the masked language modeling loss. Indices should be in `[-100, 0, ...,
-                config.vocab_size]` (see `input_ids` docstring) Tokens with indices set to `-100` are ignored (masked),
-                the loss is only computed for the tokens with labels in `[0, ..., config.vocab_size]`
-            next_sentence_label (`paddle.Tensor` of shape `(batch_size,)`, *optional*):
-                Labels for computing the next sequence prediction (classification) loss. Input should be a sequence
-                pair (see `input_ids` docstring) Indices should be in `[0, 1]`:
-
-                - 0 indicates sequence B is a continuation of sequence A,
-                - 1 indicates sequence B is a random sequence.
-            kwargs (`Dict[str, any]`, optional, defaults to *{}*):
-                Used to hide legacy arguments that have been deprecated.
-
-        Returns:
-
-        Example:
-
-        ```python
-        >>> from ppdiffusers.transformers import AutoTokenizer, BertForPreTraining
-        >>> import paddle
-
-        >>> tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-        >>> model = BertForPreTraining.from_pretrained("bert-base-uncased")
-
-        >>> inputs = tokenizer("Hello, my dog is cute", return_tensors="pt")
-        >>> outputs = model(**inputs)
-
-        >>> prediction_logits = outputs.prediction_logits
-        >>> seq_relationship_logits = outputs.seq_relationship_logits
-        ```
-        """
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
-
-        outputs = self.bert(
-            input_ids,
-            attention_mask=attention_mask,
-            token_type_ids=token_type_ids,
-            position_ids=position_ids,
-            inputs_embeds=inputs_embeds,
-            output_attentions=output_attentions,
-            output_hidden_states=output_hidden_states,
-            return_dict=return_dict,
-        )
-
-        sequence_output, pooled_output = outputs[:2]
-        prediction_scores, seq_relationship_score = self.cls(sequence_output, pooled_output)
-
-        total_loss = None
-        if labels is not None and next_sentence_label is not None:
-            loss_fct = CrossEntropyLoss()
-            masked_lm_loss = loss_fct(
-                prediction_scores.reshape([-1, self.config.vocab_size]),
-                labels.reshape(
-                    [
-                        -1,
-                    ]
-                ),
-            )
-            next_sentence_loss = loss_fct(
-                seq_relationship_score.reshape([-1, 2]),
-                next_sentence_label.reshape(
-                    [
-                        -1,
-                    ]
-                ),
-            )
-            total_loss = masked_lm_loss + next_sentence_loss
-
-        if not return_dict:
-            output = (prediction_scores, seq_relationship_score) + outputs[2:]
-            return ((total_loss,) + output) if total_loss is not None else output
-
-        return BertForPreTrainingOutput(
-            loss=total_loss,
-            prediction_logits=prediction_scores,
-            seq_relationship_logits=seq_relationship_score,
-            hidden_states=outputs.hidden_states,
-            attentions=outputs.attentions,
-        )
-
-
-class BertLMHeadModel(BertPretrainedModel):
-    _tied_weights_keys = ["predictions.decoder.bias", "cls.predictions.decoder.weight"]
+class RobertaForCausalLM(RobertaPretrainedModel):
+    _tied_weights_keys = ["lm_head.decoder.weight", "lm_head.decoder.bias"]
 
     def __init__(self, config):
         super().__init__(config)
 
         if not config.is_decoder:
-            logger.warning("If you want to use `BertLMHeadModel` as a standalone, add `is_decoder=True.`")
+            logger.warning("If you want to use `RobertaLMHeadModel` as a standalone, add `is_decoder=True.`")
 
-        self.bert = BertModel(config, add_pooling_layer=False)
-        self.cls = BertOnlyMLMHead(config, input_embeddings=self.bert.embeddings.word_embeddings.weight)
+        self.roberta = RobertaModel(config, add_pooling_layer=False)
+
+        if config.tie_word_embeddings:
+            input_embeddings = self.roberta.embeddings.word_embeddings.weight
+        else:
+            input_embeddings = None
+        self.lm_head = RobertaLMHead(config, input_embeddings=input_embeddings)
 
         # Initialize weights and apply final processing
         self.post_init()
+
+    def get_output_embeddings(self):
+        if self.config.tie_word_embeddings:
+            return None
+        else:
+            return self.lm_head.decoder
+
+    def set_output_embeddings(self, new_embeddings):
+        if self.config.tie_word_embeddings:
+            logger.warning(
+                "`set_output_embeddings` method is called when `config.tie_word_embeddings=True`. This is not expected. We will do nothing!"
+            )
+        else:
+            self.lm_head.decoder = new_embeddings
 
     def forward(
         self,
@@ -1135,7 +911,7 @@ class BertLMHeadModel(BertPretrainedModel):
         encoder_hidden_states: Optional[paddle.Tensor] = None,
         encoder_attention_mask: Optional[paddle.Tensor] = None,
         labels: Optional[paddle.Tensor] = None,
-        past_key_values: Optional[List[paddle.Tensor]] = None,
+        past_key_values: Tuple[Tuple[paddle.Tensor]] = None,
         use_cache: Optional[bool] = None,
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
@@ -1151,10 +927,11 @@ class BertLMHeadModel(BertPretrainedModel):
 
             - 1 for tokens that are **not masked**,
             - 0 for tokens that are **masked**.
+
         labels (`paddle.Tensor` of shape `(batch_size, sequence_length)`, *optional*):
             Labels for computing the left-to-right language modeling loss (next word prediction). Indices should be in
             `[-100, 0, ..., config.vocab_size]` (see `input_ids` docstring) Tokens with indices set to `-100` are
-            ignored (masked), the loss is only computed for the tokens with labels n `[0, ..., config.vocab_size]`
+            ignored (masked), the loss is only computed for the tokens with labels in `[0, ..., config.vocab_size]`
         past_key_values (`tuple(tuple(paddle.Tensor))` of length `config.n_layers` with each tuple having 4 tensors of shape `(batch_size, num_heads, sequence_length - 1, embed_size_per_head)`):
             Contains precomputed key and value hidden states of the attention blocks. Can be used to speed up decoding.
 
@@ -1164,12 +941,30 @@ class BertLMHeadModel(BertPretrainedModel):
         use_cache (`bool`, *optional*):
             If set to `True`, `past_key_values` key value states are returned and can be used to speed up decoding (see
             `past_key_values`).
-        """
+
+        Returns:
+
+        Example:
+
+        ```python
+        >>> from ppdiffusers.transformers import AutoTokenizer, RobertaForCausalLM, AutoConfig
+        >>> import paddle
+
+        >>> tokenizer = AutoTokenizer.from_pretrained("roberta-base")
+        >>> config = AutoConfig.from_pretrained("roberta-base")
+        >>> config.is_decoder = True
+        >>> model = RobertaForCausalLM.from_pretrained("roberta-base", config=config)
+
+        >>> inputs = tokenizer("Hello, my dog is cute", return_tensors="pd")
+        >>> outputs = model(**inputs)
+
+        >>> prediction_logits = outputs.logits
+        ```"""
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
         if labels is not None:
             use_cache = False
 
-        outputs = self.bert(
+        outputs = self.roberta(
             input_ids,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
@@ -1185,10 +980,11 @@ class BertLMHeadModel(BertPretrainedModel):
         )
 
         sequence_output = outputs[0]
-        prediction_scores = self.cls(sequence_output)
+        prediction_scores = self.lm_head(sequence_output)
 
         lm_loss = None
         if labels is not None:
+            # move labels to correct device to enable model parallelism
             # we are doing next-token prediction; shift prediction scores and input ids by one
             shifted_prediction_scores = prediction_scores[:, :-1, :]
             labels = labels[:, 1:]
@@ -1215,9 +1011,7 @@ class BertLMHeadModel(BertPretrainedModel):
             cross_attentions=outputs.cross_attentions,
         )
 
-    def prepare_inputs_for_generation(
-        self, input_ids, past_key_values=None, attention_mask=None, use_cache=True, **model_kwargs
-    ):
+    def prepare_inputs_for_generation(self, input_ids, past_key_values=None, attention_mask=None, **model_kwargs):
         input_shape = input_ids.shape
         # if model is used as a decoder in encoder-decoder model, the decoder attention mask is created on the fly
         if attention_mask is None:
@@ -1236,12 +1030,7 @@ class BertLMHeadModel(BertPretrainedModel):
 
             input_ids = input_ids[:, remove_prefix_length:]
 
-        return {
-            "input_ids": input_ids,
-            "attention_mask": attention_mask,
-            "past_key_values": past_key_values,
-            "use_cache": use_cache,
-        }
+        return {"input_ids": input_ids, "attention_mask": attention_mask, "past_key_values": past_key_values}
 
     def _reorder_cache(self, past_key_values, beam_idx):
         reordered_past = ()
@@ -1250,23 +1039,42 @@ class BertLMHeadModel(BertPretrainedModel):
         return reordered_past
 
 
-class BertForMaskedLM(BertPretrainedModel):
-    _tied_weights_keys = ["predictions.decoder.bias", "cls.predictions.decoder.weight"]
+class RobertaForMaskedLM(RobertaPretrainedModel):
+    _tied_weights_keys = ["lm_head.decoder.weight", "lm_head.decoder.bias"]
 
     def __init__(self, config):
         super().__init__(config)
 
         if config.is_decoder:
             logger.warning(
-                "If you want to use `BertForMaskedLM` make sure `config.is_decoder=False` for "
+                "If you want to use `RobertaForMaskedLM` make sure `config.is_decoder=False` for "
                 "bi-directional self-attention."
             )
 
-        self.bert = BertModel(config, add_pooling_layer=False)
-        self.cls = BertOnlyMLMHead(config, input_embeddings=self.bert.embeddings.word_embeddings.weight)
+        self.roberta = RobertaModel(config, add_pooling_layer=False)
+
+        if config.tie_word_embeddings:
+            input_embeddings = self.roberta.embeddings.word_embeddings.weight
+        else:
+            input_embeddings = None
+        self.lm_head = RobertaLMHead(config, input_embeddings=input_embeddings)
 
         # Initialize weights and apply final processing
         self.post_init()
+
+    def get_output_embeddings(self):
+        if self.config.tie_word_embeddings:
+            return None
+        else:
+            return self.lm_head.decoder
+
+    def set_output_embeddings(self, new_embeddings):
+        if self.config.tie_word_embeddings:
+            logger.warning(
+                "`set_output_embeddings` method is called when `config.tie_word_embeddings=True`. This is not expected. We will do nothing!"
+            )
+        else:
+            self.lm_head.decoder = new_embeddings
 
     def forward(
         self,
@@ -1287,11 +1095,12 @@ class BertForMaskedLM(BertPretrainedModel):
             Labels for computing the masked language modeling loss. Indices should be in `[-100, 0, ...,
             config.vocab_size]` (see `input_ids` docstring) Tokens with indices set to `-100` are ignored (masked), the
             loss is only computed for the tokens with labels in `[0, ..., config.vocab_size]`
+        kwargs (`Dict[str, any]`, optional, defaults to *{}*):
+            Used to hide legacy arguments that have been deprecated.
         """
-
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
-        outputs = self.bert(
+        outputs = self.roberta(
             input_ids,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
@@ -1303,13 +1112,13 @@ class BertForMaskedLM(BertPretrainedModel):
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
         )
-
         sequence_output = outputs[0]
-        prediction_scores = self.cls(sequence_output)
+        prediction_scores = self.lm_head(sequence_output)
 
         masked_lm_loss = None
         if labels is not None:
-            loss_fct = CrossEntropyLoss()  # -100 index = padding token
+            # move labels to correct device to enable model parallelism
+            loss_fct = CrossEntropyLoss()
             masked_lm_loss = loss_fct(
                 prediction_scores.reshape([-1, self.config.vocab_size]),
                 labels.reshape(
@@ -1330,140 +1139,46 @@ class BertForMaskedLM(BertPretrainedModel):
             attentions=outputs.attentions,
         )
 
-    def prepare_inputs_for_generation(self, input_ids, attention_mask=None, **model_kwargs):
-        input_shape = input_ids.shape
-        effective_batch_size = input_shape[0]
 
-        #  add a dummy token
-        if self.config.pad_token_id is None:
-            raise ValueError("The PAD token should be defined for generation")
+class RobertaLMHead(nn.Layer):
+    """Roberta Head for masked language modeling."""
 
-        attention_mask = paddle.concat(
-            [attention_mask, paddle.zeros((attention_mask.shape[0], 1), attention_mask.dtype)], axis=-1
-        )
-        dummy_token = paddle.full(
-            (effective_batch_size, 1),
-            self.config.pad_token_id,
-            dtype=paddle.int64,
-        )
-        input_ids = paddle.concat([input_ids, dummy_token], axis=1)
+    def __init__(self, config, input_embeddings=None):
+        super().__init__()
+        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
+        self.layer_norm = nn.LayerNorm(config.hidden_size, epsilon=config.layer_norm_eps)
 
-        return {"input_ids": input_ids, "attention_mask": attention_mask}
+        if input_embeddings is None:
+            # The output weights are the same as the input embeddings, but there is
+            # an output-only bias for each token.
+            self.decoder = nn.Linear(config.hidden_size, config.vocab_size, bias_attr=False)
+            self.bias = nn.Parameter(paddle.zeros((config.vocab_size,)))
+            # Need a link between the two variables so that the bias is correctly resized with `resize_token_embeddings`
+            self.decoder.bias = self.bias
+        else:
+            self.bias = nn.Parameter(paddle.zeros((config.vocab_size,)))
+            decoder_weight = input_embeddings.weight if hasattr(input_embeddings, "weight") else input_embeddings
+            self.decoder = lambda x: paddle.matmul(x, decoder_weight, transpose_y=True) + self.bias
 
+    def forward(self, features, **kwargs):
+        x = self.dense(features)
+        x = nn.functional.gelu(x)
+        x = self.layer_norm(x)
 
-class BertForNextSentencePrediction(BertPretrainedModel):
-    def __init__(self, config):
-        super().__init__(config)
+        # project back to size of vocabulary with bias
+        x = self.decoder(x)
 
-        self.bert = BertModel(config)
-        self.cls = BertOnlyNSPHead(config)
-
-        # Initialize weights and apply final processing
-        self.post_init()
-
-    def forward(
-        self,
-        input_ids: Optional[paddle.Tensor] = None,
-        attention_mask: Optional[paddle.Tensor] = None,
-        token_type_ids: Optional[paddle.Tensor] = None,
-        position_ids: Optional[paddle.Tensor] = None,
-        inputs_embeds: Optional[paddle.Tensor] = None,
-        labels: Optional[paddle.Tensor] = None,
-        output_attentions: Optional[bool] = None,
-        output_hidden_states: Optional[bool] = None,
-        return_dict: Optional[bool] = None,
-        **kwargs,
-    ) -> Union[Tuple[paddle.Tensor], NextSentencePredictorOutput]:
-        r"""
-        labels (`paddle.Tensor` of shape `(batch_size,)`, *optional*):
-            Labels for computing the next sequence prediction (classification) loss. Input should be a sequence pair
-            (see `input_ids` docstring). Indices should be in `[0, 1]`:
-
-            - 0 indicates sequence B is a continuation of sequence A,
-            - 1 indicates sequence B is a random sequence.
-
-        Returns:
-
-        Example:
-
-        ```python
-        >>> from ppdiffusers.transformers import AutoTokenizer, BertForNextSentencePrediction
-        >>> import paddle
-
-        >>> tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-        >>> model = BertForNextSentencePrediction.from_pretrained("bert-base-uncased")
-
-        >>> prompt = "In Italy, pizza served in formal settings, such as at a restaurant, is presented unsliced."
-        >>> next_sentence = "The sky is blue due to the shorter wavelength of blue light."
-        >>> encoding = tokenizer(prompt, next_sentence, return_tensors="pt")
-
-        >>> outputs = model(**encoding, labels=paddle.Tensor([1]))
-        >>> logits = outputs.logits
-        >>> assert logits[0, 0] < logits[0, 1]  # next sentence was random
-        ```
-        """
-
-        if "next_sentence_label" in kwargs:
-            warnings.warn(
-                "The `next_sentence_label` argument is deprecated and will be removed in a future version, use"
-                " `labels` instead.",
-                FutureWarning,
-            )
-            labels = kwargs.pop("next_sentence_label")
-
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
-
-        outputs = self.bert(
-            input_ids,
-            attention_mask=attention_mask,
-            token_type_ids=token_type_ids,
-            position_ids=position_ids,
-            inputs_embeds=inputs_embeds,
-            output_attentions=output_attentions,
-            output_hidden_states=output_hidden_states,
-            return_dict=return_dict,
-        )
-
-        pooled_output = outputs[1]
-
-        seq_relationship_scores = self.cls(pooled_output)
-
-        next_sentence_loss = None
-        if labels is not None:
-            loss_fct = CrossEntropyLoss()
-            next_sentence_loss = loss_fct(
-                seq_relationship_scores.reshape([-1, 2]),
-                labels.reshape(
-                    [
-                        -1,
-                    ]
-                ),
-            )
-
-        if not return_dict:
-            output = (seq_relationship_scores,) + outputs[2:]
-            return ((next_sentence_loss,) + output) if next_sentence_loss is not None else output
-
-        return NextSentencePredictorOutput(
-            loss=next_sentence_loss,
-            logits=seq_relationship_scores,
-            hidden_states=outputs.hidden_states,
-            attentions=outputs.attentions,
-        )
+        return x
 
 
-class BertForSequenceClassification(BertPretrainedModel):
+class RobertaForSequenceClassification(RobertaPretrainedModel):
     def __init__(self, config):
         super().__init__(config)
         self.num_labels = config.num_labels
         self.config = config
 
-        self.bert = BertModel(config)
-        classifier_dropout = (
-            config.classifier_dropout if config.classifier_dropout is not None else config.hidden_dropout_prob
-        )
-        self.dropout = nn.Dropout(classifier_dropout)
-        self.classifier = LinearClass(config.hidden_size, config.num_labels)
+        self.roberta = RobertaModel(config, add_pooling_layer=False)
+        self.classifier = RobertaClassificationHead(config)
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -1488,7 +1203,7 @@ class BertForSequenceClassification(BertPretrainedModel):
         """
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
-        outputs = self.bert(
+        outputs = self.roberta(
             input_ids,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
@@ -1498,14 +1213,12 @@ class BertForSequenceClassification(BertPretrainedModel):
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
         )
-
-        pooled_output = outputs[1]
-
-        pooled_output = self.dropout(pooled_output)
-        logits = self.classifier(pooled_output)
+        sequence_output = outputs[0]
+        logits = self.classifier(sequence_output)
 
         loss = None
         if labels is not None:
+            # move labels to correct device to enable model parallelism
             if self.config.problem_type is None:
                 if self.num_labels == 1:
                     self.config.problem_type = "regression"
@@ -1526,6 +1239,7 @@ class BertForSequenceClassification(BertPretrainedModel):
             elif self.config.problem_type == "multi_label_classification":
                 loss_fct = BCEWithLogitsLoss()
                 loss = loss_fct(logits, labels)
+
         if not return_dict:
             output = (logits,) + outputs[2:]
             return ((loss,) + output) if loss is not None else output
@@ -1538,16 +1252,13 @@ class BertForSequenceClassification(BertPretrainedModel):
         )
 
 
-class BertForMultipleChoice(BertPretrainedModel):
+class RobertaForMultipleChoice(RobertaPretrainedModel):
     def __init__(self, config):
         super().__init__(config)
 
-        self.bert = BertModel(config)
-        classifier_dropout = (
-            config.classifier_dropout if config.classifier_dropout is not None else config.hidden_dropout_prob
-        )
-        self.dropout = nn.Dropout(classifier_dropout)
-        self.classifier = LinearClass(config.hidden_size, 1)
+        self.roberta = RobertaModel(config)
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.classifier = nn.Linear(config.hidden_size, 1)
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -1555,11 +1266,11 @@ class BertForMultipleChoice(BertPretrainedModel):
     def forward(
         self,
         input_ids: Optional[paddle.Tensor] = None,
-        attention_mask: Optional[paddle.Tensor] = None,
         token_type_ids: Optional[paddle.Tensor] = None,
+        attention_mask: Optional[paddle.Tensor] = None,
+        labels: Optional[paddle.Tensor] = None,
         position_ids: Optional[paddle.Tensor] = None,
         inputs_embeds: Optional[paddle.Tensor] = None,
-        labels: Optional[paddle.Tensor] = None,
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
@@ -1573,27 +1284,30 @@ class BertForMultipleChoice(BertPretrainedModel):
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
         num_choices = input_ids.shape[1] if input_ids is not None else inputs_embeds.shape[1]
 
-        input_ids = input_ids.reshape([-1, input_ids.shape[-1]]) if input_ids is not None else None
-        attention_mask = attention_mask.reshape([-1, attention_mask.shape[-1]]) if attention_mask is not None else None
-        token_type_ids = token_type_ids.reshape([-1, token_type_ids.shape[-1]]) if token_type_ids is not None else None
-        position_ids = position_ids.reshape([-1, position_ids.shape[-1]]) if position_ids is not None else None
-        inputs_embeds = (
+        flat_input_ids = input_ids.reshape([-1, input_ids.shape[-1]]) if input_ids is not None else None
+        flat_position_ids = position_ids.reshape([-1, position_ids.shape[-1]]) if position_ids is not None else None
+        flat_token_type_ids = (
+            token_type_ids.reshape([-1, token_type_ids.shape[-1]]) if token_type_ids is not None else None
+        )
+        flat_attention_mask = (
+            attention_mask.reshape([-1, attention_mask.shape[-1]]) if attention_mask is not None else None
+        )
+        flat_inputs_embeds = (
             inputs_embeds.reshape([-1, inputs_embeds.shape[-2], inputs_embeds.shape[-1]])
             if inputs_embeds is not None
             else None
         )
 
-        outputs = self.bert(
-            input_ids,
-            attention_mask=attention_mask,
-            token_type_ids=token_type_ids,
-            position_ids=position_ids,
-            inputs_embeds=inputs_embeds,
+        outputs = self.roberta(
+            flat_input_ids,
+            position_ids=flat_position_ids,
+            token_type_ids=flat_token_type_ids,
+            attention_mask=flat_attention_mask,
+            inputs_embeds=flat_inputs_embeds,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
         )
-
         pooled_output = outputs[1]
 
         pooled_output = self.dropout(pooled_output)
@@ -1602,6 +1316,7 @@ class BertForMultipleChoice(BertPretrainedModel):
 
         loss = None
         if labels is not None:
+            # move labels to correct device to enable model parallelism
             loss_fct = CrossEntropyLoss()
             loss = loss_fct(reshaped_logits, labels)
 
@@ -1617,17 +1332,17 @@ class BertForMultipleChoice(BertPretrainedModel):
         )
 
 
-class BertForTokenClassification(BertPretrainedModel):
+class RobertaForTokenClassification(RobertaPretrainedModel):
     def __init__(self, config):
         super().__init__(config)
         self.num_labels = config.num_labels
 
-        self.bert = BertModel(config, add_pooling_layer=False)
+        self.roberta = RobertaModel(config, add_pooling_layer=False)
         classifier_dropout = (
             config.classifier_dropout if config.classifier_dropout is not None else config.hidden_dropout_prob
         )
         self.dropout = nn.Dropout(classifier_dropout)
-        self.classifier = LinearClass(config.hidden_size, config.num_labels)
+        self.classifier = nn.Linear(config.hidden_size, config.num_labels)
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -1650,7 +1365,7 @@ class BertForTokenClassification(BertPretrainedModel):
         """
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
-        outputs = self.bert(
+        outputs = self.roberta(
             input_ids,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
@@ -1668,6 +1383,7 @@ class BertForTokenClassification(BertPretrainedModel):
 
         loss = None
         if labels is not None:
+            # move labels to correct device to enable model parallelism
             loss_fct = CrossEntropyLoss()
             loss = loss_fct(
                 logits.reshape([-1, self.num_labels]),
@@ -1690,13 +1406,38 @@ class BertForTokenClassification(BertPretrainedModel):
         )
 
 
-class BertForQuestionAnswering(BertPretrainedModel):
+class RobertaClassificationHead(nn.Layer):
+    """Head for sentence-level classification tasks."""
+
+    def __init__(self, config):
+        super().__init__()
+        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
+        classifier_dropout = (
+            config.classifier_dropout if config.classifier_dropout is not None else config.hidden_dropout_prob
+        )
+        self.dropout = nn.Dropout(classifier_dropout)
+        self.out_proj = nn.Linear(config.hidden_size, config.num_labels)
+
+        pooler_act = getattr(config, "pooler_act", "tanh")
+        self.activation = ACT2FN[pooler_act]
+
+    def forward(self, features, **kwargs):
+        x = features[:, 0, :]  # take <s> token (equiv. to [CLS])
+        x = self.dropout(x)
+        x = self.dense(x)
+        x = self.activation(x)
+        x = self.dropout(x)
+        x = self.out_proj(x)
+        return x
+
+
+class RobertaForQuestionAnswering(RobertaPretrainedModel):
     def __init__(self, config):
         super().__init__(config)
         self.num_labels = config.num_labels
 
-        self.bert = BertModel(config, add_pooling_layer=False)
-        self.qa_outputs = LinearClass(config.hidden_size, config.num_labels)
+        self.roberta = RobertaModel(config, add_pooling_layer=False)
+        self.qa_outputs = nn.Linear(config.hidden_size, config.num_labels)
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -1726,7 +1467,7 @@ class BertForQuestionAnswering(BertPretrainedModel):
         """
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
-        outputs = self.bert(
+        outputs = self.roberta(
             input_ids,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
@@ -1772,3 +1513,19 @@ class BertForQuestionAnswering(BertPretrainedModel):
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
         )
+
+
+def create_position_ids_from_input_ids(input_ids, padding_idx, past_key_values_length=0):
+    """
+    Replace non-padding symbols with their position numbers. Position numbers begin at padding_idx+1. Padding symbols
+    are ignored. This is modified from fairseq's `utils.make_positions`.
+
+    Args:
+        x: paddle.Tensor x:
+
+    Returns: paddle.Tensor
+    """
+    # The series of casts and type-conversions here are carefully balanced to both work with ONNX export and XLA.
+    mask = (input_ids != padding_idx).cast("int64")
+    incremental_indices = (paddle.cumsum(mask, axis=1) + past_key_values_length) * mask
+    return incremental_indices.cast("int64") + padding_idx

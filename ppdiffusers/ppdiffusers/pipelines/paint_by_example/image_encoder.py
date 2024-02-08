@@ -16,7 +16,7 @@ from paddle import nn
 from paddlenlp.utils.converter import StateDictNameMapping
 
 from ppdiffusers.transformers import (
-    CLIPPreTrainedModel,
+    CLIPPretrainedModel,
     CLIPVisionConfig,
     CLIPVisionModel,
 )
@@ -27,7 +27,7 @@ from ...utils import logging
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
 
-class PaintByExampleImageEncoder(CLIPPreTrainedModel):
+class PaintByExampleImageEncoder(CLIPPretrainedModel):
     config_class = CLIPVisionConfig
 
     @classmethod

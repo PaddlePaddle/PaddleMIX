@@ -22,7 +22,7 @@ from paddlenlp.transformers.model_outputs import ModelOutput
 from ppdiffusers.transformers import (
     XLMRobertaConfig,
     XLMRobertaModel,
-    XLMRobertaPreTrainedModel,
+    XLMRobertaPretrainedModel,
 )
 
 
@@ -75,7 +75,7 @@ class RobertaSeriesConfig(XLMRobertaConfig):
         self.use_attention_mask = use_attention_mask
 
 
-class RobertaSeriesModelWithTransformation(XLMRobertaPreTrainedModel):
+class RobertaSeriesModelWithTransformation(XLMRobertaPretrainedModel):
     _keys_to_ignore_on_load_unexpected = [r"pooler", r"logit_scale"]
     _keys_to_ignore_on_load_missing = [r"position_ids", r"predictions.decoder.bias"]
     base_model_prefix = "roberta"

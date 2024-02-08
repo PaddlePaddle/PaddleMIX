@@ -628,7 +628,7 @@ class T5ClassificationHead(nn.Layer):
         return hidden_states
 
 
-class T5PreTrainedModel(PretrainedModel):
+class T5PretrainedModel(PretrainedModel):
     """
     An abstract class to handle weights initialization and a simple interface for downloading and loading pretrained
     models.
@@ -922,7 +922,7 @@ class T5PreTrainedModel(PretrainedModel):
         return shifted_input_ids
 
 
-class T5Stack(T5PreTrainedModel):
+class T5Stack(T5PretrainedModel):
     def __init__(self, config, embed_tokens=None):
         super().__init__(config)
 
@@ -1116,7 +1116,7 @@ class T5Stack(T5PreTrainedModel):
 
 
 @register_base_model
-class T5Model(T5PreTrainedModel):
+class T5Model(T5PretrainedModel):
     _keys_to_ignore_on_load_unexpected = [
         "decoder.block.0.layer.1.EncDecAttention.relative_attention_bias.weight",
     ]
@@ -1253,7 +1253,7 @@ class T5Model(T5PreTrainedModel):
         )
 
 
-class T5ForConditionalGeneration(T5PreTrainedModel):
+class T5ForConditionalGeneration(T5PretrainedModel):
     _keys_to_ignore_on_load_unexpected = [
         "decoder.block.0.layer.1.EncDecAttention.relative_attention_bias.weight",
     ]
@@ -1535,7 +1535,7 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
         return reordered_decoder_past
 
 
-class T5EncoderModel(T5PreTrainedModel):
+class T5EncoderModel(T5PretrainedModel):
     _tied_weights_keys = ["encoder.embed_tokens.weight"]
     _keys_to_ignore_on_load_unexpected = [r"decoder"]
 
@@ -1611,7 +1611,7 @@ class T5EncoderModel(T5PreTrainedModel):
         return encoder_output
 
 
-class T5ForSequenceClassification(T5PreTrainedModel):
+class T5ForSequenceClassification(T5PretrainedModel):
     _keys_to_ignore_on_load_unexpected = ["decoder.block.0.layer.1.EncDecAttention.relative_attention_bias.weight"]
     _tied_weights_keys = ["encoder.embed_tokens.weight", "decoder.embed_tokens.weight"]
 
@@ -1733,7 +1733,7 @@ class T5ForSequenceClassification(T5PreTrainedModel):
         )
 
 
-class T5ForQuestionAnswering(T5PreTrainedModel):
+class T5ForQuestionAnswering(T5PretrainedModel):
     _keys_to_ignore_on_load_unexpected = ["decoder.block.0.layer.1.EncDecAttention.relative_attention_bias.weight"]
     _tied_weights_keys = ["encoder.embed_tokens.weight", "decoder.embed_tokens.weight"]
 

@@ -21,7 +21,7 @@ from contextlib import contextmanager
 from typing import Any, Dict, List, Optional, Union
 
 import paddle
-from paddlenlp.transformers import PretrainedModel as PreTrainedModel
+from paddlenlp.transformers import PretrainedModel
 from safetensors.numpy import save_file as safe_save_file
 
 from . import __version__  # noqa: 401
@@ -72,7 +72,7 @@ class PeftModel(PushToHubMixin, SaveToAistudioMixin, paddle.nn.Layer):
     Base model encompassing various Peft methods.
 
     Args:
-        model ([`~transformers.PreTrainedModel`]): The base transformer model used for Peft.
+        model ([`~transformers.PretrainedModel`]): The base transformer model used for Peft.
         peft_config ([`PeftConfig`]): The configuration of the Peft model.
         adapter_name (`str`,  *optional*): The name of the adapter, defaults to `"default"`.
 
@@ -91,7 +91,7 @@ class PeftModel(PushToHubMixin, SaveToAistudioMixin, paddle.nn.Layer):
             in the base model if using [`PromptLearningConfig`].
     """
 
-    def __init__(self, model: PreTrainedModel, peft_config: PeftConfig, adapter_name: str = "default") -> None:
+    def __init__(self, model: PretrainedModel, peft_config: PeftConfig, adapter_name: str = "default") -> None:
         super().__init__()
         self.modules_to_save = None
         self.active_adapter = adapter_name
@@ -269,7 +269,7 @@ class PeftModel(PushToHubMixin, SaveToAistudioMixin, paddle.nn.Layer):
         Args:
             model ([`paddle.nn.Layer`]):
                 The model to be adapted. For 🤗 Transformers models, the model should be initialized with the
-                [`~transformers.PreTrainedModel.from_pretrained`].
+                [`~transformers.PretrainedModel.from_pretrained`].
             model_id (`str` or `os.PathLike`):
                 The name of the PEFT configuration to use. Can be either:
                     - A string, the `model id` of a PEFT configuration hosted inside a model repo on the Hugging Face
@@ -327,7 +327,7 @@ class PeftModel(PushToHubMixin, SaveToAistudioMixin, paddle.nn.Layer):
     def _setup_prompt_encoder(self, adapter_name: str):
         raise NotImplementedError()
 
-    def _prepare_model_for_gradient_checkpointing(self, model: PreTrainedModel):
+    def _prepare_model_for_gradient_checkpointing(self, model: PretrainedModel):
         r"""
         Prepares the model for gradient checkpointing if necessary
         """

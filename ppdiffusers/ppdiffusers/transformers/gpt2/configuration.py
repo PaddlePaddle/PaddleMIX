@@ -27,6 +27,8 @@ GPT2_PRETRAINED_CONFIG_ARCHIVE_MAP = {
     "distilgpt2": "https://huggingface.co/distilgpt2/resolve/main/config.json",
 }
 
+__all__ = ["GPT2Config"]
+
 
 class GPT2Config(PretrainedConfig):
     """
