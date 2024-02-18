@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
 """Script to fine-tune Stable Video Diffusion."""
 import argparse
 import copy
@@ -34,7 +33,7 @@ import PIL
 from einops import rearrange
 
 # from huggingface_hub import create_repo, upload_folder
-from paddle.io.DataLoader import Dataset, RandomSampler
+from paddle.io import Dataset, RandomSampler
 from PIL import Image
 from tqdm.auto import tqdm
 
@@ -115,9 +114,13 @@ def rand_cosine_interpolated(
 
 
 def rand_log_normal(shape, loc=0.0, scale=1.0, dtype=paddle.float32):
-    """Draws samples from an lognormal distribution."""
-    u = paddle.rand(shape, dtype=dtype) * (1 - 2e-7) + 1e-7
-    return paddle.distribution.Normal(loc, scale).icdf(u).exp()
+    """Draws samples from a lognormal distribution without using icdf."""
+    # westfish: paddle do not have icdf, so we use normal distribution to generate lognormal
+    # u = torch.rand(shape, dtype=dtype, device=device) * (1 - 2e-7) + 1e-7
+    # return torch.distributions.Normal(loc, scale).icdf(u).exp()
+    normal_samples = paddle.normal(mean=loc, std=scale, shape=shape)
+    log_normal_samples = paddle.exp(normal_samples)
+    return log_normal_samples
 
 
 # min_value = 0.002
@@ -126,6 +129,48 @@ def rand_log_normal(shape, loc=0.0, scale=1.0, dtype=paddle.float32):
 # noise_d_low = 32
 # noise_d_high = 64
 # sigma_data = 0.5
+
+# westfish
+class DataLoader(paddle.io.DataLoader):
+    def __init__(
+        self,
+        dataset,
+        batch_size=1,
+        shuffle=False,
+        sampler=None,
+        batch_sampler=None,
+        num_workers=0,
+        collate_fn=None,
+        pin_memory=False,
+        drop_last=False,
+        timeout=0,
+        worker_init_fn=None,
+        multiprocessing_context=None,
+        generator=None,
+    ):
+        if isinstance(dataset[0], (tuple, list)):
+            return_list = True
+        else:
+            return_list = False
+
+        super().__init__(
+            dataset,
+            feed_list=None,
+            places=None,
+            return_list=return_list,
+            batch_sampler=batch_sampler,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            drop_last=drop_last,
+            collate_fn=collate_fn,
+            num_workers=num_workers,
+            use_buffer_reader=True,
+            use_shared_memory=False,
+            timeout=timeout,
+            worker_init_fn=worker_init_fn,
+        )
+        if sampler is not None:
+            self.batch_sampler.sampler = sampler
 
 
 class DummyDataset(Dataset):
@@ -266,7 +311,7 @@ def _filter2d(input, kernel):
 
     # kernel and input tensor reshape to align element-wise or batch-wise params
     tmp_kernel = tmp_kernel.reshape([-1, 1, height, width])
-    input = input.reshape([-1, tmp_kernel.shape[0], input.shape(-2), input.shape(-1)])
+    input = input.reshape([-1, tmp_kernel.shape[0], input.shape[-2], input.shape[-1]])
 
     # convolve the tensor with the kernel.
     output = paddle.nn.functional.conv2d(input, tmp_kernel, groups=tmp_kernel.shape[0], padding=0, stride=1)
@@ -612,16 +657,6 @@ def parse_args():
         default=128,
         help=("The dimension of the LoRA update matrices."),
     )
-
-    args = parser.parse_args()
-    env_local_rank = int(os.environ.get("LOCAL_RANK", -1))
-    if env_local_rank != -1 and env_local_rank != args.local_rank:
-        args.local_rank = env_local_rank
-
-    # default to using the same revision for the non-ema model if not specified
-    if args.non_ema_revision is None:
-        args.non_ema_revision = args.revision
-
     # westfish
     parser.add_argument(
         "--train_data_dir",
@@ -635,6 +670,15 @@ def parse_args():
         default="demo.jpg",
         help=("The directory containing the validation data. "),
     )
+
+    args = parser.parse_args()
+    env_local_rank = int(os.environ.get("LOCAL_RANK", -1))
+    if env_local_rank != -1 and env_local_rank != args.local_rank:
+        args.local_rank = env_local_rank
+
+    # default to using the same revision for the non-ema model if not specified
+    if args.non_ema_revision is None:
+        args.non_ema_revision = args.revision
 
     return args
 
@@ -863,7 +907,8 @@ def main():
         width=args.width, height=args.height, sample_frames=args.num_frames, train_data_dir=args.train_data_dir
     )
     sampler = RandomSampler(train_dataset)
-    train_dataloader = paddle.io.data.DataLoader(
+    # westfish: add sampler to self defined dataloader
+    train_dataloader = DataLoader(
         train_dataset,
         sampler=sampler,
         batch_size=args.per_gpu_batch_size,
@@ -947,8 +992,10 @@ def main():
     ):
         add_time_ids = [fps, motion_bucket_id, noise_aug_strength]
 
-        passed_add_embed_dim = unet.module.config.addition_time_embed_dim * len(add_time_ids)
-        expected_add_embed_dim = unet.module.add_embedding.linear_1.weight.shape[0]
+        # passed_add_embed_dim = unet.module.config.addition_time_embed_dim * len(add_time_ids)
+        # expected_add_embed_dim = unet.module.add_embedding.linear_1.weight.shape[0]
+        passed_add_embed_dim = unet.config.addition_time_embed_dim * len(add_time_ids)
+        expected_add_embed_dim = unet.add_embedding.linear_1.weight.shape[0]
 
         if expected_add_embed_dim != passed_add_embed_dim:
             raise ValueError(
@@ -956,7 +1003,7 @@ def main():
             )
 
         add_time_ids = paddle.to_tensor([add_time_ids], dtype=dtype)
-        add_time_ids = add_time_ids.repeat(batch_size, 1)
+        add_time_ids = add_time_ids.tile([batch_size, 1])
         return add_time_ids
 
     # Potentially load in the weights and states from a previous save
@@ -988,6 +1035,9 @@ def main():
     progress_bar = tqdm(range(global_step, args.max_train_steps), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Steps")
 
+    # westfish: add amp
+    scaler = paddle.amp.GradScaler(init_loss_scaling=1024)
+    unet = paddle.amp.decorate(models=unet.to(dtype=paddle.float32), level="O2")
     for epoch in range(first_epoch, args.num_train_epochs):
         unet.train()
         train_loss = 0.0
@@ -1038,7 +1088,8 @@ def main():
                 # (this is the forward diffusion process)
                 sigmas = sigmas[:, None, None, None, None]
                 noisy_latents = latents + noise * sigmas
-                timesteps = paddle.to_tensor([0.25 * sigma.log() for sigma in sigmas])
+                # westfish: paddle.Tensor donot support list input
+                timesteps = paddle.Tensor(np.array([0.25 * sigma.log().squeeze() for sigma in sigmas]))
 
                 inp_noisy_latents = noisy_latents / ((sigmas**2 + 1) ** 0.5)
 
@@ -1059,7 +1110,7 @@ def main():
                 # Conditioning dropout to support classifier-free guidance during inference. For more details
                 # check out the section 3.2.1 of the original paper https://arxiv.org/abs/2211.09800.
                 if args.conditioning_dropout_prob is not None:
-                    random_p = paddle.rand(bsz, generator=generator)
+                    random_p = paddle.rand([bsz], generator=generator)
                     # Sample masks for the edit prompts.
                     prompt_mask = random_p < 2 * args.conditioning_dropout_prob
                     prompt_mask = prompt_mask.reshape([bsz, 1, 1])
@@ -1079,14 +1130,19 @@ def main():
                     conditional_latents = image_mask * conditional_latents
 
                 # Concatenate the `conditional_latents` with the `noisy_latents`.
-                conditional_latents = conditional_latents.unsqueeze(1).repeat(1, noisy_latents.shape[1], 1, 1, 1)
-                inp_noisy_latents = paddle.concat([inp_noisy_latents, conditional_latents], axis=2)
+                conditional_latents = conditional_latents.unsqueeze(1).tile([1, noisy_latents.shape[1], 1, 1, 1])
+                inp_noisy_latents = paddle.concat(
+                    [inp_noisy_latents, conditional_latents.astype(inp_noisy_latents.dtype)], axis=2
+                )
 
                 # check https://arxiv.org/abs/2206.00364(the EDM-framework) for more details.
                 target = latents
-                model_pred = unet(
-                    inp_noisy_latents, timesteps, encoder_hidden_states, added_time_ids=added_time_ids
-                ).sample
+
+                # westfish: add amp
+                with paddle.amp.auto_cast(enable=True, custom_white_list=None, custom_black_list=None, level="O2"):
+                    model_pred = unet(
+                        inp_noisy_latents, timesteps, encoder_hidden_states, added_time_ids=added_time_ids
+                    ).sample
 
                 # Denoise the latents
                 c_out = -sigmas / ((sigmas**2 + 1) ** 0.5)
@@ -1105,16 +1161,20 @@ def main():
                 loss = loss.mean()
 
                 # Gather the losses across all processes for logging (if we use distributed training).
-                avg_loss = accelerator.gather(loss.repeat(args.per_gpu_batch_size)).mean()
+                avg_loss = accelerator.gather(loss.tile([args.per_gpu_batch_size])).mean()
                 train_loss += avg_loss.item() / args.gradient_accumulation_steps
 
                 # Backpropagate
-                accelerator.backward(loss)
+                # accelerator.backward(loss)
+                scaled = scaler.scale(loss)
+                scaled.backward()
+                scaler.step(optimizer)
+                scaler.update()
                 # if accelerator.sync_gradients:
                 #     accelerator.clip_grad_norm_(unet.parameters(), args.max_grad_norm)
                 optimizer.step()
                 lr_scheduler.step()
-                optimizer.zero_grad()
+                optimizer.clear_grad()
 
             # Checks if the accelerator has performed an optimization step behind the scenes
             if accelerator.sync_gradients:
@@ -1196,9 +1256,10 @@ def main():
                         if not os.path.exists(val_save_dir):
                             os.makedirs(val_save_dir)
 
-                        with paddle.amp.auto_cast(
-                            enable=True, custom_white_list=None, custom_black_list=None, level="O2"
-                        ):
+                        # with paddle.amp.auto_cast(
+                        #     enable=True, custom_white_list=None, custom_black_list=None, level="O2"
+                        # ):
+                        if True:
                             for val_img_idx in range(args.num_validation_images):
                                 num_frames = args.num_frames
                                 video_frames = pipeline(
@@ -1230,7 +1291,7 @@ def main():
                         del pipeline
                         paddle.device.cuda.empty_cache()
 
-            logs = {"step_loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
+            logs = {"step_loss": loss.detach().item(), "lr": lr_scheduler.get_lr()}
             progress_bar.set_postfix(**logs)
 
             if global_step >= args.max_train_steps:

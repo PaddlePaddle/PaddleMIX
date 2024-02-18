@@ -11,17 +11,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from paddlenlp.transformers import *
+from paddlenlp.transformers import *  # isort:skip
 
-# overrided model
 from .auto import *
 from .bert import *
 from .clip import *
 from .gpt2 import *
-
-# overrided model_utils
-from .model_utils import ModuleUtilsMixin, PretrainedConfig, PretrainedModel
-
-# overrided model
+from .roberta import *
 from .t5 import *
 from .xlm_roberta import *
+
+# overrided model_utils
+from .model_utils import ModuleUtilsMixin, PretrainedConfig, PretrainedModel  # isort:skip

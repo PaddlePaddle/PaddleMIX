@@ -39,6 +39,8 @@ from .constants import (  # fastdeploy; NEW; DIFFUSERS; PPDIFFUSERS; TRANSFORMER
     NEG_INF,
     ONNX_EXTERNAL_WEIGHTS_NAME,
     ONNX_WEIGHTS_NAME,
+    PADDLE_INFER_MODEL_NAME,
+    PADDLE_INFER_WEIGHTS_NAME,
     PADDLE_SAFETENSORS_WEIGHTS_NAME,
     PADDLE_SAFETENSORS_WEIGHTS_NAME_INDEX_NAME,
     PADDLE_WEIGHTS_NAME,
@@ -171,6 +173,7 @@ from .state_dict_utils import (
 )
 from .testing_utils import (  # load_image,
     floats_tensor,
+    get_examples_pipeline,
     image_grid,
     load_hf_numpy,
     load_numpy,

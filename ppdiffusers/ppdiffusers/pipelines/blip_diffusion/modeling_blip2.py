@@ -37,7 +37,7 @@ from ...utils import logging
 logger = logging.get_logger(__name__)
 
 
-class Blip2PreTrainedModel(PretrainedModel):
+class Blip2PretrainedModel(PretrainedModel):
     """
     An abstract class to handle weights initialization and a simple interface for downloading and loading pretrained
     models.
@@ -98,7 +98,9 @@ class Blip2TextEmbeddings(nn.Layer):
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
         # position_ids (1, len position emb) is contiguous in memory and exported when serialized
-        self.register_buffer("position_ids", paddle.arange(config.max_position_embeddings).expand((1, -1)))
+        self.register_buffer(
+            "position_ids", paddle.arange(config.max_position_embeddings, dtype=paddle.int64).expand((1, -1))
+        )
         self.position_embedding_type = getattr(config, "position_embedding_type", "absolute")
 
         self.config = config
@@ -216,7 +218,7 @@ class Blip2QFormerEncoder(nn.Layer):
 
             past_key_value = past_key_values[i] if past_key_values is not None else None
 
-            if self.gradient_checkpointing and self.training and not hidden_states.stop_gradient:
+            if self.gradient_checkpointing and not hidden_states.stop_gradient:
                 layer_outputs = self._gradient_checkpointing_func(
                     layer_module.__call__,
                     hidden_states,
@@ -394,7 +396,7 @@ class ProjLayer(nn.Layer):
 
 
 # Copy-pasted from transformers.models.blip.modeling_blip.BlipVisionModel with Blip->Blip2, BLIP->BLIP_2
-class Blip2VisionModel(Blip2PreTrainedModel):
+class Blip2VisionModel(Blip2PretrainedModel):
     main_input_name = "pixel_values"
     config_class = Blip2VisionConfig
 
@@ -458,7 +460,7 @@ class Blip2VisionModel(Blip2PreTrainedModel):
 
 
 # Qformer model, used to get multimodal embeddings from the text and image inputs
-class Blip2QFormerModel(Blip2PreTrainedModel):
+class Blip2QFormerModel(Blip2PretrainedModel):
     """
     Querying Transformer (Q-Former), used in BLIP-2.
     """

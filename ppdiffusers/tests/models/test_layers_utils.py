@@ -25,6 +25,7 @@ from ppdiffusers.models.embeddings import get_timestep_embedding
 from ppdiffusers.models.lora import LoRACompatibleLinear
 from ppdiffusers.models.resnet import Downsample2D, ResnetBlock2D, Upsample2D
 from ppdiffusers.models.transformer_2d import Transformer2DModel
+from ppdiffusers.utils import USE_PEFT_BACKEND
 
 
 class EmbeddingsTests(unittest.TestCase):
@@ -676,7 +677,10 @@ class Transformer2DModelTests(unittest.TestCase):
 
         assert spatial_transformer_block.transformer_blocks[0].ff.net[0].__class__ == GEGLU
         assert spatial_transformer_block.transformer_blocks[0].ff.net[1].__class__ == nn.Dropout
-        assert spatial_transformer_block.transformer_blocks[0].ff.net[2].__class__ == LoRACompatibleLinear
+        if USE_PEFT_BACKEND:
+            assert spatial_transformer_block.transformer_blocks[0].ff.net[2].__class__ == nn.Linear
+        else:
+            assert spatial_transformer_block.transformer_blocks[0].ff.net[2].__class__ == LoRACompatibleLinear
 
         dim = 32
         inner_dim = 128
@@ -700,7 +704,10 @@ class Transformer2DModelTests(unittest.TestCase):
 
         assert spatial_transformer_block.transformer_blocks[0].ff.net[0].__class__ == ApproximateGELU
         assert spatial_transformer_block.transformer_blocks[0].ff.net[1].__class__ == nn.Dropout
-        assert spatial_transformer_block.transformer_blocks[0].ff.net[2].__class__ == LoRACompatibleLinear
+        if USE_PEFT_BACKEND:
+            assert spatial_transformer_block.transformer_blocks[0].ff.net[2].__class__ == nn.Linear
+        else:
+            assert spatial_transformer_block.transformer_blocks[0].ff.net[2].__class__ == LoRACompatibleLinear
 
         dim = 32
         inner_dim = 128

@@ -101,7 +101,7 @@ class LoraModel(BaseTuner):
         ```
 
     **Attributes**:
-        - **model** ([`~transformers.PreTrainedModel`]) -- The model to be adapted.
+        - **model** ([`~transformers.PretrainedModel`]) -- The model to be adapted.
         - **peft_config** ([`LoraConfig`]): The configuration of the Lora model.
     """
 

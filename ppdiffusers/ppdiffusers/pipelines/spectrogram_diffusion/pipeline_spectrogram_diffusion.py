@@ -107,6 +107,8 @@ class SpectrogramDiffusionPipeline(DiffusionPipeline):
             encoder_inputs=continuous_inputs.cast(self.continuous_encoder.dtype), encoder_inputs_mask=continuous_mask
         )
 
+        tokens_mask = tokens_mask.cast(tokens_encoded.dtype)
+        continuous_mask = continuous_mask.cast(continuous_encoded.dtype)
         return [(tokens_encoded, tokens_mask), (continuous_encoded, continuous_mask)]
 
     def decode(self, encodings_and_masks, input_tokens, noise_time):
@@ -204,7 +206,7 @@ class SpectrogramDiffusionPipeline(DiffusionPipeline):
             encodings_and_masks = self.encode(
                 input_tokens=paddle.to_tensor([encoder_input_tokens], dtype="int32"),
                 continuous_inputs=encoder_continuous_inputs,
-                continuous_mask=encoder_continuous_mask,
+                continuous_mask=encoder_continuous_mask.cast(dtype="int32"),
             )
 
             # Sample encoder_continuous_inputs shaped gaussian noise to begin loop
@@ -250,7 +252,7 @@ class SpectrogramDiffusionPipeline(DiffusionPipeline):
             )
 
         if output_type == "numpy":
-            output = self.melgan(input_features=full_pred_mel.astype(np.float32))
+            output = self.melgan(input_features=full_pred_mel.astype(np.float32))[0]
         else:
             output = full_pred_mel
 

@@ -61,6 +61,15 @@ else:
     _import_structure["pipeline_stable_unclip_img2img"] = ["StableUnCLIPImg2ImgPipeline"]
     _import_structure["safety_checker"] = ["StableDiffusionSafetyChecker"]
     _import_structure["stable_unclip_image_normalizer"] = ["StableUnCLIPImageNormalizer"]
+    _import_structure["pipeline_paddleinfer_cycle_diffusion"] = ["PaddleInferCycleDiffusionPipeline"]
+    _import_structure["pipeline_paddleinfer_stable_diffusion"] = ["PaddleInferStableDiffusionPipeline"]
+    _import_structure["pipeline_paddleinfer_stable_diffusion_img2img"] = ["PaddleInferStableDiffusionImg2ImgPipeline"]
+    _import_structure["pipeline_paddleinfer_stable_diffusion_inpaint"] = ["PaddleInferStableDiffusionInpaintPipeline"]
+    _import_structure["pipeline_paddleinfer_stable_diffusion_inpaint_legacy"] = [
+        "PaddleInferStableDiffusionInpaintPipelineLegacy"
+    ]
+    _import_structure["pipeline_paddleinfer_stable_diffusion_mega"] = ["PaddleInferStableDiffusionMegaPipeline"]
+
 try:
     if not (is_paddlenlp_available() and is_paddle_available() and is_paddlenlp_version(">=", "2.6.0")):
         raise OptionalDependencyNotAvailable()
@@ -139,6 +148,26 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         from .clip_image_project_model import CLIPImageProjection
         from .pipeline_cycle_diffusion import CycleDiffusionPipeline
         from .pipeline_output import StableDiffusionPipelineOutput
+
+        # paddleinfer
+        from .pipeline_paddleinfer_cycle_diffusion import (
+            PaddleInferCycleDiffusionPipeline,
+        )
+        from .pipeline_paddleinfer_stable_diffusion import (
+            PaddleInferStableDiffusionPipeline,
+        )
+        from .pipeline_paddleinfer_stable_diffusion_img2img import (
+            PaddleInferStableDiffusionImg2ImgPipeline,
+        )
+        from .pipeline_paddleinfer_stable_diffusion_inpaint import (
+            PaddleInferStableDiffusionInpaintPipeline,
+        )
+        from .pipeline_paddleinfer_stable_diffusion_inpaint_legacy import (
+            PaddleInferStableDiffusionInpaintPipelineLegacy,
+        )
+        from .pipeline_paddleinfer_stable_diffusion_mega import (
+            PaddleInferStableDiffusionMegaPipeline,
+        )
         from .pipeline_stable_diffusion import StableDiffusionPipeline
         from .pipeline_stable_diffusion_attend_and_excite import (
             StableDiffusionAttendAndExcitePipeline,
@@ -247,6 +276,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         from .pipeline_fastdeploy_stable_diffusion_upscale import (
             FastDeployStableDiffusionUpscalePipeline,
         )
+
 
 else:
     import sys

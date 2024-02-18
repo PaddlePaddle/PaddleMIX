@@ -143,7 +143,23 @@ class CLIPTextConfig(PretrainedConfig):
 
         # get the text config dict if we are loading from CLIPConfig
         if config_dict.get("model_type") == "clip":
+            projection_dim = config_dict.get("projection_dim", None)
             config_dict = config_dict["text_config"]
+            # NOTE: new add
+            text_projection_dim = config_dict.get("projection_dim", None)
+            if projection_dim is not None:
+                if text_projection_dim is None:
+                    logger.warning(
+                        f"The specified `text_config['projection_dim']` is None. The value of `projection_dim={projection_dim}` in `CLIPConfig` will be used."
+                    )
+                    config_dict["projection_dim"] = projection_dim
+                else:
+                    if text_projection_dim != projection_dim:
+                        logger.warning(
+                            f"The specified `text_config['projection_dim']` ({text_projection_dim}) is different from "
+                            f"`projection_dim` ({projection_dim}). The value of `projection_dim` will be used."
+                        )
+                        config_dict["projection_dim"] = projection_dim
 
         if "model_type" in config_dict and hasattr(cls, "model_type") and config_dict["model_type"] != cls.model_type:
             logger.warning(
@@ -252,7 +268,23 @@ class CLIPVisionConfig(PretrainedConfig):
 
         # get the vision config dict if we are loading from CLIPConfig
         if config_dict.get("model_type") == "clip":
+            projection_dim = config_dict.get("projection_dim", None)
             config_dict = config_dict["vision_config"]
+            # NOTE: new add
+            vision_projection_dim = config_dict.get("projection_dim", None)
+            if projection_dim is not None:
+                if vision_projection_dim is None:
+                    logger.warning(
+                        f"The specified `vision_config['projection_dim']` is None. The value of `projection_dim={projection_dim}` in `CLIPConfig` will be used."
+                    )
+                    config_dict["projection_dim"] = projection_dim
+                else:
+                    if vision_projection_dim != projection_dim:
+                        logger.warning(
+                            f"The specified `vision_config['projection_dim']` ({vision_projection_dim}) is different from "
+                            f"`projection_dim` ({projection_dim}). The value of `projection_dim` will be used."
+                        )
+                        config_dict["projection_dim"] = projection_dim
 
         if "model_type" in config_dict and hasattr(cls, "model_type") and config_dict["model_type"] != cls.model_type:
             logger.warning(
@@ -393,6 +425,10 @@ class CLIPConfig(PretrainedConfig):
             vision_config = {}
             logger.info("`vision_config` is `None`. initializing the `CLIPVisionConfig` with default values.")
 
+        # NOTE: new add
+        text_config["projection_dim"] = projection_dim
+        vision_config["projection_dim"] = projection_dim
+
         self.text_config = CLIPTextConfig(**text_config)
         self.vision_config = CLIPVisionConfig(**vision_config)
 
@@ -424,3 +460,31 @@ class CLIPConfig(PretrainedConfig):
         output["vision_config"] = self.vision_config.to_dict()
         output["model_type"] = self.__class__.model_type
         return output
+
+    @classmethod
+    def from_pretrained(cls, pretrained_model_name_or_path, **kwargs) -> "PretrainedConfig":
+        config_dict, kwargs = cls.get_config_dict(pretrained_model_name_or_path, **kwargs)
+        model_type = config_dict.get("model_type", "clip")
+
+        if model_type == "clip_vision_model":
+            architectures = config_dict.pop("architectures", [])
+            vision_config = CLIPVisionConfig.from_dict(config_dict)
+            text_config = CLIPTextConfig(
+                hidden_size=768,
+                dropout=0.0,
+                intermediate_size=3072,
+                num_attention_heads=12,
+                projection_dim=vision_config.projection_dim,
+            )
+            config_dict = cls.from_text_vision_configs(
+                text_config=text_config,
+                vision_config=vision_config,
+                architectures=architectures,
+                projection_dim=vision_config.projection_dim,
+            ).to_dict()
+            str_architectures = ", ".join(architectures)
+            logger.warning(
+                f"You are using a legacy config file to load {str_architectures}. "
+                f"This will be deprecated in the near future."
+            )
+        return cls.from_dict(config_dict, **kwargs)

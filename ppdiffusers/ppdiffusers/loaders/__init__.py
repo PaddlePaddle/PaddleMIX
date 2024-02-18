@@ -25,7 +25,7 @@ if is_paddle_available():
     _import_structure["utils"] = ["AttnProcsLayers"]
 
     if is_paddlenlp_available():
-        _import_structure["single_file"].extend(["FromSingleFileMixin"])
+        _import_structure["single_file"].extend(["FromSingleFileMixin", "FromCkptMixin"])
         _import_structure["lora"] = ["LoraLoaderMixin", "StableDiffusionXLLoraLoaderMixin"]
         _import_structure["textual_inversion"] = ["TextualInversionLoaderMixin"]
         _import_structure["ip_adapter"] = ["IPAdapterMixin"]
@@ -46,7 +46,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             )
             from .ip_adapter import IPAdapterMixin
             from .lora import LoraLoaderMixin, StableDiffusionXLLoraLoaderMixin
-            from .single_file import FromSingleFileMixin
+            from .single_file import FromCkptMixin, FromSingleFileMixin
             from .textual_inversion import TextualInversionLoaderMixin
 else:
     import sys

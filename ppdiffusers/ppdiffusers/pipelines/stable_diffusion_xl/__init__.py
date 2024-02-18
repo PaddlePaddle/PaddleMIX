@@ -40,6 +40,22 @@ else:
     _import_structure["pipeline_stable_diffusion_xl_img2img"] = ["StableDiffusionXLImg2ImgPipeline"]
     _import_structure["pipeline_stable_diffusion_xl_inpaint"] = ["StableDiffusionXLInpaintPipeline"]
     _import_structure["pipeline_stable_diffusion_xl_instruct_pix2pix"] = ["StableDiffusionXLInstructPix2PixPipeline"]
+    # paddleinfer
+    _import_structure["pipeline_paddleinfer_stable_diffusion_xl"] = ["PaddleInferStableDiffusionXLPipeline"]
+    _import_structure["pipeline_paddleinfer_stable_diffusion_xl_img2img"] = [
+        "PaddleInferStableDiffusionXLImg2ImgPipeline"
+    ]
+    _import_structure["pipeline_paddleinfer_stable_diffusion_xl_inpaint"] = [
+        "PaddleInferStableDiffusionXLInpaintPipeline"
+    ]
+    _import_structure["pipeline_paddleinfer_stable_diffusion_xl_pix2pix"] = [
+        "PaddleInferStableDiffusionXLPix2PixPipeline"
+    ]
+    _import_structure["pipeline_paddleinfer_stable_diffusion_xl_mega"] = ["PaddleInferStableDiffusionXLMegaPipeline"]
+    _import_structure["pipeline_paddleinfer_stable_diffusion_xl_instruct_pix2pix"] = [
+        "PaddleInferStableDiffusionXLInstructPix2PixPipeline"
+    ]
+
 
 # fastdeploy
 try:
@@ -70,6 +86,21 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         from ...utils.dummy_paddle_and_paddlenlp_objects import *  # noqa F403
     else:
         from .pipeline_output import StableDiffusionXLPipelineOutput
+        from .pipeline_paddleinfer_stable_diffusion_xl import (
+            PaddleInferStableDiffusionXLPipeline,
+        )
+        from .pipeline_paddleinfer_stable_diffusion_xl_img2img import (
+            PaddleInferStableDiffusionXLImg2ImgPipeline,
+        )
+        from .pipeline_paddleinfer_stable_diffusion_xl_inpaint import (
+            PaddleInferStableDiffusionXLInpaintPipeline,
+        )
+        from .pipeline_paddleinfer_stable_diffusion_xl_instruct_pix2pix import (
+            PaddleInferStableDiffusionXLInstructPix2PixPipeline,
+        )
+        from .pipeline_paddleinfer_stable_diffusion_xl_mega import (
+            PaddleInferStableDiffusionXLMegaPipeline,
+        )
         from .pipeline_stable_diffusion_xl import StableDiffusionXLPipeline
         from .pipeline_stable_diffusion_xl_img2img import (
             StableDiffusionXLImg2ImgPipeline,

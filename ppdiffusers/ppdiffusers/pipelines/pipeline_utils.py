@@ -64,6 +64,7 @@ if is_paddlenlp_available():
     #     SAFE_WEIGHTS_INDEX_NAME as PPNLP_SAFE_WEIGHTS_INDEX_NAME,
     # )
 
+from ..models.paddleinfer_runtime import PaddleInferRuntimeModel
 from .fastdeploy_utils import FastDeployRuntimeModel
 
 TORCH_INDEX_FILE = "diffusion_pytorch_model.bin"
@@ -83,6 +84,7 @@ LOADABLE_CLASSES = {
         "SchedulerMixin": ["save_pretrained", "from_pretrained"],
         "DiffusionPipeline": ["save_pretrained", "from_pretrained"],
         "FastDeployRuntimeModel": ["save_pretrained", "from_pretrained"],
+        "PaddleInferRuntimeModel": ["save_pretrained", "from_pretrained"],
     },
     "ppdiffusers.transformers": {
         "PretrainedTokenizer": ["save_pretrained", "from_pretrained"],
@@ -247,6 +249,9 @@ def get_class_obj_and_candidates(
         class_obj = getattr(library, class_name)
         class_candidates = {c: getattr(library, c, None) for c in importable_classes.keys()}
 
+    # we will use PPNLP PretrainedModel
+    if "PretrainedModel" in class_candidates:
+        class_candidates["PretrainedModel"] = PretrainedModel
     return class_obj, class_candidates
 
 
@@ -307,6 +312,8 @@ def load_sub_model(
     pipeline_class: Any,
     paddle_dtype: paddle.dtype,
     runtime_options: Any,
+    infer_configs: Any,
+    use_optim_cache: bool,
     model_variants: Dict[str, str],
     name: str,
     from_diffusers: bool,
@@ -361,7 +368,17 @@ def load_sub_model(
         loading_kwargs["runtime_options"] = (
             runtime_options.get(name, None) if isinstance(runtime_options, dict) else runtime_options
         )
+        # HACK, this is only for fd onnx model
+        if "melgan" in name:
+            is_onnx_model = True
         loading_kwargs["is_onnx_model"] = is_onnx_model
+
+    # PaddleInferRuntimeModel
+    if issubclass(class_obj, PaddleInferRuntimeModel):
+        loading_kwargs["infer_configs"] = (
+            infer_configs.get(name, None) if isinstance(infer_configs, dict) else infer_configs
+        )
+        loading_kwargs["use_optim_cache"] = use_optim_cache
 
     is_ppdiffusers_model = issubclass(class_obj, ppdiffusers_module.ModelMixin)
     is_paddlenlp_model = issubclass(class_obj, PretrainedModel)
@@ -393,10 +410,7 @@ def load_sub_model(
         loading_kwargs["from_hf_hub"] = from_hf_hub
         loading_kwargs["from_aistudio"] = from_aistudio
         loading_kwargs["cache_dir"] = cache_dir
-        if from_hf_hub is True or from_aistudio is True:
-            loading_kwargs["subfolder"] = name
-        else:
-            cached_folder = os.path.join(cached_folder, name)
+        loading_kwargs["subfolder"] = name
         # else load from the root directory
         loaded_sub_model = load_method(cached_folder, **loading_kwargs)
 
@@ -944,6 +958,8 @@ class DiffusionPipeline(ConfigMixin):
         use_onnx = kwargs.pop("use_onnx", None)  # noqa: F841
         use_fastdeploy = kwargs.pop("use_fastdeploy", None)  # noqa: F841
         runtime_options = kwargs.pop("runtime_options", None)
+        infer_configs = kwargs.pop("infer_configs", None)
+        use_optim_cache = kwargs.pop("use_optim_cache", False)
         load_connected_pipeline = kwargs.pop("load_connected_pipeline", False)  # noqa: F841
         model_variants = kwargs.pop("model_variants", {})
 
@@ -969,9 +985,20 @@ class DiffusionPipeline(ConfigMixin):
         # pop out "_ignore_files" as it is only needed for download
         ignore_filenames = config_dict.pop("_ignore_files", [])  # noqa: F841
 
+        custom_class_name = None
+        if os.path.isfile(os.path.join(cached_folder, f"{custom_pipeline}.py")):
+            custom_pipeline = os.path.join(cached_folder, f"{custom_pipeline}.py")
+        elif isinstance(config_dict["_class_name"], (list, tuple)) and os.path.isfile(
+            os.path.join(cached_folder, f"{config_dict['_class_name'][0]}.py")
+        ):
+            custom_pipeline = os.path.join(cached_folder, f"{config_dict['_class_name'][0]}.py")
+            custom_class_name = config_dict["_class_name"][1]
+
         pipeline_class = _get_pipeline_class(
             cls,
             config_dict,
+            custom_pipeline=custom_pipeline,
+            class_name=custom_class_name,
             cache_dir=cache_dir,
             revision=custom_revision,
         )
@@ -1060,6 +1087,10 @@ class DiffusionPipeline(ConfigMixin):
                 library_name = "ppdiffusers.transformers"
 
             class_name = class_name[4:] if class_name.startswith("Flax") else class_name
+            # support HF fast tokenizer
+            class_name = (
+                class_name[:-4] if class_name.endswith("Fast") and "tokenizer" in class_name.lower() else class_name
+            )
 
             # 6.2 Define all importable classes
             is_pipeline_module = hasattr(pipelines, library_name)
@@ -1086,6 +1117,8 @@ class DiffusionPipeline(ConfigMixin):
                     pipeline_class=pipeline_class,
                     paddle_dtype=paddle_dtype,
                     runtime_options=runtime_options,
+                    infer_configs=infer_configs,
+                    use_optim_cache=use_optim_cache,
                     model_variants=model_variants,
                     name=name,
                     from_diffusers=from_diffusers,
@@ -1118,18 +1151,31 @@ class DiffusionPipeline(ConfigMixin):
             )
 
         # 8. (TODO, junnyu) make sure all modules are in eval mode and cast dtype
-        # for name, _module in init_kwargs.items():
-        #     if isinstance(_module, nn.Layer):
-        #         _module.eval()
-        #         if paddle_dtype is not None:
-        #             _module.to(dtype=paddle_dtype)
-        #     elif isinstance(_module, (tuple, list)):
-        #         for _submodule in _module:
-        #             if isinstance(_submodule, nn.Layer):
-        #                 _submodule.eval()
-        #                 if paddle_dtype is not None:
-        #                     _submodule.to(dtype=paddle_dtype)
-
+        for name, _module in init_kwargs.items():
+            if isinstance(_module, nn.Layer):
+                _module.eval()
+                if paddle_dtype is not None:
+                    if str(paddle_dtype) in ["paddle.float32", "float32"]:
+                        _module.to(dtype="float32")
+                    else:
+                        paddle.amp.decorate(
+                            _module,
+                            level="O2",
+                            dtype=str(paddle_dtype).replace("paddle.", ""),
+                        )
+            elif isinstance(_module, (tuple, list)):
+                for _submodule in _module:
+                    if isinstance(_submodule, nn.Layer):
+                        _submodule.eval()
+                        if paddle_dtype is not None:
+                            if str(paddle_dtype) in ["paddle.float32", "float32"]:
+                                _module.to(dtype="float32")
+                            else:
+                                paddle.amp.decorate(
+                                    _submodule,
+                                    level="O2",
+                                    dtype=str(paddle_dtype).replace("paddle.", ""),
+                                )
         # 8. Instantiate the pipeline
         model = pipeline_class(**init_kwargs)
 

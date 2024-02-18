@@ -69,6 +69,9 @@ def get_down_block(
     resnet_eps,
     resnet_act_fn,
     num_attention_heads,
+    transformer_layers_per_block,
+    attention_type,
+    attention_head_dim,
     resnet_groups=None,
     cross_attention_dim=None,
     downsample_padding=None,
@@ -132,6 +135,10 @@ def get_up_block(
     resnet_eps,
     resnet_act_fn,
     num_attention_heads,
+    transformer_layers_per_block,
+    resolution_idx,
+    attention_type,
+    attention_head_dim,
     resnet_groups=None,
     cross_attention_dim=None,
     dual_cross_attention=False,
@@ -199,7 +206,7 @@ class FourierEmbedder(nn.Layer):
         return paddle.stack((x.sin(), x.cos()), axis=-1).transpose([0, 1, 3, 4, 2]).reshape([*x.shape[:2], -1])
 
 
-class PositionNet(nn.Layer):
+class GLIGENTextBoundingboxProjection(nn.Layer):
     def __init__(self, positive_len, out_dim, feature_type, fourier_freqs=8):
         super().__init__()
         self.positive_len = positive_len
@@ -856,7 +863,7 @@ class UNetFlatConditionModel(ModelMixin, ConfigMixin):
                 positive_len = cross_attention_dim[0]
 
             feature_type = "text-only" if attention_type == "gated" else "text-image"
-            self.position_net = PositionNet(
+            self.position_net = GLIGENTextBoundingboxProjection(
                 positive_len=positive_len, out_dim=cross_attention_dim, feature_type=feature_type
             )
 
@@ -1595,7 +1602,7 @@ class DownBlockFlat(nn.Layer):
         output_states = ()
 
         for resnet in self.resnets:
-            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if self.gradient_checkpointing and not hidden_states.stop_gradient:
 
                 def create_custom_forward(module):
                     def custom_forward(*inputs):
@@ -1734,9 +1741,7 @@ class CrossAttnDownBlockFlat(nn.Layer):
         blocks = list(zip(self.resnets, self.attentions))
 
         for i, (resnet, attn) in enumerate(blocks):
-            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
-                # TODO ?? what this
-                # hidden_states = hidden_states.detach()
+            if self.gradient_checkpointing and not hidden_states.stop_gradient:
 
                 def create_custom_forward(module, return_dict=None):
                     def custom_forward(*inputs):
@@ -1873,7 +1878,7 @@ class UpBlockFlat(nn.Layer):
 
             hidden_states = paddle.concat([hidden_states, res_hidden_states], axis=1)
 
-            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if self.gradient_checkpointing and not hidden_states.stop_gradient:
 
                 def create_custom_forward(module):
                     def custom_forward(*inputs):
@@ -2028,7 +2033,7 @@ class CrossAttnUpBlockFlat(nn.Layer):
 
             hidden_states = paddle.concat([hidden_states, res_hidden_states], axis=1)
 
-            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if self.gradient_checkpointing and not hidden_states.stop_gradient:
 
                 def create_custom_forward(module, return_dict=None):
                     def custom_forward(*inputs):
@@ -2305,7 +2310,7 @@ class UNetMidBlockFlatCrossAttn(nn.Layer):
         lora_scale = cross_attention_kwargs.get("scale", 1.0) if cross_attention_kwargs is not None else 1.0
         hidden_states = self.resnets[0](hidden_states, temb, scale=lora_scale)
         for attn, resnet in zip(self.attentions, self.resnets[1:]):
-            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if self.gradient_checkpointing and not hidden_states.stop_gradient:
 
                 def create_custom_forward(module, return_dict=None):
                     def custom_forward(*inputs):

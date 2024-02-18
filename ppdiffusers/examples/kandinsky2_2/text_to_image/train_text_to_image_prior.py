@@ -653,16 +653,17 @@ def main():
         if args.use_ema:
             ema_prior.copy_to(prior.parameters())
 
-        pipeline = AutoPipelineForText2Image.from_pretrained(
-            args.pretrained_decoder_model_name_or_path,
-            prior_image_encoder=image_encoder,
-            prior_text_encoder=text_encoder,
-            prior_prior=prior,
-            prior_scheduler=noise_scheduler,
-            prior_tokenizer=tokenizer,
-            prior_image_processor=image_processor,
-        )
-        pipeline.prior_pipe.save_pretrained(args.output_dir)
+        with paddle.device_guard("cpu"):
+            pipeline = AutoPipelineForText2Image.from_pretrained(
+                args.pretrained_decoder_model_name_or_path,
+                prior_image_encoder=image_encoder,
+                prior_text_encoder=text_encoder,
+                prior_prior=prior,
+                prior_scheduler=noise_scheduler,
+                prior_tokenizer=tokenizer,
+                prior_image_processor=image_processor,
+            )
+            pipeline.prior_pipe.save_pretrained(args.output_dir)
 
         if args.push_to_hub:
             repo.push_to_hub(commit_message="End of training", blocking=False, auto_lfs_prune=True)

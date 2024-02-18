@@ -18,9 +18,9 @@ import paddle
 import PIL
 import requests
 from IPython.display import display
-from paddlenlp.transformers import CLIPTextModel
 
 from ppdiffusers import DDIMScheduler, DiffusionPipeline
+from ppdiffusers.transformers import CLIPTextModel
 from ppdiffusers.utils.testing_utils import get_examples_pipeline
 
 

@@ -43,7 +43,7 @@ from .tuners import (
 from .utils import _prepare_prompt_learning_config
 
 if TYPE_CHECKING:
-    from paddlenlp.transformers import PretrainedModel as PreTrainedModel
+    from paddlenlp.transformers import PretrainedModel
 
 
 MODEL_TYPE_TO_PEFT_MODEL_MAPPING: Dict[str, PeftModel] = {}
@@ -83,13 +83,13 @@ def get_peft_config(config_dict: Dict[str, Any]) -> PeftConfig:
 
 
 def get_peft_model(
-    model: PreTrainedModel, peft_config: PeftConfig, adapter_name: str = "default", mixed: bool = False
+    model: PretrainedModel, peft_config: PeftConfig, adapter_name: str = "default", mixed: bool = False
 ) -> PeftModel | PeftMixedModel:
     """
     Returns a Peft model object from a model and a config.
 
     Args:
-        model ([`transformers.PreTrainedModel`]):
+        model ([`transformers.PretrainedModel`]):
             Model to be wrapped.
         peft_config ([`PeftConfig`]):
             Configuration object containing the parameters of the Peft model.

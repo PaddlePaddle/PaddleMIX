@@ -12,18 +12,17 @@
 # # See the License for the specific language governing permissions and
 # # limitations under the License.
 
-# import imageio
+import imageio
 
-# # pip install imageio[ffmpeg]
-# import paddle
+# pip install imageio[ffmpeg]
+import paddle
 
-# from ppdiffusers import TextToVideoZeroPipeline
+from ppdiffusers import TextToVideoZeroPipeline
 
-# model_id = "runwayml/stable-diffusion-v1-5"
-# pipe = TextToVideoZeroPipeline.from_pretrained(model_id, paddle_dtype=paddle.float16)
+model_id = "runwayml/stable-diffusion-v1-5"
+pipe = TextToVideoZeroPipeline.from_pretrained(model_id, paddle_dtype=paddle.float16)
 
-# prompt = "A panda is playing guitar on times square"
-# result = pipe(prompt=prompt).images
-# result = [(r * 255).astype("uint8") for r in result]
-# imageio.mimsave("text_to_video_generation-zero-result-panda.mp4", result, fps=4)
-# todo
+prompt = "A panda is playing guitar on times square"
+result = pipe(prompt=prompt).images
+result = [(r * 255).astype("uint8") for r in result]
+imageio.mimsave("text_to_video_generation-zero-result-panda.mp4", result, fps=4)

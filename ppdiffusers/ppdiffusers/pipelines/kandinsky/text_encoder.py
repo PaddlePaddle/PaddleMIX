@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import paddle.nn as nn
+from paddlenlp.utils.converter import StateDictNameMapping
 
 from ppdiffusers.transformers import PretrainedModel, XLMRobertaConfig, XLMRobertaModel
 
@@ -28,6 +29,63 @@ class MCLIPConfig(XLMRobertaConfig):
 
 class MultilingualCLIP(PretrainedModel):
     config_class = MCLIPConfig
+
+    @classmethod
+    def _get_name_mappings(cls, config):
+        mappings = []
+        model_mappings = [
+            ["embeddings.word_embeddings.weight", "embeddings.word_embeddings.weight"],
+            ["embeddings.position_ids", "embeddings.position_ids"],
+            ["embeddings.position_embeddings.weight", "embeddings.position_embeddings.weight"],
+            ["embeddings.token_type_embeddings.weight", "embeddings.token_type_embeddings.weight"],
+            ["embeddings.LayerNorm.weight", "embeddings.LayerNorm.weight"],
+            ["embeddings.LayerNorm.bias", "embeddings.LayerNorm.bias"],
+            ["pooler.dense.weight", "pooler.dense.weight", "transpose"],
+            ["pooler.dense.bias", "pooler.dense.bias"],
+            # for TokenClassification
+        ]
+        for layer_index in range(config.num_hidden_layers):
+            for name in [
+                "attention.self.query",
+                "attention.self.key",
+                "attention.self.value",
+                "attention.output.dense",
+                "attention.output.LayerNorm",
+                "intermediate.dense",
+                "output.dense",
+                "output.LayerNorm",
+            ]:
+                action = None if "LayerNorm" in name else "transpose"
+                model_mappings.extend(
+                    [
+                        [
+                            f"encoder.layer.{layer_index}.{name}.weight",
+                            f"encoder.layer.{layer_index}.{name}.weight",
+                            action,
+                        ],
+                        [
+                            f"encoder.layer.{layer_index}.{name}.bias",
+                            f"encoder.layer.{layer_index}.{name}.bias",
+                        ],
+                    ]
+                )
+
+        torch_prefix = "transformer."
+        paddle_prefix = "transformer."
+
+        # add prefix
+        for mapping in model_mappings:
+            mapping[0] = torch_prefix + mapping[0]
+            mapping[1] = paddle_prefix + mapping[1]
+
+        model_mappings.extend(
+            [
+                ["LinearTransformation.weight", "LinearTransformation.weight", "transpose"],
+                ["LinearTransformation.bias", "LinearTransformation.bias"],
+            ]
+        )
+        mappings = [StateDictNameMapping(*mapping, index=index) for index, mapping in enumerate(model_mappings)]
+        return mappings
 
     def __init__(self, config, *args, **kwargs):
         super().__init__(config, *args, **kwargs)

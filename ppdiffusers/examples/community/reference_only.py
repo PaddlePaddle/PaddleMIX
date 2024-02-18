@@ -22,6 +22,7 @@ import PIL
 from packaging import version
 from PIL import Image
 
+from ppdiffusers import DiffusionPipeline
 from ppdiffusers.configuration_utils import FrozenDict
 from ppdiffusers.models import AutoencoderKL, UNet2DConditionModel
 from ppdiffusers.models.cross_attention import CrossAttention
@@ -31,7 +32,6 @@ from ppdiffusers.models.unet_2d_blocks import (
     Transformer2DModel,
     Upsample2D,
 )
-from ppdiffusers.pipeline_utils import DiffusionPipeline
 from ppdiffusers.pipelines.stable_diffusion import StableDiffusionPipelineOutput
 from ppdiffusers.pipelines.stable_diffusion.safety_checker import (
     StableDiffusionSafetyChecker,

@@ -43,7 +43,7 @@ EXAMPLE_DOC_STRING = """
         >>> pipe = DiffusionPipeline.from_pretrained(repo, paddle_dtype=paddle.float16)
 
         >>> guidance_scale = 3.0
-        >>> image_url = "https://hf.co/datasets/diffusers/docs-images/resolve/main/shap-e/corgi.png"
+        >>> image_url = "https://hf-mirror.com/datasets/diffusers/docs-images/resolve/main/shap-e/corgi.png"
         >>> image = load_image(image_url).convert("RGB")
 
         >>> images = pipe(
@@ -137,7 +137,7 @@ class ShapEImg2ImgPipeline(DiffusionPipeline):
         if not isinstance(image, paddle.Tensor):
             image = self.image_processor(image, return_tensors="pd").pixel_values[0].unsqueeze(0)
 
-        image = image.cast(dtype=self.image_encoder.dtype)
+        # image = image.cast(dtype=self.image_encoder.dtype)
 
         image_embeds = self.image_encoder(image)["last_hidden_state"]
         image_embeds = image_embeds[:, 1:, :]  # .contiguous()  # batch_size, dim, 256

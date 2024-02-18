@@ -44,6 +44,13 @@ if is_paddle_available():
     _import_structure["lvdm_vae"] = ["LVDMAutoencoderKL"]
     _import_structure["lvdm_unet_3d"] = ["LVDMUNet3DModel"]
     _import_structure["ema"] = ["LitEma"]
+    _import_structure["paddleinfer_runtime"] = ["PaddleInferRuntimeModel"]
+    # NOTE, new add
+    _import_structure["modelscope_autoencoder_img2vid"] = ["AutoencoderKL_imgtovideo"]
+    _import_structure["modelscope_gaussian_diffusion"] = ["GaussianDiffusion"]
+    _import_structure["modelscope_gaussion_sdedit"] = ["GaussianDiffusion_SDEdit"]
+    _import_structure["modelscope_st_unet"] = ["STUNetModel"]
+    _import_structure["modelscope_st_unet_video2video"] = ["Vid2VidSTUNet"]
 
 
 if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
@@ -62,6 +69,12 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         from .lvdm_unet_3d import LVDMUNet3DModel
         from .lvdm_vae import LVDMAutoencoderKL
         from .modeling_utils import ModelMixin
+        from .modelscope_autoencoder_img2vid import AutoencoderKL_imgtovideo
+        from .modelscope_gaussian_diffusion import GaussianDiffusion
+        from .modelscope_gaussion_sdedit import GaussianDiffusion_SDEdit
+        from .modelscope_st_unet import STUNetModel
+        from .modelscope_st_unet_video2video import Vid2VidSTUNet
+        from .paddleinfer_runtime import PaddleInferRuntimeModel
         from .prior_transformer import PriorTransformer
         from .t5_film_transformer import T5FilmDecoder
         from .transformer_2d import Transformer2DModel
@@ -74,7 +87,6 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         from .unet_motion_model import MotionAdapter, UNetMotionModel
         from .unet_spatio_temporal_condition import UNetSpatioTemporalConditionModel
         from .vq_model import VQModel
-
 else:
     import sys
 

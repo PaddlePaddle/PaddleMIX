@@ -18,7 +18,7 @@ import paddle
 from paddle import nn
 from paddlenlp.transformers.model_outputs import BaseModelOutputWithPooling
 
-from ppdiffusers.transformers import CLIPPreTrainedModel
+from ppdiffusers.transformers import CLIPPretrainedModel
 from ppdiffusers.transformers.clip.configuration import CLIPTextConfig
 from ppdiffusers.transformers.clip.modeling import CLIPEncoder
 
@@ -40,7 +40,7 @@ def _expand_mask(mask: paddle.Tensor, dtype, tgt_len: Optional[int] = None):
 # This is a modified version of the CLIPTextModel from transformers.models.clip.modeling_clip
 # Which allows for an extra input of "context embeddings", which are the query embeddings used in Qformer
 # They pass through the clip model, along with the text embeddings, and interact with them using self attention
-class ContextCLIPTextModel(CLIPPreTrainedModel):
+class ContextCLIPTextModel(CLIPPretrainedModel):
     config_class = CLIPTextConfig
 
     _no_split_modules = ["CLIPEncoderLayer"]
@@ -201,7 +201,9 @@ class ContextCLIPTextEmbeddings(nn.Layer):
         self.position_embedding = nn.Embedding(config.max_position_embeddings, embed_dim)
 
         # position_ids (1, len position emb) is contiguous in memory and exported when serialized
-        self.register_buffer("position_ids", paddle.arange(config.max_position_embeddings).expand((1, -1)))
+        self.register_buffer(
+            "position_ids", paddle.arange(config.max_position_embeddings, dtype=paddle.int64).expand((1, -1))
+        )
 
     def forward(
         self,

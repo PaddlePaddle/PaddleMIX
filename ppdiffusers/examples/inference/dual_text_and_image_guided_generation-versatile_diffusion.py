@@ -12,17 +12,16 @@
 # # See the License for the specific language governing permissions and
 # # limitations under the License.
 
-# from ppdiffusers import VersatileDiffusionDualGuidedPipeline
-# from ppdiffusers.utils import load_image
+from ppdiffusers import VersatileDiffusionDualGuidedPipeline
+from ppdiffusers.utils import load_image
 
-# url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/data/benz.jpg"
-# image = load_image(url)
-# text = "a red car in the sun"
+url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/data/benz.jpg"
+image = load_image(url)
+text = "a red car in the sun"
 
-# pipe = VersatileDiffusionDualGuidedPipeline.from_pretrained("shi-labs/versatile-diffusion")
-# pipe.remove_unused_weights()
+pipe = VersatileDiffusionDualGuidedPipeline.from_pretrained("shi-labs/versatile-diffusion")
+pipe.remove_unused_weights()
 
-# text_to_image_strength = 0.75
-# image = pipe(prompt=text, image=image, text_to_image_strength=text_to_image_strength).images[0]
-# image.save("dual_text_and_image_guided_generation-versatile_diffusion-result.png")
-# todo
+text_to_image_strength = 0.75
+image = pipe(prompt=text, image=image, text_to_image_strength=text_to_image_strength).images[0]
+image.save("dual_text_and_image_guided_generation-versatile_diffusion-result.png")
