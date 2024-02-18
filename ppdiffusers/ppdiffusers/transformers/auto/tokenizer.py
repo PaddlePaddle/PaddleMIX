@@ -39,6 +39,7 @@ NEW_TOKENIZER_MAPPING_NAMES = OrderedDict(
         ("BertTokenizer", "bert"),
         ("XLMRobertaTokenizer", "xlm_roberta"),
         ("GPT2Tokenizer", "gpt2"),
+        ("RobertaTokenizer", "roberta"),
     ]
 )
 TOKENIZER_MAPPING_NAMES.update(NEW_TOKENIZER_MAPPING_NAMES)
