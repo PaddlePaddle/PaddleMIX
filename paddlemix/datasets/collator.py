@@ -123,11 +123,12 @@ class QwenVLCollator:
         labels = []
         images = []
         IGNORE_TOKEN_ID = -100
-        for query in data_list:
-            if isinstance(query, dict):
-                raw_data = self.processor(query=query, mode=self.mode)
+        for record in data_list:
+
+            if isinstance(record, dict) and "input_ids" in record.keys():
+                raw_data = record
             else:
-                raw_data = query
+                raw_data = self.processor(query=record, mode=self.mode)
 
             raw_data["input_ids"] += [self.processor.tokenizer.pad_token_id] * (
                 self.processor.max_len - len(raw_data["input_ids"])
