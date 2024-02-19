@@ -26,7 +26,7 @@
 ```bash
 # llava
 python paddlemix/examples/llava/run_predict_multiround.py \
---model-path "paddlemix/llava-v1.5-7b" \
+--model-path "paddlemix/llava/llava-v1.5-7b" \
 --image-file "https://bj.bcebos.com/v1/paddlenlp/models/community/GroundingDino/000000004505.jpg" \
 ```
 可配置参数说明：
