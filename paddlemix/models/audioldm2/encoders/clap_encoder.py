@@ -13,18 +13,19 @@
 # limitations under the License.
 
 import math
+import warnings
+from typing import Optional
+
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
-import warnings
 from paddle.audio.features import MelSpectrogram
-from ..clap_module.clap import create_clap_model
 from paddlenlp.transformers.roberta.tokenizer import RobertaTokenizer
-from typing import Optional
 
-def get_audio_features(
-    audio_data, mel, max_len, data_truncating, data_filling, audio_cfg
-):
+from ..clap_module.clap import create_clap_model
+
+
+def get_audio_features(audio_data, mel, max_len, data_truncating, data_filling, audio_cfg):
     """
     Calculate and add audio features to sample.
     Sample: a dict containing all the data of current sample.
@@ -39,9 +40,7 @@ def get_audio_features(
     # assert audio_data.size(-1) <= max_len, str(audio_data.size())
 
     # split to three parts
-    chunk_frames = (
-        max_len // audio_cfg["hop_size"] + 1
-    )  # the +1 related to how the spectrogram is computed
+    chunk_frames = max_len // audio_cfg["hop_size"] + 1  # the +1 related to how the spectrogram is computed
     mel = mel[:chunk_frames]
 
     audio_data = audio_data[..., :max_len]
@@ -52,6 +51,7 @@ def get_audio_features(
     sample["waveform"] = audio_data
 
     return sample
+
 
 def _get_sinc_resample_kernel(
     orig_freq: int,
@@ -64,9 +64,7 @@ def _get_sinc_resample_kernel(
     dtype: Optional[paddle.dtype] = None,
 ):
     if not (int(orig_freq) == orig_freq and int(new_freq) == new_freq):
-        raise Exception(
-            "Frequencies must be of integer type to ensure quality resampling computation. "
-        )
+        raise Exception("Frequencies must be of integer type to ensure quality resampling computation. ")
 
     if resampling_method in ["sinc_interpolation", "kaiser_window"]:
         method_map = {
@@ -124,6 +122,7 @@ def _get_sinc_resample_kernel(
 
     return kernels, width
 
+
 def _apply_sinc_resample_kernel(
     waveform: paddle.Tensor,
     orig_freq: int,
@@ -132,7 +131,7 @@ def _apply_sinc_resample_kernel(
     kernel: paddle.Tensor,
     width: int,
 ):
-    if not "float" in str(waveform.dtype):
+    if "float" not in str(waveform.dtype):
         raise TypeError(f"Expected floating point type for waveform tensor, but received {waveform.dtype}.")
 
     orig_freq = int(orig_freq) // gcd
@@ -143,7 +142,7 @@ def _apply_sinc_resample_kernel(
     waveform = waveform.reshape([-1, shape[-1]])
 
     num_wavs, length = waveform.shape
-    waveform = nn.functional.pad(waveform.unsqueeze(0), (width, width + orig_freq), data_format='NCL').squeeze(0)
+    waveform = nn.functional.pad(waveform.unsqueeze(0), (width, width + orig_freq), data_format="NCL").squeeze(0)
     resampled = nn.functional.conv1d(waveform[:, None], kernel, stride=orig_freq)
     perm_shape = list(range(resampled.dim()))
     new_perm_shape = perm_shape
@@ -189,7 +188,7 @@ def resample(
     """
 
     if orig_freq <= 0.0 or new_freq <= 0.0:
-        raise ValueError("Original frequency and desired frequecy should be positive")
+        raise ValueError("Original frequency and desired frequency should be positive")
 
     if orig_freq == new_freq:
         return waveform
@@ -209,6 +208,7 @@ def resample(
     resampled = _apply_sinc_resample_kernel(waveform, orig_freq, new_freq, gcd, kernel, width)
     return resampled
 
+
 class CLAPAudioEmbeddingClassifierFreev2(nn.Layer):
     def __init__(
         self,
@@ -223,7 +223,7 @@ class CLAPAudioEmbeddingClassifierFreev2(nn.Layer):
         training_mode=True,
     ):
         super().__init__()
-        self.device = "cpu" # The model itself is on cpu
+        self.device = "cpu"  # The model itself is on cpu
         self.cuda = enable_cuda
         self.precision = "fp32"
         self.amodel = amodel  # or 'PANN-14'
@@ -270,9 +270,7 @@ class CLAPAudioEmbeddingClassifierFreev2(nn.Layer):
         self.model.eval()
 
     def get_unconditional_condition(self, batchsize):
-        self.unconditional_token = self.model.get_text_embedding(
-            self.tokenizer(["", ""])
-        )[0:1]
+        self.unconditional_token = self.model.get_text_embedding(self.tokenizer(["", ""]))[0:1]
         return paddle.concat([self.unconditional_token.unsqueeze(0)] * batchsize, axis=0)
 
     def batch_to_list(self, batch):
@@ -295,9 +293,7 @@ class CLAPAudioEmbeddingClassifierFreev2(nn.Layer):
         # waveform: [bs, t-steps]
         t_steps = waveform.shape[-1]
         for i in range(waveform.shape[0]):
-            mute_size = int(
-                self.random_uniform(0, end=int(t_steps * self.max_random_mute_portion))
-            )
+            mute_size = int(self.random_uniform(0, end=int(t_steps * self.max_random_mute_portion)))
             mute_start = int(self.random_uniform(0, t_steps - mute_size))
             waveform[i, mute_start : mute_start + mute_size] = 0
         return waveform
@@ -315,14 +311,12 @@ class CLAPAudioEmbeddingClassifierFreev2(nn.Layer):
         return similarity.squeeze()
 
     def build_unconditional_emb(self):
-        self.unconditional_token = self.model.get_text_embedding(
-            self.tokenizer(["", ""])
-        )[0:1]
+        self.unconditional_token = self.model.get_text_embedding(self.tokenizer(["", ""]))[0:1]
 
     def forward(self, batch):
         # If you want this conditioner to be unconditional, set self.unconditional_prob = 1.0
         # If you want this conditioner to be fully conditional, set self.unconditional_prob = 0.0
-        if self.model.training == True and not self.training_mode:
+        if self.model.training is True and not self.training_mode:
             print(
                 "The pretrained CLAP model should always be in eval mode. Reloading model just in case you change the parameters."
             )
@@ -349,9 +343,7 @@ class CLAPAudioEmbeddingClassifierFreev2(nn.Layer):
                 print("INFO: clap model calculate the audio embedding as condition")
             with paddle.no_grad():
                 if self.sampling_rate != 48000:
-                    batch = resample(
-                        batch, orig_freq=self.sampling_rate, new_freq=48000
-                    )
+                    batch = resample(batch, orig_freq=self.sampling_rate, new_freq=48000)
                 audio_data = batch.squeeze(1)
                 mel = self.mel_transform(audio_data)
                 audio_dict = get_audio_features(
@@ -369,9 +361,7 @@ class CLAPAudioEmbeddingClassifierFreev2(nn.Layer):
                 # the 'fusion' truncate mode can be changed to 'rand_trunc' if run in unfusion mode
                 text_data = self.tokenizer(batch)
 
-                if isinstance(batch, str) or (
-                    isinstance(batch, list) and len(batch) == 1
-                ):
+                if isinstance(batch, str) or (isinstance(batch, list) and len(batch) == 1):
                     for key in text_data.keys():
                         text_data[key] = text_data[key].unsqueeze(0)
 

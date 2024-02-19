@@ -12,10 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import importlib
+
 import paddle
 import paddle.nn as nn
 from paddlenlp.transformers import GPTModel
-import importlib
+
 
 class Sequence2AudioMAE(nn.Layer):
     def __init__(
@@ -34,7 +36,7 @@ class Sequence2AudioMAE(nn.Layer):
         **kwargs
     ):
         super().__init__()
-        assert use_audiomae_linear == False
+        assert use_audiomae_linear is False
         self.random_mask_ratio = random_mask_ratio
         self.learning_rate = base_learning_rate
         self.cond_stage_config = cond_stage_config
@@ -42,8 +44,8 @@ class Sequence2AudioMAE(nn.Layer):
         self.optimizer_type = optimizer_type
         self.use_warmup = use_warmup
         self.use_ar_gen_loss = use_ar_gen_loss
-        # Even though the LDM can be conditioned on mutliple pooling rate
-        # Our model always predict the higest pooling rate
+        # Even though the LDM can be conditioned on multiple pooling rate
+        # Our model always predict the highest pooling rate
 
         self.mae_token_num = sequence_gen_length
         self.sequence_input_key = sequence_input_key
@@ -64,7 +66,7 @@ class Sequence2AudioMAE(nn.Layer):
         self.initialize_param_check_toolkit()
 
         self.model = GPTModel.from_pretrained("gpt2")
-        
+
         self.loss_fn = nn.L1Loss()
 
         self.logger_save_dir = None
@@ -81,15 +83,13 @@ class Sequence2AudioMAE(nn.Layer):
         unconditional_conditioning = {}
         for key in self.cond_stage_model_metadata:
             model_idx = self.cond_stage_model_metadata[key]["model_idx"]
-            unconditional_conditioning[key] = self.cond_stage_models[
-                model_idx
-            ].get_unconditional_condition(batch_size)
+            unconditional_conditioning[key] = self.cond_stage_models[model_idx].get_unconditional_condition(batch_size)
         assert (
             "crossattn_audiomae_pooled" in unconditional_conditioning.keys()
         ), "The module is not initialized with AudioMAE"
-        unconditional_conditioning[
-            "crossattn_clap_to_audiomae_feature"
-        ] = unconditional_conditioning["crossattn_audiomae_pooled"]
+        unconditional_conditioning["crossattn_clap_to_audiomae_feature"] = unconditional_conditioning[
+            "crossattn_audiomae_pooled"
+        ]
         return unconditional_conditioning
 
     def add_sos_eos_tokens(self, _id, sequence, attn_mask):
@@ -99,9 +99,7 @@ class Sequence2AudioMAE(nn.Layer):
         key_id = paddle.to_tensor([_id])
 
         # Add two more steps to attn mask
-        new_attn_mask = paddle.concat(
-            [new_attn_mask_step, attn_mask, new_attn_mask_step], axis=1
-        )
+        new_attn_mask = paddle.concat([new_attn_mask_step, attn_mask, new_attn_mask_step], axis=1)
 
         # Add two more tokens in the sequence
         sos_token = self.start_of_sequence_tokens(key_id).expand([batchsize, 1, -1])
@@ -123,9 +121,7 @@ class Sequence2AudioMAE(nn.Layer):
         input_embeds = None
         input_embeds_attn_mask = None
         for _id, sequence_key in enumerate(self.sequence_input_key):
-            assert sequence_key in cond_dict.keys(), (
-                "Invalid sequence key %s" % sequence_key
-            )
+            assert sequence_key in cond_dict.keys(), "Invalid sequence key %s" % sequence_key
             cond_embed = cond_dict[sequence_key]
             if isinstance(cond_embed, list):
                 assert (
@@ -133,13 +129,9 @@ class Sequence2AudioMAE(nn.Layer):
                 ), "The crossattn returned list should have length 2, including embed and attn_mask"
                 item_input_embeds, item_attn_mask = cond_embed
 
-                item_input_embeds = self.input_sequence_embed_linear[_id](
-                    item_input_embeds
-                )
+                item_input_embeds = self.input_sequence_embed_linear[_id](item_input_embeds)
 
-                item_input_embeds, item_attn_mask = self.add_sos_eos_tokens(
-                    _id, item_input_embeds, item_attn_mask
-                )
+                item_input_embeds, item_attn_mask = self.add_sos_eos_tokens(_id, item_input_embeds, item_attn_mask)
 
                 if input_embeds is None and input_embeds_attn_mask is None:
                     input_embeds, input_embeds_attn_mask = (
@@ -158,9 +150,7 @@ class Sequence2AudioMAE(nn.Layer):
                 cond_embed = self.input_sequence_embed_linear[_id](cond_embed)
                 attn_mask = paddle.ones((cond_embed.shape[0], cond_embed.shape[1]))
 
-                item_input_embeds, item_attn_mask = self.add_sos_eos_tokens(
-                    _id, cond_embed, attn_mask
-                )
+                item_input_embeds, item_attn_mask = self.add_sos_eos_tokens(_id, cond_embed, attn_mask)
 
                 if input_embeds is None and input_embeds_attn_mask is None:
                     input_embeds, input_embeds_attn_mask = (
@@ -177,9 +167,7 @@ class Sequence2AudioMAE(nn.Layer):
         input_embeds, input_embeds_attn_mask = self.truncate_sequence_and_mask(
             input_embeds, input_embeds_attn_mask, int(1024 - self.mae_token_num)
         )
-        cond_sequence_end_time_idx = input_embeds.shape[
-            1
-        ]  # The index that we start to collect the output embeds
+        cond_sequence_end_time_idx = input_embeds.shape[1]  # The index that we start to collect the output embeds
 
         return input_embeds, input_embeds_attn_mask, cond_sequence_end_time_idx
 
@@ -194,7 +182,7 @@ class Sequence2AudioMAE(nn.Layer):
             else:
                 mask_ratio = self.target_tokens_mask_ratio
 
-            time_seq_mask = (paddle.rand((batchsize, time_seq_len)) > mask_ratio)
+            time_seq_mask = paddle.rand((batchsize, time_seq_len)) > mask_ratio
 
             # Mask the target embedding
             target_embeds = target_embeds * time_seq_mask.unsqueeze(-1)
@@ -220,9 +208,7 @@ class Sequence2AudioMAE(nn.Layer):
             cond_sequence_end_time_idx,
         ) = self.get_input_sequence_and_mask(cond_dict)
 
-        model_input = paddle.concat(
-            [input_embeds, target_embeds[:, : target_time_steps // 4, :]], axis=1
-        )
+        model_input = paddle.concat([input_embeds, target_embeds[:, : target_time_steps // 4, :]], axis=1)
         model_input_mask = paddle.concat(
             [
                 input_embeds_attn_mask,
@@ -234,16 +220,14 @@ class Sequence2AudioMAE(nn.Layer):
         steps = self.mae_token_num
 
         for _ in range(3 * steps // 4):
-            output = self.model(
-                inputs_embeds=model_input, attention_mask=model_input_mask, return_dict=True
-            )["last_hidden_state"]
+            output = self.model(inputs_embeds=model_input, attention_mask=model_input_mask, return_dict=True)[
+                "last_hidden_state"
+            ]
             # Update the model input
             model_input = paddle.concat([model_input, output[:, -1:, :]], axis=1)
             # Update the attention mask
             attention_mask_new_step = paddle.ones((model_input_mask.shape[0], 1))
-            model_input_mask = paddle.concat(
-                [model_input_mask, attention_mask_new_step], axis=1
-            )
+            model_input_mask = paddle.concat([model_input_mask, attention_mask_new_step], axis=1)
 
         output = model_input[:, cond_sequence_end_time_idx:]
 
@@ -264,16 +248,14 @@ class Sequence2AudioMAE(nn.Layer):
         steps = self.mae_token_num
 
         for _ in range(steps):
-            output = self.model(
-                inputs_embeds=model_input, attention_mask=model_input_mask, return_dict=True
-            )["last_hidden_state"]
+            output = self.model(inputs_embeds=model_input, attention_mask=model_input_mask, return_dict=True)[
+                "last_hidden_state"
+            ]
             # Update the model input
             model_input = paddle.concat([model_input, output[:, -1:, :]], axis=1)
             # Update the attention mask
             attention_mask_new_step = paddle.ones((model_input_mask.shape[0], 1))
-            model_input_mask = paddle.concat(
-                [model_input_mask, attention_mask_new_step], axis=1
-            )
+            model_input_mask = paddle.concat([model_input_mask, attention_mask_new_step], axis=1)
 
         return model_input[:, cond_sequence_end_time_idx:], cond_dict
 
@@ -287,9 +269,7 @@ class Sequence2AudioMAE(nn.Layer):
         )
         ret = {}
 
-        ret["fbank"] = (
-            paddle.cast(fbank.unsqueeze(1), dtype="float32")
-        )
+        ret["fbank"] = paddle.cast(fbank.unsqueeze(1), dtype="float32")
         ret["stft"] = paddle.cast(stft, dtype="float32")
         ret["waveform"] = paddle.cast(waveform, dtype="float32")
         ret["text"] = list(text)
@@ -307,18 +287,14 @@ class Sequence2AudioMAE(nn.Layer):
             unconditional_cfg = False
 
             for cond_model_key in self.cond_stage_model_metadata.keys():
-                cond_stage_key = self.cond_stage_model_metadata[cond_model_key][
-                    "cond_stage_key"
-                ]
+                cond_stage_key = self.cond_stage_model_metadata[cond_model_key]["cond_stage_key"]
 
                 # The original data for conditioning
                 xc = self.get_input_item(batch, cond_stage_key)
                 if type(xc) == paddle.Tensor:
                     xc = xc
 
-                c = self.get_learned_conditioning(
-                    xc, key=cond_model_key, unconditional_cfg=unconditional_cfg
-                )
+                c = self.get_learned_conditioning(xc, key=cond_model_key, unconditional_cfg=unconditional_cfg)
                 cond_dict[cond_model_key] = c
 
         return cond_dict
@@ -340,9 +316,7 @@ class Sequence2AudioMAE(nn.Layer):
 
         # Classifier-free guidance
         if not unconditional_cfg:
-            c = self.cond_stage_models[
-                self.cond_stage_model_metadata[key]["model_idx"]
-            ](c)
+            c = self.cond_stage_models[self.cond_stage_model_metadata[key]["model_idx"]](c)
         else:
             if isinstance(c, paddle.Tensor):
                 batchsize = c.shape[0]
@@ -350,9 +324,9 @@ class Sequence2AudioMAE(nn.Layer):
                 batchsize = len(c)
             else:
                 raise NotImplementedError()
-            c = self.cond_stage_models[
-                self.cond_stage_model_metadata[key]["model_idx"]
-            ].get_unconditional_condition(batchsize)
+            c = self.cond_stage_models[self.cond_stage_model_metadata[key]["model_idx"]].get_unconditional_condition(
+                batchsize
+            )
 
         return c
 
@@ -409,9 +383,7 @@ class SequenceGenAudioMAECond(Sequence2AudioMAE):
 
         assert use_gt_mae_output is not None and use_gt_mae_prob is not None
         self.always_output_audiomae_gt = always_output_audiomae_gt
-        self.force_reload_pretrain_avoid_overwrite = (
-            force_reload_pretrain_avoid_overwrite
-        )
+        self.force_reload_pretrain_avoid_overwrite = force_reload_pretrain_avoid_overwrite
         self.pretrained_path = pretrained_path
         if self.force_reload_pretrain_avoid_overwrite:
             self.is_reload = False
@@ -456,9 +428,7 @@ class SequenceGenAudioMAECond(Sequence2AudioMAE):
             self.is_reload = True
 
         input_embeds, cond_dict = self.generate(batch)
-        input_embeds_mask = (
-            paddle.ones((input_embeds.shape[0], input_embeds.shape[1]), dtype="float32")
-        )
+        input_embeds_mask = paddle.ones((input_embeds.shape[0], input_embeds.shape[1]), dtype="float32")
         ret_dict["crossattn_audiomae_generated"] = [
             input_embeds,
             input_embeds_mask,
@@ -470,14 +440,16 @@ class SequenceGenAudioMAECond(Sequence2AudioMAE):
 
         return ret_dict
 
+
 def instantiate_from_config(config):
-    if not "target" in config:
+    if "target" not in config:
         if config == "__is_first_stage__":
             return None
         elif config == "__is_unconditional__":
             return None
         raise KeyError("Expected key `target` to instantiate.")
     return get_obj_from_str(config["target"])(**config.get("params", dict()))
+
 
 def get_obj_from_str(string, reload=False):
     module, cls = string.rsplit(".", 1)
