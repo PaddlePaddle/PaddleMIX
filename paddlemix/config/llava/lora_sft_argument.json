@@ -1,8 +1,8 @@
 {
-    "model_name_or_path": "llava-v1.5-7b",
+    "model_name_or_path": "paddlemix/llava/llava-v1.5-7b",
     "dataset": {
-      "train":[{"name": "chatml_dataset", "data_files": "train.json","chat_template":"chat_template.json"}],
-      "eval":[{"name": "chatml_dataset", "data_files": "val.json","chat_template":"chat_template.json"}]
+      "train":[{"name": "chatml_dataset", "data_files": "llava_train_part.json","chat_template":"chat_template.json"}],
+      "eval":[{"name": "chatml_dataset", "data_files": "llava_val_part.json","chat_template":"chat_template.json"}]
     },
     "mixtoken": false,
     "output_dir": "./checkpoints/llava_sft_ckpts",

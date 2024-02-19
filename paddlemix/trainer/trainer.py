@@ -218,7 +218,7 @@ def get_trainer(
         )
     else:
         if "qwen_vl" in pretrained_model_name_or_path:
-            collator = QwenVLCollator(train_processor, mode="train", mixtokens=mixtokens)
+            collator = QwenVLCollator(train_processor, mode="train")
         elif "visualglm" in pretrained_model_name_or_path:
             collator = VisualglmCollator(train_processor, mode="train")
         else:

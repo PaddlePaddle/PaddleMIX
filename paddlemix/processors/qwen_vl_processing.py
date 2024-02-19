@@ -41,7 +41,7 @@ class QwenVLProcessor(ProcessorMixin):
     def __init__(self, tokenizer, **kwargs):
         super().__init__(tokenizer)
         self.image_start_id = kwargs.get("image_start_id", 151857)
-        self.max_len = kwargs.get("max_length", 2048)
+        self.max_len = kwargs.get("max_len", 2048)
         self.image_processor = QwenVLImageProcessor()
 
     def __call__(
@@ -75,6 +75,7 @@ class QwenVLProcessor(ProcessorMixin):
         return inputs
 
     def train_preprocess(self, sources, system_message: str = "You are a helpful assistant."):
+
         IGNORE_TOKEN_ID = -100
         im_start = self.tokenizer.im_start_id
         im_end = self.tokenizer.im_end_id
@@ -91,6 +92,8 @@ class QwenVLProcessor(ProcessorMixin):
 
         image_pattern = re.compile(r"<img>.*</img>")
         image_path = []
+        if isinstance(sources, dict) and "conversations" in sources.keys():
+            sources = sources["conversations"]
         if "<img>" in sources:
             result = image_pattern.findall(sources)
             for ele in result:
@@ -121,8 +124,8 @@ class QwenVLProcessor(ProcessorMixin):
         assert len(input_id) == len(target)
 
         inputs = dict(
-            input_ids=input_id,
-            labels=target,
+            input_ids=input_id[: self.max_len],
+            labels=target[: self.max_len],
         )
         if len(image_path) > 0:
             inputs["images"] = self.image_processor(image_path)
