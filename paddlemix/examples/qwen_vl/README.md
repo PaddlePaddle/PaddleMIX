@@ -148,7 +148,7 @@ prompt2：“框出图中公交车的位置”
 对话中的检测框可以表示为`<box>(x1,y1),(x2,y2)</box>`，其中 `(x1, y1)` 和`(x2, y2)`分别对应左上角和右下角的坐标，并且被归一化到`[0, 1000)`的范围内. 检测框对应的文本描述也可以通过`<ref>text_caption</ref>`表示。
 
 ### 4.2 全参数训练
-训练时使用`paddlemix/examples/qwen_vl/finetune.py`程序进行训练，**训练前请先检查数据集路径,如果使用url，请确保环境网络正常**。需要使用A100 80G训练；若显存不足，可以使用V100 40G 进行lora微调。
+训练时使用`paddlemix/examples/qwen_vl/finetune.py`程序进行训练，**训练前请先检查数据集路径,如果使用url，请确保环境网络正常**。需要使用A100 80G训练；若显存不足，可以使用A100 40G 进行lora微调。
 
 训练命令及参数配置示例：
 ```
@@ -256,7 +256,7 @@ paddlemix/examples/qwen_vl/finetune.py \
 > 注：若不需要 sharding 策略，则无需指定tensor_parallel_degree、sharding_parallel_degree、sharding、pipeline_parallel_degree参数
 
 ### 4.3 lora微调
-lora微调需要v100 40G显存，训练后，需要使用[merge_lora_params.py](merge_lora_params.py)脚本将lora参数合并到主干模型中。
+lora微调需要A100 40G显存，训练后，需要使用[merge_lora_params.py](merge_lora_params.py)脚本将lora参数合并到主干模型中。
 
 训练命令及参数配置示例：
 ```
