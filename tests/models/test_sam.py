@@ -17,21 +17,17 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
 
-from paddlemix.models.sam.modeling import SamModel
-from paddlemix.models.sam.configuration import SamConfig
-from ppdiffusers.utils import load_image, load_numpy
-from paddlemix.processors.sam_processing import SamProcessor
-
 import inspect
 import unittest
 
 import numpy as np
 import paddle
 
-from tests.models.test_modeling_common import (
-    ModelTesterMixin,
-    floats_tensor
-)
+from paddlemix.models.sam.configuration import SamConfig
+from paddlemix.models.sam.modeling import SamModel
+from paddlemix.processors.sam_processing import SamProcessor
+from ppdiffusers.utils import load_image, load_numpy
+from tests.models.test_modeling_common import ModelTesterMixin, floats_tensor
 from tests.testing_utils import slow
 
 
@@ -41,8 +37,8 @@ class SamModelTester:
 
     def get_config(self):
         # todo: more input type
-        return SamConfig(input_type='boxs')
-    
+        return SamConfig(input_type="boxs")
+
     def prepare_config_and_inputs(self):
         pixel_values = floats_tensor([1, 3, 1024, 1024])
         # box prompt
@@ -50,22 +46,20 @@ class SamModelTester:
         config = self.get_config()
 
         return config, pixel_values, prompt
-    
+
     def prepare_config_and_inputs_for_common(self):
         config, pixel_values, prompt = self.prepare_config_and_inputs()
-        inputs_dict = {
-            'img': pixel_values,
-            'prompt': prompt
-        }
+        inputs_dict = {"img": pixel_values, "prompt": prompt}
         return config, inputs_dict
-    
+
     def create_and_check_model(self, config, pixel_values, prompt):
         model = SamModel(config=config)
         model.eval()
         with paddle.no_grad():
             result = model(pixel_values, prompt)
-        
+
         self.parent.assertIsNotNone(result)
+
 
 class SamModelTest(ModelTesterMixin, unittest.TestCase):
     all_model_classes = (SamModel,)
@@ -87,7 +81,7 @@ class SamModelTest(ModelTesterMixin, unittest.TestCase):
     def test_model(self):
         config_and_inputs = self.model_tester.prepare_config_and_inputs()
         self.model_tester.create_and_check_model(*config_and_inputs)
-        
+
     def test_determinism(self):
         def check_determinism(first, second):
             out_1 = first.numpy()
@@ -127,26 +121,27 @@ class SamModelTest(ModelTesterMixin, unittest.TestCase):
         config = SamConfig.from_pretrained("Sam/SamVitH-1024")
         self.assertIsNotNone(config)
 
-
     @slow
     def test_model_from_pretrained(self):
-        pretrained_model = 'Sam/SamVitH-1024'
-        model = SamModel.from_pretrained('Sam/SamVitH-1024', input_type='boxs')
+        pretrained_model = "Sam/SamVitH-1024"
+        model = SamModel.from_pretrained("Sam/SamVitH-1024", input_type="boxs")
         self.assertIsNotNone(model)
 
         # todo: check the res
         paddle.seed(1024)
-        img_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations.png"
+        img_url = (
+            "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations.png"
+        )
         expected_image = load_numpy(
             "https://bj.bcebos.com/v1/paddlenlp/models/community/Sam/SamVitH-1024/overture-creations-mask.npy"
         )
 
         image_pil = load_image(img_url)
-        
-        # bulid processor
+
+        # build processor
         processor = SamProcessor.from_pretrained(pretrained_model)
-        # bulid model
-        input_type='boxs'
+        # build model
+        input_type = "boxs"
         sam_model = SamModel.from_pretrained(pretrained_model, input_type=input_type)
         box_prompt = np.array([174, 115, 311, 465])
 
@@ -162,9 +157,9 @@ class SamModelTest(ModelTesterMixin, unittest.TestCase):
         avg_diff = np.abs(seg_masks.cpu().numpy().astype(int) - expected_image.astype(int)).mean()
         assert avg_diff < 10, f"Error image deviates {avg_diff} pixels on average"
 
-
     def test_save_load(self):
         pass
+
 
 if __name__ == "__main__":
     unittest.main()

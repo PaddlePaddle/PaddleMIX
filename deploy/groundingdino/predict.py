@@ -24,7 +24,7 @@ from paddle.utils.cpp_extension import load
 from paddlenlp.trainer import PdArgumentParser
 from PIL import Image, ImageDraw, ImageFont
 
-from paddlemix.processors.groundingdino_processing import GroudingDinoProcessor
+from paddlemix.processors.groundingdino_processing import GroundingDinoProcessor
 
 ms_deformable_attn = load(
     name="deformable_detr_ops",
@@ -153,7 +153,7 @@ def plot_boxes_to_image(image_pil, tgt):
 
 class Predictor(object):
     def __init__(self, model_args, data_args):
-        self.processor = GroudingDinoProcessor.from_pretrained(model_args.text_encoder_type)
+        self.processor = GroundingDinoProcessor.from_pretrained(model_args.text_encoder_type)
         self.box_threshold = model_args.box_threshold
         self.text_threshold = model_args.text_threshold
         self.predictor, self.config = load_predictor(model_args.model_path)

@@ -17,7 +17,7 @@ import paddle.nn.functional as F
 
 from paddlemix.models.groundingdino.modeling import GroundingDinoModel
 from paddlemix.models.sam.modeling import SamModel
-from paddlemix.processors.groundingdino_processing import GroudingDinoProcessor
+from paddlemix.processors.groundingdino_processing import GroundingDinoProcessor
 from paddlemix.processors.sam_processing import SamProcessor
 
 from .apptask import AppTask
@@ -86,7 +86,7 @@ class OpenSetDetTask(AppTask):
         Construct the tokenizer for the predictor.
         """
         # build processor
-        self._processor = GroudingDinoProcessor.from_pretrained(model, cache_dir=self._model_dir)
+        self._processor = GroundingDinoProcessor.from_pretrained(model, cache_dir=self._model_dir)
 
     def _construct_model(self, model):
         """

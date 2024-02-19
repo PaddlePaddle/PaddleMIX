@@ -47,4 +47,7 @@ class ChatMLDataset(DatasetBuilder, ChatTemplateMixin):
             if "image" in ann.keys():
                 yield_data["image"] = ann["image"]
 
+            if "image" in ann.keys():
+                yield_data["image"] = ann["image"]
+
             yield yield_data
