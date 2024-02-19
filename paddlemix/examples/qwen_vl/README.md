@@ -87,7 +87,7 @@ prompt2：“框出图中公交车的位置”
 
 ## 4 模型微调
 我们提供 `finetune.py` 脚本，用于模型微调。模型微调支持全参数微调，以及lora微调。
-全参数微调需要A100 80G显存，lora微调支持V100 40G显存。
+全参数微调需要A100 80G显存，lora微调支持A100 40G显存。
 
 ### 4.1 数据准备
 将自己的数据放到一个列表中并存入json文件中，示例如下,或参考[sft_examples](https://bj.bcebos.com/v1/paddlenlp/models/community/qwen-vl/sft_examples.json)：
