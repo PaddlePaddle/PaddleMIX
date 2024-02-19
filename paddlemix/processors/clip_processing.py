@@ -436,7 +436,7 @@ class CLIPImageProcessor(BaseImageProcessor):
         Crop the input data to random size and aspect ratio.
         A crop of random size (default: of 0.08 to 1.0) of the original size and a random
         aspect ratio (default: of 3/4 to 1.33) of the original aspect ratio is made.
-        After applying crop transfrom, the input data will be resized to given size.
+        After applying crop transform, the input data will be resized to given size.
 
         Args:
             image (`np.ndarray`):

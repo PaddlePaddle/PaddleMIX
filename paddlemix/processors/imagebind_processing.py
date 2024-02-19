@@ -17,15 +17,16 @@ Processor class for ImageBind.
 """
 
 import logging
-from typing import List, Optional, Union
+from abc import ABC, abstractmethod
+from fractions import Fraction
+
+# from paddlevideo.data.clip_sampling import ConstantClipsPerVideoSampler
+from typing import Any, Dict, List, NamedTuple, Optional, Tuple, Union  # noqa
 
 import paddle
 from paddle.vision.transforms import transforms as T
 from paddlenlp.transformers.tokenizer_utils_base import BatchEncoding
-# from paddlevideo.data.clip_sampling import ConstantClipsPerVideoSampler
-from typing import Any, Dict, NamedTuple, Optional, Tuple, Union, List
-from abc import ABC, abstractmethod
-from fractions import Fraction
+
 from .base_processing import ProcessorMixin
 from .processing_utils import BaseAudioProcessor
 
@@ -64,7 +65,7 @@ class ImageBindProcessor(ProcessorMixin):
             encoding["audio_values"] = self.audio_processor(audios, return_tensors=return_tensors, **kwargs)
 
         if text is not None and images is not None:
-            encoding["pixel_values"] = image_features['image']
+            encoding["pixel_values"] = image_features["image"]
             return encoding
         elif text is not None:
             return encoding
@@ -196,7 +197,6 @@ class ImageBindAudioProcessor(BaseAudioProcessor):
         return fbank
 
 
-
 class ClipInfo(NamedTuple):
     """
     Named-tuple for clip information with:
@@ -237,9 +237,8 @@ class ClipSampler(ABC):
         pass
 
     def reset(self) -> None:
-        """Resets any video-specific attributes in preperation for next video"""
+        """Resets any video-specific attributes in preparation for next video"""
         pass
-
 
 
 class ConstantClipsPerVideoSampler(ClipSampler):
@@ -248,16 +247,12 @@ class ConstantClipsPerVideoSampler(ClipSampler):
     clip_duration at these increments.
     """
 
-    def __init__(
-        self, clip_duration: float, clips_per_video: int, augs_per_clip: int = 1
-    ) -> None:
+    def __init__(self, clip_duration: float, clips_per_video: int, augs_per_clip: int = 1) -> None:
         super().__init__(clip_duration)
         self._clips_per_video = clips_per_video
         self._augs_per_clip = augs_per_clip
 
-    def __call__(
-        self, last_clip_time: float, video_duration: float, annotation: Dict[str, Any]
-    ) -> ClipInfo:
+    def __call__(self, last_clip_time: float, video_duration: float, annotation: Dict[str, Any]) -> ClipInfo:
         """
         Args:
             last_clip_time (float): Not used for ConstantClipsPerVideoSampler.
