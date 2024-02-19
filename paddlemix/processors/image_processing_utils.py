@@ -203,7 +203,7 @@ class ImageProcessingMixin(object):
         Uploads all elements of this processor to a new HuggingFace Hub repository.
         Args:
             repo_id (str): Repository name for your processor in the Hub.
-            private (bool, optional): Whether theprocessor is set to private
+            private (bool, optional): Whether the processor is set to private
             subfolder (str, optional): Push to a subfolder of the repo instead of the root
             commit_message (str, optional) — The summary / title / first line of the generated commit. Defaults to: f"Upload {path_in_repo} with huggingface_hub"
             revision (str, optional) — The git revision to commit from. Defaults to the head of the "main" branch.

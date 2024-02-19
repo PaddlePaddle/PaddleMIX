@@ -82,7 +82,7 @@ def _convert_state_dict_dtype_and_shape(state_dict, model_to_load):
         if key in state_dict:
             if isinstance(state_dict[key], np.ndarray):
                 raise ValueError(
-                    "convert_state_dict_dtype expected paddle.Tensor not numpy.ndarray, plase convert numpy.ndarray to paddle.Tensor"
+                    "convert_state_dict_dtype expected paddle.Tensor not numpy.ndarray, please convert numpy.ndarray to paddle.Tensor"
                 )
             if state_dict[key].is_floating_point() and state_dict[key].dtype != value.dtype:
                 state_dict[key] = paddle.cast(state_dict.pop(key), value.dtype)
@@ -165,8 +165,8 @@ class MixPretrainedModel(PretrainedModel):
     customized in loaded_pretrained when the pretrained model is used for different stages.
 
     The most difference between `PretrainedModel` and `MixPretrainedModel` is that
-    `MixPretrainedModel` increaces `load_pretrained` method to support loading pretrained weights
-    in differenet stages after construction. The other methods are the same as class
+    `MixPretrainedModel` increases `load_pretrained` method to support loading pretrained weights
+    in different stages after construction. The other methods are the same as class
     `paddlenlp.transformers.model_utils.PretrainedModel`.
     """
 
@@ -178,7 +178,7 @@ class MixPretrainedModel(PretrainedModel):
         return list(model_state_dict.keys())
 
     def refine_state_dict(self, state_dict):
-        # preprocess the weight loaded here, such as interpolatation
+        # preprocess the weight loaded here, such as interpolation
         pass
 
     def load_pretrained(
@@ -205,10 +205,10 @@ class MixPretrainedModel(PretrainedModel):
             pretrained_model_name_or_path (str): the pretrained model name or path.
             state_dict (Dict[str, Tensor]): the model state dict data.
             ignore_mismatched_sizes (bool, optional): whether ignore error when tensor size mismatched. Defaults to False.
-            low_cpu_mem_usage (bool, optional): whether use low cpu memory usage for loading pretrained model。 Defautls to False.
+            low_cpu_mem_usage (bool, optional): whether use low cpu memory usage for loading pretrained model。 Defaults to False.
             dtype (_type_, optional): the dtype of model state dict. Defaults to None.
-            cahce_cache_dir (str, optional): the cache directory for loading pretrained model. Defaults to None.
-            sufolder (str, optional): the subfolder of pretrained model name. Defaults "".
+            cache_dir (str, optional): the cache directory for loading pretrained model. Defaults to None.
+            subfolder (str, optional): the subfolder of pretrained model name. Defaults "".
             variant (str, optional): the pretrained model variant. Defaults to None.
 
         Returns:
@@ -364,7 +364,7 @@ class MixPretrainedModel(PretrainedModel):
             return mismatched_keys
 
         if state_dict is not None:
-            # DONT Hold tensor parallel here, only hold afer load state dict.
+            # DONT Hold tensor parallel here, only hold after load state dict.
             # Whole checkpoint
             # For model parallel if FastGeneration
             # To avoid recursive import temporarily.
@@ -398,7 +398,7 @@ class MixPretrainedModel(PretrainedModel):
                 pre_tensor_parallel_split = False
                 state_dict = paddlemix_load(shard_file)
 
-                # Mistmatched keys contains tuples key/shape1/shape2 of weights in the checkpoint that have a shape not
+                # Mismatched keys contains tuples key/shape1/shape2 of weights in the checkpoint that have a shape not
                 # matching the weights in the model.
                 mismatched_keys += _find_mismatched_keys(
                     state_dict,
