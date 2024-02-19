@@ -143,7 +143,7 @@ class FinetuneArguments(TrainingArguments):
     do_train: bool = field(default=False, metadata={"help": "Whether to run training."})
     do_eval: bool = field(default=False, metadata={"help": "Whether to run eval on the dev set."})
     do_predict: bool = field(default=False, metadata={"help": "Whether to run predictions on the test set."})
-    do_export: bool = field(default=False, metadata={"help": "Whether to export infernece model."})
+    do_export: bool = field(default=False, metadata={"help": "Whether to export inference model."})
     per_device_train_batch_size: int = field(default=8, metadata={"help": "Batch size per GPU core/CPU for training."})
     per_device_eval_batch_size: int = field(
         default=8, metadata={"help": "Batch size per GPU core/CPU for evaluation."}
@@ -164,7 +164,7 @@ class FinetuneArguments(TrainingArguments):
     )
     lr_scheduler_type: str = field(
         default="cosine",
-        metadata={"help": "The scheduler type to use. suppor linear, cosine, constant, constant_with_warmup"},
+        metadata={"help": "The scheduler type to use. support linear, cosine, constant, constant_with_warmup"},
     )
     warmup_ratio: float = field(
         default=0.0, metadata={"help": "Linear warmup over warmup_ratio fraction of total steps."}

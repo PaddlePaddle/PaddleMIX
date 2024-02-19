@@ -21,7 +21,6 @@ import numpy as np
 import paddle
 import PIL
 from paddle.vision.transforms import functional as F
-
 from paddlenlp.transformers.tokenizer_utils_base import (
     BatchEncoding,
     PreTokenizedInput,
@@ -87,7 +86,7 @@ class CLIPProcessor(ProcessorMixin):
         Main method to prepare for the model one or several sequences(s) and image(s). This method forwards the `text`
         and `kwargs` arguments to Bert's [`~BertTokenizerFast.__call__`] if `text` is not `None` to encode
         the text. To prepare the image(s), this method forwards the `images` and `kwargs` arguments to
-        CLIPImageProcessor's [`~CLIPImageProcessor.__call__`] if `images` is not `None`. Please refer to the doctsring
+        CLIPImageProcessor's [`~CLIPImageProcessor.__call__`] if `images` is not `None`. Please refer to the docstring
         of the above two methods for more information.
 
         Args:
@@ -324,7 +323,7 @@ class CLIPImageProcessor(BaseImageProcessor):
         scale: Optional[Union[List[float], Tuple[float]]] = (0.9, 1.0),
         do_collate: bool = False,
         mode: str = "train",
-        interpolation: str = "bilinear", 
+        interpolation: str = "bilinear",
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
