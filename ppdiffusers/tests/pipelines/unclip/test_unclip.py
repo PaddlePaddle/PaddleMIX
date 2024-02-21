@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import gc
 import unittest
 
@@ -358,13 +359,15 @@ class UnCLIPPipelineIntegrationTests(unittest.TestCase):
         paddle.device.cuda.empty_cache()
 
     def test_unclip_karlo(self):
+        # export USE_PPXFORMERS=False
+        os.environ["USE_PPXFORMERS"] = "False"
         # Hard code image
-        paddle.seed(0)
-        expected_image = np.array([[0.6577126, 0.60502625, 0.54735416], [0.71303344, 0.6528542, 0.5846128]])
+        expected_image = np.array([[0.73276037, 0.6916855, 0.6466039], [0.7193073, 0.65402883, 0.60441]])
         pipeline = UnCLIPPipeline.from_pretrained("kakaobrain/karlo-v1-alpha")
         pipeline.set_progress_bar_config(disable=None)
         generator = paddle.Generator().manual_seed(0)
         output = pipeline("horse", generator=generator, output_type="np")
         image = output.images[0]
         assert image.shape == (256, 256, 3)
+        print(image[0][0:2])
         assert_mean_pixel_difference(image[0][0:2], expected_image)

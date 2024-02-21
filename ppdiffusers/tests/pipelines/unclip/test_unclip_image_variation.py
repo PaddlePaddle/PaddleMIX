@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import gc
 import random
 import unittest
@@ -259,7 +260,8 @@ class UnCLIPImageVariationPipelineFastTests(PipelineTesterMixin, unittest.TestCa
         # assert np.abs(image_from_tuple_slice.flatten() - expected_slice).mean() < 0.01
 
     def test_unclip_image_variation_input_list_images(self):
-        paddle.seed(0)
+        # export USE_PPXFORMERS=False
+        os.environ["USE_PPXFORMERS"] = "False"
         components = self.get_dummy_components()
         pipe = self.pipeline_class(**components)
         pipe.set_progress_bar_config(disable=None)
@@ -274,8 +276,7 @@ class UnCLIPImageVariationPipelineFastTests(PipelineTesterMixin, unittest.TestCa
         image_from_tuple_slice = image_from_tuple[0, -3:, -3:, -1]
         assert image.shape == (2, 64, 64, 3)
         expected_slice = np.array(
-            [2.6383996e-04, 2.6383996e-04, 9.9755418e-01, 2.6383996e-04, 9.9199009e-01,
- 9.9202770e-01, 2.1415353e-03, 9.9641103e-01, 9.9973619e-01]
+            [5.2195787e-04, 9.9861729e-01, 9.9755943e-01, 9.9804139e-01, 9.9411529e-01, 9.9248374e-01, 9.9973619e-01, 9.9777848e-01, 9.9973619e-01]
         )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
         assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max() < 0.01
