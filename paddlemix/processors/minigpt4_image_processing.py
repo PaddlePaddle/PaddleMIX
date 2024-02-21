@@ -15,11 +15,10 @@
 # limitations under the License.
 """Image processor class for MiniGPT4."""
 
-from typing import Dict, List, Optional, Union, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import PIL
-
 from paddlenlp.transformers.tokenizer_utils_base import TensorType
 
 from .image_processing_utils import BaseImageProcessor, BatchFeature, get_size_dict
@@ -30,12 +29,12 @@ from .image_transforms import (
     resize,
     to_channel_dimension_format,
 )
-from .image_utils import (
-    load_image,
+from .image_utils import (  # noqa
     ChannelDimension,
     ImageInput,
     PILImageResampling,
     is_batched,
+    load_image,
     to_numpy_array,
     valid_images,
 )
@@ -60,7 +59,7 @@ class MiniGPT4ImageProcessor(BaseImageProcessor):
             Resampling filter to use if resizing the image. Only has an effect if `do_resize` is set to `True`. Can be
             overridden by the `resample` parameter in the `preprocess` method.
         do_rescale (`bool`, *optional*, defaults to `True`):
-            Wwhether to rescale the image by the specified scale `rescale_factor`. Can be overridden by the
+            Whether to rescale the image by the specified scale `rescale_factor`. Can be overridden by the
             `do_rescale` parameter in the `preprocess` method.
         rescale_factor (`int` or `float`, *optional*, defaults to `1/255`):
             Scale factor to use if rescaling the image. Only has an effect if `do_rescale` is set to `True`. Can be
@@ -141,7 +140,7 @@ class MiniGPT4ImageProcessor(BaseImageProcessor):
             size (`Dict[str, int]`):
                 Controls the size of the output image. Should be of the form `{"shortest_edge": int}`.
             resample (`PILImageResampling` filter, *optional*, defaults to `PILImageResampling.BICUBIC`):
-                Resampling filter to use when resiizing the image.
+                Resampling filter to use when resizing the image.
             data_format (`str` or `ChannelDimension`, *optional*):
                 The channel dimension format of the image. If not provided, it will be the same as the input image.
         """
@@ -191,7 +190,7 @@ class MiniGPT4ImageProcessor(BaseImageProcessor):
                 The channel dimension format of the image. If not provided, it will be the same as the input image.
         """
         return normalize(image, mean=mean, std=std, data_format=data_format, **kwargs)
-    
+
     def random_resized_crop(
         self,
         image: np.ndarray,
@@ -204,7 +203,7 @@ class MiniGPT4ImageProcessor(BaseImageProcessor):
         Crop the input data to random size and aspect ratio.
         A crop of random size (default: of 0.5 to 1.0) of the original size and a random
         aspect ratio (default: of 3/4 to 1.33) of the original aspect ratio is made.
-        After applying crop transfrom, the input data will be resized to given size.
+        After applying crop transform, the input data will be resized to given size.
 
         Args:
             image (`np.ndarray`):
@@ -214,13 +213,11 @@ class MiniGPT4ImageProcessor(BaseImageProcessor):
             scale (`float`):
                 Scale to apply to the image.
             resample (`PILImageResampling` filter, *optional*, defaults to `PILImageResampling.BICUBIC`):
-                Resampling filter to use when resiizing the image.
+                Resampling filter to use when resizing the image.
         """
         breakpoint()
         size = list(size.values())
-        return random_resized_crop(
-            image, size=size, scale=scale, resample=resample, **kwargs
-        )
+        return random_resized_crop(image, size=size, scale=scale, resample=resample, **kwargs)  # noqa
 
     def preprocess(
         self,
@@ -304,7 +301,7 @@ class MiniGPT4ImageProcessor(BaseImageProcessor):
         #     images = [images]
         if not isinstance(images, (list, tuple)):
             images = [images]
-        
+
         if isinstance(images[0], str):
             images = [load_image(image, convert_to_rgb=False) for image in images]
 
@@ -319,22 +316,23 @@ class MiniGPT4ImageProcessor(BaseImageProcessor):
 
         if do_normalize and (image_mean is None or image_std is None):
             raise ValueError("Image mean and std must be specified if do_normalize is True.")
-        
+
         if do_rand_resize_crop and scale is None:
-            raise ValueError(
-                "Random resize crop probability must be specified if do_rand_resize_crop is True."
-            )
+            raise ValueError("Random resize crop probability must be specified if do_rand_resize_crop is True.")
 
         # PIL RGBA images are converted to RGB
         if do_convert_rgb:
             images = [convert_to_rgb(image) for image in images]
-        
+
         # All transformations expect numpy arrays.
         images = [to_numpy_array(image) for image in images]
 
         if mode == "train":
             if do_rand_resize_crop:
-                images = [self.random_resized_crop(image=image, size=size, scale=scale, resample=resample) for image in images]
+                images = [
+                    self.random_resized_crop(image=image, size=size, scale=scale, resample=resample)
+                    for image in images
+                ]
         else:
             if do_resize:
                 images = [self.resize(image=image, size=size, resample=resample) for image in images]
