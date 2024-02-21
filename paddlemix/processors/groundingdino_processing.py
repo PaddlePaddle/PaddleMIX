@@ -55,8 +55,8 @@ class GroundingDinoProcessor(ProcessorMixin):
 
         self.prompt = self.text_processor.pre_caption(text)
         input_ids = self.tokenizer([self.prompt]).input_ids
-        specical_tokens = self.tokenizer.convert_tokens_to_ids(["[CLS]", "[SEP]", ".", "?"])
-        tokenized_out = self.text_processor(input_ids, specical_tokens)
+        special_tokens = self.tokenizer.convert_tokens_to_ids(["[CLS]", "[SEP]", ".", "?"])
+        tokenized_out = self.text_processor(input_ids, special_tokens)
 
         image_tensor, mask = self.image_processor(images)
 
