@@ -259,6 +259,7 @@ class UnCLIPImageVariationPipelineFastTests(PipelineTesterMixin, unittest.TestCa
         # assert np.abs(image_from_tuple_slice.flatten() - expected_slice).mean() < 0.01
 
     def test_unclip_image_variation_input_list_images(self):
+        paddle.seed(0)
         components = self.get_dummy_components()
         pipe = self.pipeline_class(**components)
         pipe.set_progress_bar_config(disable=None)

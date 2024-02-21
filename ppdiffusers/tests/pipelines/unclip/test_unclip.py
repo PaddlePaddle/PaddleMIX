@@ -359,7 +359,8 @@ class UnCLIPPipelineIntegrationTests(unittest.TestCase):
 
     def test_unclip_karlo(self):
         # Hard code image
-        expected_image = np.array([[0.62330127, 0.550345, 0.49700996], [0.7461876, 0.68656725, 0.60532]])
+        paddle.seed(0)
+        expected_image = np.array([[0.6577126, 0.60502625, 0.54735416], [0.71303344, 0.6528542, 0.5846128]])
         pipeline = UnCLIPPipeline.from_pretrained("kakaobrain/karlo-v1-alpha")
         pipeline.set_progress_bar_config(disable=None)
         generator = paddle.Generator().manual_seed(0)
