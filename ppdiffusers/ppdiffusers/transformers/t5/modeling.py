@@ -48,9 +48,6 @@ from .configuration import T5Config
 logger = logging.get_logger(__name__)
 
 
-# LinearClass = nn.TorchLinear
-LinearClass = nn.Linear
-
 ####################################################
 # This dict contains ids and associated url
 # for the pretrained weights provided with the models
@@ -125,8 +122,8 @@ class T5DenseActDense(nn.Layer):
                 config.d_ff, config.d_model, input_is_parallel=True, has_bias=False
             )
         else:
-            self.wi = LinearClass(config.d_model, config.d_ff, bias_attr=False)
-            self.wo = LinearClass(config.d_ff, config.d_model, bias_attr=False)
+            self.wi = nn.Linear(config.d_model, config.d_ff, bias_attr=False)
+            self.wo = nn.Linear(config.d_ff, config.d_model, bias_attr=False)
         self.dropout = nn.Dropout(config.dropout_rate)
         self.act = ACT2FN[config.dense_act_fn]
 
@@ -158,9 +155,9 @@ class T5DenseGatedActDense(nn.Layer):
                 config.d_ff, config.d_model, input_is_parallel=True, has_bias=False
             )
         else:
-            self.wi_0 = LinearClass(config.d_model, config.d_ff, bias_attr=False)
-            self.wi_1 = LinearClass(config.d_model, config.d_ff, bias_attr=False)
-            self.wo = LinearClass(config.d_ff, config.d_model, bias_attr=False)
+            self.wi_0 = nn.Linear(config.d_model, config.d_ff, bias_attr=False)
+            self.wi_1 = nn.Linear(config.d_model, config.d_ff, bias_attr=False)
+            self.wo = nn.Linear(config.d_ff, config.d_model, bias_attr=False)
         self.dropout = nn.Dropout(config.dropout_rate)
         self.act = ACT2FN[config.dense_act_fn]
 
@@ -236,10 +233,10 @@ class T5Attention(nn.Layer):
             self.inner_dim = self.inner_dim // config.tensor_parallel_degree
         else:
             # Mesh TensorFlow initialization to avoid scaling before softmax
-            self.q = LinearClass(self.d_model, self.inner_dim, bias_attr=False)
-            self.k = LinearClass(self.d_model, self.inner_dim, bias_attr=False)
-            self.v = LinearClass(self.d_model, self.inner_dim, bias_attr=False)
-            self.o = LinearClass(self.inner_dim, self.d_model, bias_attr=False)
+            self.q = nn.Linear(self.d_model, self.inner_dim, bias_attr=False)
+            self.k = nn.Linear(self.d_model, self.inner_dim, bias_attr=False)
+            self.v = nn.Linear(self.d_model, self.inner_dim, bias_attr=False)
+            self.o = nn.Linear(self.inner_dim, self.d_model, bias_attr=False)
 
         if self.has_relative_attention_bias:
             self.relative_attention_bias = nn.Embedding(self.relative_attention_num_buckets, self.n_heads)
@@ -615,9 +612,9 @@ class T5ClassificationHead(nn.Layer):
 
     def __init__(self, config: T5Config):
         super().__init__()
-        self.dense = LinearClass(config.d_model, config.d_model)
+        self.dense = nn.Linear(config.d_model, config.d_model)
         self.dropout = nn.Dropout(p=config.classifier_dropout)
-        self.out_proj = LinearClass(config.d_model, config.num_labels)
+        self.out_proj = nn.Linear(config.d_model, config.num_labels)
 
     def forward(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
         hidden_states = self.dropout(hidden_states)
@@ -628,7 +625,7 @@ class T5ClassificationHead(nn.Layer):
         return hidden_states
 
 
-class T5PreTrainedModel(PretrainedModel):
+class T5PretrainedModel(PretrainedModel):
     """
     An abstract class to handle weights initialization and a simple interface for downloading and loading pretrained
     models.
@@ -922,7 +919,7 @@ class T5PreTrainedModel(PretrainedModel):
         return shifted_input_ids
 
 
-class T5Stack(T5PreTrainedModel):
+class T5Stack(T5PretrainedModel):
     def __init__(self, config, embed_tokens=None):
         super().__init__(config)
 
@@ -1116,7 +1113,7 @@ class T5Stack(T5PreTrainedModel):
 
 
 @register_base_model
-class T5Model(T5PreTrainedModel):
+class T5Model(T5PretrainedModel):
     _keys_to_ignore_on_load_unexpected = [
         "decoder.block.0.layer.1.EncDecAttention.relative_attention_bias.weight",
     ]
@@ -1253,7 +1250,7 @@ class T5Model(T5PreTrainedModel):
         )
 
 
-class T5ForConditionalGeneration(T5PreTrainedModel):
+class T5ForConditionalGeneration(T5PretrainedModel):
     _keys_to_ignore_on_load_unexpected = [
         "decoder.block.0.layer.1.EncDecAttention.relative_attention_bias.weight",
     ]
@@ -1535,7 +1532,7 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
         return reordered_decoder_past
 
 
-class T5EncoderModel(T5PreTrainedModel):
+class T5EncoderModel(T5PretrainedModel):
     _tied_weights_keys = ["encoder.embed_tokens.weight"]
     _keys_to_ignore_on_load_unexpected = [r"decoder"]
 
@@ -1611,7 +1608,7 @@ class T5EncoderModel(T5PreTrainedModel):
         return encoder_output
 
 
-class T5ForSequenceClassification(T5PreTrainedModel):
+class T5ForSequenceClassification(T5PretrainedModel):
     _keys_to_ignore_on_load_unexpected = ["decoder.block.0.layer.1.EncDecAttention.relative_attention_bias.weight"]
     _tied_weights_keys = ["encoder.embed_tokens.weight", "decoder.embed_tokens.weight"]
 
@@ -1733,7 +1730,7 @@ class T5ForSequenceClassification(T5PreTrainedModel):
         )
 
 
-class T5ForQuestionAnswering(T5PreTrainedModel):
+class T5ForQuestionAnswering(T5PretrainedModel):
     _keys_to_ignore_on_load_unexpected = ["decoder.block.0.layer.1.EncDecAttention.relative_attention_bias.weight"]
     _tied_weights_keys = ["encoder.embed_tokens.weight", "decoder.embed_tokens.weight"]
 
@@ -1763,7 +1760,7 @@ class T5ForQuestionAnswering(T5PreTrainedModel):
         self.decoder = T5Stack(decoder_config, self.shared)
 
         self.num_labels = config.num_labels
-        self.qa_outputs = LinearClass(config.hidden_size, config.num_labels)
+        self.qa_outputs = nn.Linear(config.hidden_size, config.num_labels)
 
         # Initialize weights and apply final processing
         self.post_init()

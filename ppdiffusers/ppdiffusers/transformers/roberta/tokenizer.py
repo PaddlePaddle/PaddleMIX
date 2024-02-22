@@ -28,6 +28,7 @@ from paddlenlp.transformers.tokenizer_utils import (
 from ...utils import logging
 
 logger = logging.get_logger(__name__)
+__all__ = ["RobertaTokenizer"]
 
 
 @lru_cache()
@@ -77,7 +78,7 @@ class RobertaTokenizer(PPNLPPretrainedTokenizer):
     be encoded differently whether it is at the beginning of the sentence (without space) or not:
 
     ```python
-    >>> from transformers import RobertaTokenizer
+    >>> from ppdiffusers.transformers import RobertaTokenizer
 
     >>> tokenizer = RobertaTokenizer.from_pretrained("roberta-base")
     >>> tokenizer("Hello world")["input_ids"]

@@ -13,7 +13,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""PyTorch XLM-RoBERTa model."""
+"""Paddle XLM-RoBERTa model."""
 
 import math
 from typing import List, Optional, Tuple, Union
@@ -44,7 +44,6 @@ from .configuration import XLMRobertaConfig
 
 logger = logging.get_logger(__name__)
 
-LinearClass = nn.Linear
 
 XLM_ROBERTA_PRETRAINED_MODEL_ARCHIVE_LIST = [
     "xlm-roberta-base",
@@ -167,9 +166,9 @@ class XLMRobertaSelfAttention(nn.Layer):
         self.attention_head_size = int(config.hidden_size / config.num_attention_heads)
         self.all_head_size = self.num_attention_heads * self.attention_head_size
 
-        self.query = LinearClass(config.hidden_size, self.all_head_size)
-        self.key = LinearClass(config.hidden_size, self.all_head_size)
-        self.value = LinearClass(config.hidden_size, self.all_head_size)
+        self.query = nn.Linear(config.hidden_size, self.all_head_size)
+        self.key = nn.Linear(config.hidden_size, self.all_head_size)
+        self.value = nn.Linear(config.hidden_size, self.all_head_size)
 
         self.dropout = nn.Dropout(config.attention_probs_dropout_prob)
         self.position_embedding_type = position_embedding_type or getattr(
@@ -296,7 +295,7 @@ class XLMRobertaSelfAttention(nn.Layer):
 class XLMRobertaSelfOutput(nn.Layer):
     def __init__(self, config):
         super().__init__()
-        self.dense = LinearClass(config.hidden_size, config.hidden_size)
+        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
         self.LayerNorm = nn.LayerNorm(config.hidden_size, epsilon=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
@@ -338,7 +337,7 @@ class XLMRobertaAttention(nn.Layer):
 class XLMRobertaIntermediate(nn.Layer):
     def __init__(self, config):
         super().__init__()
-        self.dense = LinearClass(config.hidden_size, config.intermediate_size)
+        self.dense = nn.Linear(config.hidden_size, config.intermediate_size)
         if isinstance(config.hidden_act, str):
             self.intermediate_act_fn = ACT2FN[config.hidden_act]
         else:
@@ -353,7 +352,7 @@ class XLMRobertaIntermediate(nn.Layer):
 class XLMRobertaOutput(nn.Layer):
     def __init__(self, config):
         super().__init__()
-        self.dense = LinearClass(config.intermediate_size, config.hidden_size)
+        self.dense = nn.Linear(config.intermediate_size, config.hidden_size)
         self.LayerNorm = nn.LayerNorm(config.hidden_size, epsilon=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
@@ -539,7 +538,7 @@ class XLMRobertaEncoder(nn.Layer):
 class XLMRobertaPooler(nn.Layer):
     def __init__(self, config):
         super().__init__()
-        self.dense = LinearClass(config.hidden_size, config.hidden_size)
+        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
         pooler_act = getattr(config, "pooler_act", "tanh")
         self.activation = ACT2FN[pooler_act]
 
@@ -552,7 +551,7 @@ class XLMRobertaPooler(nn.Layer):
         return pooled_output
 
 
-class XLMRobertaPreTrainedModel(PretrainedModel):
+class XLMRobertaPretrainedModel(PretrainedModel):
     """
     An abstract class to handle weights initialization and a simple interface for downloading and loading pretrained
     models.
@@ -698,7 +697,7 @@ class XLMRobertaPreTrainedModel(PretrainedModel):
 
 
 @register_base_model
-class XLMRobertaModel(XLMRobertaPreTrainedModel):
+class XLMRobertaModel(XLMRobertaPretrainedModel):
     """
 
     The model can behave as an encoder (with only self-attention) as well as a decoder, in which case a layer of
@@ -857,7 +856,7 @@ class XLMRobertaModel(XLMRobertaPreTrainedModel):
         )
 
 
-class XLMRobertaForCausalLM(XLMRobertaPreTrainedModel):
+class XLMRobertaForCausalLM(XLMRobertaPretrainedModel):
     _tied_weights_keys = ["lm_head.decoder.weight", "lm_head.decoder.bias"]
 
     def __init__(self, config):
@@ -1029,7 +1028,7 @@ class XLMRobertaForCausalLM(XLMRobertaPreTrainedModel):
         return reordered_past
 
 
-class XLMRobertaForMaskedLM(XLMRobertaPreTrainedModel):
+class XLMRobertaForMaskedLM(XLMRobertaPretrainedModel):
     _tied_weights_keys = ["lm_head.decoder.weight", "lm_head.decoder.bias"]
 
     def __init__(self, config):
@@ -1135,13 +1134,13 @@ class XLMRobertaLMHead(nn.Layer):
 
     def __init__(self, config, input_embeddings=None):
         super().__init__()
-        self.dense = LinearClass(config.hidden_size, config.hidden_size)
+        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
         self.layer_norm = nn.LayerNorm(config.hidden_size, epsilon=config.layer_norm_eps)
 
         if input_embeddings is None:
             # The output weights are the same as the input embeddings, but there is
             # an output-only bias for each token.
-            self.decoder = LinearClass(config.hidden_size, config.vocab_size, bias_attr=False)
+            self.decoder = nn.Linear(config.hidden_size, config.vocab_size, bias_attr=False)
             self.bias = nn.Parameter(paddle.zeros((config.vocab_size,)))
             # Need a link between the two variables so that the bias is correctly resized with `resize_token_embeddings`
             self.decoder.bias = self.bias
@@ -1161,7 +1160,7 @@ class XLMRobertaLMHead(nn.Layer):
         return x
 
 
-class XLMRobertaForSequenceClassification(XLMRobertaPreTrainedModel):
+class XLMRobertaForSequenceClassification(XLMRobertaPretrainedModel):
     def __init__(self, config):
         super().__init__(config)
         self.num_labels = config.num_labels
@@ -1242,13 +1241,13 @@ class XLMRobertaForSequenceClassification(XLMRobertaPreTrainedModel):
         )
 
 
-class XLMRobertaForMultipleChoice(XLMRobertaPreTrainedModel):
+class XLMRobertaForMultipleChoice(XLMRobertaPretrainedModel):
     def __init__(self, config):
         super().__init__(config)
 
         self.roberta = XLMRobertaModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
-        self.classifier = LinearClass(config.hidden_size, 1)
+        self.classifier = nn.Linear(config.hidden_size, 1)
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -1322,7 +1321,7 @@ class XLMRobertaForMultipleChoice(XLMRobertaPreTrainedModel):
         )
 
 
-class XLMRobertaForTokenClassification(XLMRobertaPreTrainedModel):
+class XLMRobertaForTokenClassification(XLMRobertaPretrainedModel):
     def __init__(self, config):
         super().__init__(config)
         self.num_labels = config.num_labels
@@ -1332,7 +1331,7 @@ class XLMRobertaForTokenClassification(XLMRobertaPreTrainedModel):
             config.classifier_dropout if config.classifier_dropout is not None else config.hidden_dropout_prob
         )
         self.dropout = nn.Dropout(classifier_dropout)
-        self.classifier = LinearClass(config.hidden_size, config.num_labels)
+        self.classifier = nn.Linear(config.hidden_size, config.num_labels)
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -1401,12 +1400,12 @@ class XLMRobertaClassificationHead(nn.Layer):
 
     def __init__(self, config):
         super().__init__()
-        self.dense = LinearClass(config.hidden_size, config.hidden_size)
+        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
         classifier_dropout = (
             config.classifier_dropout if config.classifier_dropout is not None else config.hidden_dropout_prob
         )
         self.dropout = nn.Dropout(classifier_dropout)
-        self.out_proj = LinearClass(config.hidden_size, config.num_labels)
+        self.out_proj = nn.Linear(config.hidden_size, config.num_labels)
 
         pooler_act = getattr(config, "pooler_act", "tanh")
         self.activation = ACT2FN[pooler_act]
@@ -1421,13 +1420,13 @@ class XLMRobertaClassificationHead(nn.Layer):
         return x
 
 
-class XLMRobertaForQuestionAnswering(XLMRobertaPreTrainedModel):
+class XLMRobertaForQuestionAnswering(XLMRobertaPretrainedModel):
     def __init__(self, config):
         super().__init__(config)
         self.num_labels = config.num_labels
 
         self.roberta = XLMRobertaModel(config, add_pooling_layer=False)
-        self.qa_outputs = LinearClass(config.hidden_size, config.num_labels)
+        self.qa_outputs = nn.Linear(config.hidden_size, config.num_labels)
 
         # Initialize weights and apply final processing
         self.post_init()

@@ -19,6 +19,8 @@ from paddlenlp.transformers.conversion_utils import (
 )
 from paddlenlp.transformers.speecht5.modeling import SpeechT5HifiGan
 
+from ppdiffusers.transformers.model_utils import ModuleUtilsMixin
+
 
 def clap_get_name_mappings(cls, config):
     mappings = []
@@ -226,7 +228,6 @@ def clap_get_name_mappings(cls, config):
 
 
 def speecht5hifigan_get_name_mappings(cls, config):
-    # from pytorch to paddle
     mappings = []
     model_mappings = [
         "mean",
@@ -262,7 +263,10 @@ def speecht5hifigan_get_name_mappings(cls, config):
 
 ClapPreTrainedModel._get_name_mappings = classmethod(clap_get_name_mappings)
 SpeechT5HifiGan._get_name_mappings = classmethod(speecht5hifigan_get_name_mappings)
-from ppdiffusers.transformers.model_utils import ModuleUtilsMixin
 
-ClapPreTrainedModel.get_extended_attention_mask = ModuleUtilsMixin.get_extended_attention_mask
-ClapPreTrainedModel.dtype = ModuleUtilsMixin.dtype
+try:
+    SpeechT5HifiGan.dtype = ModuleUtilsMixin.dtype
+    ClapPreTrainedModel.get_extended_attention_mask = ModuleUtilsMixin.get_extended_attention_mask
+    ClapPreTrainedModel.dtype = ModuleUtilsMixin.dtype
+except Exception:
+    pass

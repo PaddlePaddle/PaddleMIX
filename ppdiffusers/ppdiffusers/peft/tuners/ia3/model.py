@@ -44,7 +44,7 @@ class IA3Model(BaseTuner):
     transformers model. The method is described in detail in https://arxiv.org/abs/2205.05638
 
     Args:
-        model ([`~transformers.PreTrainedModel`]): The model to be adapted.
+        model ([`~transformers.PretrainedModel`]): The model to be adapted.
         config ([`IA3Config`]): The configuration of the (IA)^3 model.
         adapter_name (`str`): The name of the adapter, defaults to `"default"`.
 
@@ -69,7 +69,7 @@ class IA3Model(BaseTuner):
         ```
 
     **Attributes**:
-        - **model** ([`~transformers.PreTrainedModel`]) -- The model to be adapted.
+        - **model** ([`~transformers.PretrainedModel`]) -- The model to be adapted.
         - **peft_config** ([`ia3Config`]): The configuration of the (IA)^3 model.
     """
 

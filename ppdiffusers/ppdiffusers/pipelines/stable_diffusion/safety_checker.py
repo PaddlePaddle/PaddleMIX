@@ -17,7 +17,7 @@ import paddle
 import paddle.nn as nn
 from paddlenlp.utils.converter import StateDictNameMapping
 
-from ppdiffusers.transformers import CLIPConfig, CLIPPreTrainedModel, CLIPVisionModel
+from ppdiffusers.transformers import CLIPConfig, CLIPPretrainedModel, CLIPVisionModel
 
 from ...utils import logging
 
@@ -30,7 +30,7 @@ def cosine_distance(image_embeds, text_embeds):
     return paddle.matmul(normalized_image_embeds, normalized_text_embeds.t())
 
 
-class StableDiffusionSafetyChecker(CLIPPreTrainedModel):
+class StableDiffusionSafetyChecker(CLIPPretrainedModel):
     config_class = CLIPConfig
 
     _no_split_modules = ["CLIPEncoderLayer"]

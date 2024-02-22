@@ -86,7 +86,6 @@ if is_paddlenlp_available():
         from paddlenlp.transformers.model_utils import no_init_weights
     except ImportError:
         from ..utils.paddle_utils import no_init_weights
-    # from paddlenlp.transformers.utils import device_guard
     from paddlenlp.transformers.model_utils import shard_checkpoint
 
 
@@ -103,7 +102,7 @@ def faster_set_state_dict(model, state_dict):
                     v_new = v_new.cast(v.dtype)
                 v.copy_(v_new, False)
             else:
-                if "undefined" in str(v.place):
+                if (hasattr(v, "_is_initialized") and not v._is_initialized()) or "undefined" in str(v.place):
                     v.initialize()
                     logger.warning(f"key {k} is not in state_dict. And it is lazy tensor. We will initialize it.")
 

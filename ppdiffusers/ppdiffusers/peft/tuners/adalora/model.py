@@ -35,7 +35,7 @@ class AdaLoraModel(LoraModel):
     https://openreview.net/forum?id=lq62uWRJjiY
 
     Args:
-        model ([`transformers.PreTrainedModel`]): The model to be adapted.
+        model ([`transformers.PretrainedModel`]): The model to be adapted.
         config ([`AdaLoraConfig`]): The configuration of the AdaLora model.
         adapter_name (`str`): The name of the adapter, defaults to `"default"`.
 
@@ -52,7 +52,7 @@ class AdaLoraModel(LoraModel):
         >>> model = AutoModelForSeq2SeqLM.from_pretrained("t5-base") >>> model = AdaLoraModel(model, config, "default")
 
     **Attributes**:
-        - **model** ([`transformers.PreTrainedModel`]) -- The model to be adapted.
+        - **model** ([`transformers.PretrainedModel`]) -- The model to be adapted.
         - **peft_config** ([`AdaLoraConfig`]): The configuration of the AdaLora model.
     """
 
