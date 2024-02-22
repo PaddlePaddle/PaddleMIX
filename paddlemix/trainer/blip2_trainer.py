@@ -27,7 +27,7 @@ from paddle.io import DataLoader, Dataset
 from paddlenlp.trainer import PrinterCallback, ProgressCallback, Trainer
 from paddlenlp.trainer.integrations import TrainerCallback
 from paddlenlp.trainer.trainer_callback import DefaultFlowCallback
-from paddlenlp.trainer.trainer_utils import (  # set_hyrbid_parallel_seed,
+from paddlenlp.trainer.trainer_utils import (  # set_hybrid_parallel_seed,
     EvalLoopOutput,
     IterableDatasetShard,
     ShardingOption,
