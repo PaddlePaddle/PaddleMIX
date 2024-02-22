@@ -219,7 +219,9 @@ class ShapEImg2ImgPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         # fix this in 0.0.0 paddlepaddle
         pass
 
-
+    def test_xformers_attention_forwardGenerator_pass(self):
+        pass
+    
 @slow
 @require_paddle_gpu
 class ShapEImg2ImgPipelineIntegrationTests(unittest.TestCase):

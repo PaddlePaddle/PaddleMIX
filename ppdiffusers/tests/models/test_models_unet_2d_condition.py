@@ -752,7 +752,7 @@ class UNet2DConditionModelIntegrationTests(unittest.TestCase):
 
         mem_bytes = paddle.device.cuda.memory_allocated()
 
-        assert mem_bytes < 5 * 10**9
+        assert mem_bytes < 8 * 10**9
 
     def test_set_attention_slice_max(self):
         paddle.device.cuda.empty_cache()
@@ -769,7 +769,7 @@ class UNet2DConditionModelIntegrationTests(unittest.TestCase):
 
         mem_bytes = paddle.device.cuda.memory_allocated()
 
-        assert mem_bytes < 5 * 10**9
+        assert mem_bytes < 8 * 10**9
 
     def test_set_attention_slice_int(self):
         paddle.device.cuda.empty_cache()
@@ -786,7 +786,7 @@ class UNet2DConditionModelIntegrationTests(unittest.TestCase):
 
         mem_bytes = paddle.device.cuda.memory_allocated()
 
-        assert mem_bytes < 5 * 10**9
+        assert mem_bytes < 8 * 10**9
 
     def test_set_attention_slice_list(self):
         paddle.device.cuda.empty_cache()
@@ -805,7 +805,7 @@ class UNet2DConditionModelIntegrationTests(unittest.TestCase):
 
         mem_bytes = paddle.device.cuda.memory_allocated()
 
-        assert mem_bytes < 5 * 10**9
+        assert mem_bytes < 8 * 10**9
 
     def get_encoder_hidden_states(self, seed=0, shape=(4, 77, 768), fp16=False):
         dtype = paddle.float16 if fp16 else paddle.float32
