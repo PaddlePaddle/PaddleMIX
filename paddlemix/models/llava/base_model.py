@@ -23,6 +23,7 @@ from .constants import (
     IMAGE_TOKEN_INDEX,
 )
 from .mm_projector import build_vision_projector
+from .mm_utils import get_anyres_image_grid_shape
 
 __all__ = ["LlavaMetaModel", "LlavaMetaForCausalLM"]
 
@@ -33,6 +34,16 @@ class LlavaMetaModel:
         if hasattr(config, "mm_vision_tower"):
             self.vision_tower = build_vision_tower(config, delay_load=True)
             self.mm_projector = build_vision_projector(config)
+
+            if "unpad" in getattr(config, "mm_patch_merge_type", ""):
+                self.image_newline = paddle.create_parameter(
+                    shape=paddle.empty(shape=[config.hidden_size], dtype=self.dtype).shape,
+                    dtype=self.dtype,
+                    default_initializer=paddle.nn.initializer.Assign(
+                        paddle.empty(shape=[config.hidden_size], dtype=self.dtype)
+                    ),
+                )
+                self.image_newline.stop_gradient = False
 
     def get_vision_tower(self):
         vision_tower = getattr(self, "vision_tower", None)
@@ -45,6 +56,7 @@ class LlavaMetaModel:
         mm_vision_select_layer = model_args.mm_vision_select_layer
         mm_vision_select_feature = model_args.mm_vision_select_feature
         pretrain_mm_mlp_adapter = model_args.pretrain_mm_mlp_adapter
+        mm_patch_merge_type = model_args.mm_patch_merge_type
         self.config.mm_vision_tower = vision_tower
 
         if self.get_vision_tower() is None:
@@ -66,6 +78,8 @@ class LlavaMetaModel:
         self.config.mm_hidden_size = vision_tower.hidden_size
         self.config.mm_vision_select_layer = mm_vision_select_layer
         self.config.mm_vision_select_feature = mm_vision_select_feature
+        self.config.mm_patch_merge_type = mm_patch_merge_type
+
         if getattr(self, "mm_projector", None) is None:
             self.mm_projector = build_vision_projector(self.config)
         else:
@@ -73,11 +87,47 @@ class LlavaMetaModel:
                 p.stop_gradient = not True
         if pretrain_mm_mlp_adapter is not None:
             mm_projector_weights = paddle.load(path=pretrain_mm_mlp_adapter)
+            if "unpad" in mm_patch_merge_type:
+                embed_std = 1 / paddle.sqrt(x=paddle.to_tensor(data=[self.config.hidden_size], dtype=self.dtype))
+                self.image_newline = paddle.create_parameter(
+                    shape=(paddle.randn(shape=[self.config.hidden_size], dtype=self.dtype) * embed_std).shape,
+                    dtype=self.dtype,
+                    default_initializer=paddle.nn.initializer.Assign(
+                        paddle.randn(shape=[self.config.hidden_size], dtype=self.dtype) * embed_std
+                    ),
+                )
+                self.image_newline.stop_gradient = False
 
             def get_w(weights, keyword):
                 return {k.split(keyword + ".")[1]: v for k, v in weights.items() if keyword in k}
 
             self.mm_projector.set_state_dict(state_dict=get_w(mm_projector_weights, "mm_projector"))
+
+
+def unpad_image(tensor, original_size):
+    """
+    Unpads a Paddle tensor of a padded and resized image.
+    Args:
+    tensor (paddle.Tensor): The image tensor, assumed to be in CxHxW format.
+    original_size (tuple): The original size of the image (height, width).
+    Returns:
+    paddle.Tensor: The unpadded image tensor.
+    """
+    original_width, original_height = original_size
+    current_height, current_width = tensor.shape[1:]
+    original_aspect_ratio = original_width / original_height
+    current_aspect_ratio = current_width / current_height
+    if original_aspect_ratio > current_aspect_ratio:
+        scale_factor = current_width / original_width
+        new_height = int(original_height * scale_factor)
+        padding = (current_height - new_height) // 2
+        unpadded_tensor = tensor[:, padding : current_height - padding, :]
+    else:
+        scale_factor = current_height / original_height
+        new_width = int(original_width * scale_factor)
+        padding = (current_width - new_width) // 2
+        unpadded_tensor = tensor[:, :, padding : current_width - padding]
+    return unpadded_tensor
 
 
 class LlavaMetaForCausalLM:
@@ -90,37 +140,83 @@ class LlavaMetaForCausalLM:
         return image_features
 
     def prepare_inputs_labels_for_multimodal(
-        self, input_ids, position_ids, attention_mask, past_key_values, labels, images
+        self,
+        input_ids,
+        position_ids,
+        attention_mask,
+        past_key_values,
+        labels,
+        images,
+        image_sizes=None,
     ):
         vision_tower = self.get_vision_tower()
         if vision_tower is None or images is None or input_ids.shape[1] == 1:
-            if (
-                past_key_values is not None
-                and vision_tower is not None
-                and images is not None
-                and input_ids.shape[1] == 1
-            ):
-
-                target_shape = past_key_values[-1][-1].shape[1] + 1
-                attention_mask = paddle.concat(
-                    x=(
-                        attention_mask,
-                        paddle.ones(
-                            shape=(attention_mask.shape[0], target_shape - attention_mask.shape[1]),
-                            dtype=attention_mask.dtype,
-                        ),
-                    ),
-                    axis=1,
-                )
-                position_ids = paddle.sum(x=attention_mask, axis=1, dtype="int64").unsqueeze(axis=-1) - 1
-
             return (input_ids, position_ids, attention_mask, past_key_values, None, labels)
         if type(images) is list or images.ndim == 5:
+            if type(images) is list:
+                images = [(x.unsqueeze(axis=0) if x.ndim == 3 else x) for x in images]
             concat_images = paddle.concat(x=[image for image in images], axis=0)
             image_features = self.encode_images(concat_images)
             split_sizes = [image.shape[0] for image in images]
-            image_features = paddle.split(x=image_features, num_or_sections=split_sizes, axis=0)
-            image_features = [x.flatten(start_axis=0, stop_axis=1) for x in image_features]
+            # >>>>image_features = paddle_aux.split(x=image_features, num_or_sections=split_sizes, axis=0)
+            mm_patch_merge_type = getattr(self.config, "mm_patch_merge_type", "flat")
+            image_aspect_ratio = getattr(self.config, "image_aspect_ratio", "square")
+            if mm_patch_merge_type == "flat":
+                image_features = [x.flatten(start_axis=0, stop_axis=1) for x in image_features]
+            elif mm_patch_merge_type.startswith("spatial"):
+                new_image_features = []
+                for image_idx, image_feature in enumerate(image_features):
+                    if image_feature.shape[0] > 1:
+                        base_image_feature = image_feature[0]
+                        image_feature = image_feature[1:]
+                        height = width = self.get_vision_tower().num_patches_per_side
+                        assert height * width == base_image_feature.shape[0]
+                        if image_aspect_ratio == "anyres":
+                            num_patch_width, num_patch_height = get_anyres_image_grid_shape(
+                                image_sizes[image_idx],
+                                self.config.image_grid_pinpoints,
+                                self.get_vision_tower().config.image_size,
+                            )
+
+                            image_feature = paddle.reshape(
+                                image_feature, (num_patch_height, num_patch_width, height, width, -1)
+                            )
+                        else:
+                            raise NotImplementedError
+                        if "unpad" in mm_patch_merge_type:
+                            image_feature = image_feature.transpose(perm=[4, 0, 2, 1, 3])
+                            image_feature = image_feature.flatten(start_axis=1, stop_axis=2).flatten(
+                                start_axis=2, stop_axis=3
+                            )
+                            image_feature = unpad_image(image_feature, image_sizes[image_idx])
+                            image_feature = paddle.concat(
+                                x=(
+                                    image_feature,
+                                    self.model.image_newline[:, (None), (None)]
+                                    .expand(shape=[*image_feature.shape[:-1], 1])
+                                    .to(image_feature.place),
+                                ),
+                                axis=-1,
+                            )
+                            x = image_feature.flatten(start_axis=1, stop_axis=2)
+                            perm_12 = list(range(x.ndim))
+                            perm_12[0] = 1
+                            perm_12[1] = 0
+                            image_feature = x.transpose(perm=perm_12)
+                        else:
+                            image_feature = image_feature.transpose(perm=[0, 2, 1, 3, 4])
+                            image_feature = image_feature.flatten(start_axis=0, stop_axis=3)
+                        image_feature = paddle.concat(x=(base_image_feature, image_feature), axis=0)
+                    else:
+                        image_feature = image_feature[0]
+                        if "unpad" in mm_patch_merge_type:
+                            image_feature = paddle.concat(
+                                x=(image_feature, self.model.image_newline[None].to(image_feature.place)), axis=0
+                            )
+                    new_image_features.append(image_feature)
+                image_features = new_image_features
+            else:
+                raise ValueError(f"Unexpected mm_patch_merge_type: {self.config.mm_patch_merge_type}")
         else:
             image_features = self.encode_images(images)
 

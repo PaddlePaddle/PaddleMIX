@@ -17,3 +17,4 @@ from paddlenlp.transformers import LlamaConfig
 
 class LlavaConfig(LlamaConfig):
     model_type = "llava"
+    mm_patch_merge_type = "spatial_unpad"

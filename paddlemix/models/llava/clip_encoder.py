@@ -29,10 +29,15 @@ class CLIPVisionTower(paddle.nn.Layer):
         self.select_feature = getattr(args, "mm_vision_select_feature", "patch")
         if not delay_load:
             self.load_model()
+        elif getattr(args, "unfreeze_mm_vision_tower", False):
+            self.load_model()
         else:
             self.cfg_only = CLIPVisionConfig.from_pretrained(self.vision_tower_name)
 
     def load_model(self):
+        if self.is_loaded:
+            print("{} is already loaded, `load_model` called again, skipping.".format(self.vision_tower_name))
+            return
         self.vision_tower = CLIPVisionModel.from_pretrained(self.vision_tower_name)
         for param in self.vision_tower.parameters():
             param.stop_gradient = True
@@ -76,6 +81,10 @@ class CLIPVisionTower(paddle.nn.Layer):
     @property
     def hidden_size(self):
         return self.config.hidden_size
+
+    @property
+    def num_patches_per_side(self):
+        return self.config.image_size // self.config.patch_size
 
     @property
     def num_patches(self):

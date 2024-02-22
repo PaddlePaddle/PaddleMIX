@@ -73,6 +73,7 @@ class LlavaLlamaForCausalLM(LlamaForCausalLM, LlavaMetaForCausalLM):
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         images: Optional[paddle.Tensor] = None,
+        image_size: Optional[List[List[int]]] = None,
         return_dict: Optional[bool] = None,
     ) -> Union[Tuple, CausalLMOutputWithPast]:
 
@@ -85,7 +86,7 @@ class LlavaLlamaForCausalLM(LlamaForCausalLM, LlavaMetaForCausalLM):
                 inputs_embeds,
                 labels,
             ) = self.prepare_inputs_labels_for_multimodal(
-                input_ids, position_ids, attention_mask, past_key_values, labels, images
+                input_ids, position_ids, attention_mask, past_key_values, labels, images, image_size
             )
 
         return super().forward(
@@ -101,14 +102,49 @@ class LlavaLlamaForCausalLM(LlamaForCausalLM, LlavaMetaForCausalLM):
             return_dict=return_dict,
         )
 
+    @paddle.no_grad()
+    def generate(
+        self,
+        input_ids: Optional[paddle.Tensor] = None,
+        images: Optional[paddle.Tensor] = None,
+        image_sizes: Optional[paddle.Tensor] = None,
+        **kwargs,
+    ):
+        position_ids = kwargs.pop("position_ids", None)
+        attention_mask = kwargs.pop("attention_mask", None)
+        if "inputs_embeds" in kwargs:
+            raise NotImplementedError("`inputs_embeds` is not supported")
+
+        if images is not None:
+            (inputs, position_ids, attention_mask, _, inputs_embeds, _) = self.prepare_inputs_labels_for_multimodal(
+                input_ids, position_ids, attention_mask, None, None, images, image_sizes=image_sizes
+            )
+        else:
+            inputs_embeds = self.get_model().embed_tokens(input_ids)
+
+        if attention_mask is None:
+            attention_mask = paddle.ones(shape=inputs_embeds.shape[:2], dtype="int64")
+
+            batch_size, seq_length = attention_mask.shape
+            position_ids = paddle.arange(seq_length).expand((batch_size, seq_length))
+
+        return super().generate(
+            position_ids=position_ids, attention_mask=attention_mask, inputs_embeds=inputs_embeds, **kwargs
+        )
+
     def prepare_inputs_for_generation(self, input_ids, past_key_values=None, inputs_embeds=None, **kwargs):
         images = kwargs.pop("images", None)
-        _inputs = super().prepare_inputs_for_generation(
+        image_sizes = kwargs.pop("image_sizes", None)
+
+        inputs = super().prepare_inputs_for_generation(
             input_ids, past_key_values=past_key_values, inputs_embeds=inputs_embeds, **kwargs
         )
+
         if images is not None:
-            _inputs["images"] = images
-        return _inputs
+            inputs["images"] = images
+        if image_sizes is not None:
+            inputs["image_sizes"] = image_sizes
+        return inputs
 
     def prepare_attention_mask_for_generation(self, input_ids, pad_token_id, eos_token_id):
         is_pad_token_in_inputs_ids = (pad_token_id is not None) and paddle.any(input_ids == pad_token_id).item()
