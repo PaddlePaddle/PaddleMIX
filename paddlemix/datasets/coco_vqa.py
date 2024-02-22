@@ -111,7 +111,7 @@ class VQADataset(DatasetBuilder):
                     "question_id": ann["question_id"],
                     "image_id": ann["image"].split("/")[-1].strip(".jpg").split("_")[-1],
                 }
-                yield_data["image_ids"]: ann["image_ids"]
+                yield_data["image_ids"] = ann["image_ids"]
             yield yield_data
 
     def _gen_image_id(self, anno):
