@@ -15,7 +15,7 @@ pip install -r requirements.txt
 ```
 
 ### 数据准备
-准备扩散模型训练的数据，格式需要适配`VideoFrameDataset`或`WebVidDataset`。数据集相关的配置请参考`lvdm/lvdm_args_short.py`或`lvdm/lvdm_args_text2video.py`中的`DatasetArguments`。相关数据下载链接为[Sky Timelapse](https://github.com/weixiong-ur/mdgan)、[Webvid](https://github.com/m-bain/webvid)。可以下载[样例数据集后](https://paddlenlp.bj.bcebos.com/models/community/westfish/lvdm_datasets/sky_timelapse_lvdm.zip)，将数据集解压到`your_data_path_to/sky_timelapse_lvdm`，该数据集对应`lvdm/lvdm_args_short.py`。
+准备扩散模型训练的数据，格式需要适配`VideoFrameDataset`或`WebVidDataset`。数据集相关的配置请参考`lvdm/lvdm_args_short.py`或`lvdm/lvdm_args_text2video.py`中的`DatasetArguments`。相关数据下载链接为[Sky Timelapse](https://github.com/weixiong-ur/mdgan)、[Webvid](https://github.com/m-bain/webvid)。可以下载[样例数据集后](https://paddlenlp.bj.bcebos.com/models/community/westfish/lvdm_datasets/sky_timelapse_lvdm.zip)，将数据集解压到`your_data_path_to/sky_timelapse_lvdm`，该数据集对应`lvdm/lvdm_args_short.py`，即unconditional generation任务的训练，关于text to video generation任务，需用户自行准备数据。
 
 
 ### 预训练模型准备
@@ -89,7 +89,11 @@ python -u train_lvdm_text2video.py \
     --overwrite_output_dir True \
     --pretrained_model_name_or_path westfish/lvdm_text2video_orig_webvid_2m \
     --recompute True \
-    --fp16 --fp16_opt_level O1
+    --fp16 --fp16_opt_level O1 \
+    --train_data_root your_data_path_to/webvid/share_datasets \
+    --train_annotation_path your_data_path_to/webvid/share_datasets/train_type_data.list \
+    --eval_data_root your_data_path_to/webvid/share_datasets \
+    --eval_annotation_path your_data_path_to/webvid/share_datasets/val_type_data.list
 ```
 
 ### 单机多卡训练
@@ -153,7 +157,11 @@ python -u -m paddle.distributed.launch --gpus "0,1,2,3,4,5,6,7" train_lvdm_text2
     --overwrite_output_dir True \
     --pretrained_model_name_or_path westfish/lvdm_text2video_orig_webvid_2m \
     --recompute True \
-    --fp16 --fp16_opt_level O1
+    --fp16 --fp16_opt_level O1 \
+    --train_data_root your_data_path_to/webvid/share_datasets \
+    --train_annotation_path your_data_path_to/webvid/share_datasets/train_type_data.list \
+    --eval_data_root your_data_path_to/webvid/share_datasets \
+    --eval_annotation_path your_data_path_to/webvid/share_datasets/val_type_data.list
 ```
 
 训练时可通过如下命令通过浏览器观察训练过程：
