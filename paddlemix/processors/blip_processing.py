@@ -88,7 +88,7 @@ class Blip2Processor(ProcessorMixin):
         Main method to prepare for the model one or several sequences(s) and image(s). This method forwards the `text`
         and `kwargs` arguments to Bert's [`~BertTokenizerFast.__call__`] if `text` is not `None` to encode
         the text. To prepare the image(s), this method forwards the `images` and `kwargs` arguments to
-        Blip2ImageProcessor's [`~Blip2ImageProcessor.__call__`] if `images` is not `None`. Please refer to the doctsring
+        Blip2ImageProcessor's [`~Blip2ImageProcessor.__call__`] if `images` is not `None`. Please refer to the docstring
         of the above two methods for more information.
 
         Args:
@@ -335,7 +335,7 @@ class BlipImageProcessor(BaseImageProcessor):
             Resampling filter to use if resizing the image. Only has an effect if `do_resize` is set to `True`. Can be
             overridden by the `resample` parameter in the `preprocess` method.
         do_rescale (`bool`, *optional*, defaults to `True`):
-            Wwhether to rescale the image by the specified scale `rescale_factor`. Can be overridden by the
+            Whether to rescale the image by the specified scale `rescale_factor`. Can be overridden by the
             `do_rescale` parameter in the `preprocess` method.
         rescale_factor (`int` or `float`, *optional*, defaults to `1/255`):
             Scale factor to use if rescaling the image. Only has an effect if `do_rescale` is set to `True`. Can be
@@ -424,7 +424,7 @@ class BlipImageProcessor(BaseImageProcessor):
             size (`Dict[str, int]`):
                 Controls the size of the output image. Should be of the form `{"shortest_edge": int}`.
             resample (`PILImageResampling` filter, *optional*, defaults to `PILImageResampling.BICUBIC`):
-                Resampling filter to use when resiizing the image.
+                Resampling filter to use when resizing the image.
             data_format (`str` or `ChannelDimension`, *optional*):
                 The channel dimension format of the image. If not provided, it will be the same as the input image.
         """
@@ -493,7 +493,7 @@ class BlipImageProcessor(BaseImageProcessor):
         Crop the input data to random size and aspect ratio.
         A crop of random size (default: of 0.08 to 1.0) of the original size and a random
         aspect ratio (default: of 3/4 to 1.33) of the original aspect ratio is made.
-        After applying crop transfrom, the input data will be resized to given size.
+        After applying crop transform, the input data will be resized to given size.
 
         Args:
             image (`np.ndarray`):
@@ -503,7 +503,7 @@ class BlipImageProcessor(BaseImageProcessor):
             scale (`float`):
                 Scale to apply to the image.
             resample (`PILImageResampling` filter, *optional*, defaults to `PILImageResampling.BICUBIC`):
-                Resampling filter to use when resiizing the image.
+                Resampling filter to use when resizing the image.
         """
         size = list(size.values())
         return random_resized_crop(image, size=size, scale=scale, resample=resample, **kwargs)

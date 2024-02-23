@@ -36,17 +36,8 @@ class CosineDecayWithWarmup(LRScheduler):
         warmup_start_lr(float): Initial learning rate of warm up. Default: 0.0.
         last_epoch (int, optional):  The index of last epoch. Can be set to restart training. Default: -1, means initial learning rate.
     """
-    
-    def __init__(
-        self,
-        learning_rate,
-        total_steps,
-        eta_min=0.0,
-        warmup_start_lr=0.0,
-        last_step=-1,
-        warmup=0,
-        **kwargs
-    ):
+
+    def __init__(self, learning_rate, total_steps, eta_min=0.0, warmup_start_lr=0.0, last_step=-1, warmup=0, **kwargs):
         self.start_lr = learning_rate
         self.eta_min = eta_min
         self.warmup_start_lr = warmup_start_lr
@@ -59,18 +50,18 @@ class CosineDecayWithWarmup(LRScheduler):
         elif isinstance(warmup, float):
             self.warmup_steps = int(warmup * total_steps)
         else:
-            raise ValueError("Warmup expected a int or float number, but recevied: {}".format(type(warmup)))
-        self.step_each_epoch = kwargs.get("step_each_epoch",None)           
+            raise ValueError("Warmup expected a int or float number, but received: {}".format(type(warmup)))
+        self.step_each_epoch = kwargs.get("step_each_epoch", None)
         if self.warmup_steps > 0:
             self.last_lr = self.warmup_start_lr
         super().__init__(learning_rate=self.last_lr, last_epoch=self.last_step)
- 
+
     def step(self):
         global_cur_step = self.last_step + 1
         if global_cur_step < self.warmup_steps:
-            self.last_lr = self.warmup_start_lr + (
-                self.start_lr - self.warmup_start_lr
-            ) * global_cur_step / max(self.warmup_steps, 1)
+            self.last_lr = self.warmup_start_lr + (self.start_lr - self.warmup_start_lr) * global_cur_step / max(
+                self.warmup_steps, 1
+            )
         else:
             if self.step_each_epoch:
                 self.last_lr = (self.start_lr - self.eta_min) * 0.5 * (
@@ -79,10 +70,9 @@ class CosineDecayWithWarmup(LRScheduler):
             else:
                 self.last_lr = (self.start_lr - self.eta_min) * 0.5 * (
                     1.0 + math.cos(math.pi * global_cur_step / self.total_steps)
-                ) + self.eta_min 
+                ) + self.eta_min
         self.last_step += 1
-        
-       
+
     def get_lr(self):
         return self.last_lr
 

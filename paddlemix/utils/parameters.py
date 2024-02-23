@@ -23,7 +23,9 @@ def disabled_train(mode="train"):
 
 def freeze_parameters(params, enable_eval=False):
     if (not isinstance(params, nn.Layer)) and (not isinstance(params, paddle.Tensor)):
-        raise TypeError("An instance of Paddle.nn.Layer or paddle.Tensor expected, but acceived: {}".format(type(model)))
+        raise TypeError(
+            "An instance of Paddle.nn.Layer or paddle.Tensor expected, but received: {}".format(type(params))
+        )
 
     if isinstance(params, paddle.Tensor):
         params.stop_gradient = True
@@ -34,6 +36,7 @@ def freeze_parameters(params, enable_eval=False):
 
         for name, param in params.named_parameters():
             param.stop_gradient = True
+
 
 def transfer_param(p, is_bias=False, dtype="float16", restore_data=False):
     param_shape = p.shape

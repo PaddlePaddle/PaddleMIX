@@ -27,7 +27,7 @@ class Appflow(object):
         model (str, optional): The model name in the task, if set None, will use the default model.
         mode (str, optional): Select the mode of the task, only used in the tasks of word_segmentation and ner.
             If set None, will use the default mode.
-        device_id (int, optional): The device id for the gpu, xpu and other devices, the defalut value is 0.
+        device_id (int, optional): The device id for the gpu, xpu and other devices, the default value is 0.
         kwargs (dict, optional): Additional keyword arguments passed along to the specific task.
 
     """
@@ -103,5 +103,5 @@ class Appflow(object):
         """
         Return the available task list.
         """
-        task_list = list(TASKS.keys())
+        task_list = list(TASKS.keys())  # noqa
         return task_list

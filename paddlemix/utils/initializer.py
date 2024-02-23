@@ -246,7 +246,7 @@ def kaiming_normal_(tensor, a=0, mode="fan_in", nonlinearity="leaky_relu", rever
     Modified tensor inspace using kaiming_normal_
     Args:
         tensor (paddle.Tensor): paddle Tensor
-        mode (str): ['fan_in', 'fan_out'], 'fin_in' defalut
+        mode (str): ['fan_in', 'fan_out'], 'fin_in' default
         nonlinearity (str): nonlinearity method name
         reverse (bool):  reverse (bool: False): tensor data format order, False by default as [fout, fin, ...].
     Return:
@@ -309,6 +309,7 @@ def reset_initialized_parameter(model, include_self=True):
             if hasattr(m, "bias") and getattr(m, "bias") is not None:
                 _no_grad_fill_(m.bias, 0)
 
+
 def to(
     self,
     device=None,
@@ -340,4 +341,3 @@ def to(
         return self
     paddle.Tensor._to(self, device, dtype, blocking)
     return self
-
