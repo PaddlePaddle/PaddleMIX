@@ -1,0 +1,6 @@
+{
+  "depth": 24,
+  "hidden_size": 1024,
+  "patch_size": 4,
+  "num_heads": 16
+}
