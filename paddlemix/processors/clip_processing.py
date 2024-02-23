@@ -21,7 +21,6 @@ import numpy as np
 import paddle
 import PIL
 from paddle.vision.transforms import functional as F
-
 from paddlenlp.transformers.tokenizer_utils_base import (
     BatchEncoding,
     PreTokenizedInput,
@@ -324,7 +323,7 @@ class CLIPImageProcessor(BaseImageProcessor):
         scale: Optional[Union[List[float], Tuple[float]]] = (0.9, 1.0),
         do_collate: bool = False,
         mode: str = "train",
-        interpolation: str = "bilinear", 
+        interpolation: str = "bilinear",
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -437,7 +436,7 @@ class CLIPImageProcessor(BaseImageProcessor):
         Crop the input data to random size and aspect ratio.
         A crop of random size (default: of 0.08 to 1.0) of the original size and a random
         aspect ratio (default: of 3/4 to 1.33) of the original aspect ratio is made.
-        After applying crop transfrom, the input data will be resized to given size.
+        After applying crop transform, the input data will be resized to given size.
 
         Args:
             image (`np.ndarray`):

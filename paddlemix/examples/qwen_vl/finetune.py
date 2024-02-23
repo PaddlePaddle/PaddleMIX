@@ -22,7 +22,7 @@ from paddlenlp.trainer import PdArgumentParser, Trainer, TrainingArguments
 from paddlenlp.transformers import PretrainedTokenizer
 from paddlenlp.transformers.qwen.configuration import QWenConfig
 
-from paddlemix import QWenLMHeadModel, QWenTokenizer
+from paddlemix import QWenLMHeadModel, QWenVLTokenizer
 from paddlemix.utils.log import logger
 
 IGNORE_TOKEN_ID = -100
@@ -213,7 +213,7 @@ def train():
         if training_args.fix_vit and hasattr(model, "visual"):
             model.freeze_vit()
 
-    tokenizer = QWenTokenizer.from_pretrained(
+    tokenizer = QWenVLTokenizer.from_pretrained(
         model_args.model_name_or_path,
         cache_dir=training_args.cache_dir,
         model_max_length=training_args.model_max_length,

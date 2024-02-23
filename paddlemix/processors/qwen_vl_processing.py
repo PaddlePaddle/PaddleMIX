@@ -41,30 +41,103 @@ class QwenVLProcessor(ProcessorMixin):
     def __init__(self, tokenizer, **kwargs):
         super().__init__(tokenizer)
         self.image_start_id = kwargs.get("image_start_id", 151857)
+        self.max_len = kwargs.get("max_len", 2048)
         self.image_processor = QwenVLImageProcessor()
 
     def __call__(
         self,
         query: List[dict] = None,
+        record: List[dict] = None,
+        mode: str = None,
         return_tensors: Optional[Union[str, TensorType]] = None,
     ):
-
+        if query is None and record is None:
+            raise ValueError("You have to specify query or record.")
         if query is None:
-            raise ValueError("You have to specify query.")
-        images = []
-        for ele in query:
-            if "image" in ele:
-                images.append(ele["image"])
+            query = record
 
-        query = self.tokenizer.from_list_format(query)
+        if mode == "train":
+            inputs = self.train_preprocess(query)
 
-        inputs = self.tokenizer(query, return_tensors=return_tensors)
-        inputs["images"] = None
+        else:
+            images = []
+            for ele in query:
+                if "image" in ele:
+                    images.append(ele["image"])
 
-        if len(images) > 0:
-            inputs["images"] = self.image_processor(images)
+            query = self.tokenizer.from_list_format(query)
+            inputs = self.tokenizer(query, return_tensors=return_tensors)
+            inputs["images"] = None
+
+            if len(images) > 0:
+                inputs["images"] = self.image_processor(images)
 
         return inputs
+
+    def train_preprocess(self, sources, system_message: str = "You are a helpful assistant."):
+
+        IGNORE_TOKEN_ID = -100
+        im_start = self.tokenizer.im_start_id
+        im_end = self.tokenizer.im_end_id
+        nl_tokens = self.tokenizer("\n").input_ids
+        _system = self.tokenizer("system").input_ids + nl_tokens
+
+        input_id, target = [], []
+        system = [im_start] + _system + self.tokenizer(system_message).input_ids + [im_end] + nl_tokens
+        input_id += system
+        target += [im_start] + [IGNORE_TOKEN_ID] * (len(system) - 3) + [im_end] + nl_tokens
+        assert len(input_id) == len(target)
+
+        import re
+
+        image_pattern = re.compile(r"<img>.*</img>")
+        image_path = []
+        if "<img>" in sources:
+            result = image_pattern.findall(sources)
+            for ele in result:
+                image_path.append(ele[5:-6])
+
+        input_id_conversation = self.tokenizer(sources).input_ids
+        input_id += input_id_conversation
+
+        im_start_index = np.where(np.array(input_id_conversation) == im_start)[0]
+        im_end_index = np.where(np.array(input_id_conversation) == im_end)[0]
+        index_list = list(zip(im_start_index, im_end_index))
+
+        for i in range(0, len(index_list), 2):
+            q = index_list[i]
+            a = index_list[i + 1]
+
+            target += [im_start] + [IGNORE_TOKEN_ID] * (q[1] - q[0] + 2 - 3) + [im_end] + nl_tokens
+            target += (
+                [im_start]
+                + [IGNORE_TOKEN_ID] * len(self.tokenizer("<|im_start|>assistant").input_ids)
+                + input_id_conversation[a[0] : a[1] + 2][
+                    len(self.tokenizer("<|im_start|>assistant").input_ids) + 1 : -2
+                ]
+                + [im_end]
+                + nl_tokens
+            )
+
+        assert len(input_id) == len(target)
+
+        inputs = dict(
+            input_ids=input_id[: self.max_len],
+            labels=target[: self.max_len],
+        )
+        if len(image_path) > 0:
+            inputs["images"] = self.image_processor(image_path)
+
+        return inputs
+
+    def batch_decode(self, *args, **kwargs):
+
+        """
+        This method forwards all its arguments to PreTrainedTokenizer's [`~PreTrainedTokenizer.batch_decode`]. Please
+        refer to the docstring of this method for more information.
+        """
+
+        return self.tokenizer.batch_decode(*args, **kwargs)
 
     def decode(self, pred: Union[List, paddle.Tensor]):
         """

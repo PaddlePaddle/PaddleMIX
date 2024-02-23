@@ -82,7 +82,7 @@ def _replace_closed_tag(
     return output_tokens
 
 
-class QWenTokenizer(PretrainedTokenizer):
+class QWenVLTokenizer(PretrainedTokenizer):
     """QWen tokenizer."""
 
     model_input_names = ["input_ids", "token_type_ids", "attention_mask"]

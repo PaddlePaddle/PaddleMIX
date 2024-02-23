@@ -18,7 +18,7 @@ import nltk
 import paddle
 from paddlenlp.transformers import AutoTokenizer
 
-from paddlemix import QWenLMHeadModel, QWenTokenizer, QwenVLProcessor
+from paddlemix import QWenLMHeadModel, QwenVLProcessor, QWenVLTokenizer
 from paddlemix.models import MiniGPT4ForConditionalGeneration
 from paddlemix.models.blip2.modeling import Blip2ForConditionalGeneration
 from paddlemix.processors import MiniGPT4Processor
@@ -219,7 +219,7 @@ class QwenVLChatTask(AppTask):
         """
         Construct the tokenizer for the predictor.
         """
-        self.tokenizer = QWenTokenizer.from_pretrained(model, dtype=self.dtype)
+        self.tokenizer = QWenVLTokenizer.from_pretrained(model, dtype=self.dtype)
         self._processor = QwenVLProcessor(tokenizer=self.tokenizer)
 
     def _construct_model(self, model):
