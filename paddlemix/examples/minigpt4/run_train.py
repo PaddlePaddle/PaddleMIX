@@ -264,10 +264,10 @@ def setdistenv(args):
     args.data_world_size = dist.get_world_size() // abs(args.tensor_parallel_degree * args.pipeline_parallel_degree)
 
     # seed control in hybrid parallel
-    set_hyrbid_parallel_seed(args.seed, args.data_world_rank, args.mp_rank)
+    set_hybrid_parallel_seed(args.seed, args.data_world_rank, args.mp_rank)
 
 
-def set_hyrbid_parallel_seed(basic_seed, data_world_rank, mp_rank, pp_rank=0):
+def set_hybrid_parallel_seed(basic_seed, data_world_rank, mp_rank, pp_rank=0):
     device_id = paddle.device.get_device()
     assert "gpu" in device_id
 
