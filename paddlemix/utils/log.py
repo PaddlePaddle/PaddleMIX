@@ -35,7 +35,7 @@ log_config = {
 
 class Logger(object):
     """
-    Deafult logger in PaddleNLP
+    Default logger in PaddleNLP
 
     Args:
         name(str) : Logger name, default is 'PaddleNLP'
