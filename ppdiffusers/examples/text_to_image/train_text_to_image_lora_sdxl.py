@@ -14,14 +14,15 @@
 # limitations under the License.
 
 """Fine-tuning script for Stable Diffusion XL for text2image with support for LoRA."""
+import os
 
+os.environ["USE_PEFT_BACKEND"] = "False"
 import argparse
 import copy
 import gc
 import itertools
 import logging
 import math
-import os
 import random
 import shutil
 from pathlib import Path
