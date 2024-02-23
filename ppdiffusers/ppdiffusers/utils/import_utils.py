@@ -316,7 +316,7 @@ except importlib_metadata.PackageNotFoundError:
     _pp_invisible_watermark_available = False
 
 
-_peft_available = True
+_peft_available = str2bool(os.getenv("USE_PEFT_BACKEND", False))
 
 
 def is_paddle_available():
