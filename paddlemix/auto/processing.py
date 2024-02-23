@@ -72,8 +72,8 @@ def get_processor_mapping():
 
 class AutoProcessorMIX:
     """
-    Autoprocessor is a generic processor class that will be instantiated as one of the
-    base processor classes when created with the Autoprocessor.from_pretrained() classmethod.
+    AutoProcessor is a generic processor class that will be instantiated as one of the
+    base processor classes when created with the AutoProcessor.from_pretrained() classmethod.
     """
 
     MAPPING_NAMES = get_processor_mapping()
