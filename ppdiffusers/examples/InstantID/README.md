@@ -67,6 +67,7 @@ hf_hub_download(repo_id="latent-consistency/lcm-lora-sdxl", filename="pytorch_lo
 import paddle
 import cv2
 import os
+os.environ["USE_PEFT_BACKEND"] = "True"
 import numpy as np
 from PIL import Image
 from ppdiffusers import ControlNetModel, AutoencoderKL
@@ -154,13 +155,15 @@ hf_hub_download(repo_id="latent-consistency/lcm-lora-sdxl", filename="pytorch_lo
 使用 LCM-LoRA 加速时， `num_inference_steps` 参数可以使用比较小的值（如 10） ，以及 `guidance_scale` 建议设置范围是 [0, 1]。
 
 ```python
+import os
+os.environ["USE_PEFT_BACKEND"] = "True"
 from ppdiffusers import LCMScheduler
 
 lora_state_dict = './checkpoints/pytorch_lora_weights.safetensors'
 
-pipe.scheduler=LCMScheduler.from_pretrained(base_model_path, 
-                                            subfolder="scheduler", 
-                                            from_hf_hub=True, 
+pipe.scheduler=LCMScheduler.from_pretrained(base_model_path,
+                                            subfolder="scheduler",
+                                            from_hf_hub=True,
                                             from_diffusers=True)
 pipe.load_lora_weights(lora_state_dict, from_diffusers=True)
 pipe.fuse_lora()

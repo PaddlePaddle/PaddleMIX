@@ -14,6 +14,7 @@
 
 import os
 
+os.environ["USE_PEFT_BACKEND"] = "True"
 # ignore warning
 os.environ["GLOG_minloglevel"] = "2"
 
