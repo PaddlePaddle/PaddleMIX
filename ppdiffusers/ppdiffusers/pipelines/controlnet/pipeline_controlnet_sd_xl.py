@@ -1176,7 +1176,7 @@ class StableDiffusionXLControlNetPipeline(
             prompt_embeds = paddle.concat([negative_prompt_embeds, prompt_embeds], axis=0)
             add_text_embeds = paddle.concat([negative_pooled_prompt_embeds, add_text_embeds], axis=0)
             add_time_ids = paddle.concat([negative_add_time_ids, add_time_ids], axis=0)
-
+        
         add_time_ids = add_time_ids.tile([batch_size * num_images_per_prompt, 1])
 
         # 8. Denoising loop

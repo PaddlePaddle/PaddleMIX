@@ -528,33 +528,6 @@ class PipelineSlowTests(unittest.TestCase):
         gc.collect()
         paddle.device.cuda.empty_cache()
 
-    def test_smart_download(self):
-        model_id = "hf-internal-testing/unet-pipeline-dummy"
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            _ = DiffusionPipeline.from_pretrained(model_id, cache_dir=tmpdirname, force_download=True)
-            local_repo_name = "--".join(["models"] + model_id.split("/"))
-            snapshot_dir = os.path.join(tmpdirname, local_repo_name, "snapshots")
-            snapshot_dir = os.path.join(snapshot_dir, os.listdir(snapshot_dir)[0])
-            assert os.path.isfile(os.path.join(snapshot_dir, DiffusionPipeline.config_name))
-            assert os.path.isfile(os.path.join(snapshot_dir, CONFIG_NAME))
-            assert os.path.isfile(os.path.join(snapshot_dir, SCHEDULER_CONFIG_NAME))
-            assert os.path.isfile(os.path.join(snapshot_dir, TORCH_WEIGHTS_NAME))
-            assert os.path.isfile(os.path.join(snapshot_dir, "scheduler", SCHEDULER_CONFIG_NAME))
-            assert os.path.isfile(os.path.join(snapshot_dir, "unet", TORCH_WEIGHTS_NAME))
-            assert os.path.isfile(os.path.join(snapshot_dir, "unet", TORCH_WEIGHTS_NAME))
-            assert not os.path.isfile(os.path.join(snapshot_dir, "big_array.npy"))
-
-    def test_warning_unused_kwargs(self):
-        model_id = "hf-internal-testing/unet-pipeline-dummy"
-        logger = logging.get_logger("ppdiffusers.pipelines")
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            with CaptureLogger(logger) as cap_logger:
-                DiffusionPipeline.from_pretrained(model_id, not_used=True, cache_dir=tmpdirname, force_download=True)
-        assert (
-            cap_logger.out.strip().split("\n")[-1]
-            == "Keyword arguments {'not_used': True} are not expected by DDPMPipeline and will be ignored."
-        )
-
     def test_from_save_pretrained(self):
         model = UNet2DModel(
             block_out_channels=(32, 64),

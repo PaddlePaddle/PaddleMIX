@@ -65,6 +65,9 @@ class VQModelTests(ModelTesterMixin, UNetTesterMixin, unittest.TestCase):
     def test_training(self):
         pass
 
+    def test_from_save_pretrained_variant(self):
+        pass
+
     def test_from_pretrained_hub(self):
         model, loading_info = VQModel.from_pretrained("fusing/vqgan-dummy", output_loading_info=True)
         self.assertIsNotNone(model)

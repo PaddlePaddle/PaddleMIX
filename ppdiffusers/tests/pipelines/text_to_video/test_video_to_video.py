@@ -183,7 +183,6 @@ class VideoToVideoSDPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
     def test_float16_inference(self):
         pass
 
-
 @slow
 class VideoToVideoSDPipelineSlowTests(unittest.TestCase):
     def test_two_step_model(self):

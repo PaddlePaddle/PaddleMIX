@@ -159,10 +159,6 @@ def create_paddle_inference_runtime(
     for pass_name in disable_paddle_pass:
         config.delete_pass(pass_name)
     if use_trt:
-        # auto compute the shape range info
-        if not os.path.exists(shape_file):
-            config.collect_shape_range_info(shape_file)
-
         config.enable_tensorrt_engine(
             workspace_size=workspace,
             precision_mode=precision_mode,
@@ -266,8 +262,8 @@ def main(args):
             use_trt=args.use_trt,
             precision_mode=precision_mode,
             device_id=args.device_id,
-            # disable_paddle_pass=paddle_delete_passes.get("unet", []),
-            tune=False,
+            disable_paddle_pass=paddle_delete_passes.get("unet", []),
+            tune=args.tune,
         ),
         image_encoder=create_paddle_inference_runtime(
             model_dir=args.model_dir,
