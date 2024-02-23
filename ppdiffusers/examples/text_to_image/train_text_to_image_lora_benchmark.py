@@ -18,6 +18,7 @@ import gc
 import math
 import os
 
+os.environ["USE_PEFT_BACKEND"] = "False"
 os.environ["FLAG_USE_OLD_RECOMPUTE"] = "True"
 import random
 import sys

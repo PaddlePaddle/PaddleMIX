@@ -13,7 +13,9 @@
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
+import os
 
+os.environ["USE_PEFT_BACKEND"] = "False"
 import argparse
 import contextlib
 import copy
@@ -21,7 +23,6 @@ import gc
 import itertools
 import logging
 import math
-import os
 import shutil
 import warnings
 from pathlib import Path

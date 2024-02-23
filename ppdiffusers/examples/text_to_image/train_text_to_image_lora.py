@@ -12,12 +12,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import os
 
+os.environ["USE_PEFT_BACKEND"] = "False"
 import argparse
 import contextlib
 import gc
 import math
-import os
 import random
 import sys
 from pathlib import Path
@@ -29,9 +30,10 @@ import paddle.nn as nn
 import paddle.nn.functional as F
 from datasets import DatasetDict, load_dataset
 from huggingface_hub import HfFolder, Repository, create_repo, whoami
-from paddle.distributed.fleet.utils.hybrid_parallel_util import (
-    fused_allreduce_gradients,
-)
+
+# from paddle.distributed.fleet.utils.hybrid_parallel_util import (
+#     fused_allreduce_gradients,
+# )
 from paddle.io import BatchSampler, DataLoader, DistributedBatchSampler
 from paddle.optimizer import AdamW
 from paddle.vision import BaseTransform, transforms
@@ -857,8 +859,8 @@ def main():
                 loss.backward()
 
             if (step + 1) % args.gradient_accumulation_steps == 0:
-                if num_processes > 1 and args.gradient_checkpointing:
-                    fused_allreduce_gradients(params_to_optimize, None)
+                # if num_processes > 1 and args.gradient_checkpointing:
+                #     fused_allreduce_gradients(params_to_optimize, None)
                 optimizer.step()
                 lr_scheduler.step()
                 optimizer.clear_grad()
