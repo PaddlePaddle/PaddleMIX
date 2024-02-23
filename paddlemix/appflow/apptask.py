@@ -26,7 +26,7 @@ from paddlemix.utils.log import logger
 
 class AppTask(object):
     """
-    The meta classs of task in Taskflow. The meta class has the five abstract function,
+    The meta class of task in Taskflow. The meta class has the five abstract function,
         the subclass need to inherit from the meta class.
     Args:
         task(string): The name of task.
@@ -98,7 +98,7 @@ class AppTask(object):
 
     def _prepare_static_mode(self):
         """
-        Construct the input data and predictor in the PaddlePaddele static mode.
+        Construct the input data and predictor in the PaddlePaddle static mode.
         """
         if paddle.get_device() == "cpu":
             self._config.disable_gpu()
@@ -220,7 +220,7 @@ class AppTask(object):
                     black_list={"sigmoid"},
                 )
                 logger.info(
-                    "The inference model in fp16 precison save in the path:{}".format(self._static_fp16_model_file)
+                    "The inference model in fp16 precision save in the path:{}".format(self._static_fp16_model_file)
                 )
             self._static_model_file = self._static_fp16_model_file
             self._static_params_file = self._static_fp16_params_file

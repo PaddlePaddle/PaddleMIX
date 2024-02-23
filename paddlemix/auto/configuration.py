@@ -96,6 +96,6 @@ class AutoConfigMIX(AutoConfig):
 
         assert inspect.isclass(model_class) and issubclass(
             model_class, PretrainedModel
-        ), f"<{model_class}> should be a PretarinedModel class, but <{type(model_class)}>"
+        ), f"<{model_class}> should be a PretrainedModel class, but <{type(model_class)}>"
 
         return cls if model_class.config_class is None else model_class.config_class
