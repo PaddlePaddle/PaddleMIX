@@ -15,10 +15,11 @@
 import contextlib
 import sys
 import time
-
+import numpy as np
+import paddle
+import paddle.distributed as dist
 import paddle.amp.auto_cast as autocast
 from paddle.io import DataLoader
-import paddle
 from paddlenlp.trainer import PrinterCallback, ProgressCallback, Trainer
 from paddlenlp.trainer.integrations import (
     INTEGRATION_TO_CALLBACK,
@@ -28,10 +29,6 @@ from paddlenlp.trainer.integrations import (
 )
 from paddlenlp.utils import profiler
 from paddlenlp.utils.log import logger
-
-import numpy as np
-import paddle
-import paddle.distributed as dist
 
 
 def worker_init_fn(_):
@@ -89,12 +86,14 @@ class VisualDLWithImageCallback(VisualDLCallback):
                 image_logs["ddim-samples-1.0"] = model.log_image(
                     input_ids=inputs["input_ids"],
                     guidance_scale=1.0,
+                    class_labels=[1,2,3,4,5,6,7,8],
                     height=args.resolution,
                     width=args.resolution,
                 )
                 image_logs["ddim-samples-7.5"] = model.log_image(
                     input_ids=inputs["input_ids"],
                     guidance_scale=7.5,
+                    class_labels=[1,2,3,4,5,6,7,8],
                     height=args.resolution,
                     width=args.resolution,
                 )

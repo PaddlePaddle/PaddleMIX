@@ -12,21 +12,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import paddle
-import paddle.nn as nn
-import paddle.nn.functional as F
 import numpy as np
 import math
 from itertools import repeat
 import collections.abc
 from functools import partial
 
+import paddle
+import paddle.nn as nn
+import paddle.nn.functional as F
+from paddle.incubate.nn.memory_efficient_attention import memory_efficient_attention
 from paddle.nn.initializer import Constant, Normal, TruncatedNormal
 trunc_normal_ = TruncatedNormal(std=0.02)
 normal_ = Normal
 zeros_ = Constant(value=0.0)
 ones_ = Constant(value=1.0)
-from paddle.distributed.fleet.utils import recompute
+import paddle.nn.initializer as initializer
 
 
 def _ntuple(n):
@@ -115,13 +116,14 @@ class Attention(nn.Layer):
             attn_drop: float = 0.,
             proj_drop: float = 0.,
             norm_layer: nn.Layer = nn.LayerNorm,
+            fused_attn: bool = False,
     ) -> None:
         super().__init__()
         assert dim % num_heads == 0, 'dim should be divisible by num_heads'
         self.num_heads = num_heads
         self.head_dim = dim // num_heads
         self.scale = self.head_dim ** -0.5
-        self.fused_attn = False
+        self.fused_attn = fused_attn
 
         self.qkv = nn.Linear(dim, dim * 3, bias_attr=qkv_bias)
         self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
@@ -137,10 +139,21 @@ class Attention(nn.Layer):
         q, k = self.q_norm(q), self.k_norm(k)
 
         if self.fused_attn:
-            x = F.scaled_dot_product_attention(
+            # x = F.scaled_dot_product_attention(
+            #     q, k, v,
+            #     dropout_p=self.attn_drop.p if self.training else 0.,
+            # )
+            q = q.transpose(perm=[0, 2, 1, 3])
+            k = k.transpose(perm=[0, 2, 1, 3])
+            v = v.transpose(perm=[0, 2, 1, 3])
+            x = memory_efficient_attention(
                 q, k, v,
-                dropout_p=self.attn_drop.p if self.training else 0.,
+                p=self.xattn_drop.p if self.training else 0.,
+                scale=self.scale,
             )
+            x = x.reshape([B, N, -1])
+            x = self.proj(x)
+            x = self.proj_drop(x)
         else:
             q = q * self.scale
             attn = q @ k.transpose([0, 1, 3, 2])
@@ -148,9 +161,9 @@ class Attention(nn.Layer):
             attn = self.attn_drop(attn)
             x = attn @ v
 
-        x = x.transpose([0, 2, 1, 3]).reshape([B, N, C])
-        x = self.proj(x)
-        x = self.proj_drop(x)
+            x = x.transpose([0, 2, 1, 3]).reshape([B, N, C])
+            x = self.proj(x)
+            x = self.proj_drop(x)
         return x
 
 
@@ -181,7 +194,7 @@ class TimestepEmbedder(nn.Layer):
         half = dim // 2
         freqs = paddle.exp(
             -math.log(max_period) * paddle.arange(start=0, end=half, dtype=paddle.float32) / half
-        ) #.to(device=t.device)
+        )
         args = t[:, None].cast('float32') * freqs[None]
         embedding = paddle.concat([paddle.cos(args), paddle.sin(args)], axis=-1)
         if dim % 2:
@@ -210,15 +223,20 @@ class LabelEmbedder(nn.Layer):
         Drops labels to enable classifier-free guidance.
         """
         if force_drop_ids is None:
-            drop_ids = paddle.randint(labels.shape[0]) < self.dropout_prob
+            drop_ids = (
+                paddle.rand(
+                    (labels.shape[0],),
+                )
+                < self.dropout_prob
+            )
         else:
-            drop_ids = force_drop_ids == 1
+            drop_ids = paddle.to_tensor(force_drop_ids == 1)
         labels = paddle.where(drop_ids, self.num_classes, labels)
         return labels
 
-    def forward(self, labels, train, force_drop_ids=None):
+    def forward(self, labels, force_drop_ids=None):
         use_dropout = self.dropout_prob > 0
-        if (train and use_dropout) or (force_drop_ids is not None):
+        if (self.training and use_dropout) or (force_drop_ids is not None):
             labels = self.token_drop(labels, force_drop_ids)
         embeddings = self.embedding_table(labels)
         return embeddings
@@ -228,10 +246,10 @@ class DiTBlock(nn.Layer):
     """
     A DiT block with adaptive layer norm zero (adaLN-Zero) conditioning.
     """
-    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0):
+    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, **block_kwargs):
         super().__init__()
         self.norm1 = nn.LayerNorm(hidden_size, epsilon=1e-6)
-        self.attn = Attention(hidden_size, num_heads=num_heads, qkv_bias=True)
+        self.attn = Attention(hidden_size, num_heads=num_heads, qkv_bias=True, **block_kwargs)
         self.norm2 = nn.LayerNorm(hidden_size, epsilon=1e-6)
         mlp_hidden_dim = int(hidden_size * mlp_ratio)
         approx_gelu = lambda: nn.GELU(approximate=True) # 'tanh'
@@ -274,16 +292,17 @@ class DiT(nn.Layer):
     """
     def __init__(
         self,
-        input_size=32,
+        input_size=32, # image_size // 8
         patch_size=2,
         in_channels=4,
         hidden_size=1152,
         depth=28,
         num_heads=16,
         mlp_ratio=4.0,
-        class_dropout_prob=0.0, # 0.1
+        class_dropout_prob=0.1,
         num_classes=1000,
         learn_sigma=True,
+        enable_recompute=False,
     ):
         super().__init__()
         self.learn_sigma = learn_sigma
@@ -291,6 +310,7 @@ class DiT(nn.Layer):
         self.out_channels = in_channels * 2 if learn_sigma else in_channels
         self.patch_size = patch_size
         self.num_heads = num_heads
+        self.enable_recompute = enable_recompute
 
         self.x_embedder = PatchEmbed(input_size, patch_size, in_channels, hidden_size, bias=True)
         self.t_embedder = TimestepEmbedder(hidden_size)
@@ -306,44 +326,48 @@ class DiT(nn.Layer):
             DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
         ])
         self.final_layer = FinalLayer(hidden_size, patch_size, self.out_channels)
-        #self.initialize_weights()
+
+        self.initialize_weights()
+        #self.set_state_dict(paddle.load('DiT-XL-2-256x256.pdparams'))
 
     def initialize_weights(self):
         # Initialize transformer layers:
-        # def _basic_init(module):
-        #     if isinstance(module, nn.Linear):
-        #         paddle.nn.init.xavier_uniform_(module.weight) ####
-        #         if module.bias is not None:
-        #             nn.init.constant_(module.bias, 0)
-        # self.apply(_basic_init)
+        def _basic_init(module):
+            if isinstance(module, nn.Linear):
+                initializer.XavierUniform()(module.weight)
+                if module.bias is not None:
+                    initializer.Constant(value=0)(module.bias)
+        self.apply(_basic_init)
 
         # Initialize (and freeze) pos_embed by sin-cos embedding:
         pos_embed = get_2d_sincos_pos_embed(self.pos_embed.shape[-1], int(self.x_embedder.num_patches ** 0.5))
-        #self.pos_embed.data.copy_(paddle.from_numpy(pos_embed).float().unsqueeze(0))
-        self.pos_embed = paddle.to_tensor(pos_embed).unsqueeze(0) ###
+        self.pos_embed.set_value(paddle.to_tensor(pos_embed, dtype='float32').unsqueeze(0))
 
-        # Initialize patch_embed like nn.Linear (instead of nn.Conv2d):
-        w = self.x_embedder.proj.weight.data
-        nn.init.xavier_uniform_(w.reshape([w.shape[0], -1]))
-        nn.init.constant_(self.x_embedder.proj.bias, 0)
+        # Initialize patch_embed like nn.Linear (instead of nn.Conv2D):
+        w = self.x_embedder.proj.weight
+        initializer.XavierUniform()(w.reshape([w.shape[0], -1]))
+        initializer.Constant(value=0)(self.x_embedder.proj.bias)
 
         # Initialize label embedding table:
-        nn.init.normal_(self.y_embedder.embedding_table.weight, std=0.02)
+        initializer.Normal(std=0.02)(self.y_embedder.embedding_table.weight)
 
         # Initialize timestep embedding MLP:
-        nn.init.normal_(self.t_embedder.mlp[0].weight, std=0.02)
-        nn.init.normal_(self.t_embedder.mlp[2].weight, std=0.02)
+        initializer.Normal(std=0.02)(self.t_embedder.mlp[0].weight)
+        initializer.Normal(std=0.02)(self.t_embedder.mlp[2].weight)
 
         # Zero-out adaLN modulation layers in DiT blocks:
         for block in self.blocks:
-            nn.init.constant_(block.adaLN_modulation[-1].weight, 0)
-            nn.init.constant_(block.adaLN_modulation[-1].bias, 0)
+            initializer.Constant(value=0)(block.adaLN_modulation[-1].weight)
+            initializer.Constant(value=0)(block.adaLN_modulation[-1].bias)
 
         # Zero-out output layers:
-        nn.init.constant_(self.final_layer.adaLN_modulation[-1].weight, 0)
-        nn.init.constant_(self.final_layer.adaLN_modulation[-1].bias, 0)
-        nn.init.constant_(self.final_layer.linear.weight, 0)
-        nn.init.constant_(self.final_layer.linear.bias, 0)
+        initializer.Constant(value=0)(self.final_layer.adaLN_modulation[-1].weight)
+        initializer.Constant(value=0)(self.final_layer.adaLN_modulation[-1].bias)
+        initializer.Constant(value=0)(self.final_layer.linear.weight)
+        initializer.Constant(value=0)(self.final_layer.linear.bias)
+
+    def set_grad_checkpointing(self, enable=True):
+        self.enable_recompute = enable
 
     def unpatchify(self, x):
         """
@@ -369,11 +393,14 @@ class DiT(nn.Layer):
         """
         x = self.x_embedder(x) + self.pos_embed  # (N, T, D), where T = H * W / patch_size ** 2
         t = self.t_embedder(t)                   # (N, D)
-        y = self.y_embedder(y, self.training)    # (N, D)
+        y = self.y_embedder(y)    # (N, D)
         c = t + y                                # (N, D)
 
         for i, block in enumerate(self.blocks):
-            x = block(x, c)       # (N, T, D)
+            if self.enable_recompute:
+                x = paddle.distributed.fleet.utils.recompute(block, x, c, use_reentrant=False)
+            else:
+                x = block(x, c)       # (N, T, D)
 
         x = self.final_layer(x, c)                # (N, T, patch_size ** 2 * out_channels)
         x = self.unpatchify(x)                   # (N, out_channels, H, W)
@@ -433,55 +460,3 @@ def get_1d_sincos_pos_embed_from_grid(embed_dim, pos):
 
     emb = np.concatenate([emb_sin, emb_cos], axis=1)  # (M, D)
     return emb
-
-
-
-#################################################################################
-#                                   DiT Configs                                  #
-#################################################################################
-
-def DiT_XL_2(**kwargs):
-    return DiT(depth=28, hidden_size=1152, patch_size=2, num_heads=16, **kwargs)
-
-def DiT_XL_4(**kwargs):
-    return DiT(depth=28, hidden_size=1152, patch_size=4, num_heads=16, **kwargs)
-
-def DiT_XL_8(**kwargs):
-    return DiT(depth=28, hidden_size=1152, patch_size=8, num_heads=16, **kwargs)
-
-def DiT_L_2(**kwargs):
-    return DiT(depth=24, hidden_size=1024, patch_size=2, num_heads=16, **kwargs)
-
-def DiT_L_4(**kwargs):
-    return DiT(depth=24, hidden_size=1024, patch_size=4, num_heads=16, **kwargs)
-
-def DiT_L_8(**kwargs):
-    return DiT(depth=24, hidden_size=1024, patch_size=8, num_heads=16, **kwargs)
-
-def DiT_B_2(**kwargs):
-    return DiT(depth=12, hidden_size=768, patch_size=2, num_heads=12, **kwargs)
-
-def DiT_B_4(**kwargs):
-    return DiT(depth=12, hidden_size=768, patch_size=4, num_heads=12, **kwargs)
-
-def DiT_B_8(**kwargs):
-    return DiT(depth=12, hidden_size=768, patch_size=8, num_heads=12, **kwargs)
-
-def DiT_S_2(**kwargs):
-    return DiT(depth=12, hidden_size=384, patch_size=2, num_heads=6, **kwargs)
-
-def DiT_S_4(**kwargs):
-    return DiT(depth=12, hidden_size=384, patch_size=4, num_heads=6, **kwargs)
-
-def DiT_S_8(**kwargs):
-    return DiT(depth=12, hidden_size=384, patch_size=8, num_heads=6, **kwargs)
-
-
-DiT_models = {
-    'DiT-XL/2': DiT_XL_2,  'DiT-XL/4': DiT_XL_4,  'DiT-XL/8': DiT_XL_8,
-    'DiT-L/2':  DiT_L_2,   'DiT-L/4':  DiT_L_4,   'DiT-L/8':  DiT_L_8,
-    'DiT-B/2':  DiT_B_2,   'DiT-B/4':  DiT_B_4,   'DiT-B/8':  DiT_B_8,
-    'DiT-S/2':  DiT_S_2,   'DiT-S/4':  DiT_S_4,   'DiT-S/8':  DiT_S_8,
-}
-
-

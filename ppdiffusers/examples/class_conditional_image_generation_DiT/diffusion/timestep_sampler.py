@@ -53,10 +53,8 @@ class ScheduleSampler(ABC):
         w = self.weights()
         p = w / np.sum(w)
         indices_np = np.random.choice(len(p), size=(batch_size,), p=p)
-        # indices = th.from_numpy(indices_np).long().to(device)
-        indices = paddle.to_tensor(indices_np)
+        indices = paddle.to_tensor(indices_np, dtype='int64')
         weights_np = 1 / (len(p) * p[indices_np])
-        #weights = th.from_numpy(weights_np).float().to(device)
         weights = paddle.to_tensor(weights_np)
         return indices, weights
 
@@ -82,12 +80,12 @@ class LossAwareSampler(ScheduleSampler):
         :param local_losses: a 1D Tensor of losses.
         """
         batch_sizes = [
-            paddle.to_tensor([0], dtype=paddle.int32) #, device=local_ts.device)
+            paddle.to_tensor([0], dtype=paddle.int32)
             for _ in range(dist.get_world_size())
         ]
         dist.all_gather(
             batch_sizes,
-            paddle.to_tensor([len(local_ts)], dtype=paddle.int32) #, device=local_ts.device),
+            paddle.to_tensor([len(local_ts)], dtype=paddle.int32),
         )
 
         # Pad all_gather batches to be the maximum batch size.

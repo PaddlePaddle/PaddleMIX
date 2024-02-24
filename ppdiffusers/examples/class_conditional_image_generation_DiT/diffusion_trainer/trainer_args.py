@@ -15,7 +15,6 @@
 import types
 from dataclasses import asdict, dataclass, field
 from typing import Optional
-
 import paddle
 from paddlenlp.utils.log import logger
 
@@ -31,7 +30,7 @@ class ModelArguments:
     )
     dit_config_file: Optional[str] = field(default="config/dit_xl_2.json", metadata={"help": "dit_config_file"})
 
-    num_inference_steps: Optional[int] = field(default=200, metadata={"help": "num_inference_steps"})
+    num_inference_steps: Optional[int] = field(default=25, metadata={"help": "num_inference_steps"})
     use_ema: bool = field(default=False, metadata={"help": "Whether or not use ema"})
     pretrained_model_name_or_path: str = field(
         default=None,
@@ -63,10 +62,9 @@ class DataArguments:
     """
     Arguments pertaining to what data we are going to input our model for training.
     """
-
-    file_list: str = field(
-        default="./data/filelist/train.filelist.list",
-        metadata={"help": "The name of the file_list."},
+    feature_path: str = field(
+        default="./data/fastdit_imagenet256",
+        metadata={"help": "The feature path."},
     )
     resolution: int = field(
         default=256,

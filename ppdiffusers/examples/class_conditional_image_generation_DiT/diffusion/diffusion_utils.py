@@ -55,7 +55,7 @@ def continuous_gaussian_log_likelihood(x, *, means, log_scales):
     centered_x = x - means
     inv_stdv = paddle.exp(-log_scales)
     normalized_x = centered_x * inv_stdv
-    log_probs = paddle.distributions.Normal(paddle.zeros_like(x), paddle.ones_like(x)).log_prob(normalized_x) #####
+    log_probs = paddle.distributions.Normal(paddle.zeros_like(x), paddle.ones_like(x)).log_prob(normalized_x)
     return log_probs
 
 

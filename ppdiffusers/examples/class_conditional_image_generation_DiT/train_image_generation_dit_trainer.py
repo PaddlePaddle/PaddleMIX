@@ -11,20 +11,20 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import itertools
 import math
 import os
+import itertools
+import numpy as np
 import paddle
-from ldm import (
+from paddlenlp.trainer import PdArgumentParser, TrainingArguments, get_last_checkpoint
+from paddlenlp.utils.log import logger
+
+from diffusion_trainer import (
     DataArguments,
     DiTDiffusionModel,
     LatentDiffusionTrainer,
     ModelArguments,
 )
-
-from paddlenlp.trainer import PdArgumentParser, TrainingArguments, get_last_checkpoint
-from paddlenlp.utils.log import logger
-import numpy as np
 
 
 class CustomDataset(paddle.io.Dataset):
@@ -85,7 +85,7 @@ def main():
     model = DiTDiffusionModel(model_args)
 
     # Setup data:
-    feature_path = 'data/fastdit_imagenet256'
+    feature_path = data_args.feature_path
     features_dir = f"{feature_path}/imagenet256_features"
     labels_dir = f"{feature_path}/imagenet256_labels"
     train_dataset = CustomDataset(features_dir, labels_dir)
@@ -96,7 +96,7 @@ def main():
         train_dataset=train_dataset,
     )
     # must set recompute after trainer init
-    #trainer.model.set_recompute(training_args.recompute)
+    trainer.model.set_recompute(training_args.recompute)
     params_to_train = itertools.chain(trainer.model.transformer.parameters())
     trainer.set_optimizer_grouped_parameters(params_to_train)
 

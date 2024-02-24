@@ -90,7 +90,6 @@ def get_beta_schedule(beta_schedule, *, beta_start, beta_end, num_diffusion_time
         )
     else:
         raise NotImplementedError(beta_schedule)
-    print(betas.shape, num_diffusion_timesteps) ###
     assert betas.shape == (num_diffusion_timesteps,)
     return betas
 
@@ -284,7 +283,6 @@ class GaussianDiffusion:
 
         if self.model_var_type in [ModelVarType.LEARNED, ModelVarType.LEARNED_RANGE]:
             assert model_output.shape == [B, C * 2, *x.shape[2:]]
-            #model_output, model_var_values = paddle.split(model_output, C, axis=1)
             model_output, model_var_values = paddle.split(model_output, 2, axis=1)
             min_log = _extract_into_tensor(self.posterior_log_variance_clipped, t, x.shape)
             max_log = _extract_into_tensor(np.log(self.betas), t, x.shape)
@@ -312,7 +310,7 @@ class GaussianDiffusion:
             if denoised_fn is not None:
                 x = denoised_fn(x)
             if clip_denoised:
-                return x.clamp(-1, 1)
+                return x.clip(-1, 1)
             return x
 
         if self.model_mean_type == ModelMeanType.START_X:
@@ -487,7 +485,7 @@ class GaussianDiffusion:
         if noise is not None:
             img = noise
         else:
-            img = paddle.randn(*shape) #, device=device)
+            img = paddle.randn(*shape)
         indices = list(range(self.num_timesteps))[::-1]
 
         if progress:
@@ -497,7 +495,7 @@ class GaussianDiffusion:
             indices = tqdm(indices)
 
         for i in indices:
-            t = paddle.tensor([i] * shape[0]) #, device=device)
+            t = paddle.tensor([i] * shape[0])
             with paddle.no_grad():
                 out = self.p_sample(
                     model,
@@ -655,7 +653,7 @@ class GaussianDiffusion:
         if noise is not None:
             img = noise
         else:
-            img = paddle.randn(*shape) #, device=device)
+            img = paddle.randn(*shape)
         indices = list(range(self.num_timesteps))[::-1]
 
         if progress:
@@ -665,7 +663,7 @@ class GaussianDiffusion:
             indices = tqdm(indices)
 
         for i in indices:
-            t = paddle.to_tensor([i] * shape[0]) #, device=device)
+            t = paddle.to_tensor([i] * shape[0])
             with paddle.no_grad():
                 out = self.ddim_sample(
                     model,
@@ -730,8 +728,6 @@ class GaussianDiffusion:
         if noise is None:
             noise = paddle.randn_like(x_start)
             # noise = paddle.to_tensor(np.load("pd/noise.npy"))
-            # print('noise ', noise.shape, noise.sum().item())
-            # [2, 4, 32, 32] 205.83055114746094
 
         x_t = self.q_sample(x_start, t, noise=noise)
 
@@ -756,10 +752,7 @@ class GaussianDiffusion:
                 ModelVarType.LEARNED_RANGE,
             ]:
                 B, C = x_t.shape[:2]
-                #print('x_t.shape ', x_t.shape)
-                #print('model_output.shape ', model_output.shape) # [2, 8, 32, 32]
                 assert model_output.shape == [B, C * 2, *x_t.shape[2:]]
-                #model_output, model_var_values = paddle.split(model_output, C, axis=1)
                 model_output, model_var_values = paddle.split(model_output, 2, axis=1)
                 # Learn the variance using the variational bound, but don't let
                 # it affect our mean prediction.
@@ -772,10 +765,10 @@ class GaussianDiffusion:
                     clip_denoised=False,
                 )["output"]
 
-                # if self.loss_type == LossType.RESCALED_MSE:
-                #     # Divide by 1000 for equivalence with initial implementation.
-                #     # Without a factor of 1/1000, the VB term hurts the MSE term.
-                #     terms["vb"] *= self.num_timesteps / 1000.0
+                if self.loss_type == LossType.RESCALED_MSE:
+                    # Divide by 1000 for equivalence with initial implementation.
+                    # Without a factor of 1/1000, the VB term hurts the MSE term.
+                    terms["vb"] *= self.num_timesteps / 1000.0
 
             target = {
                 ModelMeanType.PREVIOUS_X: self.q_posterior_mean_variance(
@@ -785,7 +778,6 @@ class GaussianDiffusion:
                 ModelMeanType.EPSILON: noise,
             }[self.model_mean_type]
 
-            #print(model_output.shape, target.shape, x_start.shape)
             assert model_output.shape == target.shape == x_start.shape
             terms["mse"] = mean_flat((target - model_output) ** 2)
             if "vb" in terms:
@@ -806,7 +798,7 @@ class GaussianDiffusion:
         :return: a batch of [N] KL values (in bits), one per batch element.
         """
         batch_size = x_start.shape[0]
-        t = paddle.to_tensor([self.num_timesteps - 1] * batch_size) #, device=x_start.device)
+        t = paddle.to_tensor([self.num_timesteps - 1] * batch_size)
         qt_mean, _, qt_log_variance = self.q_mean_variance(x_start, t)
         kl_prior = normal_kl(
             mean1=qt_mean, logvar1=qt_log_variance, mean2=0.0, logvar2=0.0
@@ -836,7 +828,7 @@ class GaussianDiffusion:
         xstart_mse = []
         mse = []
         for t in list(range(self.num_timesteps))[::-1]:
-            t_batch = paddle.to_tensor([t] * batch_size) #, device=device)
+            t_batch = paddle.to_tensor([t] * batch_size)
             noise = paddle.randn_like(x_start)
             x_t = self.q_sample(x_start=x_start, t=t_batch, noise=noise)
             # Calculate VLB term at the current timestep
@@ -878,8 +870,7 @@ def _extract_into_tensor(arr, timesteps, broadcast_shape):
                             dimension equal to the length of timesteps.
     :return: a tensor of shape [batch_size, 1, ...] where the shape has K dims.
     """
-    #res = paddle.from_numpy(arr).to(device=timesteps.device)[timesteps].float()
     res = paddle.to_tensor(arr)[timesteps].cast('float32')
     while len(res.shape) < len(broadcast_shape):
         res = res[..., None]
-    return res + paddle.zeros(broadcast_shape) #, device=timesteps.device)
+    return res + paddle.zeros(broadcast_shape)

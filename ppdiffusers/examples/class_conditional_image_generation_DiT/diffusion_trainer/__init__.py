@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .ldm_args import DataArguments, ModelArguments, NoTrainerTrainingArguments
-from .ldm_trainer import LatentDiffusionTrainer
-from .model import DiTDiffusionModel
+from .trainer_args import DataArguments, ModelArguments, NoTrainerTrainingArguments
+from .trainer import LatentDiffusionTrainer
+from .diffusion_model import DiTDiffusionModel
+from .dit import DiT

@@ -1,32 +1,37 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-# All rights reserved.
-
-# This source code is licensed under the license found in the
-# LICENSE file in the root directory of this source tree.
-
-"""
-A minimal training script for DiT.
-"""
-import paddle
-import paddle.distributed as dist
-#from paddle.nn.parallel import DistributedDataParallel
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+import os
+import json
+import argparse
+import logging
 import numpy as np
 from collections import OrderedDict
 from copy import deepcopy
 from glob import glob
 from time import time
-import argparse
-import logging
-import os
-#from accelerate import Accelerator
+import paddle
+import paddle.distributed as dist
 
-from ldm.models import DiT_models
 from diffusion import create_diffusion
+from diffusion_trainer.dit import DiT
 
 
-#################################################################################
-#                             Training Helper Functions                         #
-#################################################################################
+def read_json(file):
+    with open(file, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    return data
+
 
 @paddle.no_grad()
 def update_ema(ema_model, model, decay=0.9999):
@@ -38,7 +43,6 @@ def update_ema(ema_model, model, decay=0.9999):
 
     one_minus_decay = 1.0 - decay
     for name, param in model_params.items():
-        # name = name.replace("module.", "")
         # TODO: Consider applying only to params that require_grad to avoid small numerical changes of pos_embed
         #ema_params[name].mul_(decay).add_(param.data, alpha=1 - decay)
         ema_params[name].scale_(decay).add_(param.data * one_minus_decay)
@@ -49,7 +53,6 @@ def requires_grad(model, flag=True):
     Set requires_grad flag for all parameters in a model.
     """
     for p in model.parameters():
-        #p.requires_grad = flag
         p.stop_gradient = not flag
 
 
@@ -73,8 +76,6 @@ class CustomDataset(paddle.io.Dataset):
         self.labels_dir = labels_dir
         self.features_files = sorted(os.listdir(features_dir))
         self.labels_files = sorted(os.listdir(labels_dir))
-        print('len features_files ', len(self.features_files))
-        print('len labels_files ', len(self.labels_files))
 
     def __len__(self):
         assert len(self.features_files) == len(self.labels_files), \
@@ -86,25 +87,17 @@ class CustomDataset(paddle.io.Dataset):
         label_file = self.labels_files[idx]
         features = np.load(os.path.join(self.features_dir, feature_file))
         labels = np.load(os.path.join(self.labels_dir, label_file))
-        #return torch.from_numpy(features), torch.from_numpy(labels)
-        return paddle.to_tensor(features), paddle.to_tensor(labels)
-
-
-#################################################################################
-#                                  Training Loop                                #
-#################################################################################
+        #return paddle.to_tensor(features), paddle.to_tensor(labels)
+        return features, labels
+    
 
 def main(args, local_rank):
-    """
-    Trains a new DiT model.
-    """
-
     # Setup an experiment folder:
-    #if accelerator.is_main_process:
+    model_name = args.dit_config_file.split("/")[-1].replace(".json", "")
     if local_rank == 0:
         os.makedirs(args.results_dir, exist_ok=True)  # Make results folder (holds all experiment subfolders)
         experiment_index = len(glob(f"{args.results_dir}/*"))
-        model_string_name = args.model.replace("/", "-")  # e.g., DiT-XL/2 --> DiT-XL-2 (for naming folders)
+        model_string_name = model_name.replace("/", "-")
         experiment_dir = f"{args.results_dir}/{experiment_index:03d}-{model_string_name}"  # Create an experiment folder
         checkpoint_dir = f"{experiment_dir}/checkpoints"  # Stores saved model checkpoints
         os.makedirs(checkpoint_dir, exist_ok=True)
@@ -112,19 +105,12 @@ def main(args, local_rank):
         logger.info(f"Experiment directory created at {experiment_dir}")
 
     # Create model:
-    assert args.image_size % 8 == 0, "Image size must be divisible by 8 (for the VAE encoder)."
-    latent_size = args.image_size // 8
-    model = DiT_models[args.model](
-        input_size=latent_size,
-        num_classes=args.num_classes
-    )
+    model = DiT(**read_json(args.dit_config_file))
     # Note that parameter initialization is done within the DiT constructor
-    #model = model.to(device)
-    ema = deepcopy(model) #.to(device)  # Create an EMA of the model for use after training
+    ema = deepcopy(model)  # Create an EMA of the model for use after training
     requires_grad(ema, False)
     diffusion = create_diffusion(timestep_respacing="")  # default: 1000 steps, linear noise schedule
-    # vae = AutoencoderKL.from_pretrained(f"stabilityai/sd-vae-ft-{args.vae}").to(device)
-    #print(f"DiT Parameters: {sum(p.numel() for p in model.parameters()):,}")
+    print(f"DiT Parameters: {sum(p.numpy().size for p in model.parameters()):,}")
 
     # Setup optimizer (we used default Adam betas=(0.9, 0.999) and a constant learning rate of 1e-4 in our paper):
     opt = paddle.optimizer.AdamW(parameters=model.parameters(), learning_rate=1e-4, weight_decay=0.)
@@ -134,7 +120,7 @@ def main(args, local_rank):
     labels_dir = f"{args.feature_path}/imagenet256_labels"
     dataset = CustomDataset(features_dir, labels_dir)
 
-    print("dist.get_world_size()", dist.get_world_size())
+    #print("dist.get_world_size()", dist.get_world_size())
     train_sampler = paddle.io.DistributedBatchSampler(
                 dataset, 
                 int(args.global_batch_size // dist.get_world_size()),
@@ -148,23 +134,12 @@ def main(args, local_rank):
                 num_workers=args.num_workers,
                 use_shared_memory=True,
             ) 
-
-    # loader = paddle.io.DataLoader(
-    #     dataset,
-    #     #batch_size=int(args.global_batch_size // accelerator.num_processes),
-    #     batch_size=int(args.global_batch_size // dist.get_world_size()),
-    #     shuffle=True,
-    #     num_workers=args.num_workers,
-    #     use_shared_memory=True,
-    #     drop_last=True
-    # )
     print(f"Dataset contains {len(dataset):,} images ({args.feature_path})")
 
     # Prepare models for training:
     update_ema(ema, model, decay=0)  # Ensure EMA is initialized with synced weights
     model.train()  # important! This enables embedding dropout for classifier-free guidance
     ema.eval()  # EMA model should always be in eval mode
-    #model, opt, loader = accelerator.prepare(model, opt, loader)
     #model = DistributedDataParallel(model)
 
     # Variables for monitoring/logging purposes:
@@ -221,7 +196,7 @@ def main(args, local_rank):
                 #if accelerator.is_main_process:
                 if local_rank == 0:
                     checkpoint = {
-                        "model": model.state_dict(), # 
+                        "model": model.state_dict(),
                         "ema": ema.state_dict(),
                         "opt": opt.state_dict(),
                         "args": args
@@ -237,18 +212,16 @@ def main(args, local_rank):
 if __name__ == "__main__":
     # Default args here will train DiT-XL/2 with the hyperparameters we used in our paper (except training iters).
     parser = argparse.ArgumentParser()
-    parser.add_argument("--feature-path", type=str, default="features")
-    parser.add_argument("--results-dir", type=str, default="results")
-    parser.add_argument("--model", type=str, choices=list(DiT_models.keys()), default="DiT-XL/2")
-    parser.add_argument("--image-size", type=int, choices=[256, 512], default=256)
-    parser.add_argument("--num-classes", type=int, default=1000)
+    parser.add_argument("--feature_path", type=str, default="data/fastdit_imagenet256")
+    parser.add_argument("--results_dir", type=str, default="output_notrainer")
+    parser.add_argument("--dit_config_file", type=str, default="config/DiT_XL_patch2.json")
     parser.add_argument("--epochs", type=int, default=1400)
-    parser.add_argument("--global-batch-size", type=int, default=256)
-    parser.add_argument("--global-seed", type=int, default=0)
+    parser.add_argument("--global_batch_size", type=int, default=256)
+    parser.add_argument("--global_seed", type=int, default=0)
     parser.add_argument("--vae", type=str, choices=["ema", "mse"], default="ema")  # Choice doesn't affect training
-    parser.add_argument("--num-workers", type=int, default=1)
-    parser.add_argument("--log-every", type=int, default=1)
-    parser.add_argument("--ckpt-every", type=int, default=500)
+    parser.add_argument("--num_workers", type=int, default=1)
+    parser.add_argument("--log_every", type=int, default=1)
+    parser.add_argument("--ckpt_every", type=int, default=500)
     args = parser.parse_args()
     print(args)
 

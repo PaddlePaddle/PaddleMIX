@@ -29,39 +29,48 @@ pip install -r requirements.txt
 Tips：
 - FP32 在 40GB 的显卡上可正常训练。
 
-#### 1.3.1 单机多卡训练
+#### 1.3.2 单机多卡训练
 ```bash
-python -u train_image_generation_dit_trainer.py \
+export FLAGS_embedding_deterministic=1
+export FLAGS_cudnn_deterministic=1
+export NVIDIA_TF32_OVERRIDE=0
+export NCCL_ALGO=Tree
+
+python -u -m paddle.distributed.launch --gpus "0,1,2,3,4,5,6,7" train_image_generation_dit_trainer.py \
     --do_train \
-    --output_dir ./image_generation_dit_output_trainer \
-    --per_device_train_batch_size 16 \
+    --feature_path data/fastdit_imagenet256 \
+    --output_dir ./output_trainer \
+    --per_device_train_batch_size 32 \
     --gradient_accumulation_steps 1 \
     --learning_rate 1e-4 \
     --weight_decay 0.0 \
-    --max_steps 1000000000 \
+    --max_steps 7000000 \
     --lr_scheduler_type "constant" \
     --warmup_steps 0 \
     --image_logging_steps 1000 \
-    --logging_steps 50 \
-    --save_steps 5000 \
+    --logging_steps 20 \
+    --save_steps 10000 \
     --save_total_limit 50 \
     --seed 23 \
-    --dataloader_num_workers 4 \
+    --dataloader_num_workers 1 \
     --vae_name_or_path stabilityai/sd-vae-ft-mse \
+    --dit_config_file config/DiT_XL_patch2.json \
     --num_inference_steps 25 \
-    --max_grad_norm -1
+    --use_ema True \
+    --recompute True \
+    --max_grad_norm -1 \
+    --overwrite_output_dir True
 ```
 
 ### 1.4 自定义训练逻辑开启训练
 
 #### 1.4.1 单机多卡训练
 ```bash
-CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python -m paddle.distributed.launch \
-    --nnodes=1 --nproc_per_node=8 --use_env \
-    train.py \
-    --model DiT-XL/2 \
-    --feature-path ./data/fastdit_imagenet256 \
-    --global-batch-size 16
+python -u -m paddle.distributed.launch --gpus "0,1,2,3,4,5,6,7" \
+    train_image_generation_dit_notrainer.py \
+    --dit_config_file config/DiT_XL_patch2.json \
+    --feature_path ./data/fastdit_imagenet256 \
+    --global_batch_size 256
 ```
 
 
@@ -86,6 +95,8 @@ python scripts/convert_dit_to_ppdiffusers.py
         ├── config.json
         └── model_state.pdparams
 ```
+注意生成后的`model_index.json`里需要有`"id2label"`的1000类的id和标签对应字典，如果没有则需要手动复制`scripts/ImageNet_id2label.json`里的加进去。
+
 
 在生成`Pipeline`的权重后，我们可以使用如下的代码进行推理。
 
@@ -93,8 +104,7 @@ python scripts/convert_dit_to_ppdiffusers.py
 from ppdiffusers import DiTPipeline, DPMSolverMultistepScheduler, DDIMScheduler
 import paddle
 from paddlenlp.trainer import set_seed
-
-dtype=paddle.float16
+dtype=paddle.float32
 pipe=DiTPipeline.from_pretrained("./DiT_XL_2_256", paddle_dtype=dtype)
 
 #pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
