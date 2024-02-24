@@ -29,7 +29,7 @@ class EVA02FinetuneTrainer(Trainer):
         2、support for accum_freq
 
         Args:
-            kwargs (dict): any arugments to pass to `Trainer`
+            kwargs (dict): any arguments to pass to `Trainer`
 
         Returns:
             None
