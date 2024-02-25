@@ -17,6 +17,7 @@ import math
 from itertools import repeat
 import collections.abc
 from functools import partial
+from typing import Optional
 
 import paddle
 import paddle.nn as nn
@@ -112,11 +113,11 @@ class Attention(nn.Layer):
             dim: int,
             num_heads: int = 8,
             qkv_bias: bool = False,
+            fused_attn: bool = False,
             qk_norm: bool = False,
             attn_drop: float = 0.,
             proj_drop: float = 0.,
             norm_layer: nn.Layer = nn.LayerNorm,
-            fused_attn: bool = False,
     ) -> None:
         super().__init__()
         assert dim % num_heads == 0, 'dim should be divisible by num_heads'
@@ -246,10 +247,10 @@ class DiTBlock(nn.Layer):
     """
     A DiT block with adaptive layer norm zero (adaLN-Zero) conditioning.
     """
-    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, **block_kwargs):
+    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, fused_attn=False, **block_kwargs):
         super().__init__()
         self.norm1 = nn.LayerNorm(hidden_size, epsilon=1e-6)
-        self.attn = Attention(hidden_size, num_heads=num_heads, qkv_bias=True, **block_kwargs)
+        self.attn = Attention(hidden_size, num_heads=num_heads, qkv_bias=True, fused_attn=fused_attn, **block_kwargs)
         self.norm2 = nn.LayerNorm(hidden_size, epsilon=1e-6)
         mlp_hidden_dim = int(hidden_size * mlp_ratio)
         approx_gelu = lambda: nn.GELU(approximate=True) # 'tanh'
@@ -290,6 +291,9 @@ class DiT(nn.Layer):
     """
     Diffusion model with a Transformer backbone.
     """
+    _supports_gradient_checkpointing = True
+    _use_memory_efficient_attention_xformers = True
+
     def __init__(
         self,
         input_size=32, # image_size // 8
@@ -302,15 +306,24 @@ class DiT(nn.Layer):
         class_dropout_prob=0.1,
         num_classes=1000,
         learn_sigma=True,
-        enable_recompute=False,
+        #enable_recompute=False,
     ):
         super().__init__()
-        self.learn_sigma = learn_sigma
-        self.in_channels = in_channels
-        self.out_channels = in_channels * 2 if learn_sigma else in_channels
+        self.input_size = input_size
         self.patch_size = patch_size
+        self.in_channels = in_channels
+        self.hidden_size = hidden_size
+        self.depth = depth
         self.num_heads = num_heads
-        self.enable_recompute = enable_recompute
+        self.mlp_ratio = mlp_ratio
+        self.class_dropout_prob = class_dropout_prob
+        self.num_classes = num_classes
+        self.learn_sigma = learn_sigma
+        #self.enable_recompute = enable_recompute
+        self.gradient_checkpointing = False
+        self.fused_attn = False
+
+        self.out_channels = in_channels * 2 if learn_sigma else in_channels
 
         self.x_embedder = PatchEmbed(input_size, patch_size, in_channels, hidden_size, bias=True)
         self.t_embedder = TimestepEmbedder(hidden_size)
@@ -323,7 +336,7 @@ class DiT(nn.Layer):
         self.add_parameter("pos_embed", self.pos_embed)
 
         self.blocks = nn.LayerList([
-            DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
+            DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio, fused_attn=self.fused_attn) for _ in range(depth)
         ])
         self.final_layer = FinalLayer(hidden_size, patch_size, self.out_channels)
 
@@ -366,8 +379,12 @@ class DiT(nn.Layer):
         initializer.Constant(value=0)(self.final_layer.linear.weight)
         initializer.Constant(value=0)(self.final_layer.linear.bias)
 
-    def set_grad_checkpointing(self, enable=True):
-        self.enable_recompute = enable
+    def enable_gradient_checkpointing(self, enable=True):
+        self.gradient_checkpointing = enable
+
+    def enable_xformers_memory_efficient_attention(self, attention_op: Optional[str] = None):
+        self._use_memory_efficient_attention_xformers = True
+        self.fused_attn = True
 
     def unpatchify(self, x):
         """
@@ -397,7 +414,7 @@ class DiT(nn.Layer):
         c = t + y                                # (N, D)
 
         for i, block in enumerate(self.blocks):
-            if self.enable_recompute:
+            if self.gradient_checkpointing:
                 x = paddle.distributed.fleet.utils.recompute(block, x, c, use_reentrant=False)
             else:
                 x = block(x, c)       # (N, T, D)

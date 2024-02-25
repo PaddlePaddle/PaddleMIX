@@ -15,19 +15,21 @@ import math
 import os
 import itertools
 import numpy as np
+
 import paddle
-from paddlenlp.trainer import PdArgumentParser, TrainingArguments, get_last_checkpoint
+from paddlenlp.trainer import PdArgumentParser, TrainingArguments, get_last_checkpoint, set_seed
 from paddlenlp.utils.log import logger
 
-from diffusion_trainer import (
+from diffusion import (
     DataArguments,
-    DiTDiffusionModel,
     LatentDiffusionTrainer,
     ModelArguments,
 )
+from diffusion import DiTDiffusionModel
+from transport import SiTDiffusionModel
 
 
-class CustomDataset(paddle.io.Dataset):
+class FeatureDataset(paddle.io.Dataset):
     def __init__(self, features_dir, labels_dir):
         self.features_dir = features_dir
         self.labels_dir = labels_dir
@@ -61,7 +63,6 @@ def main():
         if model_args.image_logging_steps > 0
         else -1
     )
-
     training_args.print_config(model_args, "Model")
     training_args.print_config(data_args, "Data")
 
@@ -81,14 +82,26 @@ def main():
                 f"Checkpoint detected, resuming training at {last_checkpoint}. To avoid this behavior, change "
                 "the `--output_dir` or add `--overwrite_output_dir` to train from scratch."
             )
+    if training_args.seed is not None:
+        set_seed(training_args.seed)
 
-    model = DiTDiffusionModel(model_args)
+    model_config_name = model_args.config_file.split("/")[-1].replace(".json", "")
+    model_name = model_config_name.split("_")[0]
+    assert model_name in ["DiT", "SiT"], f"Model {model_name} not supported."
+    if model_name == "DiT":
+        model = DiTDiffusionModel(model_args)
+    else:
+        model = SiTDiffusionModel(model_args)
+    assert model.transformer.input_size == data_args.resolution // 8
+    model.set_recompute(training_args.recompute)
+    model.set_xformers(model_args.enable_xformers_memory_efficient_attention)
+    model.set_ema(model_args.use_ema)
 
     # Setup data:
     feature_path = data_args.feature_path
-    features_dir = f"{feature_path}/imagenet256_features"
-    labels_dir = f"{feature_path}/imagenet256_labels"
-    train_dataset = CustomDataset(features_dir, labels_dir)
+    features_dir = f"{feature_path}/imagenet{data_args.resolution}_features"
+    labels_dir = f"{feature_path}/imagenet{data_args.resolution}_labels"
+    train_dataset = FeatureDataset(features_dir, labels_dir)
 
     trainer = LatentDiffusionTrainer(
         model=model,

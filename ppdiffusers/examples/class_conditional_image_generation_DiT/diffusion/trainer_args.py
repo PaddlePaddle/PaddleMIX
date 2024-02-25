@@ -28,7 +28,7 @@ class ModelArguments:
         default="stabilityai/sd-vae-ft-mse",
         metadata={"help": "pretrained_vae_name_or_path"},
     )
-    dit_config_file: Optional[str] = field(default="config/dit_xl_2.json", metadata={"help": "dit_config_file"})
+    config_file: Optional[str] = field(default="config/dit_xl_2.json", metadata={"help": "config_file"})
 
     num_inference_steps: Optional[int] = field(default=25, metadata={"help": "num_inference_steps"})
     use_ema: bool = field(default=False, metadata={"help": "Whether or not use ema"})

@@ -14,204 +14,25 @@
 import contextlib
 import inspect
 import os
-import math
 import json
 import numpy as np
 import paddle
 import paddle.nn as nn
-import paddle.nn.functional as F
 
-from ppdiffusers import AutoencoderKL, DDIMScheduler
+from ppdiffusers import AutoencoderKL, DDIMScheduler, is_ppxformers_available
 from ppdiffusers.models.ema import LitEma
 from ppdiffusers.training_utils import freeze_params
 from paddlenlp.utils.log import logger
-from ppdiffusers.initializer import normal_, reset_initialized_parameter, zeros_
 
 from .dit import DiT
-
-
-def approx_standard_normal_cdf(x):
-    """
-    A fast approximation of the cumulative distribution function of the
-    standard normal.
-    """
-    return 0.5 * (1.0 + paddle.tanh(np.sqrt(2.0 / np.pi) * (x + 0.044715 * paddle.pow(x, 3))))
-
-
-def continuous_gaussian_log_likelihood(x, *, means, log_scales):
-    """
-    Compute the log-likelihood of a continuous Gaussian distribution.
-    :param x: the targets
-    :param means: the Gaussian mean Tensor.
-    :param log_scales: the Gaussian log stddev Tensor.
-    :return: a tensor like x of log probabilities (in nats).
-    """
-    centered_x = x - means
-    inv_stdv = paddle.exp(-log_scales)
-    normalized_x = centered_x * inv_stdv
-    log_probs = paddle.distributions.Normal(paddle.zeros_like(x), paddle.ones_like(x)).log_prob(normalized_x) #####
-    return log_probs
-
-
-def discretized_gaussian_log_likelihood(x, *, means, log_scales):
-    """
-    Compute the log-likelihood of a Gaussian distribution discretizing to a
-    given image.
-    :param x: the target images. It is assumed that this was uint8 values,
-              rescaled to the range [-1, 1].
-    :param means: the Gaussian mean Tensor.
-    :param log_scales: the Gaussian log stddev Tensor.
-    :return: a tensor like x of log probabilities (in nats).
-    """
-    assert x.shape == means.shape == log_scales.shape
-    centered_x = x - means
-    inv_stdv = paddle.exp(-log_scales)
-    plus_in = inv_stdv * (centered_x + 1.0 / 255.0)
-    cdf_plus = approx_standard_normal_cdf(plus_in)
-    min_in = inv_stdv * (centered_x - 1.0 / 255.0)
-    cdf_min = approx_standard_normal_cdf(min_in)
-    log_cdf_plus = paddle.log(cdf_plus.clip(min=1e-12))
-    log_one_minus_cdf_min = paddle.log((1.0 - cdf_min).clip(min=1e-12))
-    cdf_delta = cdf_plus - cdf_min
-    log_probs = paddle.where(
-        x < -0.999,
-        log_cdf_plus,
-        paddle.where(x > 0.999, log_one_minus_cdf_min, paddle.log(cdf_delta.clip(min=1e-12))),
-    )
-    assert log_probs.shape == x.shape
-    return log_probs
-
-
-def normal_kl(mean1, logvar1, mean2, logvar2):
-    """
-    Compute the KL divergence between two gaussians.
-    Shapes are automatically broadcasted, so batches can be compared to
-    scalars, among other use cases.
-    """
-    tensor = None
-    for obj in (mean1, logvar1, mean2, logvar2):
-        if isinstance(obj, paddle.Tensor):
-            tensor = obj
-            break
-    assert tensor is not None, "at least one argument must be a Tensor"
-
-    # Force variances to be Tensors. Broadcasting helps convert scalars to
-    # Tensors, but it does not work for paddle.exp().
-    logvar1, logvar2 = [
-        x if isinstance(x, paddle.Tensor) else paddle.to_tensor(x).to(tensor)
-        for x in (logvar1, logvar2)
-    ]
-
-    return 0.5 * (
-        -1.0
-        + logvar2
-        - logvar1
-        + paddle.exp(logvar1 - logvar2)
-        + ((mean1 - mean2) ** 2) * paddle.exp(-logvar2)
-    )
+from .diffusion_utils import normal_kl, discretized_gaussian_log_likelihood
+from .gaussian_diffusion import mean_flat, _extract_into_tensor, get_named_beta_schedule
 
 
 def read_json(file):
     with open(file, "r", encoding="utf-8") as f:
         data = json.load(f)
     return data
-
-
-def mean_flat(tensor):
-    """
-    Take the mean over all non-batch dimensions.
-    """
-    return paddle.mean(tensor, axis=list(range(1, len(tensor.shape))))
-
-
-def _extract_into_tensor(arr, timesteps, broadcast_shape):
-    """
-    Extract values from a 1-D numpy array for a batch of indices.
-    :param arr: the 1-D numpy array.
-    :param timesteps: a tensor of indices into the array to extract.
-    :param broadcast_shape: a larger shape of K dimensions with the batch
-                            dimension equal to the length of timesteps.
-    :return: a tensor of shape [batch_size, 1, ...] where the shape has K dims.
-    """
-    res = paddle.to_tensor(arr)[timesteps].cast('float32')
-    while len(res.shape) < len(broadcast_shape):
-        res = res[..., None]
-    return res + paddle.zeros(broadcast_shape)
-
-
-def get_beta_schedule(beta_schedule, *, beta_start, beta_end, num_diffusion_timesteps):
-    """
-    This is the deprecated API for creating beta schedules.
-    See get_named_beta_schedule() for the new library of schedules.
-    """
-    if beta_schedule == "quad":
-        betas = (
-            np.linspace(
-                beta_start ** 0.5,
-                beta_end ** 0.5,
-                num_diffusion_timesteps,
-                dtype=np.float64,
-            )
-            ** 2
-        )
-    elif beta_schedule == "linear":
-        betas = np.linspace(beta_start, beta_end, num_diffusion_timesteps, dtype=np.float64)
-    elif beta_schedule == "const":
-        betas = beta_end * np.ones(num_diffusion_timesteps, dtype=np.float64)
-    elif beta_schedule == "jsd":  # 1/T, 1/(T-1), 1/(T-2), ..., 1
-        betas = 1.0 / np.linspace(
-            num_diffusion_timesteps, 1, num_diffusion_timesteps, dtype=np.float64
-        )
-    else:
-        raise NotImplementedError(beta_schedule)
-    assert betas.shape == (num_diffusion_timesteps,)
-    return betas
-
-
-def get_named_beta_schedule(schedule_name, num_diffusion_timesteps):
-    """
-    Get a pre-defined beta schedule for the given name.
-    The beta schedule library consists of beta schedules which remain similar
-    in the limit of num_diffusion_timesteps.
-    Beta schedules may be added, but should not be removed or changed once
-    they are committed to maintain backwards compatibility.
-    """
-    if schedule_name == "linear":
-        # Linear schedule from Ho et al, extended to work for any number of
-        # diffusion steps.
-        scale = 1000 / num_diffusion_timesteps
-        return get_beta_schedule(
-            "linear",
-            beta_start=scale * 0.0001,
-            beta_end=scale * 0.02,
-            num_diffusion_timesteps=num_diffusion_timesteps,
-        )
-    elif schedule_name == "squaredcos_cap_v2":
-        return betas_for_alpha_bar(
-            num_diffusion_timesteps,
-            lambda t: math.cos((t + 0.008) / 1.008 * math.pi / 2) ** 2,
-        )
-    else:
-        raise NotImplementedError(f"unknown beta schedule: {schedule_name}")
-
-
-def betas_for_alpha_bar(num_diffusion_timesteps, alpha_bar, max_beta=0.999):
-    """
-    Create a beta schedule that discretizes the given alpha_t_bar function,
-    which defines the cumulative product of (1-beta) over time from t = [0,1].
-    :param num_diffusion_timesteps: the number of betas to produce.
-    :param alpha_bar: a lambda that takes an argument t from 0 to 1 and
-                      produces the cumulative product of (1-beta) up to that
-                      part of the diffusion process.
-    :param max_beta: the maximum beta to use; use values lower than 1 to
-                     prevent singularities.
-    """
-    betas = []
-    for i in range(num_diffusion_timesteps):
-        t1 = i / num_diffusion_timesteps
-        t2 = (i + 1) / num_diffusion_timesteps
-        betas.append(min(1 - alpha_bar(t2) / alpha_bar(t1), max_beta))
-    return np.array(betas)
 
 
 class DiTDiffusionModel(nn.Layer):
@@ -280,7 +101,7 @@ class DiTDiffusionModel(nn.Layer):
         )
 
 
-        self.transformer = DiT(**read_json(model_args.dit_config_file))
+        self.transformer = DiT(**read_json(model_args.config_file))
         self.transformer_is_pretrained = False
 
         assert model_args.prediction_type in ["epsilon", "v_prediction"]
@@ -308,10 +129,11 @@ class DiTDiffusionModel(nn.Layer):
             )
             self.eval_scheduler.set_timesteps(model_args.num_inference_steps)
 
-        self.use_ema = model_args.use_ema
         self.noise_offset = model_args.noise_offset
-        if self.use_ema:
-            self.model_ema = LitEma(self.transformer)
+
+        self.use_ema = False
+        self.model_ema = None
+
         self.transformer.train()
         self.vae.eval()
 
@@ -565,10 +387,10 @@ class DiTDiffusionModel(nn.Layer):
         return posterior_mean, posterior_variance, posterior_log_variance_clipped
 
     @paddle.no_grad()
-    def decode_image(self, pixel_values=None, **kwargs):
+    def decode_image(self, pixel_values=None, max_batch=8, **kwargs):
         self.eval()
-        if pixel_values.shape[0] > 8:
-            pixel_values = pixel_values[:8]
+        if pixel_values.shape[0] > max_batch:
+            pixel_values = pixel_values[:max_batch]
         latents = self.vae.encode(pixel_values).latent_dist.sample()
         image = self.vae.decode(latents).sample
         image = (image / 2 + 0.5).clip(0, 1).transpose([0, 2, 3, 1])
@@ -584,16 +406,16 @@ class DiTDiffusionModel(nn.Layer):
         eta=0.0,
         class_labels=[1,2,3,4,5,6,7,8],
         guidance_scale=4.0,
+        max_batch=8,
         **kwargs,
     ):
         self.eval()
         with self.ema_scope():
             if height % 8 != 0 or width % 8 != 0:
                 raise ValueError(f"`height` and `width` have to be divisible by 8 but are {height} and {width}.")
-            # only log 8 image
-            if input_ids.shape[0] > 8:
-                input_ids = input_ids[:8]
-
+            # only log max_batch image
+            if input_ids.shape[0] > max_batch:
+                input_ids = input_ids[:max_batch]
             batch_size = input_ids.shape[0]
             latent_channels = self.transformer.in_channels
 
@@ -667,20 +489,45 @@ class DiTDiffusionModel(nn.Layer):
                 latents = latent_model_input
 
             latents = 1 / self.vae.config.scaling_factor * latents
-            samples = self.vae.decode(latents).sample
-            samples = (samples / 2 + 0.5).clip(0, 1)
-            image = samples.transpose([0, 2, 3, 1]) * 255.0
+            image = self.vae.decode(latents).sample
+            image = (image / 2 + 0.5).clip(0, 1).transpose([0, 2, 3, 1]) * 255.0
         return image.cast("float32").numpy().round()
 
-    def set_recompute(self, value=False):
-        def fn(layer):
-            # ldmbert
-            if hasattr(layer, "enable_recompute"):
-                layer.enable_recompute = value
-                print("Set", layer.__class__, "recompute", layer.enable_recompute)
-            # unet
-            if hasattr(layer, "gradient_checkpointing"):
-                layer.gradient_checkpointing = value
-                print("Set", layer.__class__, "recompute", layer.gradient_checkpointing)
+    def set_recompute(self, use_recompute=False):
+        if use_recompute:
+            self.transformer.enable_gradient_checkpointing()
 
-        self.apply(fn)
+    def gradient_checkpointing_enable(self):
+        self.set_recompute(True)
+
+    def set_xformers(self, use_xformers=False):
+        if use_xformers:
+            if not is_ppxformers_available():
+                raise ValueError(
+                    'Please run `python -m pip install "paddlepaddle-gpu>=2.5.0.post117" -f https://www.paddlepaddle.org.cn/whl/linux/mkl/avx/stable.html first.'
+                )
+            else:
+                try:
+                    attention_op = os.getenv("FLAG_XFORMERS_ATTENTION_OP", "none").lower()
+
+                    if attention_op == "none":
+                        attention_op = None
+
+                    self.transformer.enable_xformers_memory_efficient_attention(attention_op)
+                    if hasattr(self.vae, "enable_xformers_memory_efficient_attention"):
+                        self.vae.enable_xformers_memory_efficient_attention(attention_op)
+                except Exception as e:
+                    logger.warn(
+                        "Could not enable memory efficient attention. Make sure develop paddlepaddle is installed"
+                        f" correctly and a GPU is available: {e}"
+                    )
+        else:
+            if hasattr(self.transformer, "set_default_attn_processor"):
+                self.transformer.set_default_attn_processor()
+            if hasattr(self.vae, "set_default_attn_processor"):
+                self.vae.set_default_attn_processor()
+
+    def set_ema(self, use_ema=False):
+        self.use_ema = use_ema
+        if use_ema:
+            self.model_ema = LitEma(self.transformer)

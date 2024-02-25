@@ -14,17 +14,20 @@
 import os
 import json
 import argparse
-import logging
 import numpy as np
 from collections import OrderedDict
 from copy import deepcopy
 from glob import glob
 from time import time
+import random
+
 import paddle
 import paddle.distributed as dist
 
 from diffusion import create_diffusion
-from diffusion_trainer.dit import DiT
+from transport import create_transport
+from transport.utils import parse_transport_args
+from diffusion.dit import DiT
 
 
 def read_json(file):
@@ -43,8 +46,8 @@ def update_ema(ema_model, model, decay=0.9999):
 
     one_minus_decay = 1.0 - decay
     for name, param in model_params.items():
+        name = name.replace("_layers.", "")
         # TODO: Consider applying only to params that require_grad to avoid small numerical changes of pos_embed
-        #ema_params[name].mul_(decay).add_(param.data, alpha=1 - decay)
         ema_params[name].scale_(decay).add_(param.data * one_minus_decay)
 
 
@@ -56,21 +59,7 @@ def requires_grad(model, flag=True):
         p.stop_gradient = not flag
 
 
-def create_logger(logging_dir):
-    """
-    Create a logger that writes to a log file and stdout.
-    """
-    logging.basicConfig(
-        level=logging.INFO,
-        format='[\033[34m%(asctime)s\033[0m] %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S',
-        handlers=[logging.StreamHandler(), logging.FileHandler(f"{logging_dir}/log.txt")]
-    )
-    logger = logging.getLogger(__name__)
-    return logger
-
-
-class CustomDataset(paddle.io.Dataset):
+class FeatureDataset(paddle.io.Dataset):
     def __init__(self, features_dir, labels_dir):
         self.features_dir = features_dir
         self.labels_dir = labels_dir
@@ -87,89 +76,110 @@ class CustomDataset(paddle.io.Dataset):
         label_file = self.labels_files[idx]
         features = np.load(os.path.join(self.features_dir, feature_file))
         labels = np.load(os.path.join(self.labels_dir, label_file))
-        #return paddle.to_tensor(features), paddle.to_tensor(labels)
         return features, labels
-    
 
-def main(args, local_rank):
+
+def main(args):
+    # Setup DDP:
+    dist.init_parallel_env()
+    assert args.global_batch_size % dist.get_world_size() == 0, f"Batch size must be divisible by world size."
+    rank = dist.get_rank()
+    seed = args.global_seed * dist.get_world_size() + rank
+    print(f"Starting rank={rank}, seed={seed}, world_size={dist.get_world_size()}.")
+    paddle.seed(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+
     # Setup an experiment folder:
-    model_name = args.dit_config_file.split("/")[-1].replace(".json", "")
-    if local_rank == 0:
+    model_config_name = args.config_file.split("/")[-1].replace(".json", "")
+    model_name = model_config_name.split("_")[0]
+    assert model_name in ["DiT", "SiT"], f"Model {model_name} not supported."
+    if rank == 0:
         os.makedirs(args.results_dir, exist_ok=True)  # Make results folder (holds all experiment subfolders)
         experiment_index = len(glob(f"{args.results_dir}/*"))
-        model_string_name = model_name.replace("/", "-")
+        model_string_name = model_config_name.replace("/", "-")
         experiment_dir = f"{args.results_dir}/{experiment_index:03d}-{model_string_name}"  # Create an experiment folder
         checkpoint_dir = f"{experiment_dir}/checkpoints"  # Stores saved model checkpoints
         os.makedirs(checkpoint_dir, exist_ok=True)
-        logger = create_logger(experiment_dir)
-        logger.info(f"Experiment directory created at {experiment_dir}")
+        print(f"Experiment directory created at {experiment_dir}")
 
     # Create model:
-    model = DiT(**read_json(args.dit_config_file))
+    if model_name in ["DiT", "SiT"]:
+        model = DiT(**read_json(args.config_file))
+    else:
+        raise NotImplementedError(f"Model {model_name} not supported.")
+    assert model.input_size == args.image_size // 8
     # Note that parameter initialization is done within the DiT constructor
     ema = deepcopy(model)  # Create an EMA of the model for use after training
     requires_grad(ema, False)
-    diffusion = create_diffusion(timestep_respacing="")  # default: 1000 steps, linear noise schedule
+    if dist.get_world_size() > 1:
+        model = paddle.DataParallel(model)
+
+    if model_name == "DiT":
+        diffusion = create_diffusion(timestep_respacing="")  # default: 1000 steps, linear noise schedule
+    elif model_name == "SiT":
+        transport = create_transport(
+            args.path_type, # "Linear"
+            args.prediction, # "velocity"
+            args.loss_weight, # None
+            args.train_eps,
+            args.sample_eps
+        )
+    else:
+        raise NotImplementedError(f"Model {model_name} not supported.")
     print(f"DiT Parameters: {sum(p.numpy().size for p in model.parameters()):,}")
 
     # Setup optimizer (we used default Adam betas=(0.9, 0.999) and a constant learning rate of 1e-4 in our paper):
     opt = paddle.optimizer.AdamW(parameters=model.parameters(), learning_rate=1e-4, weight_decay=0.)
 
     # Setup data:
-    features_dir = f"{args.feature_path}/imagenet256_features"
-    labels_dir = f"{args.feature_path}/imagenet256_labels"
-    dataset = CustomDataset(features_dir, labels_dir)
-
-    #print("dist.get_world_size()", dist.get_world_size())
+    features_dir = f"{args.feature_path}/imagenet{args.image_size}_features"
+    labels_dir = f"{args.feature_path}/imagenet{args.image_size}_labels"
+    dataset = FeatureDataset(features_dir, labels_dir)
     train_sampler = paddle.io.DistributedBatchSampler(
-                dataset, 
-                int(args.global_batch_size // dist.get_world_size()),
-                num_replicas=None,
-                rank=None,
-                shuffle=False,
-                drop_last=True)
+        dataset, 
+        int(args.global_batch_size // dist.get_world_size()),
+        num_replicas=None,
+        rank=None,
+        shuffle=False,
+        drop_last=True)
     loader = paddle.io.DataLoader(
-                dataset,
-                batch_sampler=train_sampler,
-                num_workers=args.num_workers,
-                use_shared_memory=True,
-            ) 
+        dataset,
+        batch_sampler=train_sampler,
+        num_workers=args.num_workers,
+        use_shared_memory=True,
+    ) 
     print(f"Dataset contains {len(dataset):,} images ({args.feature_path})")
 
     # Prepare models for training:
     update_ema(ema, model, decay=0)  # Ensure EMA is initialized with synced weights
     model.train()  # important! This enables embedding dropout for classifier-free guidance
     ema.eval()  # EMA model should always be in eval mode
-    #model = DistributedDataParallel(model)
 
     # Variables for monitoring/logging purposes:
     train_steps = 0
     log_steps = 0
     running_loss = 0
     start_time = time()
-    
-    logger.info(f"Training for {args.epochs} epochs...")
+
+    print(f"Training for {args.epochs} epochs...")
     for epoch in range(args.epochs):
-        logger.info(f"Beginning epoch {epoch}...")
+        print(f"Beginning epoch {epoch}...")
         for x, y in loader:
-            x = x.squeeze(axis=1)
-            y = y.squeeze(axis=1)
-            t = paddle.randint(0, diffusion.num_timesteps, (x.shape[0],))
+            x = x.squeeze(axis=1) #
+            y = y.squeeze(axis=1) #
+            if model_name == "DiT":
+                t = paddle.randint(0, diffusion.num_timesteps, (x.shape[0],))
             model_kwargs = dict(y=y)
-            loss_dict = diffusion.training_losses(model, x, t, model_kwargs)
+
+            if model_name == "DiT":
+                loss_dict = diffusion.training_losses(model, x, t, model_kwargs)
+            else:
+                loss_dict = transport.training_losses(model, x, model_kwargs)
             loss = loss_dict["loss"].mean()
-            #opt.zero_grad()
-            #opt.clear_grad()
-            #accelerator.backward(loss)
-
-            # loss_sum = loss.detach().mean()
-            # dist.all_reduce(loss_sum)
-            #loss_mean = loss / dist.get_world_size()
-            loss.backward()
-
-
-            opt.step()
             opt.clear_grad()
+            loss.backward()
+            opt.step()
             update_ema(ema, model)
 
             # Log loss values:
@@ -178,23 +188,23 @@ def main(args, local_rank):
             train_steps += 1
             if train_steps % args.log_every == 0:
                 # Measure training speed:
-                #torch.cuda.synchronize()
+                paddle.device.cuda.synchronize()
                 end_time = time()
                 steps_per_sec = log_steps / (end_time - start_time)
                 # Reduce loss history over all processes:
                 avg_loss = paddle.to_tensor(running_loss / log_steps)
+                if dist.get_world_size() > 1:
+                    dist.all_reduce(avg_loss)
                 avg_loss = avg_loss.item() / dist.get_world_size()
-                
                 print(f"(step={train_steps:07d}) Train Loss: {avg_loss:.4f}, Train Steps/Sec: {steps_per_sec:.2f}")
                 # Reset monitoring variables:
                 running_loss = 0
                 log_steps = 0
                 start_time = time()
 
-            # Save DiT checkpoint:
+            # Save DiT/SiT checkpoint:
             if train_steps % args.ckpt_every == 0 and train_steps > 0:
-                #if accelerator.is_main_process:
-                if local_rank == 0:
+                if rank == 0:
                     checkpoint = {
                         "model": model.state_dict(),
                         "ema": ema.state_dict(),
@@ -203,7 +213,8 @@ def main(args, local_rank):
                     }
                     checkpoint_path = f"{checkpoint_dir}/{train_steps:07d}.pdparams"
                     paddle.save(checkpoint, checkpoint_path)
-                    logger.info(f"Saved checkpoint to {checkpoint_path}")
+                    print(f"Saved checkpoint to {checkpoint_path}")
+                dist.barrier()
 
     model.eval()  # important! This disables randomized embedding dropout
     # do any sampling/FID calculation/etc. with ema (or model) in eval mode ...
@@ -213,8 +224,9 @@ if __name__ == "__main__":
     # Default args here will train DiT-XL/2 with the hyperparameters we used in our paper (except training iters).
     parser = argparse.ArgumentParser()
     parser.add_argument("--feature_path", type=str, default="data/fastdit_imagenet256")
+    parser.add_argument("--image_size", type=int, default=256)
     parser.add_argument("--results_dir", type=str, default="output_notrainer")
-    parser.add_argument("--dit_config_file", type=str, default="config/DiT_XL_patch2.json")
+    parser.add_argument("--config_file", type=str, default="config/DiT_XL_patch2.json")
     parser.add_argument("--epochs", type=int, default=1400)
     parser.add_argument("--global_batch_size", type=int, default=256)
     parser.add_argument("--global_seed", type=int, default=0)
@@ -222,12 +234,7 @@ if __name__ == "__main__":
     parser.add_argument("--num_workers", type=int, default=1)
     parser.add_argument("--log_every", type=int, default=1)
     parser.add_argument("--ckpt_every", type=int, default=500)
+    parse_transport_args(parser)
     args = parser.parse_args()
     print(args)
-
-    if 1:
-        local_rank = 0
-    else:
-        local_rank = os.environ['LOCAL_RANK']
-        local_rank = eval(local_rank)
-    main(args, local_rank)
+    main(args)

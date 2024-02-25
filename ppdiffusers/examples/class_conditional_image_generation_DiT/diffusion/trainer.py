@@ -19,7 +19,7 @@ import numpy as np
 import paddle
 import paddle.distributed as dist
 import paddle.amp.auto_cast as autocast
-from paddle.io import DataLoader
+
 from paddlenlp.trainer import PrinterCallback, ProgressCallback, Trainer
 from paddlenlp.trainer.integrations import (
     INTEGRATION_TO_CALLBACK,
