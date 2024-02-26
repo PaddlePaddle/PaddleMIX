@@ -12,16 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import math
+import random
+import warnings
+
 import paddle
 import paddle.nn as nn
 
-import math
-import warnings
-import random
+from ..utils import DropPath, Mlp, to_2tuple
+from .feature_fusion import AFF, DAF, iAFF
+from .utils import (
+    LogmelFilterBank,
+    SpecAugmentation,
+    Spectrogram,
+    do_mixup,
+    interpolate,
+)
 
-from .utils import do_mixup, interpolate, Spectrogram, LogmelFilterBank, SpecAugmentation
-from ..utils import to_2tuple, DropPath, Mlp
-from .feature_fusion import iAFF, AFF, DAF
 
 class PatchEmbed(nn.Layer):
     """2D Image to Patch Embedding"""
@@ -80,9 +87,7 @@ class PatchEmbed(nn.Layer):
             )
         self.norm = norm_layer(embed_dim) if norm_layer else nn.Identity()
 
-        if (self.enable_fusion) and (
-            self.fusion_type in ["daf_2d", "aff_2d", "iaff_2d"]
-        ):
+        if (self.enable_fusion) and (self.fusion_type in ["daf_2d", "aff_2d", "iaff_2d"]):
             self.mel_conv2d = nn.Conv2D(
                 in_chans,
                 embed_dim,
@@ -98,9 +103,7 @@ class PatchEmbed(nn.Layer):
                 self.fusion_model = iAFF(channels=embed_dim, type="2D")
 
     def forward(self, x, longer_idx=None):
-        if (self.enable_fusion) and (
-            self.fusion_type in ["daf_2d", "aff_2d", "iaff_2d"]
-        ):
+        if (self.enable_fusion) and (self.fusion_type in ["daf_2d", "aff_2d", "iaff_2d"]):
             global_x = x[:, 0:1, :, :]
 
             # global processing
@@ -116,18 +119,14 @@ class PatchEmbed(nn.Layer):
                 B, C, H, W = local_x.shape
                 local_x = local_x.reshape([B * C, 1, H, W])
                 local_x = self.mel_conv2d(local_x)
-                local_x = local_x.reshape(
-                    [B, C, local_x.shape[1], local_x.shape[2], local_x.shape[3]]
-                )
+                local_x = local_x.reshape([B, C, local_x.shape[1], local_x.shape[2], local_x.shape[3]])
                 local_x = local_x.transpose([0, 2, 3, 1, 4]).flatten(3)
                 TB, TC, TH, _ = local_x.shape
                 if local_x.shape[-1] < TW:
                     local_x = paddle.concat(
                         [
                             local_x,
-                            paddle.zeros(
-                                [TB, TC, TH, TW - local_x.shape[-1]]
-                            ),
+                            paddle.zeros([TB, TC, TH, TW - local_x.shape[-1]]),
                         ],
                         axis=-1,
                     )
@@ -147,6 +146,7 @@ class PatchEmbed(nn.Layer):
             x = x.flatten(2).transpose([0, 2, 1])  # BCHW -> BNC
         x = self.norm(x)
         return x
+
 
 def _no_grad_trunc_normal_(tensor, mean, std, a, b):
     def norm_cdf(x):
@@ -200,9 +200,7 @@ def window_partition(x, window_size):
     """
     B, H, W, C = x.shape
     x = x.reshape([B, H // window_size, window_size, W // window_size, window_size, C])
-    windows = (
-        x.transpose([0, 1, 3, 2, 4, 5]).reshape([-1, window_size, window_size, C])
-    )
+    windows = x.transpose([0, 1, 3, 2, 4, 5]).reshape([-1, window_size, window_size, C])
     return windows
 
 
@@ -217,9 +215,7 @@ def window_reverse(windows, window_size, H, W):
         x: (B, H, W, C)
     """
     B = int(windows.shape[0] / (H * W / window_size / window_size))
-    x = windows.reshape(
-        [B, H // window_size, W // window_size, window_size, window_size, -1]
-    )
+    x = windows.reshape([B, H // window_size, W // window_size, window_size, window_size, -1])
     x = x.transpose([0, 1, 3, 2, 4, 5]).reshape([B, H, W, -1])
     return x
 
@@ -259,20 +255,16 @@ class WindowAttention(nn.Layer):
         self.relative_position_bias_table = paddle.create_parameter(
             shape=relative_position_bias_table.shape,
             dtype=str(relative_position_bias_table.numpy().dtype),
-            default_initializer=nn.initializer.Assign(relative_position_bias_table)
-        )     # 2*Wh-1 * 2*Ww-1, nH
+            default_initializer=nn.initializer.Assign(relative_position_bias_table),
+        )  # 2*Wh-1 * 2*Ww-1, nH
 
         # get pair-wise relative position index for each token inside the window
         coords_h = paddle.arange(self.window_size[0])
         coords_w = paddle.arange(self.window_size[1])
         coords = paddle.stack(paddle.meshgrid([coords_h, coords_w]))  # 2, Wh, Ww
         coords_flatten = paddle.flatten(coords, 1)  # 2, Wh*Ww
-        relative_coords = (
-            coords_flatten[:, :, None] - coords_flatten[:, None, :]
-        )  # 2, Wh*Ww, Wh*Ww
-        relative_coords = relative_coords.transpose(
-            [1, 2, 0]
-        )  # Wh*Ww, Wh*Ww, 2
+        relative_coords = coords_flatten[:, :, None] - coords_flatten[:, None, :]  # 2, Wh*Ww, Wh*Ww
+        relative_coords = relative_coords.transpose([1, 2, 0])  # Wh*Ww, Wh*Ww, 2
         relative_coords[:, :, 0] += self.window_size[0] - 1  # shift to start from 0
         relative_coords[:, :, 1] += self.window_size[1] - 1
         relative_coords[:, :, 0] *= 2 * self.window_size[1] - 1
@@ -294,11 +286,7 @@ class WindowAttention(nn.Layer):
             mask: (0/-inf) mask with shape of (num_windows, Wh*Ww, Wh*Ww) or None
         """
         B_, N, C = x.shape
-        qkv = (
-            self.qkv(x)
-            .reshape([B_, N, 3, self.num_heads, C // self.num_heads])
-            .transpose([2, 0, 3, 1, 4])
-        )
+        qkv = self.qkv(x).reshape([B_, N, 3, self.num_heads, C // self.num_heads]).transpose([2, 0, 3, 1, 4])
         q, k, v = (
             qkv[0],
             qkv[1],
@@ -311,23 +299,15 @@ class WindowAttention(nn.Layer):
         k_new_perm_shape[-1], k_new_perm_shape[-2] = k_perm_shape[-2], k_perm_shape[-1]
         attn = q @ k.transpose(k_new_perm_shape)
 
-        relative_position_bias = self.relative_position_bias_table[
-            self.relative_position_index.reshape([-1])
-        ].reshape(
-            [self.window_size[0] * self.window_size[1],
-            self.window_size[0] * self.window_size[1],
-            -1]
+        relative_position_bias = self.relative_position_bias_table[self.relative_position_index.reshape([-1])].reshape(
+            [self.window_size[0] * self.window_size[1], self.window_size[0] * self.window_size[1], -1]
         )  # Wh*Ww,Wh*Ww,nH
-        relative_position_bias = relative_position_bias.transpose(
-            [2, 0, 1]
-        )  # nH, Wh*Ww, Wh*Ww
+        relative_position_bias = relative_position_bias.transpose([2, 0, 1])  # nH, Wh*Ww, Wh*Ww
         attn = attn + relative_position_bias.unsqueeze(0)
 
         if mask is not None:
             nW = mask.shape[0]
-            attn = attn.reshape([B_ // nW, nW, self.num_heads, N, N]) + mask.unsqueeze(
-                1
-            ).unsqueeze(0)
+            attn = attn.reshape([B_ // nW, nW, self.num_heads, N, N]) + mask.unsqueeze(1).unsqueeze(0)
             attn = attn.reshape([-1, self.num_heads, N, N])
             attn = self.softmax(attn)
         else:
@@ -348,12 +328,12 @@ class WindowAttention(nn.Layer):
         return f"dim={self.dim}, window_size={self.window_size}, num_heads={self.num_heads}"
 
 
-# We use the model based on Swintransformer Block, therefore we can use the swin-transformer pretrained model
+# We use the model based on SwinTransformer Block, therefore we can use the swin-transformer pretrained model
 class SwinTransformerBlock(nn.Layer):
     r"""Swin Transformer Block.
     Args:
         dim (int): Number of input channels.
-        input_resolution (tuple[int]): Input resulotion.
+        input_resolution (tuple[int]): Input resolution.
         num_heads (int): Number of attention heads.
         window_size (int): Window size.
         shift_size (int): Shift size for SW-MSA.
@@ -396,9 +376,7 @@ class SwinTransformerBlock(nn.Layer):
             # if window size is larger than input resolution, we don't partition windows
             self.shift_size = 0
             self.window_size = min(self.input_resolution)
-        assert (
-            0 <= self.shift_size < self.window_size
-        ), "shift_size must in 0-window_size"
+        assert 0 <= self.shift_size < self.window_size, "shift_size must in 0-window_size"
 
         self.norm1 = norm_layer(dim)
         self.attn = WindowAttention(
@@ -416,6 +394,7 @@ class SwinTransformerBlock(nn.Layer):
             self.norm2 = nn.LayerNorm(dim)
         elif self.norm_before_mlp == "bn":
             self.bn2 = nn.BatchNorm1D(dim)
+
             def norm2_fun(x):
                 perm_shape = list(range(x.dim()))
                 new_perm_shape = perm_shape
@@ -453,13 +432,11 @@ class SwinTransformerBlock(nn.Layer):
                     img_mask[:, h, w, :] = cnt
                     cnt += 1
 
-            mask_windows = window_partition(
-                img_mask, self.window_size
-            )  # nW, window_size, window_size, 1
+            mask_windows = window_partition(img_mask, self.window_size)  # nW, window_size, window_size, 1
             mask_windows = mask_windows.reshape([-1, self.window_size * self.window_size])
             attn_mask = mask_windows.unsqueeze(1) - mask_windows.unsqueeze(2)
-            attn_mask = paddle.where(attn_mask != 0, paddle.ones_like(attn_mask)*float(-100.0), attn_mask)
-            attn_mask = paddle.where(attn_mask == 0, paddle.ones_like(attn_mask)*float(0.0), attn_mask)
+            attn_mask = paddle.where(attn_mask != 0, paddle.ones_like(attn_mask) * float(-100.0), attn_mask)
+            attn_mask = paddle.where(attn_mask == 0, paddle.ones_like(attn_mask) * float(0.0), attn_mask)
         else:
             attn_mask = None
 
@@ -475,24 +452,16 @@ class SwinTransformerBlock(nn.Layer):
 
         # cyclic shift
         if self.shift_size > 0:
-            shifted_x = paddle.roll(
-                x, shifts=(-self.shift_size, -self.shift_size), axis=(1, 2)
-            )
+            shifted_x = paddle.roll(x, shifts=(-self.shift_size, -self.shift_size), axis=(1, 2))
         else:
             shifted_x = x
 
         # partition windows
-        x_windows = window_partition(
-            shifted_x, self.window_size
-        )  # nW*B, window_size, window_size, C
-        x_windows = x_windows.reshape(
-            [-1, self.window_size * self.window_size, C]
-        )  # nW*B, window_size*window_size, C
+        x_windows = window_partition(shifted_x, self.window_size)  # nW*B, window_size, window_size, C
+        x_windows = x_windows.reshape([-1, self.window_size * self.window_size, C])  # nW*B, window_size*window_size, C
 
         # W-MSA/SW-MSA
-        attn_windows, attn = self.attn(
-            x_windows, mask=self.attn_mask
-        )  # nW*B, window_size*window_size, C
+        attn_windows, attn = self.attn(x_windows, mask=self.attn_mask)  # nW*B, window_size*window_size, C
 
         # merge windows
         attn_windows = attn_windows.reshape([-1, self.window_size, self.window_size, C])
@@ -500,9 +469,7 @@ class SwinTransformerBlock(nn.Layer):
 
         # reverse cyclic shift
         if self.shift_size > 0:
-            x = paddle.roll(
-                shifted_x, shifts=(self.shift_size, self.shift_size), axis=(1, 2)
-            )
+            x = paddle.roll(shifted_x, shifts=(self.shift_size, self.shift_size), axis=(1, 2))
         else:
             x = shifted_x
         x = x.reshape([B, H * W, C])
@@ -619,9 +586,7 @@ class BasicLayer(nn.Layer):
                     qk_scale=qk_scale,
                     drop=drop,
                     attn_drop=attn_drop,
-                    drop_path=drop_path[i]
-                    if isinstance(drop_path, list)
-                    else drop_path,
+                    drop_path=drop_path[i] if isinstance(drop_path, list) else drop_path,
                     norm_layer=norm_layer,
                     norm_before_mlp=norm_before_mlp,
                 )
@@ -631,9 +596,7 @@ class BasicLayer(nn.Layer):
 
         # patch merging layer
         if downsample is not None:
-            self.downsample = downsample(
-                input_resolution, dim=dim, norm_layer=norm_layer
-            )
+            self.downsample = downsample(input_resolution, dim=dim, norm_layer=norm_layer)
         else:
             self.downsample = None
 
@@ -780,7 +743,7 @@ class HTSAT_Swin_Transformer(nn.Layer):
         )  # 2 2
         self.bn0 = nn.BatchNorm2D(self.config.mel_bins)
 
-        # split spctrogram into non-overlapping patches
+        # split spectrogram into non-overlapping patches
         self.patch_embed = PatchEmbed(
             img_size=self.spec_size,
             patch_size=self.patch_size,
@@ -802,8 +765,8 @@ class HTSAT_Swin_Transformer(nn.Layer):
             self.absolute_pos_embed = paddle.create_parameter(
                 shape=absolute_pos_embed.shape,
                 dtype=str(absolute_pos_embed.numpy().dtype),
-                default_initializer=nn.initializer.Assign(absolute_pos_embed)
-            )   
+                default_initializer=nn.initializer.Assign(absolute_pos_embed),
+            )
             trunc_normal_(self.absolute_pos_embed, std=0.02)
 
         self.pos_drop = nn.Dropout(p=self.drop_rate)
@@ -830,9 +793,7 @@ class HTSAT_Swin_Transformer(nn.Layer):
                 qk_scale=self.qk_scale,
                 drop=self.drop_rate,
                 attn_drop=self.attn_drop_rate,
-                drop_path=dpr[
-                    sum(self.depths[:i_layer]) : sum(self.depths[: i_layer + 1])
-                ],
+                drop_path=dpr[sum(self.depths[:i_layer]) : sum(self.depths[: i_layer + 1])],
                 norm_layer=self.norm_layer,
                 downsample=PatchMerging if (i_layer < self.num_layers - 1) else None,
                 use_checkpoint=use_checkpoint,
@@ -844,12 +805,7 @@ class HTSAT_Swin_Transformer(nn.Layer):
         self.avgpool = nn.AdaptiveAvgPool1D(1)
         self.maxpool = nn.AdaptiveMaxPool1D(1)
 
-        SF = (
-            self.spec_size
-            // (2 ** (len(self.depths) - 1))
-            // self.patch_stride[0]
-            // self.freq_ratio
-        )
+        SF = self.spec_size // (2 ** (len(self.depths) - 1)) // self.patch_stride[0] // self.freq_ratio
         self.tscam_conv = nn.Conv2D(
             in_channels=self.num_features,
             out_channels=self.num_classes,
@@ -858,9 +814,7 @@ class HTSAT_Swin_Transformer(nn.Layer):
         )
         self.head = nn.Linear(num_classes, num_classes)
 
-        if (self.enable_fusion) and (
-            self.fusion_type in ["daf_1d", "aff_1d", "iaff_1d"]
-        ):
+        if (self.enable_fusion) and (self.fusion_type in ["daf_1d", "aff_1d", "iaff_1d"]):
             self.mel_conv1d = nn.Sequential(
                 nn.Conv1D(64, 64, kernel_size=5, stride=3, padding=2),
                 nn.BatchNorm1D(64),
@@ -916,9 +870,7 @@ class HTSAT_Swin_Transformer(nn.Layer):
         x = self.tscam_conv(x)
         x = paddle.flatten(x, 2)  # B, C, T
 
-        fpx = interpolate(
-            nn.functional.sigmoid(x).transpose([0, 2, 1]), 8 * self.patch_stride[1]
-        )
+        fpx = interpolate(nn.functional.sigmoid(x).transpose([0, 2, 1]), 8 * self.patch_stride[1])
 
         x = self.avgpool(x)
         x = paddle.flatten(x, 1)
@@ -948,26 +900,14 @@ class HTSAT_Swin_Transformer(nn.Layer):
         B, C, T, F = x.shape
         target_T = int(self.spec_size * self.freq_ratio)
         target_F = self.spec_size // self.freq_ratio
-        assert (
-            T <= target_T and F <= target_F
-        ), "the wav size should less than or equal to the swin input size"
+        assert T <= target_T and F <= target_F, "the wav size should less than or equal to the swin input size"
         # to avoid bicubic zero error
         if T < target_T:
-            x = nn.functional.interpolate(
-                x, (target_T, x.shape[3]), mode="bicubic", align_corners=True
-            )
+            x = nn.functional.interpolate(x, (target_T, x.shape[3]), mode="bicubic", align_corners=True)
         if F < target_F:
-            x = nn.functional.interpolate(
-                x, (x.shape[2], target_F), mode="bicubic", align_corners=True
-            )
+            x = nn.functional.interpolate(x, (x.shape[2], target_F), mode="bicubic", align_corners=True)
         x = x.transpose([0, 1, 3, 2])
-        x = x.reshape(
-            [x.shape[0],
-            x.shape[1],
-            x.shape[2],
-            self.freq_ratio,
-            x.shape[3] // self.freq_ratio]
-        )
+        x = x.reshape([x.shape[0], x.shape[1], x.shape[2], self.freq_ratio, x.shape[3] // self.freq_ratio])
         # print(x.shape)
         x = x.transpose([0, 1, 3, 2, 4])
         x = x.reshape([x.shape[0], x.shape[1], x.shape[2] * x.shape[3], x.shape[4]])
@@ -978,18 +918,12 @@ class HTSAT_Swin_Transformer(nn.Layer):
         B, C, T, F = x.shape
         target_T = int(self.spec_size * self.freq_ratio)
         target_F = self.spec_size // self.freq_ratio
-        assert (
-            T <= target_T and F <= target_F
-        ), "the wav size should less than or equal to the swin input size"
+        assert T <= target_T and F <= target_F, "the wav size should less than or equal to the swin input size"
         # to avoid bicubic zero error
         if T < target_T:
-            x = nn.functional.interpolate(
-                x, (target_T, x.shape[3]), mode="bicubic", align_corners=True
-            )
+            x = nn.functional.interpolate(x, (target_T, x.shape[3]), mode="bicubic", align_corners=True)
         if F < target_F:
-            x = nn.functional.interpolate(
-                x, (x.shape[2], target_F), mode="bicubic", align_corners=True
-            )
+            x = nn.functional.interpolate(x, (x.shape[2], target_F), mode="bicubic", align_corners=True)
         x = x.transpose([0, 1, 3, 2])  # B C F T
         x = x[:, :, :, cur_pos : cur_pos + self.spec_size]
         # x = x.repeat_interleave(repeats=(1, 1, 4, 1))
@@ -1032,24 +966,15 @@ class HTSAT_Swin_Transformer(nn.Layer):
                     fusion_x_local = x[longer_list_idx, 1:, :, :].clone()
                     FB, FC, FT, FF = fusion_x_local.shape
                     fusion_x_local = fusion_x_local.reshape([FB * FC, FT, FF])
-                    fusion_x_local = paddle.transpose(
-                        fusion_x_local, (0, 2, 1)
-                    )
+                    fusion_x_local = paddle.transpose(fusion_x_local, (0, 2, 1))
                     fusion_x_local = self.mel_conv1d(fusion_x_local)
-                    fusion_x_local = fusion_x_local.reshape(
-                        FB, FC, FF, fusion_x_local.shape[-1]
-                    )
-                    fusion_x_local = (
-                        paddle.transpose(fusion_x_local, (0, 2, 1, 3))
-                        .flatten(2)
-                    )
+                    fusion_x_local = fusion_x_local.reshape(FB, FC, FF, fusion_x_local.shape[-1])
+                    fusion_x_local = paddle.transpose(fusion_x_local, (0, 2, 1, 3)).flatten(2)
                     if fusion_x_local.shape[-1] < FT:
                         fusion_x_local = paddle.concat(
                             [
                                 fusion_x_local,
-                                paddle.zeros(
-                                    (FB, FF, FT - fusion_x_local.size(-1))
-                                ),
+                                paddle.zeros((FB, FF, FT - fusion_x_local.size(-1))),
                             ],
                             axis=-1,
                         )
@@ -1057,9 +982,7 @@ class HTSAT_Swin_Transformer(nn.Layer):
                         fusion_x_local = fusion_x_local[:, :, :FT]
                     # 1D fusion
                     new_x = new_x.squeeze(1).transpose((0, 2, 1))
-                    new_x[longer_list_idx] = self.fusion_model(
-                        new_x[longer_list_idx], fusion_x_local
-                    )
+                    new_x[longer_list_idx] = self.fusion_model(new_x[longer_list_idx], fusion_x_local)
                     x = new_x.transpose((0, 2, 1))[:, None, :, :]
                 else:
                     x = new_x
