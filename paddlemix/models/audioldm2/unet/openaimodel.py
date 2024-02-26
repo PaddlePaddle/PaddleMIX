@@ -12,14 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import math
+from abc import abstractmethod
+
+import numpy as np
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
-import math
-import numpy as np
-from abc import abstractmethod
-from .attention import SpatialTransformer
 from einops import repeat
+
+from .attention import SpatialTransformer
+
 
 def conv_nd(dims, *args, **kwargs):
     """
@@ -67,17 +70,11 @@ def timestep_embedding(timesteps, dim, max_period=10000, repeat_only=False):
     """
     if not repeat_only:
         half = dim // 2
-        freqs = paddle.exp(
-            -math.log(max_period)
-            * paddle.arange(start=0, end=half, dtype="float32")
-            / half
-        )
+        freqs = paddle.exp(-math.log(max_period) * paddle.arange(start=0, end=half, dtype="float32") / half)
         args = paddle.cast(timesteps[:, None], dtype="float32") * freqs[None]
         embedding = paddle.concat([paddle.cos(args), paddle.sin(args)], axis=-1)
         if dim % 2:
-            embedding = paddle.concat(
-                [embedding, paddle.zeros_like(embedding[:, :1])], axis=-1
-            )
+            embedding = paddle.concat([embedding, paddle.zeros_like(embedding[:, :1])], axis=-1)
     else:
         embedding = repeat(timesteps, "b -> b d", d=dim)
     return embedding
@@ -85,8 +82,8 @@ def timestep_embedding(timesteps, dim, max_period=10000, repeat_only=False):
 
 class GroupNorm32(nn.GroupNorm):
     def forward(self, x):
-        return paddle.cast(super().forward(paddle.cast(x, dtype="float32")), dtype = x.dtype)
-    
+        return paddle.cast(super().forward(paddle.cast(x, dtype="float32")), dtype=x.dtype)
+
 
 class TimestepBlock(nn.Layer):
     """
@@ -98,6 +95,7 @@ class TimestepBlock(nn.Layer):
         """
         Apply the module to `x` given `emb` timestep embeddings.
         """
+
 
 class Upsample(nn.Layer):
     """
@@ -115,22 +113,18 @@ class Upsample(nn.Layer):
         self.use_conv = use_conv
         self.dims = dims
         if use_conv:
-            self.conv = conv_nd(
-                dims, self.channels, self.out_channels, 3, padding=padding
-            )
+            self.conv = conv_nd(dims, self.channels, self.out_channels, 3, padding=padding)
 
     def forward(self, x):
         assert x.shape[1] == self.channels
         if self.dims == 3:
-            x = F.interpolate(
-                x, (x.shape[2], x.shape[3] * 2, x.shape[4] * 2), mode="nearest"
-            )
+            x = F.interpolate(x, (x.shape[2], x.shape[3] * 2, x.shape[4] * 2), mode="nearest")
         else:
             x = F.interpolate(x, scale_factor=2, mode="nearest")
         if self.use_conv:
             x = self.conv(x)
         return x
-    
+
 
 class Downsample(nn.Layer):
     """
@@ -164,7 +158,7 @@ class Downsample(nn.Layer):
     def forward(self, x):
         assert x.shape[1] == self.channels
         return self.op(x)
-    
+
 
 class ResBlock(TimestepBlock):
     """
@@ -228,22 +222,18 @@ class ResBlock(TimestepBlock):
                 2 * self.out_channels if use_scale_shift_norm else self.out_channels,
             ),
         )
-        weight_attr = paddle.ParamAttr(
-            initializer=nn.initializer.Constant(value=0.0)
-        )
+        weight_attr = paddle.ParamAttr(initializer=nn.initializer.Constant(value=0.0))
         self.out_layers = nn.Sequential(
             normalization(self.out_channels),
             nn.Silu(),
             nn.Dropout(p=dropout),
-            conv_nd(dims, self.out_channels, self.out_channels, 3, padding=1, weight_attr=weight_attr)
+            conv_nd(dims, self.out_channels, self.out_channels, 3, padding=1, weight_attr=weight_attr),
         )
 
         if self.out_channels == channels:
             self.skip_connection = nn.Identity()
         elif use_conv:
-            self.skip_connection = conv_nd(
-                dims, channels, self.out_channels, 3, padding=1
-            )
+            self.skip_connection = conv_nd(dims, channels, self.out_channels, 3, padding=1)
         else:
             self.skip_connection = conv_nd(dims, channels, self.out_channels, 1)
 
@@ -256,7 +246,7 @@ class ResBlock(TimestepBlock):
             h = in_conv(h)
         else:
             h = self.in_layers(x)
-        emb_out = paddle.cast(self.emb_layers(emb), dtype = h.dtype)
+        emb_out = paddle.cast(self.emb_layers(emb), dtype=h.dtype)
         while len(emb_out.shape) < len(h.shape):
             emb_out = emb_out[..., None]
         if self.use_scale_shift_norm:
@@ -268,7 +258,7 @@ class ResBlock(TimestepBlock):
             h = h + emb_out
             h = self.out_layers(h)
         return self.skip_connection(x) + h
-    
+
 
 class QKVAttention(nn.Layer):
     """
@@ -306,11 +296,11 @@ class QKVAttention(nn.Layer):
     @staticmethod
     def count_flops(model, _x, y):
         return count_flops_attn(model, _x, y)
-    
+
 
 class QKVAttentionLegacy(nn.Layer):
     """
-    A module which performs QKV attention. Matches legacy QKVAttention + input/ouput heads shaping
+    A module which performs QKV attention. Matches legacy QKVAttention + input/output heads shaping
     """
 
     def __init__(self, n_heads):
@@ -326,13 +316,9 @@ class QKVAttentionLegacy(nn.Layer):
         bs, width, length = qkv.shape
         assert width % (3 * self.n_heads) == 0
         ch = width // (3 * self.n_heads)
-        q, k, v = (
-            qkv.reshape([bs * self.n_heads, ch * 3, length]).split(ch, axis=1)
-        )
+        q, k, v = qkv.reshape([bs * self.n_heads, ch * 3, length]).split(ch, axis=1)
         scale = 1 / math.sqrt(math.sqrt(ch))
-        weight = paddle.einsum(
-            "bct,bcs->bts", q * scale, k * scale
-        )  # More stable with f16 than dividing afterwards
+        weight = paddle.einsum("bct,bcs->bts", q * scale, k * scale)  # More stable with f16 than dividing afterwards
         weight = paddle.cast(F.softmax(paddle.cast(weight, dtype="float32"), axis=-1), dtype=weight.dtype)
         a = paddle.einsum("bts,bcs->bct", weight, v)
         return a.reshape([bs, -1, length])
@@ -341,7 +327,7 @@ class QKVAttentionLegacy(nn.Layer):
     def count_flops(model, _x, y):
         return count_flops_attn(model, _x, y)
 
- 
+
 class AttentionBlock(nn.Layer):
     """
     An attention block that allows spatial positions to attend to each other.
@@ -376,9 +362,7 @@ class AttentionBlock(nn.Layer):
             # split heads before split qkv
             self.attention = QKVAttentionLegacy(self.num_heads)
 
-        weight_attr = paddle.ParamAttr(
-            initializer=nn.initializer.Constant(value=0.0)
-        )
+        weight_attr = paddle.ParamAttr(initializer=nn.initializer.Constant(value=0.0))
         self.proj_out = conv_nd(1, channels, channels, 1, weight_attr=weight_attr)
 
     def forward(self, x):
@@ -408,7 +392,6 @@ def count_flops_attn(model, _x, y):
     # the combination of the value vectors.
     matmul_ops = 2 * b * (num_spatial**2) * c
     model.total_ops += paddle.to_tensor([matmul_ops], dtype="float64")
-
 
 
 class TimestepEmbedSequential(nn.Sequential, TimestepBlock):
@@ -441,7 +424,7 @@ class TimestepEmbedSequential(nn.Sequential, TimestepBlock):
             else:
                 x = layer(x)
         return x
-    
+
 
 class UNetModel(nn.Layer):
     """
@@ -507,14 +490,10 @@ class UNetModel(nn.Layer):
             num_heads_upsample = num_heads
 
         if num_heads == -1:
-            assert (
-                num_head_channels != -1
-            ), "Either num_heads or num_head_channels has to be set"
+            assert num_head_channels != -1, "Either num_heads or num_head_channels has to be set"
 
         if num_head_channels == -1:
-            assert (
-                num_heads != -1
-            ), "Either num_heads or num_head_channels has to be set"
+            assert num_heads != -1, "Either num_heads or num_head_channels has to be set"
 
         self.image_size = image_size
         self.in_channels = in_channels
@@ -542,7 +521,7 @@ class UNetModel(nn.Layer):
 
         # assert not (
         #     self.num_classes is not None and self.extra_film_condition_dim is not None
-        # ), "As for the condition of theh UNet model, you can only set using class label or an extra embedding vector (such as from CLAP). You cannot set both num_classes and extra_film_condition_dim."
+        # ), "As for the condition of the UNet model, you can only set using class label or an extra embedding vector (such as from CLAP). You cannot set both num_classes and extra_film_condition_dim."
 
         if self.num_classes is not None:
             self.label_emb = nn.Embedding(num_classes, time_embed_dim)
@@ -567,11 +546,7 @@ class UNetModel(nn.Layer):
             context_dim = [None]  # At least use one spatial transformer
 
         self.input_blocks = nn.LayerList(
-            [
-                TimestepEmbedSequential(
-                    conv_nd(dims, in_channels, model_channels, 3, padding=1)
-                )
-            ]
+            [TimestepEmbedSequential(conv_nd(dims, in_channels, model_channels, 3, padding=1))]
         )
         self._feature_size = model_channels
         input_block_chans = [model_channels]
@@ -582,9 +557,7 @@ class UNetModel(nn.Layer):
                 layers = [
                     ResBlock(
                         ch,
-                        time_embed_dim
-                        if (not self.use_extra_film_by_concat)
-                        else time_embed_dim * 2,
+                        time_embed_dim if (not self.use_extra_film_by_concat) else time_embed_dim * 2,
                         dropout,
                         out_channels=mult * model_channels,
                         dims=dims,
@@ -600,11 +573,7 @@ class UNetModel(nn.Layer):
                         num_heads = ch // num_head_channels
                         dim_head = num_head_channels
                     if legacy:
-                        dim_head = (
-                            ch // num_heads
-                            if use_spatial_transformer
-                            else num_head_channels
-                        )
+                        dim_head = ch // num_heads if use_spatial_transformer else num_head_channels
                     if extra_sa_layer:
                         layers.append(
                             SpatialTransformer(
@@ -642,9 +611,7 @@ class UNetModel(nn.Layer):
                     TimestepEmbedSequential(
                         ResBlock(
                             ch,
-                            time_embed_dim
-                            if (not self.use_extra_film_by_concat)
-                            else time_embed_dim * 2,
+                            time_embed_dim if (not self.use_extra_film_by_concat) else time_embed_dim * 2,
                             dropout,
                             out_channels=out_ch,
                             dims=dims,
@@ -653,9 +620,7 @@ class UNetModel(nn.Layer):
                             down=True,
                         )
                         if resblock_updown
-                        else Downsample(
-                            ch, conv_resample, dims=dims, out_channels=out_ch
-                        )
+                        else Downsample(ch, conv_resample, dims=dims, out_channels=out_ch)
                     )
                 )
                 ch = out_ch
@@ -674,9 +639,7 @@ class UNetModel(nn.Layer):
         middle_layers = [
             ResBlock(
                 ch,
-                time_embed_dim
-                if (not self.use_extra_film_by_concat)
-                else time_embed_dim * 2,
+                time_embed_dim if (not self.use_extra_film_by_concat) else time_embed_dim * 2,
                 dropout,
                 dims=dims,
                 use_checkpoint=use_checkpoint,
@@ -685,9 +648,7 @@ class UNetModel(nn.Layer):
         ]
         if extra_sa_layer:
             middle_layers.append(
-                SpatialTransformer(
-                    ch, num_heads, dim_head, depth=transformer_depth, context_dim=None
-                )
+                SpatialTransformer(ch, num_heads, dim_head, depth=transformer_depth, context_dim=None)
             )
         for context_dim_id in range(len(context_dim)):
             middle_layers.append(
@@ -710,9 +671,7 @@ class UNetModel(nn.Layer):
         middle_layers.append(
             ResBlock(
                 ch,
-                time_embed_dim
-                if (not self.use_extra_film_by_concat)
-                else time_embed_dim * 2,
+                time_embed_dim if (not self.use_extra_film_by_concat) else time_embed_dim * 2,
                 dropout,
                 dims=dims,
                 use_checkpoint=use_checkpoint,
@@ -730,9 +689,7 @@ class UNetModel(nn.Layer):
                 layers = [
                     ResBlock(
                         ch + ich,
-                        time_embed_dim
-                        if (not self.use_extra_film_by_concat)
-                        else time_embed_dim * 2,
+                        time_embed_dim if (not self.use_extra_film_by_concat) else time_embed_dim * 2,
                         dropout,
                         out_channels=model_channels * mult,
                         dims=dims,
@@ -749,11 +706,7 @@ class UNetModel(nn.Layer):
                         dim_head = num_head_channels
                     if legacy:
                         # num_heads = 1
-                        dim_head = (
-                            ch // num_heads
-                            if use_spatial_transformer
-                            else num_head_channels
-                        )
+                        dim_head = ch // num_heads if use_spatial_transformer else num_head_channels
                     if extra_sa_layer:
                         layers.append(
                             SpatialTransformer(
@@ -787,9 +740,7 @@ class UNetModel(nn.Layer):
                     layers.append(
                         ResBlock(
                             ch,
-                            time_embed_dim
-                            if (not self.use_extra_film_by_concat)
-                            else time_embed_dim * 2,
+                            time_embed_dim if (not self.use_extra_film_by_concat) else time_embed_dim * 2,
                             dropout,
                             out_channels=out_ch,
                             dims=dims,
@@ -804,9 +755,7 @@ class UNetModel(nn.Layer):
                 self.output_blocks.append(TimestepEmbedSequential(*layers))
                 self._feature_size += ch
 
-        weight_attr = paddle.ParamAttr(
-            initializer=nn.initializer.Constant(value=0.0)
-        )
+        weight_attr = paddle.ParamAttr(initializer=nn.initializer.Constant(value=0.0))
         self.out = nn.Sequential(
             normalization(ch),
             nn.Silu(),
