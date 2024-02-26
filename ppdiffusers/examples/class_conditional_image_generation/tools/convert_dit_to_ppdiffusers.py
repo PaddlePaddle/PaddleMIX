@@ -166,7 +166,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--scheduler",
-        default="dpmsolver",
+        default="ddim",
         type=str,
         required=False,
         help="DiTPipeline sample scheduler",
@@ -188,3 +188,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     main(args)
+
+# python tools/convert_dit_to_ppdiffusers.py --image_size 512 --model_name DiT_XL_2 --model_weights DiT-XL-2-512x512.pdparams --checkpoint_path DiT_XL_2_512
+# python tools/convert_dit_to_ppdiffusers.py --image_size 256 --model_name DiT_XL_2 --model_weights DiT-XL-2-256x256.pdparams --checkpoint_path DiT_XL_2_256
+# python tools/convert_dit_to_ppdiffusers.py --image_size 256 --model_name DiT_XL_2 --model_weights SiT-XL-2-256x256.pdparams --vae_model stabilityai/sd-vae-ft-ema --checkpoint_path SiT_XL_2_256

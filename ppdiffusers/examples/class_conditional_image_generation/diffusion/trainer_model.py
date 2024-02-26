@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 import contextlib
 import inspect
 import os
@@ -61,7 +62,6 @@ class DiTDiffusionModel(nn.Layer):
         #         new_betas.append(1 - alpha_cumprod / last_alpha_cumprod)
         #         last_alpha_cumprod = alpha_cumprod
         #         self.timestep_map.append(i)
-
         betas = get_named_beta_schedule('linear', 1000)
 
         # Use float64 for accuracy.
@@ -100,21 +100,11 @@ class DiTDiffusionModel(nn.Layer):
             (1.0 - self.alphas_cumprod_prev) * np.sqrt(alphas) / (1.0 - self.alphas_cumprod)
         )
 
-
         self.transformer = DiT(**read_json(model_args.config_file))
         self.transformer_is_pretrained = False
 
         assert model_args.prediction_type in ["epsilon", "v_prediction"]
         self.prediction_type = model_args.prediction_type
-
-        # self.noise_scheduler = DDPMScheduler(
-        #     beta_start=0.00085,
-        #     beta_end=0.012,
-        #     beta_schedule="scaled_linear",
-        #     num_train_timesteps=1000,
-        #     prediction_type=self.prediction_type,
-        # )
-        # self.register_buffer("alphas_cumprod", self.noise_scheduler.alphas_cumprod)
 
         if model_args.image_logging_steps > 0:
             self.eval_scheduler = DDIMScheduler(
@@ -137,39 +127,6 @@ class DiTDiffusionModel(nn.Layer):
         self.transformer.train()
         self.vae.eval()
 
-    def add_noise(
-        self,
-        original_samples: paddle.Tensor,
-        noise: paddle.Tensor,
-        timesteps: paddle.Tensor,
-    ) -> paddle.Tensor:
-        sqrt_alpha_prod = self.alphas_cumprod[timesteps] ** 0.5
-        sqrt_alpha_prod = sqrt_alpha_prod.flatten()
-        while len(sqrt_alpha_prod.shape) < len(original_samples.shape):
-            sqrt_alpha_prod = sqrt_alpha_prod.unsqueeze(-1)
-
-        sqrt_one_minus_alpha_prod = (1 - self.alphas_cumprod[timesteps]) ** 0.5
-        sqrt_one_minus_alpha_prod = sqrt_one_minus_alpha_prod.flatten()
-        while len(sqrt_one_minus_alpha_prod.shape) < len(original_samples.shape):
-            sqrt_one_minus_alpha_prod = sqrt_one_minus_alpha_prod.unsqueeze(-1)
-
-        noisy_samples = sqrt_alpha_prod * original_samples + sqrt_one_minus_alpha_prod * noise
-        return noisy_samples
-
-    def get_velocity(self, sample: paddle.Tensor, noise: paddle.Tensor, timesteps: paddle.Tensor) -> paddle.Tensor:
-        sqrt_alpha_prod = self.alphas_cumprod[timesteps] ** 0.5
-        sqrt_alpha_prod = sqrt_alpha_prod.flatten()
-        while len(sqrt_alpha_prod.shape) < len(sample.shape):
-            sqrt_alpha_prod = sqrt_alpha_prod.unsqueeze(-1)
-
-        sqrt_one_minus_alpha_prod = (1 - self.alphas_cumprod[timesteps]) ** 0.5
-        sqrt_one_minus_alpha_prod = sqrt_one_minus_alpha_prod.flatten()
-        while len(sqrt_one_minus_alpha_prod.shape) < len(sample.shape):
-            sqrt_one_minus_alpha_prod = sqrt_one_minus_alpha_prod.unsqueeze(-1)
-
-        velocity = sqrt_alpha_prod * noise - sqrt_one_minus_alpha_prod * sample
-        return velocity
-
     @contextlib.contextmanager
     def ema_scope(self, context=None):
         if self.use_ema:
@@ -188,18 +145,6 @@ class DiTDiffusionModel(nn.Layer):
     def on_train_batch_end(self):
         if self.use_ema:
             self.model_ema(self.transformer)
-
-    def q_mean_variance(self, x_start, t):
-        """
-        Get the distribution q(x_t | x_0).
-        :param x_start: the [N x C x ...] tensor of noiseless inputs.
-        :param t: the number of diffusion steps (minus 1). Here, 0 means one step.
-        :return: A tuple (mean, variance, log_variance), all of x_start's shape.
-        """
-        mean = _extract_into_tensor(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start
-        variance = _extract_into_tensor(1.0 - self.alphas_cumprod, t, x_start.shape)
-        log_variance = _extract_into_tensor(self.log_one_minus_alphas_cumprod, t, x_start.shape)
-        return mean, variance, log_variance
 
     def q_sample(self, x_start, t, noise=None):
         """
@@ -231,8 +176,6 @@ class DiTDiffusionModel(nn.Layer):
         # Get the target for loss depending on the prediction type
         if self.prediction_type == "epsilon": # default
             target = noise
-        elif self.prediction_type == "v_prediction":
-            target = self.get_velocity(latents, noise, timesteps)
         else:
             raise ValueError(f"Unknown prediction type {self.prediction_type}")
 

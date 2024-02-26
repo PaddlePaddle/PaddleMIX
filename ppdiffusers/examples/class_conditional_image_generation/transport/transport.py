@@ -1,3 +1,17 @@
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import paddle
 import numpy as np
 import enum
@@ -65,7 +79,7 @@ class Transport:
         shape = paddle.tensor(z.shape)
         N = paddle.prod(shape[1:])
         _fn = lambda x: -N / 2. * np.log(2 * np.pi) - paddle.sum(x ** 2) / 2.
-        return paddle.vmap(_fn)(z) ###
+        return paddle.vmap(_fn)(z) # TODO
     
     def check_interval(
         self, 
@@ -105,7 +119,6 @@ class Transport:
         x0 = paddle.randn_like(x1)
         t0, t1 = self.check_interval(self.train_eps, self.sample_eps)
         t = paddle.rand((x1.shape[0],)) * (t1 - t0) + t0
-        #t = t.to(x1)
         return t, x0, x1
 
     def training_losses(
@@ -127,8 +140,6 @@ class Transport:
         t, xt, ut = self.path_sampler.plan(t, x0, x1)
         model_output = model(xt, t, **model_kwargs)
         B, *_, C = xt.shape
-        ### Note
-        model_output, _ = paddle.split(model_output, 2, axis=1)
         assert model_output.shape == [B, *xt.shape[1:-1], C]
 
         terms = {}
@@ -187,7 +198,6 @@ class Transport:
 
         return body_fn
     
-
     def get_score(
         self,
     ):
@@ -392,8 +402,8 @@ class Sampler:
             eps = paddle.randint(2, x.shape, dtype=paddle.float32) * 2 - 1
             t = paddle.ones_like(t) * (1 - t)
             with paddle.enable_grad():
-                x.requires_grad = True
-                grad = paddle.autograd.grad(paddle.sum(self.drift(x, t, model, **model_kwargs) * eps), x)[0] ####
+                x.stop_gradient = False
+                grad = paddle.grad(paddle.sum(self.drift(x, t, model, **model_kwargs) * eps), x)[0]
                 logp_grad = paddle.sum(grad * eps, axis=tuple(range(1, len(x.shape))))
                 drift = self.drift(x, t, model, **model_kwargs)
             return (-drift, logp_grad)
@@ -418,7 +428,7 @@ class Sampler:
         )
 
         def _sample_fn(x, model, **model_kwargs):
-            init_logp = paddle.zeros(x.shape[0]) #.to(x)
+            init_logp = paddle.zeros(x.shape[0])
             input = (x, init_logp)
             drift, delta_logp = _ode.sample(input, model, **model_kwargs)
             drift, delta_logp = drift[-1], delta_logp[-1]

@@ -28,6 +28,7 @@ from diffusion import create_diffusion
 from transport import create_transport
 from transport.utils import parse_transport_args
 from diffusion.dit import DiT
+from transport.sit import SiT
 
 
 def read_json(file):
@@ -104,8 +105,10 @@ def main(args):
         print(f"Experiment directory created at {experiment_dir}")
 
     # Create model:
-    if model_name in ["DiT", "SiT"]:
+    if model_name == "DiT":
         model = DiT(**read_json(args.config_file))
+    elif model_name == "SiT":
+        model = SiT(**read_json(args.config_file))
     else:
         raise NotImplementedError(f"Model {model_name} not supported.")
     assert model.input_size == args.image_size // 8
@@ -122,8 +125,8 @@ def main(args):
             args.path_type, # "Linear"
             args.prediction, # "velocity"
             args.loss_weight, # None
-            args.train_eps,
-            args.sample_eps
+            args.train_eps, # 0
+            args.sample_eps, # 0
         )
     else:
         raise NotImplementedError(f"Model {model_name} not supported.")

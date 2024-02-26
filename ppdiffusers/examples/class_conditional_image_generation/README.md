@@ -109,7 +109,10 @@ python -u -m paddle.distributed.launch --gpus "0,1,2,3,4,5,6,7" \
 
 ## 2 模型推理
 
-待模型训练完毕，会在`output_dir`保存训练好的模型权重，我们可以使用`tools/convert_dit_to_ppdiffusers.py`生成推理所使用的`Pipeline`。
+待模型训练完毕，会在`output_dir`保存训练好的模型权重。注意DiT模型推理可以使用ppdiffusers中的DiTPipeline，但是SiT模型推理暂时不支持生成`Pipeline`。
+可以参照运行`python infer_demo_dit.py`或者`python infer_demo_dit.py`。
+
+DiT可以使用`tools/convert_dit_to_ppdiffusers.py`生成推理所使用的`Pipeline`。
 
 ```bash
 python tools/convert_dit_to_ppdiffusers.py

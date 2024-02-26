@@ -6,7 +6,7 @@
   "depth": 12,
   "num_heads": 6,
   "mlp_ratio": 4.0,
-  "class_dropout_prob": 0.0,
+  "class_dropout_prob": 0.1,
   "num_classes": 1000,
   "learn_sigma": true
 }

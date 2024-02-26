@@ -287,7 +287,7 @@ class FinalLayer(nn.Layer):
         return x
 
 
-class DiT(nn.Layer):
+class SiT(nn.Layer):
     """
     Diffusion model with a Transformer backbone.
     """
@@ -341,7 +341,6 @@ class DiT(nn.Layer):
         self.final_layer = FinalLayer(hidden_size, patch_size, self.out_channels)
 
         self.initialize_weights()
-        #self.set_state_dict(paddle.load('DiT-XL-2-256x256.pdparams'))
 
     def initialize_weights(self):
         # Initialize transformer layers:
@@ -421,6 +420,10 @@ class DiT(nn.Layer):
 
         x = self.final_layer(x, c)                # (N, T, patch_size ** 2 * out_channels)
         x = self.unpatchify(x)                   # (N, out_channels, H, W)
+        
+        ### Note: diff with DiT
+        if self.learn_sigma:
+            x, _ = x.chunk(2, axis=1)
         return x
 
     def forward_with_cfg(self, x, t, y, cfg_scale):
@@ -436,7 +439,6 @@ class DiT(nn.Layer):
         # This can be done by uncommenting the following line and commenting-out the line following that.
         # eps, rest = model_out[:, :self.in_channels], model_out[:, self.in_channels:]
         eps, rest = model_out[:, :3], model_out[:, 3:]
-        #cond_eps, uncond_eps = paddle.split(eps, len(eps) // 2, axis=0)
         cond_eps, uncond_eps = paddle.split(eps, 2, axis=0)
         half_eps = uncond_eps + cfg_scale * (cond_eps - uncond_eps)
         eps = paddle.concat([half_eps, half_eps], axis=0)

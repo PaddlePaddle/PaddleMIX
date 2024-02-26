@@ -13,8 +13,7 @@
 # limitations under the License.
 
 from .trainer_model import SiTDiffusionModel
-from .sit import DiT
-
+from .sit import SiT
 from .transport import Transport, ModelType, WeightType, PathType, Sampler
 
 
