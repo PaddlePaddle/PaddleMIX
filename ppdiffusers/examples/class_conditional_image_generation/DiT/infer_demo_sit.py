@@ -14,21 +14,6 @@ vae_model = "stabilityai/sd-vae-ft-ema"
 config_file = "config/SiT_XL_patch2.json"
 
 
-def numpy_to_pil(images):
-    """
-    Convert a numpy image or a batch of images to a PIL image.
-    """
-    if images.ndim == 3:
-        images = images[None, ...]
-    images = (images * 255).round().astype("uint8")
-    if images.shape[-1] == 1:
-        # special case for grayscale (single channel) images
-        pil_images = [Image.fromarray(image.squeeze(), mode="L") for image in images]
-    else:
-        pil_images = [Image.fromarray(image) for image in images]
-    return pil_images
-
-
 def read_json(file):
     with open(file, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -46,7 +31,7 @@ latent_size = 256 // 8
 # Set user inputs:
 seed = 0 #@param {type:"number"}
 paddle.seed(seed)
-num_sampling_steps = 250 #@param {type:"slider", min:0, max:1000, step:1}
+num_sampling_steps = 25 #@param {type:"slider", min:0, max:1000, step:1}
 cfg_scale = 4 #@param {type:"slider", min:1, max:10, step:0.1}
 class_labels = [207] #@param {type:"raw"}
 samples_per_row = 4 #@param {type:"number"}
@@ -97,8 +82,8 @@ elif sampler_type == "ODE":
 samples = sample_fn(z, model.forward_with_cfg, **model_kwargs)[-1]
 samples = vae.decode(samples / 0.18215).sample
 
-
-image = (samples / 2 + 0.5).clip(0, 1).transpose([0, 2, 3, 1]) * 255.0
-image = image.cast("float32").numpy().round()
-im = numpy_to_pil(image)[0]
-im.save("result.png")
+samples = (samples - samples.min()) / (samples.max() - samples.min()) * 255
+npimg = samples.astype('uint8').numpy()[0]
+npimg = np.transpose(npimg, (1, 2, 0))
+img = Image.fromarray(npimg)
+img.save("result.png")
