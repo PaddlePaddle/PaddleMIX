@@ -1,3 +1,17 @@
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import json
 import numpy as np
 from PIL import Image
@@ -68,17 +82,9 @@ if sampler_type == "SDE":
         last_step_size=last_step_size, 
         num_steps=num_sampling_steps,
     ) 
-elif sampler_type == "ODE":
-    # default to Adaptive Solver
-    ODE_sampling_method = "dopri5" #@param ["dopri5", "euler", "rk4"]
-    atol = 1e-6
-    rtol = 1e-3
-    sample_fn = sampler.sample_ode(
-        sampling_method=ODE_sampling_method,
-        atol=atol,
-        rtol=rtol,
-        num_steps=num_sampling_steps
-    ) 
+else:
+    raise NotImplementedError("ODE not supported yet. Please use SDE instead.")
+
 samples = sample_fn(z, model.forward_with_cfg, **model_kwargs)[-1]
 samples = vae.decode(samples / 0.18215).sample
 
@@ -86,4 +92,4 @@ samples = (samples - samples.min()) / (samples.max() - samples.min()) * 255
 npimg = samples.astype('uint8').numpy()[0]
 npimg = np.transpose(npimg, (1, 2, 0))
 img = Image.fromarray(npimg)
-img.save("result.png")
+img.save("result_SiT_golden_retriever.png")

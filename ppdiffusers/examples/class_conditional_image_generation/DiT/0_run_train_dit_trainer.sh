@@ -1,8 +1,3 @@
-export FLAGS_embedding_deterministic=1
-export FLAGS_cudnn_deterministic=1
-export NVIDIA_TF32_OVERRIDE=0
-export NCCL_ALGO=Tree
-
 config_file=config/DiT_XL_patch2.json
 OUTPUT_DIR=./output/DiT_XL_patch2_trainer
 
@@ -13,11 +8,11 @@ max_steps=7000000
 logging_steps=50
 seed=0
 
-USE_AMP=False # True
+USE_AMP=True
 FP16_OPT_LEVEL="O1"
 enable_tensorboard=True
-recompute=False
-enable_xformers=False
+recompute=True
+enable_xformers=True
 
 python -u -m paddle.distributed.launch --gpus "0,1,2,3,4,5,6,7" train_image_generation_trainer.py \
     --do_train \

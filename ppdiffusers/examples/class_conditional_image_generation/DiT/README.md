@@ -31,15 +31,11 @@ pip install -r requirements.txt
 
 #### 1.3.1 硬件要求
 Tips：
-- FP32 在 40GB 的显卡上可正常训练。
+- FP32 在默认总batch_size=256情况下需占42GB显存。
+- FP16 在默认总batch_size=256情况下需占21GB显存。
 
 #### 1.3.2 单机多卡训练
 ```bash
-export FLAGS_embedding_deterministic=1
-export FLAGS_cudnn_deterministic=1
-export NVIDIA_TF32_OVERRIDE=0
-export NCCL_ALGO=Tree
-
 config_file=config/DiT_XL_patch2.json
 OUTPUT_DIR=./output/DiT_XL_patch2_trainer
 
@@ -53,11 +49,11 @@ max_steps=7000000
 logging_steps=50
 seed=0
 
-USE_AMP=False
+USE_AMP=True
 FP16_OPT_LEVEL="O1"
 enable_tensorboard=True
-recompute=False
-enable_xformers=False
+recompute=True
+enable_xformers=True
 
 python -u -m paddle.distributed.launch --gpus "0,1,2,3,4,5,6,7" train_image_generation_trainer.py \
     --do_train \
@@ -94,11 +90,6 @@ python -u -m paddle.distributed.launch --gpus "0,1,2,3,4,5,6,7" train_image_gene
 
 #### 1.4.1 单机多卡训练
 ```bash
-export FLAGS_embedding_deterministic=1
-export FLAGS_cudnn_deterministic=1
-export NVIDIA_TF32_OVERRIDE=0
-export NCCL_ALGO=Tree
-
 python -u -m paddle.distributed.launch --gpus "0,1,2,3,4,5,6,7" \
     train_image_generation_notrainer.py \
     --config_file config/DiT_XL_patch2.json \

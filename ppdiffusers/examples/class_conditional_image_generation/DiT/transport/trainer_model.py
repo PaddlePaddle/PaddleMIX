@@ -82,7 +82,7 @@ class SiTDiffusionModel(nn.Layer):
         self.path_sampler = path_options[path_type]()
 
 
-        self.transformer = DiT(**read_json(model_args.config_file))
+        self.transformer = SiT(**read_json(model_args.config_file))
         self.transformer_is_pretrained = False
 
         assert model_args.prediction_type in ["epsilon", "v_prediction"]
