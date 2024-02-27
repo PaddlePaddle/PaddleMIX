@@ -41,65 +41,7 @@ def normalize_kernel2d(input: paddle.Tensor) -> paddle.Tensor:
 def filter3d(
     input: paddle.Tensor, kernel: paddle.Tensor, border_type: str = "replicate", normalized: bool = False
 ) -> paddle.Tensor:
-    """Convolve a tensor with a 3d kernel.
 
-    The function applies a given kernel to a tensor. The kernel is applied
-    independently at each depth channel of the tensor. Before applying the
-    kernel, the function applies padding according to the specified mode so
-    that the output remains in the same shape.
-
-    Args:
-        input: the input tensor with shape of
-          :math:`(B, C, D, H, W)`.
-        kernel: the kernel to be convolved with the input
-          tensor. The kernel shape must be :math:`(1, kD, kH, kW)`  or :math:`(B, kD, kH, kW)`.
-        border_type: the padding mode to be applied before convolving.
-          The expected modes are: ``'constant'``,
-          ``'replicate'`` or ``'circular'``.
-        normalized: If True, kernel will be L1 normalized.
-
-    Return:
-        the convolved tensor of same size and numbers of channels
-        as the input with shape :math:`(B, C, D, H, W)`.
-
-    Example:
-        >>> input = torch.tensor([[[
-        ...    [[0., 0., 0., 0., 0.],
-        ...     [0., 0., 0., 0., 0.],
-        ...     [0., 0., 0., 0., 0.],
-        ...     [0., 0., 0., 0., 0.],
-        ...     [0., 0., 0., 0., 0.]],
-        ...    [[0., 0., 0., 0., 0.],
-        ...     [0., 0., 0., 0., 0.],
-        ...     [0., 0., 5., 0., 0.],
-        ...     [0., 0., 0., 0., 0.],
-        ...     [0., 0., 0., 0., 0.]],
-        ...    [[0., 0., 0., 0., 0.],
-        ...     [0., 0., 0., 0., 0.],
-        ...     [0., 0., 0., 0., 0.],
-        ...     [0., 0., 0., 0., 0.],
-        ...     [0., 0., 0., 0., 0.]]
-        ... ]]])
-        >>> kernel = torch.ones(1, 3, 3, 3)
-        >>> filter3d(input, kernel)
-        tensor([[[[[0., 0., 0., 0., 0.],
-                   [0., 5., 5., 5., 0.],
-                   [0., 5., 5., 5., 0.],
-                   [0., 5., 5., 5., 0.],
-                   [0., 0., 0., 0., 0.]],
-        <BLANKLINE>
-                  [[0., 0., 0., 0., 0.],
-                   [0., 5., 5., 5., 0.],
-                   [0., 5., 5., 5., 0.],
-                   [0., 5., 5., 5., 0.],
-                   [0., 0., 0., 0., 0.]],
-        <BLANKLINE>
-                  [[0., 0., 0., 0., 0.],
-                   [0., 5., 5., 5., 0.],
-                   [0., 5., 5., 5., 0.],
-                   [0., 5., 5., 5., 0.],
-                   [0., 0., 0., 0., 0.]]]]])
-    """
     b, c, d, h, w = tuple(input.shape)
     tmp_kernel = kernel[:, (None), (...)].to(device=input.place, dtype=input.dtype)
     if normalized:
