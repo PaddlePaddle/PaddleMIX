@@ -1,3 +1,17 @@
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+# 
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# 
+#     http://www.apache.org/licenses/LICENSE-2.0
+# 
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 config_file=config/SiT_XL_patch2.json
 OUTPUT_DIR=./output/SiT_XL_patch2_trainer
 
@@ -6,6 +20,8 @@ batch_size=32 # per gpu
 num_workers=8
 max_steps=7000000
 logging_steps=50
+save_steps=5000
+image_logging_steps=-1
 seed=0
 
 USE_AMP=True
@@ -25,10 +41,10 @@ python -u -m paddle.distributed.launch --gpus "0,1,2,3,4,5,6,7" train_image_gene
     --max_steps ${max_steps} \
     --lr_scheduler_type "constant" \
     --warmup_steps 0 \
-    --image_logging_steps 1000 \
+    --image_logging_steps ${image_logging_steps} \
     --logging_dir ${OUTPUT_DIR}/tb_log \
     --logging_steps ${logging_steps} \
-    --save_steps 10000 \
+    --save_steps ${save_steps} \
     --save_total_limit 50 \
     --dataloader_num_workers ${num_workers} \
     --vae_name_or_path stabilityai/sd-vae-ft-mse \

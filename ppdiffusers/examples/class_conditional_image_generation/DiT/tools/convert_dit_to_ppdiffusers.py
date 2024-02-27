@@ -1,23 +1,43 @@
-import argparse
-import paddle
-from ppdiffusers import DDIMScheduler, DPMSolverMultistepScheduler
-from ppdiffusers import AutoencoderKL, Transformer2DModel, DiTPipeline
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
+import argparse
+
+import paddle
+
+from ppdiffusers import (
+    AutoencoderKL,
+    DDIMScheduler,
+    DiTPipeline,
+    DPMSolverMultistepScheduler,
+    Transformer2DModel,
+)
 
 # num_layers(depth), hidden_size, patch_size, num_heads
 arch_settings = {
-    'DiT_XL_2': [28, 1152, 2, 16],
-    'DiT_XL_4': [28, 1152, 4, 16],
-    'DiT_XL_8': [28, 1152, 8, 16],
-    'DiT_L_2': [24, 1024, 2, 16],
-    'DiT_L_4': [24, 1024, 4, 16],
-    'DiT_L_8': [24, 1024, 8, 16],
-    'DiT_B_2': [12, 768, 2, 12],
-    'DiT_B_4': [12, 768, 4, 12],
-    'DiT_B_8': [12, 768, 8, 12],
-    'DiT_S_2': [12, 384, 2, 6],
-    'DiT_S_4': [12, 384, 2, 6],
-    'DiT_S_8': [12, 384, 2, 6],
+    "DiT_XL_2": [28, 1152, 2, 16],
+    "DiT_XL_4": [28, 1152, 4, 16],
+    "DiT_XL_8": [28, 1152, 8, 16],
+    "DiT_L_2": [24, 1024, 2, 16],
+    "DiT_L_4": [24, 1024, 4, 16],
+    "DiT_L_8": [24, 1024, 8, 16],
+    "DiT_B_2": [12, 768, 2, 12],
+    "DiT_B_4": [12, 768, 4, 12],
+    "DiT_B_8": [12, 768, 8, 12],
+    "DiT_S_2": [12, 384, 2, 6],
+    "DiT_S_4": [12, 384, 2, 6],
+    "DiT_S_8": [12, 384, 2, 6],
 }
 
 
@@ -55,7 +75,7 @@ def main(args):
             f"blocks.{depth}.adaLN_modulation.1.bias"
         ]
 
-        q, k, v = paddle.chunk(state_dict[f"blocks.{depth}.attn.qkv.weight"], 3, axis=1) # torch axis=0
+        q, k, v = paddle.chunk(state_dict[f"blocks.{depth}.attn.qkv.weight"], 3, axis=1)  # torch axis=0
         q_bias, k_bias, v_bias = paddle.chunk(state_dict[f"blocks.{depth}.attn.qkv.bias"], 3, axis=0)
 
         state_dict[f"transformer_blocks.{depth}.attn1.to_q.weight"] = q
@@ -105,13 +125,13 @@ def main(args):
     # default DiT XL/2
     transformer = Transformer2DModel(
         sample_size=args.image_size // 8,
-        num_layers=num_layers, #
-        attention_head_dim=hidden_size // num_heads, #
+        num_layers=num_layers,  #
+        attention_head_dim=hidden_size // num_heads,  #
         in_channels=4,
         out_channels=8,
-        patch_size=patch_size, #
+        patch_size=patch_size,  #
         attention_bias=True,
-        num_attention_heads=num_heads, #
+        num_attention_heads=num_heads,  #
         activation_fn="gelu-approximate",
         num_embeds_ada_norm=1000,
         norm_type="ada_norm_zero",
@@ -119,7 +139,7 @@ def main(args):
     )
     transformer.set_state_dict(state_dict)
 
-    if args.scheduler == 'ddim':
+    if args.scheduler == "ddim":
         scheduler = DDIMScheduler(
             num_train_timesteps=1000,
             beta_schedule="linear",
@@ -152,7 +172,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--model_name",
-        default='DiT_XL_2',
+        default="DiT_XL_2",
         type=str,
         required=False,
         help="DiT model name.",
@@ -173,7 +193,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--model_weights",
-        default='DiT-XL-2-256x256.pdparams',
+        default="DiT-XL-2-256x256.pdparams",
         type=str,
         required=False,
         help="model weights path.",
@@ -183,7 +203,7 @@ if __name__ == "__main__":
         "--save", default=True, type=bool, required=False, help="Whether to save the converted pipeline or not."
     )
     parser.add_argument(
-        "--checkpoint_path", default='DiT_XL_2_256/', type=str, required=False, help="Path to the output pipeline."
+        "--checkpoint_path", default="DiT_XL_2_256/", type=str, required=False, help="Path to the output pipeline."
     )
 
     args = parser.parse_args()
@@ -192,3 +212,6 @@ if __name__ == "__main__":
 # python tools/convert_dit_to_ppdiffusers.py --image_size 512 --model_name DiT_XL_2 --model_weights DiT-XL-2-512x512.pdparams --checkpoint_path DiT_XL_2_512
 # python tools/convert_dit_to_ppdiffusers.py --image_size 256 --model_name DiT_XL_2 --model_weights DiT-XL-2-256x256.pdparams --checkpoint_path DiT_XL_2_256
 # python tools/convert_dit_to_ppdiffusers.py --image_size 256 --model_name DiT_XL_2 --model_weights SiT-XL-2-256x256.pdparams --vae_model stabilityai/sd-vae-ft-ema --checkpoint_path SiT_XL_2_256
+
+# python tools/convert_dit_to_ppdiffusers.py --image_size 512 --model_name DiT_XL_2 --model_weights DiT_XL_patch2_256_global_steps_1000.pdparams --checkpoint_path DiT_XL_2_256
+# python tools/convert_dit_to_ppdiffusers.py --image_size 256 --model_name DiT_XL_2 --model_weights output_notrainer/000-DiT_XL_patch2/checkpoints/0001000_ema.pdparams --checkpoint_path DiT_XL_2_256

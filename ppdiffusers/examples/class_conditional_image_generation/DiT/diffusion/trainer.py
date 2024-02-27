@@ -15,11 +15,11 @@
 import contextlib
 import sys
 import time
+
 import numpy as np
 import paddle
-import paddle.distributed as dist
 import paddle.amp.auto_cast as autocast
-
+import paddle.distributed as dist
 from paddlenlp.trainer import PrinterCallback, ProgressCallback, Trainer
 from paddlenlp.trainer.integrations import (
     INTEGRATION_TO_CALLBACK,
@@ -37,7 +37,7 @@ def worker_init_fn(_):
     worker_id = worker_info.id
 
     local_rank = dist.get_rank()
-    world_size = dist.get_world_size()
+    # world_size = dist.get_world_size()
     num_workers = worker_info.num_workers
     worker_id = worker_info.id
     worker_global_id = local_rank * num_workers + worker_id
@@ -82,20 +82,22 @@ class VisualDLWithImageCallback(VisualDLCallback):
             and state.global_step % args.image_logging_steps == 0
         ):
             with self.autocast_smart_context_manager(args):
-                image_logs["reconstruction"] = model.decode_image(pixel_values=inputs["pixel_values"])
+                image_logs["reconstruction"] = inputs["latents"].transpose([0, 2, 3, 1]).numpy().round()
                 image_logs["ddim-samples-1.0"] = model.log_image(
-                    input_ids=inputs["input_ids"],
+                    input_ids=None,
                     guidance_scale=1.0,
-                    class_labels=[1,2,3,4,5,6,7,8],
+                    class_labels=inputs["label_id"],
                     height=args.resolution,
                     width=args.resolution,
+                    max_batch=8,
                 )
-                image_logs["ddim-samples-7.5"] = model.log_image(
-                    input_ids=inputs["input_ids"],
-                    guidance_scale=7.5,
-                    class_labels=[1,2,3,4,5,6,7,8],
+                image_logs["ddim-samples-4.0"] = model.log_image(
+                    input_ids=None,
+                    guidance_scale=4.0,
+                    class_labels=inputs["label_id"],
                     height=args.resolution,
                     width=args.resolution,
+                    max_batch=8,
                 )
 
         if not state.is_world_process_zero:
@@ -236,17 +238,18 @@ class LatentDiffusionTrainer(Trainer):
             raise ValueError("Trainer: training requires a train_dataset.")
         # imagenet
         train_sampler = paddle.io.DistributedBatchSampler(
-            self.train_dataset, 
+            self.train_dataset,
             self.args.per_device_train_batch_size,
             num_replicas=None,
             rank=None,
             shuffle=False,
-            drop_last=True)
+            drop_last=True,
+        )
         train_dataloader = paddle.io.DataLoader(
             self.train_dataset,
             batch_sampler=train_sampler,
             num_workers=self.args.dataloader_num_workers,
             use_shared_memory=True,
             worker_init_fn=worker_init_fn,
-        ) 
+        )
         return train_dataloader

@@ -11,24 +11,23 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import os
-import json
 import argparse
-import numpy as np
+import json
+import os
+import random
 from collections import OrderedDict
 from copy import deepcopy
 from glob import glob
 from time import time
-import random
 
+import numpy as np
 import paddle
 import paddle.distributed as dist
-
 from diffusion import create_diffusion
-from transport import create_transport
-from transport.utils import parse_transport_args
 from diffusion.dit import DiT
+from transport import create_transport
 from transport.sit import SiT
+from transport.utils import parse_transport_args
 
 
 def read_json(file):
@@ -68,8 +67,9 @@ class FeatureDataset(paddle.io.Dataset):
         self.labels_files = sorted(os.listdir(labels_dir))
 
     def __len__(self):
-        assert len(self.features_files) == len(self.labels_files), \
-            "Number of feature files and label files should be same"
+        assert len(self.features_files) == len(
+            self.labels_files
+        ), "Number of feature files and label files should be same"
         return len(self.features_files)
 
     def __getitem__(self, idx):
@@ -83,7 +83,7 @@ class FeatureDataset(paddle.io.Dataset):
 def main(args):
     # Setup DDP:
     dist.init_parallel_env()
-    assert args.global_batch_size % dist.get_world_size() == 0, f"Batch size must be divisible by world size."
+    assert args.global_batch_size % dist.get_world_size() == 0, "Batch size must be divisible by world size."
     rank = dist.get_rank()
     seed = args.global_seed * dist.get_world_size() + rank
     print(f"Starting rank={rank}, seed={seed}, world_size={dist.get_world_size()}.")
@@ -99,7 +99,9 @@ def main(args):
         os.makedirs(args.results_dir, exist_ok=True)  # Make results folder (holds all experiment subfolders)
         experiment_index = len(glob(f"{args.results_dir}/*"))
         model_string_name = model_config_name.replace("/", "-")
-        experiment_dir = f"{args.results_dir}/{experiment_index:03d}-{model_string_name}"  # Create an experiment folder
+        experiment_dir = (
+            f"{args.results_dir}/{experiment_index:03d}-{model_string_name}"  # Create an experiment folder
+        )
         checkpoint_dir = f"{experiment_dir}/checkpoints"  # Stores saved model checkpoints
         os.makedirs(checkpoint_dir, exist_ok=True)
         print(f"Experiment directory created at {experiment_dir}")
@@ -122,36 +124,37 @@ def main(args):
         diffusion = create_diffusion(timestep_respacing="")  # default: 1000 steps, linear noise schedule
     elif model_name == "SiT":
         transport = create_transport(
-            args.path_type, # "Linear"
-            args.prediction, # "velocity"
-            args.loss_weight, # None
-            args.train_eps, # 0
-            args.sample_eps, # 0
+            args.path_type,  # "Linear"
+            args.prediction,  # "velocity"
+            args.loss_weight,  # None
+            args.train_eps,  # 0
+            args.sample_eps,  # 0
         )
     else:
         raise NotImplementedError(f"Model {model_name} not supported.")
     print(f"DiT Parameters: {sum(p.numpy().size for p in model.parameters()):,}")
 
     # Setup optimizer (we used default Adam betas=(0.9, 0.999) and a constant learning rate of 1e-4 in our paper):
-    opt = paddle.optimizer.AdamW(parameters=model.parameters(), learning_rate=1e-4, weight_decay=0.)
+    opt = paddle.optimizer.AdamW(parameters=model.parameters(), learning_rate=1e-4, weight_decay=0.0)
 
     # Setup data:
     features_dir = f"{args.feature_path}/imagenet{args.image_size}_features"
     labels_dir = f"{args.feature_path}/imagenet{args.image_size}_labels"
     dataset = FeatureDataset(features_dir, labels_dir)
     train_sampler = paddle.io.DistributedBatchSampler(
-        dataset, 
+        dataset,
         int(args.global_batch_size // dist.get_world_size()),
         num_replicas=None,
         rank=None,
         shuffle=False,
-        drop_last=True)
+        drop_last=True,
+    )
     loader = paddle.io.DataLoader(
         dataset,
         batch_sampler=train_sampler,
         num_workers=args.num_workers,
         use_shared_memory=True,
-    ) 
+    )
     print(f"Dataset contains {len(dataset):,} images ({args.feature_path})")
 
     # Prepare models for training:
@@ -169,8 +172,8 @@ def main(args):
     for epoch in range(args.epochs):
         print(f"Beginning epoch {epoch}...")
         for x, y in loader:
-            x = x.squeeze(axis=1) #
-            y = y.squeeze(axis=1) #
+            x = x.squeeze(axis=1)
+            y = y.squeeze(axis=1)
             if model_name == "DiT":
                 t = paddle.randint(0, diffusion.num_timesteps, (x.shape[0],))
             model_kwargs = dict(y=y)
@@ -208,16 +211,16 @@ def main(args):
             # Save DiT/SiT checkpoint:
             if train_steps % args.ckpt_every == 0 and train_steps > 0:
                 if rank == 0:
-                    checkpoint = {
-                        "model": model.state_dict(),
-                        "ema": ema.state_dict(),
-                        "opt": opt.state_dict(),
-                        "args": args
-                    }
                     checkpoint_path = f"{checkpoint_dir}/{train_steps:07d}.pdparams"
-                    paddle.save(checkpoint, checkpoint_path)
-                    print(f"Saved checkpoint to {checkpoint_path}")
-                dist.barrier()
+                    paddle.save(model.state_dict(), checkpoint_path)
+                    print(f"Saved model checkpoint to {checkpoint_path}")
+
+                    ema_checkpoint_path = f"{checkpoint_dir}/{train_steps:07d}_ema.pdparams"
+                    paddle.save(ema.state_dict(), ema_checkpoint_path)
+                    print(f"Saved ema checkpoint to {ema_checkpoint_path}")
+
+                    paddle.save({"args": args}, f"{checkpoint_dir}/{train_steps:07d}_args.json")
+                    paddle.save(opt.state_dict(), f"{checkpoint_dir}/{train_steps:07d}.pdopt")
 
     model.eval()  # important! This disables randomized embedding dropout
     # do any sampling/FID calculation/etc. with ema (or model) in eval mode ...
@@ -234,9 +237,9 @@ if __name__ == "__main__":
     parser.add_argument("--global_batch_size", type=int, default=256)
     parser.add_argument("--global_seed", type=int, default=0)
     parser.add_argument("--vae", type=str, choices=["ema", "mse"], default="ema")  # Choice doesn't affect training
-    parser.add_argument("--num_workers", type=int, default=1)
-    parser.add_argument("--log_every", type=int, default=1)
-    parser.add_argument("--ckpt_every", type=int, default=500)
+    parser.add_argument("--num_workers", type=int, default=8)
+    parser.add_argument("--log_every", type=int, default=50)
+    parser.add_argument("--ckpt_every", type=int, default=5000)
     parse_transport_args(parser)
     args = parser.parse_args()
     print(args)

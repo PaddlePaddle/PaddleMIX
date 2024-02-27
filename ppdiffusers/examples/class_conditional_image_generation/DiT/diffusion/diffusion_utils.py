@@ -17,8 +17,8 @@
 #     ADM:   https://github.com/openai/guided-diffusion/blob/main/guided_diffusion
 #     IDDPM: https://github.com/openai/improved-diffusion/blob/main/improved_diffusion/gaussian_diffusion.py
 
-import paddle
 import numpy as np
+import paddle
 
 
 def normal_kl(mean1, logvar1, mean2, logvar2):
@@ -37,16 +37,11 @@ def normal_kl(mean1, logvar1, mean2, logvar2):
     # Force variances to be Tensors. Broadcasting helps convert scalars to
     # Tensors, but it does not work for paddle.exp().
     logvar1, logvar2 = [
-        x if isinstance(x, paddle.Tensor) else paddle.to_tensor(x).to(tensor)
-        for x in (logvar1, logvar2)
+        x if isinstance(x, paddle.Tensor) else paddle.to_tensor(x).to(tensor) for x in (logvar1, logvar2)
     ]
 
     return 0.5 * (
-        -1.0
-        + logvar2
-        - logvar1
-        + paddle.exp(logvar1 - logvar2)
-        + ((mean1 - mean2) ** 2) * paddle.exp(-logvar2)
+        -1.0 + logvar2 - logvar1 + paddle.exp(logvar1 - logvar2) + ((mean1 - mean2) ** 2) * paddle.exp(-logvar2)
     )
 
 

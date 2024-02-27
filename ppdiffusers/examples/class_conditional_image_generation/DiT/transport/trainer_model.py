@@ -13,19 +13,20 @@
 # limitations under the License.
 
 import contextlib
-import os
 import json
+import os
+
 import paddle
 import paddle.nn as nn
+from paddlenlp.utils.log import logger
 
 from ppdiffusers import AutoencoderKL, is_ppxformers_available
 from ppdiffusers.models.ema import LitEma
 from ppdiffusers.training_utils import freeze_params
-from paddlenlp.utils.log import logger
 
-from .sit import SiT
-from .transport import ModelType, WeightType, PathType
 from . import path
+from .sit import SiT
+from .transport import ModelType, PathType, WeightType
 from .utils import mean_flat
 
 
@@ -48,14 +49,14 @@ class SiTDiffusionModel(nn.Layer):
         freeze_params(self.vae.parameters())
         logger.info("Freeze vae parameters!")
 
-        self.model_mean_type = "epsilon" # PREVIOUS_X START_X EPSILON
-        self.model_var_type = "learned_range" # LEARNED FIXED_SMALL FIXED_LARGE LEARNED_RANGE
-        self.loss_type = "mse" # MSE RESCALED_MSE KL(is_vb) RESCALED_KL(is_vb)
+        self.model_mean_type = "epsilon"  # PREVIOUS_X START_X EPSILON
+        self.model_var_type = "learned_range"  # LEARNED FIXED_SMALL FIXED_LARGE LEARNED_RANGE
+        self.loss_type = "mse"  # MSE RESCALED_MSE KL(is_vb) RESCALED_KL(is_vb)
 
-        self.path_type = "Linear" # LINEAR GVP VP
-        self.prediction = "velocity" # VELOCITY NOISE SCORE 
-        self.model_type = "velocity" #
-        self.loss_weight = "None" #
+        self.path_type = "Linear"  # LINEAR GVP VP
+        self.prediction = "velocity"  # VELOCITY NOISE SCORE
+        self.model_type = "velocity"  #
+        self.loss_weight = "None"  #
         self.train_eps = 0
         self.sample_eps = 0
 
@@ -80,7 +81,6 @@ class SiTDiffusionModel(nn.Layer):
             PathType.VP: path.VPCPlan,
         }
         self.path_sampler = path_options[path_type]()
-
 
         self.transformer = SiT(**read_json(model_args.config_file))
         self.transformer_is_pretrained = False
@@ -115,29 +115,30 @@ class SiTDiffusionModel(nn.Layer):
             self.model_ema(self.transformer)
 
     def check_interval(
-        self, 
-        train_eps, 
-        sample_eps, 
-        *, 
+        self,
+        train_eps,
+        sample_eps,
+        *,
         diffusion_form="SBDM",
-        sde=False, 
-        reverse=False, 
+        sde=False,
+        reverse=False,
         eval=False,
         last_step_size=0.0,
     ):
         t0 = 0
         t1 = 1
         eps = train_eps if not eval else sample_eps
-        if (type(self.path_sampler) in [path.VPCPlan]):
+        if type(self.path_sampler) in [path.VPCPlan]:
 
             t1 = 1 - eps if (not sde or last_step_size == 0) else 1 - last_step_size
 
-        elif (type(self.path_sampler) in [path.ICPlan, path.GVPCPlan]) \
-            and (self.model_type != ModelType.VELOCITY or sde): # avoid numerical issue by taking a first semi-implicit step
+        elif (type(self.path_sampler) in [path.ICPlan, path.GVPCPlan]) and (
+            self.model_type != ModelType.VELOCITY or sde
+        ):  # avoid numerical issue by taking a first semi-implicit step
 
             t0 = eps if (diffusion_form == "SBDM" and sde) or self.model_type != ModelType.VELOCITY else 0
             t1 = 1 - eps if (not sde or last_step_size == 0) else 1 - last_step_size
-        
+
         if reverse:
             t0, t1 = 1 - t0, 1 - t1
 
@@ -145,10 +146,10 @@ class SiTDiffusionModel(nn.Layer):
 
     def sample(self, x1):
         """Sampling x0 & t based on shape of x1 (if needed)
-          Args:
-            x1 - data point; [batch, *dim]
+        Args:
+          x1 - data point; [batch, *dim]
         """
-        
+
         x0 = paddle.randn_like(x1)
         t0, t1 = self.check_interval(self.train_eps, self.sample_eps)
         t = paddle.rand((x1.shape[0],)) * (t1 - t0) + t0
@@ -168,17 +169,6 @@ class SiTDiffusionModel(nn.Layer):
         else:
             raise NotImplementedError()
         return loss
-
-    @paddle.no_grad()
-    def decode_image(self, pixel_values=None, max_batch=8, **kwargs):
-        self.eval()
-        if pixel_values.shape[0] > max_batch:
-            pixel_values = pixel_values[:max_batch]
-        latents = self.vae.encode(pixel_values).latent_dist.sample()
-        image = self.vae.decode(latents).sample
-        image = (image / 2 + 0.5).clip(0, 1).transpose([0, 2, 3, 1])
-        image = (image * 255.0).cast("float32").numpy().round()
-        return image
 
     def set_recompute(self, use_recompute=False):
         if use_recompute:

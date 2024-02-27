@@ -12,30 +12,28 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .trainer_args import DataArguments, ModelArguments, NoTrainerTrainingArguments
-from .trainer import LatentDiffusionTrainer
-from .trainer_model import DiTDiffusionModel
+from . import gaussian_diffusion as gd
 from .dit import DiT
-
+from .respace import SpacedDiffusion, space_timesteps
+from .trainer import LatentDiffusionTrainer
+from .trainer_args import DataArguments, ModelArguments, NoTrainerTrainingArguments
+from .trainer_model import DiTDiffusionModel
 
 # Modified from OpenAI's diffusion repos
 #     GLIDE: https://github.com/openai/glide-text2im/blob/main/glide_text2im/gaussian_diffusion.py
 #     ADM:   https://github.com/openai/guided-diffusion/blob/main/guided_diffusion
 #     IDDPM: https://github.com/openai/improved-diffusion/blob/main/improved_diffusion/gaussian_diffusion.py
 
-from . import gaussian_diffusion as gd
-from .respace import SpacedDiffusion, space_timesteps
-
 
 def create_diffusion(
     timestep_respacing,
-    noise_schedule="linear", 
+    noise_schedule="linear",
     use_kl=False,
     sigma_small=False,
     predict_xstart=False,
     learn_sigma=True,
     rescale_learned_sigmas=False,
-    diffusion_steps=1000
+    diffusion_steps=1000,
 ):
     betas = gd.get_named_beta_schedule(noise_schedule, diffusion_steps)
     if use_kl:
@@ -49,19 +47,12 @@ def create_diffusion(
     return SpacedDiffusion(
         use_timesteps=space_timesteps(diffusion_steps, timestep_respacing),
         betas=betas,
-        model_mean_type=(
-            gd.ModelMeanType.EPSILON if not predict_xstart else gd.ModelMeanType.START_X
-        ),
+        model_mean_type=(gd.ModelMeanType.EPSILON if not predict_xstart else gd.ModelMeanType.START_X),
         model_var_type=(
-            (
-                gd.ModelVarType.FIXED_LARGE
-                if not sigma_small
-                else gd.ModelVarType.FIXED_SMALL
-            )
+            (gd.ModelVarType.FIXED_LARGE if not sigma_small else gd.ModelVarType.FIXED_SMALL)
             if not learn_sigma
             else gd.ModelVarType.LEARNED_RANGE
         ),
         loss_type=loss_type
         # rescale_timesteps=rescale_timesteps,
     )
-

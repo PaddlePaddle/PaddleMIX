@@ -13,15 +13,16 @@
 # limitations under the License.
 
 import json
+
 import numpy as np
-from PIL import Image
 import paddle
+from PIL import Image
+from transport import Sampler, create_transport
+from transport.sit import SiT
 
 from ppdiffusers import AutoencoderKL
-from transport.sit import SiT
-from transport import create_transport, Sampler
 
-paddle.device.set_device('gpu')
+paddle.device.set_device("gpu")
 
 image_size = "256"
 vae_model = "stabilityai/sd-vae-ft-ema"
@@ -37,19 +38,19 @@ def read_json(file):
 model = SiT(**read_json(config_file))
 state_dict = "SiT-XL-2-256x256.pdparams"
 model.set_dict(paddle.load(state_dict))
-model.eval() # important!
+model.eval()  # important!
 vae = AutoencoderKL.from_pretrained(vae_model)
 latent_size = 256 // 8
 
 
 # Set user inputs:
-seed = 0 #@param {type:"number"}
+seed = 0  # @param {type:"number"}
 paddle.seed(seed)
-num_sampling_steps = 25 #@param {type:"slider", min:0, max:1000, step:1}
-cfg_scale = 4 #@param {type:"slider", min:1, max:10, step:0.1}
-class_labels = [207] #@param {type:"raw"}
-samples_per_row = 4 #@param {type:"number"}
-sampler_type = "SDE" #@param ["ODE", "SDE"]
+num_sampling_steps = 25  # @param {type:"slider", min:0, max:1000, step:1}
+cfg_scale = 4  # @param {type:"slider", min:1, max:10, step:0.1}
+class_labels = [207]  # @param {type:"raw"}
+samples_per_row = 4  # @param {type:"number"}
+sampler_type = "SDE"  # @param ["ODE", "SDE"]
 # Note: ODE not support yet
 
 
@@ -70,18 +71,18 @@ model_kwargs = dict(y=y, cfg_scale=cfg_scale)
 
 # Sample images:
 if sampler_type == "SDE":
-    SDE_sampling_method = "Euler" #@param ["Euler", "Heun"]
-    diffusion_form = "linear" #@param ["constant", "SBDM", "sigma", "linear", "decreasing", "increasing-decreasing"]
-    diffusion_norm = 1 #@param {type:"slider", min:0, max:10.0, step:0.1}
-    last_step = "Mean" #@param ["Mean", "Tweedie", "Euler"]
-    last_step_size = 0.4 #@param {type:"slider", min:0, max:1.0, step:0.01}
+    SDE_sampling_method = "Euler"  # @param ["Euler", "Heun"]
+    diffusion_form = "linear"  # @param ["constant", "SBDM", "sigma", "linear", "decreasing", "increasing-decreasing"]
+    diffusion_norm = 1  # @param {type:"slider", min:0, max:10.0, step:0.1}
+    last_step = "Mean"  # @param ["Mean", "Tweedie", "Euler"]
+    last_step_size = 0.4  # @param {type:"slider", min:0, max:1.0, step:0.01}
     sample_fn = sampler.sample_sde(
         sampling_method=SDE_sampling_method,
-        diffusion_form=diffusion_form, 
+        diffusion_form=diffusion_form,
         diffusion_norm=diffusion_norm,
-        last_step_size=last_step_size, 
+        last_step_size=last_step_size,
         num_steps=num_sampling_steps,
-    ) 
+    )
 else:
     raise NotImplementedError("ODE not supported yet. Please use SDE instead.")
 
@@ -89,7 +90,7 @@ samples = sample_fn(z, model.forward_with_cfg, **model_kwargs)[-1]
 samples = vae.decode(samples / 0.18215).sample
 
 samples = (samples - samples.min()) / (samples.max() - samples.min()) * 255
-npimg = samples.astype('uint8').numpy()[0]
+npimg = samples.astype("uint8").numpy()[0]
 npimg = np.transpose(npimg, (1, 2, 0))
 img = Image.fromarray(npimg)
 img.save("result_SiT_golden_retriever.png")
