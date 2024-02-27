@@ -54,12 +54,11 @@ class ScheduleSampler(ABC):
         The weights needn't be normalized, but must be positive.
         """
 
-    def sample(self, batch_size, device):
+    def sample(self, batch_size):
         """
         Importance-sample timesteps for a batch.
-        :param batch_size: the number of timesteps.
-        :param device: the torch device to save to.
-        :return: a tuple (timesteps, weights):
+        
+        return: a tuple (timesteps, weights):
                  - timesteps: a tensor of timestep indices.
                  - weights: a tensor of weights to scale the resulting losses.
         """
