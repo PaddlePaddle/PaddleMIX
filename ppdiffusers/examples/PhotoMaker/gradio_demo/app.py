@@ -15,6 +15,8 @@ import sys
 
 sys.path.append("..")
 import os
+
+os.environ["USE_PEFT_BACKEND"] = "True"
 import random
 
 import gradio as gr

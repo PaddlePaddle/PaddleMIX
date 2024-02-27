@@ -104,7 +104,7 @@ FROM_DIFFUSERS = str2bool(os.getenv("FROM_DIFFUSERS", False))
 TO_DIFFUSERS = str2bool(os.getenv("TO_DIFFUSERS", False))
 FROM_AISTUDIO = str2bool(os.getenv("FROM_AISTUDIO", False))
 
-USE_PEFT_BACKEND = str2bool(os.getenv("USE_PEFT_BACKEND", True))  # support peft backend
+USE_PEFT_BACKEND = str2bool(os.getenv("USE_PEFT_BACKEND", False))  # support peft backend
 
 # FOR tests
 if bool(os.getenv("PATCH_ALLCLOSE", False)):

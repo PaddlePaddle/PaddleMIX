@@ -129,6 +129,7 @@ else:
             "UNetMotionModel",
             "UNetSpatioTemporalConditionModel",
             "VQModel",
+            "DiTLLaMA2DModel",
             # new add
             "LVDMAutoencoderKL",
             "LVDMUNet3DModel",
@@ -475,6 +476,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             AutoencoderTiny,
             ConsistencyDecoderVAE,
             ControlNetModel,
+            DiTLLaMA2DModel,
             GaussianDiffusion,
             GaussianDiffusion_SDEdit,
             Kandinsky3UNet,

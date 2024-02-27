@@ -725,7 +725,7 @@ if not hasattr(nn, "ParameterDict"):
                         size_str = "0"
                     device_str = "" if not p.place.is_gpu_place() else " (gpu:{})".format(p.place.gpu_device_id())
                     parastr = "{} containing: [{} of shape {}{}]".format(
-                        "Parameter" if isinstance(p, Parameter) else "Tensor", typename(p), size_str, device_str
+                        "Parameter" if isinstance(p, ParameterBase) else "Tensor", typename(p), size_str, device_str
                     )
                     child_lines.append("(" + str(k) + "): " + parastr)
                 else:

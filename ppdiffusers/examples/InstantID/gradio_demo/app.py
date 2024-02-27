@@ -13,6 +13,8 @@
 # limitations under the License.
 
 import os
+
+os.environ["USE_PEFT_BACKEND"] = "True"
 import sys
 
 sys.path.append("..")

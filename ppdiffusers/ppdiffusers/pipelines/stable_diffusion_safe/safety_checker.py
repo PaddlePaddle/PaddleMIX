@@ -110,13 +110,13 @@ class SafeStableDiffusionSafetyChecker(CLIPPretrainedModel):
                 hard_mappings.extend(
                     [
                         [
-                            f"vision_model.encoder.layers.{layer_index}.{name}.weight",
-                            f"vision_model.encoder.layers.{layer_index}.{name}.weight",
+                            f"vision_model.vision_model.encoder.layers.{layer_index}.{name}.weight",
+                            f"vision_model.vision_model.encoder.layers.{layer_index}.{name}.weight",
                             action,
                         ],
                         [
-                            f"vision_model.encoder.layers.{layer_index}.{name}.bias",
-                            f"vision_model.encoder.layers.{layer_index}.{name}.bias",
+                            f"vision_model.vision_model.encoder.layers.{layer_index}.{name}.bias",
+                            f"vision_model.vision_model.encoder.layers.{layer_index}.{name}.bias",
                         ],
                     ]
                 )
