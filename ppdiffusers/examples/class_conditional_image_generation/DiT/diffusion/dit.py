@@ -12,18 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import numpy as np
-import math
-from itertools import repeat
 import collections.abc
+import math
 from functools import partial
+from itertools import repeat
 from typing import Optional
 
+import numpy as np
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
-from paddle.incubate.nn.memory_efficient_attention import memory_efficient_attention
 from paddle.nn.initializer import Constant, Normal, TruncatedNormal
+
 trunc_normal_ = TruncatedNormal(std=0.02)
 normal_ = Normal
 zeros_ = Constant(value=0.0)
@@ -36,7 +36,9 @@ def _ntuple(n):
         if isinstance(x, collections.abc.Iterable) and not isinstance(x, str):
             return tuple(x)
         return tuple(repeat(x, n))
+
     return parse
+
 
 to_2tuple = _ntuple(2)
 
@@ -69,18 +71,18 @@ class PatchEmbed(nn.Layer):
 
 
 class Mlp(nn.Layer):
-    """ MLP as used in Vision Transformer, MLP-Mixer and related networks
-    """
+    """MLP as used in Vision Transformer, MLP-Mixer and related networks"""
+
     def __init__(
-            self,
-            in_features,
-            hidden_features=None,
-            out_features=None,
-            act_layer=nn.GELU,
-            norm_layer=None,
-            bias=True,
-            drop=0.,
-            use_conv=False,
+        self,
+        in_features,
+        hidden_features=None,
+        out_features=None,
+        act_layer=nn.GELU,
+        norm_layer=None,
+        bias=True,
+        drop=0.0,
+        use_conv=False,
     ):
         super().__init__()
         out_features = out_features or in_features
@@ -107,23 +109,22 @@ class Mlp(nn.Layer):
 
 
 class Attention(nn.Layer):
-
     def __init__(
-            self,
-            dim: int,
-            num_heads: int = 8,
-            qkv_bias: bool = False,
-            fused_attn: bool = False,
-            qk_norm: bool = False,
-            attn_drop: float = 0.,
-            proj_drop: float = 0.,
-            norm_layer: nn.Layer = nn.LayerNorm,
+        self,
+        dim: int,
+        num_heads: int = 8,
+        qkv_bias: bool = False,
+        fused_attn: bool = False,
+        qk_norm: bool = False,
+        attn_drop: float = 0.0,
+        proj_drop: float = 0.0,
+        norm_layer: nn.Layer = nn.LayerNorm,
     ) -> None:
         super().__init__()
-        assert dim % num_heads == 0, 'dim should be divisible by num_heads'
+        assert dim % num_heads == 0, "dim should be divisible by num_heads"
         self.num_heads = num_heads
         self.head_dim = dim // num_heads
-        self.scale = self.head_dim ** -0.5
+        self.scale = self.head_dim**-0.5
         self.fused_attn = fused_attn
 
         self.qkv = nn.Linear(dim, dim * 3, bias_attr=qkv_bias)
@@ -140,21 +141,12 @@ class Attention(nn.Layer):
         q, k = self.q_norm(q), self.k_norm(k)
 
         if self.fused_attn:
-            # x = F.scaled_dot_product_attention(
-            #     q, k, v,
-            #     dropout_p=self.attn_drop.p if self.training else 0.,
-            # )
-            q = q.transpose(perm=[0, 2, 1, 3])
-            k = k.transpose(perm=[0, 2, 1, 3])
-            v = v.transpose(perm=[0, 2, 1, 3])
-            x = memory_efficient_attention(
-                q, k, v,
-                p=self.xattn_drop.p if self.training else 0.,
-                scale=self.scale,
+            x = F.scaled_dot_product_attention_(
+                q,
+                k,
+                v,
+                dropout_p=self.attn_drop.p if self.training else 0.0,
             )
-            x = x.reshape([B, N, -1])
-            x = self.proj(x)
-            x = self.proj_drop(x)
         else:
             q = q * self.scale
             attn = q @ k.transpose([0, 1, 3, 2])
@@ -162,9 +154,9 @@ class Attention(nn.Layer):
             attn = self.attn_drop(attn)
             x = attn @ v
 
-            x = x.transpose([0, 2, 1, 3]).reshape([B, N, C])
-            x = self.proj(x)
-            x = self.proj_drop(x)
+        x = x.transpose([0, 2, 1, 3]).reshape([B, N, C])
+        x = self.proj(x)
+        x = self.proj_drop(x)
         return x
 
 
@@ -172,6 +164,7 @@ class TimestepEmbedder(nn.Layer):
     """
     Embeds scalar timesteps into vector representations.
     """
+
     def __init__(self, hidden_size, frequency_embedding_size=256):
         super().__init__()
         self.mlp = nn.Sequential(
@@ -193,10 +186,8 @@ class TimestepEmbedder(nn.Layer):
         """
         # https://github.com/openai/glide-text2im/blob/main/glide_text2im/nn.py
         half = dim // 2
-        freqs = paddle.exp(
-            -math.log(max_period) * paddle.arange(start=0, end=half, dtype=paddle.float32) / half
-        )
-        args = t[:, None].cast('float32') * freqs[None]
+        freqs = paddle.exp(-math.log(max_period) * paddle.arange(start=0, end=half, dtype=paddle.float32) / half)
+        args = t[:, None].cast("float32") * freqs[None]
         embedding = paddle.concat([paddle.cos(args), paddle.sin(args)], axis=-1)
         if dim % 2:
             embedding = paddle.concat([embedding, paddle.zeros_like(embedding[:, :1])], axis=-1)
@@ -212,6 +203,7 @@ class LabelEmbedder(nn.Layer):
     """
     Embeds class labels into vector representations. Also handles label dropout for classifier-free guidance.
     """
+
     def __init__(self, num_classes, hidden_size, dropout_prob):
         super().__init__()
         use_cfg_embedding = dropout_prob > 0
@@ -247,18 +239,16 @@ class DiTBlock(nn.Layer):
     """
     A DiT block with adaptive layer norm zero (adaLN-Zero) conditioning.
     """
+
     def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, fused_attn=False, **block_kwargs):
         super().__init__()
         self.norm1 = nn.LayerNorm(hidden_size, epsilon=1e-6)
         self.attn = Attention(hidden_size, num_heads=num_heads, qkv_bias=True, fused_attn=fused_attn, **block_kwargs)
         self.norm2 = nn.LayerNorm(hidden_size, epsilon=1e-6)
         mlp_hidden_dim = int(hidden_size * mlp_ratio)
-        approx_gelu = lambda: nn.GELU(approximate=True) # 'tanh'
+        approx_gelu = lambda: nn.GELU(approximate=True)  # 'tanh'
         self.mlp = Mlp(in_features=hidden_size, hidden_features=mlp_hidden_dim, act_layer=approx_gelu, drop=0)
-        self.adaLN_modulation = nn.Sequential(
-            nn.Silu(),
-            nn.Linear(hidden_size, 6 * hidden_size, bias_attr=True)
-        )
+        self.adaLN_modulation = nn.Sequential(nn.Silu(), nn.Linear(hidden_size, 6 * hidden_size, bias_attr=True))
 
     def forward(self, x, c):
         shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.adaLN_modulation(c).chunk(6, axis=1)
@@ -271,14 +261,12 @@ class FinalLayer(nn.Layer):
     """
     The final layer of DiT.
     """
+
     def __init__(self, hidden_size, patch_size, out_channels):
         super().__init__()
         self.norm_final = nn.LayerNorm(hidden_size, epsilon=1e-6)
         self.linear = nn.Linear(hidden_size, patch_size * patch_size * out_channels, bias_attr=True)
-        self.adaLN_modulation = nn.Sequential(
-            nn.Silu(),
-            nn.Linear(hidden_size, 2 * hidden_size, bias_attr=True)
-        )
+        self.adaLN_modulation = nn.Sequential(nn.Silu(), nn.Linear(hidden_size, 2 * hidden_size, bias_attr=True))
 
     def forward(self, x, c):
         shift, scale = self.adaLN_modulation(c).chunk(2, axis=1)
@@ -291,12 +279,13 @@ class DiT(nn.Layer):
     """
     Diffusion model with a Transformer backbone.
     """
+
     _supports_gradient_checkpointing = True
     _use_memory_efficient_attention_xformers = True
 
     def __init__(
         self,
-        input_size=32, # image_size // 8
+        input_size=32,  # image_size // 8
         patch_size=2,
         in_channels=4,
         hidden_size=1152,
@@ -306,7 +295,6 @@ class DiT(nn.Layer):
         class_dropout_prob=0.1,
         num_classes=1000,
         learn_sigma=True,
-        #enable_recompute=False,
     ):
         super().__init__()
         self.input_size = input_size
@@ -319,7 +307,6 @@ class DiT(nn.Layer):
         self.class_dropout_prob = class_dropout_prob
         self.num_classes = num_classes
         self.learn_sigma = learn_sigma
-        #self.enable_recompute = enable_recompute
         self.gradient_checkpointing = False
         self.fused_attn = False
 
@@ -330,18 +317,15 @@ class DiT(nn.Layer):
         self.y_embedder = LabelEmbedder(num_classes, hidden_size, class_dropout_prob)
         num_patches = self.x_embedder.num_patches
         # Will use fixed sin-cos embedding:
-        self.pos_embed = self.create_parameter(
-            shape=(1, num_patches, hidden_size), default_initializer=zeros_
-        )
+        self.pos_embed = self.create_parameter(shape=(1, num_patches, hidden_size), default_initializer=zeros_)
         self.add_parameter("pos_embed", self.pos_embed)
 
-        self.blocks = nn.LayerList([
-            DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio, fused_attn=self.fused_attn) for _ in range(depth)
-        ])
+        self.blocks = nn.LayerList(
+            [DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio, fused_attn=self.fused_attn) for _ in range(depth)]
+        )
         self.final_layer = FinalLayer(hidden_size, patch_size, self.out_channels)
 
         self.initialize_weights()
-        #self.set_state_dict(paddle.load('DiT-XL-2-256x256.pdparams'))
 
     def initialize_weights(self):
         # Initialize transformer layers:
@@ -350,11 +334,12 @@ class DiT(nn.Layer):
                 initializer.XavierUniform()(module.weight)
                 if module.bias is not None:
                     initializer.Constant(value=0)(module.bias)
+
         self.apply(_basic_init)
 
         # Initialize (and freeze) pos_embed by sin-cos embedding:
-        pos_embed = get_2d_sincos_pos_embed(self.pos_embed.shape[-1], int(self.x_embedder.num_patches ** 0.5))
-        self.pos_embed.set_value(paddle.to_tensor(pos_embed, dtype='float32').unsqueeze(0))
+        pos_embed = get_2d_sincos_pos_embed(self.pos_embed.shape[-1], int(self.x_embedder.num_patches**0.5))
+        self.pos_embed.set_value(paddle.to_tensor(pos_embed, dtype="float32").unsqueeze(0))
 
         # Initialize patch_embed like nn.Linear (instead of nn.Conv2D):
         w = self.x_embedder.proj.weight
@@ -397,7 +382,7 @@ class DiT(nn.Layer):
         assert h * w == x.shape[1]
 
         x = x.reshape(shape=(x.shape[0], h, w, p, p, c))
-        x = paddle.einsum('nhwpqc->nchpwq', x)
+        x = paddle.einsum("nhwpqc->nchpwq", x)
         imgs = x.reshape(shape=(x.shape[0], c, h * p, h * p))
         return imgs
 
@@ -409,18 +394,18 @@ class DiT(nn.Layer):
         y: (N,) tensor of class labels
         """
         x = self.x_embedder(x) + self.pos_embed  # (N, T, D), where T = H * W / patch_size ** 2
-        t = self.t_embedder(t)                   # (N, D)
-        y = self.y_embedder(y)    # (N, D)
-        c = t + y                                # (N, D)
+        t = self.t_embedder(t)  # (N, D)
+        y = self.y_embedder(y)  # (N, D)
+        c = t + y  # (N, D)
 
         for i, block in enumerate(self.blocks):
             if self.gradient_checkpointing:
                 x = paddle.distributed.fleet.utils.recompute(block, x, c, use_reentrant=False)
             else:
-                x = block(x, c)       # (N, T, D)
+                x = block(x, c)  # (N, T, D)
 
-        x = self.final_layer(x, c)                # (N, T, patch_size ** 2 * out_channels)
-        x = self.unpatchify(x)                   # (N, out_channels, H, W)
+        x = self.final_layer(x, c)  # (N, T, patch_size ** 2 * out_channels)
+        x = self.unpatchify(x)  # (N, out_channels, H, W)
         return x
 
 
@@ -428,6 +413,7 @@ class DiT(nn.Layer):
 #                   Sine/Cosine Positional Embedding Functions                  #
 #################################################################################
 # https://github.com/facebookresearch/mae/blob/main/util/pos_embed.py
+
 
 def get_2d_sincos_pos_embed(embed_dim, grid_size, cls_token=False, extra_tokens=0):
     """
@@ -454,7 +440,7 @@ def get_2d_sincos_pos_embed_from_grid(embed_dim, grid):
     emb_h = get_1d_sincos_pos_embed_from_grid(embed_dim // 2, grid[0])  # (H*W, D/2)
     emb_w = get_1d_sincos_pos_embed_from_grid(embed_dim // 2, grid[1])  # (H*W, D/2)
 
-    emb = np.concatenate([emb_h, emb_w], axis=1) # (H*W, D)
+    emb = np.concatenate([emb_h, emb_w], axis=1)  # (H*W, D)
     return emb
 
 
@@ -466,14 +452,14 @@ def get_1d_sincos_pos_embed_from_grid(embed_dim, pos):
     """
     assert embed_dim % 2 == 0
     omega = np.arange(embed_dim // 2, dtype=np.float64)
-    omega /= embed_dim / 2.
-    omega = 1. / 10000**omega  # (D/2,)
+    omega /= embed_dim / 2.0
+    omega = 1.0 / 10000**omega  # (D/2,)
 
     pos = pos.reshape(-1)  # (M,)
-    out = np.einsum('m,d->md', pos, omega)  # (M, D/2), outer product
+    out = np.einsum("m,d->md", pos, omega)  # (M, D/2), outer product
 
-    emb_sin = np.sin(out) # (M, D/2)
-    emb_cos = np.cos(out) # (M, D/2)
+    emb_sin = np.sin(out)  # (M, D/2)
+    emb_cos = np.cos(out)  # (M, D/2)
 
     emb = np.concatenate([emb_sin, emb_cos], axis=1)  # (M, D)
     return emb

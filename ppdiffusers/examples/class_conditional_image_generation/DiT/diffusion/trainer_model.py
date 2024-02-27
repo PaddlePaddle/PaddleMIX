@@ -14,20 +14,21 @@
 
 import contextlib
 import inspect
-import os
 import json
+import os
+
 import numpy as np
 import paddle
 import paddle.nn as nn
+from paddlenlp.utils.log import logger
 
 from ppdiffusers import AutoencoderKL, DDIMScheduler, is_ppxformers_available
 from ppdiffusers.models.ema import LitEma
 from ppdiffusers.training_utils import freeze_params
-from paddlenlp.utils.log import logger
 
+from .diffusion_utils import discretized_gaussian_log_likelihood, normal_kl
 from .dit import DiT
-from .diffusion_utils import normal_kl, discretized_gaussian_log_likelihood
-from .gaussian_diffusion import mean_flat, _extract_into_tensor, get_named_beta_schedule
+from .gaussian_diffusion import _extract_into_tensor, get_named_beta_schedule, mean_flat
 
 
 def read_json(file):
@@ -49,20 +50,11 @@ class DiTDiffusionModel(nn.Layer):
         freeze_params(self.vae.parameters())
         logger.info("Freeze vae parameters!")
 
-        self.model_mean_type = "epsilon" # PREVIOUS_X START_X EPSILON
-        self.model_var_type = "learned_range" # LEARNED FIXED_SMALL FIXED_LARGE LEARNED_RANGE
-        self.loss_type = "mse" # MSE RESCALED_MSE KL(is_vb) RESCALED_KL(is_vb)
+        self.model_mean_type = "epsilon"  # PREVIOUS_X START_X EPSILON
+        self.model_var_type = "learned_range"  # LEARNED FIXED_SMALL FIXED_LARGE LEARNED_RANGE
+        self.loss_type = "mse"  # MSE RESCALED_MSE KL(is_vb) RESCALED_KL(is_vb)
 
-        # self.use_timesteps = set(use_timesteps)
-        # self.timestep_map = []
-        # last_alpha_cumprod = 1.0
-        # new_betas = []
-        # for i, alpha_cumprod in enumerate(self.alphas_cumprod):
-        #     if i in self.use_timesteps:
-        #         new_betas.append(1 - alpha_cumprod / last_alpha_cumprod)
-        #         last_alpha_cumprod = alpha_cumprod
-        #         self.timestep_map.append(i)
-        betas = get_named_beta_schedule('linear', 1000)
+        betas = get_named_beta_schedule("linear", 1000)
 
         # Use float64 for accuracy.
         betas = np.array(betas, dtype=np.float64)
@@ -85,20 +77,16 @@ class DiTDiffusionModel(nn.Layer):
         self.sqrt_recipm1_alphas_cumprod = np.sqrt(1.0 / self.alphas_cumprod - 1)
 
         # calculations for posterior q(x_{t-1} | x_t, x_0)
-        self.posterior_variance = (
-            betas * (1.0 - self.alphas_cumprod_prev) / (1.0 - self.alphas_cumprod)
-        )
+        self.posterior_variance = betas * (1.0 - self.alphas_cumprod_prev) / (1.0 - self.alphas_cumprod)
         # below: log calculation clipped because the posterior variance is 0 at the beginning of the diffusion chain
-        self.posterior_log_variance_clipped = np.log(
-            np.append(self.posterior_variance[1], self.posterior_variance[1:])
-        ) if len(self.posterior_variance) > 1 else np.array([])
+        self.posterior_log_variance_clipped = (
+            np.log(np.append(self.posterior_variance[1], self.posterior_variance[1:]))
+            if len(self.posterior_variance) > 1
+            else np.array([])
+        )
 
-        self.posterior_mean_coef1 = (
-            betas * np.sqrt(self.alphas_cumprod_prev) / (1.0 - self.alphas_cumprod)
-        )
-        self.posterior_mean_coef2 = (
-            (1.0 - self.alphas_cumprod_prev) * np.sqrt(alphas) / (1.0 - self.alphas_cumprod)
-        )
+        self.posterior_mean_coef1 = betas * np.sqrt(self.alphas_cumprod_prev) / (1.0 - self.alphas_cumprod)
+        self.posterior_mean_coef2 = (1.0 - self.alphas_cumprod_prev) * np.sqrt(alphas) / (1.0 - self.alphas_cumprod)
 
         self.transformer = DiT(**read_json(model_args.config_file))
         self.transformer_is_pretrained = False
@@ -118,8 +106,6 @@ class DiTDiffusionModel(nn.Layer):
                 prediction_type=self.prediction_type,
             )
             self.eval_scheduler.set_timesteps(model_args.num_inference_steps)
-
-        self.noise_offset = model_args.noise_offset
 
         self.use_ema = False
         self.model_ema = None
@@ -166,15 +152,15 @@ class DiTDiffusionModel(nn.Layer):
     def forward(self, latents=None, label_id=None, **kwargs):
         x_start = latents
         timesteps = paddle.randint(0, self.num_timesteps, (latents.shape[0],))
-        
+
         self.vae.eval()
         noise = paddle.randn(latents.shape)
         x_t = self.q_sample(latents, timesteps, noise=noise)
 
-        model_output = self.transformer(x=x_t, t=timesteps, y=label_id) #.sample
+        model_output = self.transformer(x=x_t, t=timesteps, y=label_id)
 
         # Get the target for loss depending on the prediction type
-        if self.prediction_type == "epsilon": # default
+        if self.prediction_type == "epsilon":  # default
             target = noise
         else:
             raise ValueError(f"Unknown prediction type {self.prediction_type}")
@@ -182,17 +168,17 @@ class DiTDiffusionModel(nn.Layer):
         if self.loss_type == "mse":
             B, C = x_t.shape[:2]
             assert model_output.shape == [B, C * 2, *x_t.shape[2:]]
-            model_output, model_var_values = paddle.split(model_output, 2, axis=1) ###
+            model_output, model_var_values = paddle.split(model_output, 2, axis=1)
             # Learn the variance using the variational bound, but don't let
             # it affect our mean prediction.
             frozen_out = paddle.concat([model_output, model_var_values], axis=1)
             vb_loss = self._vb_terms_bpd(
-                    model=lambda *args, r=frozen_out: r,
-                    x_start=latents,
-                    x_t=x_t,
-                    t=timesteps,
-                    clip_denoised=False,
-                )["output"]
+                model=lambda *args, r=frozen_out: r,
+                x_start=latents,
+                x_t=x_t,
+                t=timesteps,
+                clip_denoised=False,
+            )["output"]
 
         assert model_output.shape == target.shape == x_start.shape
         mse_loss = mean_flat((target - model_output) ** 2)
@@ -202,9 +188,7 @@ class DiTDiffusionModel(nn.Layer):
             loss = mse_loss
         return loss
 
-    def _vb_terms_bpd(
-            self, model, x_start, x_t, t, clip_denoised=True, model_kwargs=None
-    ):
+    def _vb_terms_bpd(self, model, x_start, x_t, t, clip_denoised=True, model_kwargs=None):
         """
         Get a term for the variational lower-bound.
         The resulting units are bits (rather than nats, as one might expect).
@@ -213,15 +197,9 @@ class DiTDiffusionModel(nn.Layer):
                  - 'output': a shape [N] tensor of NLLs or KLs.
                  - 'pred_xstart': the x_0 predictions.
         """
-        true_mean, _, true_log_variance_clipped = self.q_posterior_mean_variance(
-            x_start=x_start, x_t=x_t, t=t
-        )
-        out = self.p_mean_variance(
-            model, x_t, t, clip_denoised=clip_denoised, model_kwargs=model_kwargs
-        )
-        kl = normal_kl(
-            true_mean, true_log_variance_clipped, out["mean"], out["log_variance"]
-        )
+        true_mean, _, true_log_variance_clipped = self.q_posterior_mean_variance(x_start=x_start, x_t=x_t, t=t)
+        out = self.p_mean_variance(model, x_t, t, clip_denoised=clip_denoised, model_kwargs=model_kwargs)
+        kl = normal_kl(true_mean, true_log_variance_clipped, out["mean"], out["log_variance"])
         kl = mean_flat(kl) / np.log(2.0)
 
         decoder_nll = -discretized_gaussian_log_likelihood(
@@ -280,15 +258,13 @@ class DiTDiffusionModel(nn.Layer):
             if denoised_fn is not None:
                 x = denoised_fn(x)
             if clip_denoised:
-                return x.clip(-1, 1) ###
+                return x.clip(-1, 1)
             return x
 
-        if self.model_mean_type == 'start_x':
+        if self.model_mean_type == "start_x":
             pred_xstart = process_xstart(model_output)
         else:
-            pred_xstart = process_xstart(
-                self._predict_xstart_from_eps(x_t=x, t=t, eps=model_output)
-            )
+            pred_xstart = process_xstart(self._predict_xstart_from_eps(x_t=x, t=t, eps=model_output))
         model_mean, _, _ = self.q_posterior_mean_variance(x_start=pred_xstart, x_t=x, t=t)
 
         assert model_mean.shape == model_log_variance.shape == pred_xstart.shape == x.shape
@@ -318,9 +294,7 @@ class DiTDiffusionModel(nn.Layer):
             + _extract_into_tensor(self.posterior_mean_coef2, t, x_t.shape) * x_t
         )
         posterior_variance = _extract_into_tensor(self.posterior_variance, t, x_t.shape)
-        posterior_log_variance_clipped = _extract_into_tensor(
-            self.posterior_log_variance_clipped, t, x_t.shape
-        )
+        posterior_log_variance_clipped = _extract_into_tensor(self.posterior_log_variance_clipped, t, x_t.shape)
         assert (
             posterior_mean.shape[0]
             == posterior_variance.shape[0]
@@ -330,42 +304,30 @@ class DiTDiffusionModel(nn.Layer):
         return posterior_mean, posterior_variance, posterior_log_variance_clipped
 
     @paddle.no_grad()
-    def decode_image(self, pixel_values=None, max_batch=8, **kwargs):
-        self.eval()
-        if pixel_values.shape[0] > max_batch:
-            pixel_values = pixel_values[:max_batch]
-        latents = self.vae.encode(pixel_values).latent_dist.sample()
-        image = self.vae.decode(latents).sample
-        image = (image / 2 + 0.5).clip(0, 1).transpose([0, 2, 3, 1])
-        image = (image * 255.0).cast("float32").numpy().round()
-        return image
-
-    @paddle.no_grad()
     def log_image(
         self,
         input_ids=None,
         height=256,
         width=256,
         eta=0.0,
-        class_labels=[1,2,3,4,5,6,7,8],
+        class_labels=None,
         guidance_scale=4.0,
         max_batch=8,
         **kwargs,
     ):
         self.eval()
         with self.ema_scope():
+            assert input_ids is None
             if height % 8 != 0 or width % 8 != 0:
                 raise ValueError(f"`height` and `width` have to be divisible by 8 but are {height} and {width}.")
-            # only log max_batch image
-            if input_ids.shape[0] > max_batch:
-                input_ids = input_ids[:max_batch]
-            batch_size = input_ids.shape[0]
+            if class_labels.shape[0] > max_batch:
+                class_labels = class_labels[:max_batch]
+            batch_size = class_labels.shape[0]
             latent_channels = self.transformer.in_channels
 
-            latents = paddle.randn((input_ids.shape[0], self.transformer.in_channels, height // 8, width // 8))
+            latents = paddle.randn((class_labels.shape[0], self.transformer.in_channels, height // 8, width // 8))
             latent_model_input = paddle.concat([latents] * 2) if guidance_scale > 1 else latents
 
-            class_labels = paddle.to_tensor(class_labels).flatten()
             class_null = paddle.to_tensor([1000] * batch_size)
             class_labels_input = paddle.concat([class_labels, class_null], 0) if guidance_scale > 1 else class_labels
 
@@ -378,7 +340,7 @@ class DiTDiffusionModel(nn.Layer):
                 if guidance_scale > 1:
                     half = latent_model_input[: len(latent_model_input) // 2]
                     latent_model_input = paddle.concat([half, half], axis=0)
-                latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
+                latent_model_input = self.eval_scheduler.scale_model_input(latent_model_input, t)
 
                 timesteps = t
                 if not paddle.is_tensor(timesteps):
@@ -398,9 +360,7 @@ class DiTDiffusionModel(nn.Layer):
                     ]
                 )
                 # predict noise model_output
-                noise_pred = self.transformer(
-                    latent_model_input, timestep=timesteps, class_labels=class_labels_input
-                ).sample
+                noise_pred = self.transformer(x=latent_model_input, t=timesteps, y=class_labels_input)
 
                 # perform guidance
                 if guidance_scale > 1:
@@ -415,7 +375,7 @@ class DiTDiffusionModel(nn.Layer):
                     noise_pred = paddle.concat([eps, rest], axis=1)
 
                 # learned sigma
-                if self.transformer.config.out_channels // 2 == latent_channels:
+                if self.transformer.out_channels // 2 == latent_channels:
                     # TODO torch.split vs paddle.split
                     model_output, _ = paddle.split(
                         noise_pred, [latent_channels, noise_pred.shape[1] - latent_channels], axis=1
@@ -424,7 +384,7 @@ class DiTDiffusionModel(nn.Layer):
                     model_output = noise_pred
 
                 # compute previous image: x_t -> x_t-1
-                latent_model_input = self.scheduler.step(model_output, t, latent_model_input).prev_sample
+                latent_model_input = self.eval_scheduler.step(model_output, t, latent_model_input).prev_sample
 
             if guidance_scale > 1:
                 latents, _ = latent_model_input.chunk(2, axis=0)
@@ -447,7 +407,7 @@ class DiTDiffusionModel(nn.Layer):
         if use_xformers:
             if not is_ppxformers_available():
                 raise ValueError(
-                    'Please run `python -m pip install "paddlepaddle-gpu>=2.5.0.post117" -f https://www.paddlepaddle.org.cn/whl/linux/mkl/avx/stable.html first.'
+                    'Please run `python -m pip install "paddlepaddle-gpu>=2.6.0" -f https://www.paddlepaddle.org.cn/whl/linux/mkl/avx/stable.html first.'
                 )
             else:
                 try:
