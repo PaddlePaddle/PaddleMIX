@@ -21,6 +21,6 @@
 
 # prompt = "A photograph of the inside of a subway train. There are raccoons sitting on the seats. One of them is reading a newspaper. The window shows the city in the background."
 
-# generator = torch.Generator().manual_seed(0)
+# generator = paddle.Generator().manual_seed(0)
 # image = pipe(prompt, num_inference_steps=25, generator=generator).images[0]
 # image.save("text_to_image_generation_kandinsky3")
