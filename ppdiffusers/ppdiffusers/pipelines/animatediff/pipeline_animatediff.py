@@ -52,7 +52,7 @@ EXAMPLE_DOC_STRING = """
         >>> from ppdiffusers import MotionAdapter, AnimateDiffPipeline, DDIMScheduler
         >>> from ppdiffusers.utils import export_to_gif
 
-        >>> adapter = MotionAdapter.from_pretrained("diffusers/motion-adapter")
+        >>> adapter = MotionAdapter.from_pretrained("guoyww/animatediff-motion-adapter-v1-5-2")
         >>> pipe = AnimateDiffPipeline.from_pretrained("frankjoshua/toonyou_beta6", motion_adapter=adapter)
         >>> pipe.scheduler = DDIMScheduler(beta_schedule="linear", steps_offset=1, clip_sample=False)
         >>> output = pipe(prompt="A corgi walking in the park")
@@ -334,7 +334,7 @@ class AnimateDiffPipeline(DiffusionPipeline, TextualInversionLoaderMixin, IPAdap
         latents = 1 / self.vae.config.scaling_factor * latents
 
         batch_size, channels, num_frames, height, width = latents.shape
-        latents = latents.transpose([0, 2, 1, 3, 4]).reshape(batch_size * num_frames, channels, height, width)
+        latents = latents.transpose([0, 2, 1, 3, 4]).reshape([batch_size * num_frames, channels, height, width])
 
         image = self.vae.decode(latents).sample
         video = (

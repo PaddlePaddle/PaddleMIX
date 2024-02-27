@@ -179,11 +179,11 @@ def load_state_dict(
                             break
                 if need_continue:
                     continue
-                py_safe_slice_ = f.get_slice(key)
                 if key in tensor_parallel_split_mapping:
+                    py_safe_slice_ = f.get_slice(key)
                     weight = tensor_parallel_split_mapping[key](py_safe_slice_)
                 else:
-                    weight = py_safe_slice_[:]
+                    weight = f.get_tensor(key)
                 state_dict[key] = paddle.Tensor(weight, zero_copy=True)
 
     else:

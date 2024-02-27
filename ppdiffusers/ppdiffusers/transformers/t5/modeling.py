@@ -788,7 +788,7 @@ class T5PretrainedModel(PretrainedModel):
                         ],
                     ]
                 )
-            elif config.feed_forward_proj == "gated-gelu":
+            elif "gated" in config.feed_forward_proj:
                 for i in range(2):
                     layer_mappings.extend(
                         [

@@ -31,7 +31,7 @@ TEXT2IMAGE_EXAMPLE_DOC_STRING = """
         ```py
         >>> from ppdiffusions import WuerstchenCombinedPipeline
 
-        >>> pipe = WuerstchenCombinedPipeline.from_pretrained("warp-ai/Wuerstchen", paddle_dtype=paddle.float16)
+        >>> pipe = WuerstchenCombinedPipeline.from_pretrained("warp-ai/Wuerstchen", paddle_dtype=paddle.float32)
         >>> prompt = "an image of a shiba inu, donning a spacesuit and helmet"
         >>> images = pipe(prompt=prompt)
         ```
