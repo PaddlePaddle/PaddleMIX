@@ -15,6 +15,7 @@
 import os
 
 os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
+os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 from pathlib import Path, PurePosixPath
 
 from huggingface_hub import hf_hub_download
