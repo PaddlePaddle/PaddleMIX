@@ -11,21 +11,25 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import itertools
 import math
 import os
-import itertools
+
 import numpy as np
-
 import paddle
-from paddlenlp.trainer import PdArgumentParser, TrainingArguments, get_last_checkpoint, set_seed
-from paddlenlp.utils.log import logger
-
 from diffusion import (
     DataArguments,
+    DiTDiffusionModel,
     LatentDiffusionTrainer,
     ModelArguments,
 )
-from diffusion import DiTDiffusionModel
+from paddlenlp.trainer import (
+    PdArgumentParser,
+    TrainingArguments,
+    get_last_checkpoint,
+    set_seed,
+)
+from paddlenlp.utils.log import logger
 from transport import SiTDiffusionModel
 
 
@@ -37,8 +41,9 @@ class FeatureDataset(paddle.io.Dataset):
         self.labels_files = sorted(os.listdir(labels_dir))
 
     def __len__(self):
-        assert len(self.features_files) == len(self.labels_files), \
-            "Number of feature files and label files should be same"
+        assert len(self.features_files) == len(
+            self.labels_files
+        ), "Number of feature files and label files should be same"
         return len(self.features_files)
 
     def __getitem__(self, idx):

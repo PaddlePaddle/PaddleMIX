@@ -18,6 +18,7 @@
 #     IDDPM: https://github.com/openai/improved-diffusion/blob/main/improved_diffusion/gaussian_diffusion.py
 
 from abc import ABC, abstractmethod
+
 import numpy as np
 import paddle
 import paddle.distributed as dist
@@ -57,7 +58,7 @@ class ScheduleSampler(ABC):
     def sample(self, batch_size):
         """
         Importance-sample timesteps for a batch.
-        
+
         return: a tuple (timesteps, weights):
                  - timesteps: a tensor of timestep indices.
                  - weights: a tensor of weights to scale the resulting losses.
@@ -65,7 +66,7 @@ class ScheduleSampler(ABC):
         w = self.weights()
         p = w / np.sum(w)
         indices_np = np.random.choice(len(p), size=(batch_size,), p=p)
-        indices = paddle.to_tensor(indices_np, dtype='int64')
+        indices = paddle.to_tensor(indices_np, dtype="int64")
         weights_np = 1 / (len(p) * p[indices_np])
         weights = paddle.to_tensor(weights_np)
         return indices, weights
@@ -91,10 +92,7 @@ class LossAwareSampler(ScheduleSampler):
         :param local_ts: an integer Tensor of timesteps.
         :param local_losses: a 1D Tensor of losses.
         """
-        batch_sizes = [
-            paddle.to_tensor([0], dtype=paddle.int32)
-            for _ in range(dist.get_world_size())
-        ]
+        batch_sizes = [paddle.to_tensor([0], dtype=paddle.int32) for _ in range(dist.get_world_size())]
         dist.all_gather(
             batch_sizes,
             paddle.to_tensor([len(local_ts)], dtype=paddle.int32),
@@ -108,9 +106,7 @@ class LossAwareSampler(ScheduleSampler):
         loss_batches = [paddle.zeros(max_bs).to(local_losses) for bs in batch_sizes]
         dist.all_gather(timestep_batches, local_ts)
         dist.all_gather(loss_batches, local_losses)
-        timesteps = [
-            x.item() for y, bs in zip(timestep_batches, batch_sizes) for x in y[:bs]
-        ]
+        timesteps = [x.item() for y, bs in zip(timestep_batches, batch_sizes) for x in y[:bs]]
         losses = [x.item() for y, bs in zip(loss_batches, batch_sizes) for x in y[:bs]]
         self.update_with_all_losses(timesteps, losses)
 
@@ -134,15 +130,13 @@ class LossSecondMomentResampler(LossAwareSampler):
         self.diffusion = diffusion
         self.history_per_term = history_per_term
         self.uniform_prob = uniform_prob
-        self._loss_history = np.zeros(
-            [diffusion.num_timesteps, history_per_term], dtype=np.float64
-        )
+        self._loss_history = np.zeros([diffusion.num_timesteps, history_per_term], dtype=np.float64)
         self._loss_counts = np.zeros([diffusion.num_timesteps], dtype=np.int)
 
     def weights(self):
         if not self._warmed_up():
             return np.ones([self.diffusion.num_timesteps], dtype=np.float64)
-        weights = np.sqrt(np.mean(self._loss_history ** 2, axis=-1))
+        weights = np.sqrt(np.mean(self._loss_history**2, axis=-1))
         weights /= np.sum(weights)
         weights *= 1 - self.uniform_prob
         weights += self.uniform_prob / len(weights)

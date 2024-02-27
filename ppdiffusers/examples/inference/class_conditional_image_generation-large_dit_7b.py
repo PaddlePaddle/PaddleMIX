@@ -14,15 +14,16 @@
 
 import paddle
 from paddlenlp.trainer import set_seed
-from ppdiffusers import DiTPipeline, DDIMScheduler
 
-dtype=paddle.bfloat32
-pipe=DiTPipeline.from_pretrained("Alpha-VLLM/Large-DiT-3B-256", paddle_dtype=dtype)
+from ppdiffusers import DDIMScheduler, DiTPipeline
+
+dtype = paddle.float16
+pipe = DiTPipeline.from_pretrained("Alpha-VLLM/Large-DiT-7B-256", paddle_dtype=dtype)
 pipe.scheduler = DDIMScheduler.from_config(pipe.scheduler.config)
 set_seed(42)
 
-words = ["golden retriever"] # class_ids [207]
+words = ["golden retriever"]  # class_ids [207]
 class_ids = pipe.get_label_ids(words)
 
 image = pipe(class_labels=class_ids, num_inference_steps=25).images[0]
-image.save("class_conditional_image_generation-large_dit_3b-result.png")
+image.save("class_conditional_image_generation-large_dit_7b-result.png")

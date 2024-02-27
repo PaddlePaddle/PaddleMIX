@@ -15,6 +15,7 @@
 import types
 from dataclasses import asdict, dataclass, field
 from typing import Optional
+
 import paddle
 from paddlenlp.utils.log import logger
 
@@ -24,6 +25,7 @@ class ModelArguments:
     """
     Arguments pertaining to which model/config we are going to fine-tune from.
     """
+
     vae_name_or_path: Optional[str] = field(
         default="stabilityai/sd-vae-ft-mse",
         metadata={"help": "pretrained_vae_name_or_path"},
@@ -62,6 +64,7 @@ class DataArguments:
     """
     Arguments pertaining to what data we are going to input our model for training.
     """
+
     feature_path: str = field(
         default="./data/fastdit_imagenet256",
         metadata={"help": "The feature path."},
@@ -97,12 +100,10 @@ class NoTrainerTrainingArguments:
         default=2,
         metadata={"help": "Number of updates steps to accumulate before performing a backward/update pass."},
     )
-    
-    
+
     learning_rate: float = field(default=1e-4, metadata={"help": "The initial learning rate for AdamW."})
     weight_decay: float = field(default=0.0, metadata={"help": "Weight decay for AdamW if we apply some."})
-    
-    
+
     adam_beta1: float = field(default=0.9, metadata={"help": "Beta1 for AdamW optimizer"})
     adam_beta2: float = field(default=0.999, metadata={"help": "Beta2 for AdamW optimizer"})
     adam_epsilon: float = field(default=1e-8, metadata={"help": "Epsilon for AdamW optimizer."})
