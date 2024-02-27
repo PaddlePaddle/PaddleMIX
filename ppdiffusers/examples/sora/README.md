@@ -35,3 +35,7 @@ PPDiffuser已支持DiT，在DiT中，首先将输入潜变量分解成若干个p
 训练文本到视频生成系统需要大量带有相应文本标题的视频。OpenAI将在DALL·E 3中引入的再标记技术应用于视频。首先训练一个描述性极强的captioner model，然后使用它为训练集中的所有视频生成文本标题。结果发现，在高度描述性的视频标题上进行训练可以提高文本的准确度以及视频的整体质量。在推理时，与DALL·E 3类似，也利用GPT将用户的短提示转化为更长、更详细的标题。这使得Sora能够生成准确遵循用户提示的高质量视频。与之相关的技术是预训练图文大模型。
 
 PaddleMIX已支持多款预训练图文大模型，具体请参考[paddlemix/examples](../examples)。
+
+## 参考
+- https://openai.com/sora
+- https://openai.com/research/video-generation-models-as-world-simulators
