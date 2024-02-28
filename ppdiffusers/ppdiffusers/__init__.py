@@ -204,6 +204,8 @@ else:
             "UnCLIPScheduler",
             "UniPCMultistepScheduler",
             "VQDiffusionScheduler",
+            "EDMDPMSolverMultistepScheduler",
+            "EDMEulerScheduler",
         ]
     )
     _import_structure["training_utils"] = ["EMAModel"]
@@ -544,6 +546,8 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             DPMSolverMultistepInverseScheduler,
             DPMSolverMultistepScheduler,
             DPMSolverSinglestepScheduler,
+            EDMDPMSolverMultistepScheduler,
+            EDMEulerScheduler,
             EulerAncestralDiscreteScheduler,
             EulerDiscreteScheduler,
             HeunDiscreteScheduler,
@@ -669,6 +673,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             StableDiffusionPipeline,
             StableDiffusionPipelineSafe,
             StableDiffusionPix2PixZeroPipeline,
+            StableDiffusionSafetyChecker,
             StableDiffusionSAGPipeline,
             StableDiffusionUpscalePipeline,
             StableDiffusionXLAdapterPipeline,
@@ -681,7 +686,6 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             StableDiffusionXLPipeline,
             StableUnCLIPImg2ImgPipeline,
             StableUnCLIPPipeline,
-            StableDiffusionSafetyChecker,
             StableVideoDiffusionPipeline,
             TextToVideoSDPipeline,
             TextToVideoZeroPipeline,
