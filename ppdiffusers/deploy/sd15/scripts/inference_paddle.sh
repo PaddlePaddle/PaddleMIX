@@ -12,6 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-export USE_PPXFORMERS=False
-export FLAGS_set_to_1d=1
-python export_model.py --pretrained_model_name_or_path runwayml/stable-diffusion-v1-5 --ipadapter_pretrained_model_name_or_path h94/IP-Adapter --ipadapter_model_subfolder models --ipadapter_weight_name ip-adapter_sd15.safetensors --output_path static_model/stable-diffusion-v1-5-ipadapter
+# text2img
+python infer_paddle.py --model_dir runwayml/stable-diffusion-v1-5 --scheduler "ddim" --backend paddle --device gpu --task_name all
