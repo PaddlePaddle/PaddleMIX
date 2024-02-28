@@ -61,42 +61,42 @@ def strtobool(v):
 
 
 def change_scheduler(self, scheduler_type="ddim"):
-    self.original_scheduler_config = self.scheduler.config
+    self.orginal_scheduler_config = self.scheduler.config
     scheduler_type = scheduler_type.lower()
     if scheduler_type == "pndm":
-        scheduler = PNDMScheduler.from_config(self.original_scheduler_config, skip_prk_steps=True)
+        scheduler = PNDMScheduler.from_config(self.orginal_scheduler_config, skip_prk_steps=True)
     elif scheduler_type == "lms":
-        scheduler = LMSDiscreteScheduler.from_config(self.original_scheduler_config)
+        scheduler = LMSDiscreteScheduler.from_config(self.orginal_scheduler_config)
     elif scheduler_type == "heun":
-        scheduler = HeunDiscreteScheduler.from_config(self.original_scheduler_config)
+        scheduler = HeunDiscreteScheduler.from_config(self.orginal_scheduler_config)
     elif scheduler_type == "euler":
-        scheduler = EulerDiscreteScheduler.from_config(self.original_scheduler_config)
+        scheduler = EulerDiscreteScheduler.from_config(self.orginal_scheduler_config)
     elif scheduler_type == "euler-ancestral":
-        scheduler = EulerAncestralDiscreteScheduler.from_config(self.original_scheduler_config)
+        scheduler = EulerAncestralDiscreteScheduler.from_config(self.orginal_scheduler_config)
     elif scheduler_type == "dpm-multi":
-        scheduler = DPMSolverMultistepScheduler.from_config(self.original_scheduler_config)
+        scheduler = DPMSolverMultistepScheduler.from_config(self.orginal_scheduler_config)
     elif scheduler_type == "dpm-single":
-        scheduler = DPMSolverSinglestepScheduler.from_config(self.original_scheduler_config)
+        scheduler = DPMSolverSinglestepScheduler.from_config(self.orginal_scheduler_config)
     elif scheduler_type == "kdpm2-ancestral":
-        scheduler = KDPM2AncestralDiscreteScheduler.from_config(self.original_scheduler_config)
+        scheduler = KDPM2AncestralDiscreteScheduler.from_config(self.orginal_scheduler_config)
     elif scheduler_type == "kdpm2":
-        scheduler = KDPM2DiscreteScheduler.from_config(self.original_scheduler_config)
+        scheduler = KDPM2DiscreteScheduler.from_config(self.orginal_scheduler_config)
     elif scheduler_type == "unipc-multi":
-        scheduler = UniPCMultistepScheduler.from_config(self.original_scheduler_config)
+        scheduler = UniPCMultistepScheduler.from_config(self.orginal_scheduler_config)
     elif scheduler_type == "ddim":
         scheduler = DDIMScheduler.from_config(
-            self.original_scheduler_config,
+            self.orginal_scheduler_config,
             steps_offset=1,
             clip_sample=False,
             set_alpha_to_one=False,
         )
     elif scheduler_type == "ddpm":
         scheduler = DDPMScheduler.from_config(
-            self.original_scheduler_config,
+            self.orginal_scheduler_config,
         )
     elif scheduler_type == "deis-multi":
         scheduler = DEISMultistepScheduler.from_config(
-            self.original_scheduler_config,
+            self.orginal_scheduler_config,
         )
     else:
         raise ValueError(f"Scheduler of type {scheduler_type} doesn't exist!")
@@ -258,7 +258,7 @@ def text2img(args):
 
         # width = args.width
         # height = args.height
-        pipe.set_progress_bar_config(disable=True)
+        pipe.set_progress_bar_config(disable=False)
 
         folder = f"torch_attn_{attention_type}_fp16" if args.use_fp16 else f"torch_attn_{attention_type}_fp32"
         os.makedirs(folder, exist_ok=True)
@@ -338,8 +338,8 @@ def text2img_with_refiner(args):
 
         # width = args.width
         # height = args.height
-        base.set_progress_bar_config(disable=True)
-        refiner.set_progress_bar_config(disable=True)
+        base.set_progress_bar_config(disable=False)
+        refiner.set_progress_bar_config(disable=False)
 
         folder = f"torch_attn_{attention_type}_fp16" if args.use_fp16 else f"torch_attn_{attention_type}_fp32"
         os.makedirs(folder, exist_ok=True)
@@ -429,7 +429,7 @@ def img2img(args):
 
         # width = args.width
         # height = args.height
-        pipe.set_progress_bar_config(disable=True)
+        pipe.set_progress_bar_config(disable=False)
 
         folder = f"torch_attn_{attention_type}_fp16" if args.use_fp16 else f"torch_attn_{attention_type}_fp32"
         os.makedirs(folder, exist_ok=True)
@@ -498,7 +498,7 @@ def inpainting(args):
 
         # width = args.width
         # height = args.height
-        pipe.set_progress_bar_config(disable=True)
+        pipe.set_progress_bar_config(disable=False)
 
         folder = f"torch_attn_{attention_type}_fp16" if args.use_fp16 else f"torch_attn_{attention_type}_fp32"
         os.makedirs(folder, exist_ok=True)
@@ -573,7 +573,7 @@ def instruct_pix2pix(args):
 
         # width = args.width
         # height = args.height
-        pipe.set_progress_bar_config(disable=True)
+        pipe.set_progress_bar_config(disable=False)
 
         folder = f"torch_attn_{attention_type}_fp16" if args.use_fp16 else f"torch_attn_{attention_type}_fp32"
         os.makedirs(folder, exist_ok=True)

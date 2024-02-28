@@ -12,6 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# ==============================================================================
+# use paddle as backend to inference static model is not fast,
+# this script is used to make sure the inference is correct.
+# ==============================================================================
 # text2img
 python infer.py --model_dir static_model/stable-diffusion-v1-5/ --scheduler "ddim" --backend paddle --device gpu --task_name text2img
 

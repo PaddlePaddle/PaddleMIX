@@ -13,4 +13,5 @@
 # limitations under the License.
 
 export USE_PPXFORMERS=False
+export FLAGS_set_to_1d=1
 python export_model.py --pretrained_model_name_or_path runwayml/stable-diffusion-v1-5 --output_path static_model/stable-diffusion-v1-5
