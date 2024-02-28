@@ -78,7 +78,7 @@ def text2img(args):
         else "stabilityai/stable-diffusion-xl-base-1.0",
         paddle_dtype=paddle_dtype,
     )
-    pipe.set_progress_bar_config(disable=True)
+    pipe.set_progress_bar_config(disable=False)
     if args.attention_type == "all":
         args.attention_type = ["raw", "cutlass", "flash"]
     else:
@@ -147,8 +147,8 @@ def text2img_with_refiner(args):
         vae=base.vae,
         paddle_dtype=paddle_dtype,
     )
-    base.set_progress_bar_config(disable=True)
-    refiner.set_progress_bar_config(disable=True)
+    base.set_progress_bar_config(disable=False)
+    refiner.set_progress_bar_config(disable=False)
     if args.attention_type == "all":
         args.attention_type = ["raw", "cutlass", "flash"]
     else:
@@ -232,7 +232,7 @@ def img2img(args):
         else "stabilityai/stable-diffusion-xl-refiner-1.0",
         paddle_dtype=paddle_dtype,
     )
-    pipe.set_progress_bar_config(disable=True)
+    pipe.set_progress_bar_config(disable=False)
     if args.attention_type == "all":
         args.attention_type = ["raw", "cutlass", "flash"]
     else:
@@ -297,7 +297,7 @@ def inpainting(args):
         paddle_dtype=paddle_dtype,
         variant="fp16",
     )
-    pipe.set_progress_bar_config(disable=True)
+    pipe.set_progress_bar_config(disable=False)
     if args.attention_type == "all":
         args.attention_type = ["raw", "cutlass", "flash"]
     else:
@@ -365,7 +365,7 @@ def instruct_pix2pix(args):
         args.pretrained_model_name_or_path if args.pretrained_model_name_or_path else "sayakpaul/sdxl-instructpix2pix",
         paddle_dtype=paddle_dtype,
     )
-    pipe.set_progress_bar_config(disable=True)
+    pipe.set_progress_bar_config(disable=False)
     if args.attention_type == "all":
         args.attention_type = ["raw", "cutlass", "flash"]
     else:

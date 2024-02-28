@@ -258,7 +258,7 @@ def text2img(args):
 
         # width = args.width
         # height = args.height
-        pipe.set_progress_bar_config(disable=True)
+        pipe.set_progress_bar_config(disable=False)
 
         folder = f"torch_attn_{attention_type}_fp16" if args.use_fp16 else f"torch_attn_{attention_type}_fp32"
         os.makedirs(folder, exist_ok=True)
@@ -338,8 +338,8 @@ def text2img_with_refiner(args):
 
         # width = args.width
         # height = args.height
-        base.set_progress_bar_config(disable=True)
-        refiner.set_progress_bar_config(disable=True)
+        base.set_progress_bar_config(disable=False)
+        refiner.set_progress_bar_config(disable=False)
 
         folder = f"torch_attn_{attention_type}_fp16" if args.use_fp16 else f"torch_attn_{attention_type}_fp32"
         os.makedirs(folder, exist_ok=True)
@@ -429,7 +429,7 @@ def img2img(args):
 
         # width = args.width
         # height = args.height
-        pipe.set_progress_bar_config(disable=True)
+        pipe.set_progress_bar_config(disable=False)
 
         folder = f"torch_attn_{attention_type}_fp16" if args.use_fp16 else f"torch_attn_{attention_type}_fp32"
         os.makedirs(folder, exist_ok=True)
@@ -498,7 +498,7 @@ def inpainting(args):
 
         # width = args.width
         # height = args.height
-        pipe.set_progress_bar_config(disable=True)
+        pipe.set_progress_bar_config(disable=False)
 
         folder = f"torch_attn_{attention_type}_fp16" if args.use_fp16 else f"torch_attn_{attention_type}_fp32"
         os.makedirs(folder, exist_ok=True)
@@ -573,7 +573,7 @@ def instruct_pix2pix(args):
 
         # width = args.width
         # height = args.height
-        pipe.set_progress_bar_config(disable=True)
+        pipe.set_progress_bar_config(disable=False)
 
         folder = f"torch_attn_{attention_type}_fp16" if args.use_fp16 else f"torch_attn_{attention_type}_fp32"
         os.makedirs(folder, exist_ok=True)

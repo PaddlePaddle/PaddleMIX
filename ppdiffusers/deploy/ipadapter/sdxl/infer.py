@@ -273,7 +273,7 @@ def main(args):
         infer_configs=infer_configs,
         use_optim_cache=False,
     )
-    pipe.set_progress_bar_config(disable=True)
+    pipe.set_progress_bar_config(disable=False)
     pipe.change_scheduler(args.scheduler)
     parse_prompt_type = args.parse_prompt_type
     width = args.width
