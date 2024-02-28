@@ -35,6 +35,7 @@ except OptionalDependencyNotAvailable:
     _dummy_objects.update(get_objects_from_module(dummy_paddle_and_paddlenlp_objects))
 else:
     _import_structure["pipeline_latent_diffusion"] = ["LDMBertModel", "LDMBertConfig", "LDMTextToImagePipeline"]
+    _import_structure["pipeline_latent_diffusion_uvit"] = ["LDMTextToImageUViTPipeline"]
     _import_structure["pipeline_latent_diffusion_superresolution"] = ["LDMSuperResolutionPipeline"]
 
 
@@ -54,6 +55,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         from .pipeline_latent_diffusion_superresolution import (
             LDMSuperResolutionPipeline,
         )
+        from .pipeline_latent_diffusion_uvit import LDMTextToImageUViTPipeline
 
 else:
     import sys

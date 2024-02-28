@@ -192,7 +192,10 @@ class PatchEmbed(nn.Layer):
             pos_embed = paddle.to_tensor(pos_embed)
             pos_embed = pos_embed.cast("float32").unsqueeze(0)
         else:
-            pos_embed = self.pos_embed
+            if self.add_pos_embed:
+                pos_embed = self.pos_embed
+            else:
+                pass
 
         # NOTE, new add for unidiffusers!
         if self.add_pos_embed:

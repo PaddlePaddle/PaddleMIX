@@ -1,0 +1,13 @@
+{
+  "sample_size": 32,
+  "patch_size": 2,
+  "in_channels": 4,
+  "num_layers": 30,
+  "num_attention_heads": 24,
+  "attention_head_dim": 64,
+  "mlp_ratio": 4,
+  "qkv_bias": false,
+  "clip_dim": 768,
+  "num_text_tokens": 77,
+  "conv": false
+}
