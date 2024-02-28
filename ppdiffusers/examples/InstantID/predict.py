@@ -14,6 +14,7 @@
 
 import os
 
+os.environ["USE_PEFT_BACKEND"] = "True"
 import cv2
 import numpy as np
 import paddle

@@ -355,6 +355,8 @@ def smart_load(
             if return_is_torch_weight:
                 with safe_open(path, framework="np") as f:
                     metadata = f.metadata()
+                    if metadata is None:
+                        metadata = {}
                     data_format = metadata.get("format", "pt")
                     if data_format == "pt":
                         is_torch_weight = True
@@ -369,6 +371,8 @@ def smart_load(
             if return_is_torch_weight:
                 with safe_open(path, framework="np") as f:
                     metadata = f.metadata()
+                    if metadata is None:
+                        metadata = {}
                     data_format = metadata.get("format", "pt")
                     if data_format == "pt":
                         is_torch_weight = True

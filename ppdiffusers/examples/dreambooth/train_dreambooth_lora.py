@@ -13,13 +13,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import os
 
+os.environ["USE_PEFT_BACKEND"] = "False"
 import argparse
 import contextlib
 import gc
 import hashlib
 import math
-import os
 import sys
 import time
 import warnings
