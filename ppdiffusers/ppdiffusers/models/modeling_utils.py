@@ -104,7 +104,7 @@ def faster_set_state_dict(model, state_dict):
             else:
                 if (hasattr(v, "_is_initialized") and not v._is_initialized()) or "undefined" in str(v.place):
                     v.initialize()
-                    logger.warning(f"key {k} is not in state_dict. And it is lazy tensor. We will initialize it.")
+                    # logger.warning(f"key {k} is not in state_dict. And it is lazy tensor. We will initialize it.")
 
 
 class ContextManagers:
