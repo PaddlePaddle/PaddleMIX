@@ -189,6 +189,7 @@ def main(args):
         "trt_flash_multihead_matmul_fuse_pass",
         "preln_elementwise_groupnorm_act_pass",
         "elementwise_groupnorm_act_pass",
+        "groupnorm_act_pass",
         "auto_mixed_precision_pass",
         "conv_elementwise_add_fuse_pass",
     ]
@@ -216,7 +217,7 @@ def main(args):
             model_dir=args.model_dir,
             model_name="vae_decoder",
             use_trt=False,
-            precision_mode=paddle_infer.PrecisionType.Half,
+            precision_mode=paddle_infer.PrecisionType.Float32,
             device_id=args.device_id,
             disable_paddle_pass=no_need_passes,
             tune=False,

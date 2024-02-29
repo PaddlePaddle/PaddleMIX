@@ -1,4 +1,4 @@
-# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# ==============================================================================
-# This is the script to tune and tensorrt.
-# with this method, you can get the fastest inference speed.
-# ==============================================================================
+export CUDA_VISIBLE_DEVICES=1 # 填写: GPU卡号
+LOCAL_PATH=/root/lxl/ADD_SDXL # 填写: PaddleMIX文件夹所在的本地路径
+cd $LOCAL_PATH/PaddleMIX/ppdiffusers/deploy/ipadapter/sd15
+
 export USE_PPXFORMERS=False
 export FLAGS_set_to_1d=1
 # 1. export the model to static_model.
@@ -26,14 +26,3 @@ python infer.py --model_dir static_model/stable-diffusion-v1-5-ipadapter/ --sche
 
 # 3. convert the model to tensorrt
 python infer.py --model_dir static_model/stable-diffusion-v1-5-ipadapter/ --scheduler "euler" --backend paddle_tensorrt --device gpu --task_name all --width 512 --height 512 --inference_steps 50
-
-# perfermance like this:
-# --width 512 --height 512 --inference_steps 50 --benchmark_steps 10
-# ==> Test text2img performance.
-# Mean latency: 3.936669 s, p50 latency: 3.932006 s, p90 latency: 3.959874 s, p95 latency: 3.962563 s.
-
-# ==> Test img2img performance.
-# Mean latency: 3.225104 s, p50 latency: 3.224078 s, p90 latency: 3.226989 s, p95 latency: 3.231290 s.
-
-# ==> Test inpaint_legacy performance.
-# Mean latency: 3.231211 s, p50 latency: 3.230408 s, p90 latency: 3.240048 s, p95 latency: 3.240094 s.

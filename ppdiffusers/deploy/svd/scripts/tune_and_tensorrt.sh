@@ -24,10 +24,10 @@ export CUDA_VISIBLE_DEVICES=6
 python export_model.py --pretrained_model_name_or_path stabilityai/stable-video-diffusion-img2vid-xt --output_path static_model/stable-video-diffusion-img2vid-xt
 
 # 2. tune the shapes of the model for tensorrt 
-python infer.py --model_dir static_model/stable-video-diffusion-img2vid-xt --backend paddle --width 256 --height 256 --device gpu --task_name img2video --tune True --inference_steps 10 --tune True --use_fp16 True
+python infer.py --model_dir static_model/stable-video-diffusion-img2vid-xt --backend paddle --width 256 --height 256 --device gpu --task_name img2video --use_fp16 False --inference_steps 1
 
 # 3. convert the model to tensorrt
-python infer.py --model_dir static_model/stable-video-diffusion-img2vid-xt --backend paddle_tensorrt --width 256 --height 256 --device gpu --task_name img2video --tune True --inference_steps 25 --benchmark_steps 10
+python infer.py --model_dir static_model/stable-video-diffusion-img2vid-xt --backend paddle_tensorrt --width 256 --height 256 --device gpu --task_name img2video --inference_steps 25
 
 # perfermance like this:
 # --width 512 --height 512 --inference_steps 50 --benchmark_steps 10

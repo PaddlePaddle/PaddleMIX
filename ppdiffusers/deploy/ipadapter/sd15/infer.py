@@ -202,6 +202,8 @@ def main(args):
         "trt_prompt_tuning_embedding_eltwise_layernorm_fuse_pass",
         "add_support_int8_pass",
         "auto_mixed_precision_pass",
+        "elementwise_groupnorm_act_pass",
+        "groupnorm_act_pass",
     ]
     paddle_delete_passes = dict(
         text_encoder=only_fp16_passes + no_need_passes if not args.use_fp16 else no_need_passes,
@@ -237,7 +239,7 @@ def main(args):
             model_dir=args.model_dir,
             model_name="vae_decoder",
             use_trt=False,
-            precision_mode=paddle_infer.PrecisionType.Half,
+            precision_mode=paddle_infer.PrecisionType.Float32,
             device_id=args.device_id,
             disable_paddle_pass=paddle_delete_passes.get("vae_decoder", []),
             tune=False,
@@ -266,7 +268,7 @@ def main(args):
         infer_configs=infer_configs,
         use_optim_cache=False,
     )
-    pipe.set_progress_bar_config(disable=True)
+    pipe.set_progress_bar_config(disable=False)
     pipe.change_scheduler(args.scheduler)
     parse_prompt_type = args.parse_prompt_type
     width = args.width
