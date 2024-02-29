@@ -12,11 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import imageio
-
 from ppdiffusers import DPMSolverMultistepScheduler, TextToVideoSDPipeline
 
-# from ppdiffusers.utils import export_to_video
+from ppdiffusers.utils import export_to_video
 
 
 pipe = TextToVideoSDPipeline.from_pretrained("damo-vilab/text-to-video-ms-1.7b")
@@ -24,7 +22,6 @@ pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
 
 prompt = "An astronaut riding a horse."
 video_frames = pipe(prompt, num_inference_steps=25).frames
-imageio.mimsave("text_to_video_generation-synth-result-astronaut_riding_a_horse.mp4", video_frames, fps=8)
-# video_path = export_to_video(
-#     video_frames, output_video_path="text_to_video_generation-synth_img2img-result-video_1024_spiderman.mp4"
-# )
+video_path = export_to_video(
+    video_frames, output_video_path="text_to_video_generation-synth_img2img-result-video_1024_spiderman.mp4"
+)
