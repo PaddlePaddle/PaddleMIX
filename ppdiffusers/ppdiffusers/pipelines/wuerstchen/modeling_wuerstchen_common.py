@@ -72,9 +72,10 @@ class GlobalResponseNorm(nn.Layer):
         super().__init__()
         self.gamma = nn.Parameter(paddle.zeros([1, 1, 1, dim]))
         self.beta = nn.Parameter(paddle.zeros([1, 1, 1, dim]))
-        # NOTE: https://github.com/PaddlePaddle/Paddle/pull/60070 this is inconsistant upgrade
-        # when len(axis) == 2 &&  p == ±1，±2, in paddle<=2.6.0 it will compute vector norm, but after upgrade, it will compute matrix norm
-        # in torch, it will compute vector norm
+        # NOTE: Reference https://github.com/PaddlePaddle/Paddle/pull/60070 for inconsistent upgrade behavior.
+        # Paddle<=2.6.0, when len(axis) == 2 and p is ±1 or ±2, the function computed the vector norm.
+        # However, after the upgrade, it now computes the matrix norm instead.
+        # In contrast, PyTorch computes the vector norm in such cases.
         self.norm = paddle.linalg.vector_norm if hasattr(paddle.linalg, "vector_norm") else paddle.linalg.norm
 
     def forward(self, x):
