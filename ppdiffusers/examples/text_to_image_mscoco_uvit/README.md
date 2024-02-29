@@ -1,6 +1,6 @@
 ## U-ViT Latent Diffusion Model 从零训练代码
 
-本教程带领大家如何开启U-ViT的**Latent Diffusion Model**的训练。
+本教程带领大家如何开启基于U-ViT的**Latent Diffusion Model**的文生图训练。
 
 ___注意___:
 ___官方32层`CompVis/ldm-text2im-large-256`的Latent Diffusion Model使用的是vae，而不是vqvae！而Huggingface团队在设计目录结构的时候把文件夹名字错误的设置成了vqvae！为了与Huggingface团队保持一致，我们同样使用了vqvae文件夹命名！___
@@ -17,14 +17,22 @@ python -m pip install paddlepaddle-gpu==2.6.0 -f https://www.paddlepaddle.org.cn
 pip install -r requirements.txt
 ```
 
+安装einops，推荐使用python>=3.8
+```bash
+pip install git+https://github.com/arogozhnikov/einops.git
+```
+
+
 ### 1.2 准备数据
 
-#### ImageNet训练数据集的特征和标签如下：
+#### MSCOCO文生图训练数据集的特征如下：
 ```
-├── data  # 我们指定的输出文件路径
-    ├──fastdit_imagenet256
-        ├── imagenet256_features
-        ├── imagenet256_labels
+├── datasets  # 我们指定的输出文件路径
+    ├──coco256_features
+        ├── empty_context.npy
+        ├── run_vis/
+        ├── train/
+        ├── val/
 ```
 
 我们提供了下载链接：
@@ -62,7 +70,7 @@ image_logging_steps=10000
 seed=1234
 
 USE_AMP=True
-fp16_opt_level="O1" # "O2" bf16 bug now
+fp16_opt_level="O1"
 enable_tensorboard=True
 recompute=True
 enable_xformers=True

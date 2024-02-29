@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import contextlib
-import os
 import sys
 import time
 
@@ -29,13 +28,10 @@ from paddlenlp.trainer.integrations import (
 from paddlenlp.utils import profiler
 from paddlenlp.utils.log import logger
 
-from .text_to_image_dataset import worker_init_fn
-
-parent_path = os.path.abspath(os.path.join(__file__, *([".."] * 4)))
-sys.path.insert(0, parent_path)
-
 from ppdiffusers.optimization import get_scheduler
 from ppdiffusers.training_utils import unwrap_model
+
+from .text_to_image_dataset import worker_init_fn
 
 PADDLE_WEIGHTS_NAME = "model_state.pdparams"
 TRAINING_ARGS_NAME = "training_args.bin"

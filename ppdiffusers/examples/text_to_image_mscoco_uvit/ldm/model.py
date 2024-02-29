@@ -42,7 +42,6 @@ except ImportError:
     )
 
 import json
-import sys
 
 from paddlenlp.utils.log import logger
 
@@ -51,9 +50,6 @@ from ppdiffusers.models.resnet import ResnetBlock2D
 from ppdiffusers.models.vae import DiagonalGaussianDistribution
 
 from .uvit_t2i import UViTT2IModel
-
-parent_path = os.path.abspath(os.path.join(__file__, *([".."] * 4)))
-sys.path.insert(0, parent_path)
 
 trunc_normal_ = TruncatedNormal(std=0.02)
 
@@ -240,9 +236,6 @@ class LatentDiffusionModel(nn.Layer):
                 trunc_normal_(m.weight)
                 if isinstance(m, nn.Linear) and m.bias is not None:
                     zeros_(m.bias)
-            # elif isinstance(m, nn.LayerNorm):
-            #     zeros_(m.bias)
-            #     ones_(m.weight)
 
     @contextlib.contextmanager
     def ema_scope(self, context=None):
