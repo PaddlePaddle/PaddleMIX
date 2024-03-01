@@ -73,9 +73,10 @@ def main():
 
     model = LatentDiffusionModel(model_args)
     model.set_recompute(training_args.recompute)
-    # model.set_xformers(training_args.enable_xformers_memory_efficient_attention)
+    model.set_xformers(training_args.enable_xformers_memory_efficient_attention)
     model.set_ema(training_args.use_ema)
 
+    # Setup data:
     dataset = MSCOCO256Features(path=data_args.feature_path, cfg=True, p_uncond=0.1)
     train_dataset = dataset.get_split(split="train", labeled=True)
 

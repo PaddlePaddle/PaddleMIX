@@ -21,8 +21,8 @@ DP_DEGREE=1 # dp_parallel_degree
 MP_DEGREE=1 # tensor_parallel_degree
 SHARDING_DEGREE=1 # sharding_parallel_degree
 
-config_file=config/SiT_XL_patch2.json
-OUTPUT_DIR=./output_trainer/SiT_XL_patch2_trainer
+config_file=config/LargeDiT_3B_patch2.json
+OUTPUT_DIR=./output_trainer/LargeDiT_3B_patch2_trainer
 
 feature_path=./data/fastdit_imagenet256
 batch_size=32 # per gpu
@@ -30,7 +30,7 @@ num_workers=8
 max_steps=7000000
 logging_steps=50
 save_steps=5000
-image_logging_steps=-1
+image_logging_steps=5000
 seed=0
 
 USE_AMP=True

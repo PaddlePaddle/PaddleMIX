@@ -285,34 +285,37 @@ class DiT(nn.Layer):
 
     def __init__(
         self,
-        input_size=32,  # image_size // 8
+        sample_size=32,  # image_size // 8
         patch_size=2,
         in_channels=4,
-        hidden_size=1152,
-        depth=28,
-        num_heads=16,
+        out_channels=8,
+        num_layers=28,
+        num_attention_heads=16,
+        attention_head_dim=72,
         mlp_ratio=4.0,
         class_dropout_prob=0.1,
         num_classes=1000,
         learn_sigma=True,
     ):
         super().__init__()
-        self.input_size = input_size
+        self.sample_size = sample_size
         self.patch_size = patch_size
         self.in_channels = in_channels
+        self.out_channels = in_channels * 2 if learn_sigma else in_channels
+        hidden_size = num_attention_heads * attention_head_dim
         self.hidden_size = hidden_size
-        self.depth = depth
-        self.num_heads = num_heads
+        self.num_layers = num_layers
+        self.num_attention_heads = num_attention_heads
         self.mlp_ratio = mlp_ratio
         self.class_dropout_prob = class_dropout_prob
         self.num_classes = num_classes
         self.learn_sigma = learn_sigma
+
         self.gradient_checkpointing = False
         self.fused_attn = False
 
-        self.out_channels = in_channels * 2 if learn_sigma else in_channels
-
-        self.x_embedder = PatchEmbed(input_size, patch_size, in_channels, hidden_size, bias=True)
+        # 1. Define input layers
+        self.x_embedder = PatchEmbed(sample_size, patch_size, in_channels, hidden_size, bias=True)
         self.t_embedder = TimestepEmbedder(hidden_size)
         self.y_embedder = LabelEmbedder(num_classes, hidden_size, class_dropout_prob)
         num_patches = self.x_embedder.num_patches
@@ -320,9 +323,15 @@ class DiT(nn.Layer):
         self.pos_embed = self.create_parameter(shape=(1, num_patches, hidden_size), default_initializer=zeros_)
         self.add_parameter("pos_embed", self.pos_embed)
 
+        # 2. Define transformers blocks
         self.blocks = nn.LayerList(
-            [DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio, fused_attn=self.fused_attn) for _ in range(depth)]
+            [
+                DiTBlock(hidden_size, num_attention_heads, mlp_ratio=mlp_ratio, fused_attn=self.fused_attn)
+                for _ in range(num_layers)
+            ]
         )
+
+        # 3. Define output layers
         self.final_layer = FinalLayer(hidden_size, patch_size, self.out_channels)
 
         self.initialize_weights()

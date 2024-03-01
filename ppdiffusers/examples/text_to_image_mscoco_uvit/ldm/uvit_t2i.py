@@ -340,9 +340,14 @@ class UViTT2IModel(nn.Layer):
         self.decoder_pred = nn.Linear(embed_dim, self.patch_dim, bias_attr=True)
         self.final_layer = nn.Conv2D(self.in_channels, self.in_channels, 3, padding=1) if conv else nn.Identity()
         self.gradient_checkpointing = False
+        self.fused_attn = False
 
     def enable_gradient_checkpointing(self, value=True):
         self.gradient_checkpointing = value
+
+    def enable_xformers_memory_efficient_attention(self, attention_op: Optional[str] = None):
+        self._use_memory_efficient_attention_xformers = True
+        self.fused_attn = True
 
     def no_weight_decay(self):
         return {"pos_embed"}

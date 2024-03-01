@@ -14,6 +14,7 @@
 
 from . import gaussian_diffusion as gd
 from .dit import DiT
+from .dit_llama import DiT_Llama
 from .respace import SpacedDiffusion, space_timesteps
 from .trainer import LatentDiffusionTrainer
 from .trainer_args import DataArguments, ModelArguments, NoTrainerTrainingArguments

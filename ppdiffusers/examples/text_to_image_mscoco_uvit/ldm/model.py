@@ -14,6 +14,7 @@
 
 import contextlib
 import inspect
+import json
 import os
 
 import einops
@@ -23,13 +24,9 @@ import paddle.nn as nn
 import paddle.nn.functional as F
 from paddle.nn.initializer import TruncatedNormal
 from paddlenlp.transformers import AutoTokenizer, CLIPTextModel
+from paddlenlp.utils.log import logger
 
-from ppdiffusers import (
-    AutoencoderKL,
-    DDIMScheduler,
-    DDPMScheduler,
-    is_ppxformers_available,
-)
+from ppdiffusers import AutoencoderKL, DDIMScheduler, is_ppxformers_available
 from ppdiffusers.models.attention_processor import Attention
 from ppdiffusers.models.ema import LitEma
 from ppdiffusers.training_utils import freeze_params
@@ -40,10 +37,6 @@ except ImportError:
     from ppdiffusers.models.transformer_2d import (
         Transformer2DModel as SpatialTransformer,
     )
-
-import json
-
-from paddlenlp.utils.log import logger
 
 from ppdiffusers.initializer import reset_initialized_parameter, zeros_
 from ppdiffusers.models.resnet import ResnetBlock2D
@@ -126,9 +119,6 @@ class LatentDiffusionModel(nn.Layer):
         super().__init__()
         self.model_args = model_args
 
-        _betas = stable_diffusion_beta_schedule()
-        self._schedule = Schedule(_betas)
-
         # init unconditional embeddings for CFG
         self.uncond_embeddings_path = f"{model_args.feature_path}/empty_context.npy"
 
@@ -181,31 +171,6 @@ class LatentDiffusionModel(nn.Layer):
         self.unet.train()
         self.vae.eval()
 
-        # init noise_scheduler and eval_scheduler
-        assert model_args.prediction_type in ["epsilon", "v_prediction"]  # default epsilon
-        self.prediction_type = model_args.prediction_type
-        self.noise_scheduler = DDPMScheduler(
-            beta_start=0.00085,
-            beta_end=0.012,
-            beta_schedule="scaled_linear",
-            num_train_timesteps=1000,
-            prediction_type=self.prediction_type,
-        )
-        self.register_buffer("alphas_cumprod", self.noise_scheduler.alphas_cumprod)
-
-        if model_args.image_logging_steps > 0:
-            self.eval_scheduler = DDIMScheduler(
-                beta_start=0.00085,
-                beta_end=0.012,
-                beta_schedule="scaled_linear",
-                num_train_timesteps=1000,
-                clip_sample=False,
-                set_alpha_to_one=False,
-                steps_offset=1,
-                prediction_type=self.prediction_type,
-            )
-            self.eval_scheduler.set_timesteps(model_args.num_inference_steps)
-
         self.use_ema = model_args.use_ema
         self.model_ema = None
         if self.use_ema:
@@ -219,6 +184,26 @@ class LatentDiffusionModel(nn.Layer):
                     "Could not enable memory efficient attention. Make sure develop paddlepaddle is installed"
                     f" correctly and a GPU is available: {e}"
                 )
+
+        # init schedule
+        _betas = stable_diffusion_beta_schedule()
+        self._schedule = Schedule(_betas)
+
+        # init eval_scheduler
+        assert model_args.prediction_type in ["epsilon", "v_prediction"]  # default epsilon
+        self.prediction_type = model_args.prediction_type
+        if model_args.image_logging_steps > 0:
+            self.eval_scheduler = DDIMScheduler(
+                beta_start=0.00085,
+                beta_end=0.012,
+                beta_schedule="scaled_linear",
+                num_train_timesteps=1000,
+                clip_sample=False,
+                set_alpha_to_one=False,
+                steps_offset=1,
+                prediction_type=self.prediction_type,
+            )
+            self.eval_scheduler.set_timesteps(model_args.num_inference_steps)
 
     def init_uvit_weights(self):
         reset_initialized_parameter(self.unet)
@@ -374,7 +359,7 @@ class LatentDiffusionModel(nn.Layer):
                     if hasattr(self.text_encoder, "enable_xformers_memory_efficient_attention"):
                         self.text_encoder.enable_xformers_memory_efficient_attention(attention_op)
                 except Exception as e:
-                    logger.warn(
+                    logger.warning(
                         "Could not enable memory efficient attention. Make sure develop paddlepaddle is installed"
                         f" correctly and a GPU is available: {e}"
                     )
