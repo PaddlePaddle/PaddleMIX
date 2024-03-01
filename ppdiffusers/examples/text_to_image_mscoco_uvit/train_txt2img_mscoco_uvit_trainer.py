@@ -15,13 +15,13 @@ import itertools
 import math
 import os
 
-import numpy as np
 import paddle
-from diffusion import (
+from ldm import (
     DataArguments,
-    DiTDiffusionModel,
+    LatentDiffusionModel,
     LatentDiffusionTrainer,
     ModelArguments,
+    MSCOCO256Features,
 )
 from paddlenlp.trainer import (
     PdArgumentParser,
@@ -30,38 +30,19 @@ from paddlenlp.trainer import (
     set_seed,
 )
 from paddlenlp.utils.log import logger
-from transport import SiTDiffusionModel
-
-
-class FeatureDataset(paddle.io.Dataset):
-    def __init__(self, features_dir, labels_dir):
-        self.features_dir = features_dir
-        self.labels_dir = labels_dir
-        self.features_files = sorted(os.listdir(features_dir))
-        self.labels_files = sorted(os.listdir(labels_dir))
-
-    def __len__(self):
-        assert len(self.features_files) == len(
-            self.labels_files
-        ), "Number of feature files and label files should be same"
-        return len(self.features_files)
-
-    def __getitem__(self, idx):
-        feature_file = self.features_files[idx]
-        label_file = self.labels_files[idx]
-
-        features = np.load(os.path.join(self.features_dir, feature_file))
-        labels = np.load(os.path.join(self.labels_dir, label_file))
-        return {"latents": features.squeeze(0), "label_id": labels.squeeze(0)}
 
 
 def main():
     parser = PdArgumentParser((ModelArguments, DataArguments, TrainingArguments))
     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
-    # report to custom_visualdl
-    training_args.report_to = ["custom_visualdl"]
+    training_args.report_to = ["visualdl"]
     training_args.resolution = data_args.resolution
+    training_args.feature_path = data_args.feature_path
+    model_args.feature_path = data_args.feature_path
     training_args.benchmark = model_args.benchmark
+    training_args.use_ema = model_args.use_ema
+    training_args.enable_xformers_memory_efficient_attention = model_args.enable_xformers_memory_efficient_attention
+    training_args.only_save_updated_model = model_args.only_save_updated_model
     training_args.profiler_options = model_args.profiler_options
     training_args.image_logging_steps = model_args.image_logging_steps = (
         (math.ceil(model_args.image_logging_steps / training_args.logging_steps) * training_args.logging_steps)
@@ -90,32 +71,40 @@ def main():
     if training_args.seed is not None:
         set_seed(training_args.seed)
 
-    model_config_name = model_args.config_file.split("/")[-1].replace(".json", "")
-    model_name = model_config_name.split("_")[0]
-    assert model_name in ["DiT", "SiT", "LargeDiT"], f"Model {model_name} not supported."
-    if model_name in ["DiT", "LargeDiT"]:
-        model = DiTDiffusionModel(model_args)
-    else:
-        model = SiTDiffusionModel(model_args)
-    assert model.transformer.sample_size == data_args.resolution // 8
+    model = LatentDiffusionModel(model_args)
     model.set_recompute(training_args.recompute)
-    model.set_xformers(model_args.enable_xformers_memory_efficient_attention)
-    model.set_ema(model_args.use_ema)
+    model.set_xformers(training_args.enable_xformers_memory_efficient_attention)
+    model.set_ema(training_args.use_ema)
 
     # Setup data:
-    feature_path = data_args.feature_path
-    features_dir = f"{feature_path}/imagenet{data_args.resolution}_features"
-    labels_dir = f"{feature_path}/imagenet{data_args.resolution}_labels"
-    train_dataset = FeatureDataset(features_dir, labels_dir)
+    dataset = MSCOCO256Features(path=data_args.feature_path, cfg=True, p_uncond=0.1)
+    train_dataset = dataset.get_split(split="train", labeled=True)
 
     trainer = LatentDiffusionTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
+        tokenizer=model.tokenizer,
     )
-    # must set recompute after trainer init
-    trainer.model.set_recompute(training_args.recompute)
-    params_to_train = itertools.chain(trainer.model.transformer.parameters())
+
+    if model_args.train_text_encoder:
+        if training_args.text_encoder_learning_rate == training_args.unet_learning_rate:
+            params_to_train = itertools.chain(model.text_encoder.parameters(), model.unet.parameters())
+        else:
+            # overwrite default learning rate with 1.0
+            training_args.learning_rate = 1.0
+            params_to_train = [
+                {
+                    "params": model.text_encoder.parameters(),
+                    "learning_rate": training_args.text_encoder_learning_rate,
+                },
+                {
+                    "params": model.unet.parameters(),
+                    "learning_rate": training_args.unet_learning_rate,
+                },
+            ]
+    else:
+        params_to_train = model.unet.parameters()
     trainer.set_optimizer_grouped_parameters(params_to_train)
 
     checkpoint = None

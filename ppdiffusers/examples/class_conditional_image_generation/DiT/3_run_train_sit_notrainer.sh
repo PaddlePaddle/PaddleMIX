@@ -12,10 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+config_file=config/SiT_XL_patch2.json
+results_dir=./output_notrainer/SiT_XL_patch2_notrainer
+
+feature_path=./data/fastdit_imagenet256
+global_batch_size=256
+num_workers=8
+max_steps=7000000
+logging_steps=50
+save_steps=5000
+
 python -u -m paddle.distributed.launch --gpus "0,1,2,3,4,5,6,7" \
     train_image_generation_notrainer.py \
-    --config_file config/SiT_XL_patch2.json \
-    --feature_path ./data/fastdit_imagenet256 \
-    --global_batch_size 256 \
-    --log_every 50 \
-    --ckpt_every 5000 \
+    --config_file ${config_file} \
+    --feature_path ${feature_path} \
+    --global_batch_size ${global_batch_size} \
+    --num_workers ${num_workers} \
+    --log_every ${logging_steps} \
+    --ckpt_every ${save_steps} \

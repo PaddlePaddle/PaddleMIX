@@ -129,6 +129,7 @@ else:
             "UNetMotionModel",
             "UNetSpatioTemporalConditionModel",
             "VQModel",
+            "UViTT2IModel",
             "DiTLLaMA2DModel",
             # new add
             "LVDMAutoencoderKL",
@@ -289,6 +290,7 @@ else:
             "LatentConsistencyModelImg2ImgPipeline",
             "LatentConsistencyModelPipeline",
             "LDMTextToImagePipeline",
+            "LDMTextToImageUViTPipeline",
             "MusicLDMPipeline",
             "PaintByExamplePipeline",
             "PixArtAlphaPipeline",
@@ -499,6 +501,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             UNet3DConditionModel,
             UNetMotionModel,
             UNetSpatioTemporalConditionModel,
+            UViTT2IModel,
             Vid2VidSTUNet,
             VQModel,
         )
@@ -630,6 +633,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             LatentConsistencyModelImg2ImgPipeline,
             LatentConsistencyModelPipeline,
             LDMTextToImagePipeline,
+            LDMTextToImageUViTPipeline,
             LVDMTextToVideoPipeline,
             LVDMUncondPipeline,
             MusicLDMPipeline,
