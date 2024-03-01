@@ -179,6 +179,7 @@ else:
             "StableDiffusionUpscalePipeline",
             "StableUnCLIPImg2ImgPipeline",
             "StableUnCLIPPipeline",
+            "StableDiffusionSafetyChecker",
             "PaddleInferCycleDiffusionPipeline",
             "PaddleInferStableDiffusionPipeline",
             "PaddleInferStableDiffusionImg2ImgPipeline",
@@ -450,6 +451,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             StableDiffusionUpscalePipeline,
             StableUnCLIPImg2ImgPipeline,
             StableUnCLIPPipeline,
+            StableDiffusionSafetyChecker,
         )
         from .stable_diffusion_safe import StableDiffusionPipelineSafe
         from .stable_diffusion_xl import (

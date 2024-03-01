@@ -439,8 +439,8 @@ class Kandinsky3ConditionalGroupNorm(nn.Layer):
         self.norm.weight = None
         self.norm.bias = None
         self.context_mlp = nn.Sequential(nn.Silu(), nn.Linear(context_dim, 2 * normalized_shape))
-        self.context_mlp[1].weight.zero_()
-        self.context_mlp[1].bias.zero_()
+        nn.init.zeros_(self.context_mlp[1].weight)
+        nn.init.zeros_(self.context_mlp[1].bias)
 
     def forward(self, x, context):
         context = self.context_mlp(context)

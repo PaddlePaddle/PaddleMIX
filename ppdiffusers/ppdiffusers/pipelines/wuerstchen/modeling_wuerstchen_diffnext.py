@@ -121,7 +121,7 @@ class WuerstchenDiffNeXt(ModelMixin, ConfigMixin):
                 up_block.append(
                     nn.Sequential(
                         WuerstchenLayerNorm(c_hidden[i], epsilon=1e-6, **norm_elementwise_affine_kwargs),
-                        nn.ConvTranspose2d(c_hidden[i], c_hidden[i - 1], kernel_size=2, stride=2),
+                        nn.Conv2DTranspose(c_hidden[i], c_hidden[i - 1], kernel_size=2, stride=2),
                     )
                 )
             self.up_blocks.append(up_block)
@@ -152,11 +152,19 @@ class WuerstchenDiffNeXt(ModelMixin, ConfigMixin):
             nn.init.constant_(self.clf[1].weight, 0)  # outputs
 
             # blocks
-            for level_block in self.down_blocks + self.up_blocks:
+            for level_block in self.down_blocks:
                 for block in level_block:
                     if isinstance(block, ResBlockStageB):
-                        block.channelwise[-1].weight.set_value(
-                            block.channelwise[-1].weight * np.sqrt(1 / sum(self.config.blocks))
+                        block.channelwise[-1].weight.copy_(
+                            block.channelwise[-1].weight * np.sqrt(1 / sum(self.config.blocks)), False
+                        )
+                    elif isinstance(block, TimestepBlock):
+                        nn.init.constant_(block.mapper.weight, 0)
+            for level_block in self.up_blocks:
+                for block in level_block:
+                    if isinstance(block, ResBlockStageB):
+                        block.channelwise[-1].weight.copy_(
+                            block.channelwise[-1].weight * np.sqrt(1 / sum(self.config.blocks)), False
                         )
                     elif isinstance(block, TimestepBlock):
                         nn.init.constant_(block.mapper.weight, 0)
@@ -190,7 +198,6 @@ class WuerstchenDiffNeXt(ModelMixin, ConfigMixin):
                                 effnet.cast("float32"),
                                 size=x.shape[-2:],
                                 mode="bicubic",
-                                antialias=True,
                                 align_corners=True,
                             ).cast(dtype)
                         )
@@ -218,7 +225,6 @@ class WuerstchenDiffNeXt(ModelMixin, ConfigMixin):
                                 effnet.cast("float32"),
                                 size=x.shape[-2:],
                                 mode="bicubic",
-                                antialias=True,
                                 align_corners=True,
                             ).cast(dtype)
                         )

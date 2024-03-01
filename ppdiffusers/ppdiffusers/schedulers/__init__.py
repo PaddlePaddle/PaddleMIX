@@ -64,6 +64,9 @@ else:
     _import_structure["scheduling_unipc_multistep"] = ["UniPCMultistepScheduler"]
     _import_structure["scheduling_utils"] = ["KarrasDiffusionSchedulers", "SchedulerMixin"]
     _import_structure["scheduling_vq_diffusion"] = ["VQDiffusionScheduler"]
+    _import_structure["scheduling_edm_dpmsolver_multistep"] = ["EDMDPMSolverMultistepScheduler"]
+    _import_structure["scheduling_edm_euler"] = ["EDMEulerScheduler"]
+
     # NOTE, new add for unidiffusers!
     _import_structure["scheduling_dpmsolver_unidiffuser"] = ["DPMSolverUniDiffuserScheduler"]
 
@@ -128,6 +131,8 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
 
         # NOTE, new add for unidiffusers!
         from .scheduling_dpmsolver_unidiffuser import DPMSolverUniDiffuserScheduler
+        from .scheduling_edm_dpmsolver_multistep import EDMDPMSolverMultistepScheduler
+        from .scheduling_edm_euler import EDMEulerScheduler
         from .scheduling_euler_ancestral_discrete import EulerAncestralDiscreteScheduler
         from .scheduling_euler_discrete import EulerDiscreteScheduler
         from .scheduling_heun_discrete import HeunDiscreteScheduler

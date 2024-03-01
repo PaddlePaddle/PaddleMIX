@@ -129,6 +129,7 @@ else:
             "UNetMotionModel",
             "UNetSpatioTemporalConditionModel",
             "VQModel",
+            "DiTLLaMA2DModel",
             # new add
             "LVDMAutoencoderKL",
             "LVDMUNet3DModel",
@@ -203,6 +204,8 @@ else:
             "UnCLIPScheduler",
             "UniPCMultistepScheduler",
             "VQDiffusionScheduler",
+            "EDMDPMSolverMultistepScheduler",
+            "EDMEulerScheduler",
         ]
     )
     _import_structure["training_utils"] = ["EMAModel"]
@@ -326,6 +329,7 @@ else:
             "StableDiffusionXLPipeline",
             "StableUnCLIPImg2ImgPipeline",
             "StableUnCLIPPipeline",
+            "StableDiffusionSafetyChecker",
             "StableVideoDiffusionPipeline",
             "TextToVideoSDPipeline",
             "TextToVideoZeroPipeline",
@@ -474,6 +478,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             AutoencoderTiny,
             ConsistencyDecoderVAE,
             ControlNetModel,
+            DiTLLaMA2DModel,
             GaussianDiffusion,
             GaussianDiffusion_SDEdit,
             Kandinsky3UNet,
@@ -541,6 +546,8 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             DPMSolverMultistepInverseScheduler,
             DPMSolverMultistepScheduler,
             DPMSolverSinglestepScheduler,
+            EDMDPMSolverMultistepScheduler,
+            EDMEulerScheduler,
             EulerAncestralDiscreteScheduler,
             EulerDiscreteScheduler,
             HeunDiscreteScheduler,
@@ -666,6 +673,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             StableDiffusionPipeline,
             StableDiffusionPipelineSafe,
             StableDiffusionPix2PixZeroPipeline,
+            StableDiffusionSafetyChecker,
             StableDiffusionSAGPipeline,
             StableDiffusionUpscalePipeline,
             StableDiffusionXLAdapterPipeline,

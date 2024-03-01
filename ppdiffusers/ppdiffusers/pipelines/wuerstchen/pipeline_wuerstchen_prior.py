@@ -39,7 +39,7 @@ EXAMPLE_DOC_STRING = """
         >>> from ppdiffusers import WuerstchenPriorPipeline
 
         >>> prior_pipe = WuerstchenPriorPipeline.from_pretrained(
-        ...     "warp-ai/wuerstchen-prior", paddle_dtype=paddle.float16
+        ...     "warp-ai/wuerstchen-prior", paddle_dtype=paddle.float32
         ... )
 
         >>> prompt = "an image of a shiba inu, donning a spacesuit and helmet"

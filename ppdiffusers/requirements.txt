@@ -13,3 +13,4 @@ note_seq
 urllib3<=2.0.0
 einops>=0.6.1
 paddlesde
+ligo-segments

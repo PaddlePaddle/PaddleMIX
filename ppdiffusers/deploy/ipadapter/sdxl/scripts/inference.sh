@@ -14,6 +14,10 @@
 
 export FLAGS_use_cuda_managed_memory=true
 
+# ==============================================================================
+# use paddle as backend to inference static model is not fast,
+# this script is used to make sure the inference is correct.
+# ==============================================================================
 # text2img
 python infer.py --model_dir static_model/stable-diffusion-xl-base-1.0-ipadapter --scheduler "ddim" --backend paddle --device gpu --task_name text2img
 
