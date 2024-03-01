@@ -28,6 +28,7 @@ from ppdiffusers.training_utils import freeze_params
 
 from .diffusion_utils import discretized_gaussian_log_likelihood, normal_kl
 from .dit import DiT
+from .dit_llama import DiT_Llama
 from .gaussian_diffusion import _extract_into_tensor, get_named_beta_schedule, mean_flat
 
 
@@ -40,6 +41,8 @@ def read_json(file):
 class DiTDiffusionModel(nn.Layer):
     def __init__(self, model_args):
         super().__init__()
+        self.model_args = model_args
+
         # init vae
         vae_name_or_path = (
             model_args.vae_name_or_path
@@ -47,16 +50,53 @@ class DiTDiffusionModel(nn.Layer):
             else os.path.join(model_args.pretrained_model_name_or_path, "vqvae")
         )
         self.vae = AutoencoderKL.from_pretrained(vae_name_or_path)
+
+        # init DiT
+        if model_args.pretrained_model_name_or_path is None:
+            if model_args.config_file.startswith("config/LargeDiT_"):
+                self.transformer = DiT_Llama(**read_json(model_args.config_file))
+            else:
+                self.transformer = DiT(**read_json(model_args.config_file))
+            # Note: Initialize DiT in diffusion/dit.py
+            logger.info("Init DiT model from scratch!")
+        else:
+            if model_args.config_file.startswith("config/LargeDiT_"):
+                self.transformer = DiT_Llama.from_pretrained(
+                    model_args.pretrained_model_name_or_path, subfolder="transformer"
+                )
+            else:
+                self.transformer = DiT.from_pretrained(
+                    model_args.pretrained_model_name_or_path, subfolder="transformer"
+                )
+            logger.info(f"Init DiT model from {model_args.pretrained_model_name_or_path}!")
+
+        # make sure unet in train mode, vae and text_encoder in eval mode
         freeze_params(self.vae.parameters())
         logger.info("Freeze vae parameters!")
+        self.vae.eval()
+        self.transformer.train()
 
+        self.use_ema = False
+        self.model_ema = None
+        if self.use_ema:
+            self.model_ema = LitEma(self.transformer)
+
+        if model_args.enable_xformers_memory_efficient_attention and is_ppxformers_available():
+            try:
+                self.transformer.enable_xformers_memory_efficient_attention()
+            except Exception as e:
+                logger.warning(
+                    "Could not enable memory efficient attention. Make sure develop paddlepaddle is installed"
+                    f" correctly and a GPU is available: {e}"
+                )
+
+        # other settings
         self.model_mean_type = "epsilon"  # PREVIOUS_X START_X EPSILON
         self.model_var_type = "learned_range"  # LEARNED FIXED_SMALL FIXED_LARGE LEARNED_RANGE
         self.loss_type = "mse"  # MSE RESCALED_MSE KL(is_vb) RESCALED_KL(is_vb)
 
+        # init scheduler
         betas = get_named_beta_schedule("linear", 1000)
-
-        # Use float64 for accuracy.
         betas = np.array(betas, dtype=np.float64)
         self.betas = betas
         assert len(betas.shape) == 1, "betas must be 1-D"
@@ -84,16 +124,12 @@ class DiTDiffusionModel(nn.Layer):
             if len(self.posterior_variance) > 1
             else np.array([])
         )
-
         self.posterior_mean_coef1 = betas * np.sqrt(self.alphas_cumprod_prev) / (1.0 - self.alphas_cumprod)
         self.posterior_mean_coef2 = (1.0 - self.alphas_cumprod_prev) * np.sqrt(alphas) / (1.0 - self.alphas_cumprod)
 
-        self.transformer = DiT(**read_json(model_args.config_file))
-        self.transformer_is_pretrained = False
-
+        # init eval_scheduler
         assert model_args.prediction_type in ["epsilon", "v_prediction"]
         self.prediction_type = model_args.prediction_type
-
         if model_args.image_logging_steps > 0:
             self.eval_scheduler = DDIMScheduler(
                 beta_start=0.00085,
@@ -106,12 +142,6 @@ class DiTDiffusionModel(nn.Layer):
                 prediction_type=self.prediction_type,
             )
             self.eval_scheduler.set_timesteps(model_args.num_inference_steps)
-
-        self.use_ema = False
-        self.model_ema = None
-
-        self.transformer.train()
-        self.vae.eval()
 
     @contextlib.contextmanager
     def ema_scope(self, context=None):
@@ -131,23 +161,6 @@ class DiTDiffusionModel(nn.Layer):
     def on_train_batch_end(self):
         if self.use_ema:
             self.model_ema(self.transformer)
-
-    def q_sample(self, x_start, t, noise=None):
-        """
-        Diffuse the data for a given number of diffusion steps.
-        In other words, sample from q(x_t | x_0).
-        :param x_start: the initial data batch.
-        :param t: the number of diffusion steps (minus 1). Here, 0 means one step.
-        :param noise: if specified, the split-out normal noise.
-        :return: A noisy version of x_start.
-        """
-        if noise is None:
-            noise = paddle.randn_like(x_start)
-        assert noise.shape == x_start.shape
-        return (
-            _extract_into_tensor(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start
-            + _extract_into_tensor(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape) * noise
-        )
 
     def forward(self, latents=None, label_id=None, **kwargs):
         x_start = latents
@@ -187,6 +200,23 @@ class DiTDiffusionModel(nn.Layer):
         else:
             loss = mse_loss
         return loss
+
+    def q_sample(self, x_start, t, noise=None):
+        """
+        Diffuse the data for a given number of diffusion steps.
+        In other words, sample from q(x_t | x_0).
+        :param x_start: the initial data batch.
+        :param t: the number of diffusion steps (minus 1). Here, 0 means one step.
+        :param noise: if specified, the split-out normal noise.
+        :return: A noisy version of x_start.
+        """
+        if noise is None:
+            noise = paddle.randn_like(x_start)
+        assert noise.shape == x_start.shape
+        return (
+            _extract_into_tensor(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start
+            + _extract_into_tensor(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape) * noise
+        )
 
     def _vb_terms_bpd(self, model, x_start, x_t, t, clip_denoised=True, model_kwargs=None):
         """
@@ -420,7 +450,7 @@ class DiTDiffusionModel(nn.Layer):
                     if hasattr(self.vae, "enable_xformers_memory_efficient_attention"):
                         self.vae.enable_xformers_memory_efficient_attention(attention_op)
                 except Exception as e:
-                    logger.warn(
+                    logger.warning(
                         "Could not enable memory efficient attention. Make sure develop paddlepaddle is installed"
                         f" correctly and a GPU is available: {e}"
                     )

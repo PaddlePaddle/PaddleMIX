@@ -40,6 +40,7 @@ if is_paddle_available():
     _import_structure["unet_motion_model"] = ["MotionAdapter", "UNetMotionModel"]
     _import_structure["unet_spatio_temporal_condition"] = ["UNetSpatioTemporalConditionModel"]
     _import_structure["vq_model"] = ["VQModel"]
+    _import_structure["uvit_t2i"] = ["UViTT2IModel"]
     _import_structure["dit_llama"] = ["DiTLLaMA2DModel"]
     # NOTE, new add
     _import_structure["lvdm_vae"] = ["LVDMAutoencoderKL"]
@@ -88,6 +89,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         from .unet_kandi3 import Kandinsky3UNet
         from .unet_motion_model import MotionAdapter, UNetMotionModel
         from .unet_spatio_temporal_condition import UNetSpatioTemporalConditionModel
+        from .uvit_t2i import UViTT2IModel
         from .vq_model import VQModel
 else:
     import sys

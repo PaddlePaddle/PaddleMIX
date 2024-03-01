@@ -55,6 +55,7 @@ else:
     _import_structure["ddpm"] = ["DDPMPipeline"]
     _import_structure["dit"] = ["DiTPipeline"]
     _import_structure["latent_diffusion"].extend(["LDMSuperResolutionPipeline"])
+    _import_structure["latent_diffusion"].extend(["LDMTextToImageUViTPipeline"])
     _import_structure["latent_diffusion_uncond"] = ["LDMPipeline"]
     _import_structure["pipeline_utils"] = [
         "AudioPipelineOutput",
@@ -148,6 +149,7 @@ else:
         "LatentConsistencyModelPipeline",
     ]
     _import_structure["latent_diffusion"].extend(["LDMTextToImagePipeline"])
+    _import_structure["latent_diffusion"].extend(["LDMTextToImageUViTPipeline"])
     _import_structure["musicldm"] = ["MusicLDMPipeline"]
     _import_structure["paint_by_example"] = ["PaintByExamplePipeline"]
     _import_structure["pixart_alpha"] = ["PixArtAlphaPipeline"]
@@ -408,7 +410,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             LatentConsistencyModelImg2ImgPipeline,
             LatentConsistencyModelPipeline,
         )
-        from .latent_diffusion import LDMTextToImagePipeline
+        from .latent_diffusion import LDMTextToImagePipeline, LDMTextToImageUViTPipeline
 
         # new add
         from .lvdm import (
@@ -447,11 +449,11 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             StableDiffusionParadigmsPipeline,
             StableDiffusionPipeline,
             StableDiffusionPix2PixZeroPipeline,
+            StableDiffusionSafetyChecker,
             StableDiffusionSAGPipeline,
             StableDiffusionUpscalePipeline,
             StableUnCLIPImg2ImgPipeline,
             StableUnCLIPPipeline,
-            StableDiffusionSafetyChecker,
         )
         from .stable_diffusion_safe import StableDiffusionPipelineSafe
         from .stable_diffusion_xl import (

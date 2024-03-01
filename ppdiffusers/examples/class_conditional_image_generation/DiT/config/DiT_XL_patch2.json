@@ -1,12 +1,8 @@
 {
-  "input_size": 32,
+  "sample_size": 32,
   "patch_size": 2,
   "in_channels": 4,
-  "hidden_size": 1152,
-  "depth": 28,
-  "num_heads": 16,
-  "mlp_ratio": 4.0,
-  "class_dropout_prob": 0.1,
-  "num_classes": 1000,
-  "learn_sigma": true
+  "num_layers": 28,
+  "num_attention_heads": 16,
+  "attention_head_dim": 72
 }
