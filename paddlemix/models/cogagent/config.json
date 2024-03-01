@@ -18,7 +18,7 @@
   "intermediate_size": 11008,
   "max_position_embeddings": 2048,
   "num_attention_heads": 32,
-  "num_hidden_layers": 1,
+  "num_hidden_layers": 32,
   "pad_token_id": 0,
   "rms_norm_eps": 1e-05,
   "template_version": "chat",
@@ -34,7 +34,7 @@
     "intermediate_size": 15360,
     "layer_norm_eps": 1e-06,
     "num_heads": 16,
-    "num_hidden_layers": 20,
+    "num_hidden_layers": 63,
     "num_positions": 257,
     "patch_size": 14
   },

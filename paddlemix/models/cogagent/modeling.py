@@ -534,6 +534,7 @@ class CogAgentModel(CogAgentPreTrainedModel):
             if position_ids is None:
                 position_ids = build_position_ids(token_type_ids, attention_mask)
             input_ids = None
+
         return self.llm_forward(
             input_ids=input_ids,
             encoder_outputs=encoder_outputs,
@@ -765,10 +766,6 @@ class CogAgentForCausalLM(CogAgentPreTrainedModel):
         hidden_states = outputs[0]
         logits = self.lm_head(hidden_states)
         logits = logits.astype(dtype="float32")
-
-        import numpy as np
-
-        np.savetxt("paddle_logits.txt", logits[0].numpy())
 
         loss = None
         if labels is not None:
