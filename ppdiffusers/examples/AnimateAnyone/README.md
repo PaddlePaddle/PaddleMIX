@@ -2,7 +2,7 @@
 
 ## 1. 模型简介
 
- Animate Anyones是由阿里巴巴智能计算研究院推出的一项角色动画技术，能将静态图像依据指定动作生成动态的角色视频。该技术利用扩散模型，以保持图像到视频转换中的时间一致性和内容细节。具体实现借鉴于[MooreThreads/Moore-AnimateAnyone](https://github.com/MooreThreads/Moore-AnimateAnyone/tree/master)。
+ Animate Anyone是一项角色动画技术，能将静态图像依据指定动作生成动态的角色视频。该技术利用扩散模型，以保持图像到视频转换中的时间一致性和内容细节。具体实现借鉴于[MooreThreads/Moore-AnimateAnyone](https://github.com/MooreThreads/Moore-AnimateAnyone/tree/master)。
 
 ![](https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/595032c0-6f76-49ba-834a-3e92e790ea2f)
 
@@ -19,7 +19,7 @@ git clone https://github.com/PaddlePaddle/PaddleMIX
 # 安装2.6.0版本的paddlepaddle-gpu，当前我们选择了cuda12.0的版本，可以查看 https://www.paddlepaddle.org.cn/ 寻找自己适合的版本
 python -m pip install paddlepaddle-gpu==2.6.0.post120 -f https://www.paddlepaddle.org.cn/whl/linux/mkl/avx/stable.html
 
-# 进入consistency_distillation目录
+# 进入AnimateAnyone目录
 cd PaddleMIX/ppdiffusers/examples/AnimateAnyone/
 
 # 安装新版本ppdiffusers
@@ -31,7 +31,7 @@ pip install -r requirements.txt
 
 ## 3. 模型下载
 
-运行以下自动下载脚本，通过 [Huggingface](https://huggingface.co/InstantX/InstantID) 下载 AnimateAnyone 相关模型权重文件，模型权重文件将存储在`./pretrained_weights`下面。
+运行以下自动下载脚本，下载 AnimateAnyone 相关模型权重文件，模型权重文件将存储在`./pretrained_weights`下面。
 
 ```shell
 python scripts/download_weights.py

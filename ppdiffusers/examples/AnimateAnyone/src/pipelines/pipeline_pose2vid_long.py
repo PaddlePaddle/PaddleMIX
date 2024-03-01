@@ -29,9 +29,6 @@ from tqdm import tqdm
 
 from ppdiffusers import DiffusionPipeline
 from ppdiffusers.image_processor import VaeImageProcessor
-from ppdiffusers.models.modeling_pytorch_paddle_utils import (
-    convert_pytorch_state_dict_to_paddle,
-)
 from ppdiffusers.models.modeling_utils import faster_set_state_dict
 from ppdiffusers.schedulers import (
     DDIMScheduler,
@@ -97,21 +94,16 @@ class Pose2VideoPipeline(DiffusionPipeline):
     def load_pretrained(self, config):
         # loading the denoising unet with motion module
         state_dict_denoise = smart_load(config.denoising_unet_path)
-        state_dict_denoise = convert_pytorch_state_dict_to_paddle(self.denoising_unet, state_dict_denoise)
-
         state_dict_motion = smart_load(config.motion_module_path)
-        state_dict_motion = convert_pytorch_state_dict_to_paddle(self.denoising_unet, state_dict_motion)
         state_dict_denoise.update(state_dict_motion)
         faster_set_state_dict(self.denoising_unet, state_dict_denoise)
 
         # loading the reference unet
         state_dict_ref = smart_load(config.reference_unet_path)
-        state_dict_ref = convert_pytorch_state_dict_to_paddle(self.reference_unet, state_dict_ref)
         faster_set_state_dict(self.reference_unet, state_dict_ref)
 
         # loading the pose guider
         state_dict_pose_guider = smart_load(config.pose_guider_path)
-        state_dict_ref = convert_pytorch_state_dict_to_paddle(self.pose_guider, state_dict_pose_guider)
         faster_set_state_dict(self.pose_guider, state_dict_pose_guider)
 
     def enable_vae_slicing(self):

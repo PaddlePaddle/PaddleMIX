@@ -39,7 +39,7 @@ def parse_args():
     parser.add_argument("-L", type=int, default=24)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--cfg", type=float, default=3.5)
-    parser.add_argument("--steps", type=int, default=1)
+    parser.add_argument("--steps", type=int, default=30)
     parser.add_argument("--fps", type=int, default=30)
     args = parser.parse_args()
 
@@ -53,23 +53,19 @@ def main():
 
     vae = AutoencoderKL.from_pretrained(
         config.pretrained_vae_path,
-        from_diffusers=True,
-        from_hf_hub=True,
     )
 
     reference_unet = UNet2DConditionModel.from_pretrained(
         config.pretrained_base_model_path,
         subfolder="unet",
-        from_diffusers=True,
-        from_hf_hub=True,
     )
 
     inference_config_path = config.inference_config
     infer_config = OmegaConf.load(inference_config_path)
     denoising_unet = UNet3DConditionModel.from_pretrained_2d(
-        config.pretrained_base_model_path,
+        config.denoising_unet_config_path,
+        config.denoising_unet_path,
         config.motion_module_path,
-        subfolder="unet",
         unet_additional_kwargs=infer_config.unet_additional_kwargs,
     )
 

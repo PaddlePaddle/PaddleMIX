@@ -13,54 +13,28 @@
 # limitations under the License.
 
 import os
+from pathlib import Path
 
-os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
-os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
-from pathlib import Path, PurePosixPath
-
-from huggingface_hub import hf_hub_download
+from aistudio_sdk.hub import download
 
 
-def prepare_base_model():
-    print("Preparing base stable-diffusion-v1-5 weights...")
-    local_dir = "./pretrained_weights/stable-diffusion-v1-5"
-    os.makedirs(local_dir, exist_ok=True)
-    for hub_file in ["unet/config.json", "unet/diffusion_pytorch_model.bin"]:
-        path = Path(hub_file)
-        saved_path = local_dir / path
-        if os.path.exists(saved_path):
-            continue
-        hf_hub_download(
-            repo_id="runwayml/stable-diffusion-v1-5",
-            subfolder=PurePosixPath(path.parent),
-            filename=PurePosixPath(path.name),
-            local_dir=local_dir,
-        )
-
-
-def prepare_anyone():
-    print("Preparing AnimateAnyone weights...")
+def load_weight():
+    print("Preparing AnimateAnyone pretrained weights...")
     local_dir = "./pretrained_weights"
     os.makedirs(local_dir, exist_ok=True)
-    for hub_file in [
-        "denoising_unet.pth",
-        "motion_module.pth",
-        "pose_guider.pth",
-        "reference_unet.pth",
+    for file_name in [
+        "config.json",
+        "denoising_unet.pdparams",
+        "motion_module.pdparams",
+        "pose_guider.pdparams",
+        "reference_unet.pdparams",
     ]:
-        path = Path(hub_file)
+        path = Path(file_name)
         saved_path = local_dir / path
         if os.path.exists(saved_path):
             continue
-
-        hf_hub_download(
-            repo_id="patrolli/AnimateAnyone",
-            subfolder=PurePosixPath(path.parent),
-            filename=PurePosixPath(path.name),
-            local_dir=local_dir,
-        )
+        download(repo_id="Tsaiyue/AnimateAnyone", filename=file_name, cache_dir=local_dir)
 
 
 if __name__ == "__main__":
-    prepare_base_model()
-    prepare_anyone()
+    load_weight()

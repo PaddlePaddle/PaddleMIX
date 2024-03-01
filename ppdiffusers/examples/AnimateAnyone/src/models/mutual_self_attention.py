@@ -74,7 +74,6 @@ class ReferenceAttentionControl:
         dtype="float16",
         batch_size=1,
         num_images_per_prompt=1,
-        device=str("cpu").replace("cuda", "gpu"),
         fusion_blocks="midup",
     ):
         MODE = mode
@@ -88,19 +87,13 @@ class ReferenceAttentionControl:
         num_images_per_prompt = num_images_per_prompt
         dtype = dtype
         if do_classifier_free_guidance:
-            uc_mask = (
-                paddle.to_tensor(
-                    data=[1] * batch_size * num_images_per_prompt * 16 + [0] * batch_size * num_images_per_prompt * 16,
-                    dtype="float32",
-                )
-                .to(device)
-                .astype(dtype="bool")
-            )
+            uc_mask = paddle.to_tensor(
+                data=[1] * batch_size * num_images_per_prompt * 16 + [0] * batch_size * num_images_per_prompt * 16,
+                dtype="float32",
+            ).astype(dtype="bool")
         else:
-            uc_mask = (
-                paddle.to_tensor(data=[0] * batch_size * num_images_per_prompt * 2, dtype="float32")
-                .to(device)
-                .astype(dtype="bool")
+            uc_mask = paddle.to_tensor(data=[0] * batch_size * num_images_per_prompt * 2, dtype="float32").astype(
+                dtype="bool"
             )
 
         def hacked_basic_transformer_inner_forward(
@@ -170,14 +163,10 @@ class ReferenceAttentionControl:
                         _uc_mask = uc_mask.clone()
                         if hidden_states.shape[0] != _uc_mask.shape[0]:
 
-                            _uc_mask = (
-                                paddle.to_tensor(
-                                    data=[1] * (hidden_states.shape[0] // 2) + [0] * (hidden_states.shape[0] // 2),
-                                    dtype="float32",
-                                )
-                                .to(device)
-                                .astype(dtype="bool")
-                            )
+                            _uc_mask = paddle.to_tensor(
+                                data=[1] * (hidden_states.shape[0] // 2) + [0] * (hidden_states.shape[0] // 2),
+                                dtype="float32",
+                            ).astype(dtype="bool")
 
                         hidden_states_c[_uc_mask] = (
                             self.attn1(

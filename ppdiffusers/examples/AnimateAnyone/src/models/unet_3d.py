@@ -25,19 +25,11 @@ import paddle
 from ppdiffusers.configuration_utils import ConfigMixin, register_to_config
 from ppdiffusers.models.attention_processor import AttentionProcessor
 from ppdiffusers.models.embeddings import TimestepEmbedding, Timesteps
-from ppdiffusers.models.modeling_pytorch_paddle_utils import (
-    convert_pytorch_state_dict_to_paddle,
-)
 from ppdiffusers.models.modeling_utils import ModelMixin
-
-# from ppdiffusers.utils import SAFETENSORS_WEIGHTS_NAME, WEIGHTS_NAME, BaseOutput, logging
-from ppdiffusers.utils import TORCH_WEIGHTS_NAME, BaseOutput, logging, smart_load
+from ppdiffusers.utils import BaseOutput, logging, smart_load
 
 from .resnet import InflatedConv3d, InflatedGroupNorm
 from .unet_3d_blocks import UNetMidBlock3DCrossAttn, get_down_block, get_up_block
-
-# from safetensors.torch import load_file
-
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -571,18 +563,14 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin):
     @classmethod
     def from_pretrained_2d(
         cls,
-        pretrained_model_path: Optional[Union[str, PathLike]],
+        denoising_unet_config_path: Optional[Union[str, PathLike]],
+        denoising_unet_path: Optional[Union[str, PathLike]],
         motion_module_path: Optional[Union[str, PathLike]],
-        subfolder=None,
         unet_additional_kwargs=None,
         mm_zero_proj_out=False,
     ):
 
-        if subfolder is not None:
-            pretrained_model_path = pretrained_model_path + "/" + subfolder
-        logger.info(f"loaded temporal unet's pretrained weights from {pretrained_model_path} ...")
-
-        config_file = pretrained_model_path + "/" + "config.json"
+        config_file = denoising_unet_config_path
         if not (Path(config_file).exists() and Path(config_file).is_file()):
             raise RuntimeError(f"{config_file} does not exist or is not a file")
 
@@ -604,16 +592,13 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin):
 
         model = cls.from_config(unet_config, **unet_additional_kwargs)
 
-        state_dict = smart_load(pretrained_model_path + "/" + TORCH_WEIGHTS_NAME)
-        state_dict = convert_pytorch_state_dict_to_paddle(model, state_dict)
-
+        state_dict = smart_load(denoising_unet_path)
         # load the motion module weights
         if Path(motion_module_path).exists() and Path(motion_module_path).is_file():
             if Path(motion_module_path).suffix.lower() in [".pth", ".pt", ".ckpt", ".pdparams"]:
                 logger.info(f"Load motion module params from {motion_module_path}")
 
                 motion_state_dict = smart_load(motion_module_path)
-                motion_state_dict = convert_pytorch_state_dict_to_paddle(model, motion_state_dict)
 
             else:
                 raise RuntimeError(f"unknown file format for motion module weights: {motion_module_path.suffix}")
