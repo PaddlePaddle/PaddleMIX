@@ -15,12 +15,13 @@
 import os
 from pathlib import Path
 
-from aistudio_sdk.hub import download
+from ppdiffusers.utils import bos_aistudio_hf_download
 
 
 def load_weight():
     print("Preparing AnimateAnyone pretrained weights...")
     local_dir = "./pretrained_weights"
+    pretrained_model_name_or_path = "Tsaiyue/AnimateAnyone"
     os.makedirs(local_dir, exist_ok=True)
     for file_name in [
         "config.json",
@@ -33,7 +34,8 @@ def load_weight():
         saved_path = local_dir / path
         if os.path.exists(saved_path):
             continue
-        download(repo_id="Tsaiyue/AnimateAnyone", filename=file_name, cache_dir=local_dir)
+
+        bos_aistudio_hf_download(pretrained_model_name_or_path, weights_name=file_name, cache_dir=local_dir)
 
 
 if __name__ == "__main__":

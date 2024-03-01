@@ -31,7 +31,7 @@ pip install -r requirements.txt
 
 ## 3. 模型下载
 
-运行以下自动下载脚本，下载 AnimateAnyone 相关模型权重文件，模型权重文件将存储在`./pretrained_weights`下面。
+运行以下自动下载脚本，下载 AnimateAnyone 相关模型权重文件，模型权重文件将存储在`./pretrained_weights`下。
 
 ```shell
 python scripts/download_weights.py
