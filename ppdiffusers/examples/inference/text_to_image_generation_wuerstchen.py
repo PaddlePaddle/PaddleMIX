@@ -16,9 +16,9 @@ import paddle
 from ppdiffusers import WuerstchenPriorPipeline, WuerstchenDecoderPipeline
 
 prior_pipe = WuerstchenPriorPipeline.from_pretrained(
-     "warp-ai/wuerstchen-prior", paddle_dtype=paddle.float32
+     "warp-ai/wuerstchen-prior", paddle_dtype=paddle.float16
 )
-gen_pipe = WuerstchenDecoderPipeline.from_pretrained("warp-ai/wuerstchen", paddle_dtype=paddle.float32)
+gen_pipe = WuerstchenDecoderPipeline.from_pretrained("warp-ai/wuerstchen", paddle_dtype=paddle.float16)
 
 prompt = "an image of a shiba inu, donning a spacesuit and helmet"
 prior_output = prior_pipe(prompt)

@@ -79,7 +79,13 @@ class GlobalResponseNorm(nn.Layer):
         self.norm = paddle.linalg.vector_norm if hasattr(paddle.linalg, "vector_norm") else paddle.linalg.norm
 
     def forward(self, x):
+        # lxl: fix normlaization error
+        dtype = x.dtype
+        x = x.cast("float32")
         agg_norm = self.norm(x, p=2, axis=(1, 2), keepdim=True)
+        agg_norm = agg_norm.cast(dtype)
+        x = x.cast(dtype)
+        
         stand_div_norm = agg_norm / (agg_norm.mean(axis=-1, keepdim=True) + 1e-6)
         return self.gamma * (x * stand_div_norm) + self.beta + x
 
