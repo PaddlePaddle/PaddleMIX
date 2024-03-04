@@ -14,6 +14,8 @@
 import itertools
 import math
 import os
+import pprint
+import socket
 
 import numpy as np
 import paddle
@@ -22,13 +24,10 @@ from diffusion import (
     DiTDiffusionModel,
     LatentDiffusionTrainer,
     ModelArguments,
+    TrainerArguments,
+    setdistenv,
 )
-from paddlenlp.trainer import (
-    PdArgumentParser,
-    TrainingArguments,
-    get_last_checkpoint,
-    set_seed,
-)
+from paddlenlp.trainer import PdArgumentParser, get_last_checkpoint, set_seed
 from paddlenlp.utils.log import logger
 from transport import SiTDiffusionModel
 
@@ -56,12 +55,24 @@ class FeatureDataset(paddle.io.Dataset):
 
 
 def main():
-    parser = PdArgumentParser((ModelArguments, DataArguments, TrainingArguments))
+    parser = PdArgumentParser((ModelArguments, DataArguments, TrainerArguments))
     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
+    training_args.hostname = socket.gethostname()
+    pprint.pprint(data_args)
+    pprint.pprint(model_args)
+    pprint.pprint(training_args)
+    setdistenv(training_args)
+    model_args.data_world_rank = training_args.data_world_rank
+    model_args.data_world_size = training_args.data_world_size
+
     # report to custom_visualdl
     training_args.report_to = ["custom_visualdl"]
     training_args.resolution = data_args.resolution
     training_args.benchmark = model_args.benchmark
+    training_args.use_ema = model_args.use_ema
+    training_args.enable_xformers_memory_efficient_attention = model_args.enable_xformers_memory_efficient_attention
+    training_args.only_save_updated_model = model_args.only_save_updated_model
+
     training_args.profiler_options = model_args.profiler_options
     training_args.image_logging_steps = model_args.image_logging_steps = (
         (math.ceil(model_args.image_logging_steps / training_args.logging_steps) * training_args.logging_steps)

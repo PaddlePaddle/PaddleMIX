@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import contextlib
+import os
 import sys
 import time
 
@@ -27,8 +28,14 @@ from paddlenlp.trainer.integrations import (
     VisualDLCallback,
     rewrite_logs,
 )
+from paddlenlp.transformers.model_utils import _add_variant
 from paddlenlp.utils import profiler
 from paddlenlp.utils.log import logger
+
+from ppdiffusers.training_utils import unwrap_model
+
+PADDLE_WEIGHTS_NAME = "model_state.pdparams"
+TRAINING_ARGS_NAME = "training_args.bin"
 
 
 def worker_init_fn(_):
@@ -253,3 +260,39 @@ class LatentDiffusionTrainer(Trainer):
             worker_init_fn=worker_init_fn,
         )
         return train_dataloader
+
+    def _save_todo(self, output_dir=None, state_dict=None, merge_tensor_parallel=False):
+        # TODO: merge_tensor_parallel
+        output_dir = output_dir if output_dir is not None else self.args.output_dir
+        os.makedirs(output_dir, exist_ok=True)
+
+        if self.args.only_save_updated_model:
+            unwraped_model = unwrap_model(self.model)
+            logger.info(f"Saving transformer DiT checkpoint to {output_dir}/transformer")
+            unwraped_model.transformer.save_pretrained(
+                os.path.join(output_dir, "transformer"),
+                # merge_tensor_parallel=merge_tensor_parallel,
+            )
+
+            if unwraped_model.use_ema:
+                logger.info(f"Saving ema transformer DiT checkpoint to {output_dir}/transformer")
+                with unwraped_model.ema_scope():
+                    unwraped_model.transformer.save_pretrained(
+                        os.path.join(output_dir, "transformer"),
+                        # merge_tensor_parallel=merge_tensor_parallel,
+                        variant="ema",
+                    )
+
+        else:
+            logger.info(f"Saving model checkpoint to {output_dir}")
+            if state_dict is None:
+                state_dict = self.model.state_dict()
+            paddle.save(
+                state_dict,
+                os.path.join(
+                    output_dir,
+                    _add_variant(PADDLE_WEIGHTS_NAME, self.args.weight_name_suffix),
+                ),
+            )
+            if self.args.should_save:
+                paddle.save(self.args, os.path.join(output_dir, TRAINING_ARGS_NAME))

@@ -52,12 +52,12 @@ TRAINER_INSTANCES='127.0.0.1'
 MASTER='127.0.0.1:8080'
 TRAINERS_NUM=1 # nnodes, machine num
 TRAINING_GPUS_PER_NODE=8 # nproc_per_node
-DP_DEGREE=1 # dp_parallel_degree
+DP_DEGREE=8 # dp_parallel_degree
 MP_DEGREE=1 # tensor_parallel_degree
 SHARDING_DEGREE=1 # sharding_parallel_degree
 
 uvit_config_file=config/uvit_t2i_small.json
-output_dir=output_dir/uvit_t2i_small
+output_dir=output_trainer/uvit_t2i_small_trainer
 
 feature_path=./datasets/coco256_features
 per_device_train_batch_size=32
@@ -65,8 +65,8 @@ dataloader_num_workers=8
 max_steps=1000000
 save_steps=5000
 warmup_steps=5000
-logging_steps=20
-image_logging_steps=10000
+logging_steps=50
+image_logging_steps=-1
 seed=1234
 
 USE_AMP=True
@@ -92,7 +92,7 @@ ${TRAINING_PYTHON} train_txt2img_mscoco_uvit_trainer.py \
     --image_logging_steps ${image_logging_steps} \
     --logging_steps ${logging_steps} \
     --save_steps ${save_steps} \
-    --seed ${seed}\
+    --seed ${seed} \
     --dataloader_num_workers ${dataloader_num_workers} \
     --max_grad_norm -1 \
     --uvit_config_file ${uvit_config_file} \
@@ -105,6 +105,10 @@ ${TRAINING_PYTHON} train_txt2img_mscoco_uvit_trainer.py \
     --fp16 ${USE_AMP} \
     --fp16_opt_level=${fp16_opt_level} \
     --enable_xformers_memory_efficient_attention ${enable_xformers} \
+    --dp_degree ${DP_DEGREE} \
+    --tensor_parallel_degree ${MP_DEGREE} \
+    --sharding_parallel_degree ${SHARDING_DEGREE} \
+    --pipeline_parallel_degree 1 \
 ```
 
 
