@@ -35,5 +35,5 @@ video = [Image.fromarray(frame).resize((1024, 576)) for frame in video_frames]
 # and denoise it
 video_frames = pipe(prompt, video=video, strength=0.6).frames
 video_path = export_to_video(
-    video_frames, output_video_path="text_to_video_generation-synth_img2img-result-video_1024_spiderman.mp4"
+    video_frames, fps=7, output_video_path="text_to_video_generation-synth_img2img-result-video_1024_spiderman.mp4"
 )
