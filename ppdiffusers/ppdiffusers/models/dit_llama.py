@@ -13,15 +13,14 @@
 # limitations under the License.
 
 import math
-from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Optional
 
 import paddle
+import paddle.nn as nn
 import paddle.nn.functional as F
-from paddle.distributed.fleet.utils import recompute
+from paddle.nn.functional.flash_attention import flash_attention
 
 from ..configuration_utils import ConfigMixin, register_to_config
-from ..utils import recompute_use_reentrant, use_old_recompute
 from .embeddings import LabelEmbedding
 from .modeling_utils import ModelMixin
 from .transformer_2d import Transformer2DModelOutput
@@ -45,24 +44,24 @@ def TypePromote(x, y):
         promote_type = TYPE_PROMOTE_DICT[y.dtype.name + x.dtype.name]
     else:
         return x, y
-    return x.astype(promote_type), y.astype(promote_type)
+    return x.cast(promote_type), y.cast(promote_type)
 
 
 def modulate(x, shift, scale):
     return x * (1 + scale.unsqueeze(axis=1)) + shift.unsqueeze(axis=1)
 
 
-class TimestepEmbedder(paddle.nn.Layer):
+class TimestepEmbedder(nn.Layer):
     """
     Embeds scalar timesteps into vector representations.
     """
 
     def __init__(self, hidden_size, frequency_embedding_size=256):
         super().__init__()
-        self.mlp = paddle.nn.Sequential(
-            paddle.nn.Linear(in_features=frequency_embedding_size, out_features=hidden_size, bias_attr=True),
-            paddle.nn.Silu(),
-            paddle.nn.Linear(in_features=hidden_size, out_features=hidden_size, bias_attr=True),
+        self.mlp = nn.Sequential(
+            nn.Linear(frequency_embedding_size, hidden_size),
+            nn.Silu(),
+            nn.Linear(hidden_size, hidden_size),
         )
         self.frequency_embedding_size = frequency_embedding_size
 
@@ -86,12 +85,12 @@ class TimestepEmbedder(paddle.nn.Layer):
 
     def forward(self, t):
         t_freq = self.timestep_embedding(t, self.frequency_embedding_size)
-        t_emb = self.mlp(t_freq.to(self.mlp[0].weight.dtype))
+        t_emb = self.mlp(t_freq.cast(self.mlp[0].weight.dtype))
         return t_emb
 
 
-class Attention(paddle.nn.Layer):
-    def __init__(self, dim: int, n_heads: int, n_kv_heads, qk_norm: bool):
+class Attention(nn.Layer):
+    def __init__(self, dim, n_heads, n_kv_heads, qk_norm=True, fused_attn=True):
         """
         Initialize the Attention module.
 
@@ -121,22 +120,22 @@ class Attention(paddle.nn.Layer):
         self.n_rep = self.n_local_heads // self.n_local_kv_heads
         self.head_dim = dim // n_heads
 
-        self.wq = paddle.nn.Linear(dim, n_heads * self.head_dim, bias_attr=False)
-        self.wk = paddle.nn.Linear(dim, self.n_kv_heads * self.head_dim, bias_attr=False)
-        self.wv = paddle.nn.Linear(dim, self.n_kv_heads * self.head_dim, bias_attr=False)
-        self.wo = paddle.nn.Linear(n_heads * self.head_dim, dim, bias_attr=False)
+        self.wq = nn.Linear(dim, n_heads * self.head_dim, bias_attr=False)
+        self.wk = nn.Linear(dim, self.n_kv_heads * self.head_dim, bias_attr=False)
+        self.wv = nn.Linear(dim, self.n_kv_heads * self.head_dim, bias_attr=False)
+        self.wo = nn.Linear(n_heads * self.head_dim, dim, bias_attr=False)
 
         if qk_norm:
-            self.q_norm = paddle.nn.LayerNorm(self.n_local_heads * self.head_dim)
-            self.k_norm = paddle.nn.LayerNorm(self.n_local_kv_heads * self.head_dim)
+            self.q_norm = nn.LayerNorm(self.n_local_heads * self.head_dim)
+            self.k_norm = nn.LayerNorm(self.n_local_kv_heads * self.head_dim)
         else:
-            self.q_norm = self.k_norm = paddle.nn.Identity()
+            self.q_norm = self.k_norm = nn.Identity()
 
-        self.fused_attn = False
+        self.fused_attn = fused_attn
         self.scale = self.head_dim**-0.5
 
     @staticmethod
-    def reshape_for_broadcast(freqs_cis: paddle.Tensor, x: paddle.Tensor):
+    def reshape_for_broadcast(freqs_cis, x):
         """
         Reshape frequency tensor for broadcasting it with another tensor.
 
@@ -164,7 +163,7 @@ class Attention(paddle.nn.Layer):
         return freqs_cis.reshape([*shape])
 
     @staticmethod
-    def apply_rotary_emb(xq: paddle.Tensor, xk: paddle.Tensor, freqs_cis):
+    def apply_rotary_emb(xq, xk, freqs_cis):
         """
         Apply rotary embeddings to input tensors using the given frequency
         tensor.
@@ -186,14 +185,14 @@ class Attention(paddle.nn.Layer):
                 and key tensor with rotary embeddings.
         """
         with paddle.amp.auto_cast(enable=False):
-            xq_ = paddle.as_complex(x=xq.astype(dtype="float32").reshape([*tuple(xq.shape)[:-1], -1, 2]))
-            xk_ = paddle.as_complex(x=xk.astype(dtype="float32").reshape([*tuple(xk.shape)[:-1], -1, 2]))
+            xq_ = paddle.as_complex(xq.cast("float32").reshape([*tuple(xq.shape)[:-1], -1, 2]))
+            xk_ = paddle.as_complex(xk.cast("float32").reshape([*tuple(xk.shape)[:-1], -1, 2]))
             freqs_cis = Attention.reshape_for_broadcast(freqs_cis, xq_)
-            xq_out = paddle.as_real(x=xq_ * freqs_cis).flatten(start_axis=3)
-            xk_out = paddle.as_real(x=xk_ * freqs_cis).flatten(start_axis=3)
-            return xq_out.astype(dtype=xq.dtype), xk_out.astype(dtype=xk.dtype)
+            xq_out = paddle.as_real(xq_ * freqs_cis).flatten(start_axis=3)
+            xk_out = paddle.as_real(xk_ * freqs_cis).flatten(start_axis=3)
+            return xq_out.cast(xq.dtype), xk_out.cast(xk.dtype)
 
-    def forward(self, x: paddle.Tensor, freqs_cis: paddle.Tensor) -> paddle.Tensor:
+    def forward(self, x, freqs_cis):
         """
         Forward pass of the attention module.
 
@@ -217,34 +216,44 @@ class Attention(paddle.nn.Layer):
         xv = xv.reshape([bsz, seqlen, self.n_local_kv_heads, self.head_dim])
 
         xq, xk = Attention.apply_rotary_emb(xq, xk, freqs_cis=freqs_cis)
-        xq, xk = xq.to(dtype), xk.to(dtype)
+        xq, xk = xq.cast(dtype), xk.cast(dtype)
 
         n_rep = self.n_local_heads // self.n_local_kv_heads
         if n_rep >= 1:
             xk = xk.unsqueeze(axis=3).tile([1, 1, 1, n_rep, 1]).flatten(start_axis=2, stop_axis=3)
             xv = xv.unsqueeze(axis=3).tile([1, 1, 1, n_rep, 1]).flatten(start_axis=2, stop_axis=3)
 
-        if self.fused_attn:
-            output = F.scaled_dot_product_attention(
-                xq.transpose([0, 2, 1, 3]),
-                xk.transpose([0, 2, 1, 3]),
-                xv.transpose([0, 2, 1, 3]),
-                dropout_p=0.0,
-                is_causal=False,
-            ).transpose([0, 2, 1, 3])
+        if dtype in [paddle.float16, paddle.bfloat16]:
+            output, _ = flash_attention(
+                xq,
+                xk,
+                xv,
+                dropout=0.0,
+                causal=False,
+                return_softmax=False,
+            )
         else:
-            q = xq.transpose([0, 2, 1, 3]) * self.scale
-            attn = q @ xk.transpose([0, 2, 1, 3]).transpose([0, 1, 3, 2])
-            attn = F.softmax(attn, axis=-1)
-            output = attn @ xv.transpose([0, 2, 1, 3])
-            output = output.transpose([0, 2, 1, 3])
+            if self.fused_attn:
+                output = F.scaled_dot_product_attention_(
+                    xq,
+                    xk,
+                    xv,
+                    dropout_p=0.0,
+                    is_causal=False,
+                )
+            else:
+                q = xq.transpose([0, 2, 1, 3]) * self.scale
+                attn = q @ xk.transpose([0, 2, 1, 3]).transpose([0, 1, 3, 2])
+                attn = F.softmax(attn, axis=-1)
+                output = attn @ xv.transpose([0, 2, 1, 3])
+                output = output.transpose([0, 2, 1, 3])
 
         output = output.flatten(start_axis=-2)
         return self.wo(output)
 
 
-class FeedForward(paddle.nn.Layer):
-    def __init__(self, dim: int, hidden_dim: int, multiple_of: int, ffn_dim_multiplier):
+class FeedForward(nn.Layer):
+    def __init__(self, dim, hidden_dim, multiple_of=256, ffn_dim_multiplier=None):
         """
         Initialize the FeedForward module.
 
@@ -268,19 +277,20 @@ class FeedForward(paddle.nn.Layer):
         hidden_dim = int(2 * hidden_dim / 3)
         if ffn_dim_multiplier is not None:
             hidden_dim = int(ffn_dim_multiplier * hidden_dim)
-        hidden_dim = multiple_of * ((hidden_dim + multiple_of - 1) // multiple_of)
-        self.w1 = paddle.nn.Linear(in_features=dim, out_features=hidden_dim, bias_attr=False)
-        self.w2 = paddle.nn.Linear(in_features=hidden_dim, out_features=dim, bias_attr=False)
-        self.w3 = paddle.nn.Linear(in_features=dim, out_features=hidden_dim, bias_attr=False)
+        hidden_dim = int(multiple_of * ((hidden_dim + multiple_of - 1) // multiple_of))
 
-    def _forward_silu_gating(self, x1, x3):
-        return F.silu(x1) * x3
+        self.w1 = nn.Linear(dim, hidden_dim, bias_attr=False)
+        self.w2 = nn.Linear(hidden_dim, dim, bias_attr=False)
+        self.w3 = nn.Linear(dim, hidden_dim, bias_attr=False)
 
     def forward(self, x):
-        return self.w2(self._forward_silu_gating(self.w1(x), self.w3(x)))
+        xw1 = F.silu(self.w1(x))
+        xw3 = self.w3(x)
+        output = self.w2(xw1 * xw3)
+        return output
 
 
-class TransformerBlock(paddle.nn.Layer):
+class TransformerBlock(nn.Layer):
     def __init__(
         self,
         layer_id: int,
@@ -288,9 +298,11 @@ class TransformerBlock(paddle.nn.Layer):
         n_heads: int,
         n_kv_heads: int,
         multiple_of: int,
+        mlp_ratio: float,
         ffn_dim_multiplier: float,
         norm_eps: float,
         qk_norm: bool,
+        fused_attn: bool,
     ) -> None:
         """
         Initialize a TransformerBlock.
@@ -325,18 +337,21 @@ class TransformerBlock(paddle.nn.Layer):
         super().__init__()
         self.dim = dim
         self.head_dim = dim // n_heads
-        self.attention = Attention(dim, n_heads, n_kv_heads, qk_norm)
+        self.attention = Attention(dim, n_heads, n_kv_heads, qk_norm, fused_attn)
+        mlp_hidden_dim = int(dim * mlp_ratio)
         self.feed_forward = FeedForward(
-            dim=dim, hidden_dim=4 * dim, multiple_of=multiple_of, ffn_dim_multiplier=ffn_dim_multiplier
+            dim=dim, hidden_dim=mlp_hidden_dim, multiple_of=multiple_of, ffn_dim_multiplier=ffn_dim_multiplier
         )
         self.layer_id = layer_id
-        self.attention_norm = paddle.nn.LayerNorm(dim, epsilon=norm_eps, bias_attr=False)
-        self.ffn_norm = paddle.nn.LayerNorm(dim, epsilon=norm_eps, bias_attr=False)
-        self.adaLN_modulation = paddle.nn.Sequential(
-            paddle.nn.Silu(), paddle.nn.Linear(in_features=min(dim, 1024), out_features=6 * dim, bias_attr=True)
+        self.attention_norm = nn.LayerNorm(dim, epsilon=norm_eps, bias_attr=False)
+        self.ffn_norm = nn.LayerNorm(dim, epsilon=norm_eps, bias_attr=False)
+
+        self.adaLN_modulation = nn.Sequential(
+            nn.Silu(),
+            nn.Linear(min(dim, 1024), 6 * dim),
         )
 
-    def forward(self, x: paddle.Tensor, freqs_cis: paddle.Tensor, adaln_input=None):
+    def forward(self, x, freqs_cis, adaln_input=None):
         """
         Perform a forward pass through the TransformerBlock.
 
@@ -352,13 +367,13 @@ class TransformerBlock(paddle.nn.Layer):
 
         """
         if adaln_input is not None:
-            (shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp) = self.adaLN_modulation(
-                adaln_input
-            ).chunk(chunks=6, axis=1)
-            h = x + gate_msa.unsqueeze(axis=1) * self.attention(
+            shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.adaLN_modulation(adaln_input).chunk(
+                6, axis=1
+            )
+            h = x + gate_msa.unsqueeze(1) * self.attention(
                 modulate(self.attention_norm(x), shift_msa, scale_msa), freqs_cis
             )
-            out = h + gate_mlp.unsqueeze(axis=1) * self.feed_forward(modulate(self.ffn_norm(h), shift_mlp, scale_mlp))
+            out = h + gate_mlp.unsqueeze(1) * self.feed_forward(modulate(self.ffn_norm(h), shift_mlp, scale_mlp))
         else:
             h = x + self.attention(self.attention_norm(x), freqs_cis)
             out = h + self.feed_forward(self.ffn_norm(h))
@@ -369,13 +384,11 @@ class FinalLayer(paddle.nn.Layer):
     def __init__(self, hidden_size, patch_size, out_channels):
         super().__init__()
         self.norm_final = paddle.nn.LayerNorm(hidden_size, weight_attr=False, bias_attr=False, epsilon=1e-06)
-        self.linear = paddle.nn.Linear(hidden_size, patch_size * patch_size * out_channels, bias_attr=True)
-        self.adaLN_modulation = paddle.nn.Sequential(
-            paddle.nn.Silu(), paddle.nn.Linear(min(hidden_size, 1024), 2 * hidden_size, bias_attr=True)
-        )
+        self.linear = nn.Linear(hidden_size, patch_size * patch_size * out_channels)
+        self.adaLN_modulation = nn.Sequential(nn.Silu(), nn.Linear(min(hidden_size, 1024), 2 * hidden_size))
 
     def forward(self, x, c):
-        shift, scale = self.adaLN_modulation(c).chunk(chunks=2, axis=1)
+        shift, scale = self.adaLN_modulation(c).chunk(2, axis=1)
         x = modulate(self.norm_final(x), shift, scale)
         x = self.linear(x)
         return x
@@ -383,17 +396,19 @@ class FinalLayer(paddle.nn.Layer):
 
 class DiTLLaMA2DModel(ModelMixin, ConfigMixin):
     _supports_gradient_checkpointing = True
+    _use_memory_efficient_attention_xformers = True
 
     @register_to_config
     def __init__(
         self,
-        sample_size: int = 32,
+        sample_size: int = 32,  # image_size // 8
         patch_size: int = 2,
         in_channels: int = 4,
-        out_channels: int = 4,
-        num_attention_heads: int = 16,
-        attention_head_dim: int = 88,
+        out_channels: int = 8,
         num_layers: int = 32,
+        num_attention_heads: int = 16,
+        attention_head_dim: int = 96,
+        mlp_ratio: float = 4.0,
         n_kv_heads=None,
         multiple_of: int = 256,
         ffn_dim_multiplier=None,
@@ -404,38 +419,65 @@ class DiTLLaMA2DModel(ModelMixin, ConfigMixin):
         qk_norm: bool = True,
     ):
         super().__init__()
-        self.learn_sigma = learn_sigma
-        self.in_channels = in_channels
-        self.out_channels = in_channels * 2 if learn_sigma else in_channels
-
         self.sample_size = sample_size
         self.patch_size = patch_size
-
+        self.in_channels = in_channels
+        self.out_channels = in_channels * 2 if learn_sigma else in_channels
         dim = attention_head_dim * num_attention_heads
 
-        self.x_embedder = paddle.nn.Linear(in_channels * patch_size**2, dim, bias_attr=True)
+        self.num_layers = num_layers
+        self.num_attention_heads = num_attention_heads
+        self.mlp_ratio = mlp_ratio
+        self.multiple_of = multiple_of
+        self.ffn_dim_multiplier = ffn_dim_multiplier
+        self.norm_eps = norm_eps
+        self.class_dropout_prob = class_dropout_prob
+        self.num_classes = num_classes
+        self.learn_sigma = learn_sigma
+        self.qk_norm = qk_norm
+
+        self.gradient_checkpointing = True
+        self.fused_attn = True
+
+        self.x_embedder = nn.Linear(in_channels * patch_size**2, dim)
         self.t_embedder = TimestepEmbedder(min(dim, 1024))
         self.y_embedder = LabelEmbedding(num_classes, min(dim, 1024), class_dropout_prob)
 
-        self.layers = paddle.nn.LayerList(
+        # 2. Define transformers blocks
+        self.layers = nn.LayerList(
             [
                 TransformerBlock(
-                    layer_id, dim, num_attention_heads, n_kv_heads, multiple_of, ffn_dim_multiplier, norm_eps, qk_norm
+                    layer_id=idx,
+                    dim=dim,
+                    n_heads=num_attention_heads,
+                    n_kv_heads=n_kv_heads,
+                    multiple_of=multiple_of,
+                    mlp_ratio=mlp_ratio,
+                    ffn_dim_multiplier=ffn_dim_multiplier,
+                    norm_eps=norm_eps,
+                    qk_norm=qk_norm,
+                    fused_attn=self.fused_attn,
                 )
-                for layer_id in range(num_layers)
+                for idx in range(num_layers)
             ]
         )
 
+        # 3. Define output layers
         self.final_layer = FinalLayer(dim, patch_size, self.out_channels)
         self.freqs_cis = self.precompute_freqs_cis(dim // num_attention_heads, 4096)
-
-        self.gradient_checkpointing = True
 
     def _set_gradient_checkpointing(self, module, value=False):
         if hasattr(module, "gradient_checkpointing"):
             module.gradient_checkpointing = value
 
-    def unpatchify(self, x: paddle.Tensor) -> paddle.Tensor:
+    def enable_gradient_checkpointing(self, value=True):
+        self.gradient_checkpointing = value
+
+    def enable_xformers_memory_efficient_attention(self, attention_op: Optional[str] = None):
+        self._use_memory_efficient_attention_xformers = True
+        self.fused_attn = True
+
+    def unpatchify(self, x):
         """
         Args:
             x: (N, T, patch_size**2 * C)
@@ -445,12 +487,13 @@ class DiTLLaMA2DModel(ModelMixin, ConfigMixin):
         p = self.patch_size
         h = w = int(tuple(x.shape)[1] ** 0.5)
         assert h * w == tuple(x.shape)[1]
+
         x = x.reshape(shape=([tuple(x.shape)[0], h, w, p, p, c]))
         x = paddle.einsum("nhwpqc->nchpwq", x)
         imgs = x.reshape(shape=([tuple(x.shape)[0], c, h * p, h * p]))
         return imgs
 
-    def patchify(self, x: paddle.Tensor) -> paddle.Tensor:
+    def patchify(self, x):
         B, C, H, W = tuple(x.shape)
         assert (H, W) == (self.sample_size, self.sample_size)
         pH = pW = self.patch_size
@@ -479,12 +522,12 @@ class DiTLLaMA2DModel(ModelMixin, ConfigMixin):
             paddle.Tensor: Precomputed frequency tensor with complex
                 exponentials.
         """
-        freqs = 1.0 / theta ** (paddle.arange(start=0, end=dim, step=2)[: dim // 2].astype(dtype="float32") / dim)
+        freqs = 1.0 / theta ** (paddle.arange(start=0, end=dim, step=2)[: dim // 2].cast("float32") / dim)
         t = paddle.arange(end=end)
         input_0, vec2_0 = TypePromote(t, freqs)
-        freqs = paddle.outer(x=input_0, y=vec2_0).astype(dtype="float32")
+        freqs = paddle.outer(input_0, vec2_0).cast("float32")
         freqs_cis = paddle.complex(
-            paddle.ones_like(x=freqs) * paddle.cos(freqs), paddle.ones_like(x=freqs) * paddle.sin(freqs)
+            paddle.ones_like(freqs) * paddle.cos(freqs), paddle.ones_like(freqs) * paddle.sin(freqs)
         )
         return freqs_cis
 
@@ -503,36 +546,19 @@ class DiTLLaMA2DModel(ModelMixin, ConfigMixin):
             class_labels: (N,) tensor of class labels
         """
         hidden_states = hidden_states.cast(self.dtype)
+        timestep = timestep.cast(self.dtype)
 
         # 1. Input
         hidden_states = self.patchify(hidden_states)
         x = self.x_embedder(hidden_states)
         t = self.t_embedder(timestep)
-        y = self.y_embedder(class_labels, self.training)
+        y = self.y_embedder(class_labels)
         adaln_input = t + y
 
         # 2. Blocks
-        for layer in self.layers:
-            if self.gradient_checkpointing and not hidden_states.stop_gradient and not use_old_recompute():
-
-                def create_custom_forward(module, return_dict=None):
-                    def custom_forward(*inputs):
-                        if return_dict is not None:
-                            return module(*inputs, return_dict=return_dict)
-                        else:
-                            return module(*inputs)
-
-                    return custom_forward
-
-                ckpt_kwargs = {} if recompute_use_reentrant() else {"use_reentrant": False}
-
-                x = recompute(
-                    create_custom_forward(layer),
-                    x,
-                    self.freqs_cis[: x.shape[1]],
-                    adaln_input,
-                    **ckpt_kwargs,
-                )
+        for i, layer in enumerate(self.layers):
+            if self.gradient_checkpointing:
+                x = paddle.distributed.fleet.utils.recompute(layer, x, self.freqs_cis[: x.shape[1]], adaln_input)
             else:
                 x = layer(
                     x,

@@ -93,8 +93,6 @@ class Attention(nn.Layer):
             self.wv = fleet.meta_parallel.ColumnParallelLinear(
                 dim, self.n_kv_heads * self.head_dim, weight_attr=None, has_bias=False, gather_output=True
             )
-            # self.wo = fleet.meta_parallel.RowParallelLinear(
-            #     n_heads * self.head_dim, dim, weight_attr=None, has_bias=False, input_is_parallel=True) #
             self.wo = fleet.meta_parallel.ColumnParallelLinear(
                 n_heads * self.head_dim, dim, weight_attr=None, has_bias=False, gather_output=True
             )
@@ -203,24 +201,23 @@ class Attention(nn.Layer):
             xv = xv.unsqueeze(axis=3).tile([1, 1, 1, n_rep, 1]).flatten(start_axis=2, stop_axis=3)
 
         if dtype in [paddle.float16, paddle.bfloat16]:
-            x, _ = flash_attention(
-                xq.transpose([0, 2, 1, 3]),
-                xk.transpose([0, 2, 1, 3]),
-                xv.transpose([0, 2, 1, 3]),
+            output, _ = flash_attention(
+                xq,
+                xk,
+                xv,
                 dropout=0.0,
                 causal=False,
                 return_softmax=False,
             )
-            output = x.transpose([0, 2, 1, 3])
         else:
             if self.fused_attn:
                 output = F.scaled_dot_product_attention_(
-                    xq.transpose([0, 2, 1, 3]),
-                    xk.transpose([0, 2, 1, 3]),
-                    xv.transpose([0, 2, 1, 3]),
+                    xq,
+                    xk,
+                    xv,
                     dropout_p=0.0,
                     is_causal=False,
-                ).transpose([0, 2, 1, 3])
+                )
             else:
                 q = xq.transpose([0, 2, 1, 3]) * self.scale
                 attn = q @ xk.transpose([0, 2, 1, 3]).transpose([0, 1, 3, 2])

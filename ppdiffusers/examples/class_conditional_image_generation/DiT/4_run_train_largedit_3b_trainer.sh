@@ -18,14 +18,16 @@ MASTER='127.0.0.1:8080'
 TRAINERS_NUM=1 # nnodes, machine num
 TRAINING_GPUS_PER_NODE=8 # nproc_per_node
 DP_DEGREE=8 # dp_parallel_degree
-MP_DEGREE=1 # tensor_parallel_degree
+MP_DEGREE=2 # tensor_parallel_degree
 SHARDING_DEGREE=1 # sharding_parallel_degree
+
+accumulation_steps=2 # gradient_accumulation_steps
 
 config_file=config/LargeDiT_3B_patch2.json
 OUTPUT_DIR=./output_trainer/LargeDiT_3B_patch2_trainer
 
 feature_path=./data/fastdit_imagenet256
-batch_size=32 # per gpu
+batch_size=16 # per gpu
 num_workers=8
 max_steps=7000000
 logging_steps=50
@@ -45,7 +47,7 @@ ${TRAINING_PYTHON} train_image_generation_trainer.py \
     --feature_path ${feature_path} \
     --output_dir ${OUTPUT_DIR} \
     --per_device_train_batch_size ${batch_size} \
-    --gradient_accumulation_steps 1 \
+    --gradient_accumulation_steps ${accumulation_steps} \
     --learning_rate 1e-4 \
     --weight_decay 0.0 \
     --max_steps ${max_steps} \

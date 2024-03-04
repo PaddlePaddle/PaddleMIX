@@ -155,7 +155,7 @@ class Attention(nn.Layer):
         if is_model_parrallel():
             self.qkv = fleet.meta_parallel.ColumnParallelLinear(
                 dim, dim * 3, weight_attr=None, has_bias=qkv_bias, gather_output=True
-            )  #
+            )
         else:
             self.qkv = nn.Linear(dim, dim * 3, bias_attr=qkv_bias)
         self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
@@ -165,7 +165,6 @@ class Attention(nn.Layer):
             self.proj = fleet.meta_parallel.ColumnParallelLinear(
                 dim, dim, weight_attr=None, has_bias=True, gather_output=True
             )
-            # dim, dim, weight_attr=None, has_bias=True, input_is_parallel=True) #
         else:
             self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)

@@ -30,7 +30,7 @@ num_workers=8
 max_steps=7000000
 logging_steps=50
 save_steps=5000
-image_logging_steps=5000
+image_logging_steps=-1
 seed=0
 
 USE_AMP=True
