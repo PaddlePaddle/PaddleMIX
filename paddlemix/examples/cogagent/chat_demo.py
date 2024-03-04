@@ -22,19 +22,12 @@ paddle.seed(seed)
 np.random.seed(seed)
 random.seed(seed)
 
-from paddlemix.auto.modeling import AutoModelMIX
-from paddlemix.auto.tokenizer import AutoTokenizerMIX
-
-"""
-This is a demo for using CogAgent and CogVLM in CLI
-Make sure you have installed vicuna-7b-v1.5 tokenizer model (https://huggingface.co/lmsys/vicuna-7b-v1.5), full checkpoint of vicuna-7b-v1.5 LLM is not required.
-In this demo, We us chat template, you can use others to replace such as 'vqa'.
-Strongly suggest to use GPU with bfloat16 support, otherwise, it will be slow.
-Mention that only one picture can be processed at one conversation, which means you can not replace or insert another picture during the conversation.
-"""
 import argparse
 
 from PIL import Image
+
+from paddlemix.auto.modeling import AutoModelMIX
+from paddlemix.auto.tokenizer import AutoTokenizerMIX
 
 parser = argparse.ArgumentParser()
 

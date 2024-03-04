@@ -13,11 +13,17 @@
 # limitations under the License.
 
 import logging
+import math
+import os
+from dataclasses import dataclass
+from functools import partial
 from math import pi
+from typing import Optional, Tuple, Union
 
 import paddle
 from einops import rearrange, repeat
 from paddle.incubate.nn.memory_efficient_attention import memory_efficient_attention
+from paddlenlp.transformers.bit.modeling import drop_path
 
 
 def broadcat(tensors, dim=-1):
@@ -96,15 +102,6 @@ class VisionRotaryEmbeddingFast(paddle.nn.Layer):
             freqs_sin = rearrange(freqs_sin, "n i m j -> n m i j")
             return t * freqs_cos + rotate_half(t) * freqs_sin
         return t * self.freqs_cos + rotate_half(t) * self.freqs_sin
-
-
-import math
-import os
-from dataclasses import dataclass
-from functools import partial
-from typing import Optional, Tuple, Union
-
-from paddlenlp.transformers.bit.modeling import drop_path
 
 
 class PatchDropout(paddle.nn.Layer):
@@ -473,9 +470,7 @@ class PatchEmbed(paddle.nn.Layer):
 
     def __init__(self, img_size=224, patch_size=16, in_chans=3, embed_dim=768):
         super().__init__()
-        # >>>>>>        img_size = timm.layers.to_2tuple(img_size)
         img_size = (img_size, img_size)
-        # >>>>>>        patch_size = timm.layers.to_2tuple(patch_size)
         patch_size = (patch_size, patch_size)
         num_patches = img_size[1] // patch_size[1] * (img_size[0] // patch_size[0])
         self.patch_shape = img_size[0] // patch_size[0], img_size[1] // patch_size[1]
@@ -844,8 +839,6 @@ class Eva2LargeEncoder(paddle.nn.Layer):
             },
         }
         self.config["vision_cfg"]["image_size"] = image_size
-        import os
-
         os.environ["delRoPE"] = "1"
         self.model = _build_vision_tower(**self.config)
 
