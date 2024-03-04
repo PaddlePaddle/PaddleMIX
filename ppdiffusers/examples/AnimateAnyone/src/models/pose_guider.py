@@ -27,26 +27,33 @@ class PoseGuider(ModelMixin):
         conditioning_embedding_channels: int,
         conditioning_channels: int = 3,
         block_out_channels: Tuple[int] = (16, 32, 64, 128),
+        weight_dtype=None,
     ):
         super().__init__()
-        self.conv_in = InflatedConv3d(conditioning_channels, block_out_channels[0], kernel_size=3, padding=1)
 
-        self.blocks = paddle.nn.LayerList(sublayers=[])
+        init_contexts = []
+        init_contexts.append(paddle.dtype_guard(weight_dtype))
+        from ppdiffusers.models.modeling_utils import ContextManagers
 
-        for i in range(len(block_out_channels) - 1):
-            channel_in = block_out_channels[i]
-            channel_out = block_out_channels[i + 1]
-            self.blocks.append(InflatedConv3d(channel_in, channel_in, kernel_size=3, padding=1))
-            self.blocks.append(InflatedConv3d(channel_in, channel_out, kernel_size=3, padding=1, stride=2))
+        with ContextManagers(init_contexts):
+            self.conv_in = InflatedConv3d(conditioning_channels, block_out_channels[0], kernel_size=3, padding=1)
 
-        self.conv_out = zero_module(
-            InflatedConv3d(
-                block_out_channels[-1],
-                conditioning_embedding_channels,
-                kernel_size=3,
-                padding=1,
+            self.blocks = paddle.nn.LayerList(sublayers=[])
+
+            for i in range(len(block_out_channels) - 1):
+                channel_in = block_out_channels[i]
+                channel_out = block_out_channels[i + 1]
+                self.blocks.append(InflatedConv3d(channel_in, channel_in, kernel_size=3, padding=1))
+                self.blocks.append(InflatedConv3d(channel_in, channel_out, kernel_size=3, padding=1, stride=2))
+
+            self.conv_out = zero_module(
+                InflatedConv3d(
+                    block_out_channels[-1],
+                    conditioning_embedding_channels,
+                    kernel_size=3,
+                    padding=1,
+                )
             )
-        )
 
     def forward(self, conditioning):
         embedding = self.conv_in(conditioning)

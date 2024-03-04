@@ -123,7 +123,7 @@ class Pose2VideoPipeline(DiffusionPipeline):
         video = rearrange(video, "(b f) c h w -> b c f h w", f=video_length)
         video = (video / 2 + 0.5).clip(min=0, max=1)
         # we always cast to float32 as this does not cause significant overhead and is compatible with bfloa16
-        video = video.cpu().astype(dtype="float32").numpy()
+        video = video.astype(dtype=latents.dtype).numpy()
         return video
 
     def prepare_extra_step_kwargs(self, generator, eta):
@@ -378,7 +378,7 @@ class Pose2VideoPipeline(DiffusionPipeline):
             fusion_blocks="full",
         )
 
-        num_channels_latents = self.denoising_unet.in_channels
+        num_channels_latents = self.denoising_unet.config.in_channels
         latents = self.prepare_latents(
             batch_size * num_images_per_prompt,
             num_channels_latents,
@@ -393,18 +393,19 @@ class Pose2VideoPipeline(DiffusionPipeline):
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
 
         # Prepare ref image latents
-        ref_image_tensor = self.ref_image_processor.preprocess(
-            ref_image, height=height, width=width
+        ref_image_tensor = self.ref_image_processor.preprocess(ref_image, height=height, width=width).astype(
+            latents.dtype
         )  # (bs, c, width, height)
 
-        ref_image_tensor = ref_image_tensor
         ref_image_latents = self.vae.encode(ref_image_tensor).latent_dist.mean
         ref_image_latents = ref_image_latents * 0.18215  # (b, 4, h, w)
 
         # Prepare a list of pose condition images
         pose_cond_tensor_list = []
         for pose_image in pose_images:
-            pose_cond_tensor = self.cond_image_processor.preprocess(pose_image, height=height, width=width)
+            pose_cond_tensor = self.cond_image_processor.preprocess(pose_image, height=height, width=width).astype(
+                latents.dtype
+            )
             pose_cond_tensor = pose_cond_tensor.unsqueeze(2)  # (bs, c, 1, h, w)
             pose_cond_tensor_list.append(pose_cond_tensor)
         pose_cond_tensor = paddle.concat(x=pose_cond_tensor_list, axis=2)
@@ -502,7 +503,9 @@ class Pose2VideoPipeline(DiffusionPipeline):
                     noise_pred_uncond, noise_pred_text = (noise_pred / counter).chunk(2)
                     noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
 
-                latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs).prev_sample
+                latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs).prev_sample.cast(
+                    latents.dtype
+                )
 
                 if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
                     progress_bar.update()
@@ -520,7 +523,7 @@ class Pose2VideoPipeline(DiffusionPipeline):
 
         # Convert to tensor
         if output_type == "tensor":
-            images = paddle.to_tensor(data=images)
+            images = paddle.to_tensor(data=images, dtype=latents.dtype)
 
         if not return_dict:
             return images

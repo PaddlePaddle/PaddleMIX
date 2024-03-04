@@ -51,12 +51,19 @@ def main():
 
     config = OmegaConf.load(args.config)
 
+    if config.weight_dtype == "fp16":
+        weight_dtype = paddle.float16
+    else:
+        weight_dtype = paddle.float32
+
     vae = AutoencoderKL.from_pretrained(
         config.pretrained_vae_path,
+        paddle_dtype=weight_dtype,
     )
 
     reference_unet = UNet2DConditionModel.from_pretrained(
         config.pretrained_base_model_path,
+        paddle_dtype=weight_dtype,
         subfolder="unet",
     )
 
@@ -64,15 +71,15 @@ def main():
     infer_config = OmegaConf.load(inference_config_path)
     denoising_unet = UNet3DConditionModel.from_pretrained_2d(
         config.denoising_unet_config_path,
-        config.denoising_unet_path,
-        config.motion_module_path,
+        weight_dtype,
         unet_additional_kwargs=infer_config.unet_additional_kwargs,
     )
 
-    pose_guider = PoseGuider(320, block_out_channels=(16, 32, 96, 256))
+    pose_guider = PoseGuider(320, block_out_channels=(16, 32, 96, 256), weight_dtype=weight_dtype)
 
     image_enc = CLIPVisionModelWithProjection.from_pretrained(
         config.image_encoder_path,
+        dtype=weight_dtype,
     )
 
     sched_kwargs = OmegaConf.to_container(infer_config.noise_scheduler_kwargs)
@@ -124,11 +131,7 @@ def main():
 
             pose_tensor = paddle.stack(x=pose_tensor_list, axis=0)
 
-            x = pose_tensor
-            perm_0 = list(range(x.ndim))
-            perm_0[0] = 1
-            perm_0[1] = 0
-            pose_tensor = x.transpose(perm=perm_0)
+            pose_tensor = pose_tensor.transpose([1, 0, 2, 3])
             pose_tensor = pose_tensor.unsqueeze(axis=0)
 
             video = pipe(

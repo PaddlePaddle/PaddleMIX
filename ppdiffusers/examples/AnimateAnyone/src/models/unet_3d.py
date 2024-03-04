@@ -14,7 +14,6 @@
 
 # Adapted from https://github.com/guoyww/AnimateDiff/blob/main/animatediff/models/unet_blocks.py
 
-from collections import OrderedDict
 from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
@@ -26,7 +25,7 @@ from ppdiffusers.configuration_utils import ConfigMixin, register_to_config
 from ppdiffusers.models.attention_processor import AttentionProcessor
 from ppdiffusers.models.embeddings import TimestepEmbedding, Timesteps
 from ppdiffusers.models.modeling_utils import ModelMixin
-from ppdiffusers.utils import BaseOutput, logging, smart_load
+from ppdiffusers.utils import BaseOutput, logging
 
 from .resnet import InflatedConv3d, InflatedGroupNorm
 from .unet_3d_blocks import UNetMidBlock3DCrossAttn, get_down_block, get_up_block
@@ -564,10 +563,8 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin):
     def from_pretrained_2d(
         cls,
         denoising_unet_config_path: Optional[Union[str, PathLike]],
-        denoising_unet_path: Optional[Union[str, PathLike]],
-        motion_module_path: Optional[Union[str, PathLike]],
+        weight_dtype=None,
         unet_additional_kwargs=None,
-        mm_zero_proj_out=False,
     ):
 
         config_file = denoising_unet_config_path
@@ -590,34 +587,12 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin):
         ]
         unet_config["mid_block_type"] = "UNetMidBlock3DCrossAttn"
 
-        model = cls.from_config(unet_config, **unet_additional_kwargs)
+        init_contexts = []
+        init_contexts.append(paddle.dtype_guard(weight_dtype))
 
-        state_dict = smart_load(denoising_unet_path)
-        # load the motion module weights
-        if Path(motion_module_path).exists() and Path(motion_module_path).is_file():
-            if Path(motion_module_path).suffix.lower() in [".pth", ".pt", ".ckpt", ".pdparams"]:
-                logger.info(f"Load motion module params from {motion_module_path}")
+        from ppdiffusers.models.modeling_utils import ContextManagers
 
-                motion_state_dict = smart_load(motion_module_path)
-
-            else:
-                raise RuntimeError(f"unknown file format for motion module weights: {motion_module_path.suffix}")
-            if mm_zero_proj_out:
-                new_motion_state_dict = OrderedDict()
-                for k in motion_state_dict:
-                    if "proj_out" in k:
-                        continue
-                    new_motion_state_dict[k] = motion_state_dict[k]
-                motion_state_dict = new_motion_state_dict
-
-            # merge the state dicts
-            state_dict.update(motion_state_dict)
-
-        # load the weights into the model
-        m, u = model.set_state_dict(state_dict=state_dict, use_structured_name=False)
-        logger.debug(f"### missing keys: {len(m)}; \n### unexpected keys: {len(u)};")
-
-        params = [p.numel() if "temporal" in n else 0 for n, p in model.named_parameters()]
-        logger.info(f"Loaded {sum(params) / 1e6}M-parameter motion module")
+        with ContextManagers(init_contexts):
+            model = cls.from_config(unet_config, **unet_additional_kwargs)
 
         return model

@@ -9,7 +9,8 @@ pose_guider_path: "./pretrained_weights/Tsaiyue/AnimateAnyone/pose_guider.pdpara
 motion_module_path: "./pretrained_weights/Tsaiyue/AnimateAnyone/motion_module.pdparams"
 
 inference_config: "./configs/inference/inference_v2.yaml"
- 
+weight_dtype: 'fp16'
+
 test_cases:
   "./configs/inference/ref_images/anyone-10.png":
     - "./configs/inference/pose_videos/anyone-video-1_kps.mp4" 
