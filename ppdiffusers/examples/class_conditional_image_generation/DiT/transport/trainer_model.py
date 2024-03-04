@@ -39,6 +39,8 @@ def read_json(file):
 class SiTDiffusionModel(nn.Layer):
     def __init__(self, model_args):
         super().__init__()
+        self.model_args = model_args
+
         # init vae
         vae_name_or_path = (
             model_args.vae_name_or_path
@@ -46,13 +48,40 @@ class SiTDiffusionModel(nn.Layer):
             else os.path.join(model_args.pretrained_model_name_or_path, "vqvae")
         )
         self.vae = AutoencoderKL.from_pretrained(vae_name_or_path)
+
+        # init SiT
+        if model_args.pretrained_model_name_or_path is None:
+            self.transformer = SiT(**read_json(model_args.config_file))
+            # Note: Initialize SiT in transport/sit.py
+            logger.info("Init SiT model from scratch!")
+        else:
+            self.transformer = SiT.from_pretrained(model_args.pretrained_model_name_or_path, subfolder="transformer")
+            logger.info(f"Init SiT model from {model_args.pretrained_model_name_or_path}!")
+
+        # make sure unet in train mode, vae and text_encoder in eval mode
         freeze_params(self.vae.parameters())
         logger.info("Freeze vae parameters!")
+        self.vae.eval()
+        self.transformer.train()
 
+        self.use_ema = False
+        self.model_ema = None
+        if self.use_ema:
+            self.model_ema = LitEma(self.transformer)
+
+        if model_args.enable_xformers_memory_efficient_attention and is_ppxformers_available():
+            try:
+                self.transformer.enable_xformers_memory_efficient_attention()
+            except Exception as e:
+                logger.warning(
+                    "Could not enable memory efficient attention. Make sure develop paddlepaddle is installed"
+                    f" correctly and a GPU is available: {e}"
+                )
+
+        # other settings
         self.model_mean_type = "epsilon"  # PREVIOUS_X START_X EPSILON
         self.model_var_type = "learned_range"  # LEARNED FIXED_SMALL FIXED_LARGE LEARNED_RANGE
         self.loss_type = "mse"  # MSE RESCALED_MSE KL(is_vb) RESCALED_KL(is_vb)
-
         self.path_type = "Linear"  # LINEAR GVP VP
         self.prediction = "velocity"  # VELOCITY NOISE SCORE
         self.model_type = "velocity"  #
@@ -82,18 +111,8 @@ class SiTDiffusionModel(nn.Layer):
         }
         self.path_sampler = path_options[path_type]()
 
-        self.transformer = SiT(**read_json(model_args.config_file))
-        self.transformer_is_pretrained = False
-
         assert model_args.prediction_type in ["epsilon", "v_prediction"]
         self.prediction_type = model_args.prediction_type
-
-        self.use_ema = model_args.use_ema
-        self.noise_offset = model_args.noise_offset
-        if self.use_ema:
-            self.model_ema = LitEma(self.transformer)
-        self.transformer.train()
-        self.vae.eval()
 
     @contextlib.contextmanager
     def ema_scope(self, context=None):
@@ -194,7 +213,7 @@ class SiTDiffusionModel(nn.Layer):
                     if hasattr(self.vae, "enable_xformers_memory_efficient_attention"):
                         self.vae.enable_xformers_memory_efficient_attention(attention_op)
                 except Exception as e:
-                    logger.warn(
+                    logger.warning(
                         "Could not enable memory efficient attention. Make sure develop paddlepaddle is installed"
                         f" correctly and a GPU is available: {e}"
                     )

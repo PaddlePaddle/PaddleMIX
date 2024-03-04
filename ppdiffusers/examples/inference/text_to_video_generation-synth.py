@@ -23,5 +23,5 @@ pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
 prompt = "An astronaut riding a horse."
 video_frames = pipe(prompt, num_inference_steps=25).frames
 video_path = export_to_video(
-    video_frames, output_video_path="text_to_video_generation-synth_img2img-result-video_1024_spiderman.mp4"
+    video_frames, fps=7, output_video_path="text_to_video_generation-synth_img2img-result-video_1024_spiderman.mp4"
 )

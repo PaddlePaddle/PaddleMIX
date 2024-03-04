@@ -12,8 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+TRAINING_MODEL_RESUME="None"
+TRAINER_INSTANCES='127.0.0.1'
+MASTER='127.0.0.1:8080'
+TRAINERS_NUM=1 # nnodes, machine num
+TRAINING_GPUS_PER_NODE=8 # nproc_per_node
+DP_DEGREE=1 # dp_parallel_degree
+MP_DEGREE=1 # tensor_parallel_degree
+SHARDING_DEGREE=1 # sharding_parallel_degree
+
 config_file=config/SiT_XL_patch2.json
-OUTPUT_DIR=./output/SiT_XL_patch2_trainer
+OUTPUT_DIR=./output_trainer/SiT_XL_patch2_trainer
 
 feature_path=./data/fastdit_imagenet256
 batch_size=32 # per gpu
@@ -30,7 +39,8 @@ enable_tensorboard=True
 recompute=True
 enable_xformers=True
 
-python -u -m paddle.distributed.launch --gpus "0,1,2,3,4,5,6,7" train_image_generation_trainer.py \
+TRAINING_PYTHON="python -m paddle.distributed.launch --master ${MASTER} --nnodes ${TRAINERS_NUM} --nproc_per_node ${TRAINING_GPUS_PER_NODE} --ips ${TRAINER_INSTANCES}"
+${TRAINING_PYTHON} train_image_generation_trainer.py \
     --do_train \
     --feature_path ${feature_path} \
     --output_dir ${OUTPUT_DIR} \

@@ -25,6 +25,7 @@ import paddle
 import paddle.distributed as dist
 from diffusion import create_diffusion
 from diffusion.dit import DiT
+from diffusion.dit_llama import DiT_Llama
 from transport import create_transport
 from transport.sit import SiT
 from transport.utils import parse_transport_args
@@ -94,7 +95,7 @@ def main(args):
     # Setup an experiment folder:
     model_config_name = args.config_file.split("/")[-1].replace(".json", "")
     model_name = model_config_name.split("_")[0]
-    assert model_name in ["DiT", "SiT"], f"Model {model_name} not supported."
+    assert model_name in ["DiT", "LargeDiT", "SiT"], f"Model {model_name} not supported."
     if rank == 0:
         os.makedirs(args.results_dir, exist_ok=True)  # Make results folder (holds all experiment subfolders)
         experiment_index = len(glob(f"{args.results_dir}/*"))
@@ -109,18 +110,20 @@ def main(args):
     # Create model:
     if model_name == "DiT":
         model = DiT(**read_json(args.config_file))
+    elif model_name == "LargeDiT":
+        model = DiT_Llama(**read_json(args.config_file))
     elif model_name == "SiT":
         model = SiT(**read_json(args.config_file))
     else:
         raise NotImplementedError(f"Model {model_name} not supported.")
-    assert model.input_size == args.image_size // 8
+    assert model.sample_size == args.image_size // 8
     # Note that parameter initialization is done within the DiT constructor
     ema = deepcopy(model)  # Create an EMA of the model for use after training
     requires_grad(ema, False)
     if dist.get_world_size() > 1:
         model = paddle.DataParallel(model)
 
-    if model_name == "DiT":
+    if model_name in ["DiT", "LargeDiT"]:
         diffusion = create_diffusion(timestep_respacing="")  # default: 1000 steps, linear noise schedule
     elif model_name == "SiT":
         transport = create_transport(
@@ -132,7 +135,7 @@ def main(args):
         )
     else:
         raise NotImplementedError(f"Model {model_name} not supported.")
-    print(f"DiT Parameters: {sum(p.numpy().size for p in model.parameters()):,}")
+    print(f"Transformer model Parameters: {sum(p.numpy().size for p in model.parameters()):,}")
 
     # Setup optimizer (we used default Adam betas=(0.9, 0.999) and a constant learning rate of 1e-4 in our paper):
     opt = paddle.optimizer.AdamW(parameters=model.parameters(), learning_rate=1e-4, weight_decay=0.0)
@@ -174,11 +177,11 @@ def main(args):
         for x, y in loader:
             x = x.squeeze(axis=1)
             y = y.squeeze(axis=1)
-            if model_name == "DiT":
+            if model_name in ["DiT", "LargeDiT"]:
                 t = paddle.randint(0, diffusion.num_timesteps, (x.shape[0],))
             model_kwargs = dict(y=y)
 
-            if model_name == "DiT":
+            if model_name in ["DiT", "LargeDiT"]:
                 loss_dict = diffusion.training_losses(model, x, t, model_kwargs)
             else:
                 loss_dict = transport.training_losses(model, x, model_kwargs)

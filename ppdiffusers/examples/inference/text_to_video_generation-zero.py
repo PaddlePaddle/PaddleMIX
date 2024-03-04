@@ -24,5 +24,5 @@ prompt = "A panda is playing guitar on times square"
 result = pipe(prompt=prompt).images
 result = [(r * 255).astype("uint8") for r in result]
 video_path = export_to_video(
-    result, output_video_path="text_to_video_generation-zero-result-panda.mp4"
+    result, fps=7, output_video_path="text_to_video_generation-zero-result-panda.mp4"
 )

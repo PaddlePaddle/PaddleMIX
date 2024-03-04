@@ -22,6 +22,7 @@ from typing import List, Union
 import numpy as np
 import PIL.Image
 import PIL.ImageOps
+import paddle
 
 from .import_utils import BACKENDS_MAPPING, is_opencv_available
 from .logging import get_logger
@@ -38,14 +39,30 @@ def buffered_writer(raw_f):
     f.flush()
 
 
-def export_to_gif(image: List[PIL.Image.Image], output_gif_path: str = None) -> str:
+def export_to_gif(images: Union[List[PIL.Image.Image], List[paddle.Tensor], List[np.ndarray]], output_gif_path: str = None) -> str:
+    if isinstance(images[0], paddle.Tensor):
+        images = [
+            PIL.Image.fromarray(
+                image.detach().cpu().numpy()
+            )
+            for image in images
+        ]
+    
+    if isinstance(images[0], np.ndarray):
+        images = [
+            PIL.Image.fromarray(
+                image.astype(np.uint8)
+            )
+            for image in images
+        ]
+    
     if output_gif_path is None:
         output_gif_path = tempfile.NamedTemporaryFile(suffix=".gif").name
 
-    image[0].save(
+    images[0].save(
         output_gif_path,
         save_all=True,
-        append_images=image[1:],
+        append_images=images[1:],
         optimize=False,
         duration=100,
         loop=0,
@@ -135,7 +152,13 @@ def export_to_video(
     if output_video_path is None:
         output_video_path = tempfile.NamedTemporaryFile(suffix=".mp4").name
 
-    if isinstance(video_frames[0], PIL.Image.Image):
+    if isinstance(video_frames[0], np.ndarray):
+        if np.max(video_frames[0]) < 1:
+            video_frames = [(frame * 255).astype(np.uint8) for frame in video_frames]
+        else:
+            video_frames = [frame.astype(np.uint8) for frame in video_frames]
+
+    elif isinstance(video_frames[0], PIL.Image.Image):
         video_frames = [np.array(frame) for frame in video_frames]
 
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
@@ -145,3 +168,16 @@ def export_to_video(
         img = cv2.cvtColor(video_frames[i], cv2.COLOR_RGB2BGR)
         video_writer.write(img)
     return output_video_path
+
+
+def export_to_video_2(
+     video_frames: Union[List[np.ndarray], List[PIL.Image.Image]], output_video_path: str = None, fps: int = 8
+):
+    try:
+        import imageio
+    except ImportError:
+        raise ImportError("Please install imageio to export video.run `pip install imageio`")
+    if output_video_path is None:
+        output_video_path = tempfile.NamedTemporaryFile(suffix=".mp4").name
+        
+    imageio.mimsave(output_video_path, video_frames, fps=fps, codec="mpeg4")
