@@ -29,8 +29,7 @@ from paddlenlp.transformers.model_outputs import (
 from paddlenlp.transformers.model_utils import PretrainedModel
 
 from .configuration import CogAgentConfig
-from .cross_visual import CrossVisionModel
-from .visual import EVA2CLIPModel
+from .cross_visual import CrossVisionModel, EVA2CLIPModel
 
 if TYPE_CHECKING:
     logger = transformers.utils.logging.get_logger(__name__)
