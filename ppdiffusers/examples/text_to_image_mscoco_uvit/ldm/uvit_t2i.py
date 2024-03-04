@@ -13,54 +13,30 @@
 # limitations under the License.
 
 import math
+from typing import Optional
 
 import einops
 import numpy as np
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
-from paddle.nn.initializer import Constant
+from paddle.distributed import fleet
+from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
 
+from ppdiffusers.configuration_utils import ConfigMixin
+from ppdiffusers.models.modeling_utils import ModelMixin
 from ppdiffusers.utils import is_ppxformers_available
 
-ones_ = Constant(value=1.0)
-zeros_ = Constant(value=0.0)
 
-from typing import Optional
-
-
-def drop_path(input, drop_prob: float = 0.0, training: bool = False):
-    """
-    Drop paths (Stochastic Depth) per sample (when applied in main path of residual blocks).
-
-    Comment by Ross Wightman: This is the same as the DropConnect impl I created for EfficientNet, etc networks,
-    however, the original name is misleading as 'Drop Connect' is a different form of dropout in a separate paper...
-    See discussion: https://github.com/tensorflow/tpu/issues/494#issuecomment-532968956 ... I've opted for changing the
-    layer and argument names to 'drop path' rather than mix DropConnect as a layer name and use 'survival rate' as the
-    argument.
-    """
-    if drop_prob == 0.0 or not training:
-        return input
-    keep_prob = 1 - drop_prob
-    shape = (input.shape[0],) + (1,) * (input.ndim - 1)  # work with diff dim tensors, not just 2D ConvNets
-    random_tensor = keep_prob + paddle.rand(shape, dtype=input.dtype)
-    random_tensor = paddle.floor(random_tensor)  # binarize
-    output = (input / keep_prob) * random_tensor
-    return output
-
-
-class DropPath(nn.Layer):
-    """Drop paths (Stochastic Depth) per sample (when applied in main path of residual blocks)."""
-
-    def __init__(self, drop_prob: Optional[float] = None) -> None:
-        super().__init__()
-        self.drop_prob = drop_prob
-
-    def forward(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
-        return drop_path(hidden_states, self.drop_prob, self.training)
-
-    def extra_repr(self) -> str:
-        return "p={}".format(self.drop_prob)
+def is_model_parrallel():
+    if paddle.distributed.get_world_size() > 1:
+        hcg = paddle.distributed.fleet.get_hybrid_communicate_group()
+        if hcg.get_model_parallel_world_size() > 1:
+            return True
+        else:
+            return False
+    else:
+        return False
 
 
 class Mlp(nn.Layer):
@@ -68,17 +44,36 @@ class Mlp(nn.Layer):
         super().__init__()
         out_features = out_features or in_features
         hidden_features = hidden_features or in_features
-        self.fc1 = nn.Linear(in_features, hidden_features)
+        if is_model_parrallel():
+            self.fc1 = fleet.meta_parallel.ColumnParallelLinear(
+                in_features,
+                hidden_features,
+                weight_attr=None,
+                has_bias=True,
+                gather_output=True,
+            )
+            self.fc2 = fleet.meta_parallel.ColumnParallelLinear(
+                hidden_features,
+                out_features,
+                weight_attr=None,
+                has_bias=True,
+                gather_output=True,
+            )
+        else:
+            self.fc1 = nn.Linear(in_features, hidden_features)
+            self.fc2 = nn.Linear(hidden_features, out_features)
+
         self.act = act_layer()
-        self.fc2 = nn.Linear(hidden_features, out_features)
         self.drop = nn.Dropout(drop)
 
     def forward(self, x):
         x = self.fc1(x)
         x = self.act(x)
-        x = self.drop(x)
+        with get_rng_state_tracker().rng_state("global_seed"):
+            x = self.drop(x)
         x = self.fc2(x)
-        x = self.drop(x)
+        with get_rng_state_tracker().rng_state("global_seed"):
+            x = self.drop(x)
         return x
 
 
@@ -117,9 +112,19 @@ class Attention(nn.Layer):
         self.head_size = head_dim
         self.scale = qk_scale or head_dim**-0.5
 
-        self.qkv = nn.Linear(dim, dim * 3, bias_attr=qkv_bias)
-        self.attn_drop = attn_drop
-        self.proj = nn.Linear(dim, dim)
+        if is_model_parrallel():
+            self.qkv = fleet.meta_parallel.ColumnParallelLinear(
+                dim, dim * 3, weight_attr=None, has_bias=qkv_bias, gather_output=True
+            )
+            self.proj = fleet.meta_parallel.ColumnParallelLinear(
+                dim, dim, weight_attr=None, has_bias=True, gather_output=True
+            )
+        else:
+            self.qkv = nn.Linear(dim, dim * 3, bias_attr=qkv_bias)
+            self.proj = nn.Linear(dim, dim)
+
+        self.attn_drop_p = attn_drop
+        self.attn_drop = nn.Dropout(attn_drop)
         self.proj_drop = nn.Dropout(proj_drop)
 
         self._use_memory_efficient_attention_xformers = True
@@ -183,7 +188,7 @@ class Attention(nn.Layer):
                 value_proj,
                 attn_mask=None,
                 scale=self.scale,
-                dropout_p=self.attn_drop,
+                dropout_p=self.attn_drop_p,
                 training=self.training,
                 attention_op=self._attention_op,
             )
@@ -191,14 +196,15 @@ class Attention(nn.Layer):
             with paddle.amp.auto_cast(enable=False):
                 attention_scores = paddle.matmul(query_proj * self.scale, key_proj, transpose_y=True)
                 attention_probs = F.softmax(attention_scores, axis=-1)
+                with get_rng_state_tracker().rng_state("global_seed"):
+                    attention_probs = self.attn_drop(attention_probs)
                 hidden_states = paddle.matmul(attention_probs, value_proj).cast(x.dtype)
 
-        hidden_states = self.reshape_batch_dim_to_heads(
-            hidden_states, transpose=not self._use_memory_efficient_attention_xformers
-        )
-
-        hidden_states = self.proj_drop(self.proj(hidden_states))
-        return hidden_states
+        x = self.reshape_batch_dim_to_heads(hidden_states, transpose=not self._use_memory_efficient_attention_xformers)
+        x = self.proj(x)
+        with get_rng_state_tracker().rng_state("global_seed"):
+            x = self.proj_drop(x)
+        return x
 
 
 class Block(nn.Layer):
@@ -211,7 +217,6 @@ class Block(nn.Layer):
         qk_scale=None,
         drop=0.0,
         attn_drop=0.0,
-        drop_path=0.0,
         act_layer=nn.GELU,
         norm_layer=nn.LayerNorm,
         skip=False,
@@ -222,11 +227,17 @@ class Block(nn.Layer):
         self.attn = Attention(
             dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop
         )
-        self.drop_path = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
-
         mlp_hidden_dim = int(dim * mlp_ratio)
         self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
-        self.skip_linear = nn.Linear(2 * dim, dim) if skip else None
+        if skip:
+            if is_model_parrallel():
+                self.skip_linear = fleet.meta_parallel.ColumnParallelLinear(
+                    2 * dim, dim, weight_attr=None, has_bias=True, gather_output=True
+                )
+            else:
+                self.skip_linear = nn.Linear(2 * dim, dim)
+        else:
+            self.skip_linear = None
 
     def forward(self, x, skip=None):
         if self.skip_linear is not None:
@@ -251,7 +262,7 @@ class PatchEmbed(nn.Layer):
         return x
 
 
-class UViTT2IModel(nn.Layer):
+class UViTT2IModel(ModelMixin, ConfigMixin):
     def __init__(
         self,
         sample_size=32,
@@ -283,7 +294,12 @@ class UViTT2IModel(nn.Layer):
         self.patch_embed = PatchEmbed(patch_size=patch_size, in_channels=in_channels, embed_dim=embed_dim)
         num_patches = (sample_size // patch_size) ** 2
 
-        self.context_embed = nn.Linear(clip_dim, embed_dim)
+        if is_model_parrallel():
+            self.context_embed = fleet.meta_parallel.ColumnParallelLinear(
+                clip_dim, embed_dim, weight_attr=None, has_bias=True, gather_output=True
+            )
+        else:
+            self.context_embed = nn.Linear(clip_dim, embed_dim)
         self.extras = 1 + num_text_tokens
         self.pos_embed = self.create_parameter(
             shape=(1, self.extras + num_patches, embed_dim),
@@ -337,8 +353,15 @@ class UViTT2IModel(nn.Layer):
         )
         self.norm = norm_layer(embed_dim, weight_attr=False, bias_attr=False)
         self.patch_dim = patch_size**2 * in_channels
-        self.decoder_pred = nn.Linear(embed_dim, self.patch_dim, bias_attr=True)
+
+        if is_model_parrallel():
+            self.decoder_pred = fleet.meta_parallel.ColumnParallelLinear(
+                embed_dim, self.patch_dim, weight_attr=None, has_bias=True, gather_output=True
+            )
+        else:
+            self.decoder_pred = nn.Linear(embed_dim, self.patch_dim)
         self.final_layer = nn.Conv2D(self.in_channels, self.in_channels, 3, padding=1) if conv else nn.Identity()
+
         self.gradient_checkpointing = False
         self.fused_attn = False
 
@@ -370,7 +393,8 @@ class UViTT2IModel(nn.Layer):
         x = paddle.concat((time_token, context_token, x), 1)
 
         x = x + self.pos_embed
-        x = self.pos_drop(x)
+        with get_rng_state_tracker().rng_state("global_seed"):
+            x = self.pos_drop(x)
 
         skips = []
         for i, blk in enumerate(self.in_blocks):
@@ -398,5 +422,4 @@ class UViTT2IModel(nn.Layer):
         x = x[:, self.extras :, :]
         x = unpatchify(x, self.in_channels)
         x = self.final_layer(x)  # conv
-
         return x

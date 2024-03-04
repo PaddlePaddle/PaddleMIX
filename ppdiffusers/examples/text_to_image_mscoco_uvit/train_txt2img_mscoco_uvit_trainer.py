@@ -14,6 +14,8 @@
 import itertools
 import math
 import os
+import pprint
+import socket
 
 import paddle
 from ldm import (
@@ -22,19 +24,24 @@ from ldm import (
     LatentDiffusionTrainer,
     ModelArguments,
     MSCOCO256Features,
+    TrainerArguments,
+    setdistenv,
 )
-from paddlenlp.trainer import (
-    PdArgumentParser,
-    TrainingArguments,
-    get_last_checkpoint,
-    set_seed,
-)
+from paddlenlp.trainer import PdArgumentParser, get_last_checkpoint, set_seed
 from paddlenlp.utils.log import logger
 
 
 def main():
-    parser = PdArgumentParser((ModelArguments, DataArguments, TrainingArguments))
+    parser = PdArgumentParser((ModelArguments, DataArguments, TrainerArguments))
     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
+    training_args.hostname = socket.gethostname()
+    pprint.pprint(data_args)
+    pprint.pprint(model_args)
+    pprint.pprint(training_args)
+    setdistenv(training_args)
+    model_args.data_world_rank = training_args.data_world_rank
+    model_args.data_world_size = training_args.data_world_size
+
     training_args.report_to = ["visualdl"]
     training_args.resolution = data_args.resolution
     training_args.feature_path = data_args.feature_path

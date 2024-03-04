@@ -13,11 +13,17 @@
 # limitations under the License.
 
 from . import gaussian_diffusion as gd
+from .dist_env import setdistenv
 from .dit import DiT
 from .dit_llama import DiT_Llama
 from .respace import SpacedDiffusion, space_timesteps
 from .trainer import LatentDiffusionTrainer
-from .trainer_args import DataArguments, ModelArguments, NoTrainerTrainingArguments
+from .trainer_args import (
+    DataArguments,
+    ModelArguments,
+    NoTrainerTrainingArguments,
+    TrainerArguments,
+)
 from .trainer_model import DiTDiffusionModel
 
 # Modified from OpenAI's diffusion repos
