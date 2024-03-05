@@ -187,7 +187,7 @@ class Attention(nn.Layer):
             x = x.transpose([0, 2, 1, 3])
         else:
             if self.fused_attn:
-                x = F.scaled_dot_product_attention(
+                x = F.scaled_dot_product_attention_(
                     q.transpose([0, 2, 1, 3]),
                     k.transpose([0, 2, 1, 3]),
                     v.transpose([0, 2, 1, 3]),
