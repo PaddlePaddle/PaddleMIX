@@ -13,7 +13,7 @@ convert_controlnet.py 转换controlnet模型
 ``` shell
 python inference.py --pretrained_path model_path \
   --prompt="a bulldog in the captains chair of a spaceship, hd, high quality" \
-  --pretrained_path ./hotshot_output/ --seed 452 --precision f32 \
+  --seed 452 --precision f32 \
   --output="output.gif"
 ```
 
@@ -24,7 +24,7 @@ controlnet 模型路径 ./controlnet_depth，在 inference.py 中配置
 ``` shell
 python inference.py --pretrained_path model_path \
   --prompt="a girl jumping up and down and pumping her fist, hd, high quality" \
-  --pretrained_path ./hotshot_output/ --seed 452 --precision f32 \
+  --seed 452 --precision f32 \
   --output="output.gif" \
   --control_type="depth" \
   --gif="https://media1.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXNneXJicG1mOHJ2dzQ2Y2JteDY1ZWlrdjNjMjl3ZWxyeWFxY2EzdyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/YOTAoXBgMCmFeQQzuZ/giphy.gif"
