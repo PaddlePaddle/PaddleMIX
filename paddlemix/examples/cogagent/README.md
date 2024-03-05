@@ -2,7 +2,7 @@
 
 ## 1. 模型介绍
 
-该模型是 [CogAgent](https://arxiv.org/abs/2312.08914) 的 paddle 实现。对齐的是 huggingface 上的 `THUDM/cogagent-chat-hf`, tokenizer 采用的是 huggingface 上的 `lmsys/vicuna-7b-v1.5`
+该模型是 [CogAgent](https://arxiv.org/abs/2312.08914) 的 paddle 实现。
 
 [CogAgent](https://arxiv.org/abs/2312.08914)是一个基于CogVLM改进的开源视觉语言模型。CogAgent-18B拥有110亿的视觉参数和70亿的语言参数。
 
