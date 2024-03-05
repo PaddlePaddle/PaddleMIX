@@ -30,7 +30,7 @@ python inference.py --pretrained_path model_path \
   --gif="https://media1.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXNneXJicG1mOHJ2dzQ2Y2JteDY1ZWlrdjNjMjl3ZWxyeWFxY2EzdyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/YOTAoXBgMCmFeQQzuZ/giphy.gif"
 ```
 
-微调训练
+微调训练使用V100 32G显示显存不足，暂时没有合适硬件测试
 
 ``` shell
 python fine_tune.py --data_dir data/ --pretrained_model_name_or_path ./hotshot_output/
