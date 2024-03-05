@@ -27,7 +27,7 @@ config_file=config/LargeDiT_3B_patch2.json
 OUTPUT_DIR=./output_trainer/LargeDiT_3B_patch2_trainer
 
 feature_path=./data/fastdit_imagenet256
-batch_size=16 # per gpu
+batch_size=32 # per gpu
 num_workers=8
 max_steps=7000000
 logging_steps=50

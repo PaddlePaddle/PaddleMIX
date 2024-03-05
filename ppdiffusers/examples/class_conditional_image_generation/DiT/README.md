@@ -1,3 +1,5 @@
+# Class-Conditional Image Generation
+
 ## Scalable Diffusion Models with Transformers (DiT)
 ## Exploring Flow and Diffusion-based Generative Models with Scalable Interpolant Transformers (SiT)
 
@@ -31,8 +33,8 @@ pip install -r requirements.txt
 
 #### 1.3.1 硬件要求
 Tips：
-- FP32 在默认总batch_size=256情况下需占42GB显存。
-- FP16 在默认总batch_size=256情况下需占21GB显存。
+- FP32 在默认总batch_size=256情况下需占 42GB 显存每卡。
+- FP16 在默认总batch_size=256情况下需占 21GB 显存每卡。
 
 #### 1.3.2 单机多卡训练
 ```bash
@@ -103,6 +105,9 @@ ${TRAINING_PYTHON} train_image_generation_trainer.py \
 ### 1.4 自定义训练逻辑开启训练
 
 #### 1.4.1 单机多卡训练
+
+注意显存约占 21GB 每卡。
+
 ```bash
 config_file=config/DiT_XL_patch2.json
 results_dir=./output_notrainer/DiT_XL_patch2_notrainer
@@ -126,6 +131,13 @@ python -u -m paddle.distributed.launch --gpus "0,1,2,3,4,5,6,7" \
 
 
 ## 2 模型推理
+
+### 2.1 使用公开权重推理
+
+可以直接运行`python infer_demo_dit.py`、`python infer_demo_dit.py`或者`infer_demo_largedit_3b.py`
+
+
+### 2.2 使用训练完的权重推理
 
 待模型训练完毕，会在`output_dir`保存训练好的模型权重。注意DiT模型推理可以使用ppdiffusers中的DiTPipeline，**但是SiT模型推理暂时不支持生成`Pipeline`**。
 可以参照运行`python infer_demo_dit.py`或者`python infer_demo_dit.py`。
