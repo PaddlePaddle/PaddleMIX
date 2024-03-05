@@ -14,7 +14,7 @@
 
 import sys
 
-sys.path.append("utils")
+sys.path.append(".")
 import argparse
 import gc
 import math
@@ -22,29 +22,32 @@ import os
 import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor
-
-# from datetime import timedelta
+from datetime import timedelta
 from pathlib import Path
 from typing import Callable
 
 import numpy as np
 import paddle
-import paddle_aux  # noqa: *
 from einops import rearrange
 from hotshot_xl import vision_utils
-from hotshot_xl.models.unet import UNet3DConditionModel
-from hotshot_xl.pipelines.hotshot_xl_pipeline import HotshotXLPipeline
 from hotshot_xl.utils import get_crop_coordinates, res_to_aspect_map, scale_aspect_fill
 from PIL import Image
 from tqdm.auto import tqdm  # noqa: *
 
 import ppdiffusers
+from ppdiffusers.models.hotshot_xl.unet import UNet3DConditionModel
+from ppdiffusers.pipelines.hotshot_xl.hotshot_xl_pipeline import HotshotXLPipeline
+from ppdiffusers.transformers import (
+    CLIPTextModel,
+    CLIPTextModelWithProjection,
+    CLIPTokenizer,
+)
 from ppdiffusers.utils import logging
 
 if ppdiffusers.utils.is_wandb_available():
     import wandb  # noqa: *
 logger = logging.get_logger(__file__)
-import accelerator
+from ppdiffusers import accelerate
 
 
 class HotshotXLDataset(paddle.io.Dataset):
@@ -108,7 +111,7 @@ def parse_args():
     parser.add_argument(
         "--report_to",
         type=str,
-        default="wandb",
+        default=None,
         help='The integration to report the results and logs to. Supported platforms are `"tensorboard"` (default), `"wandb"` and `"comet_ml"`. Use `"all"` to report to all integrations.',
     )
     parser.add_argument("--run_validation_at_start", action="store_true")
@@ -223,7 +226,7 @@ def parse_args():
 def add_time_ids(
     unet_config,
     unet_add_embedding,
-    text_encoder_2: ppdiffusers.transformers.CLIPTextModelWithProjection,
+    text_encoder_2: CLIPTextModelWithProjection,
     original_size: tuple,
     crops_coords_top_left: tuple,
     target_size: tuple,
@@ -252,11 +255,12 @@ def main():
     if args.report_to == "wandb":
         if not ppdiffusers.utils.is_wandb_available():
             raise ImportError("Make sure to install wandb if you want to use it for logging during training.")
-    # accelerator = accelerate.Accelerator(gradient_accumulation_steps=args.
-    #     gradient_accumulation_steps, mixed_precision=args.mixed_precision,
-    #     log_with=args.report_to, kwargs_handlers=[accelerate.utils.
-    #     dataclasses.InitProcessGroupKwargs(timeout=timedelta(args.
-    #     nccl_timeout))])
+    accelerator = accelerate.Accelerator(
+        gradient_accumulation_steps=args.gradient_accumulation_steps,
+        mixed_precision=args.mixed_precision,
+        log_with=args.report_to,
+        kwargs_handlers=[accelerate.utils.dataclasses.InitProcessGroupKwargs(timeout=timedelta(args.nccl_timeout))],
+    )
 
     def save_model_hook(models, weights, output_dir):
         nonlocal global_step
@@ -265,21 +269,15 @@ def main():
                 model.save_pretrained(os.path.join(output_dir, "unet"))
                 weights.pop()
 
-    # accelerator.register_save_state_pre_hook(save_model_hook)
-    # accelerate.utils.set_seed(args.seed)
-    # if accelerator.is_local_main_process:
-    if args.output_dir is not None:
-        os.makedirs(args.output_dir, exist_ok=True)
-    tokenizer = ppdiffusers.transformers.CLIPTokenizer.from_pretrained(
-        args.pretrained_model_name_or_path, subfolder="tokenizer"
-    )
-    tokenizer_2 = ppdiffusers.transformers.CLIPTokenizer.from_pretrained(
-        args.pretrained_model_name_or_path, subfolder="tokenizer_2"
-    )
-    text_encoder = ppdiffusers.transformers.CLIPTextModel.from_pretrained(
-        args.pretrained_model_name_or_path, subfolder="text_encoder"
-    )
-    text_encoder_2 = ppdiffusers.transformers.CLIPTextModelWithProjection.from_pretrained(
+    accelerator.register_save_state_pre_hook(save_model_hook)
+    accelerate.utils.set_seed(args.seed)
+    if accelerator.is_local_main_process:
+        if args.output_dir is not None:
+            os.makedirs(args.output_dir, exist_ok=True)
+    tokenizer = CLIPTokenizer.from_pretrained(args.pretrained_model_name_or_path, subfolder="tokenizer")
+    tokenizer_2 = CLIPTokenizer.from_pretrained(args.pretrained_model_name_or_path, subfolder="tokenizer_2")
+    text_encoder = CLIPTextModel.from_pretrained(args.pretrained_model_name_or_path, subfolder="text_encoder")
+    text_encoder_2 = CLIPTextModelWithProjection.from_pretrained(
         args.pretrained_model_name_or_path, subfolder="text_encoder_2"
     )
     vae = ppdiffusers.AutoencoderKL.from_pretrained(args.pretrained_model_name_or_path, subfolder="vae")
@@ -298,23 +296,16 @@ def main():
         unet.set_use_memory_efficient_attention_xformers(True, None)
     unet_config = unet.config
     unet_add_embedding = unet.add_embedding
-    out_0 = unet
-    out_0.stop_gradient = not False
-    out_0
+    unet.stop_gradient = not False
+
     temporal_params = unet.temporal_parameters()
     for p in temporal_params:
-        out_1 = p
-        out_1.stop_gradient = not True
-        out_1
-    out_2 = vae
-    out_2.stop_gradient = not False
-    out_2
-    out_3 = text_encoder
-    out_3.stop_gradient = not False
-    out_3
-    out_4 = text_encoder_2
-    out_4.stop_gradient = not False
-    out_4
+        p.stop_gradient = not True
+
+    vae.stop_gradient = not False
+    text_encoder.stop_gradient = not False
+    text_encoder_2.stop_gradient = not False
+
     if args.gradient_checkpointing:
         unet.enable_gradient_checkpointing()
     if args.scale_lr:
@@ -333,13 +324,15 @@ def main():
     else:
         optimizer_class = paddle.optimizer.AdamW
     learning_rate = args.learning_rate
-    params_to_optimize = [{"params": temporal_params, "lr": learning_rate}]
+    params_to_optimize = [{"params": temporal_params, "learning_rate": learning_rate}]
     optimizer = optimizer_class(
-        params_to_optimize,
-        lr=args.learning_rate,
-        betas=(args.adam_beta1, args.adam_beta2),
+        parameters=params_to_optimize,
+        learning_rate=args.learning_rate,
+        # betas=(args.adam_beta1, args.adam_beta2),
+        beta1=args.adam_beta1,
+        beta2=args.adam_beta2,
         weight_decay=args.adam_weight_decay,
-        eps=args.adam_epsilon,
+        epsilon=args.adam_epsilon,
     )
     if optimizer_resume_path and not args.disable_optimizer_restore:
         logger.info("Restoring the optimizer.")
@@ -388,7 +381,6 @@ def main():
 
     def image_to_tensor(img):
         with paddle.no_grad():
-            """Class Attribute: torch.distributions.Distribution.mode, can not convert, please check whether it is torch.Tensor.*/torch.autograd.function.FunctionCtx.*/torch.distributions.Distribution.* and convert manually"""
             if img.mode != "RGB":
                 img = img.convert("RGB")
             image = image_transforms(img)  # .to(accelerator.place)
@@ -404,7 +396,6 @@ def main():
         images = [Image.open(img) for img in sample["image_fps"]]
         og_size = images[0].size
         for i, im in enumerate(images):
-            """Class Attribute: torch.distributions.Distribution.mode, can not convert, please check whether it is torch.Tensor.*/torch.autograd.function.FunctionCtx.*/torch.distributions.Distribution.* and convert manually"""
             if im.mode != "RGB":
                 images[i] = im.convert("RGB")
         aspect_ratio_map = res_to_aspect_map[args.resolution]
@@ -450,7 +441,7 @@ def main():
             {"input_ids": input_ids_0},
             padding="max_length",
             max_length=tokenizer.model_max_length,
-            return_tensors="pt",
+            return_tensors="pd",
         ).input_ids
         prompt_embeds_0 = text_encoder(input_ids_0.to(device), output_hidden_states=True)
         prompt_embeds_0 = prompt_embeds_0.hidden_states[-2]
@@ -459,7 +450,7 @@ def main():
             {"input_ids": input_ids_1},
             padding="max_length",
             max_length=tokenizer.model_max_length,
-            return_tensors="pt",
+            return_tensors="pd",
         ).input_ids
         prompt_embeds = text_encoder_2(input_ids_1.to(device), output_hidden_states=True)
         pooled_prompt_embeds = prompt_embeds[0]
@@ -467,8 +458,8 @@ def main():
         prompt_embeds = paddle.concat(x=[prompt_embeds_0, prompt_embeds_1], axis=-1)
         *_, h, w = tuple(examples[0]["frames"].shape)
         return {
-            "frames": paddle.stack(x=[x["frames"] for x in examples]).to().astype(dtype="float32"),
-            "prompt_embeds": prompt_embeds.to().astype(dtype="float32"),
+            "frames": paddle.stack(x=[x["frames"] for x in examples]).astype(dtype="float32"),
+            "prompt_embeds": prompt_embeds.astype(dtype="float32"),
             "pooled_prompt_embeds": pooled_prompt_embeds,
             "additional_time_ids": paddle.stack(x=[x["additional_time_ids"] for x in examples]),
         }
@@ -484,12 +475,11 @@ def main():
         overrode_max_train_steps = True
     lr_scheduler = ppdiffusers.optimization.get_scheduler(
         args.lr_scheduler,
-        optimizer=optimizer,
+        # optimizer=optimizer,
         num_warmup_steps=args.lr_warmup_steps * args.gradient_accumulation_steps,
         num_training_steps=args.max_train_steps * args.gradient_accumulation_steps,
     )
-    # unet, optimizer, lr_scheduler, dataloader = accelerator.prepare(unet,
-    #     optimizer, lr_scheduler, dataloader)
+    unet, optimizer, lr_scheduler, dataloader = accelerator.prepare(unet, optimizer, lr_scheduler, dataloader)
 
     def to_images(video_frames: paddle.Tensor):
         to_pil = vision_utils.ToPILImage()
@@ -509,7 +499,7 @@ def main():
 
     def run_validation(step=0, node_index=0):
         nonlocal global_step
-        # nonlocal accelerator
+        nonlocal accelerator
         if args.test_prompts:
             prompts = args.test_prompts.split("|")
         else:
@@ -545,45 +535,40 @@ def main():
                     generator=paddle.framework.core.default_cpu_generator().manual_seed(111),
                 ).videos
                 videos.append(to_images(video))
-            # for tracker in accelerator.trackers:
-            #     if tracker.name == 'wandb':
-            #         tracker.log({'validation': [wandb.Video(to_video_frames
-            #             (video), fps=8, format='mp4') for video in videos]},
-            #             step=global_step)
+            for tracker in accelerator.trackers:
+                if tracker.name == "wandb":
+                    tracker.log(
+                        {"validation": [wandb.Video(to_video_frames(video), fps=8, format="mp4") for video in videos]},
+                        step=global_step,
+                    )
             del pipe
         return
 
-    vae.to(vae.place, dtype="bfloat16" if args.vae_b16 else "float32")
+    vae.to(dtype="bfloat16" if args.vae_b16 else "float32")
     # text_encoder.to(accelerator.place)
     # text_encoder_2.to(accelerator.place)
     num_update_steps_per_epoch = math.ceil(len(dataloader) / args.gradient_accumulation_steps)
     if overrode_max_train_steps:
         args.max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
     args.num_train_epochs = math.ceil(args.max_train_steps / num_update_steps_per_epoch)
-    # if accelerator.is_main_process:
-    #     accelerator.init_trackers(args.project_name)
+    if accelerator.is_main_process:
+        accelerator.init_trackers(args.project_name)
 
     def bar(prg):
         br = "|" + "█" * prg + " " * (25 - prg) + "|"
         return br
 
     num_processes = 1
-    # total_batch_size = args.train_batch_size * num_processes * args.gradient_accumulation_steps
-    # if accelerator.is_main_process:
-    #     logger.info('***** Running training *****')
-    #     logger.info(f'  Num examples = {len(dataset)}')
-    #     logger.info(f'  Num Epochs = {args.num_train_epochs}')
-    #     logger.info(
-    #         f'  Instantaneous batch size per device = {args.train_batch_size}')
-    #     logger.info(
-    #         f'  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}'
-    #         )
-    #     logger.info(
-    #         f'  Gradient Accumulation steps = {args.gradient_accumulation_steps}'
-    #         )
-    #     logger.info(f'  Total optimization steps = {args.max_train_steps}')
-    # progress_bar = tqdm(range(args.max_train_steps), disable=not
-    #     accelerator.is_local_main_process)
+    total_batch_size = args.train_batch_size * num_processes * args.gradient_accumulation_steps
+    if accelerator.is_main_process:
+        logger.info("***** Running training *****")
+        logger.info(f"  Num examples = {len(dataset)}")
+        logger.info(f"  Num Epochs = {args.num_train_epochs}")
+        logger.info(f"  Instantaneous batch size per device = {args.train_batch_size}")
+        logger.info(f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}")
+        logger.info(f"  Gradient Accumulation steps = {args.gradient_accumulation_steps}")
+        logger.info(f"  Total optimization steps = {args.max_train_steps}")
+    progress_bar = tqdm(range(args.max_train_steps), disable=not accelerator.is_local_main_process)
     latents_scaler = vae.config.scaling_factor
 
     def save_checkpoint():
@@ -592,21 +577,23 @@ def main():
         save_dir = save_dir.replace(" ", "_")
         if not os.path.exists(save_dir):
             os.makedirs(save_dir, exist_ok=True)
-        # accelerator.save_state(save_dir)
+        accelerator.save_state(save_dir)
 
-    # def save_checkpoint_and_wait():
-    #     if accelerator.is_main_process:
-    #         save_checkpoint()
-    #     accelerator.wait_for_everyone()
+    def save_checkpoint_and_wait():
+        if accelerator.is_main_process:
+            save_checkpoint()
+        accelerator.wait_for_everyone()
 
-    # def save_model_and_wait():
-    #     if accelerator.is_main_process:
-    #         HotshotXLPipeline.from_pretrained(args.
-    #             pretrained_model_name_or_path, unet=accelerator.
-    #             unwrap_model(unet), text_encoder=text_encoder,
-    #             text_encoder_2=text_encoder_2, vae=vae).save_pretrained(args
-    #             .output_dir, safe_serialization=True)
-    #     accelerator.wait_for_everyone()
+    def save_model_and_wait():
+        if accelerator.is_main_process:
+            HotshotXLPipeline.from_pretrained(
+                args.pretrained_model_name_or_path,
+                unet=accelerator.unwrap_model(unet),
+                text_encoder=text_encoder,
+                text_encoder_2=text_encoder_2,
+                vae=vae,
+            ).save_pretrained(args.output_dir, safe_serialization=True)
+        accelerator.wait_for_everyone()
 
     def compute_loss_from_batch(batch: dict):
         frames = batch["frames"]
@@ -629,7 +616,7 @@ def main():
                 paddle.device.cuda.empty_cache()
                 latents = vae.encode(x.to(dtype=vae.dtype)).latent_dist.sample().astype(dtype="float32")
             if args.latent_nan_checking and paddle.any(x=paddle.isnan(x=latents)):
-                # accelerator.print('NaN found in latents, replacing with zeros')
+                accelerator.print("NaN found in latents, replacing with zeros")
                 latents = paddle.where(condition=paddle.isnan(x=latents), x=paddle.zeros_like(x=latents), y=latents)
             latents = rearrange(latents, "(b f) c h w -> b c f h w", b=bsz)
             paddle.device.cuda.empty_cache()
@@ -687,20 +674,19 @@ def main():
                     run_validation(step=global_step, node_index=accelerator.process_index // 8)
                 accelerator.wait_for_everyone()
             loss = compute_loss_from_batch(batch)
-            accelerator.backward(grad_tensor=loss)
+            accelerator.backward(grad_tensor=loss, loss=loss)
             if accelerator.sync_gradients:
                 accelerator.clip_grad_norm_(temporal_params, args.max_grad_norm)
             optimizer.step()
             lr_scheduler.step()
-            """Class Method: *.zero_grad, can not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*/torch.distributions.Distribution.*/torch.autograd.function.FunctionCtx.*/torch.profiler.profile.*/torch.autograd.profiler.profile.*, and convert manually"""
             optimizer.clear_grad()
         if accelerator.sync_gradients:
-            # progress_bar.update(1)
+            progress_bar.update(1)
             global_step += 1
         fll = round(global_step * 100 / args.max_train_steps)
         fll = round(fll / 4)
         pr = bar(fll)  # noqa: *
-        logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0], "loss_time": time.time() - now}
+        logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr(), "loss_time": time.time() - now}
         if (
             args.validate_every_steps is not None
             and global_step > min_steps_before_validation
@@ -711,8 +697,8 @@ def main():
             accelerator.wait_for_everyone()
         for key, val in logging_data.items():
             logs[key] = val
-        # progress_bar.set_postfix(**logs)
-        # progress_bar.set_description_str("Progress:" + pr)
+        progress_bar.set_postfix(**logs)
+        progress_bar.set_description_str("Progress:" + pr)
         accelerator.log(logs, step=global_step)
         if (
             accelerator.is_main_process
@@ -734,11 +720,11 @@ def main():
         if global_step >= args.max_train_steps:
             logger.info("Max train steps reached. Breaking while loop")
             break
-    #     accelerator.wait_for_everyone()
-    # save_model_and_wait()
-    # accelerator.end_training()
+        accelerator.wait_for_everyone()
+    save_model_and_wait()
+    accelerator.end_training()
 
 
 if __name__ == "__main__":
-    # torch.multiprocessing.set_start_method('spawn')
+    # paddle.multiprocessing.set_start_method('spawn')
     main()
