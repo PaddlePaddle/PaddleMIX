@@ -79,7 +79,7 @@ from .download_utils import (
     ppdiffusers_url_download,
 )
 from .dynamic_modules_utils import get_class_from_dynamic_module
-from .export_utils import export_to_gif, export_to_obj, export_to_ply, export_to_video
+from .export_utils import export_to_gif, export_to_obj, export_to_ply, export_to_video, export_to_video_2
 from .hub_utils import (
     HF_HUB_OFFLINE,
     PushToHubMixin,

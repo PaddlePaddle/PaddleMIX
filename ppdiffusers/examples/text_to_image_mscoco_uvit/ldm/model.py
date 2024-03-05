@@ -22,25 +22,17 @@ import numpy as np
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
+from paddle.distributed import fleet
 from paddle.nn.initializer import TruncatedNormal
 from paddlenlp.transformers import AutoTokenizer, CLIPTextModel
 from paddlenlp.utils.log import logger
 
 from ppdiffusers import AutoencoderKL, DDIMScheduler, is_ppxformers_available
+from ppdiffusers.initializer import reset_initialized_parameter, zeros_
 from ppdiffusers.models.attention_processor import Attention
 from ppdiffusers.models.ema import LitEma
-from ppdiffusers.training_utils import freeze_params
-
-try:
-    from ppdiffusers.models.attention import SpatialTransformer
-except ImportError:
-    from ppdiffusers.models.transformer_2d import (
-        Transformer2DModel as SpatialTransformer,
-    )
-
-from ppdiffusers.initializer import reset_initialized_parameter, zeros_
-from ppdiffusers.models.resnet import ResnetBlock2D
 from ppdiffusers.models.vae import DiagonalGaussianDistribution
+from ppdiffusers.training_utils import freeze_params
 
 from .uvit_t2i import UViTT2IModel
 
@@ -211,13 +203,9 @@ class LatentDiffusionModel(nn.Layer):
             if isinstance(m, Attention) and getattr(m, "group_norm", None) is not None:
                 zeros_(m.to_out[0].weight)
                 zeros_(m.to_out[0].bias)
-            if isinstance(m, ResnetBlock2D):
-                zeros_(m.conv2.weight)
-                zeros_(m.conv2.bias)
-            if isinstance(m, SpatialTransformer):
-                zeros_(m.proj_out.weight)
-                zeros_(m.proj_out.bias)
-            if isinstance(m, nn.Linear):
+            if isinstance(
+                m, (nn.Linear, fleet.meta_parallel.ColumnParallelLinear, fleet.meta_parallel.RowParallelLinear)
+            ):
                 trunc_normal_(m.weight)
                 if isinstance(m, nn.Linear) and m.bias is not None:
                     zeros_(m.bias)
