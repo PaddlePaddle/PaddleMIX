@@ -386,7 +386,7 @@ class UNet3DConditionModel(
 
     def temporal_parameters(self) -> list:
         output = []
-        all_blocks = self.down_blocks + self.up_blocks + [self.mid_block]
+        all_blocks = list(self.down_blocks) + list(self.up_blocks) + [self.mid_block]
         for block in all_blocks:
             output.extend(block.temporal_parameters())
         return output
