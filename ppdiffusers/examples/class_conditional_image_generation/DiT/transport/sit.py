@@ -178,20 +178,21 @@ class Attention(nn.Layer):
 
         if dtype in [paddle.float16, paddle.bfloat16]:
             x, _ = flash_attention(
-                q,
-                k,
-                v,
+                q.transpose([0, 2, 1, 3]),
+                k.transpose([0, 2, 1, 3]),
+                v.transpose([0, 2, 1, 3]),
                 dropout=self.attn_drop.p,
                 return_softmax=False,
             )
+            x = x.transpose([0, 2, 1, 3])
         else:
             if self.fused_attn:
                 x = F.scaled_dot_product_attention_(
-                    q,
-                    k,
-                    v,
+                    q.transpose([0, 2, 1, 3]),
+                    k.transpose([0, 2, 1, 3]),
+                    v.transpose([0, 2, 1, 3]),
                     dropout_p=self.attn_drop.p if self.training else 0.0,
-                )
+                ).transpose([0, 2, 1, 3])
             else:
                 q = q * self.scale
                 attn = q @ k.transpose([0, 1, 3, 2])
