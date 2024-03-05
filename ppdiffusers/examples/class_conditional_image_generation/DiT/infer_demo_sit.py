@@ -36,7 +36,7 @@ def read_json(file):
 
 
 model = SiT(**read_json(config_file))
-state_dict = "SiT-XL-2-256x256.pdparams"
+state_dict = "SiT-XL-2-256x256.pdparams"  # wget https://bj.bcebos.com/v1/paddlenlp/models/community/facebook/SiT-XL-2-256x256.pdparams
 model.set_dict(paddle.load(state_dict))
 model.eval()  # important!
 vae = AutoencoderKL.from_pretrained(vae_model)

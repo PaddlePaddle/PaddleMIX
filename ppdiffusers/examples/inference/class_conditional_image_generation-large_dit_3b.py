@@ -17,10 +17,11 @@ from paddlenlp.trainer import set_seed
 
 from ppdiffusers import DDIMScheduler, DiTPipeline
 
-dtype = paddle.float32
-pipe = DiTPipeline.from_pretrained("Alpha-VLLM/Large-DiT-3B-256", paddle_dtype=dtype)
+dtype = paddle.bfloat16
+with paddle.LazyGuard():
+    pipe = DiTPipeline.from_pretrained("Alpha-VLLM/Large-DiT-3B-256", paddle_dtype=dtype)
 pipe.scheduler = DDIMScheduler.from_config(pipe.scheduler.config)
-set_seed(42)
+set_seed(0)
 
 words = ["golden retriever"]  # class_ids [207]
 class_ids = pipe.get_label_ids(words)
