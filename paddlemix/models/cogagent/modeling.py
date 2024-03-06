@@ -632,7 +632,7 @@ class CogAgentModel(CogAgentPreTrainedModel):
         next_cache = next_decoder_cache if use_cache else None
         if not return_dict:
             return tuple(v for v in [hidden_states, next_cache, all_hidden_states, all_self_attns] if v is not None)
-        return transformers.modeling_outputs.BaseModelOutputWithPast(
+        return transformers.model_outputs.BaseModelOutputWithPast(
             last_hidden_state=hidden_states,
             past_key_values=next_cache,
             hidden_states=all_hidden_states,
@@ -777,7 +777,7 @@ class CogAgentForCausalLM(CogAgentPreTrainedModel):
         if not return_dict:
             output = (logits,) + outputs[1:]
             return (loss,) + output if loss is not None else output
-        return transformers.modeling_outputs.CausalLMOutputWithPast(
+        return transformers.model_outputs.CausalLMOutputWithPast(
             loss=loss,
             logits=logits,
             past_key_values=outputs.past_key_values,
