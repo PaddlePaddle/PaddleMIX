@@ -639,7 +639,6 @@ class HotshotXLPipeline(
         self.scheduler.set_timesteps(num_inference_steps)
         timesteps = self.scheduler.timesteps
         num_channels_latents = self.unet.config.in_channels
-        print(latents)
         latents = self.prepare_latents(
             batch_size * num_images_per_prompt,
             num_channels_latents,
@@ -651,7 +650,6 @@ class HotshotXLPipeline(
             generator,
             latents,
         )
-        print(latents)
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
         add_text_embeds = pooled_prompt_embeds
         add_time_ids = self._get_add_time_ids(
