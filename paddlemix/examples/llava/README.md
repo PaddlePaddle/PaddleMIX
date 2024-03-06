@@ -33,7 +33,6 @@ python paddlemix/examples/llava/run_predict_multiround.py \
   * `model_name_or_path`: 指定llava系列的模型名字或权重路径
   * `image-flie` :输入图片路径或url，默认None。
 
-```
 
 输入图片：<center><img src="https://github.com/LokeZhou/PaddleMIX/assets/13300429/95f73037-097e-4712-95be-17d5ca489f11" /></center>
 
