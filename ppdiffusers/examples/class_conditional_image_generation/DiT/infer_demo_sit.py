@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import json
+import random
 
 import numpy as np
 import paddle
@@ -25,7 +26,7 @@ from ppdiffusers import AutoencoderKL
 paddle.device.set_device("gpu")
 
 image_size = "256"
-vae_model = "stabilityai/sd-vae-ft-ema"
+vae_model = "stabilityai/sd-vae-ft-ema"  # will be downloaded automatically
 config_file = "config/SiT_XL_patch2.json"
 
 
@@ -37,7 +38,7 @@ def read_json(file):
 
 model = SiT(**read_json(config_file))
 state_dict = "SiT-XL-2-256x256.pdparams"  # wget https://bj.bcebos.com/v1/paddlenlp/models/community/facebook/SiT-XL-2-256x256.pdparams
-model.set_dict(paddle.load(state_dict))
+model.set_state_dict(paddle.load(state_dict))
 model.eval()  # important!
 vae = AutoencoderKL.from_pretrained(vae_model)
 latent_size = 256 // 8
@@ -46,6 +47,13 @@ latent_size = 256 // 8
 # Set user inputs:
 seed = 0  # @param {type:"number"}
 paddle.seed(seed)
+random.seed(seed)
+np.random.seed(seed)
+from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
+
+tracker = get_rng_state_tracker()
+tracker.add("global_seed", seed)
+
 num_sampling_steps = 25  # @param {type:"slider", min:0, max:1000, step:1}
 cfg_scale = 4  # @param {type:"slider", min:1, max:10, step:0.1}
 class_labels = [207]  # @param {type:"raw"}

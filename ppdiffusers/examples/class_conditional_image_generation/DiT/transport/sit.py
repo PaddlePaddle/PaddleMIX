@@ -274,7 +274,7 @@ class ParallelLabelEmbedder(nn.Layer):
         super().__init__()
         use_cfg_embedding = dropout_prob > 0
         embedding_dim = num_classes + use_cfg_embedding
-        if is_model_parrallel:
+        if is_model_parrallel():
             self.embedding_table = fleet.meta_parallel.VocabParallelEmbedding(embedding_dim, hidden_size)
         else:
             self.embedding_table = nn.Embedding(embedding_dim, hidden_size)
@@ -313,9 +313,9 @@ class DiTBlock(nn.Layer):
 
     def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, fused_attn=False, **block_kwargs):
         super().__init__()
-        self.norm1 = nn.LayerNorm(hidden_size, epsilon=1e-6)
+        self.norm1 = nn.LayerNorm(hidden_size, weight_attr=False, bias_attr=False, epsilon=1e-6)
         self.attn = Attention(hidden_size, num_heads=num_heads, qkv_bias=True, fused_attn=fused_attn, **block_kwargs)
-        self.norm2 = nn.LayerNorm(hidden_size, epsilon=1e-6)
+        self.norm2 = nn.LayerNorm(hidden_size, weight_attr=False, bias_attr=False, epsilon=1e-6)
         mlp_hidden_dim = int(hidden_size * mlp_ratio)
         approx_gelu = lambda: nn.GELU(approximate=True)  # 'tanh'
         self.mlp = Mlp(

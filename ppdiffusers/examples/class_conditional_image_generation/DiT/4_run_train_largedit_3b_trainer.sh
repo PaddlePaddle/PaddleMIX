@@ -17,9 +17,12 @@ TRAINER_INSTANCES='127.0.0.1'
 MASTER='127.0.0.1:8080'
 TRAINERS_NUM=1 # nnodes, machine num
 TRAINING_GPUS_PER_NODE=8 # nproc_per_node
-DP_DEGREE=8 # dp_parallel_degree
+DP_DEGREE=4 # dp_parallel_degree
 MP_DEGREE=2 # tensor_parallel_degree
 SHARDING_DEGREE=1 # sharding_parallel_degree
+
+# real dp_parallel_degree = nnodes * nproc_per_node / tensor_parallel_degree / sharding_parallel_degree
+# Please make sure: nnodes * nproc_per_node >= tensor_parallel_degree * sharding_parallel_degree
 
 accumulation_steps=2 # gradient_accumulation_steps
 

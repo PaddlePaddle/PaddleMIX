@@ -17,7 +17,7 @@ from paddlenlp.trainer import set_seed
 
 from ppdiffusers import DDIMScheduler, DiTPipeline
 
-dtype = paddle.bfloat16
+dtype = paddle.float32
 with paddle.LazyGuard():
     pipe = DiTPipeline.from_pretrained("Alpha-VLLM/Large-DiT-7B-256", paddle_dtype=dtype)
 pipe.scheduler = DDIMScheduler.from_config(pipe.scheduler.config)
