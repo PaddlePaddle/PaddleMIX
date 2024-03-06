@@ -45,7 +45,7 @@ SCHEDULERS = {
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Hotshot-XL inference")
-    parser.add_argument("--pretrained_path", type=str, default="hotshotco/Hotshot-XL")
+    parser.add_argument("--pretrained_path", type=str, default="co63oc/hotshotxl/hotshot_output")
     parser.add_argument("--xformers", action="store_true")
     parser.add_argument("--spatial_unet_base", type=str)
     parser.add_argument("--lora", type=str)
@@ -119,8 +119,8 @@ def main():
         control_type_to_model_map = {
             # "canny": "diffusers/controlnet-canny-sdxl-1.0",
             # "depth": "diffusers/controlnet-depth-sdxl-1.0",
-            "canny": "./controlnet_canny",
-            "depth": "./controlnet_depth",
+            "canny": "co63oc/hotshotxl/controlnet_canny",
+            "depth": "co63oc/hotshotxl/controlnet_depth",
         }
         control_net_model_pretrained_path = control_type_to_model_map[args.control_type]
     data_type = "float32"
