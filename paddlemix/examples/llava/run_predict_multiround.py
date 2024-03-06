@@ -50,6 +50,7 @@ def main(args):
 
     model.resize_token_embeddings(len(tokenizer))
     vision_tower = model.get_vision_tower()
+
     vision_tower.load_model()
 
     if "llama-2" in model_name.lower():
@@ -101,7 +102,7 @@ def main(args):
         prompt = conv.get_prompt()
         record = {"image": args.image_file, "conversations": prompt}
         image_size = load_image(args.image_file).size
-        data_dict = processor(record=record)
+        data_dict = processor(record=record, image_aspect_ratio=model_config.image_aspect_ratio)
 
         streamer = TextStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True)
 

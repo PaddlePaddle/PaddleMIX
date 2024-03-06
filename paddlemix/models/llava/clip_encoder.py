@@ -39,6 +39,7 @@ class CLIPVisionTower(paddle.nn.Layer):
             print("{} is already loaded, `load_model` called again, skipping.".format(self.vision_tower_name))
             return
         self.vision_tower = CLIPVisionModel.from_pretrained(self.vision_tower_name)
+
         for param in self.vision_tower.parameters():
             param.stop_gradient = True
         self.is_loaded = True

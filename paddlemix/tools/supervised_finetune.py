@@ -74,6 +74,7 @@ def main():
 
     # Load model config
     model_config = AutoConfigMIX.from_pretrained(model_args.model_name_or_path, dtype=dtype)
+    model_config.use_flash_attention = model_args.use_flash_attention
 
     # Load model
     model = AutoModelMIX.from_pretrained(

@@ -173,9 +173,9 @@ def process_anyres_image(image, processor, grid_pinpoints):
 
     image_patches = [image_original_resize] + patches
     image_patches = [
-        processor.preprocess(image_patch, return_tensors="pt")["pixel_values"][0] for image_patch in image_patches
+        processor.preprocess(image_patch, return_tensors="pd")["pixel_values"][0] for image_patch in image_patches
     ]
-    return paddle.stack(image_patches, dim=0)
+    return paddle.stack(image_patches, axis=0)
 
 
 def get_model_name_from_path(model_path):
@@ -193,10 +193,8 @@ def load_image_from_base64(image):
 
 def load_image(image_file):
     if image_file.startswith("http://") or image_file.startswith("https://"):
-        proxies = {"http": "http://10.162.37.16:8128", "https": "http://10.162.37.16:8128"}
         response = requests.get(
             image_file,
-            proxies=proxies,
         )
         image = Image.open(BytesIO(response.content)).convert("RGB")
     else:

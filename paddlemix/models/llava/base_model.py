@@ -70,7 +70,6 @@ class LlavaMetaModel:
                 vision_tower = self.vision_tower[0]
             else:
                 vision_tower = self.vision_tower
-
             vision_tower.load_model()
 
         self.config.use_mm_proj = True
@@ -153,12 +152,13 @@ class LlavaMetaForCausalLM:
         if vision_tower is None or images is None or input_ids.shape[1] == 1:
             return (input_ids, position_ids, attention_mask, past_key_values, None, labels)
         if type(images) is list or images.ndim == 5:
+
             if type(images) is list:
                 images = [(x.unsqueeze(axis=0) if x.ndim == 3 else x) for x in images]
             concat_images = paddle.concat(x=[image for image in images], axis=0)
             image_features = self.encode_images(concat_images)
             split_sizes = [image.shape[0] for image in images]
-            # >>>>image_features = paddle_aux.split(x=image_features, num_or_sections=split_sizes, axis=0)
+            image_features = paddle.split(image_features, split_sizes, axis=0)
             mm_patch_merge_type = getattr(self.config, "mm_patch_merge_type", "flat")
             image_aspect_ratio = getattr(self.config, "image_aspect_ratio", "square")
             if mm_patch_merge_type == "flat":
@@ -192,9 +192,9 @@ class LlavaMetaForCausalLM:
                             image_feature = paddle.concat(
                                 x=(
                                     image_feature,
-                                    self.model.image_newline[:, (None), (None)]
-                                    .expand(shape=[*image_feature.shape[:-1], 1])
-                                    .to(image_feature.place),
+                                    self.llama.image_newline[:, (None), (None)].expand(
+                                        shape=[*image_feature.shape[:-1], 1]
+                                    ),
                                 ),
                                 axis=-1,
                             )
@@ -211,7 +211,7 @@ class LlavaMetaForCausalLM:
                         image_feature = image_feature[0]
                         if "unpad" in mm_patch_merge_type:
                             image_feature = paddle.concat(
-                                x=(image_feature, self.model.image_newline[None].to(image_feature.place)), axis=0
+                                x=(image_feature, self.llama.image_newline[None].to(image_feature.place)), axis=0
                             )
                     new_image_features.append(image_feature)
                 image_features = new_image_features
