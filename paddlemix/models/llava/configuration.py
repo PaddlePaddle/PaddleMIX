@@ -14,6 +14,8 @@
 
 from paddlenlp.transformers import LlamaConfig
 
+__all__ = ["LlavaConfig"]
+
 
 class LlavaConfig(LlamaConfig):
     model_type = "llava"

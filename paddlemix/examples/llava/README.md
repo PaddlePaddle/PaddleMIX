@@ -12,7 +12,7 @@
 
 注：图片引用自[LLaVA](https://github.com/haotian-liu/LLaVA).
 
-本仓库提供paddle版本的Llava-7b和Llava-13b模型。
+本仓库提供paddle版本的Llava-v1.5-7b、Llava-v1.5-13b、Llava-v1.6-7b模型。
 
 
 ## 2 环境准备
@@ -30,8 +30,9 @@ python paddlemix/examples/llava/run_predict_multiround.py \
 --image-file "https://bj.bcebos.com/v1/paddlenlp/models/community/GroundingDino/000000004505.jpg" \
 ```
 可配置参数说明：
-  * `model_name_or_path`: 指定llava系列的模型名字或权重路径
+  * `model-path`: 指定llava系列的模型名字或权重路径 ，支持 'paddlemix/llava/llava-v1.5-7b','paddlemix/llava/llava-v1.5-13b','paddlemix/llava/llava-v1.6-7b'
   * `image-flie` :输入图片路径或url，默认None。
+
 
 
 输入图片：<center><img src="https://github.com/LokeZhou/PaddleMIX/assets/13300429/95f73037-097e-4712-95be-17d5ca489f11" /></center>

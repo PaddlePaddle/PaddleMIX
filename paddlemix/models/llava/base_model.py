@@ -149,14 +149,15 @@ class LlavaMetaForCausalLM:
         image_sizes=None,
     ):
         vision_tower = self.get_vision_tower()
+
         if vision_tower is None or images is None or input_ids.shape[1] == 1:
             return (input_ids, position_ids, attention_mask, past_key_values, None, labels)
         if type(images) is list or images.ndim == 5:
-
             if type(images) is list:
                 images = [(x.unsqueeze(axis=0) if x.ndim == 3 else x) for x in images]
             concat_images = paddle.concat(x=[image for image in images], axis=0)
             image_features = self.encode_images(concat_images)
+
             split_sizes = [image.shape[0] for image in images]
             image_features = paddle.split(image_features, split_sizes, axis=0)
             mm_patch_merge_type = getattr(self.config, "mm_patch_merge_type", "flat")

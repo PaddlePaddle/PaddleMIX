@@ -14,7 +14,9 @@
 
 import io
 import json
+import os
 
+import yaml
 from paddlenlp.transformers import AutoTokenizer
 from paddlenlp.utils.import_utils import import_module
 from paddlenlp.utils.log import logger
@@ -32,9 +34,14 @@ class AutoTokenizerMIX(AutoTokenizer):
 
     @classmethod
     def _update_name_mapping(cls):
-        cls._name_mapping["QWenVLTokenizer"] = "qwen_vl"
-        cls._name_mapping["SimpleTokenizer"] = "processors"
-        cls._name_mapping["LLavaTokenizer"] = "llava"
+
+        tokenizer_mapping = os.path.join(os.path.dirname(__file__), "tokenizer_mapping.yaml")
+
+        with open(tokenizer_mapping) as f:
+            cfg = yaml.load(f, Loader=yaml.Loader)
+
+        for key, value in cfg.items():
+            cls._name_mapping[key] = value
 
     @classmethod
     def _get_tokenizer_class_from_config(cls, pretrained_model_name_or_path, config_file_path, use_fast):

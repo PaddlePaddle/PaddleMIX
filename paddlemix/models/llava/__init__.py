@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from .clip_encoder import *
+from .configuration import *
 from .mm_utils import *
 from .modeling import *
 from .tokenizer import *
