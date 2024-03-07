@@ -205,6 +205,7 @@ def main(args):
         "auto_mixed_precision_pass",
         "elementwise_groupnorm_act_pass",
         "groupnorm_act_pass",
+        "preln_elementwise_groupnorm_act_pass",
     ]
     paddle_delete_passes = dict(
         text_encoder=only_fp16_passes + no_need_passes if not args.use_fp16 else no_need_passes,
@@ -251,7 +252,7 @@ def main(args):
             use_trt=args.use_trt,
             precision_mode=precision_mode,
             device_id=args.device_id,
-            disable_paddle_pass=paddle_delete_passes.get("unet", []),
+            disable_paddle_pass=no_need_passes,
             tune=args.tune,
         ),
     )
