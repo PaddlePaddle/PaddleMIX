@@ -75,8 +75,8 @@ class CogAgentForCausalLMTester:
         return CogAgentConfig(**test_config)
 
     def prepare_config_and_inputs(self):
-        images = [floats_tensor([3, 224, 224])]
-        cross_images = [floats_tensor([3, 1120, 1120])]
+        images = ([floats_tensor([3, 224, 224])],)
+        cross_images = ([floats_tensor([3, 1120, 1120])],)
         tokenized_out = {
             "input_ids": ids_tensor([1, 258], 5000),
             "token_type_ids": random_attention_mask([1, 258]),
@@ -162,6 +162,10 @@ class CogAgentForCausalLMTest(ModelTesterMixin, unittest.TestCase):
                     check_determinism(tensor1, tensor2)
             else:
                 check_determinism(first, second)
+
+    @unittest.skip(reason="Hidden_states is tested in individual model tests")
+    def test_hidden_states_output(self):
+        pass
 
     def test_model(self):
         config, inputs_dict = self.model_tester.prepare_config_and_inputs_for_common()
