@@ -199,7 +199,7 @@ class DiTDiffusionModel(nn.Layer):
             loss = mse_loss + vb_loss
         else:
             loss = mse_loss
-        return loss
+        return loss.mean()
 
     def q_sample(self, x_start, t, noise=None):
         """

@@ -187,7 +187,7 @@ class SiTDiffusionModel(nn.Layer):
             loss = mean_flat(((model_output - ut) ** 2))
         else:
             raise NotImplementedError()
-        return loss
+        return loss.mean()
 
     def set_recompute(self, use_recompute=False):
         if use_recompute:
