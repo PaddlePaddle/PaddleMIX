@@ -18,7 +18,7 @@ from math import pi
 import paddle
 
 
-def broadcat(tensors, dim=-1):
+def broadcast(tensors, dim=-1):
     num_tensors = len(tensors)
     shape_lens = set(list(map(lambda t: len(t.shape), tensors)))
     assert len(shape_lens) == 1, "tensors must all have the same number of dimensions"
@@ -74,7 +74,7 @@ class VisionRotaryEmbedding(paddle.nn.Layer):
         freqs_h = freqs_h.repeat_interleave(2, axis=-1)
         freqs_w = paddle.einsum("..., f -> ... f", t, freqs)
         freqs_w = freqs_w.repeat_interleave(2, axis=-1)
-        freqs = broadcat((freqs_h[:, (None), :], freqs_w[(None), :, :]), dim=-1)
+        freqs = broadcast((freqs_h[:, (None), :], freqs_w[(None), :, :]), dim=-1)
         self.register_buffer("freqs_cos", freqs.cos(), persistable=False)
         self.register_buffer("freqs_sin", freqs.sin(), persistable=False)
         logging.info(f"Shape of rope freq: {self.freqs_cos.shape}")
@@ -123,7 +123,7 @@ class VisionRotaryEmbeddingFast(paddle.nn.Layer):
         t = paddle.arange(end=ft_seq_len) / ft_seq_len * pt_seq_len
         freqs = paddle.einsum("..., f -> ... f", t, freqs)
         freqs = freqs.repeat_interleave(2, axis=freqs.rank() - 1)
-        freqs = broadcat((freqs[:, (None), :], freqs[(None), :, :]), dim=-1)
+        freqs = broadcast((freqs[:, (None), :], freqs[(None), :, :]), dim=-1)
         freqs_cos = freqs.cos().reshape((-1, freqs.shape[-1]))
         freqs_sin = freqs.sin().reshape((-1, freqs.shape[-1]))
         self.patch_dropout = patch_dropout

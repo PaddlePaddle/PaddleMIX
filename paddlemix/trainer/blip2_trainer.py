@@ -27,7 +27,7 @@ from paddle.io import DataLoader, Dataset
 from paddlenlp.trainer import PrinterCallback, ProgressCallback, Trainer
 from paddlenlp.trainer.integrations import TrainerCallback
 from paddlenlp.trainer.trainer_callback import DefaultFlowCallback
-from paddlenlp.trainer.trainer_utils import (  # set_hyrbid_parallel_seed,
+from paddlenlp.trainer.trainer_utils import (  # set_hybrid_parallel_seed,
     EvalLoopOutput,
     IterableDatasetShard,
     ShardingOption,
@@ -180,7 +180,7 @@ class BLIP2Trainer(Trainer):
 
     Args:
     processor: (`Blip2Processor`) low level data processors to convert input text to PaddleNLP Datasets.
-    eval_processor: (`Blip2Processor`) Unlike rocessor, eval_processor is used for model evaluation.
+    eval_processor: (`Blip2Processor`) Unlike processor, eval_processor is used for model evaluation.
     eval_collator: (`BlipCollator`) dynamically pad the inputs to the longest sequence in the batch.
 
     """
@@ -299,7 +299,7 @@ class BLIP2Trainer(Trainer):
         # Multi-gpu training
         if self.args.world_size > 1 and not self.args.use_hybrid_parallel:
             model = paddle.DataParallel(model)
-            assert self.args.tensor_parallel_degree < 2, "tensor_parallel_degree = {}, pelease init optimizer.".format(
+            assert self.args.tensor_parallel_degree < 2, "tensor_parallel_degree = {}, please init optimizer.".format(
                 self.args.tensor_parallel_degree
             )
 
@@ -348,7 +348,7 @@ class BLIP2Trainer(Trainer):
                 )
                 model._prepare_pipeline_inputs_func = _prepare_pipeline_inputs_func
 
-            assert self.optimizer is not None, "Pipeline mode need decorate optimizer, pelease init optimizer."
+            assert self.optimizer is not None, "Pipeline mode need decorate optimizer, please init optimizer."
             if self.args.amp_master_grad:
                 self.optimizer = mix_precision_utils.MixPrecisionOptimizer(self.optimizer)
             self.optimizer = fleet.distributed_optimizer(self.optimizer)
@@ -408,13 +408,13 @@ class BLIP2Trainer(Trainer):
                 )
                 self.optimizer = optimizer
 
-        # pure tesnor parallel mode, no pipeline_parallel, no sharding.
+        # pure tensor parallel mode, no pipeline_parallel, no sharding.
         if not in_pipeline_parallel_mode and not in_sharding_parallel_mode and in_tensor_parallel_model:
             if self.args.amp_master_grad:
                 mix_precision_utils.MixPrecisionLayer(model, dtype=self.amp_dtype)  # return value has no use
 
             model = fleet.distributed_model(model)
-            assert self.optimizer is not None, "Tensor parallel mode need decorate optimizer, pelease init optimizer."
+            assert self.optimizer is not None, "Tensor parallel mode need decorate optimizer, please init optimizer."
             if self.args.amp_master_grad:
                 self.optimizer = mix_precision_utils.MixPrecisionOptimizer(self.optimizer)
             self.optimizer = fleet.distributed_optimizer(self.optimizer)

@@ -58,7 +58,7 @@ class MIXToken:
         # convert to 3-D [batch_size(1), seq_length, seq_length]
         batched_features["attention_mask"] = np.expand_dims(block_attention_mask, axis=0)
         if "position_ids" in batched_features:
-            # Accomodate both 1D and 2D position ids
+            # Accommodate both 1D and 2D position ids
             batched_features["position_ids"] = np.concatenate(batched_features["position_ids"], axis=-1).tolist()
         return batched_features
 
@@ -69,10 +69,10 @@ class MIXTokenMapDataset(MIXToken, Dataset):
     concatenating effective tokens to increase the throughput of a single sample and improve training speed.
 
     traditional pad tokens:
-    len( imageToken + query + paddingToken ) = max_lenght
+    len( imageToken + query + paddingToken ) = max_length
 
     MIXToken:
-    len( iamgeToken1 + query1 + imageToken2 + query2 + ... + paddingToken ) = max_lenght
+    len( imageToken1 + query1 + imageToken2 + query2 + ... + paddingToken ) = max_length
 
     """
 

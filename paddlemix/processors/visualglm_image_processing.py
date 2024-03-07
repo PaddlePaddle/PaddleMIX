@@ -210,10 +210,10 @@ class VisualGLMProcessor(ProcessorMixin):
         if query is None:
             raise ValueError("Query should not be None.")
         if not isinstance(query, str):
-            raise TypeError("A string type of query is expected, but acceived {}.".format(type(query)))
+            raise TypeError("A string type of query is expected, but received {}.".format(type(query)))
         if not isinstance(history, list):
             raise TypeError(
-                "A list type of history is expected with each item [query, response] in it, but acceived {}.".format(
+                "A list type of history is expected with each item [query, response] in it, but received {}.".format(
                     type(history)
                 )
             )
