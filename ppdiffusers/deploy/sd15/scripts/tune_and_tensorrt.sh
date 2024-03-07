@@ -25,7 +25,7 @@ python export_model.py --pretrained_model_name_or_path runwayml/stable-diffusion
 python infer.py --model_dir static_model/stable-diffusion-v1-5/ --scheduler "euler" --backend paddle --device gpu --task_name all --width 512 --height 512 --inference_steps 30 --tune True --use_fp16 False
 
 # 3. convert the model to tensorrt
-python infer.py --model_dir static_model/stable-diffusion-v1-5/ --scheduler "euler" --backend paddle_tensorrt --device gpu --task_name all --width 512 --height 512 --inference_steps 50 --use_fp16 False
+python infer.py --model_dir static_model/stable-diffusion-v1-5/ --scheduler "euler" --backend paddle_tensorrt --device gpu --task_name all --width 512 --height 512 --inference_steps 50
 
 # perfermance like this:
 # --width 512 --height 512 --inference_steps 50 --benchmark_steps 10
