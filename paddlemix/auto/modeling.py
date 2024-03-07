@@ -16,17 +16,19 @@ import io
 import json
 import os
 from collections import defaultdict
+from typing import Optional
 
 from huggingface_hub import hf_hub_download
 from paddlenlp.transformers.configuration_utils import is_standard_config
 from paddlenlp.transformers.model_utils import PretrainedModel
-from paddlenlp.transformers.utils import resolve_cache_dir
 from paddlenlp.utils.downloader import (
     COMMUNITY_MODEL_PREFIX,
     get_path_from_url_with_filelock,
     hf_file_exists,
     url_file_exists,
 )
+from paddlenlp.utils.env import HF_CACHE_HOME as PPNLP_HF_CACHE_HOME
+from paddlenlp.utils.env import MODEL_HOME as PPNLP_MODEL_HOME
 from paddlenlp.utils.import_utils import import_module
 from paddlenlp.utils.log import logger
 
@@ -55,6 +57,22 @@ ASSIGN_MAPPING = {
     "sam": "SamModel",
     "visualglm": "VisualGLMForConditionalGeneration",
 }
+
+
+def resolve_cache_dir(from_hf_hub: bool, from_aistudio: bool, cache_dir: Optional[str] = None) -> str:
+    """resolve cache dir for PretrainedModel and PretrainedConfig
+
+    Args:
+        from_hf_hub (bool): if load from huggingface hub
+        cache_dir (str): cache_dir for models
+    """
+    if cache_dir is not None:
+        return cache_dir
+    if from_aistudio:
+        return None
+    if from_hf_hub:
+        return PPNLP_HF_CACHE_HOME
+    return PPNLP_MODEL_HOME
 
 
 def get_model_mapping():
