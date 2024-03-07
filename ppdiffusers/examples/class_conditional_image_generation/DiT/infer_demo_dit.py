@@ -18,7 +18,7 @@ from paddlenlp.trainer import set_seed
 from ppdiffusers import DDIMScheduler, DiTPipeline
 
 dtype = paddle.float32
-pipe = DiTPipeline.from_pretrained("./DiT_XL_2_256", paddle_dtype=dtype)
+pipe = DiTPipeline.from_pretrained("facebook/DiT-XL-2-256", paddle_dtype=dtype)
 pipe.scheduler = DDIMScheduler.from_config(pipe.scheduler.config)
 
 words = ["golden retriever"]  # class_ids [207]

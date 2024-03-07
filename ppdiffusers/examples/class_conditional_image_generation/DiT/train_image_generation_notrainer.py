@@ -24,8 +24,10 @@ import numpy as np
 import paddle
 import paddle.distributed as dist
 from diffusion import create_diffusion
+from diffusion.dist_env import set_hyrbid_parallel_seed
 from diffusion.dit import DiT
 from diffusion.dit_llama import DiT_Llama
+from paddle.distributed import fleet
 from transport import create_transport
 from transport.sit import SiT
 from transport.utils import parse_transport_args
@@ -246,4 +248,17 @@ if __name__ == "__main__":
     parse_transport_args(parser)
     args = parser.parse_args()
     print(args)
+
+    strategy = fleet.DistributedStrategy()
+    fleet.init(is_collective=True, strategy=strategy)
+
+    sharding_parallel_degree = 1
+    hcg = fleet.get_hybrid_communicate_group()
+    mp_rank = hcg.get_model_parallel_rank()
+    dp_rank = hcg.get_data_parallel_rank()
+    sharding_rank = hcg.get_sharding_parallel_rank()
+    data_world_rank = dp_rank * sharding_parallel_degree + sharding_rank
+
+    # seed control in hybrid parallel
+    set_hyrbid_parallel_seed(args.global_seed, data_world_rank, mp_rank)
     main(args)

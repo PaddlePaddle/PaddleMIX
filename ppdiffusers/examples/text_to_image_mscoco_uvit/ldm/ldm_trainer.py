@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import contextlib
+import os
 import sys
 import time
 
@@ -25,6 +26,7 @@ from paddlenlp.trainer.integrations import (
     VisualDLCallback,
     rewrite_logs,
 )
+from paddlenlp.transformers.model_utils import _add_variant
 from paddlenlp.utils import profiler
 from paddlenlp.utils.log import logger
 
@@ -351,6 +353,49 @@ class LatentDiffusionTrainer(Trainer):
             worker_init_fn=worker_init_fn,
         )
         return train_dataloader
+
+    def _save_todo(self, output_dir=None, state_dict=None, merge_tensor_parallel=False):
+        # TODO: merge_tensor_parallel
+        output_dir = output_dir if output_dir is not None else self.args.output_dir
+        os.makedirs(output_dir, exist_ok=True)
+        if self.args.only_save_updated_model:
+            unwraped_model = unwrap_model(self.model)
+            logger.info(f"Saving unet checkpoint to {output_dir}/unet")
+            unwraped_model.unet.save_pretrained(
+                os.path.join(output_dir, "unet"),
+                # merge_tensor_parallel=merge_tensor_parallel,
+            )
+
+            if unwraped_model.use_ema:
+                logger.info(f"Saving ema unet checkpoint to {output_dir}/unet")
+                with unwraped_model.ema_scope():
+                    unwraped_model.unet.save_pretrained(
+                        os.path.join(output_dir, "unet"),
+                        # merge_tensor_parallel=merge_tensor_parallel,
+                        variant="ema",
+                    )
+
+            if unwraped_model.train_text_encoder:
+                logger.info(f"Saving text encoder checkpoint to {output_dir}/text_encoder")
+                unwraped_model.text_encoder.save_pretrained(
+                    os.path.join(output_dir, "text_encoder"),
+                    # merge_tensor_parallel=merge_tensor_parallel,
+                )
+        else:
+            logger.info(f"Saving model checkpoint to {output_dir}")
+            if state_dict is None:
+                state_dict = self.model.state_dict()
+            paddle.save(
+                state_dict,
+                os.path.join(
+                    output_dir,
+                    _add_variant(PADDLE_WEIGHTS_NAME, self.args.weight_name_suffix),
+                ),
+            )
+            if self.args.should_save:
+                if self.tokenizer is not None:
+                    self.tokenizer.save_pretrained(output_dir, merge_tensor_parallel=merge_tensor_parallel)
+                paddle.save(self.args, os.path.join(output_dir, TRAINING_ARGS_NAME))
 
 
 def get_grad_norm_and_clip(model, max_norm, norm_type=2.0, error_if_nonfinite=False):

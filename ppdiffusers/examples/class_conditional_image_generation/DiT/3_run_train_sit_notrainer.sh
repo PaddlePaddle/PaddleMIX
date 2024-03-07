@@ -16,16 +16,24 @@ config_file=config/SiT_XL_patch2.json
 results_dir=./output_notrainer/SiT_XL_patch2_notrainer
 
 feature_path=./data/fastdit_imagenet256
+
+image_size=256
 global_batch_size=256
 num_workers=8
-max_steps=7000000
+epochs=1400
 logging_steps=50
 save_steps=5000
 
+global_seed=0
+
 python -u -m paddle.distributed.launch --gpus "0,1,2,3,4,5,6,7" \
     train_image_generation_notrainer.py \
+    --image_size ${image_size} \
     --config_file ${config_file} \
     --feature_path ${feature_path} \
+    --results_dir ${results_dir} \
+    --epochs ${epochs} \
+    --global_seed ${global_seed} \
     --global_batch_size ${global_batch_size} \
     --num_workers ${num_workers} \
     --log_every ${logging_steps} \
