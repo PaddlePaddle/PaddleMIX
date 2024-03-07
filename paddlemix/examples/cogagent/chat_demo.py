@@ -31,11 +31,10 @@ from paddlemix.auto.tokenizer import AutoTokenizerMIX
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument("--from_pretrained", type=str, default="THUDM/cogagent-chat-hf", help="pretrained ckpt")
-parser.add_argument("--local_tokenizer", type=str, default="lmsys/vicuna-7b-v1.5")
+parser.add_argument("--from_pretrained", type=str, default="THUDM/cogagent-chat", help="pretrained ckpt and tokenizer")
 args = parser.parse_args()
 MODEL_PATH = args.from_pretrained
-TOKENIZER_PATH = args.local_tokenizer
+TOKENIZER_PATH = MODEL_PATH
 
 tokenizer = AutoTokenizerMIX.from_pretrained(TOKENIZER_PATH)
 

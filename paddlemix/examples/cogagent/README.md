@@ -31,10 +31,8 @@ CogAgent-18B在9个经典的跨模态基准测试中实现了最先进的全能�
 
 ```bash
 python paddlemix/examples/cogagent/chat_demo.py \
---from_pretrained "THUDM/cogagent-chat-hf" \
---local_tokenizer "lmsys/vicuna-7b-v1.5"
+--from_pretrained "THUDM/cogagent-chat"
 ```
 
 可配置参数说明：
-  * `from_pretrained`: 指定CogAgent的模型名字或权重路径，默认 THUDM/cogagent-chat-hf
-  * `local_tokenizer` :指定 tokenizer 的路径。
+  * `from_pretrained`: 指定CogAgent的模型名字或权重路径以及tokenizer，默认 THUDM/cogagent-chat
