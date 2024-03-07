@@ -23,7 +23,7 @@ def compare_version(version, pair_version):
         pair_version (str): The second version string needed to be compared.
              The format of version string should be as follow : "xxx.yyy.zzz".
     Returns:
-        int: The result of comparasion. 1 means version > pair_version; 0 means
+        int: The result of comparison. 1 means version > pair_version; 0 means
             version = pair_version; -1 means version < pair_version.
 
     Examples:

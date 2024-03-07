@@ -23,13 +23,16 @@ from typing import List, Optional, Union
 
 import numpy as np
 import paddle
+from paddlenlp.transformers.tokenizer_utils_base import (
+    BatchEncoding,
+    TensorType,
+    TextInput,
+)
 from PIL import Image
 
-from paddlenlp.transformers.tokenizer_utils_base import BatchEncoding, TensorType, TextInput
-
+from .base_processing import ProcessorMixin
 from .image_processing_utils import BatchFeature
 from .image_utils import ImageInput
-from .base_processing import ProcessorMixin
 
 __all__ = [
     "MiniGPT4Processor",
@@ -88,8 +91,8 @@ class MiniGPT4Processor(ProcessorMixin):
 
     def read_texts(self, path):
         if not os.path.isfile(path):
-            raise ValueError("A file expected for path, but acceived: {}".format(path))
-        
+            raise ValueError("A file expected for path, but received: {}".format(path))
+
         with open(path, "r", encoding="utf-8") as f:
             for text in f.readlines():
                 self.text_list.append(text.strip())
@@ -116,13 +119,7 @@ class MiniGPT4Processor(ProcessorMixin):
 
         return processed_images
 
-    def process_target_texts(
-        self,
-        target_texts,
-        end_sym: str = None,
-        max_target_len: int = None,
-        **kwargs
-    ):
+    def process_target_texts(self, target_texts, end_sym: str = None, max_target_len: int = None, **kwargs):
         end_sym = end_sym if end_sym is not None else self.end_sym
         max_target_len = max_target_len if max_target_len is not None else self.max_target_len
         target_texts = [t + end_sym for t in target_texts]
@@ -133,15 +130,20 @@ class MiniGPT4Processor(ProcessorMixin):
             truncation=True,
             max_length=max_target_len,
             return_attention_mask=True,
-            add_special_tokens=False
+            add_special_tokens=False,
         )
         target_input_ids = target_tokens.input_ids
         full_mat = paddle.full(target_input_ids.shape, -100, target_input_ids.dtype)
-        masked_target_input_ids = paddle.where(target_input_ids != self.tokenizer.pad_token_id, target_input_ids, full_mat)
+        masked_target_input_ids = paddle.where(
+            target_input_ids != self.tokenizer.pad_token_id, target_input_ids, full_mat
+        )
 
-        return {"labels":target_input_ids, "masked_labels":masked_target_input_ids, "label_attention_mask": target_tokens.attention_mask}
+        return {
+            "labels": target_input_ids,
+            "masked_labels": masked_target_input_ids,
+            "label_attention_mask": target_tokens.attention_mask,
+        }
 
-        
     def process_texts(
         self,
         texts: Union[TextInput, List[TextInput]],
@@ -227,8 +229,10 @@ class MiniGPT4Processor(ProcessorMixin):
             if text is None and len(self.text_list) != 0:
                 text = random.choice(self.text_list)
             elif text is None and len(self.text_list) == 0:
-                raise ValueError("If you want to train model, you have to input a text or input a text_path when instaniating processor.")
-        
+                raise ValueError(
+                    "If you want to train model, you have to input a text or input a text_path when instaniating processor."
+                )
+
         if images is None and text is None:
             raise ValueError("Images and text are None, you have to specify either images or texts.")
         if images is not None and not isinstance(images, (Image.Image, np.ndarray, paddle.Tensor, list)):

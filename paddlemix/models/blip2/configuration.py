@@ -30,7 +30,7 @@ __all__ = [
 class Blip2VisionConfig(PretrainedConfig):
     r"""
     This is the configuration class to store the configuration of a [`VisionTransformer`]. It is used to instantiate a
-    BLIP-2 vvisual encoder according to the specified arguments, defining the model architecture.
+    BLIP-2 visual encoder according to the specified arguments, defining the model architecture.
     Configuration objects inherit from [`PretrainedConfig`] and can be used to control the model outputs. Read the
     documentation from [`PretrainedConfig`] for more information.
     Args:

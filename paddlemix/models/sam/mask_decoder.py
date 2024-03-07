@@ -32,7 +32,7 @@ class MaskDecoder(paddle.nn.Layer):
     ) -> None:
         """
         Predicts masks given an image and prompt embeddings, using a
-        tranformer architecture.
+        transformer architecture.
 
         Arguments:
           transformer_dim (int): the channel dimension of the transformer

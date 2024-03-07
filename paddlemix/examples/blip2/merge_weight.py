@@ -32,16 +32,16 @@ from paddlemix.utils.log import logger
 def merge(args):
     model_dict = {}
     # load the first item: vision_model
-    visual_encoer_state_dict = paddle.load(args.vision_name_or_path)
-    for n, p in visual_encoer_state_dict.items():
+    visual_encoder_state_dict = paddle.load(args.vision_name_or_path)
+    for n, p in visual_encoder_state_dict.items():
         if n.startswith("visual_encoder"):
             model_dict[n] = p
         else:
-            model_dict["visual_encoer." + n] = p
+            model_dict["visual_encoder." + n] = p
     logger.info("[1/2] load visual_encoder done!")
     # load the second item: Qformer
-    visual_encoer_state_dict = paddle.load(args.vision_name_or_path)
-    for n, p in visual_encoer_state_dict.items():
+    visual_encoder_state_dict = paddle.load(args.vision_name_or_path)
+    for n, p in visual_encoder_state_dict.items():
         if n.startswith("Qformer"):
             model_dict[n] = p
         else:
