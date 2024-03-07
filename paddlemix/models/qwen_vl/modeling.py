@@ -165,9 +165,16 @@ class QWen(PretrainedModel):
                 hidden_states = paddle.cast(hidden_states, paddle.float32)
                 images = paddle.cast(images, paddle.float32)
 
+            if hidden_states_dtype == paddle.float16:
+                hidden_states = paddle.cast(hidden_states, paddle.float32)
+                images = paddle.cast(images, paddle.float32)
+
             for idx, (i, a, b) in enumerate(img_pos):
                 index = paddle.arange(a + 1, b).unsqueeze(-1)
                 hidden_states[i] = paddle.scatter(hidden_states[i], index, images[idx])
+
+            if hidden_states_dtype == paddle.float16:
+                hidden_states = paddle.cast(hidden_states, paddle.float16)
 
             if hidden_states_dtype == paddle.bfloat16:
                 hidden_states = paddle.cast(hidden_states, paddle.bfloat16)
@@ -254,7 +261,7 @@ class QWenLMHeadModel(QWenPretrainedModel):
         self.transformer = QWen(config)
         self.lm_head = paddle.nn.Linear(
             in_features=config.hidden_size, out_features=config.vocab_size, bias_attr=False
-        )
+        ).float16()
 
     def freeze_vit(self):
         for name, param in self.visual.named_parameters():
