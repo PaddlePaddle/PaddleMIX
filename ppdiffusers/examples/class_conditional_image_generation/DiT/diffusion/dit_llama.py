@@ -79,22 +79,27 @@ class Attention(nn.Layer):
         """
         super().__init__()
         self.n_kv_heads = n_heads if n_kv_heads is None else n_kv_heads
-        self.n_local_heads = n_heads
-        self.n_local_kv_heads = self.n_kv_heads
+        if is_model_parrallel():
+            hcg = paddle.distributed.fleet.get_hybrid_communicate_group()
+            model_parallel_size = hcg.get_model_parallel_world_size()
+        else:
+            model_parallel_size = 1
+        self.n_local_heads = n_heads // model_parallel_size
+        self.n_local_kv_heads = self.n_kv_heads // model_parallel_size
         self.n_rep = self.n_local_heads // self.n_local_kv_heads
         self.head_dim = dim // n_heads
         if is_model_parrallel():
             self.wq = fleet.meta_parallel.ColumnParallelLinear(
-                dim, n_heads * self.head_dim, weight_attr=None, has_bias=False, gather_output=True
+                dim, n_heads * self.head_dim, weight_attr=None, has_bias=False, gather_output=False
             )
             self.wk = fleet.meta_parallel.ColumnParallelLinear(
-                dim, self.n_kv_heads * self.head_dim, weight_attr=None, has_bias=False, gather_output=True
+                dim, self.n_kv_heads * self.head_dim, weight_attr=None, has_bias=False, gather_output=False
             )
             self.wv = fleet.meta_parallel.ColumnParallelLinear(
-                dim, self.n_kv_heads * self.head_dim, weight_attr=None, has_bias=False, gather_output=True
+                dim, self.n_kv_heads * self.head_dim, weight_attr=None, has_bias=False, gather_output=False
             )
-            self.wo = fleet.meta_parallel.ColumnParallelLinear(
-                n_heads * self.head_dim, dim, weight_attr=None, has_bias=False, gather_output=True
+            self.wo = fleet.meta_parallel.RowParallelLinear(
+                n_heads * self.head_dim, dim, weight_attr=None, has_bias=False, input_is_parallel=True
             )
         else:
             self.wq = nn.Linear(dim, n_heads * self.head_dim, bias_attr=False)
@@ -243,10 +248,10 @@ class FeedForward(nn.Layer):
                 dimension. Defaults to None.
 
         Attributes:
-            w1 (nn.Linear): Linear transformation for the first
+            w1 (ColumnParallelLinear): Linear transformation for the first
                 layer.
-            w2 (nn.Linear): Linear transformation for the second layer.
-            w3 (nn.Linear): Linear transformation for the third
+            w2 (RowParallelLinear): Linear transformation for the second layer.
+            w3 (ColumnParallelLinear): Linear transformation for the third
                 layer.
 
         """
@@ -257,13 +262,13 @@ class FeedForward(nn.Layer):
         hidden_dim = int(multiple_of * ((hidden_dim + multiple_of - 1) // multiple_of))
         if is_model_parrallel():
             self.w1 = fleet.meta_parallel.ColumnParallelLinear(
-                dim, hidden_dim, weight_attr=None, has_bias=False, gather_output=True
+                dim, hidden_dim, weight_attr=None, has_bias=False, gather_output=False
             )
-            self.w2 = fleet.meta_parallel.ColumnParallelLinear(
-                hidden_dim, dim, weight_attr=None, has_bias=False, gather_output=True
+            self.w2 = fleet.meta_parallel.RowParallelLinear(
+                hidden_dim, dim, weight_attr=None, has_bias=False, input_is_parallel=True
             )
             self.w3 = fleet.meta_parallel.ColumnParallelLinear(
-                dim, hidden_dim, weight_attr=None, has_bias=False, gather_output=True
+                dim, hidden_dim, weight_attr=None, has_bias=False, gather_output=False
             )
         else:
             self.w1 = nn.Linear(dim, hidden_dim, bias_attr=False)
@@ -426,7 +431,7 @@ class DiT_Llama(ModelMixin, ConfigMixin):
         multiple_of: int = 256,
         ffn_dim_multiplier=None,
         norm_eps: float = 1e-05,
-        class_dropout_prob: float = 0.0,  # for tensor parallel
+        class_dropout_prob: float = 0.0,  # for tensor parallel must be set to 0.0
         num_classes: int = 1000,
         learn_sigma: bool = True,
         qk_norm: bool = True,
@@ -602,8 +607,8 @@ class DiT_Llama(ModelMixin, ConfigMixin):
         # 1. Input
         hidden_states = self.patchify(hidden_states)
         x = self.x_embedder(hidden_states)
-        t = self.t_embedder(timestep)
-        y = self.y_embedder(class_labels)
+        t = self.t_embedder(timestep).cast(dtype)
+        y = self.y_embedder(class_labels).cast(dtype)
         adaln_input = t + y
 
         # 2. Blocks

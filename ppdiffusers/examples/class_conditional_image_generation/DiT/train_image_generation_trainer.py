@@ -65,8 +65,7 @@ def main():
     model_args.data_world_rank = training_args.data_world_rank
     model_args.data_world_size = training_args.data_world_size
 
-    # report to custom_visualdl
-    training_args.report_to = ["custom_visualdl"]
+    training_args.report_to = ["visualdl"]
     training_args.resolution = data_args.resolution
     training_args.benchmark = model_args.benchmark
     training_args.use_ema = model_args.use_ema

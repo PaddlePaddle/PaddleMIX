@@ -32,10 +32,15 @@ from paddlenlp.transformers.model_utils import _add_variant
 from paddlenlp.utils import profiler
 from paddlenlp.utils.log import logger
 
+from ppdiffusers.optimization import get_scheduler
 from ppdiffusers.training_utils import unwrap_model
 
 PADDLE_WEIGHTS_NAME = "model_state.pdparams"
 TRAINING_ARGS_NAME = "training_args.bin"
+
+use_tensorboard = False
+if use_tensorboard:
+    from tensorboardX import SummaryWriter
 
 
 def worker_init_fn(_):
@@ -217,12 +222,21 @@ class BenchmarkCallback(TrainerCallback):
 
 
 # register visualdl_with_image
-INTEGRATION_TO_CALLBACK.update({"custom_visualdl": VisualDLWithImageCallback})
+if not use_tensorboard:
+    INTEGRATION_TO_CALLBACK.update({"custom_visualdl": VisualDLWithImageCallback})
 
 
 class LatentDiffusionTrainer(Trainer):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        if use_tensorboard:
+            self.rank = paddle.distributed.get_rank()
+            if self.rank == 0:
+                self.writer = SummaryWriter("output/tensorboard")
+                self.logstep = 0
+
+        self.do_grad_scaling = self.args.fp16 or self.args.bf16
+
         if self.args.benchmark or self.args.profiler_options is not None:
             self.add_callback(
                 BenchmarkCallback(
@@ -239,6 +253,61 @@ class LatentDiffusionTrainer(Trainer):
     def compute_loss(self, model, inputs, return_outputs=False):
         loss = model(**inputs)
         return loss
+
+    def create_optimizer_and_scheduler(self, num_training_steps: int):
+        self.lr_scheduler = get_scheduler(
+            name="constant",
+            learning_rate=self.args.learning_rate,
+            num_warmup_steps=self.args.warmup_steps * self.args.gradient_accumulation_steps,
+            num_training_steps=self.args.max_steps * self.args.gradient_accumulation_steps,
+        )
+
+        grad_clip = None
+        if self.args.max_grad_norm is not None and self.args.max_grad_norm > 0:
+            grad_clip = paddle.nn.ClipGradByGlobalNorm(self.args.max_grad_norm)
+
+        self.optimizer = paddle.optimizer.AdamW(
+            learning_rate=self.lr_scheduler,
+            parameters=self.model.transformer.parameters(),  # only dit training, vae freeze
+            beta1=self.args.adam_beta1,  # 0.9
+            beta2=self.args.adam_beta2,  # 0.999
+            weight_decay=self.args.weight_decay,  # 0.0
+            epsilon=self.args.adam_epsilon,  # 1e-8
+            grad_clip=grad_clip,
+            multi_precision=False,
+        )
+
+    def training_step(self, model, inputs) -> paddle.Tensor:
+        model = unwrap_model(model)
+        model.train()
+
+        if self.do_grad_scaling:
+            # label_id no need to cast, should be float64
+            if self.args.fp16:
+                model = model.float16()
+                inputs["latents"] = inputs["latents"].cast("float16")
+            elif self.args.bf16:
+                model = model.bfloat16()
+                inputs["latents"] = inputs["latents"].cast("bfloat16")
+
+        with self.autocast_smart_context_manager():
+            loss = self.compute_loss(model, inputs)
+
+        if self.do_grad_scaling:
+            self.scaler.scale(loss).backward()
+        else:
+            loss.backward()
+
+        # if max_grad_norm 0, will only get grad_norm
+        grad_norms = get_grad_norm_and_clip(model, self.args.max_grad_norm)
+
+        if use_tensorboard:
+            if self.rank == 0:
+                self.writer.add_scalar("train/loss", loss.item(), self.logstep)
+                self.writer.add_scalar("train/grad_norm", grad_norms.item(), self.logstep)
+                self.writer.add_scalar("train/lr_abs", self.lr_scheduler.get_lr(), self.logstep)
+                self.logstep += 1
+        return loss.detach()
 
     def get_train_dataloader(self):
         if self.train_dataset is None:
@@ -296,3 +365,60 @@ class LatentDiffusionTrainer(Trainer):
             )
             if self.args.should_save:
                 paddle.save(self.args, os.path.join(output_dir, TRAINING_ARGS_NAME))
+
+
+def get_grad_norm_and_clip(model, max_norm, norm_type=2.0, error_if_nonfinite=False):
+    r"""Clips gradient norm of an iterable of parameters.
+
+    The norm is computed over all gradients together, as if they were
+    concatenated into a single vector. Gradients are modified in-place.
+
+    Args:
+        parameters (Iterable[Tensor] or Tensor): an iterable of Tensors or a
+            single Tensor that will have gradients normalized
+        max_norm (float or int): max norm of the gradients
+        norm_type (float or int): type of the used p-norm. Can be ``'inf'`` for
+            infinity norm.
+        error_if_nonfinite (bool): if True, an error is thrown if the total
+            norm of the gradients from :attr:`parameters` is ``nan``,
+            ``inf``, or ``-inf``. Default: False (will switch to True in the future)
+
+    Returns:
+        Total norm of the parameter gradients (viewed as a single vector).
+    """
+    parameters = model.parameters()
+    if isinstance(parameters, paddle.Tensor):
+        parameters = [parameters]
+
+    grads = [p.grad for p in parameters if p.grad is not None]
+    max_norm = float(max_norm) if max_norm else 0.0
+    norm_type = float(norm_type)
+    if len(grads) == 0:
+        return paddle.to_tensor([0.0])
+
+    if norm_type == float("inf"):
+        norms = [g.detach().abs().max() for g in grads]
+        total_norm = norms[0] if len(norms) == 1 else paddle.max(paddle.stack(norms))
+    else:
+        total_norm = paddle.norm(paddle.stack([paddle.norm(g.detach(), norm_type) for g in grads]), norm_type)
+
+    if max_norm is None or max_norm <= 0.0:
+        return total_norm
+
+    if error_if_nonfinite and paddle.logical_or(total_norm.isnan(), total_norm.isinf()):
+        raise RuntimeError(
+            f"The total norm of order {norm_type} for gradients from "
+            "`parameters` is non-finite, so it cannot be clipped. To disable "
+            "this error and scale the gradients by the non-finite norm anyway, "
+            "set `error_if_nonfinite=False`"
+        )
+    clip_coef = max_norm / (total_norm + 1e-6)
+    # Note: multiplying by the clamped coef is redundant when the coef is clamped to 1, but doing so
+    # avoids a `if clip_coef < 1:` conditional which can require a CPU <=> device synchronization
+    # when the gradients do not reside in CPU memory.
+    clip_coef_clamped = paddle.clip(clip_coef, max=1.0)
+    for g in grads:
+        clipg = paddle.multiply(g, clip_coef_clamped)
+        g.set_value(clipg)
+
+    return total_norm

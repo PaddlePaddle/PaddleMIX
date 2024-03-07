@@ -38,8 +38,10 @@ save_steps=5000
 image_logging_steps=-1
 seed=0
 
+max_grad_norm=2.0
+
 USE_AMP=True
-FP16_OPT_LEVEL="O1"
+FP16_OPT_LEVEL="O2"
 enable_tensorboard=True
 recompute=True
 enable_xformers=True
@@ -66,7 +68,7 @@ ${TRAINING_PYTHON} train_image_generation_trainer.py \
     --config_file ${config_file} \
     --num_inference_steps 25 \
     --use_ema True \
-    --max_grad_norm -1 \
+    --max_grad_norm ${max_grad_norm} \
     --overwrite_output_dir True \
     --disable_tqdm True \
     --fp16_opt_level ${FP16_OPT_LEVEL} \
