@@ -56,3 +56,6 @@ else:
     from .pipeline_fastdeploy_stable_diffusion_xl_img2img import FastDeployStableDiffusionXLImg2ImgPipeline
     from .pipeline_fastdeploy_stable_diffusion_xl_inpaint import FastDeployStableDiffusionXLInpaintPipeline
     from .pipeline_fastdeploy_stable_diffusion_xl_mega import FastDeployStableDiffusionXLMegaPipeline
+
+
+    from .pipeline_paddleinfer_stable_diffusion_xl import PaddleInferStableDiffusionXLPipeline

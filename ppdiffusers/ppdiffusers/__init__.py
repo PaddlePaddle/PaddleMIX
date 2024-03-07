@@ -55,6 +55,7 @@ try:
 except OptionalDependencyNotAvailable:
     from .utils.dummy_paddle_objects import *  # noqa F403
 else:
+    from .pipelines import PaddleInferModel
     from .models import (
         AsymmetricAutoencoderKL,
         AutoencoderKL,
@@ -274,6 +275,7 @@ else:
         FastDeployStableDiffusionXLImg2ImgPipeline,
         FastDeployStableDiffusionXLInpaintPipeline,
         FastDeployStableDiffusionXLMegaPipeline,
+        PaddleInferStableDiffusionXLPipeline,
     )
 
 try:
