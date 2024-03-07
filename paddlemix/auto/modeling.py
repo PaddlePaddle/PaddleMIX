@@ -27,7 +27,8 @@ from paddlenlp.utils.downloader import (
     hf_file_exists,
     url_file_exists,
 )
-from paddlenlp.utils.env import HF_CACHE_HOME, MODEL_HOME
+from paddlenlp.utils.env import HF_CACHE_HOME as PPNLP_HF_CACHE_HOME
+from paddlenlp.utils.env import MODEL_HOME as PPNLP_MODEL_HOME
 from paddlenlp.utils.import_utils import import_module
 from paddlenlp.utils.log import logger
 
@@ -70,8 +71,8 @@ def resolve_cache_dir(from_hf_hub: bool, from_aistudio: bool, cache_dir: Optiona
     if from_aistudio:
         return None
     if from_hf_hub:
-        return HF_CACHE_HOME
-    return MODEL_HOME
+        return PPNLP_HF_CACHE_HOME
+    return PPNLP_MODEL_HOME
 
 
 def get_model_mapping():
