@@ -26,8 +26,6 @@ from tests.models.test_configuration_common import ConfigTester
 from tests.models.test_modeling_common import ModelTesterMixin
 from tests.testing_utils import slow
 
-paddle.set_default_dtype("float16")
-
 
 class QWenLMHeadModelTester:
     def __init__(self, parent):
