@@ -158,7 +158,7 @@ def process_anyres_image(image, processor, grid_pinpoints):
         processor: The image processor object.
         grid_pinpoints (str): A string representation of a list of possible resolutions.
     Returns:
-        torch.Tensor: A tensor containing the processed image patches.
+        paddle.Tensor: A tensor containing the processed image patches.
     """
     if type(grid_pinpoints) is list:
         possible_resolutions = grid_pinpoints

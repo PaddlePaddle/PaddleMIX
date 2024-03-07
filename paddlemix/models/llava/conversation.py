@@ -139,13 +139,11 @@ class Conversation:
                             if width == height:
                                 return pil_img
                             elif width > height:
-                                """Class Attribute: torch.distributions.Distribution.mode, can not convert, please check whether it is torch.Tensor.*/torch.autograd.function.FunctionCtx.*/torch.distributions.Distribution.* and convert manually"""
                                 result = Image.new(pil_img.mode, (width, width), background_color)
                                 result.paste(pil_img, (0, (width - height) // 2))
                                 return result
                             else:
-                                """Class Attribute: torch.distributions.Distribution.mode, can not convert, please check whether it is torch.Tensor.*/torch.autograd.function.FunctionCtx.*/torch.distributions.Distribution.* and convert manually"""
-                                result = Image.new(pil_img.mode, (height, height), background_color)
+
                                 result.paste(pil_img, ((height - width) // 2, 0))
                                 return result
 
