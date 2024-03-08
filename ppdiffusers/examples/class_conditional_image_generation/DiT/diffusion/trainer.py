@@ -232,7 +232,7 @@ class LatentDiffusionTrainer(Trainer):
         if use_tensorboard:
             self.rank = paddle.distributed.get_rank()
             if self.rank == 0:
-                self.writer = SummaryWriter("output/tensorboard")
+                self.writer = SummaryWriter("output/tensorboard/test")
                 self.logstep = 0
 
         self.do_grad_scaling = self.args.fp16 or self.args.bf16
@@ -298,14 +298,18 @@ class LatentDiffusionTrainer(Trainer):
         else:
             loss.backward()
 
+        if self.do_grad_scaling:
+            self.scaler.unscale_(self.optimizer)
+
         # if max_grad_norm 0, will only get grad_norm
-        grad_norms = get_grad_norm_and_clip(model, self.args.max_grad_norm)
+        grad_norms = clip_grad_norm_(
+            self.model.transformer.parameters(), self.args.max_grad_norm, return_cliped_norm=False
+        )
 
         if use_tensorboard:
             if self.rank == 0:
                 self.writer.add_scalar("train/loss", loss.item(), self.logstep)
                 self.writer.add_scalar("train/grad_norm", grad_norms.item(), self.logstep)
-                self.writer.add_scalar("train/lr_abs", self.lr_scheduler.get_lr(), self.logstep)
                 self.logstep += 1
         return loss.detach()
 
@@ -367,7 +371,9 @@ class LatentDiffusionTrainer(Trainer):
                 paddle.save(self.args, os.path.join(output_dir, TRAINING_ARGS_NAME))
 
 
-def get_grad_norm_and_clip(model, max_norm, norm_type=2.0, error_if_nonfinite=False):
+def clip_grad_norm_(
+    parameters, max_norm, norm_type=2.0, error_if_nonfinite: bool = False, return_cliped_norm: bool = False
+):
     r"""Clips gradient norm of an iterable of parameters.
 
     The norm is computed over all gradients together, as if they were
@@ -382,29 +388,35 @@ def get_grad_norm_and_clip(model, max_norm, norm_type=2.0, error_if_nonfinite=Fa
         error_if_nonfinite (bool): if True, an error is thrown if the total
             norm of the gradients from :attr:`parameters` is ``nan``,
             ``inf``, or ``-inf``. Default: False (will switch to True in the future)
+        return_cliped_norm (bool): if True, total norm clipped will be return and it is
+            only used for tensorboard. Default: False.
 
     Returns:
         Total norm of the parameter gradients (viewed as a single vector).
     """
-    parameters = model.parameters()
     if isinstance(parameters, paddle.Tensor):
         parameters = [parameters]
-
     grads = [p.grad for p in parameters if p.grad is not None]
-    max_norm = float(max_norm) if max_norm else 0.0
+    max_norm = float(max_norm)
     norm_type = float(norm_type)
+    paddle_dtype = paddle.get_default_dtype()
     if len(grads) == 0:
         return paddle.to_tensor([0.0])
-
     if norm_type == float("inf"):
         norms = [g.detach().abs().max() for g in grads]
         total_norm = norms[0] if len(norms) == 1 else paddle.max(paddle.stack(norms))
     else:
-        total_norm = paddle.norm(paddle.stack([paddle.norm(g.detach(), norm_type) for g in grads]), norm_type)
-
-    if max_norm is None or max_norm <= 0.0:
-        return total_norm
-
+        total_norm = paddle.norm(
+            paddle.stack(
+                [
+                    paddle.norm(g.detach(), norm_type)
+                    if g.dtype == paddle_dtype
+                    else paddle.norm(g.detach().cast(paddle_dtype), norm_type)
+                    for g in grads
+                ]
+            ),
+            norm_type,
+        )
     if error_if_nonfinite and paddle.logical_or(total_norm.isnan(), total_norm.isinf()):
         raise RuntimeError(
             f"The total norm of order {norm_type} for gradients from "
@@ -417,8 +429,29 @@ def get_grad_norm_and_clip(model, max_norm, norm_type=2.0, error_if_nonfinite=Fa
     # avoids a `if clip_coef < 1:` conditional which can require a CPU <=> device synchronization
     # when the gradients do not reside in CPU memory.
     clip_coef_clamped = paddle.clip(clip_coef, max=1.0)
+    clip_coef_clamped_low_precison = None
     for g in grads:
-        clipg = paddle.multiply(g, clip_coef_clamped)
-        g.set_value(clipg)
+        if g.dtype == paddle.float32:
+            g.detach().multiply_(clip_coef_clamped)
+        else:
+            clip_coef_clamped_low_precison = (
+                clip_coef_clamped.cast(g.dtype)
+                if clip_coef_clamped_low_precison is None
+                else clip_coef_clamped_low_precison
+            )
+            g.detach().multiply_(clip_coef_clamped_low_precison)
 
+    if return_cliped_norm:
+        total_norm_clip = paddle.norm(
+            paddle.stack(
+                [
+                    paddle.norm(g.detach(), norm_type)
+                    if g.dtype == paddle_dtype
+                    else paddle.norm(g.detach().cast(paddle_dtype), norm_type)
+                    for g in grads
+                ]
+            ),
+            norm_type,
+        )
+        return total_norm_clip
     return total_norm

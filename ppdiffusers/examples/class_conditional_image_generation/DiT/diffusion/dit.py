@@ -222,15 +222,16 @@ class ParallelTimestepEmbedder(nn.Layer):
                     hidden_size,
                     weight_attr=None,
                     has_bias=True,
-                    gather_output=False,  # True
+                    gather_output=True,  # TODO: False
                 ),
                 nn.Silu(),
-                fleet.meta_parallel.RowParallelLinear(
+                fleet.meta_parallel.ColumnParallelLinear(
                     hidden_size,
                     hidden_size,
                     weight_attr=None,
                     has_bias=True,
-                    input_is_parallel=True,  #
+                    gather_output=True,
+                    # input_is_parallel=True,  # TODO: row parallel
                 ),
             )
         else:
@@ -423,7 +424,7 @@ class DiT(ModelMixin, ConfigMixin):
             shape=(1, num_patches, hidden_size),
             default_initializer=initializer.Constant(0.0),
         )
-        self.add_parameter("pos_embed", self.pos_embed)
+        # self.add_parameter("pos_embed", self.pos_embed)
 
         # 2. Define transformers blocks
         self.blocks = nn.LayerList(

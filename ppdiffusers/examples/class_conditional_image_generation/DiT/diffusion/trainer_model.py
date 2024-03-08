@@ -38,8 +38,148 @@ def read_json(file):
     return data
 
 
+def load_model(args, model, optimizer=None, ckpt_dir=""):
+    """
+    load the saved checkpoint file and update the state dicts of model and optimizer.
+    """
+    if ckpt_dir and isinstance(ckpt_dir, str) and os.path.isdir(ckpt_dir):
+        print("Try to load checkpoint from %s " % ckpt_dir)
+
+        load_dir = "{}/mp_{:0>2d}_sharding_{:0>2d}".format(ckpt_dir, args.mp_rank, args.sharding_rank)
+        model_path = os.path.join(load_dir, "model.pdparams")
+        opt_path = os.path.join(load_dir, "model_state.pdopt")
+        # meta_path = os.path.join(load_dir, "meta_state.pdopt")
+
+        if os.path.exists(model_path):
+            model_dict = paddle.load(model_path)
+            for name, param in model.state_dict().items():
+                assert name in model_dict.keys(), "No param named `{}` was found in checkpoint file.".format(name)
+
+                if param.dtype != model_dict[name].dtype:
+                    model_dict[name] = model_dict[name].cast(param.dtype)
+
+            model.set_state_dict(model_dict)
+            del model_dict
+        else:
+            raise ValueError("No checkpoint file found in %s" % model_path)
+
+        if os.path.exists(opt_path):
+            opt_dict = paddle.load(opt_path)
+            optimizer.set_state_dict(opt_dict)
+            del opt_dict
+        else:
+            print("No optimizer checkpoint file found in %s." % opt_path)
+
+        # if os.path.exists(meta_path):
+        #     meta_dict = paddle.load(meta_path)
+        #     load_recovery = {
+        #         'step': meta_dict['step'],
+        #         'epoch': meta_dict['epoch'],
+        #         'rng_state': meta_dict['cuda_rng_state']
+        #     }
+        #     del meta_dict
+        # else:
+        #     raise ValueError("No meta checkpoint file found in %s." %
+        #                         meta_path)
+
+        print("successfully load checkpoints")
+
+    elif ckpt_dir and os.path.isfile(ckpt_dir):
+        print("Try to load a whole checkpoint from %s " % ckpt_dir)
+        embedding_list = ["embedding_table"]
+        collinear_list = [
+            "wq",
+            "wk",
+            "wv",
+            "adaLN_modulation",  # TransformerBlock ParallelFinalLayer
+            "linear",
+            "x_embedder",
+            "w1",
+            "w3",
+            "fc1",
+            "fc2",
+            "qkv",
+            "proj",
+            "mlp",  # ParallelTimestepEmbedder
+            "q_norm",
+            "k_norm",
+            # "attention_norm",
+            # "ffn_norm",
+        ]
+        rowlinear_list = ["wo", "w2"]
+        all_list = collinear_list + rowlinear_list + embedding_list
+        skip_list = [
+            "patch_embed.proj.weight",
+            "patch_embed.proj.bias",
+        ]
+
+        col_list = []
+        row_list = []
+        emb_list = []
+
+        mp_rank = args.mp_rank
+        mp_size = max(args.tensor_parallel_degree, 1)
+
+        def col_split_modeldict(model_dict):
+            if len(model_dict.shape) == 2:
+                subbatch = model_dict.shape[1] // mp_size
+                return model_dict[:, mp_rank * subbatch : (mp_rank + 1) * subbatch]
+            elif len(model_dict.shape) == 1:
+                subbatch = model_dict.shape[0] // mp_size
+                return model_dict[mp_rank * subbatch : (mp_rank + 1) * subbatch]
+
+        def row_split_modeldict(model_dict):
+            if len(model_dict.shape) == 2:
+                subbatch = model_dict.shape[0] // mp_size
+                return model_dict[mp_rank * subbatch : (mp_rank + 1) * subbatch]
+            else:
+                return model_dict
+
+        def emb_split_modeldict(model_dict):
+            subbatch = model_dict.shape[0] // mp_size
+            return model_dict[mp_rank * subbatch : (mp_rank + 1) * subbatch]
+
+        model_dict = paddle.load(ckpt_dir)
+        modelkeys = model_dict.keys()
+        for whole_key in modelkeys:
+            if "." not in whole_key:
+                continue
+
+            if "mlp" in whole_key or "adaLN_modulation" in whole_key:
+                # TODO: remove nn.Sequential
+                # self.mlp = nn.Sequential(linear(), silu(), linear())
+                # self.adaLN_modulation = nn.Sequential(silu(), linear())
+                key = whole_key.split(".")[-3]
+            else:
+                key = whole_key.split(".")[-2]
+
+            if whole_key in skip_list:
+                continue
+            if key in all_list:
+                if key in collinear_list:
+                    col_list.append((key, model_dict[whole_key].shape))
+                    model_dict[whole_key] = col_split_modeldict(model_dict[whole_key])
+                elif key in rowlinear_list:
+                    row_list.append((key, model_dict[whole_key].shape))
+                    model_dict[whole_key] = row_split_modeldict(model_dict[whole_key])
+                else:
+                    # embedding_list
+                    emb_list.append((key, model_dict[whole_key].shape))
+                    model_dict[whole_key] = emb_split_modeldict(model_dict[whole_key])
+            # else:
+            #     print(f'bad whole_key:{whole_key}, the key:{key} is not in [col + rowl + embed] list')
+            #     exit()
+
+        print("cast state_dict to default dtype:{}".format(paddle.get_default_dtype()))
+        model.set_state_dict(model_dict)
+        del model_dict
+    else:
+        print("`load` requires a valid value of `ckpt_dir`.")
+        raise TypeError("`load` requires a valid value of `ckpt_dir`.")
+
+
 class DiTDiffusionModel(nn.Layer):
-    def __init__(self, model_args):
+    def __init__(self, model_args, training_args):
         super().__init__()
         self.model_args = model_args
 
@@ -69,6 +209,8 @@ class DiTDiffusionModel(nn.Layer):
                     model_args.pretrained_model_name_or_path, subfolder="transformer"
                 )
             logger.info(f"Init DiT model from {model_args.pretrained_model_name_or_path}!")
+
+        # load_model(training_args, self.transformer, ckpt_dir='DiTLLaMA_600M_256.pdparams')
 
         # make sure unet in train mode, vae and text_encoder in eval mode
         freeze_params(self.vae.parameters())
@@ -184,7 +326,7 @@ class DiTDiffusionModel(nn.Layer):
             model_output, model_var_values = paddle.split(model_output, 2, axis=1)
             # Learn the variance using the variational bound, but don't let
             # it affect our mean prediction.
-            frozen_out = paddle.concat([model_output, model_var_values], axis=1)
+            frozen_out = paddle.concat([model_output.detach(), model_var_values], axis=1)
             vb_loss = self._vb_terms_bpd(
                 model=lambda *args, r=frozen_out: r,
                 x_start=latents,

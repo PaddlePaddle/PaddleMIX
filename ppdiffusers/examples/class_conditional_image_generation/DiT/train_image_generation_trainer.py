@@ -104,9 +104,9 @@ def main():
     model_name = model_config_name.split("_")[0]
     assert model_name in ["DiT", "SiT", "LargeDiT"], f"Model {model_name} not supported."
     if model_name in ["DiT", "LargeDiT"]:
-        model = DiTDiffusionModel(model_args)
+        model = DiTDiffusionModel(model_args, training_args)
     else:
-        model = SiTDiffusionModel(model_args)
+        model = SiTDiffusionModel(model_args, training_args)
     assert model.transformer.sample_size == data_args.resolution // 8
     model.set_recompute(training_args.recompute)
     model.set_xformers(model_args.enable_xformers_memory_efficient_attention)
