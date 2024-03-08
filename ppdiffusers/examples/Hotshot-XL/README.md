@@ -19,7 +19,7 @@ python inference.py \
 
 ### Text-to-GIF with ControlNet
 
-controlnet 模型路径 ./controlnet_depth，在 inference.py 中配置
+controlnet 模型路径 co63oc/hotshotxl/controlnet_depth，在 inference.py 中配置
 
 ``` shell
 python inference.py \
