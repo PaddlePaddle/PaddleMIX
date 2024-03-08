@@ -298,10 +298,6 @@ class LatentDiffusionTrainer(Trainer):
         else:
             loss.backward()
 
-        if self.do_grad_scaling:
-            self.scaler.unscale_(self.optimizer)
-
-        # if max_grad_norm 0, will only get grad_norm
         grad_norms = clip_grad_norm_(
             self.model.transformer.parameters(), self.args.max_grad_norm, return_cliped_norm=False
         )

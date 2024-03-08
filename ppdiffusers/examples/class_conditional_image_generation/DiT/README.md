@@ -46,24 +46,32 @@ TRAINER_INSTANCES='127.0.0.1'
 MASTER='127.0.0.1:8080'
 TRAINERS_NUM=1 # nnodes, machine num
 TRAINING_GPUS_PER_NODE=8 # nproc_per_node
-DP_DEGREE=8 # dp_parallel_degree
+DP_DEGREE=1 # dp_parallel_degree
 MP_DEGREE=1 # tensor_parallel_degree
-SHARDING_DEGREE=1 # sharding_parallel_degree
+SHARDING_DEGREE=8 # sharding_parallel_degree
+
+# real dp_parallel_degree = nnodes * nproc_per_node / tensor_parallel_degree / sharding_parallel_degree
+# Please make sure: nnodes * nproc_per_node >= tensor_parallel_degree * sharding_parallel_degree
 
 config_file=config/DiT_XL_patch2.json
 OUTPUT_DIR=./output_trainer/DiT_XL_patch2_trainer
-
 feature_path=./data/fastdit_imagenet256
-batch_size=32 # per gpu
+
+per_device_train_batch_size=32
+gradient_accumulation_steps=1
+
 num_workers=8
 max_steps=7000000
-logging_steps=50
+logging_steps=20
 save_steps=5000
 image_logging_steps=-1
 seed=0
 
+max_grad_norm=-1
+
 USE_AMP=True
-FP16_OPT_LEVEL="O1"
+FP16_OPT_LEVEL="O2"
+
 enable_tensorboard=True
 recompute=True
 enable_xformers=True
@@ -73,8 +81,8 @@ ${TRAINING_PYTHON} train_image_generation_trainer.py \
     --do_train \
     --feature_path ${feature_path} \
     --output_dir ${OUTPUT_DIR} \
-    --per_device_train_batch_size ${batch_size} \
-    --gradient_accumulation_steps 1 \
+    --per_device_train_batch_size ${per_device_train_batch_size} \
+    --gradient_accumulation_steps ${gradient_accumulation_steps} \
     --learning_rate 1e-4 \
     --weight_decay 0.0 \
     --max_steps ${max_steps} \
@@ -90,7 +98,7 @@ ${TRAINING_PYTHON} train_image_generation_trainer.py \
     --config_file ${config_file} \
     --num_inference_steps 25 \
     --use_ema True \
-    --max_grad_norm -1 \
+    --max_grad_norm ${max_grad_norm} \
     --overwrite_output_dir True \
     --disable_tqdm True \
     --fp16_opt_level ${FP16_OPT_LEVEL} \
@@ -101,6 +109,9 @@ ${TRAINING_PYTHON} train_image_generation_trainer.py \
     --dp_degree ${DP_DEGREE} \
     --tensor_parallel_degree ${MP_DEGREE} \
     --sharding_parallel_degree ${SHARDING_DEGREE} \
+    --sharding "stage1" \
+    --hybrid_parallel_topo_order "sharding_first" \
+    --amp_master_grad 1 \
     --pipeline_parallel_degree 1 \
     --sep_parallel_degree 1 \
 ```
@@ -118,16 +129,24 @@ config_file=config/DiT_XL_patch2.json
 results_dir=./output_notrainer/DiT_XL_patch2_notrainer
 
 feature_path=./data/fastdit_imagenet256
+
+image_size=256
 global_batch_size=256
 num_workers=8
-max_steps=7000000
+epochs=1400
 logging_steps=50
 save_steps=5000
 
+global_seed=0
+
 python -u -m paddle.distributed.launch --gpus "0,1,2,3,4,5,6,7" \
     train_image_generation_notrainer.py \
+    --image_size ${image_size} \
     --config_file ${config_file} \
     --feature_path ${feature_path} \
+    --results_dir ${results_dir} \
+    --epochs ${epochs} \
+    --global_seed ${global_seed} \
     --global_batch_size ${global_batch_size} \
     --num_workers ${num_workers} \
     --log_every ${logging_steps} \
