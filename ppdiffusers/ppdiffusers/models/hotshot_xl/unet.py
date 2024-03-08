@@ -756,8 +756,8 @@ class UNet3DConditionModel(
         config["mid_block_type"] = "UNetMidBlock3DCrossAttn"
         model = cls.from_config(config)
         model_files = [
-            os.path.join(pretrained_model_path, "diffusion_pytorch_model.bin"),
-            os.path.join(pretrained_model_path, "diffusion_pytorch_model.safetensors"),
+            os.path.join(pretrained_model_path, "diffusion_paddle_model.bin"),
+            os.path.join(pretrained_model_path, "diffusion_paddle_model.safetensors"),
         ]
         model_file = None
         for fp in model_files:

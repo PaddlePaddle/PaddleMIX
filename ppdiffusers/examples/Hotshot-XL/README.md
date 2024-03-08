@@ -11,7 +11,7 @@ convert_controlnet.py 转换controlnet模型
 测试随机数 452，精度 f32
 
 ``` shell
-python inference.py --pretrained_path model_path \
+python inference.py \
   --prompt="a bulldog in the captains chair of a spaceship, hd, high quality" \
   --seed 452 --precision f32 \
   --output="output.gif"
@@ -22,7 +22,7 @@ python inference.py --pretrained_path model_path \
 controlnet 模型路径 ./controlnet_depth，在 inference.py 中配置
 
 ``` shell
-python inference.py --pretrained_path model_path \
+python inference.py \
   --prompt="a girl jumping up and down and pumping her fist, hd, high quality" \
   --seed 452 --precision f32 \
   --output="output.gif" \

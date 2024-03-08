@@ -20,9 +20,9 @@ from PIL import Image
 
 
 def to_pil_image(pic, mode=None):
-    """Convert a tensor or an ndarray to PIL Image. This function does not support torchscript.
+    """Convert a tensor or an ndarray to PIL Image.
 
-    See :class:`~torchvision.transforms.ToPILImage` for more details.
+    See :class:`~ToPILImage` for more details.
 
     Args:
         pic (Tensor or numpy.ndarray): Image to be converted to PIL Image.
@@ -101,9 +101,7 @@ def to_pil_image(pic, mode=None):
 class ToPILImage:
     """Convert a tensor or an ndarray to PIL Image
 
-    This transform does not support torchscript.
-
-    Converts a torch.*Tensor of shape C x H x W or a numpy ndarray of shape
+    Converts a paddle.*Tensor of shape C x H x W or a numpy ndarray of shape
     H x W x C to a PIL Image while adjusting the value range depending on the ``mode``.
 
     Args:
