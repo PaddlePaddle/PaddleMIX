@@ -31,6 +31,7 @@ feature_path=./data/fastdit_imagenet256
 per_device_train_batch_size=32
 gradient_accumulation_steps=1
 
+resolution=256
 num_workers=8
 max_steps=7000000
 logging_steps=20
@@ -52,6 +53,7 @@ ${TRAINING_PYTHON} train_image_generation_trainer.py \
     --do_train \
     --feature_path ${feature_path} \
     --output_dir ${OUTPUT_DIR} \
+    --resolution ${resolution} \
     --per_device_train_batch_size ${per_device_train_batch_size} \
     --gradient_accumulation_steps ${gradient_accumulation_steps} \
     --learning_rate 1e-4 \

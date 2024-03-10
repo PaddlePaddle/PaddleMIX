@@ -275,10 +275,11 @@ class ParallelLabelEmbedder(nn.Layer):
         super().__init__()
         use_cfg_embedding = dropout_prob > 0
         embedding_dim = num_classes + use_cfg_embedding
-        if is_model_parrallel():
-            self.embedding_table = fleet.meta_parallel.VocabParallelEmbedding(embedding_dim, hidden_size)
-        else:
-            self.embedding_table = nn.Embedding(embedding_dim, hidden_size)
+        # if is_model_parrallel():
+        #     self.embedding_table = fleet.meta_parallel.VocabParallelEmbedding(embedding_dim, hidden_size)
+        # else:
+        # Paddle not support split with padding if not be divided in model parallel now
+        self.embedding_table = nn.Embedding(embedding_dim, hidden_size)
         self.num_classes = num_classes
         self.dropout_prob = dropout_prob
 
@@ -393,7 +394,7 @@ class DiT(ModelMixin, ConfigMixin):
         num_attention_heads: int = 16,
         attention_head_dim: int = 72,
         mlp_ratio: float = 4.0,
-        class_dropout_prob: float = 0.0,  # for tensor parallel
+        class_dropout_prob: float = 0.1,
         num_classes: int = 1000,
         learn_sigma: bool = True,
     ):
@@ -411,7 +412,7 @@ class DiT(ModelMixin, ConfigMixin):
         self.num_classes = num_classes
         self.learn_sigma = learn_sigma
 
-        self.gradient_checkpointing = True
+        self.gradient_checkpointing = False
         self.fused_attn = True
 
         # 1. Define input layers

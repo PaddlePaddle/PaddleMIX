@@ -254,7 +254,8 @@ class LatentDiffusionTrainer(Trainer):
         loss = model(**inputs)
         return loss
 
-    def create_optimizer_and_scheduler(self, num_training_steps: int):
+    def create_optimizer_and_scheduler_for_debug(self, num_training_steps: int):
+        # default use paddlenlp.trainer.Trainer.create_optimizer_and_scheduler
         self.lr_scheduler = get_scheduler(
             name="constant",
             learning_rate=self.args.learning_rate,
@@ -277,7 +278,8 @@ class LatentDiffusionTrainer(Trainer):
             multi_precision=False,
         )
 
-    def training_step(self, model, inputs) -> paddle.Tensor:
+    def training_step_for_debug(self, model, inputs) -> paddle.Tensor:
+        # default use paddlenlp.trainer.Trainer.training_step
         model = unwrap_model(model)
         model.train()
 
