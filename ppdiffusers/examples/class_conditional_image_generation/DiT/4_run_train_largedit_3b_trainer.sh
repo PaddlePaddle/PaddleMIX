@@ -17,23 +17,24 @@ TRAINER_INSTANCES='127.0.0.1'
 MASTER='127.0.0.1:8080'
 TRAINERS_NUM=1 # nnodes, machine num
 TRAINING_GPUS_PER_NODE=8 # nproc_per_node
-DP_DEGREE=4 # dp_parallel_degree
-MP_DEGREE=2 # tensor_parallel_degree
-SHARDING_DEGREE=1 # sharding_parallel_degree
+DP_DEGREE=1 # dp_parallel_degree
+MP_DEGREE=4 # tensor_parallel_degree
+SHARDING_DEGREE=2 # sharding_parallel_degree
 
 # real dp_parallel_degree = nnodes * nproc_per_node / tensor_parallel_degree / sharding_parallel_degree
 # Please make sure: nnodes * nproc_per_node >= tensor_parallel_degree * sharding_parallel_degree
 
-accumulation_steps=2 # gradient_accumulation_steps
-
 config_file=config/LargeDiT_3B_patch2.json
 OUTPUT_DIR=./output_trainer/LargeDiT_3B_patch2_trainer
-
 feature_path=./data/fastdit_imagenet256
-batch_size=32 # per gpu
+
+per_device_train_batch_size=32
+gradient_accumulation_steps=1
+
+resolution=256
 num_workers=8
 max_steps=7000000
-logging_steps=50
+logging_steps=20
 save_steps=5000
 image_logging_steps=-1
 seed=0
@@ -42,6 +43,7 @@ max_grad_norm=2.0
 
 USE_AMP=True
 FP16_OPT_LEVEL="O2"
+
 enable_tensorboard=True
 recompute=True
 enable_xformers=True
@@ -51,9 +53,10 @@ ${TRAINING_PYTHON} train_image_generation_trainer.py \
     --do_train \
     --feature_path ${feature_path} \
     --output_dir ${OUTPUT_DIR} \
-    --per_device_train_batch_size ${batch_size} \
-    --gradient_accumulation_steps ${accumulation_steps} \
+    --per_device_train_batch_size ${per_device_train_batch_size} \
+    --gradient_accumulation_steps ${gradient_accumulation_steps} \
     --learning_rate 1e-4 \
+    --resolution ${resolution} \
     --weight_decay 0.0 \
     --max_steps ${max_steps} \
     --lr_scheduler_type "constant" \
@@ -79,4 +82,8 @@ ${TRAINING_PYTHON} train_image_generation_trainer.py \
     --dp_degree ${DP_DEGREE} \
     --tensor_parallel_degree ${MP_DEGREE} \
     --sharding_parallel_degree ${SHARDING_DEGREE} \
+    --sharding "stage1" \
+    --hybrid_parallel_topo_order "sharding_first" \
+    --amp_master_grad 1 \
     --pipeline_parallel_degree 1 \
+    --sep_parallel_degree 1 \

@@ -431,7 +431,7 @@ class DiT_Llama(ModelMixin, ConfigMixin):
         multiple_of: int = 256,
         ffn_dim_multiplier=None,
         norm_eps: float = 1e-05,
-        class_dropout_prob: float = 0.0,  # for tensor parallel must be set to 0.0
+        class_dropout_prob: float = 0.1,
         num_classes: int = 1000,
         learn_sigma: bool = True,
         qk_norm: bool = True,
@@ -454,7 +454,7 @@ class DiT_Llama(ModelMixin, ConfigMixin):
         self.learn_sigma = learn_sigma
         self.qk_norm = qk_norm
 
-        self.gradient_checkpointing = True
+        self.gradient_checkpointing = False
         self.fused_attn = True
 
         # 1. Define input layers
