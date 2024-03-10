@@ -79,11 +79,12 @@ ${TRAINING_PYTHON} train_image_generation_trainer.py \
     --recompute ${recompute} \
     --enable_xformers_memory_efficient_attention ${enable_xformers} \
     --bf16 ${USE_AMP} \
+    --amp_master_grad 1 \
     --dp_degree ${DP_DEGREE} \
     --tensor_parallel_degree ${MP_DEGREE} \
     --sharding_parallel_degree ${SHARDING_DEGREE} \
     --sharding "stage1" \
+    --sharding_parallel_config "enable_stage1_overlap enable_stage1_tensor_fusion" \
     --hybrid_parallel_topo_order "sharding_first" \
-    --amp_master_grad 1 \
     --pipeline_parallel_degree 1 \
     --sep_parallel_degree 1 \
