@@ -23,8 +23,8 @@ import numpy as np
 import paddle
 
 from paddlemix.models.blip2.Qformer import BertLMHeadModel
-from paddlemix.models.cogagent.configuration import CogModelConfig
-from paddlemix.models.cogagent.modeling import CogModelForCausalLM
+from paddlemix.models.cogmodel.configuration import CogModelConfig
+from paddlemix.models.cogmodel.modeling import CogModelForCausalLM
 from tests.models.test_configuration_common import ConfigTester
 from tests.models.test_modeling_common import (
     ModelTesterMixin,
@@ -180,85 +180,44 @@ class CogAgentForCausalLMTest(ModelTesterMixin, unittest.TestCase):
         self.assertIsNotNone(model)
 
 
-class CogVLMForCausalLMTester:
-    def __init__(self, parent):
-        self.parent = parent
-
+class CogVLMForCausalLMTester(CogAgentForCausalLMTester):
     def get_config(self):
         test_config = {
             "model_type": "cogvlm",
             "bos_token_id": 1,
+            # "cross_compute_hidden_size": 1024,
+            # "cross_hidden_size": 1024,
+            # "cross_image_size": 1120,
             "eos_token_id": 2,
             "hidden_act": "silu",
-            "hidden_size": 4096,
+            "hidden_size": 2,
             "initializer_range": 0.02,
-            "intermediate_size": 11008,
+            "intermediate_size": 2,
             "max_position_embeddings": 2048,
-            "num_attention_heads": 32,
+            "num_attention_heads": 1,
             "num_hidden_layers": 1,
             "pad_token_id": 0,
+            "paddlenlp_version": None,
             "rms_norm_eps": 1e-05,
             "template_version": "chat",
             "tie_word_embeddings": False,
-            "transformers_version": "4.35.0",
-            "use_cache": True,
+            "transformers_version": "4.36.0.dev0",
             "vision_config": {
                 "dropout_prob": 0.0,
                 "hidden_act": "gelu",
-                "hidden_size": 1792,
-                "image_size": 490,
+                "hidden_size": 8,
+                "image_size": 224,
                 "in_channels": 3,
-                "intermediate_size": 15360,
+                "intermediate_size": 2,
                 "layer_norm_eps": 1e-06,
-                "num_heads": 16,
+                "num_heads": 1,
                 "num_hidden_layers": 1,
                 "num_positions": 257,
                 "patch_size": 14,
             },
             "vocab_size": 32000,
         }
-
         return CogModelConfig(**test_config)
-
-    def prepare_config_and_inputs(self):
-        images = ([floats_tensor([3, 224, 224])],)
-        tokenized_out = {
-            "input_ids": ids_tensor([1, 258], 5000),
-            "token_type_ids": random_attention_mask([1, 258]),
-            "attention_mask": random_attention_mask([1, 258]),
-            "position_ids": ids_tensor([1, 258], vocab_size=100),
-        }
-
-        config = self.get_config()
-
-        return config, images, tokenized_out
-
-    def prepare_config_and_inputs_for_common(self):
-        config, images, tokenized_out = self.prepare_config_and_inputs()
-
-        inputs_dict = {
-            "images": images,
-            "input_ids": tokenized_out["input_ids"],
-            "attention_mask": tokenized_out["attention_mask"],
-            "token_type_ids": tokenized_out["token_type_ids"],
-            "position_ids": tokenized_out["position_ids"],
-        }
-
-        return config, inputs_dict
-
-    def create_and_check_model(self, images, input_ids, attention_mask, token_type_ids, position_ids):
-        model = CogModelForCausalLM(config=self.get_config())
-        model.eval()
-        with paddle.no_grad():
-            result = model(
-                images=images,
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                token_type_ids=token_type_ids,
-                position_ids=position_ids,
-            )
-
-        self.parent.assertIsNotNone(result)
 
 
 class CogVLMForCausalLMTest(CogAgentForCausalLMTest):

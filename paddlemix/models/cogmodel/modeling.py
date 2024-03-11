@@ -525,10 +525,8 @@ class CogModel(CogPreTrainedModel):
     ) -> Union[Tuple, BaseModelOutputWithPast]:
         """take care of image_encode, token_type_ids, position_ids and (attention_mask = None is fine)"""
         if past_key_values is not None:
-            if self.model_type == "cogagent":
+            if self.model_type == "cogagent" or self.model_type == "cogvlm":
                 encoder_outputs = None
-            elif self.model_type == "cogvlm":
-                pass
             else:
                 raise ValueError("model_type in config must be cogagent or cogvlm, but got {}".format(self.model_type))
         else:
@@ -959,6 +957,7 @@ class CogModelForCausalLM(CogPreTrainedModel):
                 cross_images = [cross_transform(ori[0])]
             elif self.model_type == "cogvlm":
                 images = [transform(images[0])]
+                cross_images = None
             else:
                 raise ValueError("model_type in config must be cogagent or cogvlm, but got {}".format(self.model_type))
             vision_token_num = image_size // patch_size * (image_size // patch_size) + 2
