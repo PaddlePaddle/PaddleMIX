@@ -54,7 +54,6 @@ class CogVLMForCausalLMTester:
             "rms_norm_eps": 1e-05,
             "template_version": "chat",
             "tie_word_embeddings": False,
-            "torch_dtype": "float32",
             "transformers_version": "4.35.0",
             "use_cache": True,
             "vision_config": {

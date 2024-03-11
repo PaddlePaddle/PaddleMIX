@@ -742,8 +742,6 @@ class EVAVisionTransformer(paddle.nn.Layer):
 
 
 class LayerNorm(paddle.nn.LayerNorm):
-    """Subclass torch's LayerNorm (with cast back to input dtype)."""
-
     def forward(self, x: paddle.Tensor):
         orig_type = x.dtype
         x = paddle.nn.functional.layer_norm(

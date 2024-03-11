@@ -147,7 +147,6 @@ class CogVLMModel(CogVLMPreTrainedModel):
                 images_features = self.encode_images(images)
                 images_features = rearrange(images_features, "b n d -> (b n) d")
                 images_features = images_features.to(dtype=inputs_embeds.dtype, device=inputs_embeds.place)
-                """Class Method: *.index_put, can not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*/torch.distributions.Distribution.*/torch.autograd.function.FunctionCtx.*/torch.profiler.profile.*/torch.autograd.profiler.profile.*, and convert manually"""
                 inputs_embeds = inputs_embeds.index_put([token_type_ids == VISION_TOKEN_TYPE], images_features)
             else:
                 if token_type_ids is None:
