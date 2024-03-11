@@ -201,7 +201,7 @@ class Attention(nn.Layer):
         xq, xk = xq.cast(dtype), xk.cast(dtype)
 
         n_rep = self.n_local_heads // self.n_local_kv_heads
-        if n_rep >= 1:
+        if n_rep > 1:
             xk = xk.unsqueeze(axis=3).tile([1, 1, 1, n_rep, 1]).flatten(start_axis=2, stop_axis=3)
             xv = xv.unsqueeze(axis=3).tile([1, 1, 1, n_rep, 1]).flatten(start_axis=2, stop_axis=3)
 

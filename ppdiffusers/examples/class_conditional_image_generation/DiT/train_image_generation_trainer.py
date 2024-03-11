@@ -25,7 +25,6 @@ from diffusion import (
     LatentDiffusionTrainer,
     ModelArguments,
     TrainerArguments,
-    setdistenv,
 )
 from paddlenlp.trainer import PdArgumentParser, get_last_checkpoint, set_seed
 from paddlenlp.utils.log import logger
@@ -61,9 +60,8 @@ def main():
     pprint.pprint(data_args)
     pprint.pprint(model_args)
     pprint.pprint(training_args)
-    setdistenv(training_args)
-    model_args.data_world_rank = training_args.data_world_rank
-    model_args.data_world_size = training_args.data_world_size
+    model_args.data_world_rank = training_args.dataset_rank
+    model_args.data_world_size = training_args.dataset_world_size
 
     training_args.report_to = ["visualdl"]
     training_args.resolution = data_args.resolution
