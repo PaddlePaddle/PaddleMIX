@@ -16,13 +16,10 @@
 import paddle
 
 """largely copy from llama and adapt for cogvlm"""
-import math
-import warnings
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 
 import paddlenlp.transformers as transformers
 from einops import rearrange
-from paddlenlp.transformers.activations import ACT2FN
 from paddlenlp.transformers.model_outputs import (
     BaseModelOutputWithPast,
     CausalLMOutputWithPast,
@@ -34,261 +31,18 @@ from .visual import EVA2CLIPModel
 if TYPE_CHECKING:
     from paddlenlp.transformers.utils import ModelOutput
 
+from ..cogagent.modeling import (
+    RMSNorm,
+    VisionExpertAttention,
+    VisionExpertMLP,
+    _expand_mask,
+    _make_causal_mask,
+    build_position_ids,
+    is_empty,
+)
 
 LANGUAGE_TOKEN_TYPE = 0
 VISION_TOKEN_TYPE = 1
-
-
-def masked_fill(x, mask, value):
-    y = paddle.full(x.shape, value, x.dtype)
-    return paddle.where(mask, y, x)
-
-
-def _make_causal_mask(input_ids_shape: list, dtype: paddle.dtype, device: str, past_key_values_length: int = 0):
-    """
-    Make causal mask used for bi-directional self-attention.
-    """
-    bsz, tgt_len = input_ids_shape
-    mask = paddle.full(shape=(tgt_len, tgt_len), fill_value=paddle.finfo(dtype).min)
-    mask_cond = paddle.arange(end=mask.shape[-1])
-    mask = masked_fill(mask, mask_cond < (mask_cond + 1).reshape([mask.shape[-1], 1]), 0)
-    mask = mask.to(dtype)
-    if past_key_values_length > 0:
-        mask = paddle.concat(x=[paddle.zeros(shape=[tgt_len, past_key_values_length], dtype=dtype), mask], axis=-1)
-    return mask[None, None, :, :].expand(shape=[bsz, 1, tgt_len, tgt_len + past_key_values_length])
-
-
-def _expand_mask(mask: paddle.Tensor, dtype: paddle.dtype, tgt_len: Optional[int] = None):
-    """
-    Expands attention_mask from `[bsz, seq_len]` to `[bsz, 1, tgt_seq_len, src_seq_len]`.
-    """
-    bsz, src_len = mask.shape
-    tgt_len = tgt_len if tgt_len is not None else src_len
-    expanded_mask = mask[:, (None), (None), :].expand(shape=[bsz, 1, tgt_len, src_len]).astype(dtype)
-    inverted_mask = 1.0 - expanded_mask
-
-    return masked_fill(inverted_mask, inverted_mask.astype("bool"), paddle.finfo(dtype).min)
-
-
-class RMSNorm(paddle.nn.Layer):
-    def __init__(self, hidden_size, eps=1e-06):
-        super().__init__()
-        out_0 = paddle.create_parameter(
-            shape=paddle.ones(shape=hidden_size).shape,
-            dtype=paddle.ones(shape=hidden_size).numpy().dtype,
-            default_initializer=paddle.nn.initializer.Assign(paddle.ones(shape=hidden_size)),
-        )
-        out_0.stop_gradient = not True
-        self.weight = out_0
-        self.variance_epsilon = eps
-
-    def forward(self, hidden_states):
-        input_dtype = hidden_states.dtype
-        hidden_states = hidden_states.to("float32")
-        variance = hidden_states.pow(y=2).mean(axis=-1, keepdim=True)
-        hidden_states = hidden_states * paddle.rsqrt(x=variance + self.variance_epsilon)
-        return (self.weight * hidden_states).to(input_dtype)
-
-
-class MLP(paddle.nn.Layer):
-    def __init__(self, config):
-        super().__init__()
-        self.hidden_size = config.hidden_size
-        self.intermediate_size = config.intermediate_size
-        self.gate_proj = paddle.nn.Linear(
-            in_features=self.hidden_size, out_features=self.intermediate_size, bias_attr=False
-        )
-        self.up_proj = paddle.nn.Linear(
-            in_features=self.hidden_size, out_features=self.intermediate_size, bias_attr=False
-        )
-        self.down_proj = paddle.nn.Linear(
-            in_features=self.intermediate_size, out_features=self.hidden_size, bias_attr=False
-        )
-        self.act_fn = ACT2FN[config.hidden_act]
-
-    def forward(self, x):
-        down_proj = self.down_proj(self.act_fn(self.gate_proj(x)) * self.up_proj(x))
-        return down_proj
-
-
-def get_expert_mask(token_type_ids):
-    vision_token_mask = paddle.zeros_like(x=token_type_ids, dtype="bool")
-    vision_token_mask[:, :-1] = (token_type_ids[:, :-1] == VISION_TOKEN_TYPE) & (
-        token_type_ids[:, 1:] == VISION_TOKEN_TYPE
-    )
-    language_token_mask = ~vision_token_mask
-    return vision_token_mask, language_token_mask
-
-
-class VisionExpertMLP(paddle.nn.Layer):
-    def __init__(self, config):
-        super().__init__()
-        self.language_mlp = MLP(config)
-        self.vision_mlp = MLP(config)
-
-    def forward(self, hidden_states, token_type_ids):
-        output = paddle.empty(shape=hidden_states.shape, dtype=hidden_states.dtype)
-        vision_token_mask, language_token_mask = get_expert_mask(token_type_ids)
-        output[vision_token_mask] = self.vision_mlp(hidden_states[vision_token_mask])
-        output[language_token_mask] = self.language_mlp(hidden_states[language_token_mask])
-        return output
-
-
-def attention_fn(
-    query_layer,
-    key_layer,
-    value_layer,
-    attention_mask,
-    *,
-    scaling_attention_score: bool = True,
-    attention_dropout: paddle.nn.Layer = None
-):
-    attention_mask == 0
-
-    if scaling_attention_score:
-        query_layer = query_layer / math.sqrt(query_layer.shape[-1])
-    x = key_layer
-    perm_3 = list(range(x.ndim))
-    perm_3[-1] = -2
-    perm_3[-2] = -1
-    attention_scores = paddle.matmul(x=query_layer, y=x.transpose(perm=perm_3))
-    attention_scores = attention_scores + attention_mask
-    attention_scores = paddle.nn.functional.softmax(x=attention_scores, axis=-1, dtype="float32").to(query_layer.dtype)
-    if attention_dropout is not None:
-        attention_scores = attention_dropout(attention_scores)
-    context_layer = paddle.matmul(x=attention_scores, y=value_layer)
-    return context_layer
-
-
-class RotaryEmbedding(paddle.nn.Layer):
-    def __init__(self, dim, max_position_embeddings=2048, base=10000, device=None):
-        super().__init__()
-        self.dim = dim
-        self.max_position_embeddings = max_position_embeddings
-        self.base = base
-        inv_freq = self._compute_inv_freq(device)
-        self.register_buffer(name="inv_freq", tensor=inv_freq)
-        self.max_seq_len_cached = 0
-
-    def _compute_inv_freq(self, device=None):
-        return 1.0 / self.base ** (paddle.arange(start=0, end=self.dim, step=2) / self.dim)
-
-    def _set_cos_sin_cache(self, seq_len, device, dtype):
-        self.max_seq_len_cached = seq_len
-        t = paddle.arange(dtype=self.inv_freq.dtype, end=self.max_seq_len_cached)
-        freqs = paddle.einsum("i,j->ij", t, self.inv_freq)
-        emb = paddle.concat(x=(freqs, freqs), axis=-1)
-        self.register_buffer(name="cos_cached", tensor=emb.cos()[:, None, :].to(dtype), persistable=False)
-        self.register_buffer(name="sin_cached", tensor=emb.sin()[:, None, :].to(dtype), persistable=False)
-
-    def forward(self, x, seq_len):
-        if seq_len > self.max_seq_len_cached:
-            self._set_cos_sin_cache(seq_len=seq_len, device=x.place, dtype=x.dtype)
-        return self.cos_cached[:seq_len, ...].to(dtype=x.dtype), self.sin_cached[:seq_len, ...].to(dtype=x.dtype)
-
-
-def rotate_half(x):
-    x1, x2 = x[..., : x.shape[-1] // 2], x[..., x.shape[-1] // 2 :]
-    return paddle.concat(x=(-x2, x1), axis=x1.ndim - 1)
-
-
-def apply_rotary_pos_emb_index_bhs(q, k, cos, sin, position_id):
-    cos, sin = paddle.nn.functional.embedding(x=position_id, weight=cos.squeeze(axis=1)).unsqueeze(
-        axis=1
-    ), paddle.nn.functional.embedding(x=position_id, weight=sin.squeeze(axis=1)).unsqueeze(axis=1)
-    q, k = q * cos + rotate_half(q) * sin, k * cos + rotate_half(k) * sin
-    return q, k
-
-
-class VisionExpertAttention(paddle.nn.Layer):
-    def __init__(self, config):
-        super().__init__()
-        self.config = config
-        self.hidden_size = config.hidden_size
-        self.num_heads = config.num_attention_heads
-        self.head_dim = self.hidden_size // self.num_heads
-        self.max_position_embeddings = config.max_position_embeddings
-        self.rotary_emb = RotaryEmbedding(self.head_dim)
-        self.vision_expert_query_key_value = paddle.nn.Linear(
-            in_features=self.hidden_size, out_features=self.hidden_size * 3, bias_attr=False
-        )
-        self.vision_expert_dense = paddle.nn.Linear(
-            in_features=self.hidden_size, out_features=self.hidden_size, bias_attr=False
-        )
-        self.language_expert_query_key_value = paddle.nn.Linear(
-            in_features=self.hidden_size, out_features=self.hidden_size * 3, bias_attr=False
-        )
-        self.language_expert_dense = paddle.nn.Linear(
-            in_features=self.hidden_size, out_features=self.hidden_size, bias_attr=False
-        )
-
-    def _transpose_for_scores(self, tensor):
-        """Transpose a 3D tensor [B, L, H*HD] into a 4D tensor with size [B H L HD]."""
-        new_tensor_shape = tuple(tensor.shape[:-1]) + (self.num_heads, self.head_dim)
-        tensor = tensor.reshape(new_tensor_shape)
-        return tensor.transpose(perm=[0, 2, 1, 3])
-
-    def forward(
-        self,
-        hidden_states: paddle.Tensor,
-        token_type_ids: paddle.Tensor,
-        position_ids: paddle.Tensor,
-        attention_mask: Optional[paddle.Tensor] = None,
-        past_key_value: Optional[Tuple[paddle.Tensor]] = None,
-        output_attentions: bool = False,
-        use_cache: bool = False,
-    ) -> Tuple[paddle.Tensor, Optional[paddle.Tensor], Optional[Tuple[paddle.Tensor]]]:
-        bsz, q_len, _ = hidden_states.shape
-        vision_token_mask, language_token_mask = get_expert_mask(token_type_ids)
-        shape = list(hidden_states.shape)
-        shape[-1] = shape[-1] * 3
-        mixed_raw_layer = paddle.empty(shape=shape, dtype=hidden_states.dtype)
-        # note(cocoshe): When hidden_states[vision_token_mask].shape is [0, d], pd will occur error in linear forward func.
-        if hidden_states[vision_token_mask].shape[0] != 0:
-            mixed_raw_layer[vision_token_mask] = self.vision_expert_query_key_value(hidden_states[vision_token_mask])
-        if hidden_states[language_token_mask].shape[0] != 0:
-            mixed_raw_layer[language_token_mask] = self.language_expert_query_key_value(
-                hidden_states[language_token_mask]
-            )
-        query_states, key_states, value_states = paddle.split(x=mixed_raw_layer, num_or_sections=3, axis=-1)
-        query_states = self._transpose_for_scores(query_states)
-        key_states = self._transpose_for_scores(key_states)
-        value_states = self._transpose_for_scores(value_states)
-        kv_seq_len = key_states.shape[-2]
-        if past_key_value is not None:
-            kv_seq_len += past_key_value[0].shape[-2]
-        cos, sin = self.rotary_emb(value_states, seq_len=position_ids.max() + 1)
-        query_states, key_states = apply_rotary_pos_emb_index_bhs(query_states, key_states, cos, sin, position_ids)
-        if past_key_value is not None:
-            key_states = paddle.concat(x=[past_key_value[0], key_states], axis=2)
-            value_states = paddle.concat(x=[past_key_value[1], value_states], axis=2)
-        past_key_value = (key_states, value_states) if use_cache else None
-        context_layer = attention_fn(
-            query_layer=query_states,
-            key_layer=key_states,
-            value_layer=value_states,
-            attention_mask=attention_mask,
-            scaling_attention_score=True,
-            attention_dropout=None,
-        )
-        if context_layer.shape != [bsz, self.num_heads, q_len, self.head_dim]:
-            raise ValueError(
-                f"`attn_output` should be of size {bsz, self.num_heads, q_len, self.head_dim}, but is {context_layer.shape}"
-            )
-        x = context_layer
-        perm_1 = list(range(x.ndim))
-        perm_1[1] = 2
-        perm_1[2] = 1
-        context_layer = x.transpose(perm=perm_1).reshape([bsz, q_len, self.hidden_size])
-        attn_output = paddle.empty(shape=context_layer.shape, dtype=hidden_states.dtype)
-        # note(cocoshe): When context_layer[vision_token_mask].shape is [0, d], pd will occur error in linear forward func.
-        if context_layer[vision_token_mask].shape[0] != 0:
-            attn_output[vision_token_mask] = self.vision_expert_dense(context_layer[vision_token_mask])
-        if context_layer[language_token_mask].shape[0] != 0:
-            attn_output[language_token_mask] = self.language_expert_dense(context_layer[language_token_mask])
-        if output_attentions:
-            warnings.warn("output_attentions is not implemented.")
-        return attn_output, None, past_key_value
 
 
 class CogVLMDecoderLayer(paddle.nn.Layer):
@@ -340,35 +94,6 @@ class CogVLMPreTrainedModel(transformers.PretrainedModel):
     supports_gradient_checkpointing = False
     _no_split_modules = ["CogVLMDecoderLayer", "TransformerLayer"]
     _skip_keys_device_placement = "past_key_values"
-
-
-def is_empty(images_list: Optional[List[List[paddle.Tensor]]]):
-    if images_list is None or len(images_list) == 0:
-        return True
-    for image_list in images_list:
-        if len(image_list):
-            return False
-    return True
-
-
-def build_position_ids(x, attention_mask=None):
-    if attention_mask is not None:
-        tmp = x.clone()
-        tmp[~attention_mask.astype(dtype="bool")] = -1
-    else:
-        tmp = x.clone()
-    is_boi_eoi = paddle.zeros_like(x=x, dtype="bool")
-    is_boi_eoi[:, 1:] |= (tmp[:, 1:] == VISION_TOKEN_TYPE) & (tmp[:, :-1] == LANGUAGE_TOKEN_TYPE)
-    is_boi_eoi[:, 0] |= tmp[:, 0] == VISION_TOKEN_TYPE
-    is_boi_eoi[:, :-1] |= (tmp[:, :-1] == VISION_TOKEN_TYPE) & (tmp[:, 1:] == LANGUAGE_TOKEN_TYPE)
-    is_boi_eoi[:, -1] |= tmp[:, -1] == VISION_TOKEN_TYPE
-    tmp[is_boi_eoi] = LANGUAGE_TOKEN_TYPE
-    y = paddle.zeros_like(x=x, dtype="int64")
-    y[:, 1:] = (tmp[:, 1:] == LANGUAGE_TOKEN_TYPE) | (tmp[:, 1:] == VISION_TOKEN_TYPE) & (
-        tmp[:, :-1] == LANGUAGE_TOKEN_TYPE
-    )
-    y = y.cumsum(axis=-1)
-    return y
 
 
 class CogVLMModel(CogVLMPreTrainedModel):
