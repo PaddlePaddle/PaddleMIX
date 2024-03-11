@@ -1,9 +1,10 @@
-paddlenlp>=2.6.0rc0
+paddlenlp>=2.7.2
 safetensors>=0.3.1
 ftfy
 regex
 Pillow
 opencv-python
+pyav
 # for test
 parameterized
 requests_mock
@@ -12,3 +13,4 @@ note_seq
 urllib3<=2.0.0
 einops>=0.6.1
 paddlesde
+ligo-segments

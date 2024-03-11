@@ -21,7 +21,6 @@ import numpy as np
 import paddle
 import PIL
 import PIL.Image
-from paddlenlp.transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
 
 from ppdiffusers import (
     AutoencoderKL,
@@ -58,6 +57,7 @@ from ppdiffusers.pipelines.stable_diffusion.safety_checker import (
     StableDiffusionSafetyChecker,
 )
 from ppdiffusers.schedulers import KarrasDiffusionSchedulers
+from ppdiffusers.transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
 from ppdiffusers.utils import PIL_INTERPOLATION, deprecate, logging, randn_tensor
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
@@ -536,39 +536,39 @@ class CommonMixIn:
     def change_scheduler(self, scheduler_type="ddim"):
         scheduler_type = scheduler_type.lower()
         if scheduler_type == "pndm":
-            scheduler = PNDMScheduler.from_config(self.orginal_scheduler_config, skip_prk_steps=True)
+            scheduler = PNDMScheduler.from_config(self.original_scheduler_config, skip_prk_steps=True)
         elif scheduler_type == "lms":
-            scheduler = LMSDiscreteScheduler.from_config(self.orginal_scheduler_config)
+            scheduler = LMSDiscreteScheduler.from_config(self.original_scheduler_config)
         elif scheduler_type == "heun":
-            scheduler = HeunDiscreteScheduler.from_config(self.orginal_scheduler_config)
+            scheduler = HeunDiscreteScheduler.from_config(self.original_scheduler_config)
         elif scheduler_type == "euler":
-            scheduler = EulerDiscreteScheduler.from_config(self.orginal_scheduler_config)
+            scheduler = EulerDiscreteScheduler.from_config(self.original_scheduler_config)
         elif scheduler_type == "euler-ancestral":
-            scheduler = EulerAncestralDiscreteScheduler.from_config(self.orginal_scheduler_config)
+            scheduler = EulerAncestralDiscreteScheduler.from_config(self.original_scheduler_config)
         elif scheduler_type == "dpm-multi":
-            scheduler = DPMSolverMultistepScheduler.from_config(self.orginal_scheduler_config)
+            scheduler = DPMSolverMultistepScheduler.from_config(self.original_scheduler_config)
         elif scheduler_type == "dpm-single":
-            scheduler = DPMSolverSinglestepScheduler.from_config(self.orginal_scheduler_config)
+            scheduler = DPMSolverSinglestepScheduler.from_config(self.original_scheduler_config)
         elif scheduler_type == "kdpm2-ancestral":
-            scheduler = KDPM2AncestralDiscreteScheduler.from_config(self.orginal_scheduler_config)
+            scheduler = KDPM2AncestralDiscreteScheduler.from_config(self.original_scheduler_config)
         elif scheduler_type == "kdpm2":
-            scheduler = KDPM2DiscreteScheduler.from_config(self.orginal_scheduler_config)
+            scheduler = KDPM2DiscreteScheduler.from_config(self.original_scheduler_config)
         elif scheduler_type == "unipc-multi":
-            scheduler = UniPCMultistepScheduler.from_config(self.orginal_scheduler_config)
+            scheduler = UniPCMultistepScheduler.from_config(self.original_scheduler_config)
         elif scheduler_type == "ddim":
             scheduler = DDIMScheduler.from_config(
-                self.orginal_scheduler_config,
+                self.original_scheduler_config,
                 steps_offset=1,
                 clip_sample=False,
                 set_alpha_to_one=False,
             )
         elif scheduler_type == "ddpm":
             scheduler = DDPMScheduler.from_config(
-                self.orginal_scheduler_config,
+                self.original_scheduler_config,
             )
         elif scheduler_type == "deis-multi":
             scheduler = DEISMultistepScheduler.from_config(
-                self.orginal_scheduler_config,
+                self.original_scheduler_config,
             )
         else:
             raise ValueError(
@@ -1275,7 +1275,7 @@ class StableDiffusionMegaPipeline(
             "kdpm2-ancestral",
             "kdpm2",
         ]
-        self.orginal_scheduler_config = self.scheduler.config
+        self.original_scheduler_config = self.scheduler.config
 
     @paddle.no_grad()
     def do_unet(
@@ -2609,7 +2609,7 @@ class StableDiffusionMegaPipeline(
             raise ValueError(f"`prompt` has to be of type `str` or `list` but is {type(prompt)}")
 
         if hr_scale < 0:
-            raise ValueError("hr_scale shoule be greater that 0, but received {hr_scale}")
+            raise ValueError("hr_scale shoule be greater that 0, but acceived {hr_scale}")
 
         if hr_resize_height % 8 != 0 or hr_resize_width % 8 != 0:
             raise ValueError(
@@ -2617,7 +2617,7 @@ class StableDiffusionMegaPipeline(
             )
 
         if denoising_strength > 1 or denoising_strength < 0:
-            raise ValueError(f"denoising_strength should be set between 0 and 1., but received {denoising_strength}")
+            raise ValueError(f"denoising_strength should be set between 0 and 1., but acceived {denoising_strength}")
 
         if negative_prompt is not None and negative_prompt_embeds is not None:
             raise ValueError(
@@ -2627,7 +2627,7 @@ class StableDiffusionMegaPipeline(
 
         if latent_scale_mode not in ["nearest", "bilinear", "bicubic", "area"]:
             raise ValueError(
-                f"Only such interpolate method supported for latent_scale_mode in [nearest, bilinear, bicubic, area]. but received {latent_scale_mode}."
+                f"Only such interpolate method supported for latent_scale_mode in [nearest, bilinear, bicubic, area]. but acceived {latent_scale_mode}."
             )
 
         if prompt_embeds is not None and negative_prompt_embeds is not None:

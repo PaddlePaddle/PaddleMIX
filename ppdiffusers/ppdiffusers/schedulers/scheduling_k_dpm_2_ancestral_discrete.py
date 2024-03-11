@@ -1,5 +1,4 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
-# Copyright 2022 Katherine Crowson, The HuggingFace Team and hlky. All rights reserved.
+# Copyright 2023 Katherine Crowson, The HuggingFace Team and hlky. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,7 +20,7 @@ import numpy as np
 import paddle
 
 from ..configuration_utils import ConfigMixin, register_to_config
-from ..utils import randn_tensor
+from ..utils.paddle_utils import randn_tensor
 from .scheduling_utils import KarrasDiffusionSchedulers, SchedulerMixin, SchedulerOutput
 
 
@@ -72,36 +71,38 @@ def betas_for_alpha_bar(
 
 class KDPM2AncestralDiscreteScheduler(SchedulerMixin, ConfigMixin):
     """
-    Scheduler created by @crowsonkb in [k_diffusion](https://github.com/crowsonkb/k-diffusion), see:
-    https://github.com/crowsonkb/k-diffusion/blob/5b3af030dd83e0297272d861c19477735d0317ec/k_diffusion/sampling.py#L188
+    KDPM2DiscreteScheduler with ancestral sampling is inspired by the DPMSolver2 and Algorithm 2 from the [Elucidating
+    the Design Space of Diffusion-Based Generative Models](https://huggingface.co/papers/2206.00364) paper.
 
-    Scheduler inspired by DPM-Solver-2 and Algorthim 2 from Karras et al. (2022).
-
-    [`~ConfigMixin`] takes care of storing all config attributes that are passed in the scheduler's `__init__`
-    function, such as `num_train_timesteps`. They can be accessed via `scheduler.config.num_train_timesteps`.
-    [`SchedulerMixin`] provides general loading and saving functionality via the [`SchedulerMixin.save_pretrained`] and
-    [`~SchedulerMixin.from_pretrained`] functions.
+    This model inherits from [`SchedulerMixin`] and [`ConfigMixin`]. Check the superclass documentation for the generic
+    methods the library implements for all schedulers such as loading and saving.
 
     Args:
-        num_train_timesteps (`int`): number of diffusion steps used to train the model. beta_start (`float`): the
-        starting `beta` value of inference. beta_end (`float`): the final `beta` value. beta_schedule (`str`):
-            the beta schedule, a mapping from a beta range to a sequence of betas for stepping the model. Choose from
+        num_train_timesteps (`int`, defaults to 1000):
+            The number of diffusion steps to train the model.
+        beta_start (`float`, defaults to 0.00085):
+            The starting `beta` value of inference.
+        beta_end (`float`, defaults to 0.012):
+            The final `beta` value.
+        beta_schedule (`str`, defaults to `"linear"`):
+            The beta schedule, a mapping from a beta range to a sequence of betas for stepping the model. Choose from
             `linear` or `scaled_linear`.
-        trained_betas (`np.ndarray`, optional):
-            option to pass an array of betas directly to the constructor to bypass `beta_start`, `beta_end` etc.
-            options to clip the variance used when adding noise to the denoised sample. Choose from `fixed_small`,
-            `fixed_small_log`, `fixed_large`, `fixed_large_log`, `learned` or `learned_range`.
-        prediction_type (`str`, default `epsilon`, optional):
-            prediction type of the scheduler function, one of `epsilon` (predicting the noise of the diffusion
-            process), `sample` (directly predicting the noisy sample`) or `v_prediction` (see section 2.4
-            https://imagen.research.google/video/paper.pdf)
-        timestep_spacing (`str`, default `"linspace"`):
-            The way the timesteps should be scaled. Refer to Table 2. of [Common Diffusion Noise Schedules and Sample
-            Steps are Flawed](https://arxiv.org/abs/2305.08891) for more information.
-        steps_offset (`int`, default `0`):
-            an offset added to the inference steps. You can use a combination of `offset=1` and
-            `set_alpha_to_one=False`, to make the last step use step 0 for the previous alpha product, as done in
-            stable diffusion.
+        trained_betas (`np.ndarray`, *optional*):
+            Pass an array of betas directly to the constructor to bypass `beta_start` and `beta_end`.
+        use_karras_sigmas (`bool`, *optional*, defaults to `False`):
+            Whether to use Karras sigmas for step sizes in the noise schedule during the sampling process. If `True`,
+            the sigmas are determined according to a sequence of noise levels {σi}.
+        prediction_type (`str`, defaults to `epsilon`, *optional*):
+            Prediction type of the scheduler function; can be `epsilon` (predicts the noise of the diffusion process),
+            `sample` (directly predicts the noisy sample`) or `v_prediction` (see section 2.4 of [Imagen
+            Video](https://imagen.research.google/video/paper.pdf) paper).
+        timestep_spacing (`str`, defaults to `"linspace"`):
+            The way the timesteps should be scaled. Refer to Table 2 of the [Common Diffusion Noise Schedules and
+            Sample Steps are Flawed](https://huggingface.co/papers/2305.08891) for more information.
+        steps_offset (`int`, defaults to 0):
+            An offset added to the inference steps. You can use a combination of `offset=1` and
+            `set_alpha_to_one=False` to make the last step use step 0 for the previous alpha product like in Stable
+            Diffusion.
     """
 
     _compatibles = [e.name for e in KarrasDiffusionSchedulers]
@@ -115,6 +116,7 @@ class KDPM2AncestralDiscreteScheduler(SchedulerMixin, ConfigMixin):
         beta_end: float = 0.012,
         beta_schedule: str = "linear",
         trained_betas: Optional[Union[np.ndarray, List[float]]] = None,
+        use_karras_sigmas: Optional[bool] = False,
         prediction_type: str = "epsilon",
         timestep_spacing: str = "linspace",
         steps_offset: int = 0,
@@ -139,6 +141,7 @@ class KDPM2AncestralDiscreteScheduler(SchedulerMixin, ConfigMixin):
 
         #  set all values
         self.set_timesteps(num_train_timesteps, num_train_timesteps)
+        self._step_index = None
 
     # Copied from ppdiffusers.schedulers.scheduling_heun_discrete.HeunDiscreteScheduler.index_for_timestep
     def index_for_timestep(self, timestep, schedule_timesteps=None):
@@ -167,25 +170,39 @@ class KDPM2AncestralDiscreteScheduler(SchedulerMixin, ConfigMixin):
 
         return (self.sigmas.max() ** 2 + 1) ** 0.5
 
+    @property
+    def step_index(self):
+        """
+        The index counter for current timestep. It will increae 1 after each scheduler step.
+        """
+        return self._step_index
+
     def scale_model_input(
         self,
         sample: paddle.Tensor,
         timestep: Union[float, paddle.Tensor],
     ) -> paddle.Tensor:
         """
-        Args:
         Ensures interchangeability with schedulers that need to scale the denoising model input depending on the
         current timestep.
-            sample (`paddle.Tensor`): input sample timestep (`int`, optional): current timestep
+
+        Args:
+            sample (`paddle.Tensor`):
+                The input sample.
+            timestep (`int`, *optional*):
+                The current timestep in the diffusion chain.
+
         Returns:
-            `paddle.Tensor`: scaled input sample
+            `paddle.Tensor`:
+                A scaled input sample.
         """
-        step_index = self.index_for_timestep(timestep)
+        if self.step_index is None:
+            self._init_step_index(timestep)
 
         if self.state_in_first_order:
-            sigma = self.sigmas[step_index]
+            sigma = self.sigmas[self.step_index]
         else:
-            sigma = self.sigmas_interpol[step_index - 1]
+            sigma = self.sigmas_interpol[self.step_index - 1]
 
         sample = sample / ((sigma**2 + 1) ** 0.5)
         return sample
@@ -196,11 +213,11 @@ class KDPM2AncestralDiscreteScheduler(SchedulerMixin, ConfigMixin):
         num_train_timesteps: Optional[int] = None,
     ):
         """
-        Sets the timesteps used for the diffusion chain. Supporting function to be run before inference.
+        Sets the discrete timesteps used for the diffusion chain (to be run before inference).
 
         Args:
             num_inference_steps (`int`):
-                the number of diffusion steps used when generating samples with a pre-trained model.
+                The number of diffusion steps used when generating samples with a pre-trained model.
         """
         self.num_inference_steps = num_inference_steps
 
@@ -208,18 +225,18 @@ class KDPM2AncestralDiscreteScheduler(SchedulerMixin, ConfigMixin):
 
         # "linspace", "leading", "trailing" corresponds to annotation of Table 2. of https://arxiv.org/abs/2305.08891
         if self.config.timestep_spacing == "linspace":
-            timesteps = np.linspace(0, num_train_timesteps - 1, num_inference_steps, dtype=float)[::-1].copy()
+            timesteps = np.linspace(0, num_train_timesteps - 1, num_inference_steps, dtype=np.float32)[::-1].copy()
         elif self.config.timestep_spacing == "leading":
             step_ratio = num_train_timesteps // self.num_inference_steps
             # creates integer timesteps by multiplying by ratio
             # casting to int to avoid issues when num_inference_step is power of 3
-            timesteps = (np.arange(0, num_inference_steps) * step_ratio).round()[::-1].copy().astype(float)
+            timesteps = (np.arange(0, num_inference_steps) * step_ratio).round()[::-1].copy().astype(np.float32)
             timesteps += self.config.steps_offset
         elif self.config.timestep_spacing == "trailing":
             step_ratio = num_train_timesteps / self.num_inference_steps
             # creates integer timesteps by multiplying by ratio
             # casting to int to avoid issues when num_inference_step is power of 3
-            timesteps = (np.arange(num_train_timesteps, 0, -step_ratio)).round().copy().astype(float)
+            timesteps = (np.arange(num_train_timesteps, 0, -step_ratio)).round().copy().astype(np.float32)
             timesteps -= 1
         else:
             raise ValueError(
@@ -227,9 +244,15 @@ class KDPM2AncestralDiscreteScheduler(SchedulerMixin, ConfigMixin):
             )
 
         sigmas = np.array(((1 - self.alphas_cumprod) / self.alphas_cumprod) ** 0.5)
-        self.log_sigmas = paddle.to_tensor(np.log(sigmas), dtype=paddle.float32)
+        log_sigmas = np.log(sigmas)
 
         sigmas = np.interp(timesteps, np.arange(0, len(sigmas)), sigmas)
+
+        if self.config.use_karras_sigmas:
+            sigmas = self._convert_to_karras(in_sigmas=sigmas, num_inference_steps=num_inference_steps)
+            timesteps = np.array([self._sigma_to_t(sigma, log_sigmas) for sigma in sigmas]).round()
+
+        self.log_sigmas = paddle.to_tensor(log_sigmas)
         sigmas = np.concatenate([sigmas, [0.0]]).astype(np.float32)
         sigmas = paddle.to_tensor(sigmas)
 
@@ -253,7 +276,13 @@ class KDPM2AncestralDiscreteScheduler(SchedulerMixin, ConfigMixin):
         self.sigmas_down = paddle.concat([sigmas_down[:1], sigmas_down[1:].repeat_interleave(2), sigmas_down[-1:]])
 
         timesteps = paddle.to_tensor(timesteps, dtype=paddle.float32)
-        timesteps_interpol = self.sigma_to_t(sigmas_interpol).cast(timesteps.dtype)
+        sigmas_interpol = sigmas_interpol.cpu().numpy()
+        log_sigmas = self.log_sigmas.cpu().numpy()
+        timesteps_interpol = np.array(
+            [self._sigma_to_t(sigma_interpol, log_sigmas) for sigma_interpol in sigmas_interpol]
+        )
+
+        timesteps_interpol = paddle.to_tensor(timesteps_interpol, dtype=timesteps.dtype)
         interleaved_timesteps = paddle.stack((timesteps_interpol[:-2, None], timesteps[1:, None]), axis=-1).flatten()
 
         self.timesteps = paddle.concat([timesteps[:1], interleaved_timesteps])
@@ -266,32 +295,80 @@ class KDPM2AncestralDiscreteScheduler(SchedulerMixin, ConfigMixin):
 
         self._step_index = None
 
-    def sigma_to_t(self, sigma):
+    # Copied from ppdiffusers.schedulers.scheduling_euler_discrete.EulerDiscreteScheduler._sigma_to_t
+    def _sigma_to_t(self, sigma, log_sigmas):
+        if isinstance(sigma, paddle.Tensor):
+            sigma = sigma.cpu().numpy()
+        if isinstance(log_sigmas, paddle.Tensor):
+            log_sigmas = log_sigmas.cpu().numpy()
+
         # get log sigma
-        log_sigma = sigma.log()
+        log_sigma = np.log(np.maximum(sigma, 1e-10))
 
         # get distribution
-        dists = log_sigma - self.log_sigmas[:, None]
+        dists = log_sigma - log_sigmas[:, np.newaxis]
 
         # get sigmas range
-        low_idx = (dists >= 0).cast("int64").cumsum(axis=0).argmax(axis=0).clip(max=self.log_sigmas.shape[0] - 2)
+        low_idx = np.cumsum((dists >= 0), axis=0).argmax(axis=0).clip(max=log_sigmas.shape[0] - 2)
         high_idx = low_idx + 1
 
-        low = self.log_sigmas[low_idx]
-        high = self.log_sigmas[high_idx]
+        low = log_sigmas[low_idx]
+        high = log_sigmas[high_idx]
 
         # interpolate sigmas
         w = (low - log_sigma) / (low - high)
-        w = w.clip(0, 1)
+        w = np.clip(w, 0, 1)
 
         # transform interpolation to time range
         t = (1 - w) * low_idx + w * high_idx
         t = t.reshape(sigma.shape)
         return t
 
+    # Copied from ppdiffusers.schedulers.scheduling_euler_discrete.EulerDiscreteScheduler._convert_to_karras
+    def _convert_to_karras(self, in_sigmas: paddle.Tensor, num_inference_steps) -> paddle.Tensor:
+        """Constructs the noise schedule of Karras et al. (2022)."""
+
+        # Hack to make sure that other schedulers which copy this function don't break
+        # TODO: Add this logic to the other schedulers
+        if hasattr(self.config, "sigma_min"):
+            sigma_min = self.config.sigma_min
+        else:
+            sigma_min = None
+
+        if hasattr(self.config, "sigma_max"):
+            sigma_max = self.config.sigma_max
+        else:
+            sigma_max = None
+
+        sigma_min = sigma_min if sigma_min is not None else in_sigmas[-1].item()
+        sigma_max = sigma_max if sigma_max is not None else in_sigmas[0].item()
+
+        rho = 7.0  # 7.0 is the value used in the paper
+        ramp = np.linspace(0, 1, num_inference_steps)
+        min_inv_rho = sigma_min ** (1 / rho)
+        max_inv_rho = sigma_max ** (1 / rho)
+        sigmas = (max_inv_rho + ramp * (min_inv_rho - max_inv_rho)) ** rho
+        return sigmas
+
     @property
     def state_in_first_order(self):
         return self.sample is None
+
+    # Copied from ppdiffusers.schedulers.scheduling_euler_discrete.EulerDiscreteScheduler._init_step_index
+    def _init_step_index(self, timestep):
+
+        index_candidates = (self.timesteps == timestep).nonzero()
+
+        # The sigma index that is taken for the **very** first `step`
+        # is always the second index (or the last index if there is only 1)
+        # This way we can ensure we don't accidentally skip a sigma in
+        # case we start in the middle of the denoising schedule (e.g. for image-to-image)
+        if len(index_candidates) > 1:
+            step_index = index_candidates[1]
+        else:
+            step_index = index_candidates[0]
+
+        self._step_index = step_index.item()
 
     def step(
         self,
@@ -302,35 +379,44 @@ class KDPM2AncestralDiscreteScheduler(SchedulerMixin, ConfigMixin):
         return_dict: bool = True,
     ) -> Union[SchedulerOutput, Tuple]:
         """
-        Args:
-        Predict the sample at the previous timestep by reversing the SDE. Core function to propagate the diffusion
+        Predict the sample from the previous timestep by reversing the SDE. This function propagates the diffusion
         process from the learned model outputs (most often the predicted noise).
-            model_output (`paddle.Tensor` or `np.ndarray`): direct output from learned diffusion model. timestep
-            (`int`): current discrete timestep in the diffusion chain. sample (`paddle.Tensor` or `np.ndarray`):
-                current instance of sample being created by diffusion process.
-            return_dict (`bool`): option for returning tuple rather than SchedulerOutput class
+
+        Args:
+            model_output (`paddle.Tensor`):
+                The direct output from learned diffusion model.
+            timestep (`float`):
+                The current discrete timestep in the diffusion chain.
+            sample (`paddle.Tensor`):
+                A current instance of a sample created by the diffusion process.
+            generator (`paddle.Generator`, *optional*):
+                A random number generator.
+            return_dict (`bool`):
+                Whether or not to return a [`~schedulers.scheduling_utils.SchedulerOutput`] or tuple.
+
         Returns:
             [`~schedulers.scheduling_utils.SchedulerOutput`] or `tuple`:
-            [`~schedulers.scheduling_utils.SchedulerOutput`] if `return_dict` is True, otherwise a `tuple`. When
-            returning a tuple, the first element is the sample tensor.
+                If return_dict is `True`, [`~schedulers.scheduling_ddim.SchedulerOutput`] is returned, otherwise a
+                tuple is returned where the first element is the sample tensor.
         """
-        step_index = self.index_for_timestep(timestep)
+        if self.step_index is None:
+            self._init_step_index(timestep)
 
         # advance index counter by 1
-        timestep_int = timestep.item() if paddle.is_tensor(timestep) else timestep
+        timestep_int = timestep.cpu().item() if paddle.is_tensor(timestep) else timestep
         self._index_counter[timestep_int] += 1
 
         if self.state_in_first_order:
-            sigma = self.sigmas[step_index]
-            sigma_interpol = self.sigmas_interpol[step_index]
-            sigma_up = self.sigmas_up[step_index]
-            sigma_down = self.sigmas_down[step_index - 1]
+            sigma = self.sigmas[self.step_index]
+            sigma_interpol = self.sigmas_interpol[self.step_index]
+            sigma_up = self.sigmas_up[self.step_index]
+            sigma_down = self.sigmas_down[self.step_index - 1]
         else:
             # 2nd order / KPDM2's method
-            sigma = self.sigmas[step_index - 1]
-            sigma_interpol = self.sigmas_interpol[step_index - 1]
-            sigma_up = self.sigmas_up[step_index - 1]
-            sigma_down = self.sigmas_down[step_index - 1]
+            sigma = self.sigmas[self.step_index - 1]
+            sigma_interpol = self.sigmas_interpol[self.step_index - 1]
+            sigma_up = self.sigmas_up[self.step_index - 1]
+            sigma_down = self.sigmas_down[self.step_index - 1]
 
         # currently only gamma=0 is supported. This usually works best anyways.
         # We can support gamma in the future but then need to scale the timestep before
@@ -379,6 +465,9 @@ class KDPM2AncestralDiscreteScheduler(SchedulerMixin, ConfigMixin):
             prev_sample = sample + derivative * dt
             prev_sample = prev_sample + noise * sigma_up
 
+        # upon completion increase step index by one
+        self._step_index += 1
+
         if not return_dict:
             return (prev_sample,)
 
@@ -395,9 +484,9 @@ class KDPM2AncestralDiscreteScheduler(SchedulerMixin, ConfigMixin):
         if paddle.is_tensor(timesteps) and timesteps.ndim == 0:
             timesteps = timesteps.unsqueeze(0)
         # Make sure sigmas and timesteps have the same dtype as original_samples
-        sigmas = self.sigmas.cast(original_samples.dtype)
-
+        sigmas = self.sigmas.cast(dtype=original_samples.dtype)
         schedule_timesteps = self.timesteps
+
         step_indices = [self.index_for_timestep(t, schedule_timesteps) for t in timesteps]
 
         sigma = sigmas[step_indices].flatten()

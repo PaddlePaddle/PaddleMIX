@@ -16,7 +16,6 @@ from typing import List, Optional, Union
 
 import paddle
 from packaging import version
-from paddlenlp.transformers import CLIPTextModel, CLIPTokenizer
 from PIL import Image
 
 from ppdiffusers import AutoencoderKL, UNet2DConditionModel
@@ -31,6 +30,7 @@ from ppdiffusers.schedulers import (
     EulerAncestralDiscreteScheduler,
     KarrasDiffusionSchedulers,
 )
+from ppdiffusers.transformers import CLIPTextModel, CLIPTokenizer
 from ppdiffusers.utils import (
     deprecate,
     logging,
@@ -167,7 +167,7 @@ class FabricPipeline(DiffusionPipeline):
         super().__init__()
 
         is_unet_version_less_0_9_0 = hasattr(unet.config, "_diffusers_version") and version.parse(
-            version.parse(unet.config._diffusers_version).base_version
+            version.parse(unet.config._ppdiffusers_version).base_version
         ) < version.parse("0.9.0.dev0")
         is_unet_sample_size_less_64 = hasattr(unet.config, "sample_size") and unet.config.sample_size < 64
         if is_unet_version_less_0_9_0 and is_unet_sample_size_less_64:

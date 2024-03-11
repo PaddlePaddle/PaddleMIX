@@ -36,7 +36,6 @@ from paddle.io import BatchSampler, DataLoader, Dataset, DistributedBatchSampler
 from paddle.optimizer import AdamW
 from paddle.vision import BaseTransform, transforms
 from paddlenlp.trainer import set_seed
-from paddlenlp.transformers import AutoTokenizer, PretrainedConfig
 from paddlenlp.utils.log import logger
 from PIL import Image
 from tqdm.auto import tqdm
@@ -48,12 +47,13 @@ from ppdiffusers import (
     UNet2DConditionModel,
     is_ppxformers_available,
 )
-from ppdiffusers.models.modeling_utils import freeze_params, unwrap_model
 from ppdiffusers.optimization import get_scheduler
+from ppdiffusers.training_utils import freeze_params, unwrap_model
+from ppdiffusers.transformers import AutoTokenizer, PretrainedConfig
 from ppdiffusers.utils import check_min_version
 
 # Will error if the minimal version of ppdiffusers is not installed. Remove at your own risks.
-check_min_version("0.16.1")
+check_min_version("0.24.0")
 
 
 def url_or_path_join(*path_list):
@@ -78,7 +78,7 @@ def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: st
     except Exception:
         model_class = "LDMBertModel"
     if model_class == "CLIPTextModel":
-        from paddlenlp.transformers import CLIPTextModel
+        from ppdiffusers.transformers import CLIPTextModel
 
         return CLIPTextModel
     elif model_class == "RobertaSeriesModelWithTransformation":
@@ -88,7 +88,7 @@ def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: st
 
         return RobertaSeriesModelWithTransformation
     elif model_class == "BertModel":
-        from paddlenlp.transformers import BertModel
+        from ppdiffusers.transformers import BertModel
 
         return BertModel
     elif model_class == "LDMBertModel":
@@ -99,20 +99,6 @@ def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: st
         return LDMBertModel
     else:
         raise ValueError(f"{model_class} is not supported.")
-
-
-def set_recompute(model, value=False):
-    def fn(layer):
-        # ldmbert
-        if hasattr(layer, "enable_recompute"):
-            layer.enable_recompute = value
-            print("Set", layer.__class__, "recompute", layer.enable_recompute)
-        # unet
-        if hasattr(layer, "gradient_checkpointing"):
-            layer.gradient_checkpointing = value
-            print("Set", layer.__class__, "recompute", layer.gradient_checkpointing)
-
-    model.apply(fn)
 
 
 def get_report_to(args):
@@ -653,7 +639,8 @@ def main():
     if args.gradient_checkpointing:
         unet.enable_gradient_checkpointing()
         if args.train_text_encoder:
-            set_recompute(text_encoder, True)
+            if hasattr(text_encoder, "gradient_checkpointing_enable"):
+                text_encoder.gradient_checkpointing_enable()
 
     if args.enable_xformers_memory_efficient_attention and is_ppxformers_available():
         try:

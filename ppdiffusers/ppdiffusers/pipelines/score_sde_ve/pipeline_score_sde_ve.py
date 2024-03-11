@@ -1,4 +1,3 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,7 +18,7 @@ import paddle
 
 from ...models import UNet2DModel
 from ...schedulers import ScoreSdeVeScheduler
-from ...utils import randn_tensor
+from ...utils.paddle_utils import randn_tensor
 from ..pipeline_utils import DiffusionPipeline, ImagePipelineOutput
 
 
@@ -36,6 +35,7 @@ class ScoreSdeVePipeline(DiffusionPipeline):
         scheduler ([`ScoreSdeVeScheduler`]):
             A `ScoreSdeVeScheduler` to be used in combination with `unet` to denoise the encoded image.
     """
+
     unet: UNet2DModel
     scheduler: ScoreSdeVeScheduler
 
@@ -60,8 +60,7 @@ class ScoreSdeVePipeline(DiffusionPipeline):
             batch_size (`int`, *optional*, defaults to 1):
                 The number of images to generate.
             generator (`paddle.Generator`, `optional`):
-                A [`paddle.Generator`](https://pytorch.org/docs/stable/generated/paddle.Generator.html) to make
-                generation deterministic.
+                A [`paddle.Generator`] to make generation deterministic.
             output_type (`str`, `optional`, defaults to `"pil"`):
                 The output format of the generated image. Choose between `PIL.Image` or `np.array`.
             return_dict (`bool`, *optional*, defaults to `True`):
@@ -84,7 +83,11 @@ class ScoreSdeVePipeline(DiffusionPipeline):
         self.scheduler.set_sigmas(num_inference_steps)
 
         for i, t in enumerate(self.progress_bar(self.scheduler.timesteps)):
-            sigma_t = self.scheduler.sigmas[i] * paddle.ones((shape[0],))
+            sigma_t = self.scheduler.sigmas[i] * paddle.ones(
+                [
+                    shape[0],
+                ]
+            )
 
             # correction step
             for _ in range(self.scheduler.config.correct_steps):
@@ -98,7 +101,7 @@ class ScoreSdeVePipeline(DiffusionPipeline):
             sample, sample_mean = output.prev_sample, output.prev_sample_mean
 
         sample = sample_mean.clip(0, 1)
-        sample = sample.transpose([0, 2, 3, 1]).numpy()
+        sample = sample.transpose([0, 2, 3, 1]).cast("float32").cpu().numpy()
         if output_type == "pil":
             sample = self.numpy_to_pil(sample)
 

@@ -1,4 +1,3 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,22 +11,29 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 from copy import deepcopy
 from typing import Callable, List, Optional, Union
 
 import numpy as np
 import paddle
-import PIL
-from paddlenlp.transformers import XLMRobertaTokenizer
+import paddle.nn.functional as F
+import PIL.Image
+from packaging import version
 from PIL import Image
 
+from ppdiffusers.transformers import XLMRobertaTokenizer
+
+from ... import __version__
 from ...models import UNet2DConditionModel, VQModel
 from ...schedulers import DDIMScheduler
-from ...utils import logging, randn_tensor, replace_example_docstring
+from ...utils import logging, replace_example_docstring
+from ...utils.paddle_utils import randn_tensor
 from ..pipeline_utils import DiffusionPipeline, ImagePipelineOutput
 from .text_encoder import MultilingualCLIP
 
-logger = logging.get_logger(__name__)
+logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
+
 EXAMPLE_DOC_STRING = """
     Examples:
         ```py
@@ -48,7 +54,7 @@ EXAMPLE_DOC_STRING = """
         ... )
 
         >>> init_image = load_image(
-        ...     "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main"
+        ...     "https://hf-mirror.com/datasets/hf-internal-testing/diffusers-images/resolve/main"
         ...     "/kandinsky/cat.png"
         ... )
 
@@ -91,23 +97,23 @@ def prepare_mask(masks):
                 if old_mask[0][i][j] == 1:
                     continue
                 if i != 0:
-                    mask[:, (i - 1), (j)] = 0
+                    mask[:, i - 1, j] = 0
                 if j != 0:
-                    mask[:, (i), (j - 1)] = 0
+                    mask[:, i, j - 1] = 0
                 if i != 0 and j != 0:
-                    mask[:, (i - 1), (j - 1)] = 0
+                    mask[:, i - 1, j - 1] = 0
                 if i != mask.shape[1] - 1:
-                    mask[:, (i + 1), (j)] = 0
+                    mask[:, i + 1, j] = 0
                 if j != mask.shape[2] - 1:
-                    mask[:, (i), (j + 1)] = 0
+                    mask[:, i, j + 1] = 0
                 if i != mask.shape[1] - 1 and j != mask.shape[2] - 1:
-                    mask[:, (i + 1), (j + 1)] = 0
+                    mask[:, i + 1, j + 1] = 0
         prepared_masks.append(mask)
-    return paddle.stack(x=prepared_masks, axis=0)
+    return paddle.stack(prepared_masks, axis=0)
 
 
 def prepare_mask_and_masked_image(image, mask, height, width):
-    """
+    r"""
     Prepares a pair (mask, image) to be consumed by the Kandinsky inpaint pipeline. This means that those inputs will
     be converted to ``paddle.Tensor`` with shapes ``batch x channels x height x width`` where ``channels`` is ``3`` for
     the ``image`` and ``1`` for the ``mask``.
@@ -138,10 +144,13 @@ def prepare_mask_and_masked_image(image, mask, height, width):
         tuple[paddle.Tensor]: The pair (mask, image) as ``paddle.Tensor`` with 4
             dimensions: ``batch x channels x height x width``.
     """
+
     if image is None:
         raise ValueError("`image` input cannot be undefined.")
+
     if mask is None:
         raise ValueError("`mask_image` input cannot be undefined.")
+
     if isinstance(image, paddle.Tensor):
         if not isinstance(mask, paddle.Tensor):
             raise TypeError(f"`image` is a paddle.Tensor but `mask` (type: {type(mask)} is not")
@@ -149,19 +158,22 @@ def prepare_mask_and_masked_image(image, mask, height, width):
         # Batch single image
         if image.ndim == 3:
             assert image.shape[0] == 3, "Image outside a batch should be of shape (3, H, W)"
-            image = image.unsqueeze(axis=0)
+            image = image.unsqueeze(0)
 
         # Batch and add channel dim for single mask
         if mask.ndim == 2:
-            mask = mask.unsqueeze(axis=0).unsqueeze(axis=0)
+            mask = mask.unsqueeze(0).unsqueeze(0)
+
         # Batch single mask or add channel dim
         if mask.ndim == 3:
             # Single batched mask, no channel dim or single mask not batched but channel dim
             if mask.shape[0] == 1:
-                mask = mask.unsqueeze(axis=0)
+                mask = mask.unsqueeze(0)
+
             # Batched masks no channel dim
             else:
-                mask = mask.unsqueeze(axis=1)
+                mask = mask.unsqueeze(1)
+
         assert image.ndim == 4 and mask.ndim == 4, "Image and Mask must have 4 dimensions"
         assert image.shape[-2:] == mask.shape[-2:], "Image and Mask must have the same spatial dimensions"
         assert image.shape[0] == mask.shape[0], "Image and Mask must have the same batch size"
@@ -177,37 +189,44 @@ def prepare_mask_and_masked_image(image, mask, height, width):
         # Binarize mask
         mask[mask < 0.5] = 0
         mask[mask >= 0.5] = 1
+
         # Image as float32
-        image = image.cast(dtype="float32")
+        image = image.cast(dtype=paddle.float32)
     elif isinstance(mask, paddle.Tensor):
         raise TypeError(f"`mask` is a paddle.Tensor but `image` (type: {type(image)} is not")
     else:
         # preprocess image
         if isinstance(image, (PIL.Image.Image, np.ndarray)):
             image = [image]
+
         if isinstance(image, list) and isinstance(image[0], PIL.Image.Image):
             # resize all images w.r.t passed height an width
             image = [i.resize((width, height), resample=Image.BICUBIC, reducing_gap=1) for i in image]
-            image = [np.array(i.convert("RGB"))[(None), :] for i in image]
+            image = [np.array(i.convert("RGB"))[None, :] for i in image]
             image = np.concatenate(image, axis=0)
         elif isinstance(image, list) and isinstance(image[0], np.ndarray):
-            image = np.concatenate([i[(None), :] for i in image], axis=0)
+            image = np.concatenate([i[None, :] for i in image], axis=0)
+
         image = image.transpose(0, 3, 1, 2)
-        image = paddle.to_tensor(data=image).cast(dtype="float32") / 127.5 - 1.0
+        image = paddle.to_tensor(image).cast(dtype=paddle.float32) / 127.5 - 1.0
 
         # preprocess mask
         if isinstance(mask, (PIL.Image.Image, np.ndarray)):
             mask = [mask]
+
         if isinstance(mask, list) and isinstance(mask[0], PIL.Image.Image):
             mask = [i.resize((width, height), resample=PIL.Image.LANCZOS) for i in mask]
-            mask = np.concatenate([np.array(m.convert("L"))[(None), (None), :] for m in mask], axis=0)
+            mask = np.concatenate([np.array(m.convert("L"))[None, None, :] for m in mask], axis=0)
             mask = mask.astype(np.float32) / 255.0
         elif isinstance(mask, list) and isinstance(mask[0], np.ndarray):
-            mask = np.concatenate([m[(None), (None), :] for m in mask], axis=0)
+            mask = np.concatenate([m[None, None, :] for m in mask], axis=0)
+
         mask[mask < 0.5] = 0
         mask[mask >= 0.5] = 1
-        mask = paddle.to_tensor(data=mask)
+        mask = paddle.to_tensor(mask)
+
     mask = 1 - mask
+
     return mask, image
 
 
@@ -231,6 +250,8 @@ class KandinskyInpaintPipeline(DiffusionPipeline):
             MoVQ image encoder and decoder
     """
 
+    model_cpu_offload_seq = "text_encoder->unet->movq"
+
     def __init__(
         self,
         text_encoder: MultilingualCLIP,
@@ -240,8 +261,13 @@ class KandinskyInpaintPipeline(DiffusionPipeline):
         scheduler: DDIMScheduler,
     ):
         super().__init__()
+
         self.register_modules(
-            text_encoder=text_encoder, movq=movq, tokenizer=tokenizer, unet=unet, scheduler=scheduler
+            text_encoder=text_encoder,
+            movq=movq,
+            tokenizer=tokenizer,
+            unet=unet,
+            scheduler=scheduler,
         )
         self.movq_scale_factor = 2 ** (len(self.movq.config.block_out_channels) - 1)
         self._warn_has_been_called = False
@@ -251,13 +277,22 @@ class KandinskyInpaintPipeline(DiffusionPipeline):
         if latents is None:
             latents = randn_tensor(shape, generator=generator, dtype=dtype)
         else:
-            if latents.shape != shape:
-                raise ValueError(f"Unexpected latents shape, got {latents.shape}, expected {shape}")
+            if latents.shape != list(shape):
+                raise ValueError(f"Unexpected latents shape, got {latents.shape}, expected {list(shape)}")
+            latents = latents.cast(dtype)
+
         latents = latents * scheduler.init_noise_sigma
         return latents
 
-    def _encode_prompt(self, prompt, num_images_per_prompt, do_classifier_free_guidance, negative_prompt=None):
+    def _encode_prompt(
+        self,
+        prompt,
+        num_images_per_prompt,
+        do_classifier_free_guidance,
+        negative_prompt=None,
+    ):
         batch_size = len(prompt) if isinstance(prompt, list) else 1
+        # get prompt text embeddings
         text_inputs = self.tokenizer(
             prompt,
             padding="max_length",
@@ -267,41 +302,50 @@ class KandinskyInpaintPipeline(DiffusionPipeline):
             add_special_tokens=True,
             return_tensors="pd",
         )
+
         text_input_ids = text_inputs.input_ids
         untruncated_ids = self.tokenizer(prompt, padding="longest", return_tensors="pd").input_ids
-        if (
-            untruncated_ids.shape[-1] >= text_input_ids.shape[-1]
-            and not paddle.equal_all(x=text_input_ids, y=untruncated_ids).item()
+
+        if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(
+            text_input_ids, untruncated_ids
         ):
             removed_text = self.tokenizer.batch_decode(untruncated_ids[:, self.tokenizer.model_max_length - 1 : -1])
             logger.warning(
-                f"The following part of your input was truncated because CLIP can only handle sequences up to {self.tokenizer.model_max_length} tokens: {removed_text}"
+                "The following part of your input was truncated because CLIP can only handle sequences up to"
+                f" {self.tokenizer.model_max_length} tokens: {removed_text}"
             )
+
+        text_input_ids = text_input_ids
         text_mask = text_inputs.attention_mask
+
         prompt_embeds, text_encoder_hidden_states = self.text_encoder(
             input_ids=text_input_ids, attention_mask=text_mask
         )
-        prompt_embeds = prompt_embeds.repeat_interleave(repeats=num_images_per_prompt, axis=0)
-        text_encoder_hidden_states = text_encoder_hidden_states.repeat_interleave(
-            repeats=num_images_per_prompt, axis=0
-        )
-        text_mask = text_mask.repeat_interleave(repeats=num_images_per_prompt, axis=0)
+
+        prompt_embeds = prompt_embeds.repeat_interleave(num_images_per_prompt, axis=0)
+        text_encoder_hidden_states = text_encoder_hidden_states.repeat_interleave(num_images_per_prompt, axis=0)
+        text_mask = text_mask.repeat_interleave(num_images_per_prompt, axis=0)
+
         if do_classifier_free_guidance:
             uncond_tokens: List[str]
             if negative_prompt is None:
                 uncond_tokens = [""] * batch_size
             elif type(prompt) is not type(negative_prompt):
                 raise TypeError(
-                    f"`negative_prompt` should be the same type to `prompt`, but got {type(negative_prompt)} != {type(prompt)}."
+                    f"`negative_prompt` should be the same type to `prompt`, but got {type(negative_prompt)} !="
+                    f" {type(prompt)}."
                 )
             elif isinstance(negative_prompt, str):
                 uncond_tokens = [negative_prompt]
             elif batch_size != len(negative_prompt):
                 raise ValueError(
-                    f"`negative_prompt`: {negative_prompt} has batch size {len(negative_prompt)}, but `prompt`: {prompt} has batch size {batch_size}. Please make sure that passed `negative_prompt` matches the batch size of `prompt`."
+                    f"`negative_prompt`: {negative_prompt} has batch size {len(negative_prompt)}, but `prompt`:"
+                    f" {prompt} has batch size {batch_size}. Please make sure that passed `negative_prompt` matches"
+                    " the batch size of `prompt`."
                 )
             else:
                 uncond_tokens = negative_prompt
+
             uncond_input = self.tokenizer(
                 uncond_tokens,
                 padding="max_length",
@@ -313,6 +357,7 @@ class KandinskyInpaintPipeline(DiffusionPipeline):
             )
             uncond_text_input_ids = uncond_input.input_ids
             uncond_text_mask = uncond_input.attention_mask
+
             negative_prompt_embeds, uncond_text_encoder_hidden_states = self.text_encoder(
                 input_ids=uncond_text_input_ids, attention_mask=uncond_text_mask
             )
@@ -320,27 +365,26 @@ class KandinskyInpaintPipeline(DiffusionPipeline):
             # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
 
             seq_len = negative_prompt_embeds.shape[1]
-            negative_prompt_embeds = negative_prompt_embeds.tile(repeat_times=[1, num_images_per_prompt])
+            negative_prompt_embeds = negative_prompt_embeds.tile([1, num_images_per_prompt])
             negative_prompt_embeds = negative_prompt_embeds.reshape([batch_size * num_images_per_prompt, seq_len])
+
             seq_len = uncond_text_encoder_hidden_states.shape[1]
-            uncond_text_encoder_hidden_states = uncond_text_encoder_hidden_states.tile(
-                repeat_times=[1, num_images_per_prompt, 1]
-            )
+            uncond_text_encoder_hidden_states = uncond_text_encoder_hidden_states.tile([1, num_images_per_prompt, 1])
             uncond_text_encoder_hidden_states = uncond_text_encoder_hidden_states.reshape(
                 [batch_size * num_images_per_prompt, seq_len, -1]
             )
-            uncond_text_mask = uncond_text_mask.repeat_interleave(repeats=num_images_per_prompt, axis=0)
+            uncond_text_mask = uncond_text_mask.repeat_interleave(num_images_per_prompt, axis=0)
 
             # done duplicates
 
             # For classifier free guidance, we need to do two forward passes.
             # Here we concatenate the unconditional and text embeddings into a single batch
             # to avoid doing two forward passes
-            prompt_embeds = paddle.concat(x=[negative_prompt_embeds, prompt_embeds])
-            text_encoder_hidden_states = paddle.concat(
-                x=[uncond_text_encoder_hidden_states, text_encoder_hidden_states]
-            )
-            text_mask = paddle.concat(x=[uncond_text_mask, text_mask])
+            prompt_embeds = paddle.concat([negative_prompt_embeds, prompt_embeds])
+            text_encoder_hidden_states = paddle.concat([uncond_text_encoder_hidden_states, text_encoder_hidden_states])
+
+            text_mask = paddle.concat([uncond_text_mask, text_mask])
+
         return prompt_embeds, text_encoder_hidden_states, text_mask
 
     @paddle.no_grad()
@@ -376,8 +420,8 @@ class KandinskyInpaintPipeline(DiffusionPipeline):
                 process.
             mask_image (`PIL.Image.Image`,`paddle.Tensor` or `np.ndarray`):
                 `Image`, or a tensor representing an image batch, to mask `image`. White pixels in the mask will be
-                repainted, while black pixels will be preserved. You can pass a paddle tensor as mask only if the
-                image you passed is a paddle tensor, and it should contain one color channel (L) instead of 3, so the
+                repainted, while black pixels will be preserved. You can pass a pytorch tensor as mask only if the
+                image you passed is a pytorch tensor, and it should contain one color channel (L) instead of 3, so the
                 expected shape would be either `(B, 1, H, W,)`, `(B, H, W)`, `(1, H, W)` or `(H, W)` If image is an PIL
                 image or numpy array, mask should also be a either PIL image or numpy array. If it is a PIL image, it
                 will be converted to a single channel (luminance) before use. If it is a nummpy array, the expected
@@ -405,15 +449,14 @@ class KandinskyInpaintPipeline(DiffusionPipeline):
             num_images_per_prompt (`int`, *optional*, defaults to 1):
                 The number of images to generate per prompt.
             generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
-                One or a list of paddle generator(s).
-                to make generation deterministic.
+                One or a list of [paddle generator(s)] to make generation deterministic.
             latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents, sampled from a Gaussian distribution, to be used as inputs for image
                 generation. Can be used to tweak the same generation with different prompts. If not provided, a latents
                 tensor will ge generated by sampling using the supplied random `generator`.
             output_type (`str`, *optional*, defaults to `"pil"`):
                 The output format of the generate image. Choose between: `"pil"` (`PIL.Image.Image`), `"np"`
-                (`np.array`) or `"pt"` (`paddle.Tensor`).
+                (`np.array`) or `"pd"` (`paddle.Tensor`).
             callback (`Callable`, *optional*):
                 A function that calls every `callback_steps` steps during inference. The function is called with the
                 following arguments: `callback(step: int, timestep: int, latents: paddle.Tensor)`.
@@ -428,50 +471,79 @@ class KandinskyInpaintPipeline(DiffusionPipeline):
         Returns:
             [`~pipelines.ImagePipelineOutput`] or `tuple`
         """
+        if not self._warn_has_been_called and version.parse(version.parse(__version__).base_version) < version.parse(
+            "0.23.0.dev0"
+        ):
+            logger.warn(
+                "Please note that the expected format of `mask_image` has recently been changed. "
+                "Before diffusers == 0.19.0, Kandinsky Inpainting pipelines repainted black pixels and preserved black pixels. "
+                "As of diffusers==0.19.0 this behavior has been inverted. Now white pixels are repainted and black pixels are preserved. "
+                "This way, Kandinsky's masking behavior is aligned with Stable Diffusion. "
+                "THIS means that you HAVE to invert the input mask to have the same behavior as before as explained in https://github.com/huggingface/diffusers/pull/4207. "
+                "This warning will be surpressed after the first inference call and will be removed in diffusers>0.23.0"
+            )
+            self._warn_has_been_called = True
+
+        # Define call parameters
         if isinstance(prompt, str):
             batch_size = 1
         elif isinstance(prompt, list):
             batch_size = len(prompt)
         else:
             raise ValueError(f"`prompt` has to be of type `str` or `list` but is {type(prompt)}")
+
         batch_size = batch_size * num_images_per_prompt
         do_classifier_free_guidance = guidance_scale > 1.0
+
         prompt_embeds, text_encoder_hidden_states, _ = self._encode_prompt(
             prompt, num_images_per_prompt, do_classifier_free_guidance, negative_prompt
         )
+
         if isinstance(image_embeds, list):
-            image_embeds = paddle.concat(x=image_embeds, axis=0)
+            image_embeds = paddle.concat(image_embeds, axis=0)
         if isinstance(negative_image_embeds, list):
-            negative_image_embeds = paddle.concat(x=negative_image_embeds, axis=0)
+            negative_image_embeds = paddle.concat(negative_image_embeds, axis=0)
+
         if do_classifier_free_guidance:
-            image_embeds = image_embeds.repeat_interleave(repeats=num_images_per_prompt, axis=0)
-            negative_image_embeds = negative_image_embeds.repeat_interleave(repeats=num_images_per_prompt, axis=0)
-            image_embeds = paddle.concat(x=[negative_image_embeds, image_embeds], axis=0).cast(
-                dtype=prompt_embeds.dtype
-            )
+            image_embeds = image_embeds.repeat_interleave(num_images_per_prompt, axis=0)
+            negative_image_embeds = negative_image_embeds.repeat_interleave(num_images_per_prompt, axis=0)
+
+            image_embeds = paddle.concat([negative_image_embeds, image_embeds], axis=0).cast(dtype=prompt_embeds.dtype)
 
         # preprocess image and mask
         mask_image, image = prepare_mask_and_masked_image(image, mask_image, height, width)
+
         image = image.cast(dtype=prompt_embeds.dtype)
         image = self.movq.encode(image)["latents"]
+
         mask_image = mask_image.cast(dtype=prompt_embeds.dtype)
+
         image_shape = tuple(image.shape[-2:])
-        mask_image = paddle.nn.functional.interpolate(x=mask_image, size=image_shape, mode="nearest")
+        mask_image = F.interpolate(
+            mask_image,
+            image_shape,
+            mode="nearest",
+        )
         mask_image = prepare_mask(mask_image)
         masked_image = image * mask_image
-        mask_image = mask_image.repeat_interleave(repeats=num_images_per_prompt, axis=0)
-        masked_image = masked_image.repeat_interleave(repeats=num_images_per_prompt, axis=0)
+
+        mask_image = mask_image.repeat_interleave(num_images_per_prompt, axis=0)
+        masked_image = masked_image.repeat_interleave(num_images_per_prompt, axis=0)
         if do_classifier_free_guidance:
-            mask_image = mask_image.tile(repeat_times=[2, 1, 1, 1])
-            masked_image = masked_image.tile(repeat_times=[2, 1, 1, 1])
+            mask_image = mask_image.tile([2, 1, 1, 1])
+            masked_image = masked_image.tile([2, 1, 1, 1])
+
         self.scheduler.set_timesteps(num_inference_steps)
         timesteps_tensor = self.scheduler.timesteps
+
         num_channels_latents = self.movq.config.latent_channels
+
+        # get h, w for latents
         sample_height, sample_width = get_new_h_w(height, width, self.movq_scale_factor)
 
         # create initial latent
         latents = self.prepare_latents(
-            (batch_size, num_channels_latents, sample_height, sample_width),
+            [batch_size, num_channels_latents, sample_height, sample_width],
             text_encoder_hidden_states.dtype,
             generator,
             latents,
@@ -483,12 +555,19 @@ class KandinskyInpaintPipeline(DiffusionPipeline):
         num_channels_masked_image = masked_image.shape[1]
         if num_channels_latents + num_channels_mask + num_channels_masked_image != self.unet.config.in_channels:
             raise ValueError(
-                f"Incorrect configuration settings! The config of `pipeline.unet`: {self.unet.config} expects {self.unet.config.in_channels} but received `num_channels_latents`: {num_channels_latents} + `num_channels_mask`: {num_channels_mask} + `num_channels_masked_image`: {num_channels_masked_image} = {num_channels_latents + num_channels_masked_image + num_channels_mask}. Please verify the config of `pipeline.unet` or your `mask_image` or `image` input."
+                f"Incorrect configuration settings! The config of `pipeline.unet`: {self.unet.config} expects"
+                f" {self.unet.config.in_channels} but received `num_channels_latents`: {num_channels_latents} +"
+                f" `num_channels_mask`: {num_channels_mask} + `num_channels_masked_image`: {num_channels_masked_image}"
+                f" = {num_channels_latents+num_channels_masked_image+num_channels_mask}. Please verify the config of"
+                " `pipeline.unet` or your `mask_image` or `image` input."
             )
+
         for i, t in enumerate(self.progress_bar(timesteps_tensor)):
             # expand the latents if we are doing classifier free guidance
-            latent_model_input = paddle.concat(x=[latents] * 2) if do_classifier_free_guidance else latents
-            latent_model_input = paddle.concat(x=[latent_model_input, masked_image, mask_image], axis=1)
+            latents = latents.cast(self.unet.dtype)
+            latent_model_input = paddle.concat([latents] * 2) if do_classifier_free_guidance else latents
+            latent_model_input = paddle.concat([latent_model_input, masked_image, mask_image], axis=1)
+
             added_cond_kwargs = {"text_embeds": prompt_embeds, "image_embeds": image_embeds}
             noise_pred = self.unet(
                 sample=latent_model_input,
@@ -498,32 +577,47 @@ class KandinskyInpaintPipeline(DiffusionPipeline):
                 return_dict=False,
             )[0]
             if do_classifier_free_guidance:
-                noise_pred, variance_pred = noise_pred.split(noise_pred.shape[1] // latents.shape[1], axis=1)
-                noise_pred_uncond, noise_pred_text = noise_pred.chunk(chunks=2)
-                _, variance_pred_text = variance_pred.chunk(chunks=2)
+                noise_pred, variance_pred = noise_pred.split(
+                    [latents.shape[1], noise_pred.shape[1] - latents.shape[1]], axis=1
+                )
+                noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
+                _, variance_pred_text = variance_pred.chunk(2)
                 noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
-                noise_pred = paddle.concat(x=[noise_pred, variance_pred_text], axis=1)
+                noise_pred = paddle.concat([noise_pred, variance_pred_text], axis=1)
+
             if not (
                 hasattr(self.scheduler.config, "variance_type")
                 and self.scheduler.config.variance_type in ["learned", "learned_range"]
             ):
-                noise_pred, _ = noise_pred.split(noise_pred.shape[1] // latents.shape[1], axis=1)
+                noise_pred, _ = noise_pred.split([latents.shape[1], noise_pred.shape[1] - latents.shape[1]], axis=1)
 
             # compute the previous noisy sample x_t -> x_t-1
-            latents = self.scheduler.step(noise_pred, t, latents, generator=generator).prev_sample
+            latents = self.scheduler.step(
+                noise_pred,
+                t,
+                latents,
+                generator=generator,
+            ).prev_sample
+
             if callback is not None and i % callback_steps == 0:
-                callback(i, t, latents)
+                step_idx = i // getattr(self.scheduler, "order", 1)
+                callback(step_idx, t, latents)
 
         # post-processing
         image = self.movq.decode(latents, force_not_quantize=True)["sample"]
+
         if output_type not in ["pd", "np", "pil"]:
-            raise ValueError(f"Only the output types `pt`, `pil` and `np` are supported not output_type={output_type}")
+            raise ValueError(f"Only the output types `pd`, `pil` and `np` are supported not output_type={output_type}")
+
         if output_type in ["np", "pil"]:
             image = image * 0.5 + 0.5
-            image = image.clip(min=0, max=1)
-            image = image.cpu().transpose(perm=[0, 2, 3, 1]).astype(dtype="float32").numpy()
+            image = image.clip(0, 1)
+            image = image.transpose([0, 2, 3, 1]).cast("float32").cpu().numpy()
+
         if output_type == "pil":
             image = self.numpy_to_pil(image)
+
         if not return_dict:
             return (image,)
+
         return ImagePipelineOutput(images=image)

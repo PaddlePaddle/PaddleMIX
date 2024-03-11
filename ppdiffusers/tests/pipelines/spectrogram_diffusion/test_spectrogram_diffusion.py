@@ -24,7 +24,8 @@ from ppdiffusers.pipelines.spectrogram_diffusion import (
     SpectrogramNotesEncoder,
     T5FilmDecoder,
 )
-from ppdiffusers.training_utils import enable_full_determinism
+
+# from ppdiffusers.training_utils import enable_full_determinism
 from ppdiffusers.utils import require_paddle_gpu, slow
 
 from ..pipeline_params import (
@@ -33,7 +34,7 @@ from ..pipeline_params import (
 )
 from ..test_pipelines_common import PipelineTesterMixin
 
-enable_full_determinism(42)
+# enable_full_determinism(42)
 
 MIDI_FILE = "./tests/fixtures/elise_format0.mid"
 
@@ -229,4 +230,3 @@ class PipelineIntegrationTests(unittest.TestCase):
 
         audio = output.audios[0]
         assert abs(np.abs(audio.numpy()).sum() - 14418.089) < 5e-2
-  

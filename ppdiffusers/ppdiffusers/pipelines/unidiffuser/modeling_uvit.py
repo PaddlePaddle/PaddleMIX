@@ -20,13 +20,14 @@ import paddle.nn as nn
 
 from ...configuration_utils import ConfigMixin, register_to_config
 from ...models import ModelMixin
-from ...models.attention import AdaLayerNorm, FeedForward
+from ...models.attention import FeedForward
 from ...models.attention_processor import Attention
 from ...models.embeddings import TimestepEmbedding, Timesteps, get_2d_sincos_pos_embed
+from ...models.normalization import AdaLayerNorm
 from ...models.transformer_2d import Transformer2DModelOutput
 from ...utils import logging
 
-logger = logging.get_logger(__name__)
+logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
 
 def _no_grad_trunc_normal_(tensor, mean, std, a, b):
@@ -242,12 +243,11 @@ class UTransformerBlock(nn.Layer):
         else:
             self.attn2 = None
 
+        norm_elementwise_affine_kwargs = {} if norm_elementwise_affine else dict(weight_attr=False, bias_attr=False)
         if self.use_ada_layer_norm:
             self.norm1 = AdaLayerNorm(dim, num_embeds_ada_norm)
         else:
-            self.norm1 = paddle.nn.LayerNorm(
-                normalized_shape=dim, weight_attr=norm_elementwise_affine, bias_attr=norm_elementwise_affine
-            )
+            self.norm1 = paddle.nn.LayerNorm(normalized_shape=dim, **norm_elementwise_affine_kwargs)
         if cross_attention_dim is not None or double_self_attention:
             # We currently only use AdaLayerNormZero for self attention where there will only be one attention block.
             # I.e. the number of returned modulation chunks from AdaLayerZero would not make sense if returned during
@@ -255,17 +255,13 @@ class UTransformerBlock(nn.Layer):
             self.norm2 = (
                 AdaLayerNorm(dim, num_embeds_ada_norm)
                 if self.use_ada_layer_norm
-                else paddle.nn.LayerNorm(
-                    normalized_shape=dim, weight_attr=norm_elementwise_affine, bias_attr=norm_elementwise_affine
-                )
+                else paddle.nn.LayerNorm(normalized_shape=dim, **norm_elementwise_affine_kwargs)
             )
         else:
             self.norm2 = None
 
         # 3. Feed-forward
-        self.norm3 = paddle.nn.LayerNorm(
-            normalized_shape=dim, weight_attr=norm_elementwise_affine, bias_attr=norm_elementwise_affine
-        )
+        self.norm3 = paddle.nn.LayerNorm(normalized_shape=dim, **norm_elementwise_affine_kwargs)
         self.ff = FeedForward(dim, dropout=dropout, activation_fn=activation_fn, final_dropout=final_dropout)
 
     def forward(
@@ -440,13 +436,11 @@ class UniDiffuserBlock(nn.Layer):
             )  # is self-attn if encoder_hidden_states is none
         else:
             self.attn2 = None
-
+        norm_elementwise_affine_kwargs = {} if norm_elementwise_affine else dict(weight_attr=False, bias_attr=False)
         if self.use_ada_layer_norm:
             self.norm1 = AdaLayerNorm(dim, num_embeds_ada_norm)
         else:
-            self.norm1 = paddle.nn.LayerNorm(
-                normalized_shape=dim, weight_attr=norm_elementwise_affine, bias_attr=norm_elementwise_affine
-            )
+            self.norm1 = paddle.nn.LayerNorm(normalized_shape=dim, **norm_elementwise_affine_kwargs)
         if cross_attention_dim is not None or double_self_attention:
             # We currently only use AdaLayerNormZero for self attention where there will only be one attention block.
             # I.e. the number of returned modulation chunks from AdaLayerZero would not make sense if returned during
@@ -454,17 +448,13 @@ class UniDiffuserBlock(nn.Layer):
             self.norm2 = (
                 AdaLayerNorm(dim, num_embeds_ada_norm)
                 if self.use_ada_layer_norm
-                else paddle.nn.LayerNorm(
-                    normalized_shape=dim, weight_attr=norm_elementwise_affine, bias_attr=norm_elementwise_affine
-                )
+                else paddle.nn.LayerNorm(normalized_shape=dim, **norm_elementwise_affine_kwargs)
             )
         else:
             self.norm2 = None
 
         # 3. Feed-forward
-        self.norm3 = paddle.nn.LayerNorm(
-            normalized_shape=dim, weight_attr=norm_elementwise_affine, bias_attr=norm_elementwise_affine
-        )
+        self.norm3 = paddle.nn.LayerNorm(normalized_shape=dim, **norm_elementwise_affine_kwargs)
         self.ff = FeedForward(dim, dropout=dropout, activation_fn=activation_fn, final_dropout=final_dropout)
 
     def forward(
@@ -549,7 +539,7 @@ class UniDiffuserBlock(nn.Layer):
 
 # Modified from ppdiffusers.models.transformer_2d.Transformer2DModel
 # Modify the transformer block structure to be U-Net like following U-ViT
-# Only supports patch-style input and torch.nn.LayerNorm currently
+# Only supports patch-style input and nn.LayerNorm currently
 # https://github.com/baofff/U-ViT
 class UTransformer2DModel(ModelMixin, ConfigMixin):
     """

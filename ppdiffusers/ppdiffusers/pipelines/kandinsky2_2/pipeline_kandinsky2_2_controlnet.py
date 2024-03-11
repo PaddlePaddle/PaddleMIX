@@ -1,4 +1,3 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,16 +11,19 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 from typing import Callable, List, Optional, Union
 
 import paddle
 
 from ...models import UNet2DConditionModel, VQModel
 from ...schedulers import DDPMScheduler
-from ...utils import logging, randn_tensor, replace_example_docstring
+from ...utils import logging
+from ...utils.paddle_utils import randn_tensor
 from ..pipeline_utils import DiffusionPipeline, ImagePipelineOutput
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
+
 EXAMPLE_DOC_STRING = """
     Examples:
         ```py
@@ -29,7 +31,7 @@ EXAMPLE_DOC_STRING = """
         >>> import numpy as np
 
         >>> from ppdiffusers import KandinskyV22PriorPipeline, KandinskyV22ControlnetPipeline
-        >>> from paddlenlp.transformers import pipeline
+        >>> from ppdiffusers.transformers import pipeline
         >>> from ppdiffusers.utils import load_image
 
 
@@ -38,7 +40,7 @@ EXAMPLE_DOC_STRING = """
         ...     image = np.array(image)
         ...     image = image[:, :, None]
         ...     image = np.concatenate([image, image, image], axis=2)
-        ...     detected_map = paddle.to_tensor(image).float() / 255.0
+        ...     detected_map = paddle.to_tensor(image).cast("float32") / 255.0
         ...     hint = detected_map.permute(2, 0, 1)
         ...     return hint
 
@@ -53,12 +55,13 @@ EXAMPLE_DOC_STRING = """
         ...     "kandinsky-community/kandinsky-2-2-controlnet-depth", paddle_dtype=paddle.float16
         ... )
 
+
         >>> img = load_image(
-        ...     "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main"
+        ...     "https://hf-mirror.com/datasets/hf-internal-testing/diffusers-images/resolve/main"
         ...     "/kandinsky/cat.png"
         ... ).resize((768, 768))
 
-        >>> hint = make_hint(img, depth_estimator).unsqueeze(0).half()
+        >>> hint = make_hint(img, depth_estimator).unsqueeze(0).cast("float16")
 
         >>> prompt = "A robot, 4k photo"
         >>> negative_prior_prompt = "lowres, text, error, cropped, worst quality, low quality, jpeg artifacts, ugly, duplicate, morbid, mutilated, out of frame, extra fingers, mutated hands, poorly drawn hands, poorly drawn face, mutation, deformed, blurry, dehydrated, bad anatomy, bad proportions, extra limbs, cloned face, disfigured, gross proportions, malformed limbs, missing arms, missing legs, extra arms, extra legs, fused fingers, too many fingers, long neck, username, watermark, signature"
@@ -111,9 +114,21 @@ class KandinskyV22ControlnetPipeline(DiffusionPipeline):
             MoVQ Decoder to generate the image from the latents.
     """
 
-    def __init__(self, unet: UNet2DConditionModel, scheduler: DDPMScheduler, movq: VQModel):
+    model_cpu_offload_seq = "unet->movq"
+
+    def __init__(
+        self,
+        unet: UNet2DConditionModel,
+        scheduler: DDPMScheduler,
+        movq: VQModel,
+    ):
         super().__init__()
-        self.register_modules(unet=unet, scheduler=scheduler, movq=movq)
+
+        self.register_modules(
+            unet=unet,
+            scheduler=scheduler,
+            movq=movq,
+        )
         self.movq_scale_factor = 2 ** (len(self.movq.config.block_out_channels) - 1)
 
     # Copied from ppdiffusers.pipelines.unclip.pipeline_unclip.UnCLIPPipeline.prepare_latents
@@ -121,13 +136,14 @@ class KandinskyV22ControlnetPipeline(DiffusionPipeline):
         if latents is None:
             latents = randn_tensor(shape, generator=generator, dtype=dtype)
         else:
-            if latents.shape != shape:
-                raise ValueError(f"Unexpected latents shape, got {latents.shape}, expected {shape}")
+            if latents.shape != list(shape):
+                raise ValueError(f"Unexpected latents shape, got {latents.shape}, expected {list(shape)}")
+            latents = latents.cast(dtype)
+
         latents = latents * scheduler.init_noise_sigma
         return latents
 
     @paddle.no_grad()
-    @replace_example_docstring(EXAMPLE_DOC_STRING)
     def __call__(
         self,
         image_embeds: Union[paddle.Tensor, List[paddle.Tensor]],
@@ -176,15 +192,14 @@ class KandinskyV22ControlnetPipeline(DiffusionPipeline):
             num_images_per_prompt (`int`, *optional*, defaults to 1):
                 The number of images to generate per prompt.
             generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
-                One or a list of paddle generator(s).
-                to make generation deterministic.
+                One or a list of [paddle generator(s)] to make generation deterministic.
             latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents, sampled from a Gaussian distribution, to be used as inputs for image
                 generation. Can be used to tweak the same generation with different prompts. If not provided, a latents
                 tensor will ge generated by sampling using the supplied random `generator`.
             output_type (`str`, *optional*, defaults to `"pil"`):
                 The output format of the generate image. Choose between: `"pil"` (`PIL.Image.Image`), `"np"`
-                (`np.array`) or `"pt"` (`paddle.Tensor`).
+                (`np.array`) or `"pd"` (`paddle.Tensor`).
             callback (`Callable`, *optional*):
                 A function that calls every `callback_steps` steps during inference. The function is called with the
                 following arguments: `callback(step: int, timestep: int, latents: paddle.Tensor)`.
@@ -199,30 +214,46 @@ class KandinskyV22ControlnetPipeline(DiffusionPipeline):
         Returns:
             [`~pipelines.ImagePipelineOutput`] or `tuple`
         """
+
         do_classifier_free_guidance = guidance_scale > 1.0
+
         if isinstance(image_embeds, list):
-            image_embeds = paddle.concat(x=image_embeds, axis=0)
+            image_embeds = paddle.concat(image_embeds, axis=0)
         if isinstance(negative_image_embeds, list):
-            negative_image_embeds = paddle.concat(x=negative_image_embeds, axis=0)
+            negative_image_embeds = paddle.concat(negative_image_embeds, axis=0)
         if isinstance(hint, list):
-            hint = paddle.concat(x=hint, axis=0)
+            hint = paddle.concat(hint, axis=0)
+
         batch_size = image_embeds.shape[0] * num_images_per_prompt
+
         if do_classifier_free_guidance:
-            image_embeds = image_embeds.repeat_interleave(repeats=num_images_per_prompt, axis=0)
-            negative_image_embeds = negative_image_embeds.repeat_interleave(repeats=num_images_per_prompt, axis=0)
-            hint = hint.repeat_interleave(repeats=num_images_per_prompt, axis=0)
-            image_embeds = paddle.concat(x=[negative_image_embeds, image_embeds], axis=0).cast(dtype=self.unet.dtype)
-            hint = paddle.concat(x=[hint, hint], axis=0).cast(dtype=self.unet.dtype)
+            image_embeds = image_embeds.repeat_interleave(num_images_per_prompt, axis=0)
+            negative_image_embeds = negative_image_embeds.repeat_interleave(num_images_per_prompt, axis=0)
+            hint = hint.repeat_interleave(num_images_per_prompt, axis=0)
+
+            image_embeds = paddle.concat([negative_image_embeds, image_embeds], axis=0).cast(dtype=self.unet.dtype)
+            hint = paddle.concat([hint, hint], axis=0).cast(dtype=self.unet.dtype)
+
         self.scheduler.set_timesteps(num_inference_steps)
         timesteps_tensor = self.scheduler.timesteps
+
         num_channels_latents = self.movq.config.latent_channels
+
         height, width = downscale_height_and_width(height, width, self.movq_scale_factor)
+
+        # create initial latent
         latents = self.prepare_latents(
-            (batch_size, num_channels_latents, height, width), image_embeds.dtype, generator, latents, self.scheduler
+            [batch_size, num_channels_latents, height, width],
+            image_embeds.dtype,
+            generator,
+            latents,
+            self.scheduler,
         )
+
         for i, t in enumerate(self.progress_bar(timesteps_tensor)):
             # expand the latents if we are doing classifier free guidance
-            latent_model_input = paddle.concat(x=[latents] * 2) if do_classifier_free_guidance else latents
+            latent_model_input = paddle.concat([latents] * 2) if do_classifier_free_guidance else latents
+
             added_cond_kwargs = {"image_embeds": image_embeds, "hint": hint}
             noise_pred = self.unet(
                 sample=latent_model_input,
@@ -231,34 +262,50 @@ class KandinskyV22ControlnetPipeline(DiffusionPipeline):
                 added_cond_kwargs=added_cond_kwargs,
                 return_dict=False,
             )[0]
+
             if do_classifier_free_guidance:
-                noise_pred, variance_pred = noise_pred.split(noise_pred.shape[1] // latents.shape[1], axis=1)
-                noise_pred_uncond, noise_pred_text = noise_pred.chunk(chunks=2)
-                _, variance_pred_text = variance_pred.chunk(chunks=2)
+                noise_pred, variance_pred = noise_pred.split(
+                    [latents.shape[1], noise_pred.shape[1] - latents.shape[1]], axis=1
+                )
+                noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
+                _, variance_pred_text = variance_pred.chunk(2)
                 noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
-                noise_pred = paddle.concat(x=[noise_pred, variance_pred_text], axis=1)
+                noise_pred = paddle.concat([noise_pred, variance_pred_text], axis=1)
+
             if not (
                 hasattr(self.scheduler.config, "variance_type")
                 and self.scheduler.config.variance_type in ["learned", "learned_range"]
             ):
-                noise_pred, _ = noise_pred.split(noise_pred.shape[1] // latents.shape[1], axis=1)
+                noise_pred, _ = noise_pred.split([latents.shape[1], noise_pred.shape[1] - latents.shape[1]], axis=1)
 
             # compute the previous noisy sample x_t -> x_t-1
-            latents = self.scheduler.step(noise_pred, t, latents, generator=generator)[0]
-            if callback is not None and i % callback_steps == 0:
-                callback(i, t, latents)
+            latents = self.scheduler.step(
+                noise_pred,
+                t,
+                latents,
+                generator=generator,
+            )[0]
 
+            if callback is not None and i % callback_steps == 0:
+                step_idx = i // getattr(self.scheduler, "order", 1)
+                callback(step_idx, t, latents)
         # post-processing
         image = self.movq.decode(latents, force_not_quantize=True)["sample"]
 
+        # Offload all models
+
         if output_type not in ["pd", "np", "pil"]:
-            raise ValueError(f"Only the output types `pt`, `pil` and `np` are supported not output_type={output_type}")
+            raise ValueError(f"Only the output types `pd`, `pil` and `np` are supported not output_type={output_type}")
+
         if output_type in ["np", "pil"]:
             image = image * 0.5 + 0.5
-            image = image.clip(min=0, max=1)
-            image = image.cpu().transpose(perm=[0, 2, 3, 1]).astype(dtype="float32").numpy()
+            image = image.clip(0, 1)
+            image = image.transpose([0, 2, 3, 1]).cast("float32").cpu().numpy()
+
         if output_type == "pil":
             image = self.numpy_to_pil(image)
+
         if not return_dict:
             return (image,)
+
         return ImagePipelineOutput(images=image)

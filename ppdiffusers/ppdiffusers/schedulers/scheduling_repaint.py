@@ -1,5 +1,4 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
-# Copyright 2022 ETH Zurich Computer Vision Lab and The HuggingFace Team. All rights reserved.
+# Copyright 2023 ETH Zurich Computer Vision Lab and The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,10 +18,10 @@ from typing import Optional, Tuple, Union
 
 import numpy as np
 import paddle
-import paddle.nn.functional as F
 
 from ..configuration_utils import ConfigMixin, register_to_config
-from ..utils import BaseOutput, randn_tensor
+from ..utils import BaseOutput
+from ..utils.paddle_utils import randn_tensor
 from .scheduling_utils import SchedulerMixin
 
 
@@ -91,32 +90,28 @@ def betas_for_alpha_bar(
 
 class RePaintScheduler(SchedulerMixin, ConfigMixin):
     """
-    RePaint is a schedule for DDPM inpainting inside a given mask.
+    `RePaintScheduler` is a scheduler for DDPM inpainting inside a given mask.
 
-    [`~ConfigMixin`] takes care of storing all config attributes that are passed in the scheduler's `__init__`
-    function, such as `num_train_timesteps`. They can be accessed via `scheduler.config.num_train_timesteps`.
-    [`SchedulerMixin`] provides general loading and saving functionality via the [`SchedulerMixin.save_pretrained`] and
-    [`~SchedulerMixin.from_pretrained`] functions.
-
-    For more details, see the original paper: https://arxiv.org/pdf/2201.09865.pdf
+    This model inherits from [`SchedulerMixin`] and [`ConfigMixin`]. Check the superclass documentation for the generic
+    methods the library implements for all schedulers such as loading and saving.
 
     Args:
-        num_train_timesteps (`int`): number of diffusion steps used to train the model.
-        beta_start (`float`): the starting `beta` value of inference.
-        beta_end (`float`): the final `beta` value.
-        beta_schedule (`str`):
-            the beta schedule, a mapping from a beta range to a sequence of betas for stepping the model. Choose from
-            `linear`, `scaled_linear`, `squaredcos_cap_v2` or `sigmoid`.
+        num_train_timesteps (`int`, defaults to 1000):
+            The number of diffusion steps to train the model.
+        beta_start (`float`, defaults to 0.0001):
+            The starting `beta` value of inference.
+        beta_end (`float`, defaults to 0.02):
+            The final `beta` value.
+        beta_schedule (`str`, defaults to `"linear"`):
+            The beta schedule, a mapping from a beta range to a sequence of betas for stepping the model. Choose from
+            `linear`, `scaled_linear`, `squaredcos_cap_v2`, or `sigmoid`.
         eta (`float`):
-            The weight of noise for added noise in a diffusion step. Its value is between 0.0 and 1.0 -0.0 is DDIM and
-            1.0 is DDPM scheduler respectively.
-        trained_betas (`np.ndarray`, optional):
-            option to pass an array of betas directly to the constructor to bypass `beta_start`, `beta_end` etc.
-        variance_type (`str`):
-            options to clip the variance used when adding noise to the denoised sample. Choose from `fixed_small`,
-            `fixed_small_log`, `fixed_large`, `fixed_large_log`, `learned` or `learned_range`.
-        clip_sample (`bool`, default `True`):
-            option to clip predicted sample between -1 and 1 for numerical stability.
+            The weight of noise for added noise in diffusion step. If its value is between 0.0 and 1.0 it corresponds
+            to the DDIM scheduler, and if its value is between -0.0 and 1.0 it corresponds to the DDPM scheduler.
+        trained_betas (`np.ndarray`, *optional*):
+            Pass an array of betas directly to the constructor to bypass `beta_start` and `beta_end`.
+        clip_sample (`bool`, defaults to `True`):
+            Clip the predicted sample between -1 and 1 for numerical stability.
 
     """
 
@@ -148,7 +143,7 @@ class RePaintScheduler(SchedulerMixin, ConfigMixin):
         elif beta_schedule == "sigmoid":
             # GeoDiff sigmoid schedule
             betas = paddle.linspace(-6, 6, num_train_timesteps)
-            self.betas = F.sigmoid(betas) * (beta_end - beta_start) + beta_start
+            self.betas = paddle.nn.functional.sigmoid(betas) * (beta_end - beta_start) + beta_start
         else:
             raise NotImplementedError(f"{beta_schedule} does is not implemented for {self.__class__}")
 
@@ -173,11 +168,14 @@ class RePaintScheduler(SchedulerMixin, ConfigMixin):
         current timestep.
 
         Args:
-            sample (`paddle.Tensor`): input sample
-            timestep (`int`, optional): current timestep
+            sample (`paddle.Tensor`):
+                The input sample.
+            timestep (`int`, *optional*):
+                The current timestep in the diffusion chain.
 
         Returns:
-            `paddle.Tensor`: scaled input sample
+            `paddle.Tensor`:
+                A scaled input sample.
         """
         return sample
 
@@ -187,6 +185,23 @@ class RePaintScheduler(SchedulerMixin, ConfigMixin):
         jump_length: int = 10,
         jump_n_sample: int = 10,
     ):
+        """
+        Sets the discrete timesteps used for the diffusion chain (to be run before inference).
+
+        Args:
+            num_inference_steps (`int`):
+                The number of diffusion steps used when generating samples with a pre-trained model. If used,
+                `timesteps` must be `None`.
+            jump_length (`int`, defaults to 10):
+                The number of steps taken forward in time before going backward in time for a single jump (“j” in
+                RePaint paper). Take a look at Figure 9 and 10 in the paper.
+            jump_n_sample (`int`, defaults to 10):
+                The number of times to make a forward time jump for a given chosen time sample. Take a look at Figure 9
+                and 10 in the paper.
+            device (`str` or `torch.device`, *optional*):
+                The device to which the timesteps should be moved to. If `None`, the timesteps are not moved.
+
+        """
         num_inference_steps = min(self.config.num_train_timesteps, num_inference_steps)
         self.num_inference_steps = num_inference_steps
 
@@ -240,27 +255,29 @@ class RePaintScheduler(SchedulerMixin, ConfigMixin):
         return_dict: bool = True,
     ) -> Union[RePaintSchedulerOutput, Tuple]:
         """
-        Predict the sample at the previous timestep by reversing the SDE. Core function to propagate the diffusion
+        Predict the sample from the previous timestep by reversing the SDE. This function propagates the diffusion
         process from the learned model outputs (most often the predicted noise).
 
         Args:
-            model_output (`paddle.Tensor`): direct output from learned
-                diffusion model.
-            timestep (`int`): current discrete timestep in the diffusion chain.
+            model_output (`paddle.Tensor`):
+                The direct output from learned diffusion model.
+            timestep (`int`):
+                The current discrete timestep in the diffusion chain.
             sample (`paddle.Tensor`):
-                current instance of sample being created by diffusion process.
+                A current instance of a sample created by the diffusion process.
             original_image (`paddle.Tensor`):
-                the original image to inpaint on.
+                The original image to inpaint on.
             mask (`paddle.Tensor`):
-                the mask where 0.0 values define which part of the original image to inpaint (change).
-            generator (`paddle.Generator`, *optional*): random number generator.
-            return_dict (`bool`): option for returning tuple rather than
-                DDPMSchedulerOutput class
+                The mask where a value of 0.0 indicates which part of the original image to inpaint.
+            generator (`paddle.Generator`, *optional*):
+                A random number generator.
+            return_dict (`bool`, *optional*, defaults to `True`):
+                Whether or not to return a [`~schedulers.scheduling_repaint.RePaintSchedulerOutput`] or `tuple`.
 
         Returns:
-            [`~schedulers.scheduling_utils.RePaintSchedulerOutput`] or `tuple`:
-            [`~schedulers.scheduling_utils.RePaintSchedulerOutput`] if `return_dict` is True, otherwise a `tuple`. When
-            returning a tuple, the first element is the sample tensor.
+            [`~schedulers.scheduling_repaint.RePaintSchedulerOutput`] or `tuple`:
+                If return_dict is `True`, [`~schedulers.scheduling_repaint.RePaintSchedulerOutput`] is returned,
+                otherwise a tuple is returned where the first element is the sample tensor.
 
         """
         t = timestep
@@ -287,6 +304,7 @@ class RePaintScheduler(SchedulerMixin, ConfigMixin):
         # been observed.
 
         # 5. Add noise
+
         noise = randn_tensor(model_output.shape, generator=generator, dtype=model_output.dtype)
         std_dev_t = self.eta * self._get_variance(timestep) ** 0.5
 

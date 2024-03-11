@@ -1,4 +1,5 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2022 The Music Spectrogram Diffusion Authors.
+# Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,10 +15,11 @@
 
 import paddle
 import paddle.nn as nn
-from paddlenlp.transformers.t5.configuration import T5Config
-from paddlenlp.transformers.t5.modeling import T5Block, T5LayerNorm
 
-from ...configuration_utils import ConfigMixin, ModuleUtilsMixin, register_to_config
+from ppdiffusers.transformers.model_utils import ModuleUtilsMixin
+from ppdiffusers.transformers.t5.modeling import T5Block, T5Config, T5LayerNorm
+
+from ...configuration_utils import ConfigMixin, register_to_config
 from ...models import ModelMixin
 
 
@@ -37,10 +39,14 @@ class SpectrogramContEncoder(ModelMixin, ConfigMixin, ModuleUtilsMixin):
         is_decoder: bool = False,
     ):
         super().__init__()
-        self.input_proj = nn.Linear(in_features=input_dims, out_features=d_model, bias_attr=False)
+
+        self.input_proj = nn.Linear(input_dims, d_model, bias_attr=False)
+
         self.position_encoding = nn.Embedding(targets_context_length, d_model)
         self.position_encoding.weight.stop_gradient = True
-        self.dropout_pre = nn.Dropout(p=dropout_rate)
+
+        self.dropout_pre = nn.Dropout(dropout_rate)
+
         t5config = T5Config(
             d_model=d_model,
             num_heads=num_heads,
@@ -55,19 +61,21 @@ class SpectrogramContEncoder(ModelMixin, ConfigMixin, ModuleUtilsMixin):
         for lyr_num in range(num_layers):
             lyr = T5Block(t5config)
             self.encoders.append(lyr)
+
         self.layer_norm = T5LayerNorm(d_model)
         self.dropout_post = nn.Dropout(p=dropout_rate)
 
     def forward(self, encoder_inputs, encoder_inputs_mask):
+        x = self.input_proj(encoder_inputs)
 
         # terminal relative positional encodings
-        x = self.input_proj(encoder_inputs)
         max_positions = encoder_inputs.shape[1]
-        input_positions = paddle.arange(end=max_positions)
+        input_positions = paddle.arange(max_positions)
 
-        seq_lens = encoder_inputs_mask.sum(axis=-1)
-        input_positions = paddle.roll(x=input_positions.unsqueeze(axis=0), shifts=tuple(seq_lens.tolist()), axis=0)
+        seq_lens = encoder_inputs_mask.sum(-1)
+        input_positions = paddle.roll(input_positions.unsqueeze(0), tuple(seq_lens.tolist()), axis=0)
         x += self.position_encoding(input_positions)
+
         x = self.dropout_pre(x)
 
         # inverted the attention mask
@@ -77,4 +85,5 @@ class SpectrogramContEncoder(ModelMixin, ConfigMixin, ModuleUtilsMixin):
         for lyr in self.encoders:
             x = lyr(x, extended_attention_mask)[0]
         x = self.layer_norm(x)
+
         return self.dropout_post(x), encoder_inputs_mask

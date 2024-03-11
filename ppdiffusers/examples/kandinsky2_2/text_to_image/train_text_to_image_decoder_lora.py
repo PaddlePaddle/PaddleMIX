@@ -16,15 +16,14 @@ import argparse
 import gc
 import math
 import os
-
 from pathlib import Path
 from typing import Optional
 
-from PIL import Image
 import numpy as np
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
+from datasets import load_dataset
 from huggingface_hub import HfFolder, Repository, create_repo, whoami
 from paddle.distributed.fleet.utils.hybrid_parallel_util import (
     fused_allreduce_gradients,
@@ -32,16 +31,9 @@ from paddle.distributed.fleet.utils.hybrid_parallel_util import (
 from paddle.io import BatchSampler, DataLoader, DistributedBatchSampler
 from paddle.optimizer import AdamW
 from paddlenlp.trainer import set_seed
-from paddlenlp.transformers import (
-    CLIPImageProcessor,
-    CLIPVisionModelWithProjection,
-    CLIPTextModelWithProjection,
-    CLIPTokenizer,
-)
 from paddlenlp.utils.log import logger
+from PIL import Image
 from tqdm.auto import tqdm
-
-from datasets import load_dataset
 
 from ppdiffusers import (
     AutoPipelineForText2Image,
@@ -51,30 +43,26 @@ from ppdiffusers import (
     UNet2DConditionModel,
     VQModel,
 )
-from ppdiffusers.optimization import get_scheduler
-from ppdiffusers.training_utils import (
-    freeze_params,
-    main_process_first,
-    unwrap_model,
-)
-from ppdiffusers.utils import check_min_version
 from ppdiffusers.loaders import AttnProcsLayers, LoraLoaderMixin
 from ppdiffusers.models.attention_processor import LoRAAttnAddedKVProcessor
+from ppdiffusers.optimization import get_scheduler
+from ppdiffusers.training_utils import freeze_params, main_process_first, unwrap_model
+from ppdiffusers.transformers import (
+    CLIPImageProcessor,
+    CLIPTextModelWithProjection,
+    CLIPTokenizer,
+    CLIPVisionModelWithProjection,
+)
+from ppdiffusers.utils import check_min_version
 
 check_min_version("0.16.1")
 
 
 def url_or_path_join(*path_list):
-    return (
-        os.path.join(*path_list)
-        if os.path.isdir(os.path.join(*path_list))
-        else "/".join(path_list)
-    )
+    return os.path.join(*path_list) if os.path.isdir(os.path.join(*path_list)) else "/".join(path_list)
 
 
-def save_model_card(
-    repo_id: str, images=None, base_model=str, dataset_name=str, repo_folder=None
-):
+def save_model_card(repo_id: str, images=None, base_model=str, dataset_name=str, repo_folder=None):
     img_str = ""
     for i, image in enumerate(images):
         image.save(os.path.join(repo_folder, f"image_{i}.png"))
@@ -116,9 +104,7 @@ def get_report_to(args):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(
-        description="Simple example of finetuning Kandinsky 2.2."
-    )
+    parser = argparse.ArgumentParser(description="Simple example of finetuning Kandinsky 2.2.")
     parser.add_argument(
         "--pretrained_decoder_model_name_or_path",
         type=str,
@@ -176,9 +162,7 @@ def parse_args():
         default=None,
         help="The directory where the downloaded models and datasets will be stored.",
     )
-    parser.add_argument(
-        "--seed", type=int, default=None, help="A seed for reproducible training."
-    )
+    parser.add_argument("--seed", type=int, default=None, help="A seed for reproducible training.")
     parser.add_argument(
         "--resolution",
         type=int,
@@ -209,9 +193,7 @@ def parse_args():
         action="store_true",
         help="Whether or not to use gradient checkpointing to save memory at the expense of slower backward pass.",
     )
-    parser.add_argument(
-        "--learning_rate", type=float, default=0.0001, help="learning rate"
-    )
+    parser.add_argument("--learning_rate", type=float, default=0.0001, help="learning rate")
     parser.add_argument(
         "--lr_scheduler",
         type=str,
@@ -271,9 +253,7 @@ def parse_args():
         default=1e-08,
         help="Epsilon value for the Adam optimizer",
     )
-    parser.add_argument(
-        "--max_grad_norm", default=1.0, type=float, help="Max gradient norm."
-    )
+    parser.add_argument("--max_grad_norm", default=1.0, type=float, help="Max gradient norm.")
     parser.add_argument(
         "--push_to_hub",
         action="store_true",
@@ -362,9 +342,7 @@ def parse_args():
     return args
 
 
-def get_full_repo_name(
-    model_id: str, organization: Optional[str] = None, token: Optional[str] = None
-):
+def get_full_repo_name(model_id: str, organization: Optional[str] = None, token: Optional[str] = None):
     if token is None:
         token = HfFolder.get_token()
     if organization is None:
@@ -397,15 +375,11 @@ def main():
             os.makedirs(args.output_dir, exist_ok=True)
         if args.push_to_hub:
             if args.hub_model_id is None:
-                repo_name = get_full_repo_name(
-                    Path(args.output_dir).name, token=args.hub_token
-                )
+                repo_name = get_full_repo_name(Path(args.output_dir).name, token=args.hub_token)
             else:
                 repo_name = args.hub_model_id
             create_repo(repo_name, exist_ok=True, token=args.hub_token)
-            repo = Repository(
-                args.output_dir, clone_from=repo_name, token=args.hub_token
-            )
+            repo = Repository(args.output_dir, clone_from=repo_name, token=args.hub_token)
 
             with open(os.path.join(args.output_dir, ".gitignore"), "w+") as gitignore:
                 if "step_*" not in gitignore:
@@ -414,22 +388,16 @@ def main():
                     gitignore.write("epoch_*\n")
 
     # Load scheduler and models
-    noise_scheduler = DDPMScheduler.from_pretrained(
-        args.pretrained_decoder_model_name_or_path, subfolder="scheduler"
-    )
+    noise_scheduler = DDPMScheduler.from_pretrained(args.pretrained_decoder_model_name_or_path, subfolder="scheduler")
     image_processor = CLIPImageProcessor.from_pretrained(
-        args.pretrained_prior_model_name_or_path, subfolder="image_processor"
+        url_or_path_join(args.pretrained_prior_model_name_or_path, "image_processor")
     )
 
-    vae = VQModel.from_pretrained(
-        args.pretrained_decoder_model_name_or_path, subfolder="movq"
-    )
+    vae = VQModel.from_pretrained(args.pretrained_decoder_model_name_or_path, subfolder="movq")
     image_encoder = CLIPVisionModelWithProjection.from_pretrained(
-        args.pretrained_prior_model_name_or_path, subfolder="image_encoder"
+        url_or_path_join(args.pretrained_prior_model_name_or_path, "image_encoder")
     )
-    unet = UNet2DConditionModel.from_pretrained(
-        args.pretrained_decoder_model_name_or_path, subfolder="unet"
-    )
+    unet = UNet2DConditionModel.from_pretrained(args.pretrained_decoder_model_name_or_path, subfolder="unet")
 
     freeze_params(vae.parameters())
     freeze_params(image_encoder.parameters())
@@ -437,11 +405,7 @@ def main():
     # Set correct lora layers
     unet_lora_attn_procs = {}
     for name, attn_processor in unet.attn_processors.items():
-        cross_attention_dim = (
-            None
-            if name.endswith("attn1.processor")
-            else unet.config.cross_attention_dim
-        )
+        cross_attention_dim = None if name.endswith("attn1.processor") else unet.config.cross_attention_dim
         if name.startswith("mid_block"):
             hidden_size = unet.config.block_out_channels[-1]
         elif name.startswith("up_blocks"):
@@ -478,9 +442,7 @@ def main():
             sqrt_alphas_cumprod = sqrt_alphas_cumprod[..., None]
         alpha = sqrt_alphas_cumprod.expand(timesteps.shape)
 
-        sqrt_one_minus_alphas_cumprod = sqrt_one_minus_alphas_cumprod[timesteps].cast(
-            "float32"
-        )
+        sqrt_one_minus_alphas_cumprod = sqrt_one_minus_alphas_cumprod[timesteps].cast("float32")
         while len(sqrt_one_minus_alphas_cumprod.shape) < len(timesteps.shape):
             sqrt_one_minus_alphas_cumprod = sqrt_one_minus_alphas_cumprod[..., None]
         sigma = sqrt_one_minus_alphas_cumprod.expand(timesteps.shape)
@@ -527,9 +489,7 @@ def main():
     # 6. Get the column names for input/target.
     dataset_columns = DATASET_NAME_MAPPING.get(args.dataset_name, None)
     if args.image_column is None:
-        image_column = (
-            dataset_columns[0] if dataset_columns is not None else column_names[0]
-        )
+        image_column = dataset_columns[0] if dataset_columns is not None else column_names[0]
     else:
         image_column = args.image_column
         if image_column not in column_names:
@@ -548,9 +508,7 @@ def main():
 
     def train_transforms(img):
         img = center_crop(img)
-        img = img.resize(
-            (args.resolution, args.resolution), resample=Image.BICUBIC, reducing_gap=1
-        )
+        img = img.resize((args.resolution, args.resolution), resample=Image.BICUBIC, reducing_gap=1)
         img = np.array(img).astype(np.float32) / 127.5 - 1
         img = paddle.to_tensor(data=np.transpose(img, [2, 0, 1]))
         return img
@@ -558,38 +516,24 @@ def main():
     def preprocess_train(examples):
         images = [image.convert("RGB") for image in examples[image_column]]
         examples["pixel_values"] = [train_transforms(image) for image in images]
-        examples["clip_pixel_values"] = image_processor(
-            images, return_tensors="pd"
-        ).pixel_values
+        examples["clip_pixel_values"] = image_processor(images, return_tensors="pd").pixel_values
         return examples
 
     with main_process_first():
         if args.max_train_samples is not None:
-            dataset["train"] = (
-                dataset["train"]
-                .shuffle(seed=args.seed)
-                .select(range(args.max_train_samples))
-            )
+            dataset["train"] = dataset["train"].shuffle(seed=args.seed).select(range(args.max_train_samples))
         # Set the training transforms
         train_dataset = dataset["train"].with_transform(preprocess_train)
 
     def collate_fn(examples):
-        pixel_values = paddle.stack(
-            [example["pixel_values"] for example in examples]
-        ).cast("float32")
-        clip_pixel_values = paddle.stack(
-            [example["clip_pixel_values"] for example in examples]
-        ).cast("float32")
+        pixel_values = paddle.stack([example["pixel_values"] for example in examples]).cast("float32")
+        clip_pixel_values = paddle.stack([example["clip_pixel_values"] for example in examples]).cast("float32")
         return {"pixel_values": pixel_values, "clip_pixel_values": clip_pixel_values}
 
     train_sampler = (
-        DistributedBatchSampler(
-            train_dataset, batch_size=args.train_batch_size, shuffle=False
-        )
+        DistributedBatchSampler(train_dataset, batch_size=args.train_batch_size, shuffle=False)
         if num_processes > 1
-        else BatchSampler(
-            train_dataset, batch_size=args.train_batch_size, shuffle=False
-        )
+        else BatchSampler(train_dataset, batch_size=args.train_batch_size, shuffle=False)
     )
     train_dataloader = DataLoader(
         train_dataset,
@@ -599,9 +543,7 @@ def main():
     )
 
     # Scheduler and math around the number of training steps.
-    num_update_steps_per_epoch = math.ceil(
-        len(train_dataloader) / args.gradient_accumulation_steps
-    )
+    num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
     if args.max_train_steps is None:
         args.max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
     # Afterwards we recalculate our number of training epochs
@@ -624,9 +566,7 @@ def main():
         beta2=args.adam_beta2,
         weight_decay=args.adam_weight_decay,
         epsilon=args.adam_epsilon,
-        grad_clip=nn.ClipGradByGlobalNorm(args.max_grad_norm)
-        if args.max_grad_norm > 0
-        else None,
+        grad_clip=nn.ClipGradByGlobalNorm(args.max_grad_norm) if args.max_grad_norm > 0 else None,
     )
 
     if is_main_process:
@@ -637,18 +577,14 @@ def main():
         writer = get_report_to(args)
 
     # Train!
-    total_batch_size = (
-        args.train_batch_size * num_processes * args.gradient_accumulation_steps
-    )
+    total_batch_size = args.train_batch_size * num_processes * args.gradient_accumulation_steps
 
     logger.info("***** Running training *****")
     logger.info(f"  Num examples = {len(train_dataset)}")
     logger.info(f"  Num batches each epoch = {len(train_dataloader)}")
     logger.info(f"  Num Epochs = {args.num_train_epochs}")
     logger.info(f"  Instantaneous batch size per device = {args.train_batch_size}")
-    logger.info(
-        f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}"
-    )
+    logger.info(f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}")
     logger.info(f"  Gradient Accumulation steps = {args.gradient_accumulation_steps}")
     logger.info(f"  Total optimization steps = {args.max_train_steps}")
 
@@ -689,9 +625,7 @@ def main():
             # Predict the noise residual and compute loss
             added_cond_kwargs = {"image_embeds": image_embeds}
 
-            model_pred = unet(
-                noisy_latents, timesteps, None, added_cond_kwargs=added_cond_kwargs
-            ).sample[:, :4]
+            model_pred = unet(noisy_latents, timesteps, None, added_cond_kwargs=added_cond_kwargs).sample[:, :4]
 
             if args.snr_gamma is None:
                 loss = F.mse_loss(
@@ -708,10 +642,9 @@ def main():
                     # Velocity objective requires that we add one to SNR values before we divide by them.
                     snr = snr + 1
                 mse_loss_weights = (
-                    paddle.stack(
-                        [snr, args.snr_gamma * paddle.ones_like(timesteps)],
-                        axis=1,
-                    ).min(1)[0]
+                    paddle.stack([snr, args.snr_gamma * paddle.ones_like(timesteps)], axis=1,).min(
+                        1
+                    )[0]
                     / snr
                 )
                 # We first calculate the original loss. Then we mean over the non-batch dimensions and
@@ -722,9 +655,7 @@ def main():
                     target.cast("float32"),
                     reduction="none",
                 )
-                loss = (
-                    loss.mean(axis=list(range(1, len(loss.shape)))) * mse_loss_weights
-                )
+                loss = loss.mean(axis=list(range(1, len(loss.shape)))) * mse_loss_weights
                 loss = loss.mean()
             step_loss = loss.item()
 
@@ -756,9 +687,7 @@ def main():
                         writer.add_scalar(f"train/{name}", val, global_step)
 
                     if global_step % args.checkpointing_steps == 0:
-                        save_path = os.path.join(
-                            args.output_dir, f"checkpoint-{global_step}"
-                        )
+                        save_path = os.path.join(args.output_dir, f"checkpoint-{global_step}")
 
                         LoraLoaderMixin.save_lora_weights(
                             save_directory=save_path,
@@ -771,24 +700,17 @@ def main():
 
         if is_main_process:
             text_encoder = CLIPTextModelWithProjection.from_pretrained(
-                args.pretrained_prior_model_name_or_path, subfolder="text_encoder"
+                url_or_path_join(args.pretrained_prior_model_name_or_path, "text_encoder")
             )
-            prior = PriorTransformer.from_pretrained(
-                args.pretrained_prior_model_name_or_path, subfolder="prior"
-            )
+            prior = PriorTransformer.from_pretrained(args.pretrained_prior_model_name_or_path, subfolder="prior")
             prior_image_processor = CLIPImageProcessor.from_pretrained(
-                args.pretrained_prior_model_name_or_path, subfolder="image_processor"
+                url_or_path_join(args.pretrained_prior_model_name_or_path, "image_processor")
             )
-            prior_scheduler = UnCLIPScheduler(
-                beta_schedule="squaredcos_cap_v2", prediction_type="sample"
-            )
+            prior_scheduler = UnCLIPScheduler(beta_schedule="squaredcos_cap_v2", prediction_type="sample")
             prior_tokenizer = CLIPTokenizer.from_pretrained(
                 url_or_path_join(args.pretrained_prior_model_name_or_path, "tokenizer")
             )
-            if (
-                args.validation_prompt is not None
-                and epoch % args.validation_epochs == 0
-            ):
+            if args.validation_prompt is not None and epoch % args.validation_epochs == 0 and epoch > 0:
                 logger.info(
                     f"Running validation... \n Generating {args.num_validation_images} images with prompt:"
                     f" {args.validation_prompt}."
@@ -807,9 +729,7 @@ def main():
                 pipeline.set_progress_bar_config(disable=True)
 
                 # run inference
-                generator = (
-                    paddle.Generator().manual_seed(args.seed) if args.seed else None
-                )
+                generator = paddle.Generator().manual_seed(args.seed) if args.seed else None
                 images = [
                     pipeline(
                         args.validation_prompt,
@@ -821,9 +741,7 @@ def main():
                 np_images = np.stack([np.asarray(img) for img in images])
 
                 if args.report_to == "tensorboard":
-                    writer.add_images(
-                        "validation", np_images, epoch, dataformats="NHWC"
-                    )
+                    writer.add_images("validation", np_images, epoch, dataformats="NHWC")
                 else:
                     writer.add_image("validation", np_images, epoch, dataformats="NHWC")
 
@@ -845,9 +763,7 @@ def main():
                 prompt=args.instance_prompt,
                 repo_folder=args.output_dir,
             )
-            repo.push_to_hub(
-                commit_message="End of training", blocking=False, auto_lfs_prune=True
-            )
+            repo.push_to_hub(commit_message="End of training", blocking=False, auto_lfs_prune=True)
 
         # pipeline.save_pretrained(args.output_dir)
         pipeline = AutoPipelineForText2Image.from_pretrained(
@@ -865,9 +781,7 @@ def main():
         if args.validation_prompt and args.num_validation_images > 0:
             generator = paddle.Generator().manual_seed(args.seed) if args.seed else None
             images = [
-                pipeline(
-                    args.validation_prompt, num_inference_steps=30, generator=generator
-                ).images[0]
+                pipeline(args.validation_prompt, num_inference_steps=30, generator=generator).images[0]
                 for _ in range(args.num_validation_images)
             ]
             np_images = np.stack([np.asarray(img) for img in images])
@@ -879,9 +793,7 @@ def main():
 
         writer.close()
         if args.push_to_hub:
-            repo.push_to_hub(
-                commit_message="End of training", blocking=False, auto_lfs_prune=True
-            )
+            repo.push_to_hub(commit_message="End of training", blocking=False, auto_lfs_prune=True)
 
 
 if __name__ == "__main__":

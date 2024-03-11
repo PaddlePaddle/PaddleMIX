@@ -19,6 +19,7 @@ from ppdiffusers import DiffusionPipeline
 # load both base & refiner
 base = DiffusionPipeline.from_pretrained(
     "stabilityai/stable-diffusion-xl-base-1.0",
+    paddle_dtype=paddle.float16,
 )
 refiner = DiffusionPipeline.from_pretrained(
     "stabilityai/stable-diffusion-xl-refiner-1.0",

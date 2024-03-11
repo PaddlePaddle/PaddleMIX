@@ -27,7 +27,7 @@ pipe = KandinskyV22Img2ImgPipeline.from_pretrained(
 )
 
 init_image = load_image(
-    "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main" "/kandinsky/frog.png"
+    "https://hf-mirror.com/datasets/hf-internal-testing/diffusers-images/resolve/main/kandinsky/frog.png"
 )
 image = pipe(
     image=init_image,

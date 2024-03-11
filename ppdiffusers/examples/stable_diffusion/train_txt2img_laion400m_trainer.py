@@ -14,6 +14,7 @@
 import itertools
 import os
 
+os.environ["FLAG_USE_OLD_RECOMPUTE"] = "True"
 import paddle
 from paddlenlp.trainer import PdArgumentParser, get_last_checkpoint, set_seed
 from paddlenlp.utils.log import logger
