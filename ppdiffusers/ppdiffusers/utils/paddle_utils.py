@@ -252,6 +252,10 @@ if is_paddle_available():
         finally:
             _init_weights = old_init_weights
 
+    def is_compiled_module(module) -> bool:
+        """Check whether the module was compiled with torch.compile()"""
+        return False
+
     from paddle.fft import fftn, fftshift, ifftn, ifftshift
 
     def fourier_filter(x_in: paddle.Tensor, threshold: int, scale: int) -> paddle.Tensor:

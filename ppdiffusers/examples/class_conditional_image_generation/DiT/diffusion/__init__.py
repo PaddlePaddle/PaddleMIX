@@ -13,7 +13,6 @@
 # limitations under the License.
 
 from . import gaussian_diffusion as gd
-from .dist_env import setdistenv
 from .dit import DiT
 from .dit_llama import DiT_Llama
 from .respace import SpacedDiffusion, space_timesteps

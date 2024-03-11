@@ -25,7 +25,6 @@ from diffusion import (
     LatentDiffusionTrainer,
     ModelArguments,
     TrainerArguments,
-    setdistenv,
 )
 from paddlenlp.trainer import PdArgumentParser, get_last_checkpoint, set_seed
 from paddlenlp.utils.log import logger
@@ -61,12 +60,10 @@ def main():
     pprint.pprint(data_args)
     pprint.pprint(model_args)
     pprint.pprint(training_args)
-    setdistenv(training_args)
-    model_args.data_world_rank = training_args.data_world_rank
-    model_args.data_world_size = training_args.data_world_size
+    model_args.data_world_rank = training_args.dataset_rank
+    model_args.data_world_size = training_args.dataset_world_size
 
-    # report to custom_visualdl
-    training_args.report_to = ["custom_visualdl"]
+    training_args.report_to = ["visualdl"]
     training_args.resolution = data_args.resolution
     training_args.benchmark = model_args.benchmark
     training_args.use_ema = model_args.use_ema
@@ -105,9 +102,9 @@ def main():
     model_name = model_config_name.split("_")[0]
     assert model_name in ["DiT", "SiT", "LargeDiT"], f"Model {model_name} not supported."
     if model_name in ["DiT", "LargeDiT"]:
-        model = DiTDiffusionModel(model_args)
+        model = DiTDiffusionModel(model_args, training_args)
     else:
-        model = SiTDiffusionModel(model_args)
+        model = SiTDiffusionModel(model_args, training_args)
     assert model.transformer.sample_size == data_args.resolution // 8
     model.set_recompute(training_args.recompute)
     model.set_xformers(model_args.enable_xformers_memory_efficient_attention)
