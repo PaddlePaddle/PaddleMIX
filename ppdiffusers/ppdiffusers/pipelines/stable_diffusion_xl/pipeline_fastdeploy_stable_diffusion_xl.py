@@ -15,16 +15,23 @@
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import paddle
+from ppdiffusers.transformers import (
+    CLIPTokenizer,
+    CLIPImageProcessor,
+)
 
+from ...image_processor import PipelineImageInput
+from ...loaders import IPAdapterMixin
 from ...schedulers import KarrasDiffusionSchedulers
 from ...utils import logging, randn_tensor, replace_example_docstring
 from ..fastdeploy_utils import FastDeployRuntimeModel
+from ..fastdeployxl_utils import FastDeployDiffusionXLPipelineMixin
 from ..pipeline_utils import DiffusionPipeline
 from . import StableDiffusionXLPipelineOutput
-from .fastdeployxl_utils import FastDeployDiffusionXLPipelineMixin
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
-import paddlenlp
+
+import ppdiffusers
 
 EXAMPLE_DOC_STRING = """
     Examples:
@@ -42,20 +49,7 @@ EXAMPLE_DOC_STRING = """
 """
 
 
-# Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.rescale_noise_cfg
-def rescale_noise_cfg(noise_cfg, noise_pred_text, guidance_rescale=0.0):
-    """
-    Rescale `noise_cfg` according to `guidance_rescale`. Based on findings of [Common Diffusion Noise Schedules and
-    Sample Steps are Flawed](https://arxiv.org/pdf/2305.08891.pdf). See Section 3.4
-    """
-    std_text = noise_pred_text.std(axis=list(range(1, noise_pred_text.ndim)), keepdim=True)
-    std_cfg = noise_cfg.std(axis=list(range(1, noise_cfg.ndim)), keepdim=True)
-    noise_pred_rescaled = noise_cfg * (std_text / std_cfg)
-    noise_cfg = guidance_rescale * noise_pred_rescaled + (1 - guidance_rescale) * noise_cfg
-    return noise_cfg
-
-
-class FastDeployStableDiffusionXLPipeline(DiffusionPipeline, FastDeployDiffusionXLPipelineMixin):
+class FastDeployStableDiffusionXLPipeline(DiffusionPipeline, FastDeployDiffusionXLPipelineMixin, IPAdapterMixin):
     """
     Pipeline for text-to-image generation using Stable Diffusion XL.
 
@@ -95,15 +89,19 @@ class FastDeployStableDiffusionXLPipeline(DiffusionPipeline, FastDeployDiffusion
             [`DDIMScheduler`], [`LMSDiscreteScheduler`], or [`PNDMScheduler`].
     """
 
+    _optional_components = ["vae_encoder", "image_encoder", "safety_checker", "feature_extractor"]
+
     def __init__(
         self,
         vae_encoder: FastDeployRuntimeModel,
         vae_decoder: FastDeployRuntimeModel,
         text_encoder: FastDeployRuntimeModel,
         text_encoder_2: FastDeployRuntimeModel,
-        tokenizer: paddlenlp.transformers.CLIPTokenizer,
-        tokenizer_2: paddlenlp.transformers.CLIPTokenizer,
+        tokenizer: CLIPTokenizer,
+        tokenizer_2: CLIPTokenizer,
         unet: FastDeployRuntimeModel,
+        image_encoder: FastDeployRuntimeModel,
+        feature_extractor: CLIPImageProcessor,
         scheduler: KarrasDiffusionSchedulers,
         force_zeros_for_empty_prompt: bool = True,
     ):
@@ -116,6 +114,8 @@ class FastDeployStableDiffusionXLPipeline(DiffusionPipeline, FastDeployDiffusion
             tokenizer=tokenizer,
             tokenizer_2=tokenizer_2,
             unet=unet,
+            image_encoder=image_encoder,
+            feature_extractor=feature_extractor,
             scheduler=scheduler,
         )
         self.register_to_config(force_zeros_for_empty_prompt=force_zeros_for_empty_prompt)
@@ -211,6 +211,7 @@ class FastDeployStableDiffusionXLPipeline(DiffusionPipeline, FastDeployDiffusion
         negative_prompt: Optional[Union[str, List[str]]] = None,
         negative_prompt_2: Optional[Union[str, List[str]]] = None,
         num_images_per_prompt: Optional[int] = 1,
+        timesteps: List[int] = None,
         eta: float = 0.0,
         generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
         latents: Optional[paddle.Tensor] = None,
@@ -218,6 +219,7 @@ class FastDeployStableDiffusionXLPipeline(DiffusionPipeline, FastDeployDiffusion
         negative_prompt_embeds: Optional[paddle.Tensor] = None,
         pooled_prompt_embeds: Optional[paddle.Tensor] = None,
         negative_pooled_prompt_embeds: Optional[paddle.Tensor] = None,
+        ip_adapter_image: Optional[PipelineImageInput] = None,
         output_type: Optional[str] = "pil",
         return_dict: bool = True,
         callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
@@ -292,6 +294,7 @@ class FastDeployStableDiffusionXLPipeline(DiffusionPipeline, FastDeployDiffusion
                 Pre-generated negative pooled text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt
                 weighting. If not provided, pooled negative_prompt_embeds will be generated from `negative_prompt`
                 input argument.
+            ip_adapter_image: (`PipelineImageInput`, *optional*): Optional image input to work with IP Adapters.
             output_type (`str`, *optional*, defaults to `"pil"`):
                 The output format of the generate image. Choose between
                 [PIL](https://pillow.readthedocs.io/en/stable/): `PIL.Image.Image` or `np.array`.
@@ -392,9 +395,16 @@ class FastDeployStableDiffusionXLPipeline(DiffusionPipeline, FastDeployDiffusion
             infer_op=infer_op_dict.get("text_encoder", None),
         )
 
+        if ip_adapter_image is not None:
+            image_embeds, negative_image_embeds = self.encode_image(
+                ip_adapter_image, num_images_per_prompt, infer_op=infer_op_dict.get("image_encoder", None)
+            )
+            if do_classifier_free_guidance:
+                image_embeds = paddle.concat([negative_image_embeds, image_embeds])
+
         # 4. Prepare timesteps
-        self.scheduler.set_timesteps(num_inference_steps)
-        timesteps = self.scheduler.timesteps
+        timesteps, num_inference_steps = self.retrieve_timesteps(self.scheduler, num_inference_steps, timesteps)
+
         # 5. Prepare latent variables
         num_channels_latents = 4
         latents = self.prepare_latents(
@@ -440,24 +450,34 @@ class FastDeployStableDiffusionXLPipeline(DiffusionPipeline, FastDeployDiffusion
                 latent_model_input = paddle.concat(x=[latents] * 2) if do_classifier_free_guidance else latents
                 latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
+                unet_inputs = {
+                    "sample": latent_model_input,
+                    "timestep": t,
+                    "encoder_hidden_states": prompt_embeds,
+                    "text_embeds": add_text_embeds,
+                    "time_ids": add_time_ids,
+                    "infer_op": infer_op_dict.get("unet", None),
+                    "output_shape": latent_model_input.shape,
+                }
+
+                # Add image embeds for IP-Adapter
+                # added_cond_kwargs = {"image_embeds": image_embeds} if ip_adapter_image is not None else None
+                if ip_adapter_image:
+                    unet_inputs["image_embeds"] = image_embeds
+
                 # predict the noise residual
-                noise_pred = self.unet(
-                    sample=latent_model_input,
-                    timestep=t,
-                    encoder_hidden_states=prompt_embeds,
-                    text_embeds=add_text_embeds,
-                    time_ids=add_time_ids,
-                    infer_op=infer_op_dict.get("unet", None),
-                    output_shape=latent_model_input.shape,
-                )[0]
+                noise_pred = self.unet(**unet_inputs)[0]
 
                 # perform guidance
                 if do_classifier_free_guidance:
                     noise_pred_uncond, noise_pred_text = noise_pred.chunk(chunks=2)
                     noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
-                if do_classifier_free_guidance and guidance_rescale > 0.0:
-                    # Based on 3.4. in https://arxiv.org/pdf/2305.08891.pdf
-                    noise_pred = rescale_noise_cfg(noise_pred, noise_pred_text, guidance_rescale=guidance_rescale)
+
+                    if guidance_rescale > 0.0:
+                        # Based on 3.4. in https://arxiv.org/pdf/2305.08891.pdf
+                        noise_pred = self.rescale_noise_cfg(
+                            noise_pred, noise_pred_text, guidance_rescale=guidance_rescale
+                        )
 
                 # compute the previous noisy sample x_t -> x_t-1
                 latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs, return_dict=False)[0]

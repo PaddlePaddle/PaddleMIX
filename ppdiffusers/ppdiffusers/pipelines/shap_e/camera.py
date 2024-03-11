@@ -1,5 +1,4 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
-# Copyright 2023 The HuggingFace Team. All rights reserved.
+# Copyright 2023 Open AI and The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 from dataclasses import dataclass
 from typing import Tuple
 
@@ -25,10 +25,10 @@ class DifferentiableProjectiveCamera:
     Implements a batch, differentiable, standard pinhole camera
     """
 
-    origin: paddle.Tensor
-    x: paddle.Tensor
-    y: paddle.Tensor
-    z: paddle.Tensor
+    origin: paddle.Tensor  # [batch_size x 3]
+    x: paddle.Tensor  # [batch_size x 3]
+    y: paddle.Tensor  # [batch_size x 3]
+    z: paddle.Tensor  # [batch_size x 3]
     width: int
     height: int
     x_fov: float
@@ -41,18 +41,18 @@ class DifferentiableProjectiveCamera:
         assert len(self.x.shape) == len(self.y.shape) == len(self.z.shape) == len(self.origin.shape) == 2
 
     def resolution(self):
-        return paddle.to_tensor(data=np.array([self.width, self.height], dtype=np.float32))
+        return paddle.to_tensor(np.array([self.width, self.height], dtype=np.float32))
 
     def fov(self):
-        return paddle.to_tensor(data=np.array([self.x_fov, self.y_fov], dtype=np.float32))
+        return paddle.to_tensor(np.array([self.x_fov, self.y_fov], dtype=np.float32))
 
     def get_image_coords(self) -> paddle.Tensor:
         """
         :return: coords of shape (width * height, 2)
         """
-        pixel_indices = paddle.arange(end=self.height * self.width)
+        pixel_indices = paddle.arange(self.height * self.width)
         coords = paddle.stack(
-            x=[pixel_indices % self.width, paddle.trunc(paddle.divide(pixel_indices, paddle.to_tensor(self.width)))],
+            [pixel_indices % self.width, paddle.floor_divide(pixel_indices, paddle.to_tensor(self.width))],  # rounding_mode="trunc")
             axis=1,
         )
         return coords
@@ -61,21 +61,28 @@ class DifferentiableProjectiveCamera:
     def camera_rays(self):
         batch_size, *inner_shape = self.shape
         inner_batch_size = int(np.prod(inner_shape))
+
         coords = self.get_image_coords()
-        coords = paddle.broadcast_to(x=coords.unsqueeze(axis=0), shape=[batch_size * inner_batch_size, *coords.shape])
+        coords = paddle.broadcast_to(coords.unsqueeze(0), [batch_size * inner_batch_size, *coords.shape])
         rays = self.get_camera_rays(coords)
+
         rays = rays.reshape([batch_size, inner_batch_size * self.height * self.width, 2, 3])
+
         return rays
 
     def get_camera_rays(self, coords: paddle.Tensor) -> paddle.Tensor:
         batch_size, *shape, n_coords = coords.shape
         assert n_coords == 2
         assert batch_size == self.origin.shape[0]
+
         flat = coords.reshape([batch_size, -1, 2])
+
         res = self.resolution()
         fov = self.fov()
-        fracs = flat.astype(dtype="float32") / (res - 1) * 2 - 1
-        fracs = fracs * paddle.tan(x=fov / 2)
+
+        fracs = (flat.cast("float32") / (res - 1)) * 2 - 1
+        fracs = fracs * paddle.tan(fov / 2)
+
         fracs = fracs.reshape([batch_size, -1, 2])
         directions = (
             self.z.reshape([batch_size, 1, 3])
@@ -84,10 +91,8 @@ class DifferentiableProjectiveCamera:
         )
         directions = directions / directions.norm(axis=-1, keepdim=True)
         rays = paddle.stack(
-            x=[
-                paddle.broadcast_to(
-                    x=self.origin.reshape([batch_size, 1, 3]), shape=[batch_size, directions.shape[1], 3]
-                ),
+            [
+                paddle.broadcast_to(self.origin.reshape([batch_size, 1, 3]), [batch_size, directions.shape[1], 3]),
                 directions,
             ],
             axis=2,
@@ -127,10 +132,10 @@ def create_pan_cameras(size: int) -> DifferentiableProjectiveCamera:
         ys.append(y)
         zs.append(z)
     return DifferentiableProjectiveCamera(
-        origin=paddle.to_tensor(data=np.stack(origins, axis=0)).astype(dtype="float32"),
-        x=paddle.to_tensor(data=np.stack(xs, axis=0)).astype(dtype="float32"),
-        y=paddle.to_tensor(data=np.stack(ys, axis=0)).astype(dtype="float32"),
-        z=paddle.to_tensor(data=np.stack(zs, axis=0)).astype(dtype="float32"),
+        origin=paddle.to_tensor(np.stack(origins, axis=0)).cast("float32"),
+        x=paddle.to_tensor(np.stack(xs, axis=0)).cast("float32"),
+        y=paddle.to_tensor(np.stack(ys, axis=0)).cast("float32"),
+        z=paddle.to_tensor(np.stack(zs, axis=0)).cast("float32"),
         width=size,
         height=size,
         x_fov=0.7,

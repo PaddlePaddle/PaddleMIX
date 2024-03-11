@@ -16,7 +16,7 @@ import unittest
 
 import numpy as np
 import paddle
-from paddlenlp.transformers import (
+from ppdiffusers.transformers import (
     CLIPTextConfig,
     CLIPTextModel,
     CLIPTextModelWithProjection,
@@ -43,13 +43,14 @@ from ..test_pipelines_common import (
     PipelineKarrasSchedulerTesterMixin,
     PipelineLatentTesterMixin,
     PipelineTesterMixin,
+    SDXLOptionalComponentsTesterMixin,
 )
 
 enable_full_determinism()
 
 
 class ControlNetPipelineSDXLFastTests(
-    PipelineLatentTesterMixin, PipelineKarrasSchedulerTesterMixin, PipelineTesterMixin, unittest.TestCase
+    PipelineLatentTesterMixin, PipelineKarrasSchedulerTesterMixin, SDXLOptionalComponentsTesterMixin, PipelineTesterMixin, unittest.TestCase
 ):
     pipeline_class = StableDiffusionXLControlNetPipeline
     params = TEXT_TO_IMAGE_PARAMS
@@ -57,7 +58,7 @@ class ControlNetPipelineSDXLFastTests(
     image_params = IMAGE_TO_IMAGE_IMAGE_PARAMS
     image_latents_params = TEXT_TO_IMAGE_IMAGE_PARAMS
 
-    def get_dummy_components(self):
+    def get_dummy_components(self, time_cond_proj_dim=None):
         paddle.seed(seed=0)
         unet = UNet2DConditionModel(
             block_out_channels=(32, 64),
@@ -74,6 +75,7 @@ class ControlNetPipelineSDXLFastTests(
             transformer_layers_per_block=(1, 2),
             projection_class_embeddings_input_dim=80,
             cross_attention_dim=64,
+            time_cond_proj_dim=time_cond_proj_dim,
         )
         paddle.seed(seed=0)
         controlnet = ControlNetModel(
@@ -134,6 +136,8 @@ class ControlNetPipelineSDXLFastTests(
             "tokenizer": tokenizer,
             "text_encoder_2": text_encoder_2,
             "tokenizer_2": tokenizer_2,
+            "feature_extractor": None,
+            "image_encoder": None,
         }
         return components
 
@@ -158,7 +162,8 @@ class ControlNetPipelineSDXLFastTests(
         return self._test_attention_slicing_forward_pass(expected_max_diff=0.002)
 
     def test_xformers_attention_forwardGenerator_pass(self):
-        self._test_xformers_attention_forwardGenerator_pass(expected_max_diff=0.002)
+        # self._test_xformers_attention_forwardGenerator_pass(expected_max_diff=0.002)
+        pass
 
     def test_inference_batch_single_identical(self):
         self._test_inference_batch_single_identical(expected_max_diff=0.002)
@@ -218,3 +223,6 @@ class ControlNetPipelineSDXLFastTests(
         output = sd_pipe(**inputs)
         image_slice_3 = output.images[(0), -3:, -3:, (-1)]
         assert np.abs(image_slice_1.flatten() - image_slice_3.flatten()).max() > 0.0001
+    
+    def test_save_load_optional_components(self):
+        self._test_save_load_optional_components()

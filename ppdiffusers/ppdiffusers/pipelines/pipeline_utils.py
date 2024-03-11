@@ -1,6 +1,5 @@
 # coding=utf-8
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
-# Copyright 2022 The HuggingFace Inc. team.
+# Copyright 2023 The HuggingFace Inc. team.
 # Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,63 +14,39 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import fnmatch
 import importlib
 import inspect
 import os
-import re
 import sys
-import tempfile
-import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
-import PIL
 import PIL.Image
-from huggingface_hub import (
-    create_repo,
-    get_hf_file_metadata,
-    hf_hub_url,
-    model_info,
-    repo_type_and_id_from_hf_id,
-    snapshot_download,
-    upload_folder,
-)
-from huggingface_hub.utils import EntryNotFoundError
+from huggingface_hub import create_repo
 from packaging import version
 from tqdm.auto import tqdm
 
 from ..configuration_utils import ConfigMixin
-from ..schedulers.scheduling_utils import SCHEDULER_CONFIG_NAME
 from ..utils import (
-    CONFIG_NAME,
-    DEPRECATED_REVISION_ARGS,
     DIFFUSERS_CACHE,
-    FLAX_WEIGHTS_NAME,
+    FROM_AISTUDIO,
     FROM_DIFFUSERS,
     FROM_HF_HUB,
     HF_HUB_OFFLINE,
     LOW_CPU_MEM_USAGE_DEFAULT,
-    ONNX_EXTERNAL_WEIGHTS_NAME,
-    ONNX_WEIGHTS_NAME,
     PPDIFFUSERS_CACHE,
-    TO_DIFFUSERS,
-    TORCH_SAFETENSORS_WEIGHTS_NAME,
-    TORCH_WEIGHTS_NAME,
     BaseOutput,
     deprecate,
     get_class_from_dynamic_module,
     is_paddle_available,
+    is_paddle_version,
     is_paddlenlp_available,
-    is_safetensors_available,
+    is_peft_available,
     logging,
     numpy_to_pil,
-    ppdiffusers_bos_dir_download,
-    ppdiffusers_url_download,
 )
-from ..version import VERSION as __version__
 
 if is_paddle_available():
     import paddle
@@ -80,28 +55,44 @@ if is_paddle_available():
 if is_paddlenlp_available():
     from paddlenlp.transformers import PretrainedModel
 
-from .fastdeploy_utils import FastDeployRuntimeModel
+    # from paddlenlp.utils.env import (
+    #     PADDLE_WEIGHTS_NAME as PPNLP_PADDLE_WEIGHTS_NAME,
+    #     PADDLE_WEIGHTS_INDEX_NAME as PPNLP_PADDLE_WEIGHTS_INDEX_NAME,
+    #     PYTORCH_WEIGHTS_NAME as PPNLP_PYTORCH_WEIGHTS_NAME,
+    #     PYTORCH_WEIGHTS_INDEX_NAME as PPNLP_PYTORCH_WEIGHTS_INDEX_NAME,
+    #     SAFE_WEIGHTS_NAME as PPNLP_SAFE_WEIGHTS_NAME,
+    #     SAFE_WEIGHTS_INDEX_NAME as PPNLP_SAFE_WEIGHTS_INDEX_NAME,
+    # )
 
-TRANSFORMERS_SAFE_WEIGHTS_NAME = "model.safetensors"
-TRANSFORMERS_WEIGHTS_NAME = "pytorch_model.bin"
-TRANSFORMERS_FLAX_WEIGHTS_NAME = "flax_model.msgpack"
+from ..models.paddleinfer_runtime import PaddleInferRuntimeModel
+from .fastdeploy_utils import FastDeployRuntimeModel
 
 TORCH_INDEX_FILE = "diffusion_pytorch_model.bin"
 PADDLE_INDEX_FILE = "model_state.pdparams"
 
 CUSTOM_PIPELINE_FILE_NAME = "pipeline.py"
 DUMMY_MODULES_FOLDER = "ppdiffusers.utils"
-PADDLENLP_DUMMY_MODULES_FOLDER = "paddlenlp.transformers.utils"
 CONNECTED_PIPES_KEYS = ["prior"]
 
+
 logger = logging.get_logger(__name__)
+
 
 LOADABLE_CLASSES = {
     "ppdiffusers": {
         "ModelMixin": ["save_pretrained", "from_pretrained"],
         "SchedulerMixin": ["save_pretrained", "from_pretrained"],
         "DiffusionPipeline": ["save_pretrained", "from_pretrained"],
+        "StableDiffusionSafetyChecker": ["save_pretrained", "from_pretrained"],
         "FastDeployRuntimeModel": ["save_pretrained", "from_pretrained"],
+        "PaddleInferRuntimeModel": ["save_pretrained", "from_pretrained"],
+    },
+    "ppdiffusers.transformers": {
+        "PretrainedTokenizer": ["save_pretrained", "from_pretrained"],
+        "PretrainedModel": ["save_pretrained", "from_pretrained"],
+        "FeatureExtractionMixin": ["save_pretrained", "from_pretrained"],
+        "ProcessorMixin": ["save_pretrained", "from_pretrained"],
+        "ImageProcessingMixin": ["save_pretrained", "from_pretrained"],
     },
     "paddlenlp.transformers": {
         "PretrainedTokenizer": ["save_pretrained", "from_pretrained"],
@@ -125,23 +116,11 @@ class ImagePipelineOutput(BaseOutput):
 
     Args:
         images (`List[PIL.Image.Image]` or `np.ndarray`)
-            List of denoised PIL images of length `batch_size` or numpy array of shape `(batch_size, height, width,
-            num_channels)`. PIL images or numpy array present the denoised images of the diffusion pipeline.
+            List of denoised PIL images of length `batch_size` or NumPy array of shape `(batch_size, height, width,
+            num_channels)`.
     """
 
     images: Union[List[PIL.Image.Image], np.ndarray]
-
-
-@dataclass
-class TextPipelineOutput(BaseOutput):
-    """
-    Output class for text pipelines.
-    Args:
-        prompt (`List[str]` or `str`)
-            List of denoised texts.
-    """
-
-    texts: Union[List[str], str]
 
 
 @dataclass
@@ -151,8 +130,7 @@ class AudioPipelineOutput(BaseOutput):
 
     Args:
         audios (`np.ndarray`)
-            List of denoised samples of shape `(batch_size, num_channels, sample_rate)`. Numpy array present the
-            denoised audio samples of the diffusion pipeline.
+            List of denoised audio samples of a NumPy array of shape `(batch_size, num_channels, sample_rate)`.
     """
 
     audios: np.ndarray
@@ -164,8 +142,9 @@ def is_safetensors_compatible(filenames, variant=None, passed_components=None) -
     - By default, all models are saved with the default pytorch serialization, so we use the list of default pytorch
       files to know which safetensors files are needed.
     - The model is safetensors compatible only if there is a matching safetensors file for every default pytorch file.
+
     Converting default pytorch serialized filenames to safetensors serialized filenames:
-    - For models from the ppdiffusers library, just replace the ".bin" extension with ".safetensors"
+    - For models from the diffusers library, just replace the ".bin" extension with ".safetensors"
     - For models from the transformers library, the filename changes from "pytorch_model" to "model", and the ".bin"
       extension is replaced with ".safetensors"
     """
@@ -182,9 +161,9 @@ def is_safetensors_compatible(filenames, variant=None, passed_components=None) -
             continue
 
         if extension == ".bin":
-            pt_filenames.append(filename)
+            pt_filenames.append(os.path.normpath(filename))
         elif extension == ".safetensors":
-            sf_filenames.add(filename)
+            sf_filenames.add(os.path.normpath(filename))
 
     for filename in pt_filenames:
         #  filename = 'foo/bar/baz.bam' -> path = 'foo/bar', filename = 'baz', extention = '.bam'
@@ -196,9 +175,8 @@ def is_safetensors_compatible(filenames, variant=None, passed_components=None) -
         else:
             filename = filename
 
-        expected_sf_filename = os.path.join(path, filename)
+        expected_sf_filename = os.path.normpath(os.path.join(path, filename))
         expected_sf_filename = f"{expected_sf_filename}.safetensors"
-
         if expected_sf_filename not in sf_filenames:
             logger.warning(f"{expected_sf_filename} not found")
             return False
@@ -206,92 +184,15 @@ def is_safetensors_compatible(filenames, variant=None, passed_components=None) -
     return True
 
 
-def variant_compatible_siblings(filenames, variant=None) -> Union[List[os.PathLike], str]:
-    weight_names = [
-        TORCH_WEIGHTS_NAME,
-        TORCH_SAFETENSORS_WEIGHTS_NAME,
-        TRANSFORMERS_WEIGHTS_NAME,
-        TRANSFORMERS_SAFE_WEIGHTS_NAME,
-        TRANSFORMERS_FLAX_WEIGHTS_NAME,
-        FLAX_WEIGHTS_NAME,
-        ONNX_WEIGHTS_NAME,
-        ONNX_EXTERNAL_WEIGHTS_NAME,
-    ]
-    # model_pytorch, diffusion_model_pytorch, ...
-    weight_prefixes = [w.split(".")[0] for w in weight_names]
-    # .bin, .safetensors, ...
-    weight_suffixs = [w.split(".")[-1] for w in weight_names]
-    # -00001-of-00002
-    transformers_index_format = r"\d{5}-of-\d{5}"
+def _unwrap_model(model):
+    # do nothing
+    if is_peft_available():
+        from ppdiffusers.peft import PeftModel
 
-    if variant is not None:
-        # `diffusion_pytorch_model.fp16.bin` as well as `model.fp16-00001-of-00002.safetenstors`
-        variant_file_re = re.compile(
-            rf"({'|'.join(weight_prefixes)})\.({variant}|{variant}-{transformers_index_format})\.({'|'.join(weight_suffixs)})$"
-        )
-        # `text_encoder/pytorch_model.bin.index.fp16.json`
-        variant_index_re = re.compile(
-            rf"({'|'.join(weight_prefixes)})\.({'|'.join(weight_suffixs)})\.index\.{variant}\.json$"
-        )
+        if isinstance(model, PeftModel):
+            model = model.base_model.model
 
-    # `diffusion_pytorch_model.bin` as well as `model-00001-of-00002.safetenstors`
-    non_variant_file_re = re.compile(
-        rf"({'|'.join(weight_prefixes)})(-{transformers_index_format})?\.({'|'.join(weight_suffixs)})$"
-    )
-    # `text_encoder/pytorch_model.bin.index.json`
-    non_variant_index_re = re.compile(rf"({'|'.join(weight_prefixes)})\.({'|'.join(weight_suffixs)})\.index\.json")
-
-    if variant is not None:
-        variant_weights = {f for f in filenames if variant_file_re.match(f.split("/")[-1]) is not None}
-        variant_indexes = {f for f in filenames if variant_index_re.match(f.split("/")[-1]) is not None}
-        variant_filenames = variant_weights | variant_indexes
-    else:
-        variant_filenames = set()
-
-    non_variant_weights = {f for f in filenames if non_variant_file_re.match(f.split("/")[-1]) is not None}
-    non_variant_indexes = {f for f in filenames if non_variant_index_re.match(f.split("/")[-1]) is not None}
-    non_variant_filenames = non_variant_weights | non_variant_indexes
-
-    # all variant filenames will be used by default
-    usable_filenames = set(variant_filenames)
-
-    def convert_to_variant(filename):
-        if "index" in filename:
-            variant_filename = filename.replace("index", f"index.{variant}")
-        elif re.compile(f"^(.*?){transformers_index_format}").match(filename) is not None:
-            variant_filename = f"{filename.split('-')[0]}.{variant}-{'-'.join(filename.split('-')[1:])}"
-        else:
-            variant_filename = f"{filename.split('.')[0]}.{variant}.{filename.split('.')[1]}"
-        return variant_filename
-
-    for f in non_variant_filenames:
-        variant_filename = convert_to_variant(f)
-        if variant_filename not in usable_filenames:
-            usable_filenames.add(f)
-
-    return usable_filenames, variant_filenames
-
-
-def warn_deprecated_model_variant(pretrained_model_name_or_path, use_auth_token, variant, revision, model_filenames):
-    info = model_info(
-        pretrained_model_name_or_path,
-        use_auth_token=use_auth_token,
-        revision=None,
-    )
-    filenames = {sibling.rfilename for sibling in info.siblings}
-    comp_model_filenames, _ = variant_compatible_siblings(filenames, variant=revision)
-    comp_model_filenames = [".".join(f.split(".")[:1] + f.split(".")[2:]) for f in comp_model_filenames]
-
-    if set(comp_model_filenames) == set(model_filenames):
-        warnings.warn(
-            f"You are loading the variant {revision} from {pretrained_model_name_or_path} via `revision='{revision}'` even though you can load it via `variant=`{revision}`. Loading model variants via `revision='{revision}'` is deprecated and will be removed in ppdiffusers v1. Please use `variant='{revision}'` instead.",
-            FutureWarning,
-        )
-    else:
-        warnings.warn(
-            f"You are loading the variant {revision} from {pretrained_model_name_or_path} via `revision='{revision}'`. This behavior is deprecated and will be removed in ppdiffusers v1. One should use `variant='{revision}'` instead. However, it appears that {pretrained_model_name_or_path} currently does not have the required variant filenames in the 'main' branch. \n The ppdiffusers team and community would be very grateful if you could open an issue with the title '{pretrained_model_name_or_path} is missing {revision} files' so that the correct variant file can be added.",
-            FutureWarning,
-        )
+    return model
 
 
 def maybe_raise_or_warn(
@@ -311,12 +212,12 @@ def maybe_raise_or_warn(
         # Dynamo wraps the original model in a private class.
         # I didn't find a public API to get the original class.
         sub_model = passed_class_obj[name]
-        model_cls = sub_model.__class__
+        unwrapped_sub_model = _unwrap_model(sub_model)
+        model_cls = unwrapped_sub_model.__class__
 
         if not issubclass(model_cls, expected_class_obj):
             raise ValueError(
-                f"{passed_class_obj[name]} is of type: {type(passed_class_obj[name])}, but should be"
-                f" {expected_class_obj}"
+                f"{passed_class_obj[name]} is of type: {model_cls}, but should be" f" {expected_class_obj}"
             )
     else:
         logger.warning(
@@ -325,41 +226,82 @@ def maybe_raise_or_warn(
         )
 
 
-def get_class_obj_and_candidates(library_name, class_name, importable_classes, pipelines, is_pipeline_module):
+def get_class_obj_and_candidates(
+    library_name, class_name, importable_classes, pipelines, is_pipeline_module, component_name=None, cache_dir=None
+):
     """Simple helper method to retrieve class object of module as well as potential parent class objects"""
+    component_folder = os.path.join(cache_dir, component_name)
+
     if is_pipeline_module:
         pipeline_module = getattr(pipelines, library_name)
 
         class_obj = getattr(pipeline_module, class_name)
         class_candidates = {c: class_obj for c in importable_classes.keys()}
+    elif os.path.isfile(os.path.join(component_folder, library_name + ".py")):
+        # load custom component
+        class_obj = get_class_from_dynamic_module(
+            component_folder, module_file=library_name + ".py", class_name=class_name
+        )
+        class_candidates = {c: class_obj for c in importable_classes.keys()}
     else:
         # else we just import it from the library.
         library = importlib.import_module(library_name)
+
         class_obj = getattr(library, class_name)
         class_candidates = {c: getattr(library, c, None) for c in importable_classes.keys()}
 
+    # we will use PPNLP PretrainedModel
+    if "PretrainedModel" in class_candidates:
+        class_candidates["PretrainedModel"] = PretrainedModel
     return class_obj, class_candidates
 
 
-def _get_pipeline_class(class_obj, config, custom_pipeline=None, cache_dir=None, revision=None):
+def _get_pipeline_class(
+    class_obj,
+    config,
+    custom_pipeline=None,
+    repo_id=None,
+    hub_revision=None,
+    class_name=None,
+    cache_dir=None,
+    revision=None,
+):
     if custom_pipeline is not None:
         if custom_pipeline.endswith(".py"):
             path = Path(custom_pipeline)
             # decompose into folder & file
             file_name = path.name
             custom_pipeline = path.parent.absolute()
+        elif repo_id is not None:
+            file_name = f"{custom_pipeline}.py"
+            custom_pipeline = repo_id
         else:
             file_name = CUSTOM_PIPELINE_FILE_NAME
 
+        if repo_id is not None and hub_revision is not None:
+            # if we load the pipeline code from the Hub
+            # make sure to overwrite the `revison`
+            revision = hub_revision
+
         return get_class_from_dynamic_module(
-            custom_pipeline, module_file=file_name, cache_dir=cache_dir, revision=revision
+            custom_pipeline,
+            module_file=file_name,
+            class_name=class_name,
+            repo_id=repo_id,
+            cache_dir=cache_dir,
+            revision=revision,
         )
 
     if class_obj != DiffusionPipeline:
         return class_obj
 
-    ppdiffusers_module = importlib.import_module(class_obj.__module__.split(".")[0])
-    return getattr(ppdiffusers_module, config["_class_name"])
+    diffusers_module = importlib.import_module(class_obj.__module__.split(".")[0])
+    class_name = config["_class_name"]
+    class_name = class_name[4:] if class_name.startswith("Flax") else class_name
+
+    pipeline_cls = getattr(diffusers_module, class_name)
+
+    return pipeline_cls
 
 
 def load_sub_model(
@@ -371,22 +313,31 @@ def load_sub_model(
     pipeline_class: Any,
     paddle_dtype: paddle.dtype,
     runtime_options: Any,
+    infer_configs: Any,
+    use_optim_cache: bool,
     model_variants: Dict[str, str],
     name: str,
     from_diffusers: bool,
-    low_cpu_mem_usage: bool = False,
-    cached_folder: Union[str, os.PathLike] = None,
-    **kwargs,
+    low_cpu_mem_usage: bool,
+    cached_folder: Union[str, os.PathLike],
+    revision: str = None,
+    is_onnx_model: bool = False,
+    from_hf_hub: bool = False,
+    from_aistudio: bool = False,
+    cache_dir: Union[str, os.PathLike] = None,
+    variant: str = None,
+    use_safetensors: bool = False,
 ):
-    # support huggingface diffusers onnx model
-    is_onnx_model = False
-    if "Onnx" in class_name:
-        class_name = class_name.replace("Onnx", "FastDeploy")
-        is_onnx_model = True
     """Helper method to load the module `name` from `library_name` and `class_name`"""
     # retrieve class candidates
     class_obj, class_candidates = get_class_obj_and_candidates(
-        library_name, class_name, importable_classes, pipelines, is_pipeline_module
+        library_name,
+        class_name,
+        importable_classes,
+        pipelines,
+        is_pipeline_module,
+        component_name=name,
+        cache_dir=cached_folder,
     )
 
     load_method_name = None
@@ -398,9 +349,7 @@ def load_sub_model(
     # if load method name is None, then we have a dummy module -> raise Error
     if load_method_name is None:
         none_module = class_obj.__module__
-        is_dummy_path = none_module.startswith(DUMMY_MODULES_FOLDER) or none_module.startswith(
-            PADDLENLP_DUMMY_MODULES_FOLDER
-        )
+        is_dummy_path = none_module.startswith(DUMMY_MODULES_FOLDER)
         if is_dummy_path and "dummy" in none_module:
             # call class_obj for nice error message of missing requirements
             class_obj()
@@ -409,10 +358,10 @@ def load_sub_model(
             f"The component {class_obj} of {pipeline_class} cannot be loaded as it does not seem to have"
             f" any of the loading methods defined in {ALL_IMPORTABLE_CLASSES}."
         )
-
     load_method = getattr(class_obj, load_method_name)
 
     # add kwargs to loading method
+    ppdiffusers_module = importlib.import_module(__name__.split(".")[0])
     loading_kwargs = {}
 
     # FastDeploy Model
@@ -420,100 +369,118 @@ def load_sub_model(
         loading_kwargs["runtime_options"] = (
             runtime_options.get(name, None) if isinstance(runtime_options, dict) else runtime_options
         )
-        if not is_onnx_model:
-            if os.path.isdir(os.path.join(cached_folder, name)):
-                is_onnx_model = any(
-                    d.endswith(".onnx") or d.endswith(".pb") for d in os.listdir(os.path.join(cached_folder, name))
-                )
-            else:
-                is_onnx_model = any(
-                    d.endswith(".onnx") or d.endswith(".pb") for d in os.listdir(os.path.join(cached_folder))
-                )
+        # HACK, this is only for fd onnx model
+        if "melgan" in name:
+            is_onnx_model = True
         loading_kwargs["is_onnx_model"] = is_onnx_model
 
-    from ppdiffusers import ModelMixin
+    # PaddleInferRuntimeModel
+    if issubclass(class_obj, PaddleInferRuntimeModel):
+        loading_kwargs["infer_configs"] = (
+            infer_configs.get(name, None) if isinstance(infer_configs, dict) else infer_configs
+        )
+        loading_kwargs["use_optim_cache"] = use_optim_cache
+
+    is_ppdiffusers_model = issubclass(class_obj, ppdiffusers_module.ModelMixin)
+    is_paddlenlp_model = issubclass(class_obj, PretrainedModel)
 
     # PaddleNLP or PPDiffusers Model
-    if issubclass(class_obj, (PretrainedModel, ModelMixin)):
-        loading_kwargs["variant"] = model_variants.pop(name, None)
-        loading_kwargs["from_diffusers"] = from_diffusers
-        loading_kwargs["paddle_dtype"] = paddle_dtype
-        loading_kwargs["low_cpu_mem_usage"] = low_cpu_mem_usage
-
-    loaded_sub_model = None
-    try:
-        # check if the module is in a subdirectory
-        if os.path.isdir(os.path.join(cached_folder, name)):
-            loaded_sub_model = load_method(os.path.join(cached_folder, name), **loading_kwargs)
-        else:
-            # else load from the root directory
-            loaded_sub_model = load_method(cached_folder, **loading_kwargs)
-    except Exception as e:
-        # (TODO, junnyu)
-        # if we cant find this file, we will try to download this
-        local_files_only = kwargs["local_files_only"]
-        is_local_dir = kwargs["is_local_dir"]
-        from_hf_hub = kwargs["from_hf_hub"]
-        pretrained_model_name_or_path = kwargs["pretrained_model_name_or_path"]
-        cache_dir = kwargs["cache_dir"]
-        if not local_files_only and not is_local_dir and not from_hf_hub:
-            loaded_sub_model = load_method(
-                pretrained_model_name_or_path + "/" + name, cache_dir=cache_dir, **loading_kwargs
+    if is_ppdiffusers_model or is_paddlenlp_model:
+        loading_kwargs["variant"] = model_variants.pop(name, variant)
+        loading_kwargs["use_safetensors"] = use_safetensors
+        if is_paddlenlp_model:
+            loading_kwargs["convert_from_torch"] = from_diffusers
+            loading_kwargs["dtype"] = (
+                str(paddle_dtype).replace("paddle.", "") if paddle_dtype is not None else paddle_dtype
             )
-        if loaded_sub_model is None:
-            raise ValueError(f"We cant load '{name}' from {pretrained_model_name_or_path} or {cached_folder}! \n {e} ")
+            if low_cpu_mem_usage:
+                logger.info(
+                    f"Auto set low_cpu_mem_usage to `False` for {name}, there may have some bug in paddlenlp's `low_cpu_mem_usage`."
+                )
+                low_cpu_mem_usage = False
+            loading_kwargs["low_cpu_mem_usage"] = low_cpu_mem_usage
+        else:
+            loading_kwargs["from_diffusers"] = from_diffusers
+            loading_kwargs["paddle_dtype"] = paddle_dtype
+            loading_kwargs["low_cpu_mem_usage"] = low_cpu_mem_usage
+
+    # check if the module is in a subdirectory
+    if os.path.isdir(os.path.join(cached_folder, name)):
+        loaded_sub_model = load_method(os.path.join(cached_folder, name), **loading_kwargs)
+    else:
+        loading_kwargs["from_hf_hub"] = from_hf_hub
+        loading_kwargs["from_aistudio"] = from_aistudio
+        loading_kwargs["cache_dir"] = cache_dir
+        loading_kwargs["subfolder"] = name
+        # else load from the root directory
+        loaded_sub_model = load_method(cached_folder, **loading_kwargs)
 
     return loaded_sub_model
 
 
 class DiffusionPipeline(ConfigMixin):
     r"""
-    Base class for all models.
+    Base class for all pipelines.
 
-    [`DiffusionPipeline`] takes care of storing all components (models, schedulers, processors) for diffusion pipelines
-    and handles methods for loading, downloading and saving models as well as a few methods common to all pipelines to:
+    [`DiffusionPipeline`] stores all components (models, schedulers, and processors) for diffusion pipelines and
+    provides methods for loading, downloading and saving models. It also includes methods to:
 
-        - move all modules to the device of your choice
-        - enabling/disabling the progress bar for the denoising iteration
+        - move all PyTorch modules to the device of your choice
+        - enable/disable the progress bar for the denoising iteration
 
     Class attributes:
 
-        - **config_name** (`str`) -- name of the config file that will store the class and module names of all
-          components of the diffusion pipeline.
-        - **_optional_components** (List[`str`]) -- list of all components that are optional so they don't have to be
-          passed for the pipeline to function (should be overridden by subclasses).
+        - **config_name** (`str`) -- The configuration filename that stores the class and module names of all the
+          diffusion pipeline's components.
+        - **_optional_components** (`List[str]`) -- List of all optional components that don't have to be passed to the
+          pipeline to function (should be overridden by subclasses).
     """
+
     config_name = "model_index.json"
+    model_cpu_offload_seq = None
     _optional_components = []
+    _exclude_from_cpu_offload = []
+    _load_connected_pipes = False
+    _is_fastdeploy = False
 
     def register_modules(self, **kwargs):
         # import it here to avoid circular import
-        from ppdiffusers import pipelines
+        ppdiffusers_module = importlib.import_module(__name__.split(".")[0])
+        pipelines = getattr(ppdiffusers_module, "pipelines")
 
         for name, module in kwargs.items():
             # retrieve library
-            if module is None:
+            if module is None or isinstance(module, (tuple, list)) and module[0] is None:
                 register_dict = {name: (None, None)}
             else:
-                # TODO (junnyu) support paddlenlp.transformers
-                if "paddlenlp" in module.__module__.split(".") or "ppnlp_patch_utils" in module.__module__.split("."):
-                    library = "paddlenlp.transformers"
+                # register the config from the original module, not the dynamo compiled one
+                not_compiled_module = _unwrap_model(module)
+
+                # TODO (junnyu) support paddlenlp.transformers check this ?
+                if "paddlenlp" in not_compiled_module.__module__.split("."):
+                    library = "ppdiffusers.transformers"
+                elif "ppdiffusers.transformers" in not_compiled_module.__module__:
+                    library = "ppdiffusers.transformers"
                 else:
-                    library = module.__module__.split(".")[0]
+                    library = not_compiled_module.__module__.split(".")[0]
 
                 # check if the module is a pipeline module
-                pipeline_dir = module.__module__.split(".")[-2] if len(module.__module__.split(".")) > 2 else None
-                path = module.__module__.split(".")
+                module_path_items = not_compiled_module.__module__.split(".")
+                pipeline_dir = module_path_items[-2] if len(module_path_items) > 2 else None
+
+                path = not_compiled_module.__module__.split(".")
                 is_pipeline_module = pipeline_dir in path and hasattr(pipelines, pipeline_dir)
 
                 # if library is not in LOADABLE_CLASSES, then it is a custom module.
                 # Or if it's a pipeline module, then the module is inside the pipeline
                 # folder so we set the library to module name.
-                if library not in LOADABLE_CLASSES or is_pipeline_module:
+                if is_pipeline_module:
                     library = pipeline_dir
+                elif library not in LOADABLE_CLASSES:
+                    library = not_compiled_module.__module__
 
                 # retrieve class_name
-                class_name = module.__class__.__name__
+                class_name = not_compiled_module.__class__.__name__
 
                 register_dict = {name: (library, class_name)}
 
@@ -522,22 +489,6 @@ class DiffusionPipeline(ConfigMixin):
 
             # set models
             setattr(self, name, module)
-
-            # TODO junnyu, before register model, we may need to keep some module in fp32
-            if (
-                isinstance(module, nn.Layer)
-                and hasattr(module, "_keep_in_fp32_modules")
-                and module.dtype == paddle.float16
-                and module._keep_in_fp32_modules is not None
-            ):
-                for module_name, sub_module in module.named_sublayers(include_self=True):
-                    if any(n in module_name for n in module._keep_in_fp32_modules):
-                        sub_module.to(dtype=paddle.float32)
-                        if hasattr(sub_module, "pre_hook"):
-                            sub_module.pre_hook.remove()
-                        sub_module.pre_hook = sub_module.register_forward_pre_hook(
-                            lambda layer, input: input[0].cast("float32")
-                        )
 
     def __setattr__(self, name: str, value: Any):
         if name in self.__dict__ and hasattr(self.config, name):
@@ -557,33 +508,70 @@ class DiffusionPipeline(ConfigMixin):
     def save_pretrained(
         self,
         save_directory: Union[str, os.PathLike],
-        safe_serialization: bool = False,
+        safe_serialization: bool = True,
         variant: Optional[str] = None,
-        to_diffusers: bool = None,
+        push_to_hub: bool = False,
+        save_to_aistudio: bool = False,
+        max_shard_size: Union[int, str] = "10GB",
+        to_diffusers: Optional[bool] = None,
+        **kwargs,
     ):
         """
-        Save all variables of the pipeline that can be saved and loaded as well as the pipelines configuration file to
-        a directory. A pipeline variable can be saved and loaded if its class implements both a save and loading
-        method. The pipeline can easily be re-loaded using the `[`~DiffusionPipeline.from_pretrained`]` class method.
+        Save all saveable variables of the pipeline to a directory. A pipeline variable can be saved and loaded if its
+        class implements both a save and loading method. The pipeline is easily reloaded using the
+        [`~DiffusionPipeline.from_pretrained`] class method.
 
         Arguments:
             save_directory (`str` or `os.PathLike`):
-                Directory to which to save. Will be created if it doesn't exist.
-            safe_serialization (`bool`, *optional*, defaults to `False`):
-                Whether to save the model using `safetensors` or the traditional PyTorch way (that uses `pickle`).
+                Directory to save a pipeline to. Will be created if it doesn't exist.
+            safe_serialization (`bool`, *optional*, defaults to `True`):
+                Whether to save the model using `safetensors` or the traditional PyTorch way with `pickle`.
             variant (`str`, *optional*):
-                If specified, weights are saved in the format pytorch_model.<variant>.bin.
+                If specified, weights are saved in the format `pytorch_model.<variant>.bin`.
+            push_to_hub (`bool`, *optional*, defaults to `False`):
+                Whether or not to push your model to the Hugging Face model hub after saving it. You can specify the
+                repository you want to push to with `repo_id` (will default to the name of `save_directory` in your
+                namespace).
+            kwargs (`Dict[str, Any]`, *optional*):
+                Additional keyword arguments passed along to the [`~utils.PushToHubMixin.push_to_hub`] method.
         """
-        if to_diffusers is None:
-            to_diffusers = TO_DIFFUSERS
-
         model_index_dict = dict(self.config)
         model_index_dict.pop("_class_name", None)
-        # TODO (junnyu) support old version
-        model_index_dict.pop("_diffusers_paddle_version", None)
-        model_index_dict.pop("_diffusers_version", None)
         model_index_dict.pop("_ppdiffusers_version", None)
         model_index_dict.pop("_module", None)
+        model_index_dict.pop("_name_or_path", None)
+
+        # create repo
+        commit_message = kwargs.pop("commit_message", None)
+        private = kwargs.pop("private", False)
+        create_pr = kwargs.pop("create_pr", False)
+        token = kwargs.pop("token", None)
+        token_kwargs = {}
+        if token is not None:
+            token_kwargs["token"] = token
+        repo_id = kwargs.pop("repo_id", save_directory.split(os.path.sep)[-1])
+        license = kwargs.pop("license", "creativeml-openrail-m")
+        exist_ok = kwargs.pop("exist_ok", True)
+
+        if push_to_hub:
+            repo_id = create_repo(repo_id, exist_ok=True, private=private, **token_kwargs).repo_id
+
+        if save_to_aistudio:
+            from aistudio_sdk.hub import create_repo as aistudio_create_repo
+
+            assert "/" in repo_id, "Please specify the repo id in format of `user_id/repo_name`"
+            res = aistudio_create_repo(repo_id=repo_id, private=private, license=license, **token_kwargs)
+            if "error_code" in res:
+                if res["error_code"] == 10003 and exist_ok:
+                    logger.info(
+                        f"Repo {repo_id} already exists, it will override files with the same name. To avoid this, please set exist_ok=False"
+                    )
+                else:
+                    logger.error(
+                        f"Failed to create repo {repo_id}, error_code: {res['error_code']}, error_msg: {res['error_msg']}"
+                    )
+            else:
+                logger.info(f"Successfully created repo {repo_id}")
 
         expected_modules, optional_kwargs = self._get_signature_keys(self)
 
@@ -595,7 +583,6 @@ class DiffusionPipeline(ConfigMixin):
             return True
 
         model_index_dict = {k: v for k, v in model_index_dict.items() if is_saveable_module(k, v)}
-
         for pipeline_component_name in model_index_dict.keys():
             sub_model = getattr(self, pipeline_component_name)
             model_cls = sub_model.__class__
@@ -609,6 +596,7 @@ class DiffusionPipeline(ConfigMixin):
                     logger.info(
                         f"{library_name} is not installed. Cannot save {pipeline_component_name} as {library_classes} from {library_name}"
                     )
+
                 for base_class, save_load_methods in library_classes.items():
                     class_candidate = getattr(library, base_class, None)
                     if class_candidate is not None and issubclass(model_cls, class_candidate):
@@ -630,17 +618,16 @@ class DiffusionPipeline(ConfigMixin):
             save_method_signature = inspect.signature(save_method)
             save_method_accept_safe = "safe_serialization" in save_method_signature.parameters
             save_method_accept_variant = "variant" in save_method_signature.parameters
+            save_method_accept_max_shard_size = "max_shard_size" in save_method_signature.parameters
             save_method_accept_to_diffusers = "to_diffusers" in save_method_signature.parameters
 
             save_kwargs = {}
-            # maybe we donot have torch so we use safe_serialization
-            if to_diffusers:
-                safe_serialization = True
-
             if save_method_accept_safe:
                 save_kwargs["safe_serialization"] = safe_serialization
             if save_method_accept_variant:
                 save_kwargs["variant"] = variant
+            if save_method_accept_max_shard_size:
+                save_kwargs["max_shard_size"] = max_shard_size
             if save_method_accept_to_diffusers:
                 save_kwargs["to_diffusers"] = to_diffusers
 
@@ -649,114 +636,122 @@ class DiffusionPipeline(ConfigMixin):
         # finally save the config
         self.save_config(save_directory, to_diffusers=to_diffusers)
 
-    def save_to_hf_hub(
-        self,
-        repo_id: str,
-        private: Optional[bool] = None,
-        commit_message: Optional[str] = None,
-        revision: Optional[str] = None,
-        create_pr: bool = False,
-    ):
-        """
-        Uploads all elements of this pipeline to a new HuggingFace Hub repository.
-        Args:
-            repo_id (str): Repository name for your model/tokenizer in the Hub.
-            private (bool, optional): Whether the model/tokenizer is set to private
-            commit_message (str, optional) — The summary / title / first line of the generated commit. Defaults to: f"Upload {path_in_repo} with huggingface_hub"
-            revision (str, optional) — The git revision to commit from. Defaults to the head of the "main" branch.
-            create_pr (boolean, optional) — Whether or not to create a Pull Request with that commit. Defaults to False.
-                If revision is not set, PR is opened against the "main" branch. If revision is set and is a branch, PR is opened against this branch.
-                If revision is set and is not a branch name (example: a commit oid), an RevisionNotFoundError is returned by the server.
-
-        Returns: The url of the commit of your model in the given repository.
-        """
-        repo_url = create_repo(repo_id, private=private, exist_ok=True)
-
-        # Infer complete repo_id from repo_url
-        # Can be different from the input `repo_id` if repo_owner was implicit
-        _, repo_owner, repo_name = repo_type_and_id_from_hf_id(repo_url)
-
-        repo_id = f"{repo_owner}/{repo_name}"
-
-        # Check if README file already exist in repo
-        try:
-            get_hf_file_metadata(hf_hub_url(repo_id=repo_id, filename="README.md", revision=revision))
-            has_readme = True
-        except EntryNotFoundError:
-            has_readme = False
-
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            # save model
-            self.save_pretrained(tmp_dir)
-            # Add readme if does not exist
-            logger.info("README.md not found, adding the default README.md")
-            if not has_readme:
-                with open(os.path.join(tmp_dir, "README.md"), "w") as f:
-                    f.write(f"---\nlibrary_name: ppdiffusers\n---\n# {repo_id}")
-
-            # Upload model and return
-            logger.info(f"Pushing to the {repo_id}. This might take a while")
-            return upload_folder(
-                repo_id=repo_id,
-                repo_type="model",
-                folder_path=tmp_dir,
+        if save_to_aistudio:
+            self._upload_folder_aistudio(
+                save_directory,
+                repo_id,
                 commit_message=commit_message,
-                revision=revision,
+                **token_kwargs,
+            )
+        if push_to_hub:
+            self._upload_folder(
+                save_directory,
+                repo_id,
+                commit_message=commit_message,
                 create_pr=create_pr,
+                **token_kwargs,
             )
 
-    def to(
-        self,
-        paddle_device: Optional[str] = None,
-        paddle_dtype: Optional[paddle.dtype] = None,
-        silence_dtype_warnings: bool = True,
-    ):
-        if paddle_device is None and paddle_dtype is None:
-            return self
+    def to(self, *args, **kwargs):
+        r"""
+        Performs Pipeline dtype and/or device conversion. A paddle.dtype and paddle.device are inferred from the
+        arguments of `self.to(*args, **kwargs).`
+
+        <Tip>
+
+            If the pipeline already has the correct paddle.dtype and paddle.device, then it is returned as is. Otherwise,
+            the returned pipeline is a copy of self with the desired paddle.dtype and paddle.device.
+
+        </Tip>
+
+
+        Here are the ways to call `to`:
+
+        - `to(dtype, silence_dtype_warnings=False) → DiffusionPipeline` to return a pipeline with the specified
+          [`dtype`].
+        - `to(device, silence_dtype_warnings=False) → DiffusionPipeline` to return a pipeline with the specified
+          [`device`].
+        - `to(device=None, dtype=None, silence_dtype_warnings=False) → DiffusionPipeline` to return a pipeline with the
+          specified [`device`] and [`dtype`].
+
+        Arguments:
+            dtype (`paddle.dtype`, *optional*):
+                Returns a pipeline with the specified
+            device (`str`, *optional*):
+                Returns a pipeline with the specified
+            silence_dtype_warnings (`str`, *optional*, defaults to `False`):
+                Whether to omit warnings if the target `dtype` is not compatible with the target `device`.
+
+        Returns:
+            [`DiffusionPipeline`]: The pipeline converted to specified `dtype` and/or `dtype`.
+        """
+
+        paddle_dtype = kwargs.pop("paddle_dtype", None)
+        if paddle_dtype is not None:
+            deprecate("paddle_dtype", "0.25.0", "")
+        paddle_device = kwargs.pop("paddle_device", None)
+        if paddle_device is not None:
+            deprecate("paddle_device", "0.25.0", "")
+
+        dtype_kwarg = kwargs.pop("dtype", None)
+        device_kwarg = kwargs.pop("device", None)
+
+        if paddle_dtype is not None and dtype_kwarg is not None:
+            raise ValueError(
+                "You have passed both `paddle_dtype` and `dtype` as a keyword argument. Please make sure to only pass `dtype`."
+            )
+
+        dtype = paddle_dtype or dtype_kwarg
+
+        if paddle_device is not None and device_kwarg is not None:
+            raise ValueError(
+                "You have passed both `torch_device` and `device` as a keyword argument. Please make sure to only pass `device`."
+            )
+
+        device = paddle_device or device_kwarg
+
+        dtype_arg = None
+        device_arg = None
+        if len(args) == 1:
+            if isinstance(args[0], paddle.dtype):
+                dtype_arg = args[0]
+            else:
+                device_arg = args[0] if args[0] is not None else None
+        elif len(args) == 2:
+            if isinstance(args[0], paddle.dtype):
+                raise ValueError(
+                    "When passing two arguments, make sure the first corresponds to `device` and the second to `dtype`."
+                )
+            device_arg = args[0] if args[0] is not None else None
+            dtype_arg = args[1]
+        elif len(args) > 2:
+            raise ValueError("Please make sure to pass at most two arguments (`device` and `dtype`) `.to(...)`")
+
+        if dtype is not None and dtype_arg is not None:
+            raise ValueError(
+                "You have passed `dtype` both as an argument and as a keyword argument. Please only pass one of the two."
+            )
+
+        dtype = dtype or dtype_arg
+
+        if device is not None and device_arg is not None:
+            raise ValueError(
+                "You have passed `device` both as an argument and as a keyword argument. Please only pass one of the two."
+            )
+
+        device = device or device_arg
 
         module_names, _ = self._get_signature_keys(self)
         modules = [getattr(self, n, None) for n in module_names]
         modules = [m for m in modules if isinstance(m, nn.Layer)]
-        for module in modules:
-            if (
-                paddle_device is not None
-                and module.dtype == paddle.float16
-                and str(paddle_device) in ["cpu"]
-                and not silence_dtype_warnings
-            ):
-                logger.warning(
-                    "Pipelines loaded with `paddle_dtype=paddle.float16` cannot run with `cpu` device. It"
-                    " is not recommended to move them to `cpu` as running them will fail. Please make"
-                    " sure to use an accelerator to run the pipeline in inference, due to the lack of"
-                    " support for`float16` operations on this device in Paddle. Please, remove the"
-                    " `paddle_dtype=paddle.float16` argument, or use another device for inference."
-                )
-            kwargs = {}
-            if paddle_device is not None:
-                kwargs["device"] = paddle_device
-            if paddle_dtype is not None:
-                kwargs["dtype"] = paddle_dtype
-            module.to(**kwargs)
 
-            # TODO junnyu, before register model, we may need to keep some module in fp32
-            if (
-                isinstance(module, nn.Layer)
-                and hasattr(module, "_keep_in_fp32_modules")
-                and module.dtype == paddle.float16
-                and module._keep_in_fp32_modules is not None
-            ):
-                for module_name, sub_module in module.named_sublayers(include_self=True):
-                    if any(n in module_name for n in module._keep_in_fp32_modules):
-                        sub_module.to(dtype=paddle.float32)
-                        if hasattr(sub_module, "pre_hook"):
-                            sub_module.pre_hook.remove()
-                        sub_module.pre_hook = sub_module.register_forward_pre_hook(
-                            lambda layer, input: input[0].cast("float32")
-                        )
+        for module in modules:
+            module.to(device=device, dtype=dtype)
+
         return self
 
     @property
-    def device(self):
+    def device(self) -> str:
         r"""
         Returns:
             `paddle.device`: The paddle device on which the pipeline is located.
@@ -769,133 +764,146 @@ class DiffusionPipeline(ConfigMixin):
             return module.place
         return "cpu"
 
+    @property
+    def dtype(self) -> paddle.dtype:
+        r"""
+        Returns:
+            `paddle.dtype`: The paddle dtype on which the pipeline is located.
+        """
+        module_names, _ = self._get_signature_keys(self)
+        modules = [getattr(self, n, None) for n in module_names]
+        modules = [m for m in modules if isinstance(m, nn.Layer)]
+
+        for module in modules:
+            return module.dtype
+
+        return paddle.float32
+
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path: Optional[Union[str, os.PathLike]], **kwargs):
         r"""
-        Instantiate a Paddle diffusion pipeline from pre-trained pipeline weights.
+        Instantiate a Paddle diffusion pipeline from pretrained pipeline weights.
 
-        The pipeline is set in evaluation mode by default using `model.eval()` (Dropout modules are deactivated).
+        The pipeline is set in evaluation mode (`model.eval()`) by default.
 
-        The warning *Weights from XXX not initialized from pretrained model* means that the weights of XXX do not come
-        pretrained with the rest of the model. It is up to you to train those weights with a downstream fine-tuning
-        task.
+        If you get the error message below, you need to finetune the weights for your downstream task:
 
-        The warning *Weights from XXX not used in YYY* means that the layer XXX is not used by YYY, therefore those
-        weights are discarded.
+        ```
+        Some weights of UNet2DConditionModel were not initialized from the model checkpoint at runwayml/stable-diffusion-v1-5 and are newly initialized because the shapes did not match:
+        - conv_in.weight: found shape [320, 4, 3, 3] in the checkpoint and [320, 9, 3, 3] in the model instantiated
+        You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+        ```
 
         Parameters:
             pretrained_model_name_or_path (`str` or `os.PathLike`, *optional*):
                 Can be either:
 
-                    - A string, the *repo id* of a pretrained pipeline hosted inside a model repo on
-                      https://huggingface.co/ Valid repo ids have to be located under a user or organization name, like
-                      `CompVis/ldm-text2im-large-256`.
-                    - A path to a *directory* containing pipeline weights saved using
-                      [`~DiffusionPipeline.save_pretrained`], e.g., `./my_pipeline_directory/`.
+                    - A string, the *repo id* (for example `CompVis/ldm-text2im-large-256`) of a pretrained pipeline
+                      hosted on the Hub.
+                    - A path to a *directory* (for example `./my_pipeline_directory/`) containing pipeline weights
+                      saved using
+                    [`~DiffusionPipeline.save_pretrained`].
             paddle_dtype (`str` or `paddle.dtype`, *optional*):
-                Override the default `paddle.dtype` and load the model under this dtype. If `"auto"` is passed the dtype
-                will be automatically derived from the model's weights.
+                Override the default `paddle.dtype` and load the model with another dtype. If "auto" is passed, the
+                dtype is automatically derived from the model's weights.
             custom_pipeline (`str`, *optional*):
 
                 <Tip warning={true}>
 
-                    This is an experimental feature and is likely to change in the future.
+                🧪 This is an experimental feature and may change in the future.
 
                 </Tip>
 
                 Can be either:
 
-                    - A string, the *repo id* of a custom pipeline hosted inside a model repo on
-                      https://huggingface.co/. Valid repo ids have to be located under a user or organization name,
-                      like `hf-internal-testing/diffusers-dummy-pipeline`.
-
-                        <Tip>
-
-                         It is required that the model repo has a file, called `pipeline.py` that defines the custom
-                         pipeline.
-
-                        </Tip>
-
+                    - A string, the *repo id* (for example `hf-internal-testing/diffusers-dummy-pipeline`) of a custom
+                      pipeline hosted on the Hub. The repository must contain a file called pipeline.py that defines
+                      the custom pipeline.
                     - A string, the *file name* of a community pipeline hosted on GitHub under
-                      https://github.com/huggingface/diffusers/tree/main/examples/community. Valid file names have to
-                      match exactly the file name without `.py` located under the above link, *e.g.*
-                      `clip_guided_stable_diffusion`.
-
-                        <Tip>
-
-                         Community pipelines are always loaded from the current `main` branch of GitHub.
-
-                        </Tip>
-
-                    - A path to a *directory* containing a custom pipeline, e.g., `./my_pipeline_directory/`.
-
-                        <Tip>
-
-                         It is required that the directory has a file, called `pipeline.py` that defines the custom
-                         pipeline.
-
-                        </Tip>
+                      [Community](https://github.com/huggingface/diffusers/tree/main/examples/community). Valid file
+                      names must match the file name and not the pipeline script (`clip_guided_stable_diffusion`
+                      instead of `clip_guided_stable_diffusion.py`). Community pipelines are always loaded from the
+                      current main branch of GitHub.
+                    - A path to a directory (`./my_pipeline_directory/`) containing a custom pipeline. The directory
+                      must contain a file called `pipeline.py` that defines the custom pipeline.
 
                 For more information on how to load and create custom pipelines, please have a look at [Loading and
                 Adding Custom
                 Pipelines](https://huggingface.co/docs/diffusers/using-diffusers/custom_pipeline_overview)
-
             force_download (`bool`, *optional*, defaults to `False`):
                 Whether or not to force the (re-)download of the model weights and configuration files, overriding the
                 cached versions if they exist.
             cache_dir (`Union[str, os.PathLike]`, *optional*):
-                Path to a directory in which a downloaded pretrained model configuration should be cached if the
-                standard cache should not be used.
+                Path to a directory where a downloaded pretrained model configuration is cached if the standard cache
+                is not used.
             resume_download (`bool`, *optional*, defaults to `False`):
-                Whether or not to delete incompletely received files. Will attempt to resume the download if such a
-                file exists.
+                Whether or not to resume downloading the model weights and configuration files. If set to `False`, any
+                incompletely downloaded files are deleted.
             proxies (`Dict[str, str]`, *optional*):
-                A dictionary of proxy servers to use by protocol or endpoint, e.g., `{'http': 'foo.bar:3128',
+                A dictionary of proxy servers to use by protocol or endpoint, for example, `{'http': 'foo.bar:3128',
                 'http://hostname': 'foo.bar:4012'}`. The proxies are used on each request.
             output_loading_info(`bool`, *optional*, defaults to `False`):
                 Whether or not to also return a dictionary containing missing keys, unexpected keys and error messages.
-            local_files_only(`bool`, *optional*, defaults to `False`):
-                Whether or not to only look at local files (i.e., do not try to download the model).
+            local_files_only (`bool`, *optional*, defaults to `False`):
+                Whether to only load local model weights and configuration files or not. If set to `True`, the model
+                won't be downloaded from the Hub.
             use_auth_token (`str` or *bool*, *optional*):
-                The token to use as HTTP bearer authorization for remote files. If `True`, will use the token generated
-                when running `huggingface-cli login` (stored in `~/.huggingface`).
+                The token to use as HTTP bearer authorization for remote files. If `True`, the token generated from
+                `diffusers-cli login` (stored in `~/.huggingface`) is used.
             revision (`str`, *optional*, defaults to `"main"`):
-                The specific model version to use. It can be a branch name, a tag name, or a commit id, since we use a
-                git-based system for storing models and other artifacts on huggingface.co, so `revision` can be any
-                identifier allowed by git.
-            custom_revision (`str`, *optional*, defaults to `"main"` when loading from the Hub and to local version of `ppdiffusers` when loading from GitHub):
+                The specific model version to use. It can be a branch name, a tag name, a commit id, or any identifier
+                allowed by Git.
+            custom_revision (`str`, *optional*, defaults to `"main"`):
                 The specific model version to use. It can be a branch name, a tag name, or a commit id similar to
-                `revision` when loading a custom pipeline from the Hub. It can be a ppdiffusers version when loading a
-                custom pipeline from GitHub.
+                `revision` when loading a custom pipeline from the Hub. It can be a 🤗 Diffusers version when loading a
+                custom pipeline from GitHub, otherwise it defaults to `"main"` when loading from the Hub.
             mirror (`str`, *optional*):
-                Mirror source to accelerate downloads in China. If you are from China and have an accessibility
-                problem, you can set this option to resolve it. Note that we do not guarantee the timeliness or safety.
-                Please refer to the mirror site for more information. specify the folder name here.
-            return_cached_folder (`bool`, *optional*, defaults to `False`):
-                If set to `True`, path to downloaded cached folder will be returned in addition to loaded pipeline.
-            use_safetensors (`bool`, *optional* ):
-                If set to `True`, the pipeline will be loaded from `safetensors` weights. If set to `None` (the
-                default). The pipeline will load using `safetensors` if the safetensors weights are available *and* if
-                `safetensors` is installed. If the to `False` the pipeline will *not* use `safetensors`.
+                Mirror source to resolve accessibility issues if you’re downloading a model in China. We do not
+                guarantee the timeliness or safety of the source, and you should refer to the mirror site for more
+                information.
+            device_map (`str` or `Dict[str, Union[int, str, paddle.device]]`, *optional*):
+                A map that specifies where each submodule should go. It doesn’t need to be defined for each
+                parameter/buffer name; once a given module name is inside, every submodule of it will be sent to the
+                same device.
+
+                Set `device_map="auto"` to have 🤗 Accelerate automatically compute the most optimized `device_map`. For
+                more information about each option see [designing a device
+                map](https://hf.co/docs/accelerate/main/en/usage_guides/big_modeling#designing-a-device-map).
+            max_memory (`Dict`, *optional*):
+                A dictionary device identifier for the maximum memory. Will default to the maximum memory available for
+                each GPU and the available CPU RAM if unset.
+            offload_folder (`str` or `os.PathLike`, *optional*):
+                The path to offload weights if device_map contains the value `"disk"`.
+            offload_state_dict (`bool`, *optional*):
+                If `True`, temporarily offloads the CPU state dict to the hard drive to avoid running out of CPU RAM if
+                the weight of the CPU state dict + the biggest shard of the checkpoint does not fit. Defaults to `True`
+                when there is some disk offload.
+            low_cpu_mem_usage (`bool`, *optional*, defaults to `True` if paddle version >= 2.5.0 else `False`):
+                Speed up model loading only loading the pretrained weights and not initializing the weights. This also
+                tries to not use more than 1x model size in CPU memory (including peak memory) while loading the model.
+                Only supported for Paddle >= 2.5.0. If you are using an older version of Paddle, setting this
+                argument to `True` will raise an error.
+            use_safetensors (`bool`, *optional*, defaults to `None`):
+                If set to `None`, the safetensors weights are downloaded if they're available **and** if the
+                safetensors library is installed. If set to `True`, the model is forcibly loaded from safetensors
+                weights. If set to `False`, safetensors weights are not loaded.
+            use_onnx (`bool`, *optional*, defaults to `None`):
+                If set to `True`, ONNX weights will always be downloaded if present. If set to `False`, ONNX weights
+                will never be downloaded. By default `use_onnx` defaults to the `_is_onnx` class attribute which is
+                `False` for non-ONNX pipelines and `True` for ONNX pipelines. ONNX weights include both files ending
+                with `.onnx` and `.pb`.
             kwargs (remaining dictionary of keyword arguments, *optional*):
-                Can be used to overwrite load - and saveable variables - *i.e.* the pipeline components - of the
-                specific pipeline class. The overwritten components are then directly passed to the pipelines
-                `__init__` method. See example below for more information.
+                Can be used to overwrite load and saveable variables (the pipeline components of the specific pipeline
+                class). The overwritten components are passed directly to the pipelines `__init__` method. See example
+                below for more information.
             variant (`str`, *optional*):
-                If specified load weights from `variant` filename, *e.g.* pytorch_model.<variant>.bin. `variant` is
-                ignored when using `from_flax`.
+                Load weights from a specified variant filename such as `"fp16"` or `"ema"`. This is ignored when
+                loading `from_flax`.
 
         <Tip>
 
-         It is required to be logged in (`huggingface-cli login`) when you want to use private or [gated
-         models](https://huggingface.co/docs/hub/models-gated#gated-models), *e.g.* `"runwayml/stable-diffusion-v1-5"`
-
-        </Tip>
-
-        <Tip>
-
-        Activate the special ["offline-mode"](https://huggingface.co/diffusers/installation.html#offline-mode) to use
-        this method in a firewalled environment.
+        To use private or [gated](https://huggingface.co/docs/hub/models-gated#gated-models) models, log-in with
+        `huggingface-cli login`.
 
         </Tip>
 
@@ -919,85 +927,81 @@ class DiffusionPipeline(ConfigMixin):
         >>> pipeline.scheduler = scheduler
         ```
         """
-        resume_download = kwargs.pop("resume_download", False)
-        force_download = kwargs.pop("force_download", False)
-        proxies = kwargs.pop("proxies", None)
-        local_files_only = kwargs.pop("local_files_only", HF_HUB_OFFLINE)
-        use_auth_token = kwargs.pop("use_auth_token", None)
-        revision = kwargs.pop("revision", None)
-        from_diffusers = kwargs.pop("from_diffusers", FROM_DIFFUSERS)
-        paddle_dtype = kwargs.pop("paddle_dtype", None)
-        custom_pipeline = kwargs.pop("custom_pipeline", None)
-        custom_revision = kwargs.pop("custom_revision", None)
-        runtime_options = kwargs.pop("runtime_options", None)
-        low_cpu_mem_usage = kwargs.pop("low_cpu_mem_usage", LOW_CPU_MEM_USAGE_DEFAULT)
-        use_safetensors = kwargs.pop("use_safetensors", None if is_safetensors_available() else False)
-        variant = kwargs.pop("variant", None)
         from_hf_hub = kwargs.pop("from_hf_hub", FROM_HF_HUB)
-
-        # deperate
-        return_cached_folder = kwargs.pop("return_cached_folder", False)
-
-        cache_dir = (
-            kwargs.pop("cache_dir", DIFFUSERS_CACHE) if from_hf_hub else kwargs.pop("cache_dir", PPDIFFUSERS_CACHE)
-        )
-
-        load_sub_model_kwargs = {
-            "pretrained_model_name_or_path": pretrained_model_name_or_path,
-            "is_local_dir": False,
-            "local_files_only": local_files_only,
-            "from_hf_hub": from_hf_hub,
-            "cache_dir": cache_dir,
-        }
+        from_aistudio = kwargs.pop("from_aistudio", FROM_AISTUDIO)
+        cache_dir = kwargs.pop("cache_dir", None)
+        if cache_dir is None:
+            if from_aistudio:
+                cache_dir = None  # TODO, check aistudio cache
+            elif from_hf_hub:
+                cache_dir = DIFFUSERS_CACHE
+            else:
+                cache_dir = PPDIFFUSERS_CACHE
+        from_diffusers = kwargs.pop("from_diffusers", FROM_DIFFUSERS)
+        resume_download = kwargs.pop("resume_download", False)  # noqa: F841
+        force_download = kwargs.pop("force_download", False)  # noqa: F841
+        proxies = kwargs.pop("proxies", None)  # noqa F841
+        local_files_only = kwargs.pop("local_files_only", HF_HUB_OFFLINE)  # noqa: F841
+        use_auth_token = kwargs.pop("use_auth_token", None)  # noqa: F841
+        revision = kwargs.pop("revision", None)
+        paddle_dtype = kwargs.pop("paddle_dtype", None)
+        custom_pipeline = kwargs.pop("custom_pipeline", None)  # noqa: F841
+        custom_revision = kwargs.pop("custom_revision", None)
+        provider = kwargs.pop("provider", None)  # noqa: F841
+        sess_options = kwargs.pop("sess_options", None)  # noqa: F841
+        device_map = kwargs.pop("device_map", None)  # noqa: F841
+        max_memory = kwargs.pop("max_memory", None)  # noqa: F841
+        offload_folder = kwargs.pop("offload_folder", None)  # noqa: F841
+        offload_state_dict = kwargs.pop("offload_state_dict", False)  # noqa: F841
+        low_cpu_mem_usage = kwargs.pop("low_cpu_mem_usage", LOW_CPU_MEM_USAGE_DEFAULT)
+        variant = kwargs.pop("variant", None)
+        use_safetensors = kwargs.pop("use_safetensors", None)  # noqa: F841
+        use_onnx = kwargs.pop("use_onnx", None)  # noqa: F841
+        use_fastdeploy = kwargs.pop("use_fastdeploy", None)  # noqa: F841
+        runtime_options = kwargs.pop("runtime_options", None)
+        infer_configs = kwargs.pop("infer_configs", None)
+        use_optim_cache = kwargs.pop("use_optim_cache", False)
+        load_connected_pipeline = kwargs.pop("load_connected_pipeline", False)  # noqa: F841
+        model_variants = kwargs.pop("model_variants", {})
 
         # 1. Download the checkpoints and configs
         # use snapshot download here to get it working from from_pretrained
-        if not os.path.isdir(pretrained_model_name_or_path):
-            cached_folder = cls.download(
-                pretrained_model_name_or_path,
-                cache_dir=cache_dir,
-                resume_download=resume_download,
-                force_download=force_download,
-                proxies=proxies,
-                local_files_only=local_files_only,
-                use_auth_token=use_auth_token,
-                revision=revision,
-                use_safetensors=use_safetensors,
-                custom_pipeline=custom_pipeline,
-                custom_revision=custom_revision,
-                variant=variant,
-                from_hf_hub=from_hf_hub,
-                from_diffusers=from_diffusers,
-                **kwargs,
-            )
+        if os.path.isdir(pretrained_model_name_or_path):
+            # if pretrained_model_name_or_path.count("/") > 1:
+            #     raise ValueError(
+            #         f'The provided pretrained_model_name_or_path "{pretrained_model_name_or_path}"'
+            #         " is neither a valid local path nor a valid repo id. Please check the parameter."
+            #     )
+            cached_folder = pretrained_model_name_or_path
+            config_dict = cls.load_config(cached_folder)
         else:
-            # is_local_dir
-            load_sub_model_kwargs["is_local_dir"] = True
+            config_dict = cls.load_config(
+                pretrained_model_name_or_path,
+                from_hf_hub=from_hf_hub,
+                from_aistudio=from_aistudio,
+                cache_dir=cache_dir,
+            )
             cached_folder = pretrained_model_name_or_path
 
-        config_dict = cls.load_config(cached_folder)
-
         # pop out "_ignore_files" as it is only needed for download
-        config_dict.pop("_ignore_files", None)
+        ignore_filenames = config_dict.pop("_ignore_files", [])  # noqa: F841
 
-        # 2. Define which model components should load variants
-        # We retrieve the information by matching whether variant
-        # model checkpoints exist in the subfolders
-        model_variants = {}
-        if variant is not None:
-            for folder in os.listdir(cached_folder):
-                folder_path = os.path.join(cached_folder, folder)
-                is_folder = os.path.isdir(folder_path) and folder in config_dict
-                variant_exists = is_folder and any(
-                    p.split(".")[1].startswith(variant) for p in os.listdir(folder_path)
-                )
-                if variant_exists:
-                    model_variants[folder] = variant
+        custom_class_name = None
+        if os.path.isfile(os.path.join(cached_folder, f"{custom_pipeline}.py")):
+            custom_pipeline = os.path.join(cached_folder, f"{custom_pipeline}.py")
+        elif isinstance(config_dict["_class_name"], (list, tuple)) and os.path.isfile(
+            os.path.join(cached_folder, f"{config_dict['_class_name'][0]}.py")
+        ):
+            custom_pipeline = os.path.join(cached_folder, f"{config_dict['_class_name'][0]}.py")
+            custom_class_name = config_dict["_class_name"][1]
 
-        # 3. Load the pipeline class, if using custom module then load it from the hub
-        # if we load from explicit class, let's use it
         pipeline_class = _get_pipeline_class(
-            cls, config_dict, custom_pipeline=custom_pipeline, cache_dir=cache_dir, revision=custom_revision
+            cls,
+            config_dict,
+            custom_pipeline=custom_pipeline,
+            class_name=custom_class_name,
+            cache_dir=cache_dir,
+            revision=custom_revision,
         )
 
         # DEPRECATED: To be removed in 1.0.0
@@ -1006,8 +1010,9 @@ class DiffusionPipeline(ConfigMixin):
             if "_diffusers_paddle_version" in config_dict
             else config_dict["_ppdiffusers_version"]
         )
+        # DEPRECATED: To be removed in 1.0.0
         if pipeline_class.__name__ == "StableDiffusionInpaintPipeline" and version.parse(
-            version.parse(_ppdiffusers_version).base_version
+            _ppdiffusers_version
         ) <= version.parse("0.5.1"):
             from ppdiffusers import (
                 StableDiffusionInpaintPipeline,
@@ -1039,8 +1044,12 @@ class DiffusionPipeline(ConfigMixin):
 
         init_dict, unused_kwargs, _ = pipeline_class.extract_init_dict(config_dict, **kwargs)
 
-        # define init kwargs
-        init_kwargs = {k: init_dict.pop(k) for k in optional_kwargs if k in init_dict}
+        # define init kwargs and make sure that optional component modules are filtered out
+        init_kwargs = {
+            k: init_dict.pop(k)
+            for k in optional_kwargs
+            if k in init_dict and k not in pipeline_class._optional_components
+        }
         init_kwargs = {**init_kwargs, **passed_pipe_kwargs}
 
         # remove `null` components
@@ -1058,44 +1067,44 @@ class DiffusionPipeline(ConfigMixin):
             logger.warning(
                 f"Keyword arguments {unused_kwargs} are not expected by {pipeline_class.__name__} and will be ignored."
             )
+
+        if low_cpu_mem_usage and (not is_paddle_version(">=", "2.5.0") and not is_paddle_version("==", "0.0.0")):
+            raise NotImplementedError(
+                "Low memory initialization requires paddlepaddle-gpu >= 2.5.0. Please either update your PaddlePaddle version or set"
+                " `low_cpu_mem_usage=False`."
+            )
+
         # import it here to avoid circular import
         from ppdiffusers import pipelines
 
         # 6. Load each module in the pipeline
-        for name, (library_name, class_name) in init_dict.items():
-            # 6.0 - support old model_index.json and hf model_index.json
+        for name, (library_name, class_name) in logging.tqdm(
+            sorted(init_dict.items(), key=lambda x: x[0]), desc="Loading pipeline components..."
+        ):
+            # 6.1 - now that JAX/Flax is an official framework of the library, we might load from Flax names
             if library_name in ["diffusers_paddle", "diffusers"]:
                 library_name = "ppdiffusers"
-            if library_name == "transformers":
-                library_name = "paddlenlp.transformers"
+            if library_name in ["transformers", "paddlenlp.transformers"]:
+                library_name = "ppdiffusers.transformers"
 
-            # 6.1 - now that JAX/Flax is an official framework of the library, we might load from Flax names
-            if class_name.startswith("Flax"):
-                class_name = class_name[4:]
-
-            if class_name.endswith("TokenizerFast"):
-                class_name = class_name[:-4]
+            class_name = class_name[4:] if class_name.startswith("Flax") else class_name
+            # support HF fast tokenizer
+            class_name = (
+                class_name[:-4] if class_name.endswith("Fast") and "tokenizer" in class_name.lower() else class_name
+            )
 
             # 6.2 Define all importable classes
             is_pipeline_module = hasattr(pipelines, library_name)
-            importable_classes = ALL_IMPORTABLE_CLASSES if is_pipeline_module else LOADABLE_CLASSES[library_name]
+            importable_classes = ALL_IMPORTABLE_CLASSES
             loaded_sub_model = None
 
             # 6.3 Use passed sub model or load class_name from library_name
             if name in passed_class_obj:
-                # 1. check that passed_class_obj has correct parent class
-                if not is_pipeline_module:
-                    # if the model is in a pipeline module, then we load it from the pipeline
-                    # check that passed_class_obj has correct parent class
-                    maybe_raise_or_warn(
-                        library_name,
-                        library,
-                        class_name,
-                        importable_classes,
-                        passed_class_obj,
-                        name,
-                        is_pipeline_module,
-                    )
+                # if the model is in a pipeline module, then we load it from the pipeline
+                # check that passed_class_obj has correct parent class
+                maybe_raise_or_warn(
+                    library_name, library, class_name, importable_classes, passed_class_obj, name, is_pipeline_module
+                )
 
                 loaded_sub_model = passed_class_obj[name]
             else:
@@ -1109,15 +1118,24 @@ class DiffusionPipeline(ConfigMixin):
                     pipeline_class=pipeline_class,
                     paddle_dtype=paddle_dtype,
                     runtime_options=runtime_options,
+                    infer_configs=infer_configs,
+                    use_optim_cache=use_optim_cache,
                     model_variants=model_variants,
                     name=name,
                     from_diffusers=from_diffusers,
-                    variant=variant,
                     low_cpu_mem_usage=low_cpu_mem_usage,
                     cached_folder=cached_folder,
-                    **load_sub_model_kwargs,
+                    revision=revision,
+                    is_onnx_model=False,
+                    from_hf_hub=from_hf_hub,
+                    from_aistudio=from_aistudio,
+                    cache_dir=cache_dir,
+                    variant=variant,
+                    use_safetensors=use_safetensors,
                 )
-
+                logger.info(
+                    f"Loaded {name} as {class_name} from `{name}` subfolder of {pretrained_model_name_or_path}."
+                )
             init_kwargs[name] = loaded_sub_model  # UNet(...), # DiffusionSchedule(...)
 
         # 7. Potentially add passed objects if expected
@@ -1137,370 +1155,62 @@ class DiffusionPipeline(ConfigMixin):
         for name, _module in init_kwargs.items():
             if isinstance(_module, nn.Layer):
                 _module.eval()
-                if paddle_dtype is not None and _module.dtype != paddle_dtype:
-                    _module.to(dtype=paddle_dtype)
+                if paddle_dtype is not None:
+                    if str(paddle_dtype) in ["paddle.float32", "float32"]:
+                        _module.to(dtype="float32")
+                    else:
+                        paddle.amp.decorate(
+                            _module,
+                            level="O2",
+                            dtype=str(paddle_dtype).replace("paddle.", ""),
+                        )
             elif isinstance(_module, (tuple, list)):
                 for _submodule in _module:
                     if isinstance(_submodule, nn.Layer):
                         _submodule.eval()
-                        if paddle_dtype is not None and _submodule.dtype != paddle_dtype:
-                            _submodule.to(dtype=paddle_dtype)
-
-        # 9. Instantiate the pipeline
+                        if paddle_dtype is not None:
+                            if str(paddle_dtype) in ["paddle.float32", "float32"]:
+                                _module.to(dtype="float32")
+                            else:
+                                paddle.amp.decorate(
+                                    _submodule,
+                                    level="O2",
+                                    dtype=str(paddle_dtype).replace("paddle.", ""),
+                                )
+        # 8. Instantiate the pipeline
         model = pipeline_class(**init_kwargs)
 
-        # 10. Save where the model was instantiated from
+        # 9. Save where the model was instantiated from
         model.register_to_config(_name_or_path=pretrained_model_name_or_path)
-
         return model
 
-    @classmethod
-    def download(cls, pretrained_model_name, **kwargs) -> Union[str, os.PathLike]:
-        r"""
-        Download and cache a PyTorch diffusion pipeline from pre-trained pipeline weights.
-        Parameters:
-             pretrained_model_name (`str` or `os.PathLike`, *optional*):
-                Should be a string, the *repo id* of a pretrained pipeline hosted inside a model repo on
-                https://huggingface.co/ Valid repo ids have to be located under a user or organization name, like
-                `CompVis/ldm-text2im-large-256`.
-            custom_pipeline (`str`, *optional*):
-                <Tip warning={true}>
-                    This is an experimental feature and is likely to change in the future.
-                </Tip>
-                Can be either:
-                    - A string, the *repo id* of a custom pipeline hosted inside a model repo on
-                      https://huggingface.co/. Valid repo ids have to be located under a user or organization name,
-                      like `hf-internal-testing/diffusers-dummy-pipeline`.
-                        <Tip>
-                         It is required that the model repo has a file, called `pipeline.py` that defines the custom
-                         pipeline.
-                        </Tip>
-                    - A string, the *file name* of a community pipeline hosted on GitHub under
-                      https://github.com/huggingface/diffusers/tree/main/examples/community. Valid file names have to
-                      match exactly the file name without `.py` located under the above link, *e.g.*
-                      `clip_guided_stable_diffusion`.
-                        <Tip>
-                         Community pipelines are always loaded from the current `main` branch of GitHub.
-                        </Tip>
-                    - A path to a *directory* containing a custom pipeline, e.g., `./my_pipeline_directory/`.
-                        <Tip>
-                         It is required that the directory has a file, called `pipeline.py` that defines the custom
-                         pipeline.
-                        </Tip>
-                For more information on how to load and create custom pipelines, please have a look at [Loading and
-                Adding Custom
-                Pipelines](https://huggingface.co/docs/diffusers/using-diffusers/custom_pipeline_overview)
-            force_download (`bool`, *optional*, defaults to `False`):
-                Whether or not to force the (re-)download of the model weights and configuration files, overriding the
-                cached versions if they exist.
-            resume_download (`bool`, *optional*, defaults to `False`):
-                Whether or not to delete incompletely received files. Will attempt to resume the download if such a
-                file exists.
-            proxies (`Dict[str, str]`, *optional*):
-                A dictionary of proxy servers to use by protocol or endpoint, e.g., `{'http': 'foo.bar:3128',
-                'http://hostname': 'foo.bar:4012'}`. The proxies are used on each request.
-            output_loading_info(`bool`, *optional*, defaults to `False`):
-                Whether or not to also return a dictionary containing missing keys, unexpected keys and error messages.
-            local_files_only(`bool`, *optional*, defaults to `False`):
-                Whether or not to only look at local files (i.e., do not try to download the model).
-            use_auth_token (`str` or *bool*, *optional*):
-                The token to use as HTTP bearer authorization for remote files. If `True`, will use the token generated
-                when running `huggingface-cli login` (stored in `~/.huggingface`).
-            revision (`str`, *optional*, defaults to `"main"`):
-                The specific model version to use. It can be a branch name, a tag name, or a commit id, since we use a
-                git-based system for storing models and other artifacts on huggingface.co, so `revision` can be any
-                identifier allowed by git.
-            custom_revision (`str`, *optional*, defaults to `"main"` when loading from the Hub and to local version of
-            `diffusers` when loading from GitHub):
-                The specific model version to use. It can be a branch name, a tag name, or a commit id similar to
-                `revision` when loading a custom pipeline from the Hub. It can be a diffusers version when loading a
-                custom pipeline from GitHub.
-            mirror (`str`, *optional*):
-                Mirror source to accelerate downloads in China. If you are from China and have an accessibility
-                problem, you can set this option to resolve it. Note that we do not guarantee the timeliness or safety.
-                Please refer to the mirror site for more information. specify the folder name here.
-            variant (`str`, *optional*):
-                If specified load weights from `variant` filename, *e.g.* pytorch_model.<variant>.bin or
-                model_state.<variant>.pdparams.
-        <Tip>
-         It is required to be logged in (`huggingface-cli login`) when you want to use private or [gated
-         models](https://huggingface.co/docs/hub/models-gated#gated-models)
-        </Tip>
-        """
-        from_hf_hub = kwargs.pop("from_hf_hub", FROM_HF_HUB)
-        cache_dir = (
-            kwargs.pop("cache_dir", DIFFUSERS_CACHE) if from_hf_hub else kwargs.pop("cache_dir", PPDIFFUSERS_CACHE)
-        )
-        from_diffusers = kwargs.pop("from_diffusers", FROM_DIFFUSERS)
-        resume_download = kwargs.pop("resume_download", False)
-        force_download = kwargs.pop("force_download", False)
-        proxies = kwargs.pop("proxies", None)
-        local_files_only = kwargs.pop("local_files_only", HF_HUB_OFFLINE)
-        use_auth_token = kwargs.pop("use_auth_token", None)
-        revision = kwargs.pop("revision", None)
-        custom_pipeline = kwargs.pop("custom_pipeline", None)
-        custom_revision = kwargs.pop("custom_revision", None)
-        variant = kwargs.pop("variant", None)
-        use_safetensors = kwargs.pop("use_safetensors", None)
-        max_workers = int(kwargs.pop("max_workers", 1))
-
-        if from_diffusers and use_safetensors and not is_safetensors_available():
-            raise ValueError(
-                "`use_safetensors`=True but safetensors is not installed. Please install safetensors with `pip install safetensors"
-            )
-        allow_pickle = False
-        if use_safetensors is None:
-            use_safetensors = is_safetensors_available()
-            allow_pickle = True
-
-        pipeline_is_cached = False
-        allow_patterns = []
-        ignore_patterns = []
-
-        # load config
-        config_dict, config_file = cls.load_config(
-            pretrained_model_name,
-            cache_dir=cache_dir,
-            resume_download=resume_download,
-            force_download=force_download,
-            proxies=proxies,
-            local_files_only=local_files_only,
-            use_auth_token=use_auth_token,
-            revision=revision,
-            from_hf_hub=from_hf_hub,
-            return_config_file=True,
-        )
-
-        ignore_filenames = config_dict.pop("_ignore_files", [])
-
-        # is_fastdeploy_model we wont use safetensors
-        if cls == DiffusionPipeline:
-            is_fastdeploy_model = "fastdeploy" in config_dict.get("_class_name", "").lower()
-        else:
-            is_fastdeploy_model = "fastdeploy" in cls.__name__.lower()
-        if is_fastdeploy_model:
-            use_safetensors = False
-
-        # retrieve all folder_names that contain relevant files
-        folder_names = []
-        for k, v in config_dict.items():
-            # if we pass specifc module, we won't donwload this
-            if k in kwargs:
-                continue
-            if isinstance(v, list):
-                if None in v:
-                    continue
-                folder_names.append(k)
-
-        # support [PT] .bin, .safetensors, [PD] .pdparams, fastdeploy model
-        if from_hf_hub:
-            if not local_files_only:
-                info = model_info(
-                    pretrained_model_name,
-                    use_auth_token=use_auth_token,
-                    revision=revision,
-                )
-
-                filenames = {sibling.rfilename for sibling in info.siblings}
-                model_filenames, variant_filenames = variant_compatible_siblings(filenames, variant=variant)
-
-                # remove ignored filenames
-                model_filenames = set(model_filenames) - set(ignore_filenames)
-                variant_filenames = set(variant_filenames) - set(ignore_filenames)
-
-                # if the whole pipeline is cached we don't have to ping the Hub
-                if revision in DEPRECATED_REVISION_ARGS and version.parse(
-                    version.parse(__version__).base_version
-                ) >= version.parse("0.17.0"):
-                    warn_deprecated_model_variant(
-                        pretrained_model_name, use_auth_token, variant, revision, model_filenames
-                    )
-
-                model_folder_names = {os.path.split(f)[0] for f in model_filenames}
-
-                # all filenames compatible with variant will be added
-                allow_patterns = list(model_filenames)
-
-                # allow all patterns from non-model folders
-                # this enables downloading schedulers, tokenizers, ...
-                allow_patterns += [os.path.join(k, "*") for k in folder_names if k not in model_folder_names]
-                # also allow downloading config.json files with the model
-                allow_patterns += [os.path.join(k, "config.json") for k in model_folder_names]
-
-                allow_patterns += [
-                    SCHEDULER_CONFIG_NAME,
-                    CONFIG_NAME,
-                    cls.config_name,
-                    CUSTOM_PIPELINE_FILE_NAME,
-                ]
-
-                # retrieve passed components that should not be downloaded
-                pipeline_class = _get_pipeline_class(
-                    cls, config_dict, custom_pipeline=custom_pipeline, cache_dir=cache_dir, revision=custom_revision
-                )
-                expected_components, _ = cls._get_signature_keys(pipeline_class)
-                passed_components = [k for k in expected_components if k in kwargs]
-
-                if (
-                    use_safetensors
-                    and not allow_pickle
-                    and not is_safetensors_compatible(
-                        model_filenames, variant=variant, passed_components=passed_components
-                    )
-                ):
-                    raise EnvironmentError(
-                        f"Could not found the necessary `safetensors` weights in {model_filenames} (variant={variant})"
-                    )
-                elif use_safetensors and is_safetensors_compatible(
-                    model_filenames, variant=variant, passed_components=passed_components
-                ):
-                    ignore_patterns = [
-                        "*.msgpack",
-                        "*.bin",
-                        "*.pdparams",
-                        "*.pdiparams",
-                        "*.pdmodel",
-                    ]
-
-                    safetensors_variant_filenames = {f for f in variant_filenames if f.endswith(".safetensors")}
-                    safetensors_model_filenames = {f for f in model_filenames if f.endswith(".safetensors")}
-                    if (
-                        len(safetensors_variant_filenames) > 0
-                        and safetensors_model_filenames != safetensors_variant_filenames
-                    ):
-                        logger.warn(
-                            f"\nA mixture of {variant} and non-{variant} filenames will be loaded.\nLoaded {variant} filenames:\n[{', '.join(safetensors_variant_filenames)}]\nLoaded non-{variant} filenames:\n[{', '.join(safetensors_model_filenames - safetensors_variant_filenames)}\nIf this behavior is not expected, please check your folder structure."
-                        )
-                else:
-                    ignore_patterns = ["*.safetensors", "*.msgpack"]
-                    if from_diffusers:
-                        ignore_patterns.extend(["*.pdparams", "*.pdiparams", "*.pdmodel"])
-                        suffix = ".bin"
-                    else:
-                        if is_fastdeploy_model:
-                            ignore_patterns.extend(["*.pdparams", "*.bin"])
-                            suffix = ".pdmodel"
-                        else:
-                            ignore_patterns.extend(["*.pdiparams", "*.pdmodel", "*.bin"])
-                            suffix = ".pdparams"
-
-                    bin_variant_filenames = {f for f in variant_filenames if f.endswith(suffix)}
-                    bin_model_filenames = {f for f in model_filenames if f.endswith(suffix)}
-                    if len(bin_variant_filenames) > 0 and bin_model_filenames != bin_variant_filenames:
-                        logger.warn(
-                            f"\nA mixture of {variant} and non-{variant} filenames will be loaded.\nLoaded {variant} filenames:\n[{', '.join(bin_variant_filenames)}]\nLoaded non-{variant} filenames:\n[{', '.join(bin_model_filenames - bin_variant_filenames)}\nIf this behavior is not expected, please check your folder structure."
-                        )
-
-                # Don't download any objects that are passed
-                allow_patterns = [
-                    p for p in allow_patterns if not (len(p.split("/")) == 2 and p.split("/")[0] in passed_components)
-                ]
-                # Don't download index files of forbidden patterns either
-                ignore_patterns = ignore_patterns + [f"{i}.index.*json" for i in ignore_patterns]
-
-                re_ignore_pattern = [re.compile(fnmatch.translate(p)) for p in ignore_patterns]
-                re_allow_pattern = [re.compile(fnmatch.translate(p)) for p in allow_patterns]
-
-                expected_files = [f for f in filenames if not any(p.match(f) for p in re_ignore_pattern)]
-                expected_files = [f for f in expected_files if any(p.match(f) for p in re_allow_pattern)]
-
-                snapshot_folder = Path(config_file).parent
-                pipeline_is_cached = all((snapshot_folder / f).is_file() for f in expected_files)
-
-                if pipeline_is_cached:
-                    # if the pipeline is cached, we can directly return it
-                    # else call snapshot_download
-                    return snapshot_folder
-
-            user_agent = {"pipeline_class": cls.__name__}
-            if custom_pipeline is not None and not custom_pipeline.endswith(".py"):
-                user_agent["custom_pipeline"] = custom_pipeline
-
-            # download all allow_patterns - ignore_patterns
-            cached_folder = snapshot_download(
-                pretrained_model_name,
-                cache_dir=cache_dir,
-                resume_download=resume_download,
-                force_download=force_download,  # new added force_download
-                proxies=proxies,
-                local_files_only=local_files_only,
-                use_auth_token=use_auth_token,
-                revision=revision,
-                allow_patterns=list(set(allow_patterns) - set(ignore_filenames)),
-                ignore_patterns=list(
-                    set(ignore_patterns + ignore_filenames)
-                ),  # diffusers bug, so we must add this ignore_filenames!
-                user_agent=user_agent,
-                max_workers=max_workers,
-            )
-        else:
-            # only support [PD] .pdparams, fastdeploy model
-            cached_folder = ppdiffusers_bos_dir_download(
-                pretrained_model_name,
-                revision=revision,
-                cache_dir=cache_dir,
-                resume_download=resume_download,
-                force_download=force_download,  # new added force_download
-                folder_names=folder_names,
-                variant=variant,
-                is_fastdeploy_model=is_fastdeploy_model,
-                local_files_only=local_files_only,
-                max_workers=max_workers,
-            )
-
-        return cached_folder
+    @property
+    def name_or_path(self) -> str:
+        return getattr(self.config, "_name_or_path", None)
 
     @classmethod
-    def from_pretrained_original_ckpt(cls, pretrained_model_name_or_path: Optional[Union[str, os.PathLike]], **kwargs):
-        from .stable_diffusion.convert_from_ckpt_deprecated import (
-            load_pipeline_from_original_stable_diffusion_ckpt,
-        )
-
-        resume_download = kwargs.pop("resume_download", False)
-        force_download = kwargs.pop("force_download", False)
-        paddle_dtype = kwargs.pop("paddle_dtype", None)
-        cache_dir = kwargs.pop("cache_dir", PPDIFFUSERS_CACHE)
-        original_config_file = kwargs.pop("original_config_file", None)
-        requires_safety_checker = kwargs.pop("requires_safety_checker", False)
-        pretrained_model_name_or_path = str(pretrained_model_name_or_path)
-        if os.path.isfile(pretrained_model_name_or_path):
-            checkpoint_path = pretrained_model_name_or_path
-        elif pretrained_model_name_or_path.startswith("http://") or pretrained_model_name_or_path.startswith(
-            "https://"
-        ):
-            checkpoint_path = ppdiffusers_url_download(
-                pretrained_model_name_or_path,
-                cache_dir=cache_dir,
-                resume_download=resume_download,
-                force_download=force_download,
-            )
-        else:
-            raise EnvironmentError(f"Please check your {pretrained_model_name_or_path}.")
-        pipeline = load_pipeline_from_original_stable_diffusion_ckpt(
-            checkpoint_path=checkpoint_path,
-            original_config_file=original_config_file,
-            paddle_dtype=paddle_dtype,
-            requires_safety_checker=requires_safety_checker,
-            cls=cls,
-            **kwargs,
-        )
-
-        return pipeline
-
-    @staticmethod
-    def _get_signature_keys(obj):
+    def _get_signature_keys(cls, obj):
         parameters = inspect.signature(obj.__init__).parameters
         required_parameters = {k: v for k, v in parameters.items() if v.default == inspect._empty}
         optional_parameters = set({k for k, v in parameters.items() if v.default != inspect._empty})
         expected_modules = set(required_parameters.keys()) - {"self"}
+
+        optional_names = list(optional_parameters)
+        for name in optional_names:
+            if name in cls._optional_components:
+                expected_modules.add(name)
+                optional_parameters.remove(name)
+
         return expected_modules, optional_parameters
 
     @property
     def components(self) -> Dict[str, Any]:
         r"""
-
         The `self.components` property can be useful to run different pipelines with the same weights and
-        configurations to not have to re-allocate memory.
+        configurations without reallocating additional memory.
+
+        Returns (`dict`):
+            A dictionary containing all the modules needed to initialize the pipeline.
 
         Examples:
 
@@ -1515,9 +1225,6 @@ class DiffusionPipeline(ConfigMixin):
         >>> img2img = StableDiffusionImg2ImgPipeline(**text2img.components)
         >>> inpaint = StableDiffusionInpaintPipeline(**text2img.components)
         ```
-
-        Returns:
-            A dictionary containing all the modules needed to initialize the pipeline.
         """
         expected_modules, optional_parameters = self._get_signature_keys(self)
         components = {
@@ -1535,7 +1242,7 @@ class DiffusionPipeline(ConfigMixin):
     @staticmethod
     def numpy_to_pil(images):
         """
-        Convert a numpy image or a batch of images to a PIL image.
+        Convert a NumPy image or a batch of images to a PIL image.
         """
         return numpy_to_pil(images)
 
@@ -1611,10 +1318,17 @@ class DiffusionPipeline(ConfigMixin):
 
     def enable_attention_slicing(self, slice_size: Optional[Union[str, int]] = "auto"):
         r"""
-        Enable sliced attention computation.
+        Enable sliced attention computation. When this option is enabled, the attention module splits the input tensor
+        in slices to compute attention in several steps. For more than one attention head, the computation is performed
+        sequentially over each head. This is useful to save some memory in exchange for a small speed decrease.
 
-        When this option is enabled, the attention module will split the input tensor in slices, to compute attention
-        in several steps. This is useful to save some memory in exchange for a small speed decrease.
+        <Tip warning={true}>
+
+        ⚠️ Don't enable attention slicing if you're already using `scaled_dot_product_attention` (SDPA) from Paddle
+        2.5 or PPXFormers. These attention computations are already very memory efficient so you won't need to enable
+        this function. If you enable attention slicing with SDPA or PPXFormers, it can lead to serious slow downs!
+
+        </Tip>
 
         Args:
             slice_size (`str` or `int`, *optional*, defaults to `"auto"`):
@@ -1622,13 +1336,30 @@ class DiffusionPipeline(ConfigMixin):
                 `"max"`, maximum amount of memory will be saved by running only one slice at a time. If a number is
                 provided, uses as many slices as `attention_head_dim // slice_size`. In this case, `attention_head_dim`
                 must be a multiple of `slice_size`.
+
+        Examples:
+
+        ```py
+        >>> import paddle
+        >>> from ppdiffusers import StableDiffusionPipeline
+
+        >>> pipe = StableDiffusionPipeline.from_pretrained(
+        ...     "runwayml/stable-diffusion-v1-5",
+        ...     paddle_dtype=paddle.float16,
+        ...     use_safetensors=True,
+        ... )
+
+        >>> prompt = "a photo of an astronaut riding a horse on mars"
+        >>> pipe.enable_attention_slicing()
+        >>> image = pipe(prompt).images[0]
+        ```
         """
         self.set_attention_slice(slice_size)
 
     def disable_attention_slicing(self):
         r"""
-        Disable sliced attention computation. If `enable_attention_slicing` was previously invoked, this method will go
-        back to computing attention in one step.
+        Disable sliced attention computation. If `enable_attention_slicing` was previously called, attention is
+        computed in one step.
         """
         # set slice_size = `None` to disable `attention slicing`
         self.enable_attention_slicing(None)
@@ -1683,3 +1414,41 @@ class DiffusionPipeline(ConfigMixin):
             self.vae.disable_tiling()
         if hasattr(self, "vqvae"):
             self.vqvae.disable_tiling()
+
+    def enable_freeu(self, s1: float, s2: float, b1: float, b2: float):
+        r"""Enables the FreeU mechanism as in https://arxiv.org/abs/2309.11497.
+
+        The suffixes after the scaling factors represent the stages where they are being applied.
+
+        Please refer to the [official repository](https://github.com/ChenyangSi/FreeU) for combinations of the values
+        that are known to work well for different pipelines such as Stable Diffusion v1, v2, and Stable Diffusion XL.
+
+        Args:
+            s1 (`float`):
+                Scaling factor for stage 1 to attenuate the contributions of the skip features. This is done to
+                mitigate "oversmoothing effect" in the enhanced denoising process.
+            s2 (`float`):
+                Scaling factor for stage 2 to attenuate the contributions of the skip features. This is done to
+                mitigate "oversmoothing effect" in the enhanced denoising process.
+            b1 (`float`): Scaling factor for stage 1 to amplify the contributions of backbone features.
+            b2 (`float`): Scaling factor for stage 2 to amplify the contributions of backbone features.
+        """
+        if not hasattr(self, "unet"):
+            raise ValueError("The pipeline must have `unet` for using FreeU.")
+        self.unet.enable_freeu(s1=s1, s2=s2, b1=b1, b2=b2)
+
+    def disable_freeu(self):
+        """Disables the FreeU mechanism if enabled."""
+        if not hasattr(self, "unet"):
+            raise ValueError("The pipeline must have `unet` for using FreeU.")
+        self.unet.disable_freeu()
+
+    def maybe_free_model_hooks(self):
+        r"""
+        Function that offloads all components, removes all model hooks that were added when using
+        `enable_model_cpu_offload` and then applies them again. In case the model has not been offloaded this function
+        is a no-op. Make sure to add this function to the end of the `__call__` function of your pipeline so that it
+        functions correctly when applying enable_model_cpu_offload.
+        """
+        # do nothing
+        return

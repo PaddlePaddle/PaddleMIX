@@ -1,4 +1,3 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,9 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import math
+from typing import Optional, Tuple
 
 import paddle
-import paddle.nn as nn
+from paddle import nn
 
 from ..configuration_utils import ConfigMixin, register_to_config
 from .attention_processor import Attention
@@ -64,8 +64,8 @@ class T5FilmDecoder(ModelMixin, ConfigMixin):
         self.post_dropout = nn.Dropout(p=dropout_rate)
         self.spec_out = nn.Linear(d_model, input_dims, bias_attr=False)
 
-    def encoder_decoder_mask(self, query_input, key_input):
-        mask = paddle.multiply(query_input.unsqueeze(-1), key_input.unsqueeze(-2).cast(query_input.dtype))
+    def encoder_decoder_mask(self, query_input: paddle.Tensor, key_input: paddle.Tensor) -> paddle.Tensor:
+        mask = paddle.multiply(query_input.unsqueeze(-1), key_input.unsqueeze(-2))
         return mask.unsqueeze(-3)
 
     def forward(self, encodings_and_masks, decoder_input_tokens, decoder_noise_time):
@@ -77,7 +77,7 @@ class T5FilmDecoder(ModelMixin, ConfigMixin):
             decoder_noise_time * self.config.max_decoder_noise_time,
             embedding_dim=self.config.d_model,
             max_period=self.config.max_decoder_noise_time,
-        ).cast(self.dtype)
+        ).cast(dtype=self.dtype)
 
         conditioning_emb = self.conditioning_emb(time_steps).unsqueeze(1)
 
@@ -88,14 +88,15 @@ class T5FilmDecoder(ModelMixin, ConfigMixin):
         # If we want to use relative positions for audio context, we can just offset
         # this sequence by the length of encodings_and_masks.
         decoder_positions = paddle.broadcast_to(
-            paddle.arange(
-                seq_length,
-            ),
-            shape=(batch, seq_length),
+            paddle.arange(seq_length),
+            (batch, seq_length),
         )
 
         position_encodings = self.position_encoding(decoder_positions)
-        inputs = self.continuous_inputs_projection(decoder_input_tokens.cast(position_encodings.dtype))
+
+        inputs = self.continuous_inputs_projection(
+            decoder_input_tokens.cast(position_encodings.dtype)
+        )  # NEW ADD cast dtype
         inputs += position_encodings
         y = self.dropout(inputs)
 
@@ -152,13 +153,13 @@ class DecoderLayer(nn.Layer):
 
     def forward(
         self,
-        hidden_states,
-        conditioning_emb=None,
-        attention_mask=None,
-        encoder_hidden_states=None,
-        encoder_attention_mask=None,
+        hidden_states: paddle.Tensor,
+        conditioning_emb: Optional[paddle.Tensor] = None,
+        attention_mask: Optional[paddle.Tensor] = None,
+        encoder_hidden_states: Optional[paddle.Tensor] = None,
+        encoder_attention_mask: Optional[paddle.Tensor] = None,
         encoder_decoder_position_bias=None,
-    ):
+    ) -> Tuple[paddle.Tensor]:
         hidden_states = self.layer[0](
             hidden_states,
             conditioning_emb=conditioning_emb,
@@ -192,10 +193,10 @@ class T5LayerSelfAttentionCond(nn.Layer):
 
     def forward(
         self,
-        hidden_states,
-        conditioning_emb=None,
-        attention_mask=None,
-    ):
+        hidden_states: paddle.Tensor,
+        conditioning_emb: Optional[paddle.Tensor] = None,
+        attention_mask: Optional[paddle.Tensor] = None,
+    ) -> paddle.Tensor:
         # pre_self_attention_layer_norm
         normed_hidden_states = self.layer_norm(hidden_states)
 
@@ -219,10 +220,10 @@ class T5LayerCrossAttention(nn.Layer):
 
     def forward(
         self,
-        hidden_states,
-        key_value_states=None,
-        attention_mask=None,
-    ):
+        hidden_states: paddle.Tensor,
+        key_value_states: Optional[paddle.Tensor] = None,
+        attention_mask: Optional[paddle.Tensor] = None,
+    ) -> paddle.Tensor:
         normed_hidden_states = self.layer_norm(hidden_states)
         attention_output = self.attention(
             normed_hidden_states,
@@ -241,7 +242,7 @@ class T5LayerFFCond(nn.Layer):
         self.layer_norm = T5LayerNorm(d_model, eps=layer_norm_epsilon)
         self.dropout = nn.Dropout(dropout_rate)
 
-    def forward(self, hidden_states, conditioning_emb=None):
+    def forward(self, hidden_states: paddle.Tensor, conditioning_emb: Optional[paddle.Tensor] = None) -> paddle.Tensor:
         forwarded_states = self.layer_norm(hidden_states)
         if conditioning_emb is not None:
             forwarded_states = self.film(forwarded_states, conditioning_emb)
@@ -260,7 +261,7 @@ class T5DenseGatedActDense(nn.Layer):
         self.dropout = nn.Dropout(dropout_rate)
         self.act = NewGELUActivation()
 
-    def forward(self, hidden_states):
+    def forward(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
         hidden_gelu = self.act(self.wi_0(hidden_states))
         hidden_linear = self.wi_1(hidden_states)
         hidden_states = hidden_gelu * hidden_linear
@@ -277,21 +278,22 @@ class T5LayerNorm(nn.Layer):
 
     def __init__(self, hidden_size, eps=1e-6):
         super().__init__()
-        self.weight = self.create_parameter(shape=[hidden_size], default_initializer=nn.initializer.Constant(1.0))
+        self.weight = nn.Parameter(paddle.ones(hidden_size))
         self.variance_epsilon = eps
 
-    def forward(self, hidden_states):
+    def forward(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
         # T5 uses a layer_norm which only scales and doesn't shift, which is also known as Root Mean
         # Square Layer Normalization https://arxiv.org/abs/1910.07467 thus variance is calculated
         # w/o mean and there is no bias. Additionally we want to make sure that the accumulation for
         # half-precision inputs is done in fp32
 
-        variance = paddle.pow(hidden_states.cast(paddle.float32), 2).mean(axis=-1, keepdim=True)
+        variance = hidden_states.cast(paddle.float32).pow(2).mean(-1, keepdim=True)
         hidden_states = hidden_states * paddle.rsqrt(variance + self.variance_epsilon)
 
         # convert into half-precision if necessary
-        if self.weight.dtype == paddle.float16:
-            hidden_states = hidden_states.cast(paddle.float16)
+        if self.weight.dtype in [paddle.float16, paddle.bfloat16]:
+            hidden_states = hidden_states.cast(self.weight.dtype)
+
         return self.weight * hidden_states
 
 
@@ -316,8 +318,8 @@ class T5FiLMLayer(nn.Layer):
         super().__init__()
         self.scale_bias = nn.Linear(in_features, out_features * 2, bias_attr=False)
 
-    def forward(self, x, conditioning_emb):
+    def forward(self, x: paddle.Tensor, conditioning_emb: paddle.Tensor) -> paddle.Tensor:
         emb = self.scale_bias(conditioning_emb)
-        scale, shift = emb.chunk(2, axis=-1)
+        scale, shift = paddle.chunk(emb, 2, -1)
         x = x * (1 + scale) + shift
         return x

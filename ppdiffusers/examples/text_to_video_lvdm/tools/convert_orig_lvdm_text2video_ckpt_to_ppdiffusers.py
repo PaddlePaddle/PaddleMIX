@@ -26,8 +26,6 @@ except ImportError:
     raise ImportError(
         "OmegaConf is required to convert the SD checkpoints. Please install it with `pip install OmegaConf`."
     )
-from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
-
 from ppdiffusers import (
     AutoencoderKL,
     DDIMScheduler,
@@ -41,6 +39,7 @@ from ppdiffusers import (
     LVDMUNet3DModel,
     PNDMScheduler,
 )
+from ppdiffusers.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
 
 paddle.set_device("cpu")
 MZ_ZIP_LOCAL_DIR_HEADER_SIZE = 30

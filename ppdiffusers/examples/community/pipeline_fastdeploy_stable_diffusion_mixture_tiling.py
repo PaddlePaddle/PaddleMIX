@@ -22,7 +22,7 @@ import paddle
 from tqdm.auto import tqdm
 
 # from ppdiffusers.models import AutoencoderKL, UNet2DConditionModel
-from ppdiffusers.pipeline_utils import DiffusionPipeline
+from ppdiffusers import DiffusionPipeline
 from ppdiffusers.pipelines.fastdeploy_utils import (
     FastDeployDiffusionPipelineMixin,
     FastDeployRuntimeModel,
@@ -34,8 +34,9 @@ from ppdiffusers.utils import logging
 
 try:
     from ligo.segments import segment
-    from paddlenlp.transformers import CLIPFeatureExtractor  # CLIPTextModel,
-    from paddlenlp.transformers import CLIPTokenizer
+
+    from ppdiffusers.transformers import CLIPFeatureExtractor  # CLIPTextModel,
+    from ppdiffusers.transformers import CLIPTokenizer
 except ImportError:
     raise ImportError("Please install paddlenlp and ligo-segments to use the mixture pipeline")
 logger = logging.get_logger(__name__)
@@ -463,7 +464,7 @@ class FastDeployStableDiffusionTilingPipeline(
                 latents = self.scheduler.step(noise_pred, t, latents).prev_sample
             if i == len(self.scheduler.timesteps) - 1:
                 # sync for accuracy it/s measure
-                paddle.device.cuda.synchronize()
+                paddle.device.synchronize()
 
         # scale and decode the image latents with vae
         image = self._decode_vae_latents(latents)

@@ -1,5 +1,4 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
-# Copyright 2022 Google Brain and The HuggingFace Team. All rights reserved.
+# Copyright 2023 Google Brain and The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,21 +21,22 @@ from typing import Optional, Tuple, Union
 import paddle
 
 from ..configuration_utils import ConfigMixin, register_to_config
-from ..utils import BaseOutput, randn_tensor
+from ..utils import BaseOutput
+from ..utils.paddle_utils import randn_tensor
 from .scheduling_utils import SchedulerMixin, SchedulerOutput
 
 
 @dataclass
 class SdeVeOutput(BaseOutput):
     """
-    Output class for the ScoreSdeVeScheduler's step function output.
+    Output class for the scheduler's `step` function output.
 
     Args:
         prev_sample (`paddle.Tensor` of shape `(batch_size, num_channels, height, width)` for images):
-            Computed sample (x_{t-1}) of previous timestep. `prev_sample` should be used as next model input in the
+            Computed sample `(x_{t-1})` of previous timestep. `prev_sample` should be used as next model input in the
             denoising loop.
         prev_sample_mean (`paddle.Tensor` of shape `(batch_size, num_channels, height, width)` for images):
-            Mean averaged `prev_sample`. Same as `prev_sample`, only mean-averaged over previous timesteps.
+            Mean averaged `prev_sample` over previous timesteps.
     """
 
     prev_sample: paddle.Tensor
@@ -45,26 +45,25 @@ class SdeVeOutput(BaseOutput):
 
 class ScoreSdeVeScheduler(SchedulerMixin, ConfigMixin):
     """
-    The variance exploding stochastic differential equation (SDE) scheduler.
+    `ScoreSdeVeScheduler` is a variance exploding stochastic differential equation (SDE) scheduler.
 
-    For more information, see the original paper: https://arxiv.org/abs/2011.13456
-
-    [`~ConfigMixin`] takes care of storing all config attributes that are passed in the scheduler's `__init__`
-    function, such as `num_train_timesteps`. They can be accessed via `scheduler.config.num_train_timesteps`.
-    [`SchedulerMixin`] provides general loading and saving functionality via the [`SchedulerMixin.save_pretrained`] and
-    [`~SchedulerMixin.from_pretrained`] functions.
+    This model inherits from [`SchedulerMixin`] and [`ConfigMixin`]. Check the superclass documentation for the generic
+    methods the library implements for all schedulers such as loading and saving.
 
     Args:
-        num_train_timesteps (`int`): number of diffusion steps used to train the model.
-        snr (`float`):
-            coefficient weighting the step from the model_output sample (from the network) to the random noise.
-        sigma_min (`float`):
-                initial noise scale for sigma sequence in sampling procedure. The minimum sigma should mirror the
-                distribution of the data.
-        sigma_max (`float`): maximum value used for the range of continuous timesteps passed into the model.
-        sampling_eps (`float`): the end value of sampling, where timesteps decrease progressively from 1 to
-        epsilon.
-        correct_steps (`int`): number of correction steps performed on a produced sample.
+        num_train_timesteps (`int`, defaults to 1000):
+            The number of diffusion steps to train the model.
+        snr (`float`, defaults to 0.15):
+            A coefficient weighting the step from the `model_output` sample (from the network) to the random noise.
+        sigma_min (`float`, defaults to 0.01):
+            The initial noise scale for the sigma sequence in the sampling procedure. The minimum sigma should mirror
+            the distribution of the data.
+        sigma_max (`float`, defaults to 1348.0):
+            The maximum value used for the range of continuous timesteps passed into the model.
+        sampling_eps (`float`, defaults to 1e-5):
+            The end value of sampling where timesteps decrease progressively from 1 to epsilon.
+        correct_steps (`int`, defaults to 1):
+            The number of correction steps performed on a produced sample.
     """
 
     order = 1
@@ -93,23 +92,28 @@ class ScoreSdeVeScheduler(SchedulerMixin, ConfigMixin):
         current timestep.
 
         Args:
-            sample (`paddle.Tensor`): input sample
-            timestep (`int`, optional): current timestep
+            sample (`paddle.Tensor`):
+                The input sample.
+            timestep (`int`, *optional*):
+                The current timestep in the diffusion chain.
 
         Returns:
-            `paddle.Tensor`: scaled input sample
+            `paddle.Tensor`:
+                A scaled input sample.
         """
         return sample
 
     def set_timesteps(self, num_inference_steps: int, sampling_eps: float = None):
         """
-        Sets the continuous timesteps used for the diffusion chain. Supporting function to be run before inference.
+        Sets the continuous timesteps used for the diffusion chain (to be run before inference).
 
         Args:
             num_inference_steps (`int`):
-                the number of diffusion steps used when generating samples with a pre-trained model.
-            sampling_eps (`float`, optional):
-                final timestep value (overrides value given at Scheduler instantiation).
+                The number of diffusion steps used when generating samples with a pre-trained model.
+            sampling_eps (`float`, *optional*):
+                The final timestep value (overrides value given during scheduler instantiation).
+            device (`str` or `torch.device`, *optional*):
+                The device to which the timesteps should be moved to. If `None`, the timesteps are not moved.
 
         """
         sampling_eps = sampling_eps if sampling_eps is not None else self.config.sampling_eps
@@ -120,19 +124,18 @@ class ScoreSdeVeScheduler(SchedulerMixin, ConfigMixin):
         self, num_inference_steps: int, sigma_min: float = None, sigma_max: float = None, sampling_eps: float = None
     ):
         """
-        Sets the noise scales used for the diffusion chain. Supporting function to be run before inference.
-
-        The sigmas control the weight of the `drift` and `diffusion` components of sample update.
+        Sets the noise scales used for the diffusion chain (to be run before inference). The sigmas control the weight
+        of the `drift` and `diffusion` components of the sample update.
 
         Args:
             num_inference_steps (`int`):
-                the number of diffusion steps used when generating samples with a pre-trained model.
+                The number of diffusion steps used when generating samples with a pre-trained model.
             sigma_min (`float`, optional):
-                initial noise scale value (overrides value given at Scheduler instantiation).
+                The initial noise scale value (overrides value given during scheduler instantiation).
             sigma_max (`float`, optional):
-                final noise scale value (overrides value given at Scheduler instantiation).
+                The final noise scale value (overrides value given during scheduler instantiation).
             sampling_eps (`float`, optional):
-                final timestep value (overrides value given at Scheduler instantiation).
+                The final timestep value (overrides value given during scheduler instantiation).
 
         """
         sigma_min = sigma_min if sigma_min is not None else self.config.sigma_min
@@ -148,7 +151,7 @@ class ScoreSdeVeScheduler(SchedulerMixin, ConfigMixin):
         self.sigmas = paddle.to_tensor([sigma_min * (sigma_max / sigma_min) ** t for t in self.timesteps])
 
     def get_adjacent_sigma(self, timesteps, t):
-        # (TODO, junnyu) BUG in PaddlePaddle, here is the issue https://github.com/PaddlePaddle/Paddle/issues/56335
+        # NOTE (TODO, junnyu) BUG in PaddlePaddle, here is the issue https://github.com/PaddlePaddle/Paddle/issues/56335
         index = timesteps - 1
         if (index < 0).all():
             index += self.discrete_sigmas.shape[0]
@@ -167,20 +170,25 @@ class ScoreSdeVeScheduler(SchedulerMixin, ConfigMixin):
         return_dict: bool = True,
     ) -> Union[SdeVeOutput, Tuple]:
         """
-        Predict the sample at the previous timestep by reversing the SDE. Core function to propagate the diffusion
+        Predict the sample from the previous timestep by reversing the SDE. This function propagates the diffusion
         process from the learned model outputs (most often the predicted noise).
 
         Args:
-            model_output (`paddle.Tensor`): direct output from learned diffusion model.
-            timestep (`int`): current discrete timestep in the diffusion chain.
+            model_output (`paddle.Tensor`):
+                The direct output from learned diffusion model.
+            timestep (`int`):
+                The current discrete timestep in the diffusion chain.
             sample (`paddle.Tensor`):
-                current instance of sample being created by diffusion process.
-            generator: random number generator.
-            return_dict (`bool`): option for returning tuple rather than SchedulerOutput class
+                A current instance of a sample created by the diffusion process.
+            generator (`paddle.Generator`, *optional*):
+                A random number generator.
+            return_dict (`bool`, *optional*, defaults to `True`):
+                Whether or not to return a [`~schedulers.scheduling_sde_ve.SdeVeOutput`] or `tuple`.
 
         Returns:
-            [`~schedulers.scheduling_sde_ve.SdeVeOutput`] or `tuple`: [`~schedulers.scheduling_sde_ve.SdeVeOutput`] if
-            `return_dict` is True, otherwise a `tuple`. When returning a tuple, the first element is the sample tensor.
+            [`~schedulers.scheduling_sde_ve.SdeVeOutput`] or `tuple`:
+                If return_dict is `True`, [`~schedulers.scheduling_sde_ve.SdeVeOutput`] is returned, otherwise a tuple
+                is returned where the first element is the sample tensor.
 
         """
         if self.timesteps is None:
@@ -188,7 +196,11 @@ class ScoreSdeVeScheduler(SchedulerMixin, ConfigMixin):
                 "`self.timesteps` is not set, you need to run 'set_timesteps' after creating the scheduler"
             )
 
-        timestep = timestep * paddle.ones((sample.shape[0],))  # paddle.repeat_interleave(timestep, sample.shape[0])
+        timestep = timestep * paddle.ones(
+            [
+                sample.shape[0],
+            ]
+        )  # paddle.repeat_interleave(timestep, sample.shape[0])
         timesteps = (timestep * (len(self.timesteps) - 1)).cast("int64")
 
         sigma = self.discrete_sigmas[timesteps]
@@ -222,19 +234,23 @@ class ScoreSdeVeScheduler(SchedulerMixin, ConfigMixin):
         return_dict: bool = True,
     ) -> Union[SchedulerOutput, Tuple]:
         """
-        Correct the predicted sample based on the output model_output of the network. This is often run repeatedly
-        after making the prediction for the previous timestep.
+        Correct the predicted sample based on the `model_output` of the network. This is often run repeatedly after
+        making the prediction for the previous timestep.
 
         Args:
-            model_output (`paddle.Tensor`): direct output from learned diffusion model.
+            model_output (`paddle.Tensor`):
+                The direct output from learned diffusion model.
             sample (`paddle.Tensor`):
-                current instance of sample being created by diffusion process.
-            generator: random number generator.
-            return_dict (`bool`): option for returning tuple rather than SchedulerOutput class
+                A current instance of a sample created by the diffusion process.
+            generator (`paddle.Generator`, *optional*):
+                A random number generator.
+            return_dict (`bool`, *optional*, defaults to `True`):
+                Whether or not to return a [`~schedulers.scheduling_sde_ve.SdeVeOutput`] or `tuple`.
 
         Returns:
-            [`~schedulers.scheduling_sde_ve.SdeVeOutput`] or `tuple`: [`~schedulers.scheduling_sde_ve.SdeVeOutput`] if
-            `return_dict` is True, otherwise a `tuple`. When returning a tuple, the first element is the sample tensor.
+            [`~schedulers.scheduling_sde_ve.SdeVeOutput`] or `tuple`:
+                If return_dict is `True`, [`~schedulers.scheduling_sde_ve.SdeVeOutput`] is returned, otherwise a tuple
+                is returned where the first element is the sample tensor.
 
         """
         if self.timesteps is None:
@@ -276,7 +292,11 @@ class ScoreSdeVeScheduler(SchedulerMixin, ConfigMixin):
             timesteps = timesteps.unsqueeze(0)
         # Make sure sigmas and timesteps have the same dtype as original_samples
         sigmas = self.discrete_sigmas[timesteps]
-        noise = paddle.randn(original_samples.shape, dtype=original_samples.dtype) * sigmas[:, None, None, None]
+        noise = (
+            noise * sigmas[:, None, None, None]
+            if noise is not None
+            else paddle.randn(original_samples.shape, dtype=original_samples.dtype) * sigmas[:, None, None, None]
+        )
         noisy_samples = noise + original_samples
         return noisy_samples
 

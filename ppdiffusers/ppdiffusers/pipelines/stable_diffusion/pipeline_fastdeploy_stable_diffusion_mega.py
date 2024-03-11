@@ -18,6 +18,7 @@ from typing import Callable, Dict, List, Optional, Union
 import paddle
 import PIL.Image
 
+from ...image_processor import PipelineImageInput
 from ...utils import logging
 from .pipeline_fastdeploy_cycle_diffusion import FastDeployCycleDiffusionPipeline
 from .pipeline_fastdeploy_stable_diffusion import FastDeployStableDiffusionPipeline
@@ -64,7 +65,7 @@ class FastDeployStableDiffusionMegaPipeline(FastDeployStableDiffusionPipeline):
         feature_extractor ([`CLIPFeatureExtractor`]):
             Model that extracts features from generated images to be used as inputs for the `safety_checker`.
     """
-    _optional_components = ["vae_encoder", "safety_checker", "feature_extractor"]
+    _optional_components = ["image_encoder", "vae_encoder", "safety_checker", "feature_extractor"]
 
     def __call__(self, *args, **kwargs):
         return self.text2img(*args, **kwargs)
@@ -89,6 +90,7 @@ class FastDeployStableDiffusionMegaPipeline(FastDeployStableDiffusionPipeline):
         callback_steps: Optional[int] = 1,
         controlnet_cond: Union[paddle.Tensor, PIL.Image.Image] = None,
         controlnet_conditioning_scale: float = 1.0,
+        ip_adapter_image: Optional[PipelineImageInput] = None,
         infer_op_dict: Dict[str, str] = None,
     ):
 
@@ -117,6 +119,7 @@ class FastDeployStableDiffusionMegaPipeline(FastDeployStableDiffusionPipeline):
             callback_steps=callback_steps,
             controlnet_cond=controlnet_cond,
             controlnet_conditioning_scale=controlnet_conditioning_scale,
+            ip_adapter_image=ip_adapter_image,
             infer_op_dict=infer_op_dict,
         )
         return output
@@ -143,6 +146,7 @@ class FastDeployStableDiffusionMegaPipeline(FastDeployStableDiffusionPipeline):
         callback_steps: Optional[int] = 1,
         controlnet_cond: Union[paddle.Tensor, PIL.Image.Image] = None,
         controlnet_conditioning_scale: float = 1.0,
+        ip_adapter_image: Optional[PipelineImageInput] = None,
         infer_op_dict: Dict[str, str] = None,
     ):
         expected_components = inspect.signature(FastDeployStableDiffusionImg2ImgPipeline.__init__).parameters.keys()
@@ -172,6 +176,7 @@ class FastDeployStableDiffusionMegaPipeline(FastDeployStableDiffusionPipeline):
             callback_steps=callback_steps,
             controlnet_cond=controlnet_cond,
             controlnet_conditioning_scale=controlnet_conditioning_scale,
+            ip_adapter_image=ip_adapter_image,
             infer_op_dict=infer_op_dict,
         )
 
@@ -200,6 +205,7 @@ class FastDeployStableDiffusionMegaPipeline(FastDeployStableDiffusionPipeline):
         callback_steps: Optional[int] = 1,
         controlnet_cond: Union[paddle.Tensor, PIL.Image.Image] = None,
         controlnet_conditioning_scale: float = 1.0,
+        ip_adapter_image: Optional[PipelineImageInput] = None,
         infer_op_dict: Dict[str, str] = None,
     ):
         assert (
@@ -235,6 +241,7 @@ class FastDeployStableDiffusionMegaPipeline(FastDeployStableDiffusionPipeline):
             callback_steps=callback_steps,
             controlnet_cond=controlnet_cond,
             controlnet_conditioning_scale=controlnet_conditioning_scale,
+            ip_adapter_image=ip_adapter_image,
             infer_op_dict=infer_op_dict,
         )
 
@@ -263,6 +270,7 @@ class FastDeployStableDiffusionMegaPipeline(FastDeployStableDiffusionPipeline):
         callback_steps: Optional[int] = 1,
         controlnet_cond: Union[paddle.Tensor, PIL.Image.Image] = None,
         controlnet_conditioning_scale: float = 1.0,
+        ip_adapter_image: Optional[PipelineImageInput] = None,
         infer_op_dict: Dict[str, str] = None,
     ):
         assert self.unet_num_latent_channels in [4, 9]
@@ -294,6 +302,7 @@ class FastDeployStableDiffusionMegaPipeline(FastDeployStableDiffusionPipeline):
             callback_steps=callback_steps,
             controlnet_cond=controlnet_cond,
             controlnet_conditioning_scale=controlnet_conditioning_scale,
+            ip_adapter_image=ip_adapter_image,
             infer_op_dict=infer_op_dict,
         )
 

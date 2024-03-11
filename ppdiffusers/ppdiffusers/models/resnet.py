@@ -1,4 +1,3 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2023 The HuggingFace Team. All rights reserved.
 # `TemporalConvLayer` Copyright 2023 Alibaba DAMO-VILAB, The ModelScope Team and The HuggingFace Team. All rights reserved.
 #
@@ -15,13 +14,13 @@
 # limitations under the License.
 
 from functools import partial
-from typing import Optional
+from typing import Optional, Tuple, Union
 
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
 
-from ..initializer import zeros_
+from ..utils import USE_PEFT_BACKEND
 from .activations import get_activation
 from .attention import AdaGroupNorm
 from .attention_processor import SpatialNorm
@@ -42,7 +41,14 @@ class Upsample1D(nn.Layer):
             number of output channels. Defaults to `channels`.
     """
 
-    def __init__(self, channels, use_conv=False, use_conv_transpose=False, out_channels=None, name="conv"):
+    def __init__(
+        self,
+        channels: int,
+        use_conv: bool = False,
+        use_conv_transpose: bool = False,
+        out_channels: Optional[int] = None,
+        name: str = "conv",
+    ):
         super().__init__()
         self.channels = channels
         self.out_channels = out_channels or channels
@@ -56,7 +62,7 @@ class Upsample1D(nn.Layer):
         elif use_conv:
             self.conv = nn.Conv1D(self.channels, self.out_channels, 3, padding=1)
 
-    def forward(self, inputs):
+    def forward(self, inputs: paddle.Tensor) -> paddle.Tensor:
         assert inputs.shape[1] == self.channels
         if self.use_conv_transpose:
             return self.conv(inputs)
@@ -83,7 +89,14 @@ class Downsample1D(nn.Layer):
             padding for the convolution.
     """
 
-    def __init__(self, channels, use_conv=False, out_channels=None, padding=1, name="conv"):
+    def __init__(
+        self,
+        channels: int,
+        use_conv: bool = False,
+        out_channels: Optional[int] = None,
+        padding: int = 1,
+        name: str = "conv",
+    ):
         super().__init__()
         self.channels = channels
         self.out_channels = out_channels or channels
@@ -98,7 +111,7 @@ class Downsample1D(nn.Layer):
             assert self.channels == self.out_channels
             self.conv = nn.AvgPool1D(kernel_size=stride, stride=stride)
 
-    def forward(self, inputs):
+    def forward(self, inputs: paddle.Tensor) -> paddle.Tensor:
         assert inputs.shape[1] == self.channels
         return self.conv(inputs)
 
@@ -117,19 +130,27 @@ class Upsample2D(nn.Layer):
             number of output channels. Defaults to `channels`.
     """
 
-    def __init__(self, channels, use_conv=False, use_conv_transpose=False, out_channels=None, name="conv"):
+    def __init__(
+        self,
+        channels: int,
+        use_conv: bool = False,
+        use_conv_transpose: bool = False,
+        out_channels: Optional[int] = None,
+        name: str = "conv",
+    ):
         super().__init__()
         self.channels = channels
         self.out_channels = out_channels or channels
         self.use_conv = use_conv
         self.use_conv_transpose = use_conv_transpose
         self.name = name
+        conv_cls = nn.Conv2D if USE_PEFT_BACKEND else LoRACompatibleConv
 
         conv = None
         if use_conv_transpose:
             conv = nn.Conv2DTranspose(channels, self.out_channels, 4, 2, 1)
         elif use_conv:
-            conv = LoRACompatibleConv(self.channels, self.out_channels, 3, padding=1)
+            conv = conv_cls(self.channels, self.out_channels, 3, padding=1)
 
         # TODO(Suraj, Patrick) - clean up after weight dicts are correctly renamed
         if name == "conv":
@@ -137,7 +158,12 @@ class Upsample2D(nn.Layer):
         else:
             self.Conv2d_0 = conv
 
-    def forward(self, hidden_states, output_size=None):
+    def forward(
+        self,
+        hidden_states: paddle.Tensor,
+        output_size: Optional[int] = None,
+        scale: float = 1.0,
+    ) -> paddle.Tensor:
         assert hidden_states.shape[1] == self.channels
 
         if self.use_conv_transpose:
@@ -149,6 +175,10 @@ class Upsample2D(nn.Layer):
         dtype = hidden_states.dtype
         if dtype == paddle.bfloat16:
             hidden_states = hidden_states.cast("float32")
+
+        # upsample_nearest_nhwc fails with large batch sizes. see https://github.com/huggingface/diffusers/issues/984
+        # if hidden_states.shape[0] >= 64:
+        #     hidden_states = hidden_states.contiguous()
 
         # if `output_size` is passed we force the interpolation output
         # size and do not make use of `scale_factor=2`
@@ -164,9 +194,15 @@ class Upsample2D(nn.Layer):
         # TODO(Suraj, Patrick) - clean up after weight dicts are correctly renamed
         if self.use_conv:
             if self.name == "conv":
-                hidden_states = self.conv(hidden_states)
+                if isinstance(self.conv, LoRACompatibleConv) and not USE_PEFT_BACKEND:
+                    hidden_states = self.conv(hidden_states, scale)
+                else:
+                    hidden_states = self.conv(hidden_states)
             else:
-                hidden_states = self.Conv2d_0(hidden_states)
+                if isinstance(self.Conv2d_0, LoRACompatibleConv) and not USE_PEFT_BACKEND:
+                    hidden_states = self.Conv2d_0(hidden_states, scale)
+                else:
+                    hidden_states = self.Conv2d_0(hidden_states)
 
         return hidden_states
 
@@ -185,7 +221,14 @@ class Downsample2D(nn.Layer):
             padding for the convolution.
     """
 
-    def __init__(self, channels, use_conv=False, out_channels=None, padding=1, name="conv"):
+    def __init__(
+        self,
+        channels: int,
+        use_conv: bool = False,
+        out_channels: Optional[int] = None,
+        padding: int = 1,
+        name: str = "conv",
+    ):
         super().__init__()
         self.channels = channels
         self.out_channels = out_channels or channels
@@ -193,9 +236,10 @@ class Downsample2D(nn.Layer):
         self.padding = padding
         stride = 2
         self.name = name
+        conv_cls = nn.Conv2D if USE_PEFT_BACKEND else LoRACompatibleConv
 
         if use_conv:
-            conv = LoRACompatibleConv(self.channels, self.out_channels, 3, stride=stride, padding=padding)
+            conv = conv_cls(self.channels, self.out_channels, 3, stride=stride, padding=padding)
         else:
             assert self.channels == self.out_channels
             conv = nn.AvgPool2D(kernel_size=stride, stride=stride)
@@ -209,14 +253,22 @@ class Downsample2D(nn.Layer):
         else:
             self.conv = conv
 
-    def forward(self, hidden_states):
+    def forward(self, hidden_states: paddle.Tensor, scale: float = 1.0) -> paddle.Tensor:
         assert hidden_states.shape[1] == self.channels
+
         if self.use_conv and self.padding == 0:
             pad = (0, 1, 0, 1)
             hidden_states = F.pad(hidden_states, pad, mode="constant", value=0)
 
         assert hidden_states.shape[1] == self.channels
-        hidden_states = self.conv(hidden_states)
+
+        if not USE_PEFT_BACKEND:
+            if isinstance(self.conv, LoRACompatibleConv):
+                hidden_states = self.conv(hidden_states, scale)
+            else:
+                hidden_states = self.conv(hidden_states)
+        else:
+            hidden_states = self.conv(hidden_states)
 
         return hidden_states
 
@@ -225,7 +277,7 @@ class FirUpsample2D(nn.Layer):
     """A 2D FIR upsampling layer with an optional convolution.
 
     Parameters:
-        channels (`int`):
+        channels (`int`, optional):
             number of channels in the inputs and outputs.
         use_conv (`bool`, default `False`):
             option to use a convolution.
@@ -235,7 +287,13 @@ class FirUpsample2D(nn.Layer):
             kernel for the FIR filter.
     """
 
-    def __init__(self, channels=None, out_channels=None, use_conv=False, fir_kernel=(1, 3, 3, 1)):
+    def __init__(
+        self,
+        channels: Optional[int] = None,
+        out_channels: Optional[int] = None,
+        use_conv: bool = False,
+        fir_kernel: Tuple[int, int, int, int] = (1, 3, 3, 1),
+    ):
         super().__init__()
         out_channels = out_channels if out_channels else channels
         if use_conv:
@@ -244,7 +302,14 @@ class FirUpsample2D(nn.Layer):
         self.fir_kernel = fir_kernel
         self.out_channels = out_channels
 
-    def _upsample_2d(self, hidden_states, weight=None, kernel=None, factor=2, gain=1):
+    def _upsample_2d(
+        self,
+        hidden_states: paddle.Tensor,
+        weight: Optional[paddle.Tensor] = None,
+        kernel: Optional[paddle.Tensor] = None,
+        factor: int = 2,
+        gain: float = 1,
+    ) -> paddle.Tensor:
         """Fused `upsample_2d()` followed by `Conv2d()`.
 
         Padding is performed only once at the beginning, not between the operations. The fused op is considerably more
@@ -252,17 +317,21 @@ class FirUpsample2D(nn.Layer):
         arbitrary order.
 
         Args:
-            hidden_states: Input tensor of the shape `[N, C, H, W]` or `[N, H, W, C]`.
-            weight: Weight tensor of the shape `[filterH, filterW, inChannels,
-                outChannels]`. Grouped convolution can be performed by `inChannels = x.shape[0] // numGroups`.
-            kernel: FIR filter of the shape `[firH, firW]` or `[firN]`
-                (separable). The default is `[1] * factor`, which corresponds to nearest-neighbor upsampling.
-            factor: Integer upsampling factor (default: 2).
-            gain: Scaling factor for signal magnitude (default: 1.0).
+            hidden_states (`paddle.Tensor`):
+                Input tensor of the shape `[N, C, H, W]` or `[N, H, W, C]`.
+            weight (`paddle.Tensor`, *optional*):
+                Weight tensor of the shape `[filterH, filterW, inChannels, outChannels]`. Grouped convolution can be
+                performed by `inChannels = x.shape[0] // numGroups`.
+            kernel (`paddle.Tensor`, *optional*):
+                FIR filter of the shape `[firH, firW]` or `[firN]` (separable). The default is `[1] * factor`, which
+                corresponds to nearest-neighbor upsampling.
+            factor (`int`, *optional*): Integer upsampling factor (default: 2).
+            gain (`float`, *optional*): Scaling factor for signal magnitude (default: 1.0).
 
         Returns:
-            output: Tensor of the shape `[N, C, H * factor, W * factor]` or `[N, H * factor, W * factor, C]`, and same
-            datatype as `hidden_states`.
+            output (`paddle.Tensor`):
+                Tensor of the shape `[N, C, H * factor, W * factor]` or `[N, H * factor, W * factor, C]`, and same
+                datatype as `hidden_states`.
         """
 
         assert isinstance(factor, int) and factor >= 1
@@ -305,7 +374,11 @@ class FirUpsample2D(nn.Layer):
             weight = weight.reshape([num_groups * inC, -1, convH, convW])
 
             inverse_conv = F.conv2d_transpose(
-                hidden_states, weight, stride=stride, output_padding=output_padding, padding=0
+                hidden_states,
+                weight,
+                stride=stride,
+                output_padding=output_padding,
+                padding=0,
             )
 
             output = upfirdn2d_native(
@@ -324,7 +397,7 @@ class FirUpsample2D(nn.Layer):
 
         return output
 
-    def forward(self, hidden_states):
+    def forward(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
         if self.use_conv:
             height = self._upsample_2d(hidden_states, self.Conv2d_0.weight, kernel=self.fir_kernel)
             height = height + self.Conv2d_0.bias.reshape([1, -1, 1, 1])
@@ -348,7 +421,13 @@ class FirDownsample2D(nn.Layer):
             kernel for the FIR filter.
     """
 
-    def __init__(self, channels=None, out_channels=None, use_conv=False, fir_kernel=(1, 3, 3, 1)):
+    def __init__(
+        self,
+        channels: Optional[int] = None,
+        out_channels: Optional[int] = None,
+        use_conv: bool = False,
+        fir_kernel: Tuple[int, int, int, int] = (1, 3, 3, 1),
+    ):
         super().__init__()
         out_channels = out_channels if out_channels else channels
         if use_conv:
@@ -357,25 +436,37 @@ class FirDownsample2D(nn.Layer):
         self.use_conv = use_conv
         self.out_channels = out_channels
 
-    def _downsample_2d(self, hidden_states, weight=None, kernel=None, factor=2, gain=1):
+    def _downsample_2d(
+        self,
+        hidden_states: paddle.Tensor,
+        weight: Optional[paddle.Tensor] = None,
+        kernel: Optional[paddle.Tensor] = None,
+        factor: int = 2,
+        gain: float = 1,
+    ) -> paddle.Tensor:
         """Fused `Conv2d()` followed by `downsample_2d()`.
         Padding is performed only once at the beginning, not between the operations. The fused op is considerably more
         efficient than performing the same calculation using standard TensorFlow ops. It supports gradients of
         arbitrary order.
 
         Args:
-            hidden_states: Input tensor of the shape `[N, C, H, W]` or `[N, H, W, C]`.
-            weight:
+            hidden_states (`paddle.Tensor`):
+                Input tensor of the shape `[N, C, H, W]` or `[N, H, W, C]`.
+            weight (`paddle.Tensor`, *optional*):
                 Weight tensor of the shape `[filterH, filterW, inChannels, outChannels]`. Grouped convolution can be
                 performed by `inChannels = x.shape[0] // numGroups`.
-            kernel: FIR filter of the shape `[firH, firW]` or `[firN]` (separable). The default is `[1] *
-            factor`, which corresponds to average pooling.
-            factor: Integer downsampling factor (default: 2).
-            gain: Scaling factor for signal magnitude (default: 1.0).
+            kernel (`paddle.Tensor`, *optional*):
+                FIR filter of the shape `[firH, firW]` or `[firN]` (separable). The default is `[1] * factor`, which
+                corresponds to average pooling.
+            factor (`int`, *optional*, default to `2`):
+                Integer downsampling factor.
+            gain (`float`, *optional*, default to `1.0`):
+                Scaling factor for signal magnitude.
 
         Returns:
-            output: Tensor of the shape `[N, C, H // factor, W // factor]` or `[N, H // factor, W // factor, C]`, and
-            same datatype as `x`.
+            output (`paddle.Tensor`):
+                Tensor of the shape `[N, C, H // factor, W // factor]` or `[N, H // factor, W // factor, C]`, and same
+                datatype as `x`.
         """
 
         assert isinstance(factor, int) and factor >= 1
@@ -411,7 +502,7 @@ class FirDownsample2D(nn.Layer):
 
         return output
 
-    def forward(self, hidden_states):
+    def forward(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
         if self.use_conv:
             downsample_input = self._downsample_2d(hidden_states, weight=self.Conv2d_0.weight, kernel=self.fir_kernel)
             hidden_states = downsample_input + self.Conv2d_0.bias.reshape([1, -1, 1, 1])
@@ -423,14 +514,20 @@ class FirDownsample2D(nn.Layer):
 
 # downsample/upsample layer used in k-upscaler, might be able to use FirDownsample2D/DirUpsample2D instead
 class KDownsample2D(nn.Layer):
-    def __init__(self, pad_mode="reflect"):
+    r"""A 2D K-downsampling layer.
+
+    Parameters:
+        pad_mode (`str`, *optional*, default to `"reflect"`): the padding mode to use.
+    """
+
+    def __init__(self, pad_mode: str = "reflect"):
         super().__init__()
         self.pad_mode = pad_mode
         kernel_1d = paddle.to_tensor([[1 / 8, 3 / 8, 3 / 8, 1 / 8]])
         self.pad = kernel_1d.shape[1] // 2 - 1
         self.register_buffer("kernel", paddle.matmul(kernel_1d, kernel_1d, transpose_x=True), persistable=False)
 
-    def forward(self, inputs):
+    def forward(self, inputs: paddle.Tensor) -> paddle.Tensor:
         inputs = F.pad(inputs, (self.pad,) * 4, self.pad_mode)
         weight = paddle.zeros(
             [inputs.shape[1], inputs.shape[1], self.kernel.shape[0], self.kernel.shape[1]], dtype=inputs.dtype
@@ -442,14 +539,20 @@ class KDownsample2D(nn.Layer):
 
 
 class KUpsample2D(nn.Layer):
-    def __init__(self, pad_mode="reflect"):
+    r"""A 2D K-upsampling layer.
+
+    Parameters:
+        pad_mode (`str`, *optional*, default to `"reflect"`): the padding mode to use.
+    """
+
+    def __init__(self, pad_mode: str = "reflect"):
         super().__init__()
         self.pad_mode = pad_mode
         kernel_1d = paddle.to_tensor([[1 / 8, 3 / 8, 3 / 8, 1 / 8]]) * 2
         self.pad = kernel_1d.shape[1] // 2 - 1
         self.register_buffer("kernel", paddle.matmul(kernel_1d, kernel_1d, transpose_x=True), persistable=False)
 
-    def forward(self, inputs):
+    def forward(self, inputs: paddle.Tensor) -> paddle.Tensor:
         inputs = F.pad(inputs, ((self.pad + 1) // 2,) * 4, self.pad_mode)
         weight = paddle.zeros(
             [inputs.shape[1], inputs.shape[1], self.kernel.shape[0], self.kernel.shape[1]], dtype=inputs.dtype
@@ -494,29 +597,27 @@ class ResnetBlock2D(nn.Layer):
     def __init__(
         self,
         *,
-        in_channels,
-        out_channels=None,
-        conv_shortcut=False,
-        dropout=0.0,
-        temb_channels=512,
-        groups=32,
-        groups_out=None,
-        pre_norm=True,
-        eps=1e-6,
-        non_linearity="swish",
-        skip_time_act: bool = False,  # skip_time_act is the same as pre_temb_non_linearity
-        time_embedding_norm="default",  # default, scale_shift, ada_group, spatial
-        kernel=None,
-        output_scale_factor=1.0,
-        use_in_shortcut=None,
-        up=False,
-        down=False,
+        in_channels: int,
+        out_channels: Optional[int] = None,
+        conv_shortcut: bool = False,
+        dropout: float = 0.0,
+        temb_channels: int = 512,
+        groups: int = 32,
+        groups_out: Optional[int] = None,
+        pre_norm: bool = True,
+        eps: float = 1e-6,
+        non_linearity: str = "swish",
+        skip_time_act: bool = False,
+        time_embedding_norm: str = "default",  # default, scale_shift, ada_group, spatial
+        kernel: Optional[paddle.Tensor] = None,
+        output_scale_factor: float = 1.0,
+        use_in_shortcut: Optional[bool] = None,
+        up: bool = False,
+        down: bool = False,
         conv_shortcut_bias: bool = True,
         conv_2d_out_channels: Optional[int] = None,
-        pre_temb_non_linearity: bool = False,  # skip_time_act is the same as pre_temb_non_linearity
     ):
         super().__init__()
-        self.pre_temb_non_linearity = pre_temb_non_linearity
         self.pre_norm = pre_norm
         self.pre_norm = True
         self.in_channels = in_channels
@@ -529,6 +630,9 @@ class ResnetBlock2D(nn.Layer):
         self.time_embedding_norm = time_embedding_norm
         self.skip_time_act = skip_time_act
 
+        linear_cls = nn.Linear if USE_PEFT_BACKEND else LoRACompatibleLinear
+        conv_cls = nn.Conv2D if USE_PEFT_BACKEND else LoRACompatibleConv
+
         if groups_out is None:
             groups_out = groups
 
@@ -539,13 +643,13 @@ class ResnetBlock2D(nn.Layer):
         else:
             self.norm1 = nn.GroupNorm(num_groups=groups, num_channels=in_channels, epsilon=eps)
 
-        self.conv1 = LoRACompatibleConv(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
+        self.conv1 = conv_cls(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
 
         if temb_channels is not None:
             if self.time_embedding_norm == "default":
-                self.time_emb_proj = LoRACompatibleLinear(temb_channels, out_channels)
+                self.time_emb_proj = linear_cls(temb_channels, out_channels)
             elif self.time_embedding_norm == "scale_shift":
-                self.time_emb_proj = LoRACompatibleLinear(temb_channels, 2 * out_channels)
+                self.time_emb_proj = linear_cls(temb_channels, 2 * out_channels)
             elif self.time_embedding_norm == "ada_group" or self.time_embedding_norm == "spatial":
                 self.time_emb_proj = None
             else:
@@ -562,7 +666,7 @@ class ResnetBlock2D(nn.Layer):
 
         self.dropout = nn.Dropout(dropout)
         conv_2d_out_channels = conv_2d_out_channels or out_channels
-        self.conv2 = LoRACompatibleConv(out_channels, conv_2d_out_channels, kernel_size=3, stride=1, padding=1)
+        self.conv2 = conv_cls(out_channels, conv_2d_out_channels, kernel_size=3, stride=1, padding=1)
 
         self.nonlinearity = get_activation(non_linearity)
 
@@ -588,11 +692,21 @@ class ResnetBlock2D(nn.Layer):
 
         self.conv_shortcut = None
         if self.use_in_shortcut:
-            self.conv_shortcut = LoRACompatibleConv(
-                in_channels, conv_2d_out_channels, kernel_size=1, stride=1, padding=0, bias_attr=conv_shortcut_bias
+            self.conv_shortcut = conv_cls(
+                in_channels,
+                conv_2d_out_channels,
+                kernel_size=1,
+                stride=1,
+                padding=0,
+                bias_attr=conv_shortcut_bias,
             )
 
-    def forward(self, input_tensor, temb):
+    def forward(
+        self,
+        input_tensor: paddle.Tensor,
+        temb: paddle.Tensor,
+        scale: float = 1.0,
+    ) -> paddle.Tensor:
         hidden_states = input_tensor
 
         if self.time_embedding_norm == "ada_group" or self.time_embedding_norm == "spatial":
@@ -603,18 +717,34 @@ class ResnetBlock2D(nn.Layer):
         hidden_states = self.nonlinearity(hidden_states)
 
         if self.upsample is not None:
-            input_tensor = self.upsample(input_tensor)
-            hidden_states = self.upsample(hidden_states)
+            # upsample_nearest_nhwc fails with large batch sizes. see https://github.com/huggingface/diffusers/issues/984
+            if hidden_states.shape[0] >= 64:
+                input_tensor = input_tensor.contiguous()
+                hidden_states = hidden_states.contiguous()
+            input_tensor = (
+                self.upsample(input_tensor, scale=scale)
+                if isinstance(self.upsample, Upsample2D)
+                else self.upsample(input_tensor)
+            )
+            hidden_states = (
+                self.upsample(hidden_states, scale=scale)
+                if isinstance(self.upsample, Upsample2D)
+                else self.upsample(hidden_states)
+            )
         elif self.downsample is not None:
             input_tensor = self.downsample(input_tensor)
             hidden_states = self.downsample(hidden_states)
 
-        hidden_states = self.conv1(hidden_states)
+        hidden_states = self.conv1(hidden_states, scale) if not USE_PEFT_BACKEND else self.conv1(hidden_states)
 
         if self.time_emb_proj is not None:
-            if not self.pre_temb_non_linearity and not self.skip_time_act:
+            if not self.skip_time_act:
                 temb = self.nonlinearity(temb)
-            temb = self.time_emb_proj(temb)[:, :, None, None]
+            temb = (
+                self.time_emb_proj(temb, scale)[:, :, None, None]
+                if not USE_PEFT_BACKEND
+                else self.time_emb_proj(temb)[:, :, None, None]
+            )
 
         if temb is not None and self.time_embedding_norm == "default":
             hidden_states = hidden_states + temb
@@ -625,16 +755,18 @@ class ResnetBlock2D(nn.Layer):
             hidden_states = self.norm2(hidden_states)
 
         if temb is not None and self.time_embedding_norm == "scale_shift":
-            scale, shift = temb.chunk(2, axis=1)
+            scale, shift = paddle.chunk(temb, 2, axis=1)
             hidden_states = hidden_states * (1 + scale) + shift
 
         hidden_states = self.nonlinearity(hidden_states)
 
         hidden_states = self.dropout(hidden_states)
-        hidden_states = self.conv2(hidden_states)
+        hidden_states = self.conv2(hidden_states, scale) if not USE_PEFT_BACKEND else self.conv2(hidden_states)
 
         if self.conv_shortcut is not None:
-            input_tensor = self.conv_shortcut(input_tensor)
+            input_tensor = (
+                self.conv_shortcut(input_tensor, scale) if not USE_PEFT_BACKEND else self.conv_shortcut(input_tensor)
+            )
 
         # TODO this maybe result -inf, input_tensor's min value -57644  hidden_states's min value -10000
         output_tensor = (input_tensor + hidden_states) / self.output_scale_factor
@@ -643,7 +775,7 @@ class ResnetBlock2D(nn.Layer):
 
 
 # unet_rl.py
-def rearrange_dims(tensor):
+def rearrange_dims(tensor: paddle.Tensor) -> paddle.Tensor:
     if len(tensor.shape) == 2:
         return tensor[:, :, None]
     if len(tensor.shape) == 3:
@@ -657,16 +789,30 @@ def rearrange_dims(tensor):
 class Conv1dBlock(nn.Layer):
     """
     Conv1d --> GroupNorm --> Mish
+
+    Parameters:
+        inp_channels (`int`): Number of input channels.
+        out_channels (`int`): Number of output channels.
+        kernel_size (`int` or `tuple`): Size of the convolving kernel.
+        n_groups (`int`, default `8`): Number of groups to separate the channels into.
+        activation (`str`, defaults to `mish`): Name of the activation function.
     """
 
-    def __init__(self, inp_channels, out_channels, kernel_size, n_groups=8):
+    def __init__(
+        self,
+        inp_channels: int,
+        out_channels: int,
+        kernel_size: Union[int, Tuple[int, int]],
+        n_groups: int = 8,
+        activation: str = "mish",
+    ):
         super().__init__()
 
         self.conv1d = nn.Conv1D(inp_channels, out_channels, kernel_size, padding=kernel_size // 2)
         self.group_norm = nn.GroupNorm(n_groups, out_channels)
         self.mish = nn.Mish()
 
-    def forward(self, inputs):
+    def forward(self, inputs: paddle.Tensor) -> paddle.Tensor:
         intermediate_repr = self.conv1d(inputs)
         intermediate_repr = rearrange_dims(intermediate_repr)
         intermediate_repr = self.group_norm(intermediate_repr)
@@ -677,7 +823,25 @@ class Conv1dBlock(nn.Layer):
 
 # unet_rl.py
 class ResidualTemporalBlock1D(nn.Layer):
-    def __init__(self, inp_channels, out_channels, embed_dim, kernel_size=5):
+    """
+    Residual 1D block with temporal convolutions.
+
+    Parameters:
+        inp_channels (`int`): Number of input channels.
+        out_channels (`int`): Number of output channels.
+        embed_dim (`int`): Embedding dimension.
+        kernel_size (`int` or `tuple`): Size of the convolving kernel.
+        activation (`str`, defaults `mish`): It is possible to choose the right activation function.
+    """
+
+    def __init__(
+        self,
+        inp_channels: int,
+        out_channels: int,
+        embed_dim: int,
+        kernel_size: Union[int, Tuple[int, int]] = 5,
+        activation: str = "mish",
+    ):
         super().__init__()
         self.conv_in = Conv1dBlock(inp_channels, out_channels, kernel_size)
         self.conv_out = Conv1dBlock(out_channels, out_channels, kernel_size)
@@ -689,7 +853,7 @@ class ResidualTemporalBlock1D(nn.Layer):
             nn.Conv1D(inp_channels, out_channels, 1) if inp_channels != out_channels else nn.Identity()
         )
 
-    def forward(self, inputs, t):
+    def forward(self, inputs: paddle.Tensor, t: paddle.Tensor) -> paddle.Tensor:
         """
         Args:
             inputs : [ batch_size x inp_channels x horizon ]
@@ -705,7 +869,12 @@ class ResidualTemporalBlock1D(nn.Layer):
         return out + self.residual_conv(inputs)
 
 
-def upsample_2d(hidden_states, kernel=None, factor=2, gain=1):
+def upsample_2d(
+    hidden_states: paddle.Tensor,
+    kernel: Optional[paddle.Tensor] = None,
+    factor: int = 2,
+    gain: float = 1,
+) -> paddle.Tensor:
     r"""Upsample2D a batch of 2D images with the given filter.
     Accepts a batch of 2D images of the shape `[N, C, H, W]` or `[N, H, W, C]` and upsamples each image with the given
     filter. The filter is normalized so that if the input pixels are constant, they will be scaled by the specified
@@ -713,14 +882,19 @@ def upsample_2d(hidden_states, kernel=None, factor=2, gain=1):
     a: multiple of the upsampling factor.
 
     Args:
-        hidden_states: Input tensor of the shape `[N, C, H, W]` or `[N, H, W, C]`.
-        kernel: FIR filter of the shape `[firH, firW]` or `[firN]`
-          (separable). The default is `[1] * factor`, which corresponds to nearest-neighbor upsampling.
-        factor: Integer upsampling factor (default: 2).
-        gain: Scaling factor for signal magnitude (default: 1.0).
+        hidden_states (`paddle.Tensor`):
+            Input tensor of the shape `[N, C, H, W]` or `[N, H, W, C]`.
+        kernel (`paddle.Tensor`, *optional*):
+            FIR filter of the shape `[firH, firW]` or `[firN]` (separable). The default is `[1] * factor`, which
+            corresponds to nearest-neighbor upsampling.
+        factor (`int`, *optional*, default to `2`):
+            Integer upsampling factor.
+        gain (`float`, *optional*, default to `1.0`):
+            Scaling factor for signal magnitude (default: 1.0).
 
     Returns:
-        output: Tensor of the shape `[N, C, H * factor, W * factor]`
+        output (`paddle.Tensor`):
+            Tensor of the shape `[N, C, H * factor, W * factor]`
     """
     assert isinstance(factor, int) and factor >= 1
     if kernel is None:
@@ -742,7 +916,12 @@ def upsample_2d(hidden_states, kernel=None, factor=2, gain=1):
     return output
 
 
-def downsample_2d(hidden_states, kernel=None, factor=2, gain=1):
+def downsample_2d(
+    hidden_states: paddle.Tensor,
+    kernel: Optional[paddle.Tensor] = None,
+    factor: int = 2,
+    gain: float = 1,
+) -> paddle.Tensor:
     r"""Downsample2D a batch of 2D images with the given filter.
     Accepts a batch of 2D images of the shape `[N, C, H, W]` or `[N, H, W, C]` and downsamples each image with the
     given filter. The filter is normalized so that if the input pixels are constant, they will be scaled by the
@@ -750,14 +929,19 @@ def downsample_2d(hidden_states, kernel=None, factor=2, gain=1):
     shape is a multiple of the downsampling factor.
 
     Args:
-        hidden_states: Input tensor of the shape `[N, C, H, W]` or `[N, H, W, C]`.
-        kernel: FIR filter of the shape `[firH, firW]` or `[firN]`
-          (separable). The default is `[1] * factor`, which corresponds to average pooling.
-        factor: Integer downsampling factor (default: 2).
-        gain: Scaling factor for signal magnitude (default: 1.0).
+        hidden_states (`paddle.Tensor`)
+            Input tensor of the shape `[N, C, H, W]` or `[N, H, W, C]`.
+        kernel (`paddle.Tensor`, *optional*):
+            FIR filter of the shape `[firH, firW]` or `[firN]` (separable). The default is `[1] * factor`, which
+            corresponds to average pooling.
+        factor (`int`, *optional*, default to `2`):
+            Integer downsampling factor.
+        gain (`float`, *optional*, default to `1.0`):
+            Scaling factor for signal magnitude.
 
     Returns:
-        output: Tensor of the shape `[N, C, H // factor, W // factor]`
+        output (`paddle.Tensor`):
+            Tensor of the shape `[N, C, H // factor, W // factor]`
     """
 
     assert isinstance(factor, int) and factor >= 1
@@ -771,7 +955,12 @@ def downsample_2d(hidden_states, kernel=None, factor=2, gain=1):
 
     kernel = kernel * gain
     pad_value = kernel.shape[0] - factor
-    output = upfirdn2d_native(hidden_states, kernel, down=factor, pad=((pad_value + 1) // 2, pad_value // 2))
+    output = upfirdn2d_native(
+        hidden_states,
+        kernel,
+        down=factor,
+        pad=((pad_value + 1) // 2, pad_value // 2),
+    )
     return output
 
 
@@ -801,7 +990,13 @@ def dummy_pad(tensor, up_x=0, up_y=0):
     return tensor
 
 
-def upfirdn2d_native(tensor, kernel, up=1, down=1, pad=(0, 0)):
+def upfirdn2d_native(
+    tensor: paddle.Tensor,
+    kernel: paddle.Tensor,
+    up: int = 1,
+    down: int = 1,
+    pad: Tuple[int, int] = (0, 0),
+) -> paddle.Tensor:
     up_x = up_y = up
     down_x = down_y = down
     pad_x0 = pad_y0 = pad[0]
@@ -854,43 +1049,51 @@ class TemporalConvLayer(nn.Layer):
     https://github.com/modelscope/modelscope/blob/1509fdb973e5871f37148a4b5e5964cafd43e64d/modelscope/models/multi_modal/video_synthesis/unet_sd.py#L1016
     """
 
-    def __init__(self, in_dim, out_dim=None, dropout=0.0):
+    def __init__(
+        self,
+        in_dim: int,
+        out_dim: Optional[int] = None,
+        dropout: float = 0.0,
+        norm_num_groups: int = 32,
+    ):
         super().__init__()
         out_dim = out_dim or in_dim
         self.in_dim = in_dim
         self.out_dim = out_dim
+
         # conv layers
         self.conv1 = nn.Sequential(
-            nn.GroupNorm(num_groups=32, num_channels=in_dim),
+            nn.GroupNorm(norm_num_groups, in_dim),
             nn.Silu(),
-            nn.Conv3D(in_channels=in_dim, out_channels=out_dim, kernel_size=(3, 1, 1), padding=(1, 0, 0)),
+            nn.Conv3D(in_dim, out_dim, (3, 1, 1), padding=(1, 0, 0)),
         )
         self.conv2 = nn.Sequential(
-            nn.GroupNorm(num_groups=32, num_channels=out_dim),
+            nn.GroupNorm(norm_num_groups, out_dim),
             nn.Silu(),
-            nn.Dropout(p=dropout),
-            nn.Conv3D(in_channels=out_dim, out_channels=in_dim, kernel_size=(3, 1, 1), padding=(1, 0, 0)),
+            nn.Dropout(dropout),
+            nn.Conv3D(out_dim, in_dim, (3, 1, 1), padding=(1, 0, 0)),
         )
         self.conv3 = nn.Sequential(
-            nn.GroupNorm(num_groups=32, num_channels=out_dim),
+            nn.GroupNorm(norm_num_groups, out_dim),
             nn.Silu(),
-            nn.Dropout(p=dropout),
-            nn.Conv3D(in_channels=out_dim, out_channels=in_dim, kernel_size=(3, 1, 1), padding=(1, 0, 0)),
+            nn.Dropout(dropout),
+            nn.Conv3D(out_dim, in_dim, (3, 1, 1), padding=(1, 0, 0)),
         )
         self.conv4 = nn.Sequential(
-            nn.GroupNorm(num_groups=32, num_channels=out_dim),
+            nn.GroupNorm(norm_num_groups, out_dim),
             nn.Silu(),
-            nn.Dropout(p=dropout),
-            nn.Conv3D(in_channels=out_dim, out_channels=in_dim, kernel_size=(3, 1, 1), padding=(1, 0, 0)),
+            nn.Dropout(dropout),
+            nn.Conv3D(out_dim, in_dim, (3, 1, 1), padding=(1, 0, 0)),
         )
-        zeros_(self.conv4[-1].weight)
-        zeros_(self.conv4[-1].bias)
 
-    def forward(self, hidden_states, num_frames=1):
+        # zero out the last layer params,so the conv block is identity
+        with paddle.no_grad():
+            self.conv4[-1].weight.zero_()
+            self.conv4[-1].bias.zero_()
+
+    def forward(self, hidden_states: paddle.Tensor, num_frames: int = 1) -> paddle.Tensor:
         hidden_states = (
-            hidden_states[None, :]
-            .reshape((-1, num_frames) + tuple(hidden_states.shape[1:]))
-            .transpose(perm=[0, 2, 1, 3, 4])
+            hidden_states[None, :].reshape([-1, num_frames] + hidden_states.shape[1:]).transpose([0, 2, 1, 3, 4])
         )
         identity = hidden_states
         hidden_states = self.conv1(hidden_states)
@@ -898,7 +1101,274 @@ class TemporalConvLayer(nn.Layer):
         hidden_states = self.conv3(hidden_states)
         hidden_states = self.conv4(hidden_states)
         hidden_states = identity + hidden_states
-        hidden_states = hidden_states.transpose(perm=[0, 2, 1, 3, 4]).reshape(
-            (hidden_states.shape[0] * hidden_states.shape[2], -1) + tuple(hidden_states.shape[3:])
+
+        hidden_states = hidden_states.transpose([0, 2, 1, 3, 4]).reshape(
+            [hidden_states.shape[0] * hidden_states.shape[2], -1] + hidden_states.shape[3:]
         )
         return hidden_states
+
+
+class TemporalResnetBlock(nn.Layer):
+    r"""
+    A Resnet block.
+
+    Parameters:
+        in_channels (`int`): The number of channels in the input.
+        out_channels (`int`, *optional*, default to be `None`):
+            The number of output channels for the first conv2d layer. If None, same as `in_channels`.
+        temb_channels (`int`, *optional*, default to `512`): the number of channels in timestep embedding.
+        eps (`float`, *optional*, defaults to `1e-6`): The epsilon to use for the normalization.
+    """
+
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: Optional[int] = None,
+        temb_channels: int = 512,
+        eps: float = 1e-6,
+    ):
+        super().__init__()
+        self.in_channels = in_channels
+        out_channels = in_channels if out_channels is None else out_channels
+        self.out_channels = out_channels
+
+        kernel_size = (3, 1, 1)
+        padding = [k // 2 for k in kernel_size]
+
+        self.norm1 = nn.GroupNorm(num_groups=32, num_channels=in_channels, epsilon=eps)
+        self.conv1 = nn.Conv3D(
+            in_channels,
+            out_channels,
+            kernel_size=kernel_size,
+            stride=1,
+            padding=padding,
+        )
+
+        if temb_channels is not None:
+            self.time_emb_proj = nn.Linear(temb_channels, out_channels)
+        else:
+            self.time_emb_proj = None
+
+        self.norm2 = nn.GroupNorm(num_groups=32, num_channels=out_channels, epsilon=eps)
+
+        self.dropout = nn.Dropout(0.0)
+        self.conv2 = nn.Conv3D(
+            out_channels,
+            out_channels,
+            kernel_size=kernel_size,
+            stride=1,
+            padding=padding,
+        )
+
+        self.nonlinearity = get_activation("silu")
+
+        self.use_in_shortcut = self.in_channels != out_channels
+
+        self.conv_shortcut = None
+        if self.use_in_shortcut:
+            self.conv_shortcut = nn.Conv3D(
+                in_channels,
+                out_channels,
+                kernel_size=1,
+                stride=1,
+                padding=0,
+            )
+
+    def forward(self, input_tensor: paddle.Tensor, temb: paddle.Tensor) -> paddle.Tensor:
+        hidden_states = input_tensor
+
+        hidden_states = self.norm1(hidden_states)
+        hidden_states = self.nonlinearity(hidden_states)
+        hidden_states = self.conv1(hidden_states)
+
+        if self.time_emb_proj is not None:
+            temb = self.nonlinearity(temb)
+            temb = self.time_emb_proj(temb)[:, :, :, None, None]
+            temb = temb.transpose([0, 2, 1, 3, 4])
+            hidden_states = hidden_states + temb
+
+        hidden_states = self.norm2(hidden_states)
+        hidden_states = self.nonlinearity(hidden_states)
+        hidden_states = self.dropout(hidden_states)
+        hidden_states = self.conv2(hidden_states)
+
+        if self.conv_shortcut is not None:
+            input_tensor = self.conv_shortcut(input_tensor)
+
+        output_tensor = input_tensor + hidden_states
+
+        return output_tensor
+
+
+# VideoResBlock
+class SpatioTemporalResBlock(nn.Layer):
+    r"""
+    A SpatioTemporal Resnet block.
+
+    Parameters:
+        in_channels (`int`): The number of channels in the input.
+        out_channels (`int`, *optional*, default to be `None`):
+            The number of output channels for the first conv2d layer. If None, same as `in_channels`.
+        temb_channels (`int`, *optional*, default to `512`): the number of channels in timestep embedding.
+        eps (`float`, *optional*, defaults to `1e-6`): The epsilon to use for the spatial resenet.
+        temporal_eps (`float`, *optional*, defaults to `eps`): The epsilon to use for the temporal resnet.
+        merge_factor (`float`, *optional*, defaults to `0.5`): The merge factor to use for the temporal mixing.
+        merge_strategy (`str`, *optional*, defaults to `learned_with_images`):
+            The merge strategy to use for the temporal mixing.
+        switch_spatial_to_temporal_mix (`bool`, *optional*, defaults to `False`):
+            If `True`, switch the spatial and temporal mixing.
+    """
+
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: Optional[int] = None,
+        temb_channels: int = 512,
+        eps: float = 1e-6,
+        temporal_eps: Optional[float] = None,
+        merge_factor: float = 0.5,
+        merge_strategy="learned_with_images",
+        switch_spatial_to_temporal_mix: bool = False,
+    ):
+        super().__init__()
+
+        self.spatial_res_block = ResnetBlock2D(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            temb_channels=temb_channels,
+            eps=eps,
+        )
+
+        self.temporal_res_block = TemporalResnetBlock(
+            in_channels=out_channels if out_channels is not None else in_channels,
+            out_channels=out_channels if out_channels is not None else in_channels,
+            temb_channels=temb_channels,
+            eps=temporal_eps if temporal_eps is not None else eps,
+        )
+
+        self.time_mixer = AlphaBlender(
+            alpha=merge_factor,
+            merge_strategy=merge_strategy,
+            switch_spatial_to_temporal_mix=switch_spatial_to_temporal_mix,
+        )
+
+    def forward(
+        self,
+        hidden_states: paddle.Tensor,
+        temb: Optional[paddle.Tensor] = None,
+        image_only_indicator: Optional[paddle.Tensor] = None,
+    ):
+        num_frames = image_only_indicator.shape[-1]
+        hidden_states = self.spatial_res_block(hidden_states, temb)
+
+        batch_frames, channels, height, width = hidden_states.shape
+        batch_size = batch_frames // num_frames
+
+        hidden_states_mix = (
+            hidden_states[None, :]
+            .reshape([batch_size, num_frames, channels, height, width])
+            .transpose([0, 2, 1, 3, 4])
+        )
+        hidden_states = (
+            hidden_states[None, :]
+            .reshape([batch_size, num_frames, channels, height, width])
+            .transpose([0, 2, 1, 3, 4])
+        )
+
+        if temb is not None:
+            temb = temb.reshape([batch_size, num_frames, -1])
+
+        hidden_states = self.temporal_res_block(hidden_states, temb)
+        hidden_states = self.time_mixer(
+            x_spatial=hidden_states_mix,
+            x_temporal=hidden_states,
+            image_only_indicator=image_only_indicator,
+        )
+
+        hidden_states = hidden_states.transpose([0, 2, 1, 3, 4]).reshape([batch_frames, channels, height, width])
+        return hidden_states
+
+
+class AlphaBlender(nn.Layer):
+    r"""
+    A module to blend spatial and temporal features.
+
+    Parameters:
+        alpha (`float`): The initial value of the blending factor.
+        merge_strategy (`str`, *optional*, defaults to `learned_with_images`):
+            The merge strategy to use for the temporal mixing.
+        switch_spatial_to_temporal_mix (`bool`, *optional*, defaults to `False`):
+            If `True`, switch the spatial and temporal mixing.
+    """
+
+    strategies = ["learned", "fixed", "learned_with_images"]
+
+    def __init__(
+        self,
+        alpha: float,
+        merge_strategy: str = "learned_with_images",
+        switch_spatial_to_temporal_mix: bool = False,
+    ):
+        super().__init__()
+        self.merge_strategy = merge_strategy
+        self.switch_spatial_to_temporal_mix = switch_spatial_to_temporal_mix  # For TemporalVAE
+
+        if merge_strategy not in self.strategies:
+            raise ValueError(f"merge_strategy needs to be in {self.strategies}")
+
+        if self.merge_strategy == "fixed":
+            self.register_buffer("mix_factor", paddle.to_tensor([alpha]))
+        elif self.merge_strategy == "learned" or self.merge_strategy == "learned_with_images":
+            self.mix_factor = nn.Parameter(paddle.to_tensor([alpha]))
+        else:
+            raise ValueError(f"Unknown merge strategy {self.merge_strategy}")
+
+    def get_alpha(self, image_only_indicator: paddle.Tensor, ndims: int) -> paddle.Tensor:
+        if self.merge_strategy == "fixed":
+            alpha = self.mix_factor
+
+        elif self.merge_strategy == "learned":
+            alpha = F.sigmoid(self.mix_factor)
+
+        elif self.merge_strategy == "learned_with_images":
+            if image_only_indicator is None:
+                raise ValueError("Please provide image_only_indicator to use learned_with_images merge strategy")
+
+            alpha = paddle.where(
+                image_only_indicator.cast("bool"),
+                paddle.ones([1, 1]),
+                F.sigmoid(self.mix_factor)[..., None],
+            )
+
+            # (batch, channel, frames, height, width)
+            if ndims == 5:
+                alpha = alpha[:, None, :, None, None]
+            # (batch*frames, height*width, channels)
+            elif ndims == 3:
+                alpha = alpha.reshape(
+                    [
+                        -1,
+                    ]
+                )[:, None, None]
+            else:
+                raise ValueError(f"Unexpected ndims {ndims}. Dimensions should be 3 or 5")
+
+        else:
+            raise NotImplementedError
+
+        return alpha
+
+    def forward(
+        self,
+        x_spatial: paddle.Tensor,
+        x_temporal: paddle.Tensor,
+        image_only_indicator: Optional[paddle.Tensor] = None,
+    ) -> paddle.Tensor:
+        alpha = self.get_alpha(image_only_indicator, x_spatial.ndim)
+        alpha = alpha.cast(x_spatial.dtype)
+
+        if self.switch_spatial_to_temporal_mix:
+            alpha = 1.0 - alpha
+
+        x = alpha * x_spatial + (1.0 - alpha) * x_temporal
+        return x

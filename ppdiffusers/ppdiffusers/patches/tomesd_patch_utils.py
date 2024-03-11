@@ -24,9 +24,9 @@ from typing import Any, Callable, Dict, Optional, Tuple, Type, Union
 import paddle
 import paddle.nn as nn
 
-from ..models.attention import BasicTransformerBlock
+from ..models.attention import BasicTransformerBlock, _chunked_feed_forward
 from ..pipelines.pipeline_utils import DiffusionPipeline
-from .ppnlp_patch_utils import patch_to
+from .paddle_patch import patch_to
 
 TOME_PREFIX = "ToMe"
 
@@ -65,9 +65,10 @@ def scatter_reduce(
     return input
 
 
-# patch scatter_reduce
-paddle.scatter_reduce = scatter_reduce
-paddle.Tensor.scatter_reduce = scatter_reduce
+if not hasattr(paddle, "scatter_reduce"):
+    # patch scatter_reduce
+    paddle.scatter_reduce = scatter_reduce
+    paddle.Tensor.scatter_reduce = scatter_reduce
 
 
 def do_nothing(x: paddle.Tensor, mode: str = None):
@@ -255,25 +256,44 @@ def make_tome_block(block_class: Type[nn.Layer]) -> Type[nn.Layer]:
             timestep: Optional[paddle.Tensor] = None,
             cross_attention_kwargs: Dict[str, Any] = None,
             class_labels: Optional[paddle.Tensor] = None,
-        ):
+        ) -> paddle.Tensor:
             # (1) ToMe
             m_a, m_c, m_m, u_a, u_c, u_m = compute_merge(hidden_states, self._tome_info)
 
             # Notice that normalization is always applied before the real computation in the following blocks.
             # 1. Self-Attention
+            batch_size = hidden_states.shape[0]
             if self.use_ada_layer_norm:
                 norm_hidden_states = self.norm1(hidden_states, timestep)
             elif self.use_ada_layer_norm_zero:
                 norm_hidden_states, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.norm1(
                     hidden_states, timestep, class_labels, hidden_dtype=hidden_states.dtype
                 )
-            else:
+            elif self.use_layer_norm:
                 norm_hidden_states = self.norm1(hidden_states)
+            elif self.use_ada_layer_norm_single:
+                shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = (
+                    self.scale_shift_table[None] + timestep.reshape([batch_size, 6, -1])
+                ).chunk(6, axis=1)
+                norm_hidden_states = self.norm1(hidden_states)
+                norm_hidden_states = norm_hidden_states * (1 + scale_msa) + shift_msa
+                norm_hidden_states = norm_hidden_states.squeeze(1)
+            else:
+                raise ValueError("Incorrect norm used")
+
+            if self.pos_embed is not None:
+                norm_hidden_states = self.pos_embed(norm_hidden_states)
 
             # (2) ToMe m_a
             norm_hidden_states = m_a(norm_hidden_states)
 
-            cross_attention_kwargs = cross_attention_kwargs if cross_attention_kwargs is not None else {}
+            # 1. Retrieve lora scale.
+            lora_scale = cross_attention_kwargs.get("scale", 1.0) if cross_attention_kwargs is not None else 1.0
+
+            # 2. Prepare GLIGEN inputs
+            cross_attention_kwargs = cross_attention_kwargs.copy() if cross_attention_kwargs is not None else {}
+            gligen_kwargs = cross_attention_kwargs.pop("gligen", None)
+
             attn_output = self.attn1(
                 norm_hidden_states,
                 encoder_hidden_states=encoder_hidden_states if self.only_cross_attention else None,
@@ -282,18 +302,38 @@ def make_tome_block(block_class: Type[nn.Layer]) -> Type[nn.Layer]:
             )
             if self.use_ada_layer_norm_zero:
                 attn_output = gate_msa.unsqueeze(1) * attn_output
+            elif self.use_ada_layer_norm_single:
+                attn_output = gate_msa * attn_output
 
             # (3) ToMe u_a
             hidden_states = u_a(attn_output) + hidden_states
 
+            if hidden_states.ndim == 4:
+                hidden_states = hidden_states.squeeze(1)
+
+            # 2.5 GLIGEN Control
+            if gligen_kwargs is not None:
+                hidden_states = self.fuser(hidden_states, gligen_kwargs["objs"])
+
+            # 3. Cross-Attention
             if self.attn2 is not None:
-                norm_hidden_states = (
-                    self.norm2(hidden_states, timestep) if self.use_ada_layer_norm else self.norm2(hidden_states)
-                )
+                if self.use_ada_layer_norm:
+                    norm_hidden_states = self.norm2(hidden_states, timestep)
+                elif self.use_ada_layer_norm_zero or self.use_layer_norm:
+                    norm_hidden_states = self.norm2(hidden_states)
+                elif self.use_ada_layer_norm_single:
+                    # For PixArt norm2 isn't applied here:
+                    # https://github.com/PixArt-alpha/PixArt-alpha/blob/0f55e922376d8b797edd44d25d0e7464b260dcab/diffusion/model/nets/PixArtMS.py#L70C1-L76C103
+                    norm_hidden_states = hidden_states
+                else:
+                    raise ValueError("Incorrect norm")
+
                 # (4) ToMe m_c
                 norm_hidden_states = m_c(norm_hidden_states)
 
-                # 2. Cross-Attention
+                if self.pos_embed is not None and self.use_ada_layer_norm_single is False:
+                    norm_hidden_states = self.pos_embed(norm_hidden_states)
+
                 attn_output = self.attn2(
                     norm_hidden_states,
                     encoder_hidden_states=encoder_hidden_states,
@@ -303,35 +343,38 @@ def make_tome_block(block_class: Type[nn.Layer]) -> Type[nn.Layer]:
                 # (5) ToMe u_c
                 hidden_states = u_c(attn_output) + hidden_states
 
-            # 3. Feed-forward
-            norm_hidden_states = self.norm3(hidden_states)
+            # 4. Feed-forward
+            if not self.use_ada_layer_norm_single:
+                norm_hidden_states = self.norm3(hidden_states)
 
             if self.use_ada_layer_norm_zero:
                 norm_hidden_states = norm_hidden_states * (1 + scale_mlp[:, None]) + shift_mlp[:, None]
+
+            if self.use_ada_layer_norm_single:
+                norm_hidden_states = self.norm2(hidden_states)
+                norm_hidden_states = norm_hidden_states * (1 + scale_mlp) + shift_mlp
 
             # (6) ToMe m_m
             norm_hidden_states = m_m(norm_hidden_states)
 
             if self._chunk_size is not None:
                 # "feed_forward_chunk_size" can be used to save memory
-                if norm_hidden_states.shape[self._chunk_dim] % self._chunk_size != 0:
-                    raise ValueError(
-                        f"`hidden_states` dimension to be chunked: {norm_hidden_states.shape[self._chunk_dim]} has to be divisible by chunk size: {self._chunk_size}. Make sure to set an appropriate `chunk_size` when calling `unet.enable_forward_chunking`."
-                    )
-
-                num_chunks = norm_hidden_states.shape[self._chunk_dim] // self._chunk_size
-                ff_output = paddle.concat(
-                    [self.ff(hid_slice) for hid_slice in norm_hidden_states.chunk(num_chunks, axis=self._chunk_dim)],
-                    axis=self._chunk_dim,
+                ff_output = _chunked_feed_forward(
+                    self.ff, norm_hidden_states, self._chunk_dim, self._chunk_size, lora_scale=lora_scale
                 )
             else:
-                ff_output = self.ff(norm_hidden_states)
+                ff_output = self.ff(norm_hidden_states, scale=lora_scale)
 
             if self.use_ada_layer_norm_zero:
                 ff_output = gate_mlp.unsqueeze(1) * ff_output
+            elif self.use_ada_layer_norm_single:
+                ff_output = gate_mlp * ff_output
 
             # (7) ToMe u_m
             hidden_states = u_m(ff_output) + hidden_states
+
+            if hidden_states.ndim == 4:
+                hidden_states = hidden_states.squeeze(1)
 
             return hidden_states
 
@@ -353,12 +396,12 @@ def remove_tome(model_or_pipe: Union[nn.Layer, DiffusionPipeline], only_return_s
     """Removes a patch from a ToMeXXX module if it was already patched."""
     model_list = []
     if isinstance(model_or_pipe, DiffusionPipeline):
-        for _, component in model_or_pipe.components.items():
-            if isinstance(component, nn.Layer):
+        for name, component in model_or_pipe.components.items():
+            if isinstance(component, nn.Layer) and name not in ["vqvae", "vae"]:
                 model_list.append(component)
             elif isinstance(component, (tuple, list)):
                 for each_component in component:
-                    if isinstance(component, nn.Layer):
+                    if isinstance(component, nn.Layer) and name not in ["vqvae", "vae"]:
                         model_list.append(each_component)
     elif isinstance(model_or_pipe, nn.Layer):
         model_list.append(model_or_pipe)

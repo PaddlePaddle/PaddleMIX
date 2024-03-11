@@ -12,15 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-rm -rf CompVis-stable-diffusion-v1-4-paddle-init-pd.tar.gz
+rm -rf CompVis-stable-diffusion-v1-4-paddle-init-safetensors.tar.gz
 rm -rf CompVis-stable-diffusion-v1-4-paddle-init
 rm -rf laion400m_demo_data.tar.gz
 rm -rf data
 rm -rf pokemon-blip-captions.tar.gz
 rm -rf pokemon-blip-captions
 
-wget https://bj.bcebos.com/paddlenlp/models/community/CompVis/CompVis-stable-diffusion-v1-4-paddle-init-pd.tar.gz
-tar -zxvf CompVis-stable-diffusion-v1-4-paddle-init-pd.tar.gz
+wget https://bj.bcebos.com/paddlenlp/models/community/CompVis/CompVis-stable-diffusion-v1-4-paddle-init-safetensors.tar.gz
+tar -zxvf CompVis-stable-diffusion-v1-4-paddle-init-safetensors.tar.gz
 
 # pretrain
 wget https://paddlenlp.bj.bcebos.com/models/community/junnyu/develop/laion400m_demo_data.tar.gz
@@ -35,6 +35,10 @@ python -m pip install --upgrade pip -i https://mirror.baidu.com/pypi/simple
 python -m pip install einops -i https://mirror.baidu.com/pypi/simple
 python -m pip install -r ../requirements.txt
 python -m pip install --upgrade paddlenlp pybind11 regex sentencepiece tqdm visualdl attrdict easydict pyyaml paddlesde -i https://mirror.baidu.com/pypi/simple
+
+# FOR DEBUG
+python -m pip uninstall paddlenlp -y
+python -m pip install install https://paddlenlp.bj.bcebos.com/models/community/junnyu/wheels/paddlenlp-2.6.2-py3-none-any.whl
 
 # uninstall ppdiffusers and install develop paddlemix
 python -m pip uninstall -y ppdiffusers

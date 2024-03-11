@@ -1,4 +1,4 @@
-# Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,16 +11,23 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# flake8: noqa
+
+from typing import TYPE_CHECKING
 
 from ...utils import (
+    PPDIFFUSERS_SLOW_IMPORT,
     OptionalDependencyNotAvailable,
+    _LazyModule,
     is_paddle_available,
     is_paddlenlp_available,
+    is_paddlenlp_version,
 )
 
+_dummy_objects = {}
+_import_structure = {}
+
 try:
-    if not (is_paddlenlp_available() and is_paddle_available()):
+    if not (is_paddlenlp_available() and is_paddle_available() and is_paddlenlp_version(">=", "2.6.0")):
         raise OptionalDependencyNotAvailable()
 except OptionalDependencyNotAvailable:
     from ...utils.dummy_paddle_and_paddlenlp_objects import (
@@ -29,15 +36,55 @@ except OptionalDependencyNotAvailable:
         VersatileDiffusionPipeline,
         VersatileDiffusionTextToImagePipeline,
     )
+
+    _dummy_objects.update(
+        {
+            "VersatileDiffusionDualGuidedPipeline": VersatileDiffusionDualGuidedPipeline,
+            "VersatileDiffusionImageVariationPipeline": VersatileDiffusionImageVariationPipeline,
+            "VersatileDiffusionPipeline": VersatileDiffusionPipeline,
+            "VersatileDiffusionTextToImagePipeline": VersatileDiffusionTextToImagePipeline,
+        }
+    )
 else:
-    from .modeling_text_unet import UNetFlatConditionModel
-    from .pipeline_versatile_diffusion import VersatileDiffusionPipeline
-    from .pipeline_versatile_diffusion_dual_guided import (
-        VersatileDiffusionDualGuidedPipeline,
+    _import_structure["modeling_text_unet"] = ["UNetFlatConditionModel"]
+    _import_structure["pipeline_versatile_diffusion"] = ["VersatileDiffusionPipeline"]
+    _import_structure["pipeline_versatile_diffusion_dual_guided"] = ["VersatileDiffusionDualGuidedPipeline"]
+    _import_structure["pipeline_versatile_diffusion_image_variation"] = ["VersatileDiffusionImageVariationPipeline"]
+    _import_structure["pipeline_versatile_diffusion_text_to_image"] = ["VersatileDiffusionTextToImagePipeline"]
+
+
+if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
+    try:
+        if not (is_paddlenlp_available() and is_paddle_available() and is_paddlenlp_version(">=", "2.6.0")):
+            raise OptionalDependencyNotAvailable()
+    except OptionalDependencyNotAvailable:
+        from ...utils.dummy_paddle_and_paddlenlp_objects import (
+            VersatileDiffusionDualGuidedPipeline,
+            VersatileDiffusionImageVariationPipeline,
+            VersatileDiffusionPipeline,
+            VersatileDiffusionTextToImagePipeline,
+        )
+    else:
+        from .pipeline_versatile_diffusion import VersatileDiffusionPipeline
+        from .pipeline_versatile_diffusion_dual_guided import (
+            VersatileDiffusionDualGuidedPipeline,
+        )
+        from .pipeline_versatile_diffusion_image_variation import (
+            VersatileDiffusionImageVariationPipeline,
+        )
+        from .pipeline_versatile_diffusion_text_to_image import (
+            VersatileDiffusionTextToImagePipeline,
+        )
+
+else:
+    import sys
+
+    sys.modules[__name__] = _LazyModule(
+        __name__,
+        globals()["__file__"],
+        _import_structure,
+        module_spec=__spec__,
     )
-    from .pipeline_versatile_diffusion_image_variation import (
-        VersatileDiffusionImageVariationPipeline,
-    )
-    from .pipeline_versatile_diffusion_text_to_image import (
-        VersatileDiffusionTextToImagePipeline,
-    )
+
+    for name, value in _dummy_objects.items():
+        setattr(sys.modules[__name__], name, value)

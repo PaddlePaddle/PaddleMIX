@@ -19,7 +19,7 @@ import unittest
 
 import numpy as np
 import paddle
-from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
+from ppdiffusers.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
 from PIL import Image
 
 from ppdiffusers import (
@@ -30,7 +30,7 @@ from ppdiffusers import (
     UNet2DConditionModel,
 )
 from ppdiffusers.initializer import normal_, ones_
-from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion_controlnet import (
+from ppdiffusers.pipelines.controlnet.pipeline_controlnet_inpaint import (
     MultiControlNetModel,
 )
 from ppdiffusers.utils import floats_tensor, load_image, load_numpy, randn_tensor, slow

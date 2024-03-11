@@ -1,4 +1,3 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,7 +19,6 @@ import paddle.nn as nn
 import paddle.nn.functional as F
 
 from ..configuration_utils import ConfigMixin, register_to_config
-from ..initializer import zeros_
 from ..loaders import FromOriginalControlnetMixin
 from ..utils import BaseOutput, logging
 from .attention_processor import AttentionProcessor, AttnProcessor
@@ -35,6 +33,7 @@ from .modeling_utils import ModelMixin
 from .unet_2d_blocks import (
     CrossAttnDownBlock2D,
     DownBlock2D,
+    UNetMidBlock2D,
     UNetMidBlock2DCrossAttn,
     get_down_block,
 )
@@ -62,11 +61,6 @@ class ControlNetOutput(BaseOutput):
     mid_block_res_sample: paddle.Tensor
 
 
-class Mish(nn.Layer):
-    def forward(self, hidden_states):
-        return hidden_states * paddle.tanh(F.softplus(hidden_states))
-
-
 class ControlNetConditioningEmbedding(nn.Layer):
     """
     "Stable Diffusion uses a pre-processing method similar to VQ-GAN [11] to convert the entire dataset of 512 × 512
@@ -81,7 +75,7 @@ class ControlNetConditioningEmbedding(nn.Layer):
         self,
         conditioning_embedding_channels: int,
         conditioning_channels: int = 3,
-        block_out_channels: Tuple[int] = (16, 32, 96, 256),
+        block_out_channels: Tuple[int, ...] = (16, 32, 96, 256),
     ):
         super().__init__()
 
@@ -175,6 +169,9 @@ class ControlNetModel(ModelMixin, ConfigMixin, FromOriginalControlnetMixin):
         conditioning_embedding_out_channels (`tuple[int]`, *optional*, defaults to `(16, 32, 96, 256)`):
             The tuple of output channel for each block in the `conditioning_embedding` layer.
         global_pool_conditions (`bool`, defaults to `False`):
+            TODO(Patrick) - unused parameter.
+        addition_embed_type_num_heads (`int`, defaults to 64):
+            The number of heads to use for the `TextTimeEmbedding` layer.
     """
 
     _supports_gradient_checkpointing = True
@@ -186,14 +183,15 @@ class ControlNetModel(ModelMixin, ConfigMixin, FromOriginalControlnetMixin):
         conditioning_channels: int = 3,
         flip_sin_to_cos: bool = True,
         freq_shift: int = 0,
-        down_block_types: Tuple[str] = (
+        down_block_types: Tuple[str, ...] = (
             "CrossAttnDownBlock2D",
             "CrossAttnDownBlock2D",
             "CrossAttnDownBlock2D",
             "DownBlock2D",
         ),
+        mid_block_type: Optional[str] = "UNetMidBlock2DCrossAttn",
         only_cross_attention: Union[bool, Tuple[bool]] = False,
-        block_out_channels: Tuple[int] = (320, 640, 1280, 1280),
+        block_out_channels: Tuple[int, ...] = (320, 640, 1280, 1280),
         layers_per_block: int = 2,
         downsample_padding: int = 1,
         mid_block_scale_factor: float = 1,
@@ -201,11 +199,11 @@ class ControlNetModel(ModelMixin, ConfigMixin, FromOriginalControlnetMixin):
         norm_num_groups: Optional[int] = 32,
         norm_eps: float = 1e-5,
         cross_attention_dim: int = 1280,
-        transformer_layers_per_block: Union[int, Tuple[int]] = 1,
+        transformer_layers_per_block: Union[int, Tuple[int, ...]] = 1,
         encoder_hid_dim: Optional[int] = None,
         encoder_hid_dim_type: Optional[str] = None,
-        attention_head_dim: Union[int, Tuple[int]] = 8,
-        num_attention_heads: Optional[Union[int, Tuple[int]]] = None,
+        attention_head_dim: Union[int, Tuple[int, ...]] = 8,
+        num_attention_heads: Optional[Union[int, Tuple[int, ...]]] = None,
         use_linear_projection: bool = False,
         class_embed_type: Optional[str] = None,
         addition_embed_type: Optional[str] = None,
@@ -215,10 +213,9 @@ class ControlNetModel(ModelMixin, ConfigMixin, FromOriginalControlnetMixin):
         resnet_time_scale_shift: str = "default",
         projection_class_embeddings_input_dim: Optional[int] = None,
         controlnet_conditioning_channel_order: str = "rgb",
-        conditioning_embedding_out_channels: Optional[Tuple[int]] = (16, 32, 96, 256),
+        conditioning_embedding_out_channels: Optional[Tuple[int, ...]] = (16, 32, 96, 256),
         global_pool_conditions: bool = False,
-        addition_embed_type_num_heads=64,
-        resnet_pre_temb_non_linearity: bool = False,
+        addition_embed_type_num_heads: int = 64,
     ):
         super().__init__()
         # If `num_attention_heads` is not defined (which is the case for most models)
@@ -361,18 +358,6 @@ class ControlNetModel(ModelMixin, ConfigMixin, FromOriginalControlnetMixin):
         if isinstance(num_attention_heads, int):
             num_attention_heads = (num_attention_heads,) * len(down_block_types)
 
-        # pre_temb_act_fun opt
-        self.resnet_pre_temb_non_linearity = resnet_pre_temb_non_linearity
-        if resnet_pre_temb_non_linearity:
-            if act_fn == "swish":
-                self.down_resnet_temb_nonlinearity = lambda x: F.silu(x)
-            elif act_fn == "mish":
-                self.down_resnet_temb_nonlinearity = nn.Mish()
-            elif act_fn == "silu":
-                self.down_resnet_temb_nonlinearity = nn.Silu()
-            elif act_fn == "gelu":
-                self.down_resnet_temb_nonlinearity = nn.GELU()
-
         # down
         output_channel = block_out_channels[0]
 
@@ -404,7 +389,6 @@ class ControlNetModel(ModelMixin, ConfigMixin, FromOriginalControlnetMixin):
                 only_cross_attention=only_cross_attention[i],
                 upcast_attention=upcast_attention,
                 resnet_time_scale_shift=resnet_time_scale_shift,
-                resnet_pre_temb_non_linearity=self.resnet_pre_temb_non_linearity,
             )
             self.down_blocks.append(down_block)
 
@@ -425,29 +409,44 @@ class ControlNetModel(ModelMixin, ConfigMixin, FromOriginalControlnetMixin):
         controlnet_block = zero_module(controlnet_block)
         self.controlnet_mid_block = controlnet_block
 
-        self.mid_block = UNetMidBlock2DCrossAttn(
-            transformer_layers_per_block=transformer_layers_per_block[-1],
-            in_channels=mid_block_channel,
-            temb_channels=time_embed_dim,
-            resnet_eps=norm_eps,
-            resnet_act_fn=act_fn,
-            output_scale_factor=mid_block_scale_factor,
-            resnet_time_scale_shift=resnet_time_scale_shift,
-            cross_attention_dim=cross_attention_dim,
-            num_attention_heads=num_attention_heads[-1],
-            resnet_groups=norm_num_groups,
-            use_linear_projection=use_linear_projection,
-            upcast_attention=upcast_attention,
-            resnet_pre_temb_non_linearity=self.resnet_pre_temb_non_linearity,
-        )
+        if mid_block_type == "UNetMidBlock2DCrossAttn":
+            self.mid_block = UNetMidBlock2DCrossAttn(
+                transformer_layers_per_block=transformer_layers_per_block[-1],
+                in_channels=mid_block_channel,
+                temb_channels=time_embed_dim,
+                resnet_eps=norm_eps,
+                resnet_act_fn=act_fn,
+                output_scale_factor=mid_block_scale_factor,
+                resnet_time_scale_shift=resnet_time_scale_shift,
+                cross_attention_dim=cross_attention_dim,
+                num_attention_heads=num_attention_heads[-1],
+                resnet_groups=norm_num_groups,
+                use_linear_projection=use_linear_projection,
+                upcast_attention=upcast_attention,
+            )
+        elif mid_block_type == "UNetMidBlock2D":
+            self.mid_block = UNetMidBlock2D(
+                in_channels=block_out_channels[-1],
+                temb_channels=time_embed_dim,
+                num_layers=0,
+                resnet_eps=norm_eps,
+                resnet_act_fn=act_fn,
+                output_scale_factor=mid_block_scale_factor,
+                resnet_groups=norm_num_groups,
+                resnet_time_scale_shift=resnet_time_scale_shift,
+                add_attention=False,
+            )
+        else:
+            raise ValueError(f"unknown mid_block_type : {mid_block_type}")
 
     @classmethod
     def from_unet(
         cls,
         unet: UNet2DConditionModel,
         controlnet_conditioning_channel_order: str = "rgb",
-        conditioning_embedding_out_channels: Optional[Tuple[int]] = (16, 32, 96, 256),
+        conditioning_embedding_out_channels: Optional[Tuple[int, ...]] = (16, 32, 96, 256),
         load_weights_from_unet: bool = True,
+        conditioning_channels: int = 3,
     ):
         r"""
         Instantiate a [`ControlNetModel`] from [`UNet2DConditionModel`].
@@ -492,9 +491,10 @@ class ControlNetModel(ModelMixin, ConfigMixin, FromOriginalControlnetMixin):
             upcast_attention=unet.config.upcast_attention,
             resnet_time_scale_shift=unet.config.resnet_time_scale_shift,
             projection_class_embeddings_input_dim=unet.config.projection_class_embeddings_input_dim,
+            mid_block_type=unet.config.mid_block_type,
             controlnet_conditioning_channel_order=controlnet_conditioning_channel_order,
             conditioning_embedding_out_channels=conditioning_embedding_out_channels,
-            resnet_pre_temb_non_linearity=unet.config.resnet_pre_temb_non_linearity,
+            conditioning_channels=conditioning_channels,
         )
 
         if load_weights_from_unet:
@@ -572,7 +572,8 @@ class ControlNetModel(ModelMixin, ConfigMixin, FromOriginalControlnetMixin):
         """
         self.set_attn_processor(AttnProcessor())
 
-    def set_attention_slice(self, slice_size):
+    # Copied from ppdiffusers.models.unet_2d_condition.UNet2DConditionModel.set_attention_slice
+    def set_attention_slice(self, slice_size: Union[str, int, List[int]]) -> None:
         r"""
         Enable sliced attention computation.
         When this option is enabled, the attention module splits the input tensor in slices to compute attention in
@@ -635,7 +636,7 @@ class ControlNetModel(ModelMixin, ConfigMixin, FromOriginalControlnetMixin):
         for module in self.children():
             fn_recursive_set_attention_slice(module, reversed_slice_size)
 
-    def _set_gradient_checkpointing(self, module, value=False):
+    def _set_gradient_checkpointing(self, module, value: bool = False) -> None:
         if isinstance(module, (CrossAttnDownBlock2D, DownBlock2D)):
             module.gradient_checkpointing = value
 
@@ -645,7 +646,7 @@ class ControlNetModel(ModelMixin, ConfigMixin, FromOriginalControlnetMixin):
         timestep: Union[paddle.Tensor, float, int],
         encoder_hidden_states: paddle.Tensor,
         controlnet_cond: paddle.Tensor,
-        conditioning_scale: Union[List[float], float] = 1.0,
+        conditioning_scale: float = 1.0,
         class_labels: Optional[paddle.Tensor] = None,
         timestep_cond: Optional[paddle.Tensor] = None,
         attention_mask: Optional[paddle.Tensor] = None,
@@ -653,7 +654,7 @@ class ControlNetModel(ModelMixin, ConfigMixin, FromOriginalControlnetMixin):
         cross_attention_kwargs: Optional[Dict[str, Any]] = None,
         guess_mode: bool = False,
         return_dict: bool = True,
-    ) -> Union[ControlNetOutput, Tuple]:
+    ) -> Union[ControlNetOutput, Tuple[Tuple[paddle.Tensor, ...], paddle.Tensor]]:
         """
         The [`ControlNetModel`] forward method.
         Args:
@@ -717,14 +718,12 @@ class ControlNetModel(ModelMixin, ConfigMixin, FromOriginalControlnetMixin):
                 sample.shape[0],
             ]
         )
-
         t_emb = self.time_proj(timesteps)
 
         # timesteps does not contain any weights and will always return f32 tensors
         # but time_embedding might actually be running in fp16. so we need to cast here.
         # there might be better ways to encapsulate this.
         t_emb = t_emb.cast(dtype=sample.dtype)
-        aug_emb = None
 
         emb = self.time_embedding(t_emb, timestep_cond)
 
@@ -740,10 +739,10 @@ class ControlNetModel(ModelMixin, ConfigMixin, FromOriginalControlnetMixin):
             # maybe cast it to int64
             if isinstance(self.class_embedding, nn.Embedding):
                 class_labels = class_labels.cast(paddle.int64)
-            class_emb = self.class_embedding(class_labels).cast(sample.dtype)
+            class_emb = self.class_embedding(class_labels).cast(dtype=sample.dtype)
             emb = emb + class_emb
 
-        if "addition_embed_type" in self.config:
+        if self.config.addition_embed_type is not None:
             if self.config.addition_embed_type == "text":
                 aug_emb = self.add_embedding(encoder_hidden_states)
 
@@ -768,9 +767,6 @@ class ControlNetModel(ModelMixin, ConfigMixin, FromOriginalControlnetMixin):
                 aug_emb = self.add_embedding(add_embeds)
 
         emb = emb + aug_emb if aug_emb is not None else emb
-
-        if self.resnet_pre_temb_non_linearity:
-            emb = self.down_resnet_temb_nonlinearity(emb)
 
         # 2. pre-process
         sample = self.conv_in(sample)
@@ -798,13 +794,16 @@ class ControlNetModel(ModelMixin, ConfigMixin, FromOriginalControlnetMixin):
 
         # 4. mid
         if self.mid_block is not None:
-            sample = self.mid_block(
-                sample,
-                emb,
-                encoder_hidden_states=encoder_hidden_states,
-                attention_mask=attention_mask,
-                cross_attention_kwargs=cross_attention_kwargs,
-            )
+            if hasattr(self.mid_block, "has_cross_attention") and self.mid_block.has_cross_attention:
+                sample = self.mid_block(
+                    sample,
+                    emb,
+                    encoder_hidden_states=encoder_hidden_states,
+                    attention_mask=attention_mask,
+                    cross_attention_kwargs=cross_attention_kwargs,
+                )
+            else:
+                sample = self.mid_block(sample, emb)
 
         # 5. Control net blocks
 
@@ -825,11 +824,11 @@ class ControlNetModel(ModelMixin, ConfigMixin, FromOriginalControlnetMixin):
             down_block_res_samples = [sample * scale for sample, scale in zip(down_block_res_samples, scales)]
             mid_block_res_sample = mid_block_res_sample * scales[-1]  # last one
         else:
-            # add conditioning_scale https://github.com/huggingface/diffusers/pull/2627
             if isinstance(conditioning_scale, (float, int)):
                 down_block_res_samples = [sample * conditioning_scale for sample in down_block_res_samples]
                 mid_block_res_sample = mid_block_res_sample * conditioning_scale
             else:
+                # NEW ADD, for multiple conditioning scales
                 down_block_res_samples = [
                     sample * ccs for sample, ccs in zip(down_block_res_samples, conditioning_scale[:-1])
                 ]
@@ -849,7 +848,8 @@ class ControlNetModel(ModelMixin, ConfigMixin, FromOriginalControlnetMixin):
         )
 
 
+@paddle.no_grad()
 def zero_module(module):
     for p in module.parameters():
-        zeros_(p)
+        p.zero_()
     return module

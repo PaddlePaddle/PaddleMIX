@@ -1,4 +1,3 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,7 +18,8 @@ import paddle
 import paddle.nn as nn
 
 from ..configuration_utils import ConfigMixin, register_to_config
-from ..utils import BaseOutput, apply_forward_hook
+from ..utils import BaseOutput
+from ..utils.accelerate_utils import apply_forward_hook
 from .modeling_utils import ModelMixin
 from .vae import Decoder, DecoderOutput, Encoder, VectorQuantizer
 
@@ -118,7 +118,7 @@ class VQModel(ModelMixin, ConfigMixin):
         )
 
     @apply_forward_hook
-    def encode(self, x: paddle.Tensor, return_dict: bool = True):
+    def encode(self, x: paddle.Tensor, return_dict: bool = True) -> VQEncoderOutput:
         h = self.encoder(x)
         h = self.quant_conv(h)
 
@@ -128,12 +128,14 @@ class VQModel(ModelMixin, ConfigMixin):
         return VQEncoderOutput(latents=h)
 
     @apply_forward_hook
-    def decode(self, h: paddle.Tensor, force_not_quantize: bool = False, return_dict: bool = True):
-        # cast h to float16 / float32
+    def decode(
+        self, h: paddle.Tensor, force_not_quantize: bool = False, return_dict: bool = True
+    ) -> Union[DecoderOutput, paddle.Tensor]:
+        # TODO junnyu, cast h to float16 / float32
         h = h.cast(self.dtype)
         # also go through quantization layer
         if not force_not_quantize:
-            quant, emb_loss, info = self.quantize(h)
+            quant, _, _ = self.quantize(h)
         else:
             quant = h
         quant2 = self.post_quant_conv(quant)
@@ -144,7 +146,9 @@ class VQModel(ModelMixin, ConfigMixin):
 
         return DecoderOutput(sample=dec)
 
-    def forward(self, sample: paddle.Tensor, return_dict: bool = True):
+    def forward(
+        self, sample: paddle.Tensor, return_dict: bool = True
+    ) -> Union[DecoderOutput, Tuple[paddle.Tensor, ...]]:
         r"""
         The [`VQModel`] forward method.
 

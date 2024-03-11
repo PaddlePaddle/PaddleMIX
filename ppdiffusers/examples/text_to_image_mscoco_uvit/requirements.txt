@@ -1,0 +1,6 @@
+paddlenlp>=2.7.2
+paddlepaddle-gpu>=2.6.0
+ppdiffusers>=0.19.4
+fastcore
+visualdl
+Pillow

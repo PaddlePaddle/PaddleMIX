@@ -1,4 +1,3 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,19 +11,22 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Callable, List, Optional, Union
+
+from typing import Callable, Dict, List, Optional, Union
 
 import numpy as np
 import paddle
-import PIL
+import PIL.Image
 from PIL import Image
 
 from ...models import UNet2DConditionModel, VQModel
 from ...schedulers import DDPMScheduler
-from ...utils import logging, randn_tensor, replace_example_docstring
+from ...utils import deprecate, logging
+from ...utils.paddle_utils import randn_tensor
 from ..pipeline_utils import DiffusionPipeline, ImagePipelineOutput
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
+
 EXAMPLE_DOC_STRING = """
     Examples:
         ```py
@@ -44,7 +46,7 @@ EXAMPLE_DOC_STRING = """
         ... )
 
         >>> init_image = load_image(
-        ...     "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main"
+        ...     "https://hf-mirror.com/datasets/hf-internal-testing/diffusers-images/resolve/main"
         ...     "/kandinsky/frog.png"
         ... )
 
@@ -80,7 +82,7 @@ def prepare_image(pil_image, w=512, h=512):
     arr = np.array(pil_image.convert("RGB"))
     arr = arr.astype(np.float32) / 127.5 - 1
     arr = np.transpose(arr, [2, 0, 1])
-    image = paddle.to_tensor(data=arr).unsqueeze(axis=0)
+    image = paddle.to_tensor(arr).unsqueeze(0)
     return image
 
 
@@ -100,17 +102,32 @@ class KandinskyV22Img2ImgPipeline(DiffusionPipeline):
             MoVQ Decoder to generate the image from the latents.
     """
 
-    def __init__(self, unet: UNet2DConditionModel, scheduler: DDPMScheduler, movq: VQModel):
+    model_cpu_offload_seq = "unet->movq"
+    _callback_tensor_inputs = ["latents", "image_embeds", "negative_image_embeds"]
+
+    def __init__(
+        self,
+        unet: UNet2DConditionModel,
+        scheduler: DDPMScheduler,
+        movq: VQModel,
+    ):
         super().__init__()
-        self.register_modules(unet=unet, scheduler=scheduler, movq=movq)
+
+        self.register_modules(
+            unet=unet,
+            scheduler=scheduler,
+            movq=movq,
+        )
         self.movq_scale_factor = 2 ** (len(self.movq.config.block_out_channels) - 1)
 
     # Copied from ppdiffusers.pipelines.kandinsky.pipeline_kandinsky_img2img.KandinskyImg2ImgPipeline.get_timesteps
     def get_timesteps(self, num_inference_steps, strength):
         # get the original timestep using init_timestep
         init_timestep = min(int(num_inference_steps * strength), num_inference_steps)
+
         t_start = max(num_inference_steps - init_timestep, 0)
         timesteps = self.scheduler.timesteps[t_start:]
+
         return timesteps, num_inference_steps - t_start
 
     def prepare_latents(self, image, timestep, batch_size, num_images_per_prompt, dtype, generator=None):
@@ -118,34 +135,56 @@ class KandinskyV22Img2ImgPipeline(DiffusionPipeline):
             raise ValueError(
                 f"`image` has to be of type `paddle.Tensor`, `PIL.Image.Image` or list but is {type(image)}"
             )
+
         image = image.cast(dtype=dtype)
+
         batch_size = batch_size * num_images_per_prompt
+
         if image.shape[1] == 4:
             init_latents = image
+
         else:
             if isinstance(generator, list) and len(generator) != batch_size:
                 raise ValueError(
-                    f"You have passed a list of generators of length {len(generator)}, but requested an effective batch size of {batch_size}. Make sure the batch size matches the length of the generators."
+                    f"You have passed a list of generators of length {len(generator)}, but requested an effective batch"
+                    f" size of {batch_size}. Make sure the batch size matches the length of the generators."
                 )
+
             elif isinstance(generator, list):
                 init_latents = [
                     self.movq.encode(image[i : i + 1]).latent_dist.sample(generator[i]) for i in range(batch_size)
                 ]
-                init_latents = paddle.concat(x=init_latents, axis=0)
+                init_latents = paddle.concat(init_latents, axis=0)
             else:
                 init_latents = self.movq.encode(image).latent_dist.sample(generator)
+
             init_latents = self.movq.config.scaling_factor * init_latents
-        init_latents = paddle.concat(x=[init_latents], axis=0)
+
+        init_latents = paddle.concat([init_latents], axis=0)
+
         shape = init_latents.shape
         noise = randn_tensor(shape, generator=generator, dtype=dtype)
 
         # get latents
         init_latents = self.scheduler.add_noise(init_latents, noise, timestep)
+
         latents = init_latents
+
         return latents
 
+    @property
+    def guidance_scale(self):
+        return self._guidance_scale
+
+    @property
+    def do_classifier_free_guidance(self):
+        return self._guidance_scale > 1
+
+    @property
+    def num_timesteps(self):
+        return self._num_timesteps
+
     @paddle.no_grad()
-    @replace_example_docstring(EXAMPLE_DOC_STRING)
     def __call__(
         self,
         image_embeds: Union[paddle.Tensor, List[paddle.Tensor]],
@@ -159,19 +198,20 @@ class KandinskyV22Img2ImgPipeline(DiffusionPipeline):
         num_images_per_prompt: int = 1,
         generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
         output_type: Optional[str] = "pil",
-        callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
-        callback_steps: int = 1,
         return_dict: bool = True,
+        callback_on_step_end: Optional[Callable[[int, int, Dict], None]] = None,
+        callback_on_step_end_tensor_inputs: List[str] = ["latents"],
+        **kwargs,
     ):
         """
         Function invoked when calling the pipeline for generation.
 
         Args:
-            image_embeds (`paddle.Tensor `List[paddle.Tensor]`):
+            image_embeds (`paddle.Tensor` or `List[paddle.Tensor]`):
                 The clip image embeddings for text prompt, that will be used to condition the image generation.
-            image (`paddle.TensorPIL.Image.Image`, `np.ndarray`, `List[paddle.Tensor]`, `List[PIL.Image.Image]`, or `List[np.ndarray]`):
+            image (`paddle.Tensor`, `PIL.Image.Image`, `np.ndarray`, `List[paddle.Tensor]`, `List[PIL.Image.Image]`, or `List[np.ndarray]`):
                 `Image`, or tensor representing an image batch, that will be used as the starting point for the
-                process. Can also accpet image latents as `image`, if passing latents directly, it will not be encoded
+                process. Can also accept image latents as `image`, if passing latents directly, it will not be encoded
                 again.
             strength (`float`, *optional*, defaults to 0.8):
                 Conceptually, indicates how much to transform the reference `image`. Must be between 0 and 1. `image`
@@ -179,7 +219,7 @@ class KandinskyV22Img2ImgPipeline(DiffusionPipeline):
                 denoising steps depends on the amount of noise initially added. When `strength` is 1, added noise will
                 be maximum and the denoising process will run for the full number of iterations specified in
                 `num_inference_steps`. A value of 1, therefore, essentially ignores `image`.
-            negative_image_embeds (`paddle.Tensor `List[paddle.Tensor]`):
+            negative_image_embeds (`paddle.Tensor` or `List[paddle.Tensor]`):
                 The clip image embeddings for negative text prompt, will be used to condition the image generation.
             height (`int`, *optional*, defaults to 512):
                 The height in pixels of the generated image.
@@ -197,57 +237,89 @@ class KandinskyV22Img2ImgPipeline(DiffusionPipeline):
             num_images_per_prompt (`int`, *optional*, defaults to 1):
                 The number of images to generate per prompt.
             generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
-                One or a list of paddle generator(s).
-                to make generation deterministic.
+                One or a list of [paddle generator(s)] to make generation deterministic.
             output_type (`str`, *optional*, defaults to `"pil"`):
                 The output format of the generate image. Choose between: `"pil"` (`PIL.Image.Image`), `"np"`
-                (`np.array`) or `"pt"` (`paddle.Tensor`).
-            callback (`Callable`, *optional*):
-                A function that calls every `callback_steps` steps during inference. The function is called with the
-                following arguments: `callback(step: int, timestep: int, latents: paddle.Tensor)`.
-            callback_steps (`int`, *optional*, defaults to 1):
-                The frequency at which the `callback` function is called. If not specified, the callback is called at
-                every step.
+                (`np.array`) or `"pd"` (`paddle.Tensor`).
             return_dict (`bool`, *optional*, defaults to `True`):
                 Whether or not to return a [`~pipelines.ImagePipelineOutput`] instead of a plain tuple.
+            callback_on_step_end (`Callable`, *optional*):
+                A function that calls at the end of each denoising steps during the inference. The function is called
+                with the following arguments: `callback_on_step_end(self: DiffusionPipeline, step: int, timestep: int,
+                callback_kwargs: Dict)`. `callback_kwargs` will include a list of all tensors as specified by
+                `callback_on_step_end_tensor_inputs`.
+            callback_on_step_end_tensor_inputs (`List`, *optional*):
+                The list of tensor inputs for the `callback_on_step_end` function. The tensors specified in the list
+                will be passed as `callback_kwargs` argument. You will only be able to include variables listed in the
+                `._callback_tensor_inputs` attribute of your pipeline class.
 
         Examples:
 
         Returns:
             [`~pipelines.ImagePipelineOutput`] or `tuple`
         """
-        do_classifier_free_guidance = guidance_scale > 1.0
+
+        callback = kwargs.pop("callback", None)
+        callback_steps = kwargs.pop("callback_steps", None)
+
+        if callback is not None:
+            deprecate(
+                "callback",
+                "1.0.0",
+                "Passing `callback` as an input argument to `__call__` is deprecated, consider use `callback_on_step_end`",
+            )
+        if callback_steps is not None:
+            deprecate(
+                "callback_steps",
+                "1.0.0",
+                "Passing `callback_steps` as an input argument to `__call__` is deprecated, consider use `callback_on_step_end`",
+            )
+
+        if callback_on_step_end_tensor_inputs is not None and not all(
+            k in self._callback_tensor_inputs for k in callback_on_step_end_tensor_inputs
+        ):
+            raise ValueError(
+                f"`callback_on_step_end_tensor_inputs` has to be in {self._callback_tensor_inputs}, but found {[k for k in callback_on_step_end_tensor_inputs if k not in self._callback_tensor_inputs]}"
+            )
+
+        self._guidance_scale = guidance_scale
+
         if isinstance(image_embeds, list):
-            image_embeds = paddle.concat(x=image_embeds, axis=0)
+            image_embeds = paddle.concat(image_embeds, axis=0)
         batch_size = image_embeds.shape[0]
         if isinstance(negative_image_embeds, list):
-            negative_image_embeds = paddle.concat(x=negative_image_embeds, axis=0)
-        if do_classifier_free_guidance:
-            image_embeds = image_embeds.repeat_interleave(repeats=num_images_per_prompt, axis=0)
-            negative_image_embeds = negative_image_embeds.repeat_interleave(repeats=num_images_per_prompt, axis=0)
-            negative_image_embeds = negative_image_embeds.cast(self.unet.dtype)
-            image_embeds = image_embeds.cast(self.unet.dtype)
-            image_embeds = paddle.concat(x=[negative_image_embeds, image_embeds], axis=0).cast(dtype=self.unet.dtype)
+            negative_image_embeds = paddle.concat(negative_image_embeds, axis=0)
+
+        if self.do_classifier_free_guidance:
+            image_embeds = image_embeds.repeat_interleave(num_images_per_prompt, axis=0)
+            negative_image_embeds = negative_image_embeds.repeat_interleave(num_images_per_prompt, axis=0)
+
+            image_embeds = paddle.concat([negative_image_embeds, image_embeds], axis=0).cast(dtype=self.unet.dtype)
+
         if not isinstance(image, list):
             image = [image]
         if not all(isinstance(i, (PIL.Image.Image, paddle.Tensor)) for i in image):
             raise ValueError(
-                f"Input is in incorrect format: {[type(i) for i in image]}. Currently, we only support  PIL image and paddle tensor"
+                f"Input is in incorrect format: {[type(i) for i in image]}. Currently, we only support  PIL image and pytorch tensor"
             )
-        image = paddle.concat(x=[prepare_image(i, width, height) for i in image], axis=0)
+
+        image = paddle.concat([prepare_image(i, width, height) for i in image], axis=0)
         image = image.cast(dtype=image_embeds.dtype)
+
         latents = self.movq.encode(image)["latents"]
-        latents = latents.repeat_interleave(repeats=num_images_per_prompt, axis=0)
+        latents = latents.repeat_interleave(num_images_per_prompt, axis=0)
         self.scheduler.set_timesteps(num_inference_steps)
         timesteps, num_inference_steps = self.get_timesteps(num_inference_steps, strength)
-        latent_timestep = timesteps[:1].tile(repeat_times=[batch_size * num_images_per_prompt])
+        latent_timestep = timesteps[:1].tile([batch_size * num_images_per_prompt])
         height, width = downscale_height_and_width(height, width, self.movq_scale_factor)
         latents = self.prepare_latents(
             latents, latent_timestep, batch_size, num_images_per_prompt, image_embeds.dtype, generator
         )
+        self._num_timesteps = len(timesteps)
         for i, t in enumerate(self.progress_bar(timesteps)):
             # expand the latents if we are doing classifier free guidance
-            latent_model_input = paddle.concat(x=[latents] * 2) if do_classifier_free_guidance else latents
+            latent_model_input = paddle.concat([latents] * 2) if self.do_classifier_free_guidance else latents
+
             added_cond_kwargs = {"image_embeds": image_embeds}
             noise_pred = self.unet(
                 sample=latent_model_input,
@@ -256,34 +328,65 @@ class KandinskyV22Img2ImgPipeline(DiffusionPipeline):
                 added_cond_kwargs=added_cond_kwargs,
                 return_dict=False,
             )[0]
-            if do_classifier_free_guidance:
-                noise_pred, variance_pred = noise_pred.split(noise_pred.shape[1] // latents.shape[1], axis=1)
-                noise_pred_uncond, noise_pred_text = noise_pred.chunk(chunks=2)
-                _, variance_pred_text = variance_pred.chunk(chunks=2)
-                noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
-                noise_pred = paddle.concat(x=[noise_pred, variance_pred_text], axis=1)
+
+            if self.do_classifier_free_guidance:
+                noise_pred, variance_pred = noise_pred.split(
+                    [latents.shape[1], noise_pred.shape[1] - latents.shape[1]], axis=1
+                )
+                noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
+                _, variance_pred_text = variance_pred.chunk(2)
+                noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_text - noise_pred_uncond)
+                noise_pred = paddle.concat([noise_pred, variance_pred_text], axis=1)
+
             if not (
                 hasattr(self.scheduler.config, "variance_type")
                 and self.scheduler.config.variance_type in ["learned", "learned_range"]
             ):
-                noise_pred, _ = noise_pred.split(noise_pred.shape[1] // latents.shape[1], axis=1)
+                noise_pred, _ = noise_pred.split([latents.shape[1], noise_pred.shape[1] - latents.shape[1]], axis=1)
 
             # compute the previous noisy sample x_t -> x_t-1
-            latents = self.scheduler.step(noise_pred, t, latents, generator=generator)[0]
+            latents = self.scheduler.step(
+                noise_pred,
+                t,
+                latents,
+                generator=generator,
+            )[0]
+
+            if callback_on_step_end is not None:
+                callback_kwargs = {}
+                for k in callback_on_step_end_tensor_inputs:
+                    callback_kwargs[k] = locals()[k]
+                callback_outputs = callback_on_step_end(self, i, t, callback_kwargs)
+
+                latents = callback_outputs.pop("latents", latents)
+                image_embeds = callback_outputs.pop("image_embeds", image_embeds)
+                negative_image_embeds = callback_outputs.pop("negative_image_embeds", negative_image_embeds)
+
             if callback is not None and i % callback_steps == 0:
-                callback(i, t, latents)
+                step_idx = i // getattr(self.scheduler, "order", 1)
+                callback(step_idx, t, latents)
 
-        # post-processing
-        image = self.movq.decode(latents, force_not_quantize=True)["sample"]
+        if output_type not in ["pd", "np", "pil", "latent"]:
+            raise ValueError(
+                f"Only the output types `pd`, `pil` ,`np` and `latent` are supported not output_type={output_type}"
+            )
 
-        if output_type not in ["pd", "np", "pil"]:
-            raise ValueError(f"Only the output types `pt`, `pil` and `np` are supported not output_type={output_type}")
-        if output_type in ["np", "pil"]:
-            image = image * 0.5 + 0.5
-            image = image.clip(min=0, max=1)
-            image = image.cpu().transpose(perm=[0, 2, 3, 1]).astype(dtype="float32").numpy()
-        if output_type == "pil":
-            image = self.numpy_to_pil(image)
+        if not output_type == "latent":
+            # post-processing
+            image = self.movq.decode(latents, force_not_quantize=True)["sample"]
+            if output_type in ["np", "pil"]:
+                image = image * 0.5 + 0.5
+                image = image.clip(0, 1)
+                image = image.transpose([0, 2, 3, 1]).cast("float32").cpu().numpy()
+
+            if output_type == "pil":
+                image = self.numpy_to_pil(image)
+        else:
+            image = latents
+
+        # Offload all models
+
         if not return_dict:
             return (image,)
+
         return ImagePipelineOutput(images=image)

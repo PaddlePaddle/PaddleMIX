@@ -16,7 +16,7 @@
 import unittest
 
 import paddle
-from paddlenlp.transformers import (
+from ppdiffusers.transformers import (
     CLIPTextConfig,
     CLIPTextModel,
     CLIPTextModelWithProjection,

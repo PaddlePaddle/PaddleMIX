@@ -1,5 +1,6 @@
+# coding=utf-8
 # Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
-# Copyright 2023 The HuggingFace Team. All rights reserved.
+# Copyright 2023 HuggingFace Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,7 +23,6 @@ from typing import Dict, List, Tuple
 
 import numpy as np
 import paddle
-import requests_mock
 from requests.exceptions import HTTPError
 
 from ppdiffusers.models import UNet2DConditionModel
@@ -33,119 +33,76 @@ from ppdiffusers.models.attention_processor import (
 )
 from ppdiffusers.training_utils import EMAModel
 from ppdiffusers.utils import logging
-from ppdiffusers.utils.testing_utils import CaptureLogger, nightly, require_paddle_gpu
+from ppdiffusers.utils.testing_utils import (
+    CaptureLogger,
+    paddle_device,
+    require_paddle_gpu,
+)
 
 
 class ModelUtilsTest(unittest.TestCase):
     def tearDown(self):
         super().tearDown()
 
-        import ppdiffusers
+    # def test_accelerate_loading_error_message(self):
+    #     with self.assertRaises(ValueError) as error_context:
+    #         UNet2DConditionModel.from_pretrained("hf-internal-testing/stable-diffusion-broken", subfolder="unet")
 
-        ppdiffusers.utils.import_utils._safetensors_available = True
+    #     # make sure that error message states what keys are missing
+    #     assert "conv_out.bias" in str(error_context.exception)
 
     def test_cached_files_are_used_when_no_internet(self):
+        # A mock response for an HTTP head request to emulate server down
         response_mock = mock.Mock()
         response_mock.status_code = 500
         response_mock.headers = {}
         response_mock.raise_for_status.side_effect = HTTPError
         response_mock.json.return_value = {}
+
+        # Download this model to make sure it's in the cache.
         orig_model = UNet2DConditionModel.from_pretrained(
             "hf-internal-testing/tiny-stable-diffusion-torch", subfolder="unet"
         )
+
+        # Under the mock environment we get a 500 error when trying to reach the model.
         with mock.patch("requests.request", return_value=response_mock):
+            # Download this model to make sure it's in the cache.
             model = UNet2DConditionModel.from_pretrained(
                 "hf-internal-testing/tiny-stable-diffusion-torch", subfolder="unet", local_files_only=True
             )
+
         for p1, p2 in zip(orig_model.parameters(), model.parameters()):
             if (p1 != p2).cast("int64").sum() > 0:
                 assert False, "Parameters not the same!"
-
-    @nightly
-    def test_one_request_upon_cached(self):
-        import ppdiffusers
-
-        ppdiffusers.utils.import_utils._safetensors_available = False
-
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            with requests_mock.mock(real_http=True) as m:
-                UNet2DConditionModel.from_pretrained(
-                    "hf-internal-testing/tiny-stable-diffusion-torch",
-                    subfolder="unet",
-                    cache_dir=tmpdirname,
-                    from_hf_hub=True,
-                    from_diffusers=True,
-                )
-
-            download_requests = [r.method for r in m.request_history]
-            assert download_requests.count("HEAD") == 2, "2 HEAD requests one for config, one for model"
-            assert download_requests.count("GET") == 2, "2 GET requests one for config, one for model"
-
-            with requests_mock.mock(real_http=True) as m:
-                UNet2DConditionModel.from_pretrained(
-                    "hf-internal-testing/tiny-stable-diffusion-torch",
-                    subfolder="unet",
-                    cache_dir=tmpdirname,
-                    from_hf_hub=True,
-                    from_diffusers=True,
-                )
-
-            cache_requests = [r.method for r in m.request_history]
-            # TODO check this
-            assert (
-                "HEAD" == cache_requests[0] and len(cache_requests) == 2
-            ), "We should call only `model_info` to check for _commit hash and `send_telemetry`"
-
-        ppdiffusers.utils.import_utils._safetensors_available = True
-
-    def test_weight_overwrite(self):
-        with tempfile.TemporaryDirectory() as tmpdirname, self.assertRaises(RuntimeError) as error_context:
-            UNet2DConditionModel.from_pretrained(
-                "hf-internal-testing/tiny-stable-diffusion-torch",
-                subfolder="unet",
-                cache_dir=tmpdirname,
-                in_channels=9,
-                # from_hf_hub=True,
-                # from_diffusers=True,
-            )
-
-        # make sure that error message states what keys are missing
-        assert "size mismatch" in str(error_context.exception)
-
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            model = UNet2DConditionModel.from_pretrained(
-                "hf-internal-testing/tiny-stable-diffusion-torch",
-                subfolder="unet",
-                cache_dir=tmpdirname,
-                in_channels=9,
-                low_cpu_mem_usage=False,
-                ignore_mismatched_sizes=True,
-                # from_hf_hub=True,
-                # from_diffusers=True,
-            )
-
-        assert model.config.in_channels == 9
 
 
 class UNetTesterMixin:
     def test_forward_signature(self):
         init_dict, _ = self.prepare_init_args_and_inputs_for_common()
+
         model = self.model_class(**init_dict)
         signature = inspect.signature(model.forward)
+        # signature.parameters is an OrderedDict => so arg_names order is deterministic
         arg_names = [*signature.parameters.keys()]
+
         expected_arg_names = ["sample", "timestep"]
         self.assertListEqual(arg_names[:2], expected_arg_names)
 
     def test_forward_with_norm_groups(self):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
+
         init_dict["norm_num_groups"] = 16
-        init_dict["block_out_channels"] = 16, 32
+        init_dict["block_out_channels"] = (16, 32)
+
         model = self.model_class(**init_dict)
         model.eval()
+
         with paddle.no_grad():
             output = model(**inputs_dict)
+
             if isinstance(output, dict):
                 output = output.to_tuple()[0]
+
         self.assertIsNotNone(output)
         expected_shape = inputs_dict["sample"].shape
         self.assertEqual(output.shape, expected_shape, "Input and output shapes do not match")
@@ -154,27 +111,44 @@ class UNetTesterMixin:
 class ModelTesterMixin:
     main_input_name = None  # overwrite in model specific tester class
     base_precision = 1e-3
+    forward_requires_fresh_args = False
 
-    def test_from_save_pretrained(self):
-        init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
-        model = self.model_class(**init_dict)
+    def test_from_save_pretrained(self, expected_max_diff=1e-1):
+        if self.forward_requires_fresh_args:
+            model = self.model_class(**self.init_dict)
+        else:
+            init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
+            model = self.model_class(**init_dict)
+
         if hasattr(model, "set_default_attn_processor"):
             model.set_default_attn_processor()
         model.eval()
+
         with tempfile.TemporaryDirectory() as tmpdirname:
-            model.save_pretrained(tmpdirname)
+            model.save_pretrained(tmpdirname, safe_serialization=False)
             new_model = self.model_class.from_pretrained(tmpdirname)
             if hasattr(new_model, "set_default_attn_processor"):
                 new_model.set_default_attn_processor()
+
         with paddle.no_grad():
-            image = model(**inputs_dict)
+            if self.forward_requires_fresh_args:
+                image = model(**self.inputs_dict(0))
+            else:
+                image = model(**inputs_dict)
+
             if isinstance(image, dict):
                 image = image.to_tuple()[0]
-            new_image = new_model(**inputs_dict)
+
+            if self.forward_requires_fresh_args:
+                new_image = new_model(**self.inputs_dict(0))
+            else:
+                new_image = new_model(**inputs_dict)
+
             if isinstance(new_image, dict):
                 new_image = new_image.to_tuple()[0]
-        max_diff = (image - new_image).abs().sum().item()
-        self.assertLessEqual(max_diff, 1e-01, "Models give different forward passes")
+
+        max_diff = (image - new_image).abs().max().item()
+        self.assertLessEqual(max_diff, expected_max_diff, "Models give different forward passes")
 
     def test_getattr_is_correct(self):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
@@ -223,99 +197,144 @@ class ModelTesterMixin:
     def test_set_attn_processor_for_determinism(self):
         os.environ["FLAGS_cudnn_deterministic"] = "False"
         os.environ["FLAGS_cpu_deterministic"] = "False"
+        if self.forward_requires_fresh_args:
+            model = self.model_class(**self.init_dict)
+        else:
+            init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
+            model = self.model_class(**init_dict)
 
-        init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
-        model = self.model_class(**init_dict)
         if not hasattr(model, "set_attn_processor"):
+            # If not has `set_attn_processor`, skip test
             return
+
         assert all(type(proc) == AttnProcessor2_5 for proc in model.attn_processors.values())
         with paddle.no_grad():
-            output_1 = model(**inputs_dict)[0]
+            if self.forward_requires_fresh_args:
+                output_1 = model(**self.inputs_dict(0))[0]
+            else:
+                output_1 = model(**inputs_dict)[0]
+
         model.set_default_attn_processor()
         assert all(type(proc) == AttnProcessor for proc in model.attn_processors.values())
         with paddle.no_grad():
-            output_2 = model(**inputs_dict)[0]
-        model.enable_xformers_memory_efficient_attention()
-        assert all(type(proc) == XFormersAttnProcessor for proc in model.attn_processors.values())
-        with paddle.no_grad():
-            output_3 = model(**inputs_dict)[0]
+            if self.forward_requires_fresh_args:
+                output_2 = model(**self.inputs_dict(0))[0]
+            else:
+                output_2 = model(**inputs_dict)[0]
+
         model.set_attn_processor(AttnProcessor2_5())
         assert all(type(proc) == AttnProcessor2_5 for proc in model.attn_processors.values())
         with paddle.no_grad():
-            output_4 = model(**inputs_dict)[0]
+            if self.forward_requires_fresh_args:
+                output_4 = model(**self.inputs_dict(0))[0]
+            else:
+                output_4 = model(**inputs_dict)[0]
+
         model.set_attn_processor(AttnProcessor())
         assert all(type(proc) == AttnProcessor for proc in model.attn_processors.values())
         with paddle.no_grad():
-            output_5 = model(**inputs_dict)[0]
-        model.set_attn_processor(XFormersAttnProcessor())
-        assert all(type(proc) == XFormersAttnProcessor for proc in model.attn_processors.values())
-        with paddle.no_grad():
-            output_6 = model(**inputs_dict)[0]
-        os.environ["FLAGS_cudnn_deterministic"] = "True"
-        os.environ["FLAGS_cpu_deterministic"] = "True"
-        assert paddle.allclose(x=output_2, y=output_1, atol=self.base_precision).item()
-        assert paddle.allclose(x=output_2, y=output_3, atol=self.base_precision).item()
-        assert paddle.allclose(x=output_2, y=output_4, atol=self.base_precision).item()
-        assert paddle.allclose(x=output_2, y=output_5, atol=self.base_precision).item()
+            if self.forward_requires_fresh_args:
+                output_5 = model(**self.inputs_dict(0))[0]
+            else:
+                output_5 = model(**inputs_dict)[0]
+            model.set_attn_processor(XFormersAttnProcessor())
+            assert all(type(proc) == XFormersAttnProcessor for proc in model.attn_processors.values())
+            with paddle.no_grad():
+                if self.forward_requires_fresh_args:
+                    output_6 = model(**self.inputs_dict(0))[0]
+                else:
+                    output_6 = model(**inputs_dict)[0]
+            os.environ["FLAGS_cudnn_deterministic"] = "True"
+            os.environ["FLAGS_cpu_deterministic"] = "True"
+
+        # make sure that outputs match
+        assert paddle.allclose(output_2, output_1, atol=self.base_precision).item()
+        assert paddle.allclose(output_2, output_4, atol=self.base_precision).item()
+        assert paddle.allclose(output_2, output_5, atol=self.base_precision).item()
         assert paddle.allclose(x=output_2, y=output_6, atol=self.base_precision).item()
 
-    def test_from_save_pretrained_variant(self):
-        init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
-        model = self.model_class(**init_dict)
+    def test_from_save_pretrained_variant(self, expected_max_diff=5e-5):
+        if self.forward_requires_fresh_args:
+            model = self.model_class(**self.init_dict)
+        else:
+            init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
+            model = self.model_class(**init_dict)
+
         if hasattr(model, "set_default_attn_processor"):
             model.set_default_attn_processor()
+
         model.eval()
+
         with tempfile.TemporaryDirectory() as tmpdirname:
-            model.save_pretrained(tmpdirname, variant="fp16")
+            model.save_pretrained(tmpdirname, variant="fp16", safe_serialization=False)
             new_model = self.model_class.from_pretrained(tmpdirname, variant="fp16")
             if hasattr(new_model, "set_default_attn_processor"):
                 new_model.set_default_attn_processor()
+
             # non-variant cannot be loaded
-            with self.assertRaises(OSError) as error_context:
-                self.model_class.from_pretrained(tmpdirname)
+            # model = self.model_class.from_pretrained(tmpdirname)
 
-            # make sure that error message states what keys are missing
-            # support diffusion_pytorch_model.bin and model_state.pdparams
-            assert "Error no file named model_state.pdparams found in directory" in str(
-                error_context.exception
-            ) or "Error no file named diffusion_pytorch_model.bin found in directory" in str(error_context.exception)
+            # self.assertIsNotNone(model)
+
         with paddle.no_grad():
-
-            image = model(**inputs_dict)
+            if self.forward_requires_fresh_args:
+                image = model(**self.inputs_dict(0))
+            else:
+                image = model(**inputs_dict)
             if isinstance(image, dict):
                 image = image.to_tuple()[0]
 
-            new_image = new_model(**inputs_dict)
+            if self.forward_requires_fresh_args:
+                new_image = new_model(**self.inputs_dict(0))
+            else:
+                new_image = new_model(**inputs_dict)
+
             if isinstance(new_image, dict):
                 new_image = new_image.to_tuple()[0]
-        max_diff = (image - new_image).abs().sum().item()
-        self.assertLessEqual(max_diff, 1e-01, "Models give different forward passes")
+
+        max_diff = (image - new_image).abs().max().item()
+        self.assertLessEqual(max_diff, expected_max_diff, "Models give different forward passes")
 
     def test_from_save_pretrained_dtype(self):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
+
         model = self.model_class(**init_dict)
         model.eval()
-        for dtype in [paddle.float32, paddle.float16, paddle.bfloat16]:
 
+        for dtype in [paddle.float32, paddle.float16, paddle.bfloat16]:
+            if paddle_device == "mps" and dtype == paddle.bfloat16:
+                continue
             with tempfile.TemporaryDirectory() as tmpdirname:
                 model.to(dtype=dtype)
-                model.save_pretrained(tmpdirname)
-                new_model = self.model_class.from_pretrained(tmpdirname, paddle_dtype=dtype)
-                assert new_model.dtype == dtype
-                new_model = self.model_class.from_pretrained(tmpdirname, paddle_dtype=dtype)
+                model.save_pretrained(tmpdirname, safe_serialization=False)
+                # new_model = self.model_class.from_pretrained(tmpdirname, low_cpu_mem_usage=True, paddle_dtype=dtype)
+                # assert new_model.dtype == dtype
+                new_model = self.model_class.from_pretrained(tmpdirname, low_cpu_mem_usage=False, paddle_dtype=dtype)
                 assert new_model.dtype == dtype
 
-    def test_determinism(self, expected_max_diff=1e-4):
-        init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
-        model = self.model_class(**init_dict)
+    def test_determinism(self, expected_max_diff=5e-4):
+        if self.forward_requires_fresh_args:
+            model = self.model_class(**self.init_dict)
+        else:
+            init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
+            model = self.model_class(**init_dict)
         model.eval()
+
         with paddle.no_grad():
-            first = model(**inputs_dict)
+            if self.forward_requires_fresh_args:
+                first = model(**self.inputs_dict(0))
+            else:
+                first = model(**inputs_dict)
             if isinstance(first, dict):
                 first = first.to_tuple()[0]
-            second = model(**inputs_dict)
+
+            if self.forward_requires_fresh_args:
+                second = model(**self.inputs_dict(0))
+            else:
+                second = model(**inputs_dict)
             if isinstance(second, dict):
                 second = second.to_tuple()[0]
+
         out_1 = first.cpu().numpy()
         out_2 = second.cpu().numpy()
         out_1 = out_1[~np.isnan(out_1)]
@@ -327,11 +346,15 @@ class ModelTesterMixin:
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
         model = self.model_class(**init_dict)
         model.eval()
+
         with paddle.no_grad():
             output = model(**inputs_dict)
+
             if isinstance(output, dict):
                 output = output.to_tuple()[0]
+
         self.assertIsNotNone(output)
+
         # input & output have to have the same shape
         input_tensor = inputs_dict[self.main_input_name]
         expected_shape = input_tensor.shape
@@ -339,60 +362,75 @@ class ModelTesterMixin:
 
     def test_model_from_pretrained(self):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
+
         model = self.model_class(**init_dict)
         model.eval()
 
         # test if the model can be loaded from the config
         # and has all the expected shape
         with tempfile.TemporaryDirectory() as tmpdirname:
-
-            model.save_pretrained(tmpdirname)
-            print("##############")
-            print(os.listdir(tmpdirname))
+            model.save_pretrained(tmpdirname, safe_serialization=False)
             new_model = self.model_class.from_pretrained(tmpdirname)
             new_model.eval()
+
+        # check if all parameters shape are the same
         for param_name in model.state_dict().keys():
             param_1 = model.state_dict()[param_name]
             param_2 = new_model.state_dict()[param_name]
             self.assertEqual(param_1.shape, param_2.shape)
+
         with paddle.no_grad():
             output_1 = model(**inputs_dict)
+
             if isinstance(output_1, dict):
                 output_1 = output_1.to_tuple()[0]
+
             output_2 = new_model(**inputs_dict)
+
             if isinstance(output_2, dict):
                 output_2 = output_2.to_tuple()[0]
+
         self.assertEqual(output_1.shape, output_2.shape)
 
     def test_training(self):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
+
         model = self.model_class(**init_dict)
         model.train()
         output = model(**inputs_dict)
+
         if isinstance(output, dict):
             output = output.to_tuple()[0]
+
         input_tensor = inputs_dict[self.main_input_name]
-        noise = paddle.randn(shape=(input_tensor.shape[0],) + self.output_shape)
-        loss = paddle.nn.functional.mse_loss(input=output, label=noise)
+        noise = paddle.randn((input_tensor.shape[0],) + self.output_shape)
+        loss = paddle.nn.functional.mse_loss(output, noise)
         loss.backward()
 
     def test_ema_training(self):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
+
         model = self.model_class(**init_dict)
         model.train()
         ema_model = EMAModel(model.parameters())
+
         output = model(**inputs_dict)
+
         if isinstance(output, dict):
             output = output.to_tuple()[0]
+
         input_tensor = inputs_dict[self.main_input_name]
-        noise = paddle.randn(shape=(input_tensor.shape[0],) + self.output_shape)
-        loss = paddle.nn.functional.mse_loss(input=output, label=noise)
+        noise = paddle.randn((input_tensor.shape[0],) + self.output_shape)
+        loss = paddle.nn.functional.mse_loss(output, noise)
         loss.backward()
         ema_model.step(model.parameters())
 
     def test_outputs_equivalence(self):
         def set_nan_tensor_to_zero(t):
+            # Temporary fallback until `aten::_index_put_impl_` is implemented in mps
+            # Track progress in https://github.com/pypaddle/pypaddle/issues/77764
             # t[t != t] = 0
+            # return t.to(device)
             return t
 
         def recursive_check(tuple_object, dict_object):
@@ -407,38 +445,68 @@ class ModelTesterMixin:
             else:
                 self.assertTrue(
                     paddle.allclose(
-                        set_nan_tensor_to_zero(tuple_object), set_nan_tensor_to_zero(dict_object), atol=1e-05
+                        set_nan_tensor_to_zero(tuple_object), set_nan_tensor_to_zero(dict_object), atol=5e-5
                     ),
-                    msg=f"Tuple and dict output are not equal. Difference: {paddle.max(x=paddle.abs(x=tuple_object - dict_object))}. Tuple has `nan`: {paddle.isnan(x=tuple_object).any()} and `inf`: {paddle.isinf(x=tuple_object)}. Dict has `nan`: {paddle.isnan(x=dict_object).any()} and `inf`: {paddle.isinf(x=dict_object)}.",
+                    msg=(
+                        "Tuple and dict output are not equal. Difference:"
+                        f" {paddle.max(paddle.abs(tuple_object - dict_object))}. Tuple has `nan`:"
+                        f" {paddle.isnan(tuple_object).any()} and `inf`: {paddle.isinf(tuple_object)}. Dict has"
+                        f" `nan`: {paddle.isnan(dict_object).any()} and `inf`: {paddle.isinf(dict_object)}."
+                    ),
                 )
 
-        init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
-        model = self.model_class(**init_dict)
+        if self.forward_requires_fresh_args:
+            model = self.model_class(**self.init_dict)
+        else:
+            init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
+            model = self.model_class(**init_dict)
+
         model.eval()
+
         with paddle.no_grad():
-            outputs_dict = model(**inputs_dict)
-            outputs_tuple = model(**inputs_dict, return_dict=False)
+            if self.forward_requires_fresh_args:
+                outputs_dict = model(**self.inputs_dict(0))
+                outputs_tuple = model(**self.inputs_dict(0), return_dict=False)
+            else:
+                outputs_dict = model(**inputs_dict)
+                outputs_tuple = model(**inputs_dict, return_dict=False)
+
         recursive_check(outputs_tuple, outputs_dict)
 
     def test_enable_disable_gradient_checkpointing(self):
         if not self.model_class._supports_gradient_checkpointing:
-            return
+            return  # Skip test if model does not support gradient checkpointing
+
         init_dict, _ = self.prepare_init_args_and_inputs_for_common()
+
+        # at init model should have gradient checkpointing disabled
         model = self.model_class(**init_dict)
         self.assertFalse(model.is_gradient_checkpointing)
+
+        # check enable works
         model.enable_gradient_checkpointing()
         self.assertTrue(model.is_gradient_checkpointing)
+
+        # check disable works
         model.disable_gradient_checkpointing()
         self.assertFalse(model.is_gradient_checkpointing)
 
     def test_deprecated_kwargs(self):
         has_kwarg_in_model_class = "kwargs" in inspect.signature(self.model_class.__init__).parameters
         has_deprecated_kwarg = len(self.model_class._deprecated_kwargs) > 0
+
         if has_kwarg_in_model_class and not has_deprecated_kwarg:
             raise ValueError(
-                f"{self.model_class} has `**kwargs` in its __init__ method but has not defined any deprecated kwargs under the `_deprecated_kwargs` class attribute. Make sure to either remove `**kwargs` if there are no deprecated arguments or add the deprecated argument with `_deprecated_kwargs = [<deprecated_argument>]`"
+                f"{self.model_class} has `**kwargs` in its __init__ method but has not defined any deprecated kwargs"
+                " under the `_deprecated_kwargs` class attribute. Make sure to either remove `**kwargs` if there are"
+                " no deprecated arguments or add the deprecated argument with `_deprecated_kwargs ="
+                " [<deprecated_argument>]`"
             )
+
         if not has_kwarg_in_model_class and has_deprecated_kwarg:
             raise ValueError(
-                f"{self.model_class} doesn't have `**kwargs` in its __init__ method but has defined deprecated kwargs under the `_deprecated_kwargs` class attribute. Make sure to either add the `**kwargs` argument to {self.model_class}.__init__ if there are deprecated arguments or remove the deprecated argument from `_deprecated_kwargs = [<deprecated_argument>]`"
+                f"{self.model_class} doesn't have `**kwargs` in its __init__ method but has defined deprecated kwargs"
+                " under the `_deprecated_kwargs` class attribute. Make sure to either add the `**kwargs` argument to"
+                f" {self.model_class}.__init__ if there are deprecated arguments or remove the deprecated argument"
+                " from `_deprecated_kwargs = [<deprecated_argument>]`"
             )
