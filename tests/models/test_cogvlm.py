@@ -23,8 +23,8 @@ import numpy as np
 import paddle
 
 from paddlemix.models.blip2.Qformer import BertLMHeadModel
-from paddlemix.models.cogmodel.configuration import CogModelConfig
-from paddlemix.models.cogmodel.modeling import CogModelForCausalLM
+from paddlemix.models.cogvlm.configuration import CogModelConfig
+from paddlemix.models.cogvlm.modeling import CogModelForCausalLM
 from tests.models.test_configuration_common import ConfigTester
 from tests.models.test_modeling_common import (
     ModelTesterMixin,
