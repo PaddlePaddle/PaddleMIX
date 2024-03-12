@@ -891,4 +891,4 @@ images.save("out.png")
 ```
 
 生成的图片如下所示：
-<center><img src="https://github.com/PaddlePaddle/PaddleMIX/assets/4617245/efb1f1d8-dcaa-4250-a90e-198b9ab01ff6" width=100%></center>
+<center><img src="https://github.com/PaddlePaddle/PaddleMIX/assets/4617245/938e44c1-a0c1-4a34-8496-f63bc1592673" width=100%></center>
