@@ -1,20 +1,42 @@
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import random
 from typing import Any, Callable, Dict, List, Optional, Union
 
 import cv2
 import numpy as np
 import paddle
+import paddle.nn.functional as F
 from einops import rearrange
-from paddlenlp.transformers import CLIPTokenizer, CLIPTextModel
+from paddle.vision import transforms
+
+from ppdiffusers.transformers import CLIPTextModel, CLIPTokenizer
+
 from ...loaders import LoraLoaderMixin, TextualInversionLoaderMixin
-from ...models.modelscope_autoencoder_img2vid import AutoencoderKL_imgtovideo, get_first_stage_encoding
-from ...models.modelscope_gaussion_sdedit import GaussianDiffusion_SDEdit, noise_schedule
+from ...models.modelscope_autoencoder_img2vid import (
+    AutoencoderKL_imgtovideo,
+    get_first_stage_encoding,
+)
+from ...models.modelscope_gaussion_sdedit import (
+    GaussianDiffusion_SDEdit,
+    noise_schedule,
+)
 from ...models.modelscope_st_unet_video2video import Vid2VidSTUNet
-from ...utils import logging, replace_example_docstring
+from ...utils import logging
 from ..pipeline_utils import DiffusionPipeline
 from . import VideoToVideoModelscopePipelineOutput
-import paddle.nn.functional as F
-from paddle.vision import transforms
 
 logger = logging.get_logger(__name__)
 EXAMPLE_DOC_STRING = """
@@ -71,11 +93,11 @@ class VideoToVideoModelscopePipeline(DiffusionPipeline, TextualInversionLoaderMi
     """
 
     def __init__(
-            self,
-            text_encoder: CLIPTextModel,
-            tokenizer: CLIPTokenizer,
-            vae: AutoencoderKL_imgtovideo,
-            unet: Vid2VidSTUNet,
+        self,
+        text_encoder: CLIPTextModel,
+        tokenizer: CLIPTokenizer,
+        vae: AutoencoderKL_imgtovideo,
+        unet: Vid2VidSTUNet,
     ):
         super().__init__()
         self.register_modules(text_encoder=text_encoder, tokenizer=tokenizer, vae=vae, unet=unet)
@@ -95,27 +117,25 @@ class VideoToVideoModelscopePipeline(DiffusionPipeline, TextualInversionLoaderMi
         paddle.seed(self.seed)
         np.random.seed(self.seed)
         random.seed(self.seed)
-        self.vid_trans = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean=[0.5,0.5,0.5], std=[0.5,0.5,0.5])])
-        
+        self.vid_trans = transforms.Compose(
+            [transforms.ToTensor(), transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])]
+        )
+
         # [diffusion]
         sigmas = noise_schedule(
-            schedule='logsnr_cosine_interp',
-            n=1000,
-            zero_terminal_snr=True,
-            scale_min=2.0,
-            scale_max=4.0)
-        diffusion = GaussianDiffusion_SDEdit(
-            sigmas=sigmas, prediction_type='v')
+            schedule="logsnr_cosine_interp", n=1000, zero_terminal_snr=True, scale_min=2.0, scale_max=4.0
+        )
+        diffusion = GaussianDiffusion_SDEdit(sigmas=sigmas, prediction_type="v")
         self.diffusion = diffusion
 
     def _encode_prompt(
-            self,
-            prompt,
-            num_videos_per_prompt,
-            do_classifier_free_guidance,
-            negative_prompt=None,
-            prompt_embeds: Optional[paddle.Tensor] = None,
-            negative_prompt_embeds: Optional[paddle.Tensor] = None,
+        self,
+        prompt,
+        num_videos_per_prompt,
+        do_classifier_free_guidance,
+        negative_prompt=None,
+        prompt_embeds: Optional[paddle.Tensor] = None,
+        negative_prompt_embeds: Optional[paddle.Tensor] = None,
     ):
         r"""
         Encodes the prompt into text encoder hidden states.
@@ -159,10 +179,10 @@ class VideoToVideoModelscopePipeline(DiffusionPipeline, TextualInversionLoaderMi
             untruncated_ids = self.tokenizer(prompt, padding="longest", return_tensors="pd").input_ids
 
             if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(
-                    text_input_ids, untruncated_ids
+                text_input_ids, untruncated_ids
             ):
                 removed_text = self.tokenizer.batch_decode(
-                    untruncated_ids[:, self.tokenizer.model_max_length - 1: -1]
+                    untruncated_ids[:, self.tokenizer.model_max_length - 1 : -1]
                 )
                 logger.warning(
                     "The following part of your input was truncated because CLIP can only handle sequences up to"
@@ -243,14 +263,15 @@ class VideoToVideoModelscopePipeline(DiffusionPipeline, TextualInversionLoaderMi
 
         return prompt_embeds
 
-    def input_preprocess(self,
-                         vid_path,
-                         prompt,
-                         num_images_per_prompt,
-                         do_classifier_free_guidance,
-                         ):
+    def input_preprocess(
+        self,
+        vid_path,
+        prompt,
+        num_images_per_prompt,
+        do_classifier_free_guidance,
+    ):
         if prompt is None:
-            prompt = ''
+            prompt = ""
         caption = prompt + self.positive_prompt
         y = self._encode_prompt(
             caption,
@@ -285,65 +306,59 @@ class VideoToVideoModelscopePipeline(DiffusionPipeline, TextualInversionLoaderMi
                 frame_list.append(frame)
         capture.release()
 
-        video_data=paddle.stack([self.vid_trans(u) for u in frame_list],axis=0)
+        video_data = paddle.stack([self.vid_trans(u) for u in frame_list], axis=0)
 
-        return {'video_data': video_data, 'y': y}
+        return {"video_data": video_data, "y": y}
 
     @paddle.no_grad()
     # @replace_example_docstring(EXAMPLE_DOC_STRING)
     def __call__(
-            self,
-            prompt: Union[str, List[str]] = None,
-            video_path: str = None,
-            height: Optional[int] = None,
-            width: Optional[int] = None,
-            num_frames: int = 16,
-            num_inference_steps: int = 50,
-            guidance_scale: float = 9.0,
-            negative_prompt: Optional[Union[str, List[str]]] = None,
-            eta: float = 0.0,
-            generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
-            latents: Optional[paddle.Tensor] = None,
-            prompt_embeds: Optional[paddle.Tensor] = None,
-            negative_prompt_embeds: Optional[paddle.Tensor] = None,
-            output_type: Optional[str] = "np",
-            return_dict: bool = True,
-            callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
-            callback_steps: int = 1,
-            cross_attention_kwargs: Optional[Dict[str, Any]] = None,
+        self,
+        prompt: Union[str, List[str]] = None,
+        video_path: str = None,
+        height: Optional[int] = None,
+        width: Optional[int] = None,
+        num_frames: int = 16,
+        num_inference_steps: int = 50,
+        guidance_scale: float = 9.0,
+        negative_prompt: Optional[Union[str, List[str]]] = None,
+        eta: float = 0.0,
+        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        latents: Optional[paddle.Tensor] = None,
+        prompt_embeds: Optional[paddle.Tensor] = None,
+        negative_prompt_embeds: Optional[paddle.Tensor] = None,
+        output_type: Optional[str] = "np",
+        return_dict: bool = True,
+        callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
+        callback_steps: int = 1,
+        cross_attention_kwargs: Optional[Dict[str, Any]] = None,
     ):
 
         num_images_per_prompt = 1
         do_classifier_free_guidance = False
 
-        text_encoder_lora_scale = (
-            cross_attention_kwargs.get("scale", None) if cross_attention_kwargs is not None else None
-        )
-        negative_y = self._encode_prompt(
-            self.negative_prompt,
-            num_images_per_prompt,
-            do_classifier_free_guidance
-        )
+        # text_encoder_lora_scale = (
+        #     cross_attention_kwargs.get("scale", None) if cross_attention_kwargs is not None else None
+        # )
+        negative_y = self._encode_prompt(self.negative_prompt, num_images_per_prompt, do_classifier_free_guidance)
 
         # input_process
         input_data = self.input_preprocess(
             vid_path=video_path,
             prompt=prompt,
             num_images_per_prompt=num_images_per_prompt,
-            do_classifier_free_guidance=do_classifier_free_guidance
+            do_classifier_free_guidance=do_classifier_free_guidance,
         )
-        video_data = input_data['video_data']
-        y = input_data['y']
-        video_data = F.interpolate(
-            video_data, size=(720, 1280), mode='bilinear')
+        video_data = input_data["video_data"]
+        y = input_data["y"]
+        video_data = F.interpolate(video_data, size=(720, 1280), mode="bilinear")
         video_data = video_data.unsqueeze(0)
-        video_data = paddle.to_tensor(video_data,place=negative_y.place)
+        video_data = paddle.to_tensor(video_data, place=negative_y.place)
 
         batch_size, frames_num, _, _, _ = video_data.shape
-        video_data = rearrange(video_data, 'b f c h w -> (b f) c h w')
+        video_data = rearrange(video_data, "b f c h w -> (b f) c h w")
 
-        video_data_list = paddle.chunk(
-            video_data, video_data.shape[0] // 1, axis=0)
+        video_data_list = paddle.chunk(video_data, video_data.shape[0] // 1, axis=0)
 
         with paddle.no_grad():
             decode_data = []
@@ -352,20 +367,16 @@ class VideoToVideoModelscopePipeline(DiffusionPipeline, TextualInversionLoaderMi
                 tmp = get_first_stage_encoding(encoder_posterior.latent_dist).detach()
                 decode_data.append(tmp)
             video_data_feature = paddle.concat(decode_data, axis=0)
-            video_data_feature = rearrange(
-                video_data_feature, '(b f) c h w -> b c f h w', b=batch_size)
+            video_data_feature = rearrange(video_data_feature, "(b f) c h w -> b c f h w", b=batch_size)
         paddle.device.cuda.empty_cache()
 
         with paddle.amp.auto_cast(enable=True):
             total_noise_levels = 600
-            t = paddle.randint(
-                total_noise_levels - 1,
-                total_noise_levels, (1,),
-                dtype=paddle.int64)
+            t = paddle.randint(total_noise_levels - 1, total_noise_levels, (1,), dtype=paddle.int64)
 
-            noise = paddle.randn(shape=video_data_feature.shape,dtype=video_data_feature.dtype)
+            noise = paddle.randn(shape=video_data_feature.shape, dtype=video_data_feature.dtype)
             noised_lr = self.diffusion.diffuse(video_data_feature, t, noise)
-            model_kwargs = [{'y': y}, {'y': negative_y}]
+            model_kwargs = [{"y": y}, {"y": negative_y}]
 
             gen_vid = self.diffusion.sample(
                 noise=noised_lr,
@@ -373,29 +384,27 @@ class VideoToVideoModelscopePipeline(DiffusionPipeline, TextualInversionLoaderMi
                 model_kwargs=model_kwargs,
                 guide_scale=7.5,
                 guide_rescale=0.2,
-                solver='dpmpp_2m_sde' if self.solver_mode == 'fast' else 'heun',
-                steps=30 if self.solver_mode == 'fast' else 50,
+                solver="dpmpp_2m_sde" if self.solver_mode == "fast" else "heun",
+                steps=30 if self.solver_mode == "fast" else 50,
                 t_max=total_noise_levels - 1,
                 t_min=0,
-                discretization='trailing')
+                discretization="trailing",
+            )
 
             paddle.device.cuda.empty_cache()
 
             scale_factor = 0.18215
-            vid_tensor_feature = 1. / scale_factor * gen_vid
+            vid_tensor_feature = 1.0 / scale_factor * gen_vid
 
-            vid_tensor_feature = rearrange(vid_tensor_feature,
-                                           'b c f h w -> (b f) c h w')
-            vid_tensor_feature_list = paddle.chunk(
-                vid_tensor_feature, vid_tensor_feature.shape[0] // 2, axis=0)
+            vid_tensor_feature = rearrange(vid_tensor_feature, "b c f h w -> (b f) c h w")
+            vid_tensor_feature_list = paddle.chunk(vid_tensor_feature, vid_tensor_feature.shape[0] // 2, axis=0)
             decode_data = []
             for vd_data in vid_tensor_feature_list:
                 tmp = self.vae.decode(vd_data).sample
                 decode_data.append(tmp)
             vid_tensor_gen = paddle.concat(decode_data, axis=0)
 
-        gen_video = rearrange(
-            vid_tensor_gen, '(b f) c h w -> b c f h w', b=self.batch_size)
+        gen_video = rearrange(vid_tensor_gen, "(b f) c h w -> b c f h w", b=self.batch_size)
 
         video = tensor2vid(gen_video)
 

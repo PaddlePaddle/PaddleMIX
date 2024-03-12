@@ -17,17 +17,17 @@ import unittest
 
 import numpy as np
 import paddle
-from paddlenlp.transformers import (
-    CLIPTextConfig,
-    CLIPTextModel,
-    CLIPTextModelWithProjection,
-    CLIPTokenizer,
-)
 
 from ppdiffusers import AutoencoderKL, EulerDiscreteScheduler, UNet2DConditionModel
 from ppdiffusers.image_processor import VaeImageProcessor
 from ppdiffusers.pipelines.stable_diffusion_xl.pipeline_stable_diffusion_xl_instruct_pix2pix import (
     StableDiffusionXLInstructPix2PixPipeline,
+)
+from ppdiffusers.transformers import (
+    CLIPTextConfig,
+    CLIPTextModel,
+    CLIPTextModelWithProjection,
+    CLIPTokenizer,
 )
 from ppdiffusers.utils import floats_tensor
 from ppdiffusers.utils.testing_utils import enable_full_determinism
@@ -41,13 +41,18 @@ from ..test_pipelines_common import (
     PipelineKarrasSchedulerTesterMixin,
     PipelineLatentTesterMixin,
     PipelineTesterMixin,
+    SDXLOptionalComponentsTesterMixin,
 )
 
 enable_full_determinism()
 
 
 class StableDiffusionXLInstructPix2PixPipelineFastTests(
-    PipelineLatentTesterMixin, PipelineKarrasSchedulerTesterMixin, PipelineTesterMixin, unittest.TestCase
+    PipelineLatentTesterMixin,
+    PipelineKarrasSchedulerTesterMixin,
+    SDXLOptionalComponentsTesterMixin,
+    PipelineTesterMixin,
+    unittest.TestCase,
 ):
     pipeline_class = StableDiffusionXLInstructPix2PixPipeline
     params = TEXT_GUIDED_IMAGE_VARIATION_PARAMS - {"height", "width", "cross_attention_kwargs"}
@@ -70,7 +75,7 @@ class StableDiffusionXLInstructPix2PixPipelineFastTests(
             addition_embed_type="text_time",
             addition_time_embed_dim=8,
             transformer_layers_per_block=(1, 2),
-            projection_class_embeddings_input_dim=72,
+            projection_class_embeddings_input_dim=80,
             cross_attention_dim=64,
         )
         scheduler = EulerDiscreteScheduler(
@@ -116,12 +121,12 @@ class StableDiffusionXLInstructPix2PixPipelineFastTests(
             "tokenizer": tokenizer,
             "text_encoder_2": text_encoder_2,
             "tokenizer_2": tokenizer_2,
-            "requires_aesthetics_score": True,
+            # "requires_aesthetics_score": True,
         }
         return components
 
     def get_dummy_inputs(self, seed=0):
-        image = floats_tensor((1, 3, 32, 32), rng=random.Random(seed))
+        image = floats_tensor((1, 3, 64, 64), rng=random.Random(seed))
         image = image / 2 + 0.5
         generator = paddle.Generator().manual_seed(seed)
         inputs = {
@@ -137,7 +142,7 @@ class StableDiffusionXLInstructPix2PixPipelineFastTests(
 
     def test_components_function(self):
         init_components = self.get_dummy_components()
-        init_components.pop("requires_aesthetics_score")
+        # init_components.pop("requires_aesthetics_score")
         pipe = self.pipeline_class(**init_components)
         self.assertTrue(hasattr(pipe, "components"))
         self.assertTrue(set(pipe.components.keys()) == set(init_components.keys()))
@@ -147,6 +152,9 @@ class StableDiffusionXLInstructPix2PixPipelineFastTests(
 
     def test_attention_slicing_forward_pass(self):
         super().test_attention_slicing_forward_pass()
+
+    def test_save_load_optional_components(self):
+        self._test_save_load_optional_components()
 
     def test_latents_input(self):
         components = self.get_dummy_components()

@@ -1,4 +1,4 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -160,3 +160,31 @@ class DDIMSchedulerTest(SchedulerCommonTest):
 
         assert abs(result_sum.item() - 149.0784) < 1e-2
         assert abs(result_mean.item() - 0.1941) < 1e-3
+
+    def test_full_loop_with_noise(self):
+        scheduler_class = self.scheduler_classes[0]
+        scheduler_config = self.get_scheduler_config()
+        scheduler = scheduler_class(**scheduler_config)
+
+        num_inference_steps, eta = 10, 0.0
+        t_start = 8
+
+        model = self.dummy_model()
+        sample = self.dummy_sample_deter
+
+        scheduler.set_timesteps(num_inference_steps)
+
+        # add noise
+        noise = self.dummy_noise_deter
+        timesteps = scheduler.timesteps[t_start * scheduler.order :]
+        sample = scheduler.add_noise(sample, noise, timesteps[:1])
+
+        for t in timesteps:
+            residual = model(sample, t)
+            sample = scheduler.step(residual, t, sample, eta).prev_sample
+
+        result_sum = paddle.sum(paddle.abs(sample))
+        result_mean = paddle.mean(paddle.abs(sample))
+
+        assert abs(result_sum.item() - 354.5418) < 1e-2, f" expected result sum 218.4379, but get {result_sum}"
+        assert abs(result_mean.item() - 0.4616) < 1e-3, f" expected result mean 0.2844, but get {result_mean}"

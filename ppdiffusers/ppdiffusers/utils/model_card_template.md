@@ -9,7 +9,7 @@ should probably proofread and complete it, then remove this comment. -->
 
 ## Model description
 
-This diffusion model is trained with the [PPDiffusers](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers) library
+This diffusion model is trained with the [PPDiffusers](https://github.com/PaddlePaddle/PaddleMIX/ppdiffusers) library
 on the `{{ dataset_name }}` dataset.
 
 ## Intended uses & limitations
@@ -42,3 +42,7 @@ The following hyperparameters were used during training:
 - ema_inv_gamma: {{ ema_power }}
 - ema_inv_gamma: {{ ema_max_decay }}
 - mixed_precision: {{ mixed_precision }}
+
+### Training results
+
+📈 [TensorBoard logs](https://huggingface.co/{{ repo_name }}/tensorboard?#scalars)

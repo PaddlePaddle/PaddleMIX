@@ -17,9 +17,9 @@ from io import BytesIO
 import paddle
 import PIL
 import requests
-from paddlenlp.transformers import CLIPFeatureExtractor, CLIPModel
 
 from ppdiffusers import DiffusionPipeline
+from ppdiffusers.transformers import CLIPFeatureExtractor, CLIPModel
 
 
 def download_image(url):

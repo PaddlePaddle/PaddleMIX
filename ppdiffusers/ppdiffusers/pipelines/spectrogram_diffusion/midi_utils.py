@@ -1,4 +1,5 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2022 The Music Spectrogram Diffusion Authors.
+# Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -38,13 +39,18 @@ if is_note_seq_available():
     import note_seq
 else:
     raise ImportError("Please install note-seq via `pip install note-seq`")
+
+
 INPUT_FEATURE_LENGTH = 2048
+
 SAMPLE_RATE = 16000
 HOP_SIZE = 320
 FRAME_RATE = int(SAMPLE_RATE // HOP_SIZE)
+
 DEFAULT_STEPS_PER_SECOND = 100
 DEFAULT_MAX_SHIFT_SECONDS = 10
 DEFAULT_NUM_VELOCITY_BINS = 1
+
 SLAKH_CLASS_PROGRAMS = {
     "Acoustic Piano": 0,
     "Electric Piano": 4,
@@ -168,7 +174,6 @@ class Codec:
         self.steps_per_second = steps_per_second
         self._shift_range = EventRange(type="shift", min_value=0, max_value=max_shift_steps)
         self._event_ranges = [self._shift_range] + event_ranges
-
         # Ensure all event types have unique names.
         assert len(self._event_ranges) == len({er.type for er in self._event_ranges})
 
@@ -180,7 +185,7 @@ class Codec:
     # events that are intended to be used from within autograph functions.
 
     def is_shift_event_index(self, index: int) -> bool:
-        return self._shift_range.min_value <= index and index <= self._shift_range.max_value
+        return (self._shift_range.min_value <= index) and (index <= self._shift_range.max_value)
 
     @property
     def max_shift_steps(self) -> int:
@@ -193,10 +198,12 @@ class Codec:
             if event.type == er.type:
                 if not er.min_value <= event.value <= er.max_value:
                     raise ValueError(
-                        f"Event value {event.value} is not within valid range [{er.min_value}, {er.max_value}] for type {event.type}"
+                        f"Event value {event.value} is not within valid range "
+                        f"[{er.min_value}, {er.max_value}] for type {event.type}"
                     )
                 return offset + event.value - er.min_value
             offset += er.max_value - er.min_value + 1
+
         raise ValueError(f"Unknown event type: {event.type}")
 
     def event_type_range(self, event_type: str) -> Tuple[int, int]:
@@ -206,6 +213,7 @@ class Codec:
             if event_type == er.type:
                 return offset, offset + (er.max_value - er.min_value)
             offset += er.max_value - er.min_value + 1
+
         raise ValueError(f"Unknown event type: {event_type}")
 
     def decode_event_index(self, index: int) -> Event:
@@ -215,6 +223,7 @@ class Codec:
             if offset <= index <= offset + er.max_value - er.min_value:
                 return Event(type=er.type, value=er.min_value + index - offset)
             offset += er.max_value - er.min_value + 1
+
         raise ValueError(f"Unknown event index: {index}")
 
 
@@ -294,16 +303,25 @@ def program_to_slakh_program(program):
             return slakh_program
 
 
-def audio_to_frames(samples, hop_size: int, frame_rate: int) -> Tuple[Sequence[Sequence[int]], paddle.Tensor]:
+def audio_to_frames(
+    samples,
+    hop_size: int,
+    frame_rate: int,
+) -> Tuple[Sequence[Sequence[int]], paddle.Tensor]:
     """Convert audio samples to non-overlapping frames and frame times."""
     frame_size = hop_size
     samples = np.pad(samples, [0, frame_size - len(samples) % frame_size], mode="constant")
 
     # Split audio into frames.
     frames = frame(
-        paddle.to_tensor(data=samples).unsqueeze(axis=0), frame_length=frame_size, frame_step=frame_size, pad_end=False
+        paddle.to_tensor(samples).unsqueeze(0),
+        frame_length=frame_size,
+        frame_step=frame_size,
+        pad_end=False,  # TODO check why its off by 1 here when True
     )
+
     num_frames = len(samples) // frame_size
+
     times = np.arange(num_frames) / frame_rate
     return frames, times
 
@@ -357,7 +375,9 @@ def velocity_to_bin(velocity, num_velocity_bins):
 
 
 def note_event_data_to_events(
-    state: Optional[NoteEncodingState], value: NoteEventData, codec: Codec
+    state: Optional[NoteEncodingState],
+    value: NoteEventData,
+    codec: Codec,
 ) -> Sequence[Event]:
     """Convert note event data to a sequence of events."""
     if value.velocity is None:
@@ -371,14 +391,19 @@ def note_event_data_to_events(
             if state is not None:
                 state.active_pitches[value.pitch, 0] = velocity_bin
             return [Event("velocity", velocity_bin), Event("pitch", value.pitch)]
-        elif value.is_drum:
-            # drum events use a separate vocabulary
-            return [Event("velocity", velocity_bin), Event("drum", value.pitch)]
         else:
-            # program + velocity + pitch
-            if state is not None:
-                state.active_pitches[value.pitch, value.program] = velocity_bin
-            return [Event("program", value.program), Event("velocity", velocity_bin), Event("pitch", value.pitch)]
+            if value.is_drum:
+                # drum events use a separate vocabulary
+                return [Event("velocity", velocity_bin), Event("drum", value.pitch)]
+            else:
+                # program + velocity + pitch
+                if state is not None:
+                    state.active_pitches[(value.pitch, value.program)] = velocity_bin
+                return [
+                    Event("program", value.program),
+                    Event("velocity", velocity_bin),
+                    Event("pitch", value.pitch),
+                ]
 
 
 def note_encoding_state_to_events(state: NoteEncodingState) -> Sequence[Event]:
@@ -427,10 +452,12 @@ def encode_and_index_events(
     indices = np.argsort(event_times, kind="stable")
     event_steps = [round(event_times[i] * codec.steps_per_second) for i in indices]
     event_values = [event_values[i] for i in indices]
+
     events = []
     state_events = []
     event_start_indices = []
     state_event_indices = []
+
     cur_step = 0
     cur_event_idx = 0
     cur_state_event_idx = 0
@@ -455,6 +482,7 @@ def encode_and_index_events(
             # we want to capture the state prior to the occurrence of the event.
             for e in encoding_state_to_events_fn(state):
                 state_events.append(codec.encode_event(e))
+
         for e in encode_event_fn(state, event_value, codec):
             events.append(codec.encode_event(e))
 
@@ -478,6 +506,7 @@ def encode_and_index_events(
     event_start_indices = segment(np.array(event_start_indices).astype(np.int32), TARGET_FEATURE_LENGTH)
     event_end_indices = segment(np.array(event_end_indices).astype(np.int32), TARGET_FEATURE_LENGTH)
     state_event_indices = segment(np.array(state_event_indices).astype(np.int32), TARGET_FEATURE_LENGTH)
+
     outputs = []
     for start_indices, end_indices, event_indices in zip(event_start_indices, event_end_indices, state_event_indices):
         outputs.append(
@@ -489,6 +518,7 @@ def encode_and_index_events(
                 "state_event_indices": event_indices,
             }
         )
+
     return outputs
 
 
@@ -497,7 +527,9 @@ def extract_sequence_with_indices(features, state_events_end_token=None, feature
     features = features.copy()
     start_idx = features["event_start_indices"][0]
     end_idx = features["event_end_indices"][-1]
+
     features[feature_key] = features[feature_key][start_idx:end_idx]
+
     if state_events_end_token is not None:
         # Extract the state events corresponding to the audio start token, and
         # prepend them to the targets array.
@@ -506,8 +538,13 @@ def extract_sequence_with_indices(features, state_events_end_token=None, feature
         while features["state_events"][state_event_end_idx - 1] != state_events_end_token:
             state_event_end_idx += 1
         features[feature_key] = np.concatenate(
-            [features["state_events"][state_event_start_idx:state_event_end_idx], features[feature_key]], axis=0
+            [
+                features["state_events"][state_event_start_idx:state_event_end_idx],
+                features[feature_key],
+            ],
+            axis=0,
         )
+
     return features
 
 
@@ -516,12 +553,16 @@ def map_midi_programs(
 ) -> Mapping[str, Any]:
     """Apply MIDI program map to token sequences."""
     granularity = PROGRAM_GRANULARITIES[granularity_type]
+
     feature[feature_key] = granularity.tokens_map_fn(feature[feature_key], codec)
     return feature
 
 
 def run_length_encode_shifts_fn(
-    features, codec: Codec, feature_key: str = "inputs", state_change_event_types: Sequence[str] = ()
+    features,
+    codec: Codec,
+    feature_key: str = "inputs",
+    state_change_event_types: Sequence[str] = (),
 ) -> Callable[[Mapping[str, Any]], Mapping[str, Any]]:
     """Return a function that run-length encodes shifts for a given codec.
 
@@ -547,20 +588,24 @@ def run_length_encode_shifts_fn(
           A dict of features.
         """
         events = features[feature_key]
+
         shift_steps = 0
         total_shift_steps = 0
         output = np.array([], dtype=np.int32)
+
         current_state = np.zeros(len(state_change_event_ranges), dtype=np.int32)
+
         for event in events:
             if codec.is_shift_event_index(event):
                 shift_steps += 1
                 total_shift_steps += 1
+
             else:
                 # If this event is a state change and has the same value as the current
                 # state, we can skip it entirely.
                 is_redundant = False
                 for i, (min_index, max_index) in enumerate(state_change_event_ranges):
-                    if min_index <= event and event <= max_index:
+                    if (min_index <= event) and (event <= max_index):
                         if current_state[i] == event:
                             is_redundant = True
                         current_state[i] = event
@@ -576,6 +621,7 @@ def run_length_encode_shifts_fn(
                         output = np.concatenate([output, [output_steps]], axis=0)
                         shift_steps -= output_steps
                 output = np.concatenate([output, [event]], axis=0)
+
         features[feature_key] = output
         return features
 
@@ -585,11 +631,15 @@ def run_length_encode_shifts_fn(
 def note_representation_processor_chain(features, codec: Codec, note_representation_config: NoteRepresentationConfig):
     tie_token = codec.encode_event(Event("tie", 0))
     state_events_end_token = tie_token if note_representation_config.include_ties else None
+
     features = extract_sequence_with_indices(
         features, state_events_end_token=state_events_end_token, feature_key="inputs"
     )
+
     features = map_midi_programs(features, codec)
+
     features = run_length_encode_shifts_fn(features, codec, state_change_event_types=["velocity", "program"])
+
     return features
 
 
@@ -613,14 +663,19 @@ class MidiProcessor:
         if not isinstance(midi, bytes):
             with open(midi, "rb") as f:
                 midi = f.read()
+
         ns = note_seq.midi_to_note_sequence(midi)
         ns_sus = note_seq.apply_sustain_control_changes(ns)
+
         for note in ns_sus.notes:
             if not note.is_drum:
                 note.program = program_to_slakh_program(note.program)
+
         samples = np.zeros(int(ns_sus.total_time * SAMPLE_RATE))
+
         _, frame_times = audio_to_frames(samples, HOP_SIZE, FRAME_RATE)
         times, values = note_sequence_to_onsets_and_offsets_and_programs(ns_sus)
+
         events = encode_and_index_events(
             state=NoteEncodingState(),
             event_times=times,
@@ -630,8 +685,10 @@ class MidiProcessor:
             encode_event_fn=note_event_data_to_events,
             encoding_state_to_events_fn=note_encoding_state_to_events,
         )
+
         events = [
             note_representation_processor_chain(event, self.codec, self.note_representation_config) for event in events
         ]
         input_tokens = [self.tokenizer.encode(event["inputs"]) for event in events]
+
         return input_tokens

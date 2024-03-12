@@ -1,11 +1,35 @@
-from einops import rearrange
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-from .modelscope_st_unet import STUNetModel, default, prob_mask_like, sinusoidal_embedding_paddle, STUNetOutput, \
-    TemporalTransformer, TemporalAttentionMultiBlock, SpatialTransformer, ResBlock
-from ..configuration_utils import register_to_config
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
+from einops import rearrange
+
+from ..configuration_utils import register_to_config
+from .lvdm_util import avg_pool_nd
+from .modelscope_st_unet import (
+    ResBlock,
+    SpatialTransformer,
+    STUNetModel,
+    STUNetOutput,
+    TemporalAttentionMultiBlock,
+    TemporalTransformer,
+    default,
+    prob_mask_like,
+    sinusoidal_embedding_paddle,
+)
 
 USE_TEMPORAL_TRANSFORMER = True
 
@@ -69,28 +93,30 @@ class Upsample(nn.Layer):
 
 class Vid2VidSTUNet(STUNetModel):
     @register_to_config
-    def __init__(self,
-                 in_channels=4,
-                 out_channels=4,
-                 dim=320,
-                 y_dim=1024,
-                 context_channels=1024,
-                 dim_mult=[1, 2, 4, 4],
-                 num_heads=8,
-                 head_dim=64,
-                 num_res_blocks=2,
-                 attn_scales=[1 / 1, 1 / 2, 1 / 4],
-                 use_scale_shift_norm=True,
-                 dropout=0.1,
-                 temporal_attn_times=1,
-                 temporal_attention=True,
-                 use_checkpoint=True,
-                 use_image_dataset=False,
-                 use_fps_condition=False,
-                 use_sim_mask=False,
-                 training=False,
-                 inpainting=True,
-                 **kwargs):
+    def __init__(
+        self,
+        in_channels=4,
+        out_channels=4,
+        dim=320,
+        y_dim=1024,
+        context_channels=1024,
+        dim_mult=[1, 2, 4, 4],
+        num_heads=8,
+        head_dim=64,
+        num_res_blocks=2,
+        attn_scales=[1 / 1, 1 / 2, 1 / 4],
+        use_scale_shift_norm=True,
+        dropout=0.1,
+        temporal_attn_times=1,
+        temporal_attention=True,
+        use_checkpoint=True,
+        use_image_dataset=False,
+        use_fps_condition=False,
+        use_sim_mask=False,
+        training=False,
+        inpainting=True,
+        **kwargs
+    ):
         super(Vid2VidSTUNet, self).__init__(
             in_channels=in_channels,
             out_channels=out_channels,
@@ -105,7 +131,7 @@ class Vid2VidSTUNet(STUNetModel):
             use_scale_shift_norm=use_scale_shift_norm,
             dropout=dropout,
             temporal_attn_times=temporal_attn_times,
-            temporal_attention=temporal_attention
+            temporal_attention=temporal_attention,
         )
         embed_dim = dim * 4
         num_heads = num_heads if num_heads else dim // 32
@@ -174,7 +200,9 @@ class Vid2VidSTUNet(STUNetModel):
                         head_dim,
                         rotary_emb=self.rotary_emb,
                         temporal_attn_times=temporal_attn_times,
-                        use_image_dataset=use_image_dataset))
+                        use_image_dataset=use_image_dataset,
+                    )
+                )
 
         self.input_blocks.append(init_block)
         shortcut_dims.append(dim)
@@ -306,18 +334,20 @@ class Vid2VidSTUNet(STUNetModel):
                     block.append(upsample)
                 self.output_blocks.append(block)
 
-    def forward(self,
-                x,
-                t,
-                y,
-                x_lr=None,
-                fps=None,
-                video_mask=None,
-                focus_present_mask=None,
-                prob_focus_present=0.,
-                mask_last_frame_num=0,
-                return_dict: bool = True,
-                **kwargs):
+    def forward(
+        self,
+        x,
+        t,
+        y,
+        x_lr=None,
+        fps=None,
+        video_mask=None,
+        focus_present_mask=None,
+        prob_focus_present=0.0,
+        mask_last_frame_num=0,
+        return_dict: bool = True,
+        **kwargs
+    ):
         batch, x_c, x_f, x_h, x_w = x.shape
         device = x.place
         self.batch = batch

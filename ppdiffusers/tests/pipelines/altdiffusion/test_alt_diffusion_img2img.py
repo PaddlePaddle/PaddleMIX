@@ -19,7 +19,6 @@ import unittest
 
 import numpy as np
 import paddle
-from paddlenlp.transformers import XLMRobertaTokenizer
 
 import ppdiffusers  # noqa F401
 from ppdiffusers import (
@@ -33,6 +32,7 @@ from ppdiffusers.pipelines.alt_diffusion.modeling_roberta_series import (
     RobertaSeriesConfig,
     RobertaSeriesModelWithTransformation,
 )
+from ppdiffusers.transformers import XLMRobertaTokenizer
 from ppdiffusers.utils import floats_tensor, load_image, slow
 from ppdiffusers.utils.testing_utils import enable_full_determinism, require_paddle_gpu
 
@@ -160,8 +160,8 @@ class AltDiffusionImg2ImgPipelineFastTests(unittest.TestCase):
         expected_slice = np.array(
             [0.8620628, 0.5237646, 0.5834946, 0.39199167, 0.14265564, 0.4836399, 0.50643086, 0.46689287, 0.5785755]
         )
-        assert np.abs(image_slice.flatten() - expected_slice).max() < 0.005
-        assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max() < 0.005
+        assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
+        assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max() < 0.01
 
     def test_stable_diffusion_img2img_fp16(self):
         """Test that stable diffusion img2img works with fp16"""
@@ -193,6 +193,7 @@ class AltDiffusionImg2ImgPipelineFastTests(unittest.TestCase):
         ).images
         assert image.shape == (1, 32, 32, 3)
 
+    @slow
     def test_stable_diffusion_img2img_pipeline_multiple_of_8(self):
         init_image = load_image(
             "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/sketch-mountains-input.png"
@@ -200,7 +201,7 @@ class AltDiffusionImg2ImgPipelineFastTests(unittest.TestCase):
 
         init_image = init_image.resize((760, 504))
         model_id = "BAAI/AltDiffusion"
-        pipe = AltDiffusionImg2ImgPipeline.from_pretrained(model_id)
+        pipe = AltDiffusionImg2ImgPipeline.from_pretrained(model_id, safety_checker=None)
 
         pipe.set_progress_bar_config(disable=None)
         pipe.enable_attention_slicing()

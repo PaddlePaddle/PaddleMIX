@@ -1,4 +1,4 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -127,25 +127,55 @@ class LMSDiscreteSchedulerTest(SchedulerCommonTest):
         assert abs(result_mean.item() - 1.31) < 1e-3
 
     def test_full_loop_device_karras_sigmas(self):
-            scheduler_class = self.scheduler_classes[0]
-            scheduler_config = self.get_scheduler_config()
-            scheduler = scheduler_class(**scheduler_config, use_karras_sigmas=True)
+        scheduler_class = self.scheduler_classes[0]
+        scheduler_config = self.get_scheduler_config()
+        scheduler = scheduler_class(**scheduler_config, use_karras_sigmas=True)
 
-            scheduler.set_timesteps(self.num_inference_steps)
+        scheduler.set_timesteps(self.num_inference_steps)
 
-            model = self.dummy_model()
-            sample = self.dummy_sample_deter * scheduler.init_noise_sigma
+        model = self.dummy_model()
+        sample = self.dummy_sample_deter * scheduler.init_noise_sigma
 
-            for t in scheduler.timesteps:
-                sample = scheduler.scale_model_input(sample, t)
+        for t in scheduler.timesteps:
+            sample = scheduler.scale_model_input(sample, t)
 
-                model_output = model(sample, t)
+            model_output = model(sample, t)
 
-                output = scheduler.step(model_output, t, sample)
-                sample = output.prev_sample
+            output = scheduler.step(model_output, t, sample)
+            sample = output.prev_sample
 
-            result_sum = paddle.sum(paddle.abs(sample))
-            result_mean = paddle.mean(paddle.abs(sample))
+        result_sum = paddle.sum(paddle.abs(sample))
+        result_mean = paddle.mean(paddle.abs(sample))
 
-            assert abs(result_sum.item() - 3812.9927) < 2e-2
-            assert abs(result_mean.item() - 4.9648) < 1e-3
+        assert abs(result_sum.item() - 3812.9927) < 2e-2
+        assert abs(result_mean.item() - 4.9648) < 1e-3
+
+    def test_full_loop_with_noise(self):
+        scheduler_class = self.scheduler_classes[0]
+        scheduler_config = self.get_scheduler_config()
+        scheduler = scheduler_class(**scheduler_config)
+
+        scheduler.set_timesteps(self.num_inference_steps)
+
+        model = self.dummy_model()
+        sample = self.dummy_sample_deter * scheduler.init_noise_sigma
+
+        # add noise
+        t_start = self.num_inference_steps - 2
+        noise = self.dummy_noise_deter
+        timesteps = scheduler.timesteps[t_start * scheduler.order :]
+        sample = scheduler.add_noise(sample, noise, timesteps[:1])
+
+        for i, t in enumerate(timesteps):
+            sample = scheduler.scale_model_input(sample, t)
+
+            model_output = model(sample, t)
+
+            output = scheduler.step(model_output, t, sample)
+            sample = output.prev_sample
+
+        result_sum = paddle.sum(paddle.abs(sample))
+        result_mean = paddle.mean(paddle.abs(sample))
+
+        assert abs(result_sum.item() - 27663.5957) < 1e-2
+        assert abs(result_mean.item() - 36.0203) < 1e-3

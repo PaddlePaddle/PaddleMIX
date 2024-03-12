@@ -36,7 +36,6 @@ from paddle.io import BatchSampler, DataLoader, Dataset, DistributedBatchSampler
 from paddle.optimizer import AdamW
 from paddle.vision.transforms import RandomHorizontalFlip
 from paddlenlp.trainer import set_seed
-from paddlenlp.transformers import AutoTokenizer, PretrainedConfig
 from paddlenlp.utils.log import logger
 from PIL import Image
 from tqdm.auto import tqdm
@@ -51,6 +50,7 @@ from ppdiffusers import (
 )
 from ppdiffusers.optimization import get_scheduler
 from ppdiffusers.training_utils import freeze_params, unfreeze_params, unwrap_model
+from ppdiffusers.transformers import AutoTokenizer, PretrainedConfig
 from ppdiffusers.utils import PIL_INTERPOLATION, check_min_version
 
 check_min_version("0.16.1")
@@ -69,7 +69,7 @@ def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: st
     except Exception:
         model_class = "LDMBertModel"
     if model_class == "CLIPTextModel":
-        from paddlenlp.transformers import CLIPTextModel
+        from ppdiffusers.transformers import CLIPTextModel
 
         return CLIPTextModel
     elif model_class == "RobertaSeriesModelWithTransformation":
@@ -79,7 +79,7 @@ def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: st
 
         return RobertaSeriesModelWithTransformation
     elif model_class == "BertModel":
-        from paddlenlp.transformers import BertModel
+        from ppdiffusers.transformers import BertModel
 
         return BertModel
     elif model_class == "LDMBertModel":
@@ -93,17 +93,8 @@ def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: st
 
 
 def set_recompute(model, value=False):
-    def fn(layer):
-        # ldmbert
-        if hasattr(layer, "enable_recompute"):
-            layer.enable_recompute = value
-            print("Set", layer.__class__, "recompute", layer.enable_recompute)
-        # # unet
-        # if hasattr(layer, "gradient_checkpointing"):
-        #     layer.gradient_checkpointing = value
-        #     print("Set", layer.__class__, "recompute", layer.gradient_checkpointing)
-
-    model.apply(fn)
+    if hasattr(model, "gradient_checkpointing_enable"):
+        model.gradient_checkpointing_enable()
 
 
 def get_report_to(args):
@@ -720,7 +711,8 @@ def main():
 
     if args.gradient_checkpointing:
         # unet.enable_gradient_checkpointing()
-        set_recompute(text_encoder, True)
+        if hasattr(text_encoder, "gradient_checkpointing_enable"):
+            text_encoder.gradient_checkpointing_enable()
 
     # set attention to default
     unet.set_default_attn_processor()
@@ -945,7 +937,7 @@ def main():
                     break
 
         if is_main_process:
-            if args.validation_prompt is not None and epoch % args.validation_epochs == 0:
+            if args.validation_prompt is not None and epoch % args.validation_epochs == 0 and epoch > 0:
                 logger.info(
                     f"Running validation... \n Generating {args.num_validation_images} images with prompt:"
                     f" {args.validation_prompt}."

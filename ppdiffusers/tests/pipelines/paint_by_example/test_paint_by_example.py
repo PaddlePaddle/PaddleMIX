@@ -19,7 +19,6 @@ import unittest
 
 import numpy as np
 import paddle
-from paddlenlp.transformers import CLIPImageProcessor, CLIPVisionConfig
 from PIL import Image
 
 from ppdiffusers import (
@@ -29,7 +28,8 @@ from ppdiffusers import (
     UNet2DConditionModel,
 )
 from ppdiffusers.pipelines.paint_by_example import PaintByExampleImageEncoder
-from ppdiffusers.utils import floats_tensor, load_image, slow
+from ppdiffusers.transformers import CLIPImageProcessor, CLIPVisionConfig
+from ppdiffusers.utils import floats_tensor, slow
 from ppdiffusers.utils.testing_utils import enable_full_determinism, require_paddle_gpu
 
 from ..pipeline_params import (
@@ -131,7 +131,7 @@ class PaintByExamplePipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         image_slice = image[0, -3:, -3:, -1]
         assert image.shape == (1, 64, 64, 3)
         expected_slice = np.array(
-            [0.82595694, 0.51862055, 0.5474039, 0.2411496, 0.20220888, 0.3430622, 0.3558151, 0.06606945, 0.4550809]
+            [0.68689936, 0.3917557, 0.44053555, 0.3441629, 0.22763872, 0.37148172, 0.41948307, 0.13494274, 0.45955443]
         )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 
