@@ -12,5 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# text2img
-python infer_paddle.py --model_dir runwayml/stable-diffusion-v1-5 --scheduler "ddim" --backend paddle --device gpu --task_name all
+export FLAGS_use_cuda_managed_memory=False
+
+export USE_PPXFORMERS=False
+
+# python infer.py --model_dir static_model/stable-video-diffusion-img2vid-xt --scheduler "euler" --backend paddle --width 576 --height 576 --device gpu --task_name img2video
+python infer_dygraph_paddle.py --model_dir stabilityai/stable-video-diffusion-img2vid-xt --scheduler "euler" --backend paddle --width 256 --height 256 --device gpu --task_name img2video --inference_steps 25

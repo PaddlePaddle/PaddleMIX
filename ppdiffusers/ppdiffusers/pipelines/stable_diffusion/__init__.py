@@ -68,6 +68,7 @@ else:
     _import_structure["pipeline_paddleinfer_stable_diffusion_inpaint_legacy"] = [
         "PaddleInferStableDiffusionInpaintPipelineLegacy"
     ]
+    _import_structure["pipeline_stable_diffusion_mega"] = ["StableDiffusionMegaPipeline"]
     _import_structure["pipeline_paddleinfer_stable_diffusion_mega"] = ["PaddleInferStableDiffusionMegaPipeline"]
 
 try:
@@ -188,6 +189,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             StableDiffusionLatentUpscalePipeline,
         )
         from .pipeline_stable_diffusion_ldm3d import StableDiffusionLDM3DPipeline
+        from .pipeline_stable_diffusion_mega import StableDiffusionMegaPipeline
         from .pipeline_stable_diffusion_model_editing import (
             StableDiffusionModelEditingPipeline,
         )

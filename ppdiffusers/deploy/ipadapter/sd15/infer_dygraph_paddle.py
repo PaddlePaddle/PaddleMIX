@@ -18,30 +18,18 @@ import time
 
 # isort: split
 import paddle
-import paddle.inference as paddle_infer
 
 # isort: split
-import cv2
 import numpy as np
 from paddlenlp.trainer.argparser import strtobool
-from PIL import Image
 from tqdm.auto import trange
 
 from ppdiffusers import (  # noqa
     DiffusionPipeline,
-    PaddleInferStableDiffusionMegaPipeline,
+    StableDiffusionMegaPipeline,
+    StableDiffusionPipeline,
 )
 from ppdiffusers.utils import load_image
-
-
-def get_canny_image(image, args):
-    if isinstance(image, Image.Image):
-        image = np.array(image)
-    image = cv2.Canny(image, args.low_threshold, args.high_threshold)
-    image = image[:, :, None]
-    image = np.concatenate([image, image, image], axis=2)
-    canny_image = Image.fromarray(image)
-    return canny_image
 
 
 def parse_arguments():
@@ -49,8 +37,27 @@ def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--model_dir",
-        default="runwayml/stable-diffusion-v1-5@paddleinfer",
-        help="The model directory of diffusion_model.",
+        type=str,
+        default="runwayml/stable-diffusion-v1-5",
+        help="Path to the `ppdiffusers` checkpoint to convert (either a local directory or on the bos).",
+    )
+    parser.add_argument(
+        "--ipadapter_pretrained_model_name_or_path",
+        type=str,
+        default="h94/IP-Adapter",
+        help="Path to the `ppdiffusers`'s ip-adapter checkpoint to convert (either a local directory or on the bos).Example: h94/IP-Adapter",
+    )
+    parser.add_argument(
+        "--ipadapter_model_subfolder",
+        type=str,
+        default="models",
+        help="Path to the `ppdiffusers`'s ip-adapter checkpoint to convert (either a local directory or on the bos).Example: models",
+    )
+    parser.add_argument(
+        "--ipadapter_weight_name",
+        type=str,
+        default="ip-adapter_sd15.safetensors",
+        help="Name of the weight to convert.Example: ip-adapter_sd15.safetensors",
     )
     parser.add_argument(
         "--inference_steps",
@@ -67,8 +74,8 @@ def parse_arguments():
     parser.add_argument(
         "--backend",
         type=str,
-        default="paddle_tensorrt",
-        choices=["paddle", "paddle_tensorrt"],
+        default="paddle",
+        choices=["paddle"],
         help="The inference runtime backend of unet model and text encoder model.",
     )
     parser.add_argument(
@@ -135,73 +142,13 @@ def parse_arguments():
     parser.add_argument("--hr_resize_width", type=int, default=768, help="HR Width of input image")
     parser.add_argument("--is_sd2_0", type=strtobool, default=False, help="Is sd2_0 model?")
     parser.add_argument(
-        "--low_threshold",
-        type=int,
-        default=100,
-        help="The value of Canny low threshold.",
-    )
-    parser.add_argument(
-        "--high_threshold",
-        type=int,
-        default=200,
-        help="The value of Canny high threshold.",
-    )
-    parser.add_argument(
         "--tune",
         type=strtobool,
         default=False,
         help="Whether to tune the shape of tensorrt engine.",
     )
+
     return parser.parse_args()
-
-
-def create_paddle_inference_runtime(
-    model_dir="",
-    model_name="",
-    use_trt=False,
-    precision_mode=paddle_infer.PrecisionType.Half,
-    device_id=0,
-    disable_paddle_trt_ops=[],
-    disable_paddle_pass=[],
-    workspace=24 * 1024 * 1024 * 1024,
-    tune=False,
-):
-    config = paddle_infer.Config()
-    config.enable_memory_optim()
-    shape_file = f"{model_dir}/{model_name}/shape_range_info.pbtxt"
-    if tune:
-        config.collect_shape_range_info(shape_file)
-        config.switch_ir_optim(False)
-    else:
-        config.enable_new_executor()
-
-    if device_id != -1:
-        config.use_gpu()
-        config.enable_use_gpu(memory_pool_init_size_mb=2000, device_id=device_id, precision_mode=precision_mode)
-    for pass_name in disable_paddle_pass:
-        config.delete_pass(pass_name)
-    if use_trt:
-        config.enable_tensorrt_engine(
-            workspace_size=workspace,
-            precision_mode=precision_mode,
-            max_batch_size=1,
-            min_subgraph_size=3,
-            use_static=True,
-        )
-        config.enable_tensorrt_memory_optim()
-        config.enable_tuned_tensorrt_dynamic_shape(shape_file, True)
-        cache_file = os.path.join(model_dir, model_name, "_opt_cache/")
-        config.set_optim_cache_dir(cache_file)
-        if precision_mode != paddle_infer.PrecisionType.Half:
-            only_fp16_passes = [
-                "trt_cross_multihead_matmul_fuse_pass",
-                "trt_flash_multihead_matmul_fuse_pass",
-                "preln_elementwise_groupnorm_act_pass",
-                "elementwise_groupnorm_act_pass",
-            ]
-            for curr_pass in only_fp16_passes:
-                config.delete_pass(curr_pass)
-    return config
 
 
 def main(args):
@@ -214,72 +161,13 @@ def main(args):
     min_image_size = 512
     max_image_size = 768
     max_image_size = max(min_image_size, max_image_size)
-
-    # 4. Init runtime
-    only_fp16_passes = [
-        "trt_cross_multihead_matmul_fuse_pass",
-        "trt_flash_multihead_matmul_fuse_pass",
-        "preln_elementwise_groupnorm_act_pass",
-        "elementwise_groupnorm_act_pass",
-    ]
-    no_need_passes = [
-        "trt_prompt_tuning_embedding_eltwise_layernorm_fuse_pass",
-        "add_support_int8_pass",
-        "auto_mixed_precision_pass",
-        "conv_elementwise_add_fuse_pass",
-    ]
-    paddle_delete_passes = dict(
-        text_encoder=only_fp16_passes + no_need_passes if not args.use_fp16 else no_need_passes,
-        text_encoder_2=only_fp16_passes + no_need_passes if not args.use_fp16 else no_need_passes,
-        vae_encoder=only_fp16_passes + [] if args.use_fp16 else [],
-        vae_decoder=only_fp16_passes + no_need_passes if not args.use_fp16 else no_need_passes,
-        unet=only_fp16_passes + no_need_passes if not args.use_fp16 else no_need_passes,
-    )
-    args.use_trt = args.backend == "paddle_tensorrt"
-    precision_mode = paddle_infer.PrecisionType.Half if args.use_fp16 else paddle_infer.PrecisionType.Float32
-    infer_configs = dict(
-        text_encoder=create_paddle_inference_runtime(
-            model_dir=args.model_dir,
-            use_trt=False,
-            model_name="text_encoder",
-            precision_mode=precision_mode,
-            device_id=args.device_id,
-            disable_paddle_trt_ops=["range", "lookup_table_v2"],
-            disable_paddle_pass=paddle_delete_passes.get("text_encoder", []),
-            tune=False,
-        ),
-        vae_encoder=create_paddle_inference_runtime(
-            model_dir=args.model_dir,
-            model_name="vae_encoder",
-            use_trt=False,
-            precision_mode=precision_mode,
-            device_id=args.device_id,
-            disable_paddle_pass=paddle_delete_passes.get("vae_encoder", []),
-            tune=False,
-        ),
-        vae_decoder=create_paddle_inference_runtime(
-            model_dir=args.model_dir,
-            model_name="vae_decoder",
-            use_trt=False,
-            precision_mode=precision_mode,
-            device_id=args.device_id,
-            disable_paddle_pass=paddle_delete_passes.get("vae_decoder", []),
-            tune=False,
-        ),
-        unet=create_paddle_inference_runtime(
-            model_dir=args.model_dir,
-            model_name="unet",
-            use_trt=args.use_trt,
-            precision_mode=precision_mode,
-            device_id=args.device_id,
-            disable_paddle_pass=paddle_delete_passes.get("unet", []),
-            tune=args.tune,
-        ),
-    )
-    pipe = PaddleInferStableDiffusionMegaPipeline.from_pretrained(
+    pipe = StableDiffusionMegaPipeline.from_pretrained(
         args.model_dir,
-        infer_configs=infer_configs,
-        use_optim_cache=False,
+    )
+    pipe.load_ip_adapter(
+        args.ipadapter_pretrained_model_name_or_path,
+        subfolder=args.ipadapter_model_subfolder,
+        weight_name=args.ipadapter_weight_name,
     )
     pipe.set_progress_bar_config(disable=False)
     pipe.change_scheduler(args.scheduler)
@@ -289,24 +177,20 @@ def main(args):
 
     folder = f"results-{args.backend}"
     os.makedirs(folder, exist_ok=True)
-
     if args.task_name in ["text2img", "all"]:
-        init_image = load_image(
-            "https://paddlenlp.bj.bcebos.com/models/community/junnyu/develop/control_bird_canny_demo.png"
-        )
-        controlnet_cond = get_canny_image(init_image, args)
         # text2img
-        prompt = "bird"
+        prompt = "a photo of an astronaut riding a horse on mars"
         time_costs = []
         # warmup
+        img_url = "https://paddlenlp.bj.bcebos.com/models/community/examples/images/load_neg_embed.png"
+        ip_image = load_image(img_url)
         pipe.text2img(
             prompt,
-            num_inference_steps=10,
+            num_inference_steps=20,
             height=height,
             width=width,
+            ip_adapter_image=ip_image,
             parse_prompt_type=parse_prompt_type,
-            controlnet_cond=controlnet_cond,
-            controlnet_conditioning_scale=1.0,
         )
         print("==> Test text2img performance.")
         for step in trange(args.benchmark_steps):
@@ -314,12 +198,12 @@ def main(args):
             paddle.seed(seed)
             images = pipe.text2img(
                 prompt,
+                output_type="pil",
                 num_inference_steps=args.inference_steps,
                 height=height,
                 width=width,
+                ip_adapter_image=ip_image,
                 parse_prompt_type=parse_prompt_type,
-                controlnet_cond=controlnet_cond,
-                controlnet_conditioning_scale=1.0,
             ).images
             latency = time.time() - start
             time_costs += [latency]
@@ -331,9 +215,12 @@ def main(args):
         images[0].save(f"{folder}/text2img.png")
 
     if args.task_name in ["img2img", "all"]:
-        img_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/sketch-mountains-input.png"
+        # img2img
+        img_url = (
+            "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/sketch-mountains-input.png"
+        )
         init_image = load_image(img_url)
-        controlnet_cond = get_canny_image(init_image, args)
+        ip_image = load_image(img_url)
         prompt = "A fantasy landscape, trending on artstation"
         time_costs = []
         # warmup
@@ -343,9 +230,8 @@ def main(args):
             num_inference_steps=20,
             height=height,
             width=width,
+            ip_adapter_image=ip_image,
             parse_prompt_type=parse_prompt_type,
-            controlnet_cond=controlnet_cond,
-            controlnet_conditioning_scale=1.0,
         )
         print("==> Test img2img performance.")
         for step in trange(args.benchmark_steps):
@@ -357,9 +243,8 @@ def main(args):
                 num_inference_steps=args.inference_steps,
                 height=height,
                 width=width,
+                ip_adapter_image=init_image,
                 parse_prompt_type=parse_prompt_type,
-                controlnet_cond=controlnet_cond,
-                controlnet_conditioning_scale=1.0,
             ).images
             latency = time.time() - start
             time_costs += [latency]
@@ -370,42 +255,46 @@ def main(args):
         )
         images[0].save(f"{folder}/img2img.png")
 
-    if args.task_name in ["inpaint_legacy", "all"]:
+    if args.task_name in ["inpaint", "inpaint_legacy", "all"]:
         img_url = (
             "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations.png"
         )
         mask_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations-mask.png"
+        ip_image = load_image(img_url)
         init_image = load_image(img_url)
         mask_image = load_image(mask_url)
-        controlnet_cond = get_canny_image(init_image, args)
         prompt = "Face of a yellow cat, high resolution, sitting on a park bench"
         time_costs = []
-
-        pipe.inpaint_legacy(
+        # warmup
+        if args.task_name in ["inpaint_legacy", "all"]:
+            call_fn = pipe.inpaint_legacy
+            task_name = "inpaint_legacy"
+        else:
+            call_fn = pipe.inpaint
+            task_name = "inpaint"
+        call_fn(
             prompt,
             image=init_image,
             mask_image=mask_image,
             num_inference_steps=20,
             height=height,
             width=width,
+            ip_adapter_image=ip_image,
             parse_prompt_type=parse_prompt_type,
-            controlnet_cond=controlnet_cond,
-            controlnet_conditioning_scale=1.0,
         )
-        print("==> Test inpaint_legacy performance.")
+        print(f"==> Test {task_name} performance.")
         for step in trange(args.benchmark_steps):
             start = time.time()
             paddle.seed(seed)
-            images = pipe.inpaint_legacy(
+            images = call_fn(
                 prompt,
                 image=init_image,
                 mask_image=mask_image,
                 num_inference_steps=args.inference_steps,
                 height=height,
                 width=width,
+                ip_adapter_image=ip_image,
                 parse_prompt_type=parse_prompt_type,
-                controlnet_cond=controlnet_cond,
-                controlnet_conditioning_scale=1.0,
             ).images
             latency = time.time() - start
             time_costs += [latency]
@@ -414,11 +303,9 @@ def main(args):
             f"Mean latency: {np.mean(time_costs):2f} s, p50 latency: {np.percentile(time_costs, 50):2f} s, "
             f"p90 latency: {np.percentile(time_costs, 90):2f} s, p95 latency: {np.percentile(time_costs, 95):2f} s."
         )
-        if args.task_name == "all":
-            task_name = "inpaint_legacy"
-        else:
-            task_name = args.task_name
+
         images[0].save(f"{folder}/{task_name}.png")
+
 
 if __name__ == "__main__":
     args = parse_arguments()
