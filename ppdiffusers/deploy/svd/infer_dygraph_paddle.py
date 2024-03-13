@@ -20,14 +20,10 @@ import paddle
 
 # isort: split
 import numpy as np
-import paddle.inference as paddle_infer
 from paddlenlp.trainer.argparser import strtobool
 from tqdm.auto import trange
 
-from ppdiffusers import (  # noqa
-    DiffusionPipeline,
-    PaddleInferStableVideoDiffusionPipeline,
-)
+from ppdiffusers import DiffusionPipeline, StableVideoDiffusionPipeline  # noqa
 from ppdiffusers.utils import load_image
 
 
@@ -116,56 +112,6 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def create_paddle_inference_runtime(
-    model_dir="",
-    model_name="",
-    use_trt=False,
-    precision_mode=paddle_infer.PrecisionType.Half,
-    device_id=0,
-    disable_paddle_trt_ops=[],
-    disable_paddle_pass=[],
-    workspace=24 * 1024 * 1024 * 1024,
-    tune=False,
-):
-    config = paddle_infer.Config()
-    config.enable_new_executor()
-    config.enable_memory_optim()
-    shape_file = f"{model_dir}/{model_name}/shape_range_info.pbtxt"
-    if tune:
-        config.collect_shape_range_info(shape_file)
-        # config.switch_ir_optim(False)
-    else:
-        config.enable_new_executor()
-
-    if device_id != -1:
-        config.use_gpu()
-        config.enable_use_gpu(memory_pool_init_size_mb=2000, device_id=device_id, precision_mode=precision_mode)
-    for pass_name in disable_paddle_pass:
-        config.delete_pass(pass_name)
-    if use_trt:
-        config.enable_tensorrt_engine(
-            workspace_size=workspace,
-            precision_mode=precision_mode,
-            max_batch_size=1,
-            min_subgraph_size=3,
-            use_static=True,
-        )
-        config.enable_tensorrt_memory_optim()
-        config.enable_tuned_tensorrt_dynamic_shape(shape_file, True)
-        cache_file = os.path.join(model_dir, model_name, "_opt_cache/")
-        config.set_optim_cache_dir(cache_file)
-        if precision_mode != paddle_infer.PrecisionType.Half:
-            only_fp16_passes = [
-                "trt_cross_multihead_matmul_fuse_pass",
-                "trt_flash_multihead_matmul_fuse_pass",
-                "preln_elementwise_groupnorm_act_pass",
-                "elementwise_groupnorm_act_pass",
-            ]
-            for curr_pass in only_fp16_passes:
-                config.delete_pass(curr_pass)
-    return config
-
-
 def main(args):
     if args.device_id == -1:
         paddle.set_device("cpu")
@@ -173,78 +119,7 @@ def main(args):
         paddle.set_device(f"gpu:{args.device_id}")
     seed = 1024
 
-    only_fp16_passes = [
-        "trt_cross_multihead_matmul_fuse_pass",
-        "trt_flash_multihead_matmul_fuse_pass",
-        "preln_elementwise_groupnorm_act_pass",
-        "elementwise_groupnorm_act_pass",
-        "auto_mixed_precision_pass",
-    ]
-    no_need_passes = [
-        "trt_prompt_tuning_embedding_eltwise_layernorm_fuse_pass",
-        "add_support_int8_pass",
-        "auto_mixed_precision_pass",
-        "trt_cross_multihead_matmul_fuse_pass",
-        "trt_flash_multihead_matmul_fuse_pass",
-        "preln_elementwise_groupnorm_act_pass",
-        "elementwise_groupnorm_act_pass",
-        "groupnorm_act_pass",
-        "auto_mixed_precision_pass",
-        "conv_elementwise_add_fuse_pass",
-    ]
-    paddle_delete_passes = dict(  # noqa
-        text_encoder=only_fp16_passes + no_need_passes if not args.use_fp16 else no_need_passes,
-        text_encoder_2=only_fp16_passes + no_need_passes if not args.use_fp16 else no_need_passes,
-        vae_encoder=only_fp16_passes + [] if args.use_fp16 else [],
-        vae_decoder=only_fp16_passes + no_need_passes if not args.use_fp16 else no_need_passes,
-        unet=only_fp16_passes + no_need_passes if not args.use_fp16 else no_need_passes,
-        image_encoder=only_fp16_passes + no_need_passes if not args.use_fp16 else no_need_passes,
-    )
-    args.use_trt = args.backend == "paddle_tensorrt"
-    precision_mode = paddle_infer.PrecisionType.Half if args.use_fp16 else paddle_infer.PrecisionType.Float32
-    infer_configs = dict(
-        vae_encoder=create_paddle_inference_runtime(
-            model_dir=args.model_dir,
-            model_name="vae_encoder",
-            use_trt=False,
-            precision_mode=paddle_infer.PrecisionType.Half,
-            device_id=args.device_id,
-            disable_paddle_pass=paddle_delete_passes.get("vae_encoder", []),
-            tune=False,
-        ),
-        vae_decoder=create_paddle_inference_runtime(
-            model_dir=args.model_dir,
-            model_name="vae_decoder",
-            use_trt=False,
-            precision_mode=paddle_infer.PrecisionType.Float32,
-            device_id=args.device_id,
-            disable_paddle_pass=no_need_passes,
-            tune=False,
-        ),
-        unet=create_paddle_inference_runtime(
-            model_dir=args.model_dir,
-            model_name="unet",
-            use_trt=args.use_trt,
-            precision_mode=precision_mode,
-            device_id=args.device_id,
-            disable_paddle_pass=no_need_passes,
-            tune=args.tune,
-        ),
-        image_encoder=create_paddle_inference_runtime(
-            model_dir=args.model_dir,
-            model_name="image_encoder",
-            use_trt=False,
-            precision_mode=paddle_infer.PrecisionType.Half,
-            device_id=args.device_id,
-            disable_paddle_pass=paddle_delete_passes.get("image_encoder", []),
-            tune=False,
-        ),
-    )
-    pipe = PaddleInferStableVideoDiffusionPipeline.from_pretrained(
-        args.model_dir,
-        infer_configs=infer_configs,
-        use_optim_cache=False,
-    )
+    pipe = StableVideoDiffusionPipeline.from_pretrained(args.model_dir, paddle_dtype=paddle.float16)
     pipe.set_progress_bar_config(disable=False)
     width = args.width
     height = args.height

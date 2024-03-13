@@ -17,7 +17,7 @@ import os
 import time
 
 # isort: split
-import paddle
+import torch
 
 # isort: split
 import numpy as np
@@ -26,6 +26,7 @@ from tqdm.auto import trange
 
 from ppdiffusers import (  # noqa
     DiffusionPipeline,
+    StableDiffusionMegaPipeline,
     StableDiffusionPipeline,
 )
 from ppdiffusers.utils import load_image
@@ -36,8 +37,27 @@ def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--model_dir",
+        type=str,
         default="runwayml/stable-diffusion-v1-5",
-        help="The model directory of diffusion_model.",
+        help="Path to the `ppdiffusers` checkpoint to convert (either a local directory or on the bos).",
+    )
+    parser.add_argument(
+        "--ipadapter_pretrained_model_name_or_path",
+        type=str,
+        default="h94/IP-Adapter",
+        help="Path to the `ppdiffusers`'s ip-adapter checkpoint to convert (either a local directory or on the bos).Example: h94/IP-Adapter",
+    )
+    parser.add_argument(
+        "--ipadapter_model_subfolder",
+        type=str,
+        default="models",
+        help="Path to the `ppdiffusers`'s ip-adapter checkpoint to convert (either a local directory or on the bos).Example: models",
+    )
+    parser.add_argument(
+        "--ipadapter_weight_name",
+        type=str,
+        default="ip-adapter_sd15.safetensors",
+        help="Name of the weight to convert.Example: ip-adapter_sd15.safetensors",
     )
     parser.add_argument(
         "--inference_steps",
@@ -54,8 +74,8 @@ def parse_arguments():
     parser.add_argument(
         "--backend",
         type=str,
-        default="paddle",
-        choices=["paddle"],
+        default="torch",
+        choices=["torch"],
         help="The inference runtime backend of unet model and text encoder model.",
     )
     parser.add_argument(
@@ -127,22 +147,22 @@ def parse_arguments():
         default=False,
         help="Whether to tune the shape of tensorrt engine.",
     )
-    
+
     return parser.parse_args()
 
-def main(args):
-    if args.device_id == -1:
-        paddle.set_device("cpu")
-    else:
-        paddle.set_device(f"gpu:{args.device_id}")
 
+def main(args):
     seed = 1024
     min_image_size = 512
     max_image_size = 768
     max_image_size = max(min_image_size, max_image_size)
     pipe = StableDiffusionMegaPipeline.from_pretrained(
         args.model_dir,
-        image_encoder=None,
+    )
+    pipe.load_ip_adapter(
+        args.ipadapter_pretrained_model_name_or_path,
+        subfolder=args.ipadapter_model_subfolder,
+        weight_name=args.ipadapter_weight_name,
     )
     pipe.set_progress_bar_config(disable=False)
     pipe.change_scheduler(args.scheduler)
@@ -157,23 +177,27 @@ def main(args):
         prompt = "a photo of an astronaut riding a horse on mars"
         time_costs = []
         # warmup
+        img_url = "https://paddlenlp.bj.bcebos.com/models/community/examples/images/load_neg_embed.png"
+        ip_image = load_image(img_url)
         pipe.text2img(
             prompt,
             num_inference_steps=20,
             height=height,
             width=width,
+            ip_adapter_image=ip_image,
             parse_prompt_type=parse_prompt_type,
         )
         print("==> Test text2img performance.")
         for step in trange(args.benchmark_steps):
             start = time.time()
-            paddle.seed(seed)
+            torch.manual_seed(seed)
             images = pipe.text2img(
                 prompt,
                 output_type="pil",
                 num_inference_steps=args.inference_steps,
                 height=height,
                 width=width,
+                ip_adapter_image=ip_image,
                 parse_prompt_type=parse_prompt_type,
             ).images
             latency = time.time() - start
@@ -187,8 +211,11 @@ def main(args):
 
     if args.task_name in ["img2img", "all"]:
         # img2img
-        img_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/sketch-mountains-input.png"
+        img_url = (
+            "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/sketch-mountains-input.png"
+        )
         init_image = load_image(img_url)
+        ip_image = load_image(img_url)
         prompt = "A fantasy landscape, trending on artstation"
         time_costs = []
         # warmup
@@ -198,18 +225,20 @@ def main(args):
             num_inference_steps=20,
             height=height,
             width=width,
+            ip_adapter_image=ip_image,
             parse_prompt_type=parse_prompt_type,
         )
         print("==> Test img2img performance.")
         for step in trange(args.benchmark_steps):
             start = time.time()
-            paddle.seed(seed)
+            torch.manual_seed(seed)
             images = pipe.img2img(
                 prompt,
                 image=init_image,
                 num_inference_steps=args.inference_steps,
                 height=height,
                 width=width,
+                ip_adapter_image=init_image,
                 parse_prompt_type=parse_prompt_type,
             ).images
             latency = time.time() - start
@@ -226,6 +255,7 @@ def main(args):
             "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations.png"
         )
         mask_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations-mask.png"
+        ip_image = load_image(img_url)
         init_image = load_image(img_url)
         mask_image = load_image(mask_url)
         prompt = "Face of a yellow cat, high resolution, sitting on a park bench"
@@ -244,12 +274,13 @@ def main(args):
             num_inference_steps=20,
             height=height,
             width=width,
+            ip_adapter_image=ip_image,
             parse_prompt_type=parse_prompt_type,
         )
         print(f"==> Test {task_name} performance.")
         for step in trange(args.benchmark_steps):
             start = time.time()
-            paddle.seed(seed)
+            torch.manual_seed(seed)
             images = call_fn(
                 prompt,
                 image=init_image,
@@ -257,6 +288,7 @@ def main(args):
                 num_inference_steps=args.inference_steps,
                 height=height,
                 width=width,
+                ip_adapter_image=ip_image,
                 parse_prompt_type=parse_prompt_type,
             ).images
             latency = time.time() - start
@@ -268,6 +300,7 @@ def main(args):
         )
 
         images[0].save(f"{folder}/{task_name}.png")
+
 
 if __name__ == "__main__":
     args = parse_arguments()
