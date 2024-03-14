@@ -416,7 +416,7 @@ class Attention(nn.Layer):
         # If doesn't apply LoRA do `add_k_proj` or `add_v_proj`
         is_lora_activated.pop("add_k_proj", None)
         is_lora_activated.pop("add_v_proj", None)
-        # 2. else it is not posssible that only some layers have LoRA activated
+        # 2. else it is not possible that only some layers have LoRA activated
         if not all(is_lora_activated.values()):
             raise ValueError(
                 f"Make sure that either all layers or no layers have LoRA activated, but have {is_lora_activated}"
@@ -1637,7 +1637,7 @@ class LoRAAttnAddedKVProcessor(nn.Layer):
 
 class IPAdapterAttnProcessor(nn.Layer):
     r"""
-    Attention processor for IP-Adapater.
+    Attention processor for IP-Adapter.
 
     Args:
         hidden_size (`int`):
@@ -1748,7 +1748,7 @@ class IPAdapterAttnProcessor(nn.Layer):
 
 class IPAdapterXFormersAttnProcessor(nn.Layer):
     r"""
-    Attention processor for IP-Adapater for using xFormers.
+    Attention processor for IP-Adapter for using xFormers.
 
     Args:
         hidden_size (`int`):
@@ -1901,7 +1901,7 @@ class IPAdapterXFormersAttnProcessor(nn.Layer):
 # this way torch.compile and co. will work as well
 class Kandi3AttnProcessor:
     r"""
-    Default kandinsky3 proccesor for performing attention-related computations.
+    Default kandinsky3 processor for performing attention-related computations.
     """
 
     @staticmethod
