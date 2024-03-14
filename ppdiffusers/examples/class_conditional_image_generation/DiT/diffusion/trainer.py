@@ -235,7 +235,7 @@ class LatentDiffusionTrainer(Trainer):
                 self.writer = SummaryWriter("output/tensorboard/test")
                 self.logstep = 0
 
-        self.do_grad_scaling = self.args.fp16 or self.args.bf16
+        self.do_grad_scaling = True if self.args.fp16 else False
 
         if self.args.benchmark or self.args.profiler_options is not None:
             self.add_callback(

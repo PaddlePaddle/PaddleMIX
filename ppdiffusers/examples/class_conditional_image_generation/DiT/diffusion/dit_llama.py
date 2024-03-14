@@ -20,6 +20,8 @@ import paddle.nn.functional as F
 import paddle.nn.initializer as initializer
 from paddle.distributed import fleet
 from paddle.nn.functional.flash_attention import flash_attention
+from paddle.incubate.nn.functional import fused_rotary_position_embedding as fused_rope
+from paddle.incubate.nn.functional import fused_rms_norm
 
 from ppdiffusers.configuration_utils import ConfigMixin
 from ppdiffusers.models.modeling_utils import ModelMixin
@@ -51,6 +53,38 @@ def TypePromote(x, y):
     else:
         return x, y
     return x.cast(promote_type), y.cast(promote_type)
+
+class RMSNorm(nn.Layer):
+    """Applies RMS Normalization over a mini-batch of inputs
+
+    Currently only runs on cuda() tensors.
+
+    .. math::
+        y = \frac{x}{\mathrm{RMS}[x]} * \gamma
+
+    The root-mean-square is calculated separately over the last
+    certain number dimensions which have to be of the shape specified by
+    :attr:`normalized_shape`.
+    :math:`\gamma` is a learnable affine transform parameter of
+    :attr:`normalized_shape`.
+    `epsilon` is added to the mean-square, then the root of the sum is taken.
+    """
+
+    def __init__(self, normalized_shape, epsilon=1e-5):
+        super().__init__()
+        if isinstance(normalized_shape, int):
+            normalized_shape = [normalized_shape]
+        self.normalized_shape = normalized_shape
+        self.weight = paddle.create_parameter(
+            shape=self.normalized_shape,
+            dtype=paddle.get_default_dtype(),
+            default_initializer=nn.initializer.Constant(1.0),
+        )
+        self.epsilon = epsilon
+
+    def forward(self, hidden_states):
+        out, _ = fused_rms_norm(hidden_states, self.weight, None, self.epsilon, 2)
+        return out
 
 
 class Attention(nn.Layer):
@@ -197,13 +231,15 @@ class Attention(nn.Layer):
         xk = xk.reshape([bsz, seqlen, self.n_local_kv_heads, self.head_dim])
         xv = xv.reshape([bsz, seqlen, self.n_local_kv_heads, self.head_dim])
 
-        xq, xk = Attention.apply_rotary_emb(xq, xk, freqs_cis=freqs_cis)
+        if False:
+            xq, xk = Attention.apply_rotary_emb(xq, xk, freqs_cis=freqs_cis)
+        else:
+            if self.n_local_heads != self.n_local_kv_heads:
+                xq, _, _ = fused_rope(xq, None, None)
+                xk, _, _ = fused_rope(xk, None, None)
+            else:
+                xq, xk, _ = fused_rope(xq, xk, None)
         xq, xk = xq.cast(dtype), xk.cast(dtype)
-
-        n_rep = self.n_local_heads // self.n_local_kv_heads
-        if n_rep > 1:
-            xk = xk.unsqueeze(axis=3).tile([1, 1, 1, n_rep, 1]).flatten(start_axis=2, stop_axis=3)
-            xv = xv.unsqueeze(axis=3).tile([1, 1, 1, n_rep, 1]).flatten(start_axis=2, stop_axis=3)
 
         if dtype in [paddle.float16, paddle.bfloat16]:
             output, _ = flash_attention(
@@ -224,6 +260,10 @@ class Attention(nn.Layer):
                     is_causal=False,
                 )
             else:
+                n_rep = self.n_local_heads // self.n_local_kv_heads
+                if n_rep > 1:
+                    xk = xk.unsqueeze(axis=3).tile([1, 1, 1, n_rep, 1]).flatten(start_axis=2, stop_axis=3)
+                    xv = xv.unsqueeze(axis=3).tile([1, 1, 1, n_rep, 1]).flatten(start_axis=2, stop_axis=3)
                 q = xq.transpose([0, 2, 1, 3]) * self.scale
                 attn = q @ xk.transpose([0, 2, 1, 3]).transpose([0, 1, 3, 2])
                 attn = F.softmax(attn, axis=-1)
@@ -335,8 +375,8 @@ class TransformerBlock(nn.Layer):
             dim=dim, hidden_dim=mlp_hidden_dim, multiple_of=multiple_of, ffn_dim_multiplier=ffn_dim_multiplier
         )
         self.layer_id = layer_id
-        self.attention_norm = nn.LayerNorm(dim, epsilon=norm_eps, bias_attr=False)
-        self.ffn_norm = nn.LayerNorm(dim, epsilon=norm_eps, bias_attr=False)
+        self.attention_norm = RMSNorm(dim, epsilon=norm_eps)
+        self.ffn_norm = RMSNorm(dim, epsilon=norm_eps)
 
         if is_model_parrallel():
             self.adaLN_modulation = nn.Sequential(
