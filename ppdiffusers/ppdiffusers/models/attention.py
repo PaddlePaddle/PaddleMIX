@@ -165,7 +165,7 @@ class BasicTransformerBlock(nn.Layer):
 
         if positional_embeddings and (num_positional_embeddings is None):
             raise ValueError(
-                "If `positional_embedding` type is defined, `num_positition_embeddings` must also be defined."
+                "If `positional_embedding` type is defined, `num_positional_embeddings` must also be defined."
             )
 
         if positional_embeddings == "sinusoidal":

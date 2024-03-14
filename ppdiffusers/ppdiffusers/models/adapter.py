@@ -227,7 +227,7 @@ class T2IAdapter(ModelMixin, ConfigMixin):
 
     Parameters:
         in_channels (`int`, *optional*, defaults to 3):
-            Number of channels of Aapter's input(*control image*). Set this parameter to 1 if you're using gray scale
+            Number of channels of Adapter's input(*control image*). Set this parameter to 1 if you're using gray scale
             image as *control image*.
         channels (`List[int]`, *optional*, defaults to `(320, 640, 1280, 1280)`):
             The number of channel of each downsample block's output hidden state. The `len(block_out_channels)` will
