@@ -1083,9 +1083,6 @@ class XFormersAttnProcessor:
         return hidden_states
 
 
-FusedAttnProcessor2_0 = XFormersAttnProcessor
-
-
 class CustomDiffusionXFormersAttnProcessor(nn.Layer):
     r"""
     Processor for implementing memory efficient attention using xFormers for the Custom Diffusion method.

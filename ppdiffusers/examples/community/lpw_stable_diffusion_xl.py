@@ -38,7 +38,6 @@ from ppdiffusers.models.attention_processor import (
     XFormersAttnProcessor,
 )
 from ppdiffusers.models.embeddings import ImageProjection
-from ppdiffusers.pipelines.pipeline_utils import StableDiffusionMixin
 from ppdiffusers.pipelines.stable_diffusion_xl.pipeline_output import (
     StableDiffusionXLPipelineOutput,
 )
@@ -564,7 +563,6 @@ def retrieve_timesteps(
 
 class SDXLLongPromptWeightingPipeline(
     DiffusionPipeline,
-    StableDiffusionMixin,
     FromSingleFileMixin,
     IPAdapterMixin,
     LoraLoaderMixin,
