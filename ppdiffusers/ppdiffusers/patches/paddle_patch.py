@@ -25,6 +25,7 @@ from typing import Any, Dict, Iterable, Iterator, Mapping, Optional, Tuple, Unio
 import numpy as np
 import paddle
 import paddle.nn as nn
+from paddle.distributed import fleet
 
 try:
     from paddle.base.dygraph.base import param_guard
@@ -429,16 +430,20 @@ if is_ppxformers_available():
             # (2) FLAG_USE_CUTLASS_V2 in yes, y, true, t, 1, use cutlass v2
             use_cutlass_v2 = attn_mask is not None or str2bool(os.getenv("FLAG_USE_CUTLASS_V2", "no"))
             if not use_cutlass_v2:
-                with requires_grad_and_without_random(query, key, value):
-                    output = memory_efficient_attention(
-                        query,
-                        key,
-                        value,
-                        None,
-                        p=dropout_p if training else 0.0,
-                        scale=scale,
-                        training=True,
-                    )  # make sure we use training=True
+                # with requires_grad_and_without_random(query, key, value):
+                output = memory_efficient_attention(
+                    query,
+                    key,
+                    value,
+                    None,
+                    p=dropout_p if training else 0.0,
+                    scale=scale,
+                    training=True,
+                )  # make sure we use training=True
+                if query.shape[3] > 256:
+                    hcg = fleet.get_hybrid_communicate_group()
+                    mp_group = hcg.get_model_parallel_group()
+                    paddle.distributed.broadcast(output, src=mp_group.ranks[0], group=mp_group, sync_op=True)
             else:
                 assert (
                     variable_length_memory_efficient_attention is not None
@@ -463,16 +468,21 @@ if is_ppxformers_available():
                     pre_cache_length=0,
                 ).transpose([0, 2, 1, 3])
         elif attention_op == "flash":
-            with requires_grad_and_without_random(query, key, value):
-                output = paddle.nn.functional.scaled_dot_product_attention(
-                    query,
-                    key,
-                    value,
-                    attn_mask=None if is_causal else attn_mask,
-                    dropout_p=dropout_p if training else 0.0,
-                    is_causal=bool(is_causal),
-                    training=training,
-                )
+            # with requires_grad_and_without_random(query, key, value):
+            output = paddle.nn.functional.scaled_dot_product_attention(
+                query,
+                key,
+                value,
+                attn_mask=None if is_causal else attn_mask,
+                dropout_p=dropout_p if training else 0.0,
+                is_causal=bool(is_causal),
+                training=training,
+            )
+            # hidden_dimension excel 256 will use mea
+            if query.shape[3] > 256:
+                hcg = fleet.get_hybrid_communicate_group()
+                mp_group = hcg.get_model_parallel_group()
+                paddle.distributed.broadcast(output, src=mp_group.ranks[0], group=mp_group, sync_op=True)
         else:
             raise ValueError(
                 "ppxformers's attention_op shoulde be in ['auto', 'math', 'cutlass', `memory_efficient`, 'flash']."
