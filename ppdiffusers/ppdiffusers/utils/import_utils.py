@@ -182,7 +182,7 @@ try:
     _paddlenlp_version = importlib_metadata.version("paddlenlp")
     logger.debug(f"Successfully imported paddlenlp version {_paddlenlp_version}")
 except importlib_metadata.PackageNotFoundError:
-    _paddlenlp_available = False
+    _paddlenlp_version = "0.0.0"
 
 # (sayakpaul): importlib.util.find_spec("opencv-python") returns None even when it's installed.
 # _opencv_available = importlib.util.find_spec("opencv-python") is not None
