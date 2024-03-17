@@ -16,12 +16,6 @@
 import unittest
 
 import paddle
-from paddlenlp.transformers import (
-    CLIPTextConfig,
-    CLIPTextModel,
-    CLIPTextModelWithProjection,
-    CLIPTokenizer,
-)
 
 from ppdiffusers import (
     AutoencoderKL,
@@ -33,6 +27,12 @@ from ppdiffusers import (
 )
 from ppdiffusers.pipelines.stable_diffusion.stable_unclip_image_normalizer import (
     StableUnCLIPImageNormalizer,
+)
+from ppdiffusers.transformers import (
+    CLIPTextConfig,
+    CLIPTextModel,
+    CLIPTextModelWithProjection,
+    CLIPTokenizer,
 )
 from ppdiffusers.utils.testing_utils import enable_full_determinism
 

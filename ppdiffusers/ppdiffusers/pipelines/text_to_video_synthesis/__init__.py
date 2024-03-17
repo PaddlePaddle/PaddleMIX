@@ -1,5 +1,4 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
-# Copyright 2023 The HuggingFace Team. All rights reserved.
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,42 +12,56 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from dataclasses import dataclass
-from typing import List, Optional, Union
-
-import numpy as np
-import paddle
+from typing import TYPE_CHECKING
 
 from ...utils import (
-    BaseOutput,
+    PPDIFFUSERS_SLOW_IMPORT,
     OptionalDependencyNotAvailable,
+    _LazyModule,
+    get_objects_from_module,
     is_paddle_available,
     is_paddlenlp_available,
 )
 
-
-@dataclass
-class TextToVideoSDPipelineOutput(BaseOutput):
-    """
-    Output class for text-to-video pipelines.
-
-    Args:
-        frames (`List[np.ndarray]` or `paddle.Tensor`)
-            List of denoised frames (essentially images) as NumPy arrays of shape `(height, width, num_channels)` or as
-            a `paddle` tensor.  The length of the list denotes the video length i.e., the number of frames.
-    """
-
-    frames: Union[List[np.ndarray], paddle.Tensor]
-
+_dummy_objects = {}
+_import_structure = {}
 
 try:
     if not (is_paddlenlp_available() and is_paddle_available()):
         raise OptionalDependencyNotAvailable()
 except OptionalDependencyNotAvailable:
-    from ...utils.dummy_paddle_and_paddlenlp_objects import *
+    from ...utils import dummy_paddle_and_paddlenlp_objects  # noqa F403
+
+    _dummy_objects.update(get_objects_from_module(dummy_paddle_and_paddlenlp_objects))
 else:
-    from .pipeline_text_to_video_synth import TextToVideoSDPipeline
-    from .pipeline_text_to_video_synth_img2img import (  # noqa: F401
-        VideoToVideoSDPipeline,
+    _import_structure["pipeline_output"] = ["TextToVideoSDPipelineOutput"]
+    _import_structure["pipeline_text_to_video_synth"] = ["TextToVideoSDPipeline"]
+    _import_structure["pipeline_text_to_video_synth_img2img"] = ["VideoToVideoSDPipeline"]
+    _import_structure["pipeline_text_to_video_zero"] = ["TextToVideoZeroPipeline"]
+    _import_structure["pipeline_text_to_video_zero_sdxl"] = ["TextToVideoZeroSDXLPipeline"]
+
+
+if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
+    try:
+        if not (is_paddlenlp_available() and is_paddle_available()):
+            raise OptionalDependencyNotAvailable()
+    except OptionalDependencyNotAvailable:
+        from ...utils.dummy_paddle_and_paddlenlp_objects import *  # noqa F403
+    else:
+        from .pipeline_output import TextToVideoSDPipelineOutput
+        from .pipeline_text_to_video_synth import TextToVideoSDPipeline
+        from .pipeline_text_to_video_synth_img2img import VideoToVideoSDPipeline
+        from .pipeline_text_to_video_zero import TextToVideoZeroPipeline
+        from .pipeline_text_to_video_zero_sdxl import TextToVideoZeroSDXLPipeline
+
+else:
+    import sys
+
+    sys.modules[__name__] = _LazyModule(
+        __name__,
+        globals()["__file__"],
+        _import_structure,
+        module_spec=__spec__,
     )
-    from .pipeline_text_to_video_zero import TextToVideoZeroPipeline
+    for name, value in _dummy_objects.items():
+        setattr(sys.modules[__name__], name, value)

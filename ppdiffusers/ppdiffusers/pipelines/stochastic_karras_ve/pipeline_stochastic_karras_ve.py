@@ -1,4 +1,3 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,7 +18,7 @@ import paddle
 
 from ...models import UNet2DModel
 from ...schedulers import KarrasVeScheduler
-from ...utils import randn_tensor
+from ...utils.paddle_utils import randn_tensor
 from ..pipeline_utils import DiffusionPipeline, ImagePipelineOutput
 
 
@@ -59,7 +58,7 @@ class KarrasVePipeline(DiffusionPipeline):
             batch_size (`int`, *optional*, defaults to 1):
                 The number of images to generate.
             generator (`paddle.Generator`, *optional*):
-                A paddle.Generator to make generation deterministic.
+                A [`paddle.Generator`] to make generation deterministic.
             num_inference_steps (`int`, *optional*, defaults to 50):
                 The number of denoising steps. More denoising steps usually lead to a higher quality image at the
                 expense of slower inference.
@@ -118,7 +117,7 @@ class KarrasVePipeline(DiffusionPipeline):
             sample = step_output.prev_sample
 
         sample = (sample / 2 + 0.5).clip(0, 1)
-        image = sample.transpose([0, 2, 3, 1]).numpy()
+        image = sample.transpose([0, 2, 3, 1]).cast("float32").cpu().numpy()
         if output_type == "pil":
             image = self.numpy_to_pil(image)
 

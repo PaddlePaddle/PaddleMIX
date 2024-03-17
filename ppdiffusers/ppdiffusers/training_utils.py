@@ -15,7 +15,6 @@
 
 import contextlib
 import copy
-import os
 import random
 from typing import Any, Dict, Optional, Union
 
@@ -24,26 +23,10 @@ import paddle
 import paddle.distributed
 import paddle.nn as nn
 
+from .models import UNet2DConditionModel
 from .utils import deprecate, get_logger
 
 logger = get_logger(__name__)
-
-
-def enable_full_determinism(seed: int):
-    """
-    Helper function for reproducible behavior during distributed training.
-    """
-    # set seed first
-    set_seed(seed)
-
-    #  Enable Paddle deterministic mode. This potentially requires either the environment
-    #  variable 'CUDA_LAUNCH_BLOCKING' or 'CUBLAS_WORKSPACE_CONFIG' to be set,
-    # depending on the CUDA version, so we set them both here
-    os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
-    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"
-    os.environ["FLAGS_cudnn_deterministic"] = "True"
-    os.environ["FLAGS_benchmark"] = "True"
-    os.environ["FLAGS_conv_workspace_size_limit"] = "4096"
 
 
 def set_seed(seed: int):
@@ -58,9 +41,53 @@ def set_seed(seed: int):
         paddle.seed(seed)
     # ^^ safe to call this function even if cuda is not available
 
-    # Adapted from torch-ema https://github.com/fadel/pytorch_ema/blob/master/torch_ema/ema.py#L14
+
+def compute_snr(noise_scheduler, timesteps):
+    """
+    Computes SNR as per
+    https://github.com/TiankaiHang/Min-SNR-Diffusion-Training/blob/521b624bd70c67cee4bdf49225915f5945a872e3/guided_diffusion/gaussian_diffusion.py#L847-L849
+    """
+    alphas_cumprod = noise_scheduler.alphas_cumprod
+    sqrt_alphas_cumprod = alphas_cumprod**0.5
+    sqrt_one_minus_alphas_cumprod = (1.0 - alphas_cumprod) ** 0.5
+
+    # Expand the tensors.
+    # Adapted from https://github.com/TiankaiHang/Min-SNR-Diffusion-Training/blob/521b624bd70c67cee4bdf49225915f5945a872e3/guided_diffusion/gaussian_diffusion.py#L1026
+    sqrt_alphas_cumprod = sqrt_alphas_cumprod[timesteps].cast("float32")
+    while len(sqrt_alphas_cumprod.shape) < len(timesteps.shape):
+        sqrt_alphas_cumprod = sqrt_alphas_cumprod[..., None]
+    alpha = sqrt_alphas_cumprod.expand(timesteps.shape)
+
+    sqrt_one_minus_alphas_cumprod = sqrt_one_minus_alphas_cumprod[timesteps].cast("float32")
+    while len(sqrt_one_minus_alphas_cumprod.shape) < len(timesteps.shape):
+        sqrt_one_minus_alphas_cumprod = sqrt_one_minus_alphas_cumprod[..., None]
+    sigma = sqrt_one_minus_alphas_cumprod.expand(timesteps.shape)
+
+    # Compute SNR.
+    snr = (alpha / sigma) ** 2
+    return snr
 
 
+def unet_lora_state_dict(unet: UNet2DConditionModel) -> Dict[str, paddle.Tensor]:
+    r"""
+    Returns:
+        A state dict containing just the LoRA parameters.
+    """
+    lora_state_dict = {}
+
+    for name, module in unet.named_sublayers(include_self=True):
+        if hasattr(module, "set_lora_layer"):
+            lora_layer = getattr(module, "lora_layer")
+            if lora_layer is not None:
+                current_lora_layer_sd = lora_layer.state_dict()
+                for lora_layer_matrix_name, lora_param in current_lora_layer_sd.items():
+                    # The matrix name can either be "down" or "up".
+                    lora_state_dict[f"unet.{name}.lora.{lora_layer_matrix_name}"] = lora_param
+
+    return lora_state_dict
+
+
+# Adapted from torch-ema https://github.com/fadel/pytorch_ema/blob/master/torch_ema/ema.py#L14
 class EMAModel:
     """
     Exponential Moving Average of models weights
@@ -174,7 +201,7 @@ class EMAModel:
         """
         Compute the decay factor for the exponential moving average.
         """
-        # we donot -1!
+        # NOTE we donot -1! (yujun06) diffirent from diffusers's implementation
         step = max(0, optimization_step - self.update_after_step)
 
         if step <= 0:
@@ -214,13 +241,14 @@ class EMAModel:
         self.cur_decay_value = decay
         one_minus_decay = 1 - decay
 
-        # TODO(westfish): support zero3 and collecting (or gathering) a partitioned parameter
+        context_manager = contextlib.nullcontext
 
         for s_param, param in zip(self.shadow_params, parameters):
-            if not param.stop_gradient:
-                s_param.copy_(s_param - one_minus_decay * (s_param - param), True)
-            else:
-                s_param.copy_(param, True)
+            with context_manager():
+                if not param.stop_gradient:
+                    s_param.copy_(s_param - one_minus_decay * (s_param - param), False)
+                else:
+                    s_param.copy_(param, False)
 
     def copy_to(self, parameters) -> None:
         """
@@ -233,7 +261,19 @@ class EMAModel:
         """
         parameters = list(parameters)
         for s_param, param in zip(self.shadow_params, parameters):
-            param.copy_(s_param, True)
+            param.copy_(s_param.cast(param.dtype), False)
+
+    def to(self, device=None, dtype=None) -> None:
+        r"""Move internal buffers of the ExponentialMovingAverage to `device`.
+
+        Args:
+            device: like `device` argument to `paddle.Tensor.to`
+        """
+        # .to() on the tensors handles None correctly
+        self.shadow_params = [
+            p._to(device=device, dtype=dtype) if p.is_floating_point() else p._to(device=device)
+            for p in self.shadow_params
+        ]
 
     def state_dict(self) -> dict:
         r"""
@@ -276,7 +316,7 @@ class EMAModel:
         if self.temp_stored_params is None:
             raise RuntimeError("This ExponentialMovingAverage has no `store()`ed weights " "to `restore()`")
         for c_param, param in zip(self.temp_stored_params, parameters):
-            param.copy_(c_param, True)
+            param.copy_(c_param.cast(param.dtype), False)
 
         # Better memory-wise.
         self.temp_stored_params = None
@@ -325,7 +365,7 @@ class EMAModel:
             self.shadow_params = shadow_params
             if not isinstance(self.shadow_params, list):
                 raise ValueError("shadow_params must be a list")
-            if not all(isinstance(p, paddle.Tensor) for p in self.shadow_params):
+            if not all(paddle.is_tensor(p) for p in self.shadow_params):
                 raise ValueError("shadow_params must all be Tensors")
 
 

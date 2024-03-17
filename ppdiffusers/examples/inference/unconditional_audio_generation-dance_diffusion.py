@@ -24,4 +24,8 @@ audios = pipe(audio_length_in_s=4.0).audios
 
 # 保存音频到本地
 for i, audio in enumerate(audios):
-    write(f"unconditional_audio_generation-dance_diffusion-result_{i}.wav", pipe.unet.sample_rate, audio.transpose())
+    write(
+        f"unconditional_audio_generation-dance_diffusion-result_{i}.wav",
+        pipe.unet.config.sample_rate,
+        audio.transpose(),
+    )

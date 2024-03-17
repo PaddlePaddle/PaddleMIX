@@ -1,4 +1,3 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2022 The Music Spectrogram Diffusion Authors.
 # Copyright 2023 The HuggingFace Team. All rights reserved.
 #
@@ -22,12 +21,18 @@ import paddle
 
 from ...models import T5FilmDecoder
 from ...schedulers import DDPMScheduler
-from ...utils import logging, randn_tensor
+from ...utils import is_fastdeploy_available, logging
+from ...utils.paddle_utils import randn_tensor
+
+if is_fastdeploy_available():
+    from ..fastdeploy_utils import FastDeployRuntimeModel
+
 from ..pipeline_utils import AudioPipelineOutput, DiffusionPipeline
 from .continous_encoder import SpectrogramContEncoder
 from .notes_encoder import SpectrogramNotesEncoder
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
+
 TARGET_FEATURE_LENGTH = 256
 
 
@@ -45,8 +50,9 @@ class SpectrogramDiffusionPipeline(DiffusionPipeline):
             A [`T5FilmDecoder`] to denoise the encoded audio latents.
         scheduler ([`DDPMScheduler`]):
             A scheduler to be used in combination with `decoder` to denoise the encoded audio latents.
-        melgan ([`OnnxRuntimeModel`]):
+        melgan ([`FastDeployRuntimeModel`]):
     """
+
     _optional_components = ["melgan"]
 
     def __init__(
@@ -55,14 +61,15 @@ class SpectrogramDiffusionPipeline(DiffusionPipeline):
         continuous_encoder: SpectrogramContEncoder,
         decoder: T5FilmDecoder,
         scheduler: DDPMScheduler,
-        melgan: (Any),
+        melgan: FastDeployRuntimeModel if is_fastdeploy_available() else Any,
     ) -> None:
         super().__init__()
 
         # From MELGAN
-        self.min_value = math.log(1e-05)  # Matches MelGAN training.
+        self.min_value = math.log(1e-5)  # Matches MelGAN training.
         self.max_value = 4.0  # Largest value for most examples
         self.n_dims = 128
+
         self.register_modules(
             notes_encoder=notes_encoder,
             continuous_encoder=continuous_encoder,
@@ -75,7 +82,7 @@ class SpectrogramDiffusionPipeline(DiffusionPipeline):
         """Linearly scale features to network outputs range."""
         min_out, max_out = output_range
         if clip:
-            features = paddle.clip(x=features, min=self.min_value, max=self.max_value)
+            features = paddle.clip(features, self.min_value, self.max_value)
         # Scale to [0, 1].
         zero_one = (features - self.min_value) / (self.max_value - self.min_value)
         # Scale to [min_out, max_out].
@@ -84,7 +91,7 @@ class SpectrogramDiffusionPipeline(DiffusionPipeline):
     def scale_to_features(self, outputs, input_range=(-1.0, 1.0), clip=False):
         """Invert by linearly scaling network outputs to features range."""
         min_out, max_out = input_range
-        outputs = paddle.clip(x=outputs, min=min_out, max=max_out) if clip else outputs
+        outputs = paddle.clip(outputs, min_out, max_out) if clip else outputs
         # Scale to [0, 1].
         zero_one = (outputs - min_out) / (max_out - min_out)
         # Scale to [self.min_value, self.max_value].
@@ -95,9 +102,13 @@ class SpectrogramDiffusionPipeline(DiffusionPipeline):
         tokens_encoded, tokens_mask = self.notes_encoder(
             encoder_input_tokens=input_tokens, encoder_inputs_mask=tokens_mask
         )
+
         continuous_encoded, continuous_mask = self.continuous_encoder(
             encoder_inputs=continuous_inputs.cast(self.continuous_encoder.dtype), encoder_inputs_mask=continuous_mask
         )
+
+        tokens_mask = tokens_mask.cast(tokens_encoded.dtype)
+        continuous_mask = continuous_mask.cast(continuous_encoded.dtype)
         return [(tokens_encoded, tokens_mask), (continuous_encoded, continuous_mask)]
 
     def decode(self, encodings_and_masks, input_tokens, noise_time):
@@ -124,13 +135,12 @@ class SpectrogramDiffusionPipeline(DiffusionPipeline):
         callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
         callback_steps: int = 1,
     ) -> Union[AudioPipelineOutput, Tuple]:
-        if (
-            callback_steps is None
-            or callback_steps is not None
-            and (not isinstance(callback_steps, int) or callback_steps <= 0)
+        if (callback_steps is None) or (
+            callback_steps is not None and (not isinstance(callback_steps, int) or callback_steps <= 0)
         ):
             raise ValueError(
-                f"`callback_steps` has to be a positive integer but is {callback_steps} of type {type(callback_steps)}."
+                f"`callback_steps` has to be a positive integer but is {callback_steps} of type"
+                f" {type(callback_steps)}."
             )
         r"""
         The call function to the pipeline for generation.
@@ -138,8 +148,7 @@ class SpectrogramDiffusionPipeline(DiffusionPipeline):
         Args:
             input_tokens (`List[List[int]]`):
             generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
-                A [`paddle.Generator`](https://pytorch.org/docs/stable/generated/paddle.Generator.html) to make
-                generation deterministic.
+                A [`topaddlerch.Generator`] to make generation deterministic.
             num_inference_steps (`int`, *optional*, defaults to 100):
                 The number of denoising steps. More denoising steps usually lead to a higher quality audio at the
                 expense of slower inference.
@@ -176,53 +185,78 @@ class SpectrogramDiffusionPipeline(DiffusionPipeline):
 
         pred_mel = np.zeros([1, TARGET_FEATURE_LENGTH, self.n_dims], dtype=np.float32)
         full_pred_mel = np.zeros([1, 0, self.n_dims], np.float32)
-        ones = paddle.ones(shape=(1, TARGET_FEATURE_LENGTH), dtype=bool)
+        ones = paddle.ones((1, TARGET_FEATURE_LENGTH), dtype=paddle.bool)
+
         for i, encoder_input_tokens in enumerate(input_tokens):
             if i == 0:
-                encoder_continuous_inputs = paddle.to_tensor(data=pred_mel[:1].copy()).cast(self.decoder.dtype)
+                encoder_continuous_inputs = paddle.to_tensor(pred_mel[:1].copy()).cast(dtype=self.decoder.dtype)
                 # The first chunk has no previous context.
-                encoder_continuous_mask = paddle.zeros(shape=(1, TARGET_FEATURE_LENGTH), dtype=bool)
+                encoder_continuous_mask = paddle.zeros((1, TARGET_FEATURE_LENGTH), dtype=paddle.bool)
             else:
                 # The full song pipeline does not feed in a context feature, so the mask
                 # will be all 0s after the feature converter. Because we know we're
                 # feeding in a full context chunk from the previous prediction, set it
                 # to all 1s.
                 encoder_continuous_mask = ones
+
             encoder_continuous_inputs = self.scale_features(
                 encoder_continuous_inputs, output_range=[-1.0, 1.0], clip=True
             )
+
             encodings_and_masks = self.encode(
-                input_tokens=paddle.to_tensor(data=[encoder_input_tokens], dtype="int32"),
+                input_tokens=paddle.to_tensor([encoder_input_tokens], dtype="int32"),
                 continuous_inputs=encoder_continuous_inputs,
-                continuous_mask=encoder_continuous_mask,
+                continuous_mask=encoder_continuous_mask.cast(dtype="int32"),
             )
+
             # Sample encoder_continuous_inputs shaped gaussian noise to begin loop
-            x = randn_tensor(shape=encoder_continuous_inputs.shape, generator=generator, dtype=self.decoder.dtype)
+            x = randn_tensor(
+                shape=encoder_continuous_inputs.shape,
+                generator=generator,
+                dtype=self.decoder.dtype,
+            )
+
             # set step values
             self.scheduler.set_timesteps(num_inference_steps)
+
             # Denoising diffusion loop
             for j, t in enumerate(self.progress_bar(self.scheduler.timesteps)):
                 output = self.decode(
                     encodings_and_masks=encodings_and_masks,
                     input_tokens=x,
-                    noise_time=t / self.scheduler.config.num_train_timesteps,
+                    noise_time=t / self.scheduler.config.num_train_timesteps,  # rescale to [0, 1)
                 )
 
                 # Compute previous output: x_t -> x_t-1
                 x = self.scheduler.step(output, t, x, generator=generator).prev_sample
+
             mel = self.scale_to_features(x, input_range=[-1.0, 1.0])
             encoder_continuous_inputs = mel[:1]
-            pred_mel = mel.cpu().astype(dtype="float32").numpy()
+            pred_mel = mel.cast(dtype="float32").cpu().numpy()
+
             full_pred_mel = np.concatenate([full_pred_mel, pred_mel[:1]], axis=1)
 
             # call the callback, if provided
             if callback is not None and i % callback_steps == 0:
                 callback(i, full_pred_mel)
+
             logger.info("Generated segment", i)
+
+        if output_type == "numpy" and not is_fastdeploy_available():
+            raise ValueError(
+                "Cannot return output in 'np' format if FastDeploy is not available. Make sure to have FastDeploy installed or set 'output_type' to 'mel'."
+            )
+        elif output_type == "numpy" and self.melgan is None:
+            raise ValueError(
+                "Cannot return output in 'np' format if melgan component is not defined. Make sure to define `self.melgan` or set 'output_type' to 'mel'."
+            )
+
         if output_type == "numpy":
             output = self.melgan(input_features=full_pred_mel.astype(np.float32))[0]
         else:
             output = full_pred_mel
+
         if not return_dict:
             return (output,)
+
         return AudioPipelineOutput(audios=output)

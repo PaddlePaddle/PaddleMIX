@@ -16,17 +16,16 @@ import argparse
 import json
 
 import paddle
-from paddlenlp.transformers import AutoTokenizer
 from paddlenlp.utils.log import logger
 
 from ppdiffusers import (
     AutoencoderKL,
     DDIMScheduler,
-    LDMBertModel,
     LDMTextToImagePipeline,
     UNet2DConditionModel,
 )
-from ppdiffusers.pipelines.latent_diffusion import LDMBertConfig
+from ppdiffusers.pipelines.latent_diffusion import LDMBertConfig, LDMBertModel
+from ppdiffusers.transformers import AutoTokenizer
 
 
 def parse_args():

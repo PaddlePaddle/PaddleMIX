@@ -4,7 +4,6 @@
 # Copyright (c) 2021 OpenAI
 # MIT License
 #
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,7 +24,7 @@ import paddle
 
 from ...models import AutoencoderKL, Transformer2DModel
 from ...schedulers import KarrasDiffusionSchedulers
-from ...utils import randn_tensor
+from ...utils.paddle_utils import randn_tensor
 from ..pipeline_utils import DiffusionPipeline, ImagePipelineOutput
 
 
@@ -45,6 +44,8 @@ class DiTPipeline(DiffusionPipeline):
             A scheduler to be used in combination with `transformer` to denoise the encoded image latents.
     """
 
+    model_cpu_offload_seq = "transformer->vae"
+
     def __init__(
         self,
         transformer: Transformer2DModel,
@@ -62,8 +63,6 @@ class DiTPipeline(DiffusionPipeline):
                 for label in value.split(","):
                     self.labels[label.lstrip().rstrip()] = int(key)
             self.labels = dict(sorted(self.labels.items()))
-            # register id2label
-            self.register_to_config(id2label=id2label)
 
     def get_label_ids(self, label: Union[str, List[str]]) -> List[int]:
         r"""
@@ -110,8 +109,7 @@ class DiTPipeline(DiffusionPipeline):
                 A higher guidance scale value encourages the model to generate images closely linked to the text
                 `prompt` at the expense of lower image quality. Guidance scale is enabled when `guidance_scale > 1`.
             generator (`paddle.Generator`, *optional*):
-                A [`paddle.Generator`](https://pytorch.org/docs/stable/generated/paddle.Generator.html) to make
-                generation deterministic.
+                A [`paddle.Generator`] to make generation deterministic.
             num_inference_steps (`int`, *optional*, defaults to 250):
                 The number of denoising steps. More denoising steps usually lead to a higher quality image at the
                 expense of slower inference.
@@ -160,13 +158,16 @@ class DiTPipeline(DiffusionPipeline):
         )
         latent_model_input = paddle.concat([latents] * 2) if guidance_scale > 1 else latents
 
-        class_labels = paddle.to_tensor(class_labels).flatten()
+        class_labels = paddle.to_tensor(class_labels).reshape(
+            [
+                -1,
+            ]
+        )
         class_null = paddle.to_tensor([1000] * batch_size)
         class_labels_input = paddle.concat([class_labels, class_null], 0) if guidance_scale > 1 else class_labels
 
         # set step values
         self.scheduler.set_timesteps(num_inference_steps)
-
         for t in self.progress_bar(self.scheduler.timesteps):
             if guidance_scale > 1:
                 half = latent_model_input[: len(latent_model_input) // 2]
@@ -174,9 +175,8 @@ class DiTPipeline(DiffusionPipeline):
             latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
             timesteps = t
+
             if not paddle.is_tensor(timesteps):
-                # TODO: this requires sync between CPU and GPU. So try to pass timesteps as tensors if you can
-                # This would be a good case for the `match` statement (Python 3.10+)
                 if isinstance(timesteps, float):
                     dtype = paddle.float32
                 else:
@@ -198,9 +198,7 @@ class DiTPipeline(DiffusionPipeline):
             # perform guidance
             if guidance_scale > 1:
                 eps, rest = noise_pred[:, :latent_channels], noise_pred[:, latent_channels:]
-                bs = eps.shape[0]
-                # TODO torch.split vs paddle.split
-                cond_eps, uncond_eps = paddle.split(eps, [bs // 2, bs - bs // 2], axis=0)
+                cond_eps, uncond_eps = paddle.chunk(eps, 2, axis=0)
 
                 half_eps = uncond_eps + guidance_scale * (cond_eps - uncond_eps)
                 eps = paddle.concat([half_eps, half_eps], axis=0)
@@ -209,7 +207,6 @@ class DiTPipeline(DiffusionPipeline):
 
             # learned sigma
             if self.transformer.config.out_channels // 2 == latent_channels:
-                # TODO torch.split vs paddle.split
                 model_output, _ = paddle.split(
                     noise_pred, [latent_channels, noise_pred.shape[1] - latent_channels], axis=1
                 )
@@ -230,7 +227,7 @@ class DiTPipeline(DiffusionPipeline):
         samples = (samples / 2 + 0.5).clip(0, 1)
 
         # we always cast to float32 as this does not cause significant overhead and is compatible with bfloat16
-        samples = samples.transpose([0, 2, 3, 1]).cast("float32").numpy()
+        samples = samples.transpose([0, 2, 3, 1]).cast("float32").cpu().numpy()
 
         if output_type == "pil":
             samples = self.numpy_to_pil(samples)

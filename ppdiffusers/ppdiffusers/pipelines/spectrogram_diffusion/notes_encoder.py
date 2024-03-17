@@ -1,4 +1,5 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2022 The Music Spectrogram Diffusion Authors.
+# Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,10 +15,11 @@
 
 import paddle
 import paddle.nn as nn
-from paddlenlp.transformers.t5.configuration import T5Config
-from paddlenlp.transformers.t5.modeling import T5Block, T5LayerNorm
 
-from ...configuration_utils import ConfigMixin, ModuleUtilsMixin, register_to_config
+from ppdiffusers.transformers.model_utils import ModuleUtilsMixin
+from ppdiffusers.transformers.t5.modeling import T5Block, T5Config, T5LayerNorm
+
+from ...configuration_utils import ConfigMixin, register_to_config
 from ...models import ModelMixin
 
 
@@ -37,10 +39,14 @@ class SpectrogramNotesEncoder(ModelMixin, ConfigMixin, ModuleUtilsMixin):
         is_decoder: bool = False,
     ):
         super().__init__()
+
         self.token_embedder = nn.Embedding(vocab_size, d_model)
+
         self.position_encoding = nn.Embedding(max_length, d_model)
-        self.position_encoding.weight.stop_gradient = not False
+        self.position_encoding.weight.stop_gradient = True
+
         self.dropout_pre = nn.Dropout(p=dropout_rate)
+
         t5config = T5Config(
             vocab_size=vocab_size,
             d_model=d_model,
@@ -52,24 +58,30 @@ class SpectrogramNotesEncoder(ModelMixin, ConfigMixin, ModuleUtilsMixin):
             is_decoder=is_decoder,
             is_encoder_decoder=False,
         )
+
         self.encoders = nn.LayerList()
         for lyr_num in range(num_layers):
             lyr = T5Block(t5config)
             self.encoders.append(lyr)
+
         self.layer_norm = T5LayerNorm(d_model)
         self.dropout_post = nn.Dropout(p=dropout_rate)
 
     def forward(self, encoder_input_tokens, encoder_inputs_mask):
         x = self.token_embedder(encoder_input_tokens)
+
         seq_length = encoder_input_tokens.shape[1]
-        inputs_positions = paddle.arange(end=seq_length)
+        inputs_positions = paddle.arange(seq_length)
         x += self.position_encoding(inputs_positions)
+
         x = self.dropout_pre(x)
 
         # inverted the attention mask
         input_shape = encoder_input_tokens.shape
         extended_attention_mask = self.get_extended_attention_mask(encoder_inputs_mask, input_shape)
+
         for lyr in self.encoders:
             x = lyr(x, extended_attention_mask)[0]
         x = self.layer_norm(x)
+
         return self.dropout_post(x), encoder_inputs_mask

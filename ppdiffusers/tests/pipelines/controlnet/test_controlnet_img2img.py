@@ -19,7 +19,6 @@ import unittest
 
 import numpy as np
 import paddle
-from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
 from PIL import Image
 
 from ppdiffusers import (
@@ -30,9 +29,10 @@ from ppdiffusers import (
     UNet2DConditionModel,
 )
 from ppdiffusers.initializer import normal_, ones_
-from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion_controlnet import (
+from ppdiffusers.pipelines.controlnet.pipeline_controlnet_img2img import (
     MultiControlNetModel,
 )
+from ppdiffusers.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
 from ppdiffusers.utils import floats_tensor, load_image, load_numpy, randn_tensor, slow
 from ppdiffusers.utils.testing_utils import enable_full_determinism, require_paddle_gpu
 
@@ -318,7 +318,7 @@ class StableDiffusionMultiControlNetPipelineFastTests(
                 pipe.save_pretrained(tmpdir)
             except NotImplementedError:
                 pass
-        
+
     def test_save_load_local(self):
         pass
 
@@ -335,9 +335,15 @@ class ControlNetImg2ImgPipelineSlowTests(unittest.TestCase):
         paddle.device.cuda.empty_cache()
 
     def test_canny(self):
-        controlnet = ControlNetModel.from_pretrained("lllyasviel/sd-controlnet-canny", from_diffusers=False, from_hf_hub=False)
+        controlnet = ControlNetModel.from_pretrained(
+            "lllyasviel/sd-controlnet-canny", from_diffusers=False, from_hf_hub=False
+        )
         pipe = StableDiffusionControlNetImg2ImgPipeline.from_pretrained(
-            "runwayml/stable-diffusion-v1-5", safety_checker=None, controlnet=controlnet, from_diffusers=False, from_hf_hub=False
+            "runwayml/stable-diffusion-v1-5",
+            safety_checker=None,
+            controlnet=controlnet,
+            from_diffusers=False,
+            from_hf_hub=False,
         )
         # pipe.enable_model_cpu_offload()
         pipe.set_progress_bar_config(disable=None)

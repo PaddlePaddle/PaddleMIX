@@ -16,7 +16,6 @@
 from typing import Optional
 
 import paddle
-from paddlenlp.transformers import CLIPTextModel, CLIPTokenizer
 from PIL import Image
 from tqdm.auto import tqdm
 
@@ -27,6 +26,7 @@ from ppdiffusers import (
     UNet2DConditionModel,
 )
 from ppdiffusers.image_processor import VaeImageProcessor
+from ppdiffusers.transformers import CLIPTextModel, CLIPTokenizer
 from ppdiffusers.utils import deprecate
 
 

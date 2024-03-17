@@ -32,7 +32,7 @@ import os
 import paddle
 from clip_guided_stable_diffusion import CLIPGuidedStableDiffusion
 
-from paddlenlp.transformers import CLIPFeatureExtractor, CLIPModel
+from ppdiffusers.transformers import CLIPFeatureExtractor, CLIPModel
 
 feature_extractor = CLIPFeatureExtractor.from_pretrained(
     "laion/CLIP-ViT-B-32-laion2B-s34B-b79K")
@@ -655,7 +655,7 @@ import paddle
 import open_clip
 from open_clip import SimpleTokenizer
 from ppdiffusers import DiffusionPipeline
-from paddlenlp.transformers import CLIPFeatureExtractor, CLIPModel
+from ppdiffusers.transformers import CLIPFeatureExtractor, CLIPModel
 
 
 def download_image(url):
@@ -731,7 +731,7 @@ import paddle
 import PIL
 import requests
 from IPython.display import display
-from paddlenlp.transformers import CLIPTextModel
+from ppdiffusers.transformers import CLIPTextModel
 
 from ppdiffusers import DDIMScheduler, DiffusionPipeline
 from ppdiffusers.utils.testing_utils import get_examples_pipeline

@@ -22,7 +22,7 @@ scheduler = LMSDiscreteScheduler(
 pipeline = DiffusionPipeline.from_pretrained(
     "CompVis/stable-diffusion-v1-4",
     scheduler=scheduler,
-    custom_pipeline=os.path.abspath(os.path.join(os.getcwd(), "..", "community/mixture_tiling.py")),
+    custom_pipeline=os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "community/mixture_tiling.py")),
 )
 
 # Mixture of Diffusers generation

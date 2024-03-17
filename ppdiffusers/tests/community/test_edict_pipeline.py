@@ -18,9 +18,9 @@ import paddle
 import PIL
 import requests
 from IPython.display import display
-from paddlenlp.transformers import CLIPTextModel
 
 from ppdiffusers import DDIMScheduler, DiffusionPipeline
+from ppdiffusers.transformers import CLIPTextModel
 from ppdiffusers.utils.testing_utils import get_examples_pipeline
 
 
@@ -66,7 +66,7 @@ pipeline = DiffusionPipeline.from_pretrained(
 )
 
 # download image
-image_url = "https://huggingface.co/datasets/Joqsan/images/resolve/main/imagenet_dog_1.jpeg"
+image_url = "https://paddlenlp.bj.bcebos.com/models/community/hf-internal-testing/diffusers-images/imagenet_dog_1.jpeg"
 response = requests.get(image_url)
 image = PIL.Image.open(BytesIO(response.content))
 

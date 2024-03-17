@@ -15,12 +15,10 @@
 
 import gc
 import random
-import tempfile
 import unittest
 
 import numpy as np
 import paddle
-from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
 
 from ppdiffusers import (
     AutoencoderKL,
@@ -32,6 +30,7 @@ from ppdiffusers import (
 from ppdiffusers.pipelines.stable_diffusion_safe import (
     StableDiffusionPipelineSafe as StableDiffusionPipeline,
 )
+from ppdiffusers.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
 from ppdiffusers.utils import floats_tensor, nightly
 from ppdiffusers.utils.testing_utils import require_paddle_gpu
 

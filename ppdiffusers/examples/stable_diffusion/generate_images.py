@@ -19,7 +19,6 @@ import random
 import paddle
 import pandas as pd
 from paddle.utils.download import get_path_from_url
-from paddlenlp.transformers import CLIPTextModel
 from tqdm.auto import tqdm
 
 from ppdiffusers import (
@@ -30,6 +29,7 @@ from ppdiffusers import (
     StableDiffusionPipeline,
     UNet2DConditionModel,
 )
+from ppdiffusers.transformers import CLIPTextModel
 from ppdiffusers.utils import DOWNLOAD_SERVER, PPDIFFUSERS_CACHE
 
 base_url = DOWNLOAD_SERVER + "/CompVis/data/"

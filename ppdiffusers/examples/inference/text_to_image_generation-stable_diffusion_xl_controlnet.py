@@ -28,7 +28,7 @@ prompt = "aerial view, a futuristic research complex in a bright foggy jungle, h
 negative_prompt = "low quality, bad quality, sketches"
 
 image = load_image(
-    "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/sd_controlnet/hf-logo.png"
+    "https://hf-mirror.com/datasets/hf-internal-testing/diffusers-images/resolve/main/sd_controlnet/hf-logo.png"
 )
 
 controlnet_conditioning_scale = 0.5  # recommended for good generalization

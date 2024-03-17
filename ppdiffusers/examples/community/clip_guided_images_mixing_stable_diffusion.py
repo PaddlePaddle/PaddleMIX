@@ -20,12 +20,6 @@ import paddle
 import paddle.nn.functional as F
 import PIL
 from einops import rearrange
-from paddlenlp.transformers import (
-    CLIPFeatureExtractor,
-    CLIPModel,
-    CLIPTextModel,
-    CLIPTokenizer,
-)
 from tqdm import tqdm
 
 from ppdiffusers import (
@@ -37,12 +31,18 @@ from ppdiffusers import (
     PNDMScheduler,
     UNet2DConditionModel,
 )
-from ppdiffusers.loaders import FromCkptMixin
+from ppdiffusers.loaders import FromSingleFileMixin
 from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion import (
     StableDiffusionPipelineOutput,
 )
 from ppdiffusers.pipelines.stable_diffusion.safety_checker import (
     StableDiffusionSafetyChecker,
+)
+from ppdiffusers.transformers import (
+    CLIPFeatureExtractor,
+    CLIPModel,
+    CLIPTextModel,
+    CLIPTokenizer,
 )
 from ppdiffusers.utils import PIL_INTERPOLATION, logging, randn_tensor
 
@@ -103,7 +103,7 @@ def set_requires_grad(model, value):
         param.stop_gradient = not value
 
 
-class CLIPGuidedImagesMixingStableDiffusion(DiffusionPipeline, FromCkptMixin):
+class CLIPGuidedImagesMixingStableDiffusion(DiffusionPipeline, FromSingleFileMixin):
     # _optional_components = ["safety_checker", "feature_extractor"]
     def __init__(
         self,
@@ -141,7 +141,6 @@ class CLIPGuidedImagesMixingStableDiffusion(DiffusionPipeline, FromCkptMixin):
                 f"Make sure to define a feature extractor when loading {self.__class__} if you want to use the safety"
                 " checker. If you do not want to use the safety checker, you can pass `'safety_checker=None'` instead."
             )
-        # breakpoint()
         self.register_modules(
             vae=vae,
             text_encoder=text_encoder,

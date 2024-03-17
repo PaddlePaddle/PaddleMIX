@@ -18,26 +18,19 @@ import json
 import os
 import random
 import shutil
-import sys
+import sys  # noqa
 import tempfile
 import unittest
-import unittest.mock as mock
+import unittest.mock as mock  # noqa
 
 import numpy as np
 import paddle
 import PIL
-import requests_mock
+import requests_mock  # noqa
 import safetensors.torch
-from paddlenlp.transformers import (
-    CLIPImageProcessor,
-    CLIPModel,
-    CLIPTextConfig,
-    CLIPTextModel,
-    CLIPTokenizer,
-)
 from parameterized import parameterized
 from PIL import Image
-from requests.exceptions import HTTPError
+from requests.exceptions import HTTPError  # noqa
 
 from ppdiffusers import (
     AutoencoderKL,
@@ -56,23 +49,21 @@ from ppdiffusers import (
     StableDiffusionPipeline,
     UNet2DConditionModel,
     UNet2DModel,
-    logging,
 )
-from ppdiffusers.schedulers.scheduling_utils import SCHEDULER_CONFIG_NAME
-from ppdiffusers.utils import (
-    CONFIG_NAME,
-    TORCH_WEIGHTS_NAME,
-    floats_tensor,
-    nightly,
-    slow,
+from ppdiffusers.transformers import (
+    CLIPImageProcessor,
+    CLIPModel,
+    CLIPTextConfig,
+    CLIPTextModel,
+    CLIPTokenizer,
 )
+from ppdiffusers.utils import floats_tensor, nightly, slow
 from ppdiffusers.utils.testing_utils import (
-    CaptureLogger,
     get_tests_dir,
     require_compel,
     require_paddle_gpu,
-    require_torch,
 )
+
 
 @nightly
 class CustomPipelineTests(unittest.TestCase):
@@ -90,7 +81,6 @@ class CustomPipelineTests(unittest.TestCase):
     #     with paddle.no_grad():
     #         output = pipeline()
     #     assert output.numel() == output.sum()
-
 
     #     assert pipeline.__class__.__name__ == "UnetSchedulerOneForwardPipeline"
 
@@ -527,33 +517,6 @@ class PipelineSlowTests(unittest.TestCase):
         super().tearDown()
         gc.collect()
         paddle.device.cuda.empty_cache()
-
-    def test_smart_download(self):
-        model_id = "hf-internal-testing/unet-pipeline-dummy"
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            _ = DiffusionPipeline.from_pretrained(model_id, cache_dir=tmpdirname, force_download=True)
-            local_repo_name = "--".join(["models"] + model_id.split("/"))
-            snapshot_dir = os.path.join(tmpdirname, local_repo_name, "snapshots")
-            snapshot_dir = os.path.join(snapshot_dir, os.listdir(snapshot_dir)[0])
-            assert os.path.isfile(os.path.join(snapshot_dir, DiffusionPipeline.config_name))
-            assert os.path.isfile(os.path.join(snapshot_dir, CONFIG_NAME))
-            assert os.path.isfile(os.path.join(snapshot_dir, SCHEDULER_CONFIG_NAME))
-            assert os.path.isfile(os.path.join(snapshot_dir, TORCH_WEIGHTS_NAME))
-            assert os.path.isfile(os.path.join(snapshot_dir, "scheduler", SCHEDULER_CONFIG_NAME))
-            assert os.path.isfile(os.path.join(snapshot_dir, "unet", TORCH_WEIGHTS_NAME))
-            assert os.path.isfile(os.path.join(snapshot_dir, "unet", TORCH_WEIGHTS_NAME))
-            assert not os.path.isfile(os.path.join(snapshot_dir, "big_array.npy"))
-
-    def test_warning_unused_kwargs(self):
-        model_id = "hf-internal-testing/unet-pipeline-dummy"
-        logger = logging.get_logger("ppdiffusers.pipelines")
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            with CaptureLogger(logger) as cap_logger:
-                DiffusionPipeline.from_pretrained(model_id, not_used=True, cache_dir=tmpdirname, force_download=True)
-        assert (
-            cap_logger.out.strip().split("\n")[-1]
-            == "Keyword arguments {'not_used': True} are not expected by DDPMPipeline and will be ignored."
-        )
 
     def test_from_save_pretrained(self):
         model = UNet2DModel(

@@ -1,4 +1,3 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,25 +11,41 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 import inspect
-import warnings
 from typing import Callable, List, Optional, Union
 
 import numpy as np
 import paddle
-import PIL
-from paddlenlp.transformers import CLIPImageProcessor
+import PIL.Image
+
+from ppdiffusers.transformers import CLIPImageProcessor
 
 from ...image_processor import VaeImageProcessor
 from ...models import AutoencoderKL, UNet2DConditionModel
 from ...schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
-from ...utils import logging, randn_tensor
+from ...utils import deprecate, logging
+from ...utils.paddle_utils import randn_tensor
 from ..pipeline_utils import DiffusionPipeline
 from ..stable_diffusion import StableDiffusionPipelineOutput
 from ..stable_diffusion.safety_checker import StableDiffusionSafetyChecker
 from .image_encoder import PaintByExampleImageEncoder
 
-logger = logging.get_logger(__name__)
+logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
+
+
+# Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion_img2img.retrieve_latents
+def retrieve_latents(
+    encoder_output: paddle.Tensor, generator: Optional[paddle.Generator] = None, sample_mode: str = "sample"
+):
+    if hasattr(encoder_output, "latent_dist") and sample_mode == "sample":
+        return encoder_output.latent_dist.sample(generator)
+    elif hasattr(encoder_output, "latent_dist") and sample_mode == "argmax":
+        return encoder_output.latent_dist.mode()
+    elif hasattr(encoder_output, "latents"):
+        return encoder_output.latents
+    else:
+        raise AttributeError("Could not access latents of provided encoder_output")
 
 
 def prepare_mask_and_masked_image(image, mask):
@@ -68,19 +83,20 @@ def prepare_mask_and_masked_image(image, mask):
         # Batch single image
         if image.ndim == 3:
             assert image.shape[0] == 3, "Image outside a batch should be of shape (3, H, W)"
-            image = image.unsqueeze(axis=0)
+            image = image.unsqueeze(0)
 
         # Batch and add channel dim for single mask
         if mask.ndim == 2:
-            mask = mask.unsqueeze(axis=0).unsqueeze(axis=0)
+            mask = mask.unsqueeze(0).unsqueeze(0)
 
         # Batch single mask or add channel dim
         if mask.ndim == 3:
             # Batched mask
             if mask.shape[0] == image.shape[0]:
-                mask = mask.unsqueeze(axis=1)
+                mask = mask.unsqueeze(1)
             else:
-                mask = mask.unsqueeze(axis=0)
+                mask = mask.unsqueeze(0)
+
         assert image.ndim == 4 and mask.ndim == 4, "Image and Mask must have 4 dimensions"
         assert image.shape[-2:] == mask.shape[-2:], "Image and Mask must have the same spatial dimensions"
         assert image.shape[0] == mask.shape[0], "Image and Mask must have the same batch size"
@@ -96,38 +112,44 @@ def prepare_mask_and_masked_image(image, mask):
 
         # paint-by-example inverses the mask
         mask = 1 - mask
+
         # Binarize mask
         mask[mask < 0.5] = 0
         mask[mask >= 0.5] = 1
 
         # Image as float32
-        image = image.cast(dtype="float32")
+        image = image.cast(dtype=paddle.float32)
     elif isinstance(mask, paddle.Tensor):
         raise TypeError(f"`mask` is a paddle.Tensor but `image` (type: {type(image)} is not")
     else:
         if isinstance(image, PIL.Image.Image):
             image = [image]
+
         image = np.concatenate([np.array(i.convert("RGB"))[None, :] for i in image], axis=0)
         image = image.transpose(0, 3, 1, 2)
-        image = paddle.to_tensor(data=image).cast(dtype="float32") / 127.5 - 1.0
+        image = paddle.to_tensor(image).cast(dtype=paddle.float32) / 127.5 - 1.0
 
         # preprocess mask
         if isinstance(mask, PIL.Image.Image):
             mask = [mask]
+
         mask = np.concatenate([np.array(m.convert("L"))[None, None, :] for m in mask], axis=0)
         mask = mask.astype(np.float32) / 255.0
 
         # paint-by-example inverses the mask
         mask = 1 - mask
+
         mask[mask < 0.5] = 0
         mask[mask >= 0.5] = 1
-        mask = paddle.to_tensor(data=mask)
+        mask = paddle.to_tensor(mask)
+
     masked_image = image * mask
+
     return mask, masked_image
 
 
 class PaintByExamplePipeline(DiffusionPipeline):
-    """
+    r"""
     <Tip warning={true}>
 
     🧪 This is an experimental feature!
@@ -162,6 +184,9 @@ class PaintByExamplePipeline(DiffusionPipeline):
 
     # TODO: feature_extractor is required to encode initial images (if they are in PIL format),
     # we should give a descriptive message if the pipeline doesn't have one.
+
+    model_cpu_offload_seq = "unet->vae"
+    _exclude_from_cpu_offload = ["image_encoder"]
     _optional_components = ["safety_checker"]
 
     def __init__(
@@ -175,6 +200,7 @@ class PaintByExamplePipeline(DiffusionPipeline):
         requires_safety_checker: bool = False,
     ):
         super().__init__()
+
         self.register_modules(
             vae=vae,
             image_encoder=image_encoder,
@@ -192,13 +218,13 @@ class PaintByExamplePipeline(DiffusionPipeline):
         if self.safety_checker is None:
             has_nsfw_concept = None
         else:
-            if paddle.is_tensor(x=image):
+            if paddle.is_tensor(image):
                 feature_extractor_input = self.image_processor.postprocess(image, output_type="pil")
             else:
                 feature_extractor_input = self.image_processor.numpy_to_pil(image)
             safety_checker_input = self.feature_extractor(feature_extractor_input, return_tensors="pd")
             image, has_nsfw_concept = self.safety_checker(
-                images=image, clip_input=safety_checker_input.pixel_values.cast(dtype)
+                images=image, clip_input=safety_checker_input.pixel_values.cast(dtype=dtype)
             )
         return image, has_nsfw_concept
 
@@ -222,14 +248,14 @@ class PaintByExamplePipeline(DiffusionPipeline):
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.decode_latents
     def decode_latents(self, latents):
-        warnings.warn(
-            "The decode_latents method is deprecated and will be removed in a future version. Please use VaeImageProcessor instead",
-            FutureWarning,
-        )
+        deprecation_message = "The decode_latents method is deprecated and will be removed in 1.0.0. Please use VaeImageProcessor.postprocess(...) instead"
+        deprecate("decode_latents", "1.0.0", deprecation_message, standard_warn=False)
+
         latents = 1 / self.vae.config.scaling_factor * latents
         image = self.vae.decode(latents, return_dict=False)[0]
-        image = (image / 2 + 0.5).clip(min=0, max=1)
-        image = image.cpu().transpose(perm=[0, 2, 3, 1]).astype(dtype="float32").numpy()
+        image = (image / 2 + 0.5).clip(0, 1)
+        # we always cast to float32 as this does not cause significant overhead and is compatible with bfloat16
+        image = image.cast(dtype=paddle.float32).transpose([0, 2, 3, 1]).cpu().numpy()
         return image
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion_image_variation.StableDiffusionImageVariationPipeline.check_inputs
@@ -240,17 +266,19 @@ class PaintByExamplePipeline(DiffusionPipeline):
             and not isinstance(image, list)
         ):
             raise ValueError(
-                f"`image` has to be of type `paddle.Tensor` or `PIL.Image.Image` or `List[PIL.Image.Image]` but is {type(image)}"
+                "`image` has to be of type `paddle.Tensor` or `PIL.Image.Image` or `List[PIL.Image.Image]` but is"
+                f" {type(image)}"
             )
+
         if height % 8 != 0 or width % 8 != 0:
             raise ValueError(f"`height` and `width` have to be divisible by 8 but are {height} and {width}.")
-        if (
-            callback_steps is None
-            or callback_steps is not None
-            and (not isinstance(callback_steps, int) or callback_steps <= 0)
+
+        if (callback_steps is None) or (
+            callback_steps is not None and (not isinstance(callback_steps, int) or callback_steps <= 0)
         ):
             raise ValueError(
-                f"`callback_steps` has to be a positive integer but is {callback_steps} of type {type(callback_steps)}."
+                f"`callback_steps` has to be a positive integer but is {callback_steps} of type"
+                f" {type(callback_steps)}."
             )
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_latents
@@ -258,12 +286,14 @@ class PaintByExamplePipeline(DiffusionPipeline):
         shape = (batch_size, num_channels_latents, height // self.vae_scale_factor, width // self.vae_scale_factor)
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
-                f"You have passed a list of generators of length {len(generator)}, but requested an effective batch size of {batch_size}. Make sure the batch size matches the length of the generators."
+                f"You have passed a list of generators of length {len(generator)}, but requested an effective batch"
+                f" size of {batch_size}. Make sure the batch size matches the length of the generators."
             )
+
         if latents is None:
             latents = randn_tensor(shape, generator=generator, dtype=dtype)
         else:
-            latents = latents
+            latents = latents.cast(dtype)
 
         # scale the initial noise by the standard deviation required by the scheduler
         latents = latents * self.scheduler.init_noise_sigma
@@ -273,33 +303,42 @@ class PaintByExamplePipeline(DiffusionPipeline):
     def prepare_mask_latents(
         self, mask, masked_image, batch_size, height, width, dtype, generator, do_classifier_free_guidance
     ):
+        # resize the mask to latents shape as we concatenate the mask to the latents
         # we do that before converting to dtype to avoid breaking in case we're using cpu_offload
         # and half precision
         mask = paddle.nn.functional.interpolate(
-            x=mask, size=(height // self.vae_scale_factor, width // self.vae_scale_factor)
+            mask, size=(height // self.vae_scale_factor, width // self.vae_scale_factor)
         )
         mask = mask.cast(dtype=dtype)
+
         masked_image = masked_image.cast(dtype=dtype)
-        masked_image_latents = self._encode_vae_image(masked_image, generator=generator)
+
+        if masked_image.shape[1] == 4:
+            masked_image_latents = masked_image
+        else:
+            masked_image_latents = self._encode_vae_image(masked_image, generator=generator)
 
         # duplicate mask and masked_image_latents for each generation per prompt, using mps friendly method
         if mask.shape[0] < batch_size:
             if not batch_size % mask.shape[0] == 0:
                 raise ValueError(
-                    f"The passed mask and the required batch size don't match. Masks are supposed to be duplicated to a total batch size of {batch_size}, but {mask.shape[0]} masks were passed. Make sure the number of masks that you pass is divisible by the total requested batch size."
+                    "The passed mask and the required batch size don't match. Masks are supposed to be duplicated to"
+                    f" a total batch size of {batch_size}, but {mask.shape[0]} masks were passed. Make sure the number"
+                    " of masks that you pass is divisible by the total requested batch size."
                 )
-            mask = mask.tile(repeat_times=[batch_size // mask.shape[0], 1, 1, 1])
+            mask = mask.tile([batch_size // mask.shape[0], 1, 1, 1])
         if masked_image_latents.shape[0] < batch_size:
             if not batch_size % masked_image_latents.shape[0] == 0:
                 raise ValueError(
-                    f"The passed images and the required batch size don't match. Images are supposed to be duplicated to a total batch size of {batch_size}, but {masked_image_latents.shape[0]} images were passed. Make sure the number of images that you pass is divisible by the total requested batch size."
+                    "The passed images and the required batch size don't match. Images are supposed to be duplicated"
+                    f" to a total batch size of {batch_size}, but {masked_image_latents.shape[0]} images were passed."
+                    " Make sure the number of images that you pass is divisible by the total requested batch size."
                 )
-            masked_image_latents = masked_image_latents.tile(
-                repeat_times=[batch_size // masked_image_latents.shape[0], 1, 1, 1]
-            )
-        mask = paddle.concat(x=[mask] * 2) if do_classifier_free_guidance else mask
+            masked_image_latents = masked_image_latents.tile([batch_size // masked_image_latents.shape[0], 1, 1, 1])
+
+        mask = paddle.concat([mask] * 2) if do_classifier_free_guidance else mask
         masked_image_latents = (
-            paddle.concat(x=[masked_image_latents] * 2) if do_classifier_free_guidance else masked_image_latents
+            paddle.concat([masked_image_latents] * 2) if do_classifier_free_guidance else masked_image_latents
         )
 
         # aligning device to prevent device errors when concating it with the latent model input
@@ -310,34 +349,40 @@ class PaintByExamplePipeline(DiffusionPipeline):
     def _encode_vae_image(self, image: paddle.Tensor, generator: paddle.Generator):
         if isinstance(generator, list):
             image_latents = [
-                self.vae.encode(image[i : i + 1]).latent_dist.sample(generator=generator[i])
+                retrieve_latents(self.vae.encode(image[i : i + 1]), generator=generator[i])
                 for i in range(image.shape[0])
             ]
-            image_latents = paddle.concat(x=image_latents, axis=0)
+            image_latents = paddle.concat(image_latents, axis=0)
         else:
-            image_latents = self.vae.encode(image).latent_dist.sample(generator=generator)
+            image_latents = retrieve_latents(self.vae.encode(image), generator=generator)
+
         image_latents = self.vae.config.scaling_factor * image_latents
+
         return image_latents
 
     def _encode_image(self, image, num_images_per_prompt, do_classifier_free_guidance):
-        dtype = self.image_encoder.dtype
+        dtype = next(self.image_encoder.named_parameters())[1].dtype
+
         if not isinstance(image, paddle.Tensor):
             image = self.feature_extractor(images=image, return_tensors="pd").pixel_values
+
         image = image.cast(dtype=dtype)
         image_embeddings, negative_prompt_embeds = self.image_encoder(image, return_uncond_vector=True)
 
         # duplicate image embeddings for each generation per prompt, using mps friendly method
         bs_embed, seq_len, _ = image_embeddings.shape
-        image_embeddings = image_embeddings.tile(repeat_times=[1, num_images_per_prompt, 1])
+        image_embeddings = image_embeddings.tile([1, num_images_per_prompt, 1])
         image_embeddings = image_embeddings.reshape([bs_embed * num_images_per_prompt, seq_len, -1])
+
         if do_classifier_free_guidance:
-            negative_prompt_embeds = negative_prompt_embeds.tile(repeat_times=[1, image_embeddings.shape[0], 1])
+            negative_prompt_embeds = negative_prompt_embeds.tile([1, image_embeddings.shape[0], 1])
             negative_prompt_embeds = negative_prompt_embeds.reshape([bs_embed * num_images_per_prompt, 1, -1])
 
             # For classifier free guidance, we need to do two forward passes.
             # Here we concatenate the unconditional and text embeddings into a single batch
             # to avoid doing two forward passes
-            image_embeddings = paddle.concat(x=[negative_prompt_embeds, image_embeddings])
+            image_embeddings = paddle.concat([negative_prompt_embeds, image_embeddings])
+
         return image_embeddings
 
     @paddle.no_grad()
@@ -360,7 +405,7 @@ class PaintByExamplePipeline(DiffusionPipeline):
         callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
         callback_steps: int = 1,
     ):
-        """
+        r"""
         The call function to the pipeline for generation.
 
         Args:
@@ -393,8 +438,8 @@ class PaintByExamplePipeline(DiffusionPipeline):
                 Corresponds to parameter eta (η) from the [DDIM](https://arxiv.org/abs/2010.02502) paper. Only applies
                 to the [`~schedulers.DDIMScheduler`], and is ignored in other schedulers.
             generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
-                A [`paddle.Generator`](https://pytorch.org/docs/stable/generated/paddle.Generator.html) to make
-                generation deterministic.
+                                A [`paddle.Generator`] to make generation deterministic.
+
             latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents sampled from a Gaussian distribution, to be used as inputs for image
                 generation. Can be used to tweak the same generation with different prompts. If not provided, a latents
@@ -510,50 +555,61 @@ class PaintByExamplePipeline(DiffusionPipeline):
         num_channels_masked_image = masked_image_latents.shape[1]
         if num_channels_latents + num_channels_mask + num_channels_masked_image != self.unet.config.in_channels:
             raise ValueError(
-                f"Incorrect configuration settings! The config of `pipeline.unet`: {self.unet.config} expects {self.unet.config.in_channels} but received `num_channels_latents`: {num_channels_latents} + `num_channels_mask`: {num_channels_mask} + `num_channels_masked_image`: {num_channels_masked_image} = {num_channels_latents + num_channels_masked_image + num_channels_mask}. Please verify the config of `pipeline.unet` or your `mask_image` or `image` input."
+                f"Incorrect configuration settings! The config of `pipeline.unet`: {self.unet.config} expects"
+                f" {self.unet.config.in_channels} but received `num_channels_latents`: {num_channels_latents} +"
+                f" `num_channels_mask`: {num_channels_mask} + `num_channels_masked_image`: {num_channels_masked_image}"
+                f" = {num_channels_latents+num_channels_masked_image+num_channels_mask}. Please verify the config of"
+                " `pipeline.unet` or your `mask_image` or `image` input."
             )
 
         # 9. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
-        num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
 
         # 10. Denoising loop
+        num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(x=[latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = paddle.concat([latents] * 2) if do_classifier_free_guidance else latents
 
                 # concat latents, mask, masked_image_latents in the channel dimension
                 latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
-                latent_model_input = paddle.concat(x=[latent_model_input, masked_image_latents, mask], axis=1)
+                latent_model_input = latent_model_input.cast(masked_image_latents.dtype)
+                latent_model_input = paddle.concat([latent_model_input, masked_image_latents, mask], axis=1)
 
                 # predict the noise residual
                 noise_pred = self.unet(latent_model_input, t, encoder_hidden_states=image_embeddings).sample
 
                 # perform guidance
                 if do_classifier_free_guidance:
-                    noise_pred_uncond, noise_pred_text = noise_pred.chunk(chunks=2)
+                    noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
                     noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
 
                 # compute the previous noisy sample x_t -> x_t-1
                 latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs).prev_sample
 
                 # call the callback, if provided
-                if i == len(timesteps) - 1 or i + 1 > num_warmup_steps and (i + 1) % self.scheduler.order == 0:
+                if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
                     progress_bar.update()
                     if callback is not None and i % callback_steps == 0:
-                        callback(i, t, latents)
+                        step_idx = i // getattr(self.scheduler, "order", 1)
+                        callback(step_idx, t, latents)
+
         if not output_type == "latent":
             image = self.vae.decode(latents / self.vae.config.scaling_factor, return_dict=False)[0]
             image, has_nsfw_concept = self.run_safety_checker(image, image_embeddings.dtype)
         else:
             image = latents
             has_nsfw_concept = None
+
         if has_nsfw_concept is None:
             do_denormalize = [True] * image.shape[0]
         else:
-            do_denormalize = [(not has_nsfw) for has_nsfw in has_nsfw_concept]
+            do_denormalize = [not has_nsfw for has_nsfw in has_nsfw_concept]
+
         image = self.image_processor.postprocess(image, output_type=output_type, do_denormalize=do_denormalize)
+
         if not return_dict:
-            return image, has_nsfw_concept
+            return (image, has_nsfw_concept)
+
         return StableDiffusionPipelineOutput(images=image, nsfw_content_detected=has_nsfw_concept)

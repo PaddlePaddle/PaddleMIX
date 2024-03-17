@@ -1,0 +1,8 @@
+{
+  "sample_size": 32,
+  "patch_size": 4,
+  "in_channels": 4,
+  "num_layers": 12,
+  "num_attention_heads": 12,
+  "attention_head_dim": 64
+}

@@ -37,7 +37,7 @@ python -u train_text_to_image_decoder.py \
   --checkpoints_total_limit=3 \
   --lr_scheduler="constant" --lr_warmup_steps=0 \
   --seed=42 \
-  --output_dir="kandi2-decoder-pokemon-model" 
+  --output_dir="kandi2-decoder-pokemon-model"
 ```
 
 <!-- accelerate_snippet_end -->
@@ -61,7 +61,7 @@ python -u train_text_to_image_decoder.py \
   --checkpoints_total_limit=3 \
   --lr_scheduler="constant" --lr_warmup_steps=0 \
   --seed=42 \
-  --output_dir="kandi2-decoder-pokemon-model" 
+  --output_dir="kandi2-decoder-pokemon-model"
 ```
 
 训练完成后，模型将保存在命令中指定的 `output_dir` 目录中。在本例中是 `kandi22-decoder-pokemon-model`。要加载微调后的模型进行推理，后将该路径传递给 `KandinskyV22CombinedPipeline` :
@@ -109,7 +109,7 @@ python -u train_text_to_image_prior.py \
   --checkpoints_total_limit=3 \
   --lr_scheduler="constant" --lr_warmup_steps=0 \
   --seed=42 \
-  --output_dir="kandi2-prior-pokemon-model" 
+  --output_dir="kandi2-prior-pokemon-model"
 ```
 
 <!-- accelerate_snippet_end -->
@@ -149,7 +149,7 @@ python -u -m paddle.distributed.launch --gpus "0,1,2,3" train_text_to_image_deco
   --checkpoints_total_limit=3 \
   --lr_scheduler="constant" --lr_warmup_steps=0 \
   --seed=42 \
-  --output_dir="kandi2-decoder-pokemon-model"  
+  --output_dir="kandi2-decoder-pokemon-model"
 ```
 
 # 使用 LoRA 和 Text-to-Image 技术进行模型训练

@@ -17,8 +17,8 @@ import paddle
 import paddle.nn as nn
 
 from ..configuration_utils import ConfigMixin, register_to_config
-from ..utils import apply_forward_hook
-from .autoencoder_kl import AutoencoderKLOutput
+from ..utils.accelerate_utils import apply_forward_hook
+from .modeling_outputs import AutoencoderKLOutput
 from .modeling_utils import ModelMixin
 from .vae import (
     DecoderOutput,
@@ -70,11 +70,11 @@ class AsymmetricAutoencoderKL(ModelMixin, ConfigMixin):
         self,
         in_channels: int = 3,
         out_channels: int = 3,
-        down_block_types: Tuple[str] = ("DownEncoderBlock2D",),
-        down_block_out_channels: Tuple[int] = (64,),
+        down_block_types: Tuple[str, ...] = ("DownEncoderBlock2D",),
+        down_block_out_channels: Tuple[int, ...] = (64,),
         layers_per_down_block: int = 1,
-        up_block_types: Tuple[str] = ("UpDecoderBlock2D",),
-        up_block_out_channels: Tuple[int] = (64,),
+        up_block_types: Tuple[str, ...] = ("UpDecoderBlock2D",),
+        up_block_out_channels: Tuple[int, ...] = (64,),
         layers_per_up_block: int = 1,
         act_fn: str = "silu",
         latent_channels: int = 4,
@@ -113,8 +113,13 @@ class AsymmetricAutoencoderKL(ModelMixin, ConfigMixin):
         self.use_slicing = False
         self.use_tiling = False
 
+        self.register_to_config(block_out_channels=up_block_out_channels)
+        self.register_to_config(force_upcast=False)
+
     @apply_forward_hook
-    def encode(self, x: paddle.Tensor, return_dict: bool = True) -> AutoencoderKLOutput:
+    def encode(self, x: paddle.Tensor, return_dict: bool = True) -> Union[AutoencoderKLOutput, Tuple[paddle.Tensor]]:
+        # TODO junnyu, add this to support pure fp16
+        x = x.cast(self.encoder.conv_in.weight.dtype)
         h = self.encoder(x)
         moments = self.quant_conv(h)
         posterior = DiagonalGaussianDistribution(moments)
@@ -130,7 +135,7 @@ class AsymmetricAutoencoderKL(ModelMixin, ConfigMixin):
         image: Optional[paddle.Tensor] = None,
         mask: Optional[paddle.Tensor] = None,
         return_dict: bool = True,
-    ) -> Union[DecoderOutput, paddle.Tensor]:
+    ) -> Union[DecoderOutput, Tuple[paddle.Tensor]]:
         z = self.post_quant_conv(z)
         dec = self.decoder(z, image, mask)
 
@@ -143,10 +148,14 @@ class AsymmetricAutoencoderKL(ModelMixin, ConfigMixin):
     def decode(
         self,
         z: paddle.Tensor,
+        generator: Optional[paddle.Generator] = None,
         image: Optional[paddle.Tensor] = None,
         mask: Optional[paddle.Tensor] = None,
         return_dict: bool = True,
-    ) -> Union[DecoderOutput, paddle.Tensor]:
+    ) -> Union[DecoderOutput, Tuple[paddle.Tensor]]:
+        # TODO junnyu, add this to support pure fp16
+        z = z.cast(self.post_quant_conv.weight.dtype)
+
         decoded = self._decode(z, image, mask).sample
 
         if not return_dict:
@@ -161,7 +170,7 @@ class AsymmetricAutoencoderKL(ModelMixin, ConfigMixin):
         sample_posterior: bool = False,
         return_dict: bool = True,
         generator: Optional[paddle.Generator] = None,
-    ) -> Union[DecoderOutput, paddle.Tensor]:
+    ) -> Union[DecoderOutput, Tuple[paddle.Tensor]]:
         r"""
         Args:
             sample (`paddle.Tensor`): Input sample.

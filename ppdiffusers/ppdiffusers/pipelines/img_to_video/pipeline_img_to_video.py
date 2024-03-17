@@ -18,16 +18,17 @@ from typing import Any, Callable, Dict, List, Optional
 import numpy as np
 import paddle
 from einops import rearrange
-from paddlenlp.transformers import CLIPVisionModelWithProjection
-from paddlenlp.transformers.image_transforms import convert_to_rgb, normalize, resize
+from paddlenlp.transformers.image_transforms import normalize, resize
 from paddlenlp.transformers.image_utils import to_numpy_array
 from PIL import Image
+
+from ppdiffusers.transformers import CLIPVisionModelWithProjection
 
 from ...loaders import LoraLoaderMixin, TextualInversionLoaderMixin
 from ...models.modelscope_autoencoder_img2vid import AutoencoderKL_imgtovideo
 from ...models.modelscope_gaussian_diffusion import GaussianDiffusion, beta_schedule
 from ...models.modelscope_st_unet import STUNetModel
-from ...utils import logging, replace_example_docstring
+from ...utils import logging
 from ..pipeline_utils import DiffusionPipeline
 from . import ImgToVideoSDPipelineOutput
 
