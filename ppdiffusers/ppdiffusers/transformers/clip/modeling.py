@@ -808,7 +808,7 @@ class CLIPTextTransformer(nn.Layer):
                 )
             )
         else:
-            # The config gets updated `eos_token_id` from PR #24773 (so the use of exta new tokens is possible)
+            # The config gets updated `eos_token_id` from PR #24773 (so the use of extra new tokens is possible)
             # We need to get the first position of `eos_token_id` value (`pad_token_ids` might equal to `eos_token_id`)
             pooled_output = last_hidden_state.gather_nd(
                 paddle.stack(
