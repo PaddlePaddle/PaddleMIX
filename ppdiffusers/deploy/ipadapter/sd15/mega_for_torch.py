@@ -25,7 +25,7 @@ from diffusers import (
 from diffusers.image_processor import PipelineImageInput
 from diffusers.utils import logging
 
-from ppdiffusers import (
+from diffusers import (
     DDIMScheduler,
     DDPMScheduler,
     DEISMultistepScheduler,

@@ -17,7 +17,7 @@ import os
 import time
 
 # isort: split
-import paddle
+import torch
 
 # isort: split
 import sys
@@ -140,6 +140,7 @@ def main(args):
     pipe = StableDiffusionMegaPipeline.from_pretrained(
         args.model_dir,
         image_encoder=None,
+        torch_dtype=torch.float16 if args.use_fp16 else torch.float32,
     ).to("cuda")
     pipe.set_progress_bar_config(disable=False)
     pipe.change_scheduler(args.scheduler)
@@ -164,7 +165,7 @@ def main(args):
         print("==> Test text2img performance.")
         for step in trange(args.benchmark_steps):
             start = time.time()
-            paddle.seed(seed)
+            torch.manual_seed(seed)
             images = pipe.text2img(
                 prompt,
                 output_type="pil",
@@ -202,7 +203,7 @@ def main(args):
         print("==> Test img2img performance.")
         for step in trange(args.benchmark_steps):
             start = time.time()
-            paddle.seed(seed)
+            torch.manual_seed(seed)
             images = pipe.img2img(
                 prompt,
                 image=init_image,
@@ -248,7 +249,7 @@ def main(args):
         print(f"==> Test {task_name} performance.")
         for step in trange(args.benchmark_steps):
             start = time.time()
-            paddle.seed(seed)
+            torch.manual_seed(seed)
             images = call_fn(
                 prompt,
                 image=init_image,

@@ -12,4 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-python infer_dygraph_torch.py --model_dir runwayml/stable-diffusion-v1-5 --scheduler "ddim" --backend torch --device gpu --task_name all
+python infer_dygraph_torch.py --model_dir runwayml/stable-diffusion-v1-5 --scheduler "ddim" --backend torch --task_name all

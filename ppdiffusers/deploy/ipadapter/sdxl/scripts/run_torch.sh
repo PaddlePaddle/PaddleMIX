@@ -15,7 +15,7 @@
 set -uex
 
 # speed test
-python infer_dygraph_torch.py --device_id 4 --use_fp16 True --attention_type raw --task text2img
-python infer_dygraph_torch.py --device_id 4 --use_fp16 True --attention_type raw --task text2img_with_refiner
-python infer_dygraph_torch.py --device_id 4 --use_fp16 True --attention_type raw --task img2img
-python infer_dygraph_torch.py --device_id 4 --use_fp16 True --attention_type raw --task inpainting 
+python infer_dygraph_torch.py --device_id 4 --use_fp16 True --task text2img
+python infer_dygraph_torch.py --device_id 4 --use_fp16 True --task text2img_with_refiner
+python infer_dygraph_torch.py --device_id 4 --use_fp16 True --task img2img
+python infer_dygraph_torch.py --device_id 4 --use_fp16 True --task inpainting 

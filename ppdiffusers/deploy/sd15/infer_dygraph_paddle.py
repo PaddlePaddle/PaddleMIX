@@ -145,6 +145,7 @@ def main(args):
     pipe = StableDiffusionMegaPipeline.from_pretrained(
         args.model_dir,
         image_encoder=None,
+        paddle_dtype=paddle.float16 if args.use_fp16 else paddle.float32
     )
     pipe.set_progress_bar_config(disable=False)
     pipe.change_scheduler(args.scheduler)

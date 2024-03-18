@@ -119,7 +119,10 @@ def main(args):
         paddle.set_device(f"gpu:{args.device_id}")
     seed = 1024
 
-    pipe = StableVideoDiffusionPipeline.from_pretrained(args.model_dir, paddle_dtype=paddle.float16)
+    pipe = StableVideoDiffusionPipeline.from_pretrained(
+        args.model_dir,
+        paddle_dtype=paddle.float16 if args.use_fp16 else paddle.float32
+    )
     pipe.set_progress_bar_config(disable=False)
     width = args.width
     height = args.height

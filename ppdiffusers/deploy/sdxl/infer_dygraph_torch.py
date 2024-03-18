@@ -120,7 +120,7 @@ def parse_arguments():
         help="The model directory of diffusion_model.",
     )
     parser.add_argument("--inference_steps", type=int, default=50, help="The number of unet inference steps.")
-    parser.add_argument("--benchmark_steps", type=int, default=10, help="The number of performance benchmark steps.")
+    parser.add_argument("--benchmark_steps", type=int, default=1, help="The number of performance benchmark steps.")
     parser.add_argument(
         "--parse_prompt_type",
         type=str,

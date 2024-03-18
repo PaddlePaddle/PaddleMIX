@@ -141,12 +141,6 @@ def parse_arguments():
     parser.add_argument("--hr_resize_height", type=int, default=768, help="HR Height of input image")
     parser.add_argument("--hr_resize_width", type=int, default=768, help="HR Width of input image")
     parser.add_argument("--is_sd2_0", type=strtobool, default=False, help="Is sd2_0 model?")
-    parser.add_argument(
-        "--tune",
-        type=strtobool,
-        default=False,
-        help="Whether to tune the shape of tensorrt engine.",
-    )
 
     return parser.parse_args()
 
@@ -163,6 +157,7 @@ def main(args):
     max_image_size = max(min_image_size, max_image_size)
     pipe = StableDiffusionMegaPipeline.from_pretrained(
         args.model_dir,
+        paddle_dtype="float16" if args.use_fp16 else "float32",
     )
     pipe.load_ip_adapter(
         args.ipadapter_pretrained_model_name_or_path,

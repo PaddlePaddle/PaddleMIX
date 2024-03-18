@@ -135,7 +135,7 @@ def parse_arguments():
         help="Name of the weight to convert.Example: ip-adapter_sd15.safetensors",
     )
     parser.add_argument("--inference_steps", type=int, default=50, help="The number of unet inference steps.")
-    parser.add_argument("--benchmark_steps", type=int, default=10, help="The number of performance benchmark steps.")
+    parser.add_argument("--benchmark_steps", type=int, default=1, help="The number of performance benchmark steps.")
     parser.add_argument(
         "--parse_prompt_type",
         type=str,
@@ -245,7 +245,7 @@ def text2img(args):
         if args.pretrained_model_name_or_path
         else "stabilityai/stable-diffusion-xl-base-1.0",
         torch_dtype=torch_dtype,
-    )
+    ).to("cuda")
     pipe.load_ip_adapter(
         args.ipadapter_pretrained_model_name_or_path,
         subfolder=args.ipadapter_model_subfolder,
@@ -326,7 +326,7 @@ def text2img_with_refiner(args):
         if args.pretrained_model_name_or_path
         else "stabilityai/stable-diffusion-xl-base-1.0",
         torch_dtype=torch_dtype,
-    )
+    ).to("cuda")
     base.load_ip_adapter(
         args.ipadapter_pretrained_model_name_or_path,
         subfolder=args.ipadapter_model_subfolder,
@@ -437,9 +437,9 @@ def img2img(args):
     pipe = StableDiffusionXLImg2ImgPipeline.from_pretrained(
         args.pretrained_model_name_or_path
         if args.pretrained_model_name_or_path
-        else "stabilityai/stable-diffusion-xl-refiner-1.0",
+        else "stabilityai/stable-diffusion-xl-base-1.0",
         torch_dtype=torch_dtype,
-    )
+    ).to("cuda")
     pipe.load_ip_adapter(
         args.ipadapter_pretrained_model_name_or_path,
         subfolder=args.ipadapter_model_subfolder,
@@ -514,7 +514,7 @@ def inpainting(args):
         if args.pretrained_model_name_or_path
         else "stabilityai/stable-diffusion-xl-base-1.0",
         torch_dtype=torch_dtype,
-    )
+    ).to("cuda")
     pipe.load_ip_adapter(
         args.ipadapter_pretrained_model_name_or_path,
         subfolder=args.ipadapter_model_subfolder,

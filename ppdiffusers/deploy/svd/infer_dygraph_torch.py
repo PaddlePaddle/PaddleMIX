@@ -116,7 +116,7 @@ def main(args):
 
     pipe = StableVideoDiffusionPipeline.from_pretrained(
         args.model_dir,
-        paddle_dtype="float16",
+        torch_dtype=torch.float16 if args.use_fp16 else torch.float32
     ).to("cuda")
     pipe.set_progress_bar_config(disable=False)
     width = args.width

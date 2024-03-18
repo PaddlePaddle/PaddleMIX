@@ -24,12 +24,12 @@ import numpy as np
 from paddlenlp.trainer.argparser import strtobool
 from tqdm.auto import trange
 
-from ppdiffusers import (  # noqa
+from diffusers import (  # noqa
     DiffusionPipeline,
-    StableDiffusionMegaPipeline,
     StableDiffusionPipeline,
 )
-from ppdiffusers.utils import load_image
+from mega_for_torch import StableDiffusionMegaPipeline
+from diffusers.utils import load_image
 
 
 def parse_arguments():
@@ -153,12 +153,10 @@ def parse_arguments():
 
 def main(args):
     seed = 1024
-    min_image_size = 512
-    max_image_size = 768
-    max_image_size = max(min_image_size, max_image_size)
     pipe = StableDiffusionMegaPipeline.from_pretrained(
         args.model_dir,
-    )
+        torch_dtype=torch.float16 if args.use_fp16 else torch.float32,
+    ).to("cuda")
     pipe.load_ip_adapter(
         args.ipadapter_pretrained_model_name_or_path,
         subfolder=args.ipadapter_model_subfolder,
