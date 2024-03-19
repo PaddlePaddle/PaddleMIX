@@ -310,9 +310,8 @@ def device_scope(device="cpu"):
 
 
 @contextlib.contextmanager
-def requires_grad_and_without_random(*tensors, seed=0, stop_gradient=False):
+def requires_grad_and_without_random(*tensors, stop_gradient=False):
     raw_rng_state = paddle.get_cuda_rng_state()
-    paddle.seed(seed)
     raw_stop_gradient = [each_tensor.stop_gradient for each_tensor in tensors]
     need_switch_stop_gradient = len(set(raw_stop_gradient)) > 1
     if need_switch_stop_gradient:
@@ -430,16 +429,16 @@ if is_ppxformers_available():
             # (2) FLAG_USE_CUTLASS_V2 in yes, y, true, t, 1, use cutlass v2
             use_cutlass_v2 = attn_mask is not None or str2bool(os.getenv("FLAG_USE_CUTLASS_V2", "no"))
             if not use_cutlass_v2:
-                # with requires_grad_and_without_random(query, key, value):
-                output = memory_efficient_attention(
-                    query,
-                    key,
-                    value,
-                    None,
-                    p=dropout_p if training else 0.0,
-                    scale=scale,
-                    training=True,
-                )  # make sure we use training=True
+                with requires_grad_and_without_random(query, key, value):
+                    output = memory_efficient_attention(
+                        query,
+                        key,
+                        value,
+                        None,
+                        p=dropout_p if training else 0.0,
+                        scale=scale,
+                        training=True,
+                    )  # make sure we use training=True
                 if query.shape[3] > 256:
                     if paddle.distributed.get_world_size() > 1:
                         hcg = fleet.get_hybrid_communicate_group()
@@ -469,16 +468,16 @@ if is_ppxformers_available():
                     pre_cache_length=0,
                 ).transpose([0, 2, 1, 3])
         elif attention_op == "flash":
-            # with requires_grad_and_without_random(query, key, value):
-            output = paddle.nn.functional.scaled_dot_product_attention(
-                query,
-                key,
-                value,
-                attn_mask=None if is_causal else attn_mask,
-                dropout_p=dropout_p if training else 0.0,
-                is_causal=bool(is_causal),
-                training=training,
-            )
+            with requires_grad_and_without_random(query, key, value):
+                output = paddle.nn.functional.scaled_dot_product_attention(
+                    query,
+                    key,
+                    value,
+                    attn_mask=None if is_causal else attn_mask,
+                    dropout_p=dropout_p if training else 0.0,
+                    is_causal=bool(is_causal),
+                    training=training,
+                )
             # hidden_dimension excel 256 will use mea
             if query.shape[3] > 256:
                 if paddle.distributed.get_world_size() > 1:
