@@ -21,24 +21,26 @@ python -m pip install paddlepaddle-gpu==2.6.0.post112 -f https://www.paddlepaddl
 
 <a name="快速体验"></a>
 
-## 静态图模型导出 (static model export)
+## 快速体验
+### 静态图模型导出 (static model export)
 ```
 export USE_PPXFORMERS=False
+export FLAGS_set_to_1d=1
 python export_model.py --pretrained_model_name_or_path stabilityai/stable-diffusion-xl-base-1.0 --output_path static_model/stable-diffusion-xl-base-1.0
 ```
 导出模型在static_model/stable-diffusion-xl-base-1.0目录下。
 
-### 文图生成（Text-to-Image Generation）
+### 基于静态图的推理 (Paddle后端)
 ```
-python infer.py --model_dir static_model/stable-diffusion-xl-base-1.0 --scheduler "preconfig-euler-ancestral" --backend paddle --device gpu --task_name text2img
-```
-
-### 文本引导的图像变换（Image-to-Image Text-Guided Generation）
-```
-python infer.py --model_dir static_model/stable-diffusion-xl-base-1.0 --scheduler "preconfig-euler-ancestral" --backend paddle --device gpu --task_name img2img
+python infer.py --model_dir static_model/stable-diffusion-xl-base-1.0 --scheduler "euler" --backend paddle --device gpu --task_name all --width 512 --height 512 --inference_steps 30 --tune False --use_fp16 True
 ```
 
-### 文本引导的图像编辑（Text-Guided Image Inpainting）
+### 基于静态图的推理 (TensorRT后端，建议在A100上使用)
+要使用TensorRT后端，需要先进行tune，并生成TensorRT所需的模型动态shape信息。(设置--tune True)
 ```
-python infer.py --model_dir static_model/stable-diffusion-xl-base-1.0 --scheduler "preconfig-euler-ancestral" --backend paddle --device gpu --task_name inpaint
+python infer.py --model_dir static_model/stable-diffusion-xl-base-1.0 --scheduler "euler" --backend paddle --device gpu --task_name all --width 512 --height 512 --inference_steps 30 --tune True --use_fp16 False
+```
+在tune完成后，可以执行以下命令进行推理。(第一次执行时，需要等待TensorRT模型编译完成，需要较长时间，后续执行时，直接加载编译好的模型进行推理)
+```
+python infer.py --model_dir static_model/stable-diffusion-xl-base-1.0 --scheduler "euler" --backend paddle_tensorrt --device gpu --task_name all --width 512 --height 512 --inference_steps 50
 ```
