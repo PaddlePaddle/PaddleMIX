@@ -835,7 +835,7 @@ class CLIPTextTransformer(nn.Layer):
     def _build_causal_attention_mask(self, bsz, seq_len, dtype):
         mask = paddle.triu(
             # paddle.full((bsz, 1, seq_len, seq_len), paddle.finfo(dtype).min, dtype=dtype),
-            paddle.ones((bsz, paddle.to_tensor([1]), seq_len, seq_len), dtype=dtype) * paddle.finfo(dtype).min,
+            paddle.ones((bsz, paddle.to_tensor(1), seq_len, seq_len), dtype=dtype) * paddle.finfo(dtype).min,
             diagonal=1,
         )
         return mask
