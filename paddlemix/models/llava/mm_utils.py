@@ -198,7 +198,7 @@ def load_image(image_file):
         )
         image = Image.open(BytesIO(response.content)).convert("RGB")
     else:
-        image = Image.open(image_file).convert("RGB")
+        image = Image.open("/paddle/data/GCC/images/" + image_file).convert("RGB")
     return image
 
 
@@ -441,7 +441,9 @@ def preprocess_plain(sources: Sequence[str], tokenizer: PretrainedTokenizer) -> 
     return dict(input_ids=input_ids, labels=targets)
 
 
-def get_conversation(sources: Sequence[str], tokenizer: PretrainedTokenizer, has_image: bool = False) -> Dict:
+def get_conversation(
+    version: Sequence[str], sources: Sequence[str], tokenizer: PretrainedTokenizer, has_image: bool = False
+) -> Dict:
     """
         Given a list of sources, each is a conversation list. This transform:
         1. Add signal '### ' at the beginning each sentence, with end signal '
@@ -450,6 +452,11 @@ def get_conversation(sources: Sequence[str], tokenizer: PretrainedTokenizer, has
         3. Tokenize the concatenated conversation;
         4. Make a deepcopy as the target. Mask human words with IGNORE_INDEX.
     """
+    if version in conversation_lib.conv_templates:
+        conversation_lib.default_conversation = conversation_lib.conv_templates[version]
+    else:
+        conversation_lib.default_conversation = conversation_lib.conv_templates["vicuna_v1"]
+
     if conversation_lib.default_conversation.sep_style == conversation_lib.SeparatorStyle.PLAIN:
         return preprocess_plain(sources, tokenizer)
     elif conversation_lib.default_conversation.sep_style == conversation_lib.SeparatorStyle.LLAMA_2:

@@ -118,7 +118,7 @@ class AutoProcessorMIX:
             text_model_name_or_path = pretrained_model_name_or_path
 
         for names, processor_class in cls._processor_mapping.items():
-            if names.lower() in pretrained_model_name_or_path.lower().replace("-", "_"):
+            if names.lower() in pretrained_model_name_or_path.lower().replace("-", "_").replace("vicuna", "llava"):
                 attributes = processor_class["processor"].attributes
                 attributes_dict = {}
 

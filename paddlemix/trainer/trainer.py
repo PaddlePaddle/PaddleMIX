@@ -163,7 +163,7 @@ def get_trainer(
     Returns:
         Trainer: a trainer instance
     """
-    pretrained_model_name_or_path = pretrained_model_name_or_path.lower().replace("-", "_")
+    pretrained_model_name_or_path = pretrained_model_name_or_path.lower().replace("-", "_").replace("vicuna", "llava")
     if "clip" in pretrained_model_name_or_path or "coca" in pretrained_model_name_or_path:
         zeroshot = ClipZeroShot(model, args)
         return CLIPTrainer(
