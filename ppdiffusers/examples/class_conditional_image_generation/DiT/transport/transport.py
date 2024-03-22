@@ -18,7 +18,7 @@ import numpy as np
 import paddle
 
 from . import path
-from .integrators import ode, sde
+from .integrators import sde
 from .utils import mean_flat
 
 
@@ -328,106 +328,3 @@ class Sampler:
             return xs
 
         return _sample
-
-    def sample_ode(
-        self,
-        *,
-        sampling_method="dopri5",
-        num_steps=50,
-        atol=1e-6,
-        rtol=1e-3,
-        reverse=False,
-    ):
-        """returns a sampling function with given ODE settings
-        Args:
-        - sampling_method: type of sampler used in solving the ODE; default to be Dopri5
-        - num_steps:
-            - fixed solver (Euler, Heun): the actual number of integration steps performed
-            - adaptive solver (Dopri5): the number of datapoints saved during integration; produced by interpolation
-        - atol: absolute error tolerance for the solver
-        - rtol: relative error tolerance for the solver
-        - reverse: whether solving the ODE in reverse (data to noise); default to False
-        """
-        if reverse:
-            drift = lambda x, t, model, **kwargs: self.drift(x, paddle.ones_like(t) * (1 - t), model, **kwargs)
-        else:
-            drift = self.drift
-
-        t0, t1 = self.transport.check_interval(
-            self.transport.train_eps,
-            self.transport.sample_eps,
-            sde=False,
-            eval=True,
-            reverse=reverse,
-            last_step_size=0.0,
-        )
-
-        _ode = ode(
-            drift=drift,
-            t0=t0,
-            t1=t1,
-            sampler_type=sampling_method,
-            num_steps=num_steps,
-            atol=atol,
-            rtol=rtol,
-        )
-        return _ode.sample
-
-    def sample_ode_likelihood(
-        self,
-        *,
-        sampling_method="dopri5",
-        num_steps=50,
-        atol=1e-6,
-        rtol=1e-3,
-    ):
-        """returns a sampling function for calculating likelihood with given ODE settings
-        Args:
-        - sampling_method: type of sampler used in solving the ODE; default to be Dopri5
-        - num_steps:
-            - fixed solver (Euler, Heun): the actual number of integration steps performed
-            - adaptive solver (Dopri5): the number of datapoints saved during integration; produced by interpolation
-        - atol: absolute error tolerance for the solver
-        - rtol: relative error tolerance for the solver
-        """
-
-        def _likelihood_drift(x, t, model, **model_kwargs):
-            x, _ = x
-            eps = paddle.randint(2, x.shape, dtype=paddle.float32) * 2 - 1
-            t = paddle.ones_like(t) * (1 - t)
-            with paddle.enable_grad():
-                x.stop_gradient = False
-                grad = paddle.grad(paddle.sum(self.drift(x, t, model, **model_kwargs) * eps), x)[0]
-                logp_grad = paddle.sum(grad * eps, axis=tuple(range(1, len(x.shape))))
-                drift = self.drift(x, t, model, **model_kwargs)
-            return (-drift, logp_grad)
-
-        t0, t1 = self.transport.check_interval(
-            self.transport.train_eps,
-            self.transport.sample_eps,
-            sde=False,
-            eval=True,
-            reverse=False,
-            last_step_size=0.0,
-        )
-
-        _ode = ode(
-            drift=_likelihood_drift,
-            t0=t0,
-            t1=t1,
-            sampler_type=sampling_method,
-            num_steps=num_steps,
-            atol=atol,
-            rtol=rtol,
-        )
-
-        def _sample_fn(x, model, **model_kwargs):
-            init_logp = paddle.zeros(x.shape[0])
-            input = (x, init_logp)
-            drift, delta_logp = _ode.sample(input, model, **model_kwargs)
-            drift, delta_logp = drift[-1], delta_logp[-1]
-            prior_logp = self.transport.prior_logp(drift)
-            logp = prior_logp - delta_logp
-            return logp, drift
-
-        return _sample_fn

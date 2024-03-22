@@ -17,6 +17,7 @@
 |CLIP Guided Images Mixing Stable Diffusion Pipeline| 一个用于图片融合的Stable Diffusion Pipeline|[CLIP Guided Images Mixing Using Stable Diffusion](#clip-guided-images-mixing-with-stable-diffusion)||
 |EDICT Image Editing Pipeline| 一个用于文本引导的图像编辑的 Stable Diffusion Pipeline|[EDICT Image Editing Pipeline](#edict_pipeline)||
 |FABRIC - Stable Diffusion with feedback Pipeline| 一个用于喜欢图片和不喜欢图片的反馈 Pipeline|[FABRIC - Stable Diffusion with feedback Pipeline](#fabric_pipeline)||
+|Stable Diffusion XL Long Weighted Prompt Pipeline| 一个不限制 prompt 长度的 Pipeline|[Stable Diffusion XL Long Weighted Prompt Pipeline](#stable-diffusion-xl-long-weighted-prompt-pipeline)||
 
 ## Example usages
 
@@ -857,6 +858,37 @@ image = pipe(
 
 image.save("black_to_blue.png")
 ```
+
 生成的图片如下所示：
 <center><img src="https://github.com/PaddlePaddle/PaddleMIX/assets/4617245/efb1f1d8-dcaa-4250-a90e-198b9ab01ff6" width=100%></center>
 <center><img src="https://github.com/PaddlePaddle/PaddleMIX/assets/4617245/2cc4b360-3c51-43ef-8f4e-292ae776566a" width=100%></center>
+
+### Stable Diffusion XL Long Weighted Prompt Pipeline
+
+一个不限制 prompt 长度的 Pipeline。使用方式如下所示：
+
+``` python
+import paddle
+
+from ppdiffusers import DiffusionPipeline
+from ppdiffusers.utils.testing_utils import get_examples_pipeline
+
+pipe = DiffusionPipeline.from_pretrained(
+    "stabilityai/stable-diffusion-xl-base-1.0",
+    paddle_dtype=paddle.float16,
+    use_safetensors=True,
+    variant="fp16",
+    custom_pipeline=get_examples_pipeline("lpw_stable_diffusion_xl"),
+)
+
+prompt = "photo of a cute (white) cat running on the grass" * 20
+prompt2 = "chasing (birds:1.5)" * 20
+prompt = f"{prompt},{prompt2}"
+neg_prompt = "blur, low quality, carton, animate"
+
+images = pipe(prompt=prompt, negative_prompt=neg_prompt, generator=paddle.Generator().manual_seed(452)).images[0]
+images.save("out.png")
+```
+
+生成的图片如下所示：
+<center><img src="https://github.com/PaddlePaddle/PaddleMIX/assets/4617245/938e44c1-a0c1-4a34-8496-f63bc1592673" width=100%></center>

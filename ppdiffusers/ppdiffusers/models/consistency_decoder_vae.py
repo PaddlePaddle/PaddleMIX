@@ -277,7 +277,7 @@ class ConsistencyDecoderVAE(ModelMixin, ConfigMixin):
         Args:
             x (`paddle.Tensor`): Input batch of images.
             return_dict (`bool`, *optional*, defaults to `True`):
-                Whether to return a [`~models.consistecy_decoder_vae.ConsistencyDecoderOoutput`] instead of a plain
+                Whether to return a [`~models.consistency_decoder_vae.ConsistencyDecoderOutput`] instead of a plain
                 tuple.
 
         Returns:

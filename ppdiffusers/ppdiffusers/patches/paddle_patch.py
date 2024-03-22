@@ -195,15 +195,7 @@ raw_gather_nd = paddle.gather_nd
 
 @paddle.jit.not_to_static
 def gather_nd(x, index, name=None):
-    bfp16 = False
-    if x.dtype == paddle.bfloat16:
-        x = x.cast(paddle.float16)
-        bfp16 = True
-
     out = raw_gather_nd(x, index=index, name=name)
-
-    if bfp16:
-        out = out.cast(paddle.bfloat16)
     return out
 
 

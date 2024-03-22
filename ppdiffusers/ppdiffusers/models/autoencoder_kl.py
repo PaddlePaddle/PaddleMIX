@@ -86,9 +86,9 @@ class AutoencoderKL(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
         force_upcast: float = True,
     ):
         super().__init__()
-        # if down_block_out_channels not givien, we will use block_out_channels
+        # if down_block_out_channels not given, we will use block_out_channels
         _down_block_out_channels = block_out_channels if down_block_out_channels is None else down_block_out_channels
-        # if up_block_out_channels not givien, we will use block_out_channels
+        # if up_block_out_channels not given, we will use block_out_channels
         _up_block_out_channels = block_out_channels if up_block_out_channels is None else up_block_out_channels
 
         # pass init params to Encoder

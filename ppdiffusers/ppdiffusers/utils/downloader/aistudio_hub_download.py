@@ -40,8 +40,8 @@ logger = logging.getLogger(__name__)
 
 from .common import (
     _CACHED_NO_EXIST,
-    DEFALUT_LOCAL_DIR_AUTO_SYMLINK_THRESHOLD,
     DEFAULT_ETAG_TIMEOUT,
+    DEFAULT_LOCAL_DIR_AUTO_SYMLINK_THRESHOLD,
     DEFAULT_REQUEST_TIMEOUT,
     AistudioBosFileMetadata,
     OfflineModeIsEnabled,
@@ -598,7 +598,7 @@ def aistudio_hub_download(
 
             # If "auto" (default) copy-paste small files to ease manual editing but symlink big files to save disk
             # In both cases, blob file is cached.
-            is_big_file = os.stat(temp_file.name).st_size > DEFALUT_LOCAL_DIR_AUTO_SYMLINK_THRESHOLD
+            is_big_file = os.stat(temp_file.name).st_size > DEFAULT_LOCAL_DIR_AUTO_SYMLINK_THRESHOLD
             if local_dir_use_symlinks is True or (local_dir_use_symlinks == "auto" and is_big_file):
                 logger.debug(f"Storing {url} in cache at {blob_path}")
                 _chmod_and_replace(temp_file.name, blob_path)

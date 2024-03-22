@@ -67,7 +67,7 @@ REPO_ID_SEPARATOR = "--"
 DEFAULT_DOWNLOAD_TIMEOUT = 10
 DEFAULT_REQUEST_TIMEOUT = 10
 DEFAULT_ETAG_TIMEOUT = 10
-DEFALUT_LOCAL_DIR_AUTO_SYMLINK_THRESHOLD: int = 5 * 1024 * 1024
+DEFAULT_LOCAL_DIR_AUTO_SYMLINK_THRESHOLD: int = 5 * 1024 * 1024
 
 OFFLINE = _is_true(os.environ.get("AISTUDIO_BOS_OFFLINE"))
 _CACHED_NO_EXIST = object()
@@ -537,7 +537,7 @@ def _to_local_dir(
 
     # If "auto" (default) copy-paste small files to ease manual editing but symlink big files to save disk
     if use_symlinks == "auto":
-        use_symlinks = os.stat(real_blob_path).st_size > DEFALUT_LOCAL_DIR_AUTO_SYMLINK_THRESHOLD
+        use_symlinks = os.stat(real_blob_path).st_size > DEFAULT_LOCAL_DIR_AUTO_SYMLINK_THRESHOLD
 
     if use_symlinks:
         _create_symlink(real_blob_path, local_dir_filepath, new_blob=False)
