@@ -808,7 +808,7 @@ class CLIPTextTransformer(nn.Layer):
                 )
             )
         else:
-            # The config gets updated `eos_token_id` from PR #24773 (so the use of exta new tokens is possible)
+            # The config gets updated `eos_token_id` from PR #24773 (so the use of extra new tokens is possible)
             # We need to get the first position of `eos_token_id` value (`pad_token_ids` might equal to `eos_token_id`)
             pooled_output = last_hidden_state.gather_nd(
                 paddle.stack(
@@ -835,7 +835,7 @@ class CLIPTextTransformer(nn.Layer):
     def _build_causal_attention_mask(self, bsz, seq_len, dtype):
         mask = paddle.triu(
             # paddle.full((bsz, 1, seq_len, seq_len), paddle.finfo(dtype).min, dtype=dtype),
-            paddle.ones((bsz, paddle.to_tensor([1]), seq_len, seq_len), dtype=dtype) * paddle.finfo(dtype).min,
+            paddle.ones((bsz, paddle.to_tensor(1), seq_len, seq_len), dtype=dtype) * paddle.finfo(dtype).min,
             diagonal=1,
         )
         return mask

@@ -955,7 +955,7 @@ class PaddleInferDiffusionXLPipelineMixin:
         text_encoder_2 = self.text_encoder_2
         if prompt_embeds is None:
             prompt_2 = prompt_2 or prompt
-            # textual inversion: procecss multi-vector tokens if necessary
+            # textual inversion: process multi-vector tokens if necessary
             prompt_embeds_list = []
             # for prompt, tokenizer, text_encoder in zip(prompts, tokenizers, text_encoders):
 

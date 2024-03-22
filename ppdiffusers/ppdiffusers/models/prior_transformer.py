@@ -350,7 +350,7 @@ class PriorTransformer(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin):
             axis=1,
         )
 
-        # Allow positional_embedding to not include the `addtional_embeddings` and instead pad it with zeros for these additional tokens
+        # Allow positional_embedding to not include the `additional_embeddings` and instead pad it with zeros for these additional tokens
         additional_embeddings_len = additional_embeddings_len + proj_embeddings.shape[1] + 1
         if positional_embeddings.shape[1] < hidden_states.shape[1]:
             positional_embeddings = F.pad(
