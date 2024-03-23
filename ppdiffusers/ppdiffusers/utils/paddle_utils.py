@@ -93,10 +93,10 @@ if is_paddle_available():
         is_bfloat16 = "bfloat16" in str(dtype) or "bfloat16" in paddle.get_default_dtype()
         if is_bfloat16:
             if generator is None:
-                return randn(shape, dtype="float16", name=name).cast(paddle.bfloat16)
+                return randn(shape, dtype=paddle.bfloat16, name=name)
             else:
                 with get_rng_state_tracker().rng_state(generator):
-                    return randn(shape, dtype="float16", name=name).cast(paddle.bfloat16)
+                    return randn(shape, dtype=paddle.bfloat16, name=name)
         else:
             if generator is None:
                 return randn(shape, dtype=dtype, name=name)
