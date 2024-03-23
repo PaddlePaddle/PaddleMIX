@@ -17,7 +17,10 @@ from typing import Optional
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
-from paddle.nn.functional.flash_attention import flash_attention
+from paddle.nn.functional.flash_attention import (
+    flash_attention,
+    scaled_dot_product_attention,
+)
 
 from ..configuration_utils import ConfigMixin, register_to_config
 from .dit_llama import FeedForward, FinalLayer, TimestepEmbedder, TypePromote, modulate
@@ -165,9 +168,6 @@ class Attention(nn.Layer):
         xq, xk = xq.cast(dtype), xk.cast(dtype)
 
         n_rep = self.n_local_heads // self.n_local_kv_heads
-        if n_rep >= 1:
-            xk = xk.unsqueeze(axis=3).tile([1, 1, 1, n_rep, 1]).flatten(start_axis=2, stop_axis=3)
-            xv = xv.unsqueeze(axis=3).tile([1, 1, 1, n_rep, 1]).flatten(start_axis=2, stop_axis=3)
 
         if dtype in [paddle.float16, paddle.bfloat16]:
             output, _ = flash_attention(
@@ -179,6 +179,9 @@ class Attention(nn.Layer):
                 return_softmax=False,
             )
         else:
+            if n_rep > 1:
+                xk = xk.unsqueeze(axis=3).tile([1, 1, 1, n_rep, 1]).flatten(start_axis=2, stop_axis=3)
+                xv = xv.unsqueeze(axis=3).tile([1, 1, 1, n_rep, 1]).flatten(start_axis=2, stop_axis=3)
             if self.fused_attn:
                 output = F.scaled_dot_product_attention_(
                     xq,
@@ -200,16 +203,27 @@ class Attention(nn.Layer):
             yk = self.ky_norm(self.wk_y(y)).reshape([bsz, -1, self.n_local_kv_heads, self.head_dim])
             yv = self.wv_y(y).reshape([bsz, -1, self.n_local_kv_heads, self.head_dim])
             n_rep = self.n_local_heads // self.n_local_kv_heads
-            if n_rep >= 1:
-                yk = yk.unsqueeze(3).tile([1, 1, 1, n_rep, 1]).flatten(2, 3)
-                yv = yv.unsqueeze(3).tile([1, 1, 1, n_rep, 1]).flatten(2, 3)
 
-            output_y = F.scaled_dot_product_attention_(
-                xq,
-                yk,
-                yv,
-                attn_mask=y_mask.reshape([bsz, 1, 1, -1]).expand([bsz, self.n_local_heads, seqlen, -1]),
-            )
+            y_mask = y_mask.reshape([bsz, 1, 1, -1]).expand([bsz, self.n_local_heads, seqlen, -1])
+
+            if dtype in [paddle.float16, paddle.bfloat16]:
+                output_y = scaled_dot_product_attention(
+                    xq,
+                    yk,
+                    yv,
+                    attn_mask=y_mask.cast(dtype),  # no need to transpose
+                )
+            else:
+                if n_rep > 1:
+                    yk = yk.unsqueeze(3).tile([1, 1, 1, n_rep, 1]).flatten(2, 3)
+                    yv = yv.unsqueeze(3).tile([1, 1, 1, n_rep, 1]).flatten(2, 3)
+
+                output_y = F.scaled_dot_product_attention_(
+                    xq,
+                    yk,
+                    yv,
+                    attn_mask=y_mask,
+                )
 
             output_y = output_y * self.gate.tanh().reshape([1, 1, -1, 1])
             output_y = output_y.flatten(-2)
@@ -296,6 +310,7 @@ class TransformerBlock(nn.Layer):
                 feedforward layers.
 
         """
+        y = y.cast(x.dtype)
         if adaln_input is not None:
             shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.adaLN_modulation(adaln_input).chunk(
                 6, axis=1
