@@ -235,7 +235,7 @@ class LatentDiffusionTrainer(Trainer):
                 self.writer = SummaryWriter("output/tensorboard/test")
                 self.logstep = 0
 
-        self.do_grad_scaling = self.args.fp16 or self.args.bf16
+        self.do_grad_scaling = True if self.args.fp16 else False
 
         if self.args.benchmark or self.args.profiler_options is not None:
             self.add_callback(
@@ -282,15 +282,6 @@ class LatentDiffusionTrainer(Trainer):
         # default use paddlenlp.trainer.Trainer.training_step
         model = unwrap_model(model)
         model.train()
-
-        if self.do_grad_scaling:
-            # label_id no need to cast, should be float64
-            if self.args.fp16:
-                model = model.float16()
-                inputs["latents"] = inputs["latents"].cast("float16")
-            elif self.args.bf16:
-                model = model.bfloat16()
-                inputs["latents"] = inputs["latents"].cast("bfloat16")
 
         with self.autocast_smart_context_manager():
             loss = self.compute_loss(model, inputs)

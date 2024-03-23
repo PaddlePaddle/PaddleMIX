@@ -14,6 +14,9 @@ python -m pip install paddlepaddle-gpu==2.6.0 -f https://www.paddlepaddle.org.cn
 pip install -r requirements.txt
 ```
 
+训练Large-DiT(DiT-LLaMA)模型需安装`fused_ln`，需要安装[此目录](https://github.com/PaddlePaddle/PaddleNLP/tree/develop/model_zoo/gpt-3/external_ops)下的自定义OP， `python setup.py install`。
+
+
 ### 1.2 准备数据
 
 #### ImageNet训练数据集的特征和标签如下：
