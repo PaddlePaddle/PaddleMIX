@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import paddle
-from torchdiffeq import odeint
 
 
 class sde:
@@ -83,38 +82,4 @@ class sde:
                 x, mean_x = sampler(x, mean_x, ti, model, **model_kwargs)
                 samples.append(x)
 
-        return samples
-
-
-class ode:
-    """ODE solver class"""
-
-    def __init__(
-        self,
-        drift,
-        *,
-        t0,
-        t1,
-        sampler_type,
-        num_steps,
-        atol,
-        rtol,
-    ):
-        assert t0 < t1, "ODE sampler has to be in forward time"
-        self.drift = drift
-        self.t = paddle.linspace(t0, t1, num_steps)
-        self.atol = atol
-        self.rtol = rtol
-        self.sampler_type = sampler_type
-
-    def sample(self, x, model, **model_kwargs):
-        def _fn(t, x):
-            t = paddle.ones(x[0].shape[0]) * t if isinstance(x, tuple) else paddle.ones(x.shape[0]) * t
-            model_output = self.drift(x, t, model, **model_kwargs)
-            return model_output
-
-        t = self.t
-        atol = [self.atol] * len(x) if isinstance(x, tuple) else [self.atol]
-        rtol = [self.rtol] * len(x) if isinstance(x, tuple) else [self.rtol]
-        samples = odeint(_fn, x, t, method=self.sampler_type, atol=atol, rtol=rtol)
         return samples
