@@ -1,8 +1,8 @@
 {
-  "model_name_or_path": "/paddle/models/vicuna-13b-v1.5",
+  "model_name_or_path": "vicuna-13b-v1.5",
   "dataset": {
-    "train":[{"name": "chatml_dataset", "data_files": "/paddle/data/ScienceQA/llava_pretrain.json"}],
-    "eval":[{"name": "chatml_dataset", "data_files": "/paddle/data/ScienceQA/llava_val_part.json"}]
+    "train":[{"name": "chatml_dataset", "data_files": "data/ScienceQA/llava_pretrain.json"}],
+    "eval":[{"name": "chatml_dataset", "data_files": "data/ScienceQA/llava_val_part.json"}]
   },
   "mixtoken": false,
   "output_dir": "./checkpoints/llava_pretrain_ckpts",

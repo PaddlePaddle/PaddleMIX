@@ -44,7 +44,13 @@ USER: 给出公交车位置的坐标
 ASSISTANT: 0.23, 0.33, 0.79, 0.78
 ```
 
-## 4 模型微调
+## 4 预训练
+
+```bash
+python paddlemix/examples/llava/pretrain.py paddlemix/config/llava/pretrain.json
+```
+
+## 5 模型微调
 Llava 基于 PaddleMIX tool 统一微调工具链，支持全参数、lora微调，具体可参考 [tools](../../tools/README.md)
 
 ```bash
