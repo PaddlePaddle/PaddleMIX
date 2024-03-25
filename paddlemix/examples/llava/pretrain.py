@@ -91,6 +91,8 @@ def main():
         text_model_name_or_path=model_args.text_model_name_or_path,
         train="train",
         max_length=data_args.max_length,
+        version=model_config.version,
+        image_aspect_ratio=model_config.get("image_aspect_ratio", "square"),
     )
     if training_args.do_eval:
         eval_processor, _ = AutoProcessorMIX.from_pretrained(
@@ -98,6 +100,8 @@ def main():
             text_model_name_or_path=model_args.text_model_name_or_path,
             eval="eval",
             max_length=data_args.max_length,
+            version=model_config.version,
+            image_aspect_ratio=model_config.get("image_aspect_ratio", "square"),
         )
 
     # Load dataset

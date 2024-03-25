@@ -1,8 +1,8 @@
 {
   "model_name_or_path": "/paddle/models/vicuna-13b-v1.5",
   "dataset": {
-    "train":[{"name": "chatml_dataset", "data_files": "/paddle/data/ScienceQA/llava_pretrain.json","chat_template":"/paddle/models/paddlemix/llava/llava-v1.5-7b/chat_template.json"}],
-    "eval":[{"name": "chatml_dataset", "data_files": "/paddle/data/ScienceQA/llava_val_part.json","chat_template":"/paddle/models/paddlemix/llava/llava-v1.5-7b/chat_template.json"}]
+    "train":[{"name": "chatml_dataset", "data_files": "/paddle/data/ScienceQA/llava_pretrain.json"}],
+    "eval":[{"name": "chatml_dataset", "data_files": "/paddle/data/ScienceQA/llava_val_part.json"}]
   },
   "mixtoken": false,
   "output_dir": "./checkpoints/llava_pretrain_ckpts",
@@ -28,5 +28,7 @@
   "do_eval": false,
   "disable_tqdm": true,
   "save_total_limit": 1,
-  "eval_steps": 120
+  "eval_steps": 120,
+  "version":"plain"
+
 }

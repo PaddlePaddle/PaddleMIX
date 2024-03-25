@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
+# from abc import ABC, abstractmethod
 import paddle
 
 from .clip_encoder import build_vision_tower
@@ -82,6 +84,11 @@ class LlavaMetaModel:
         if getattr(self, "mm_projector", None) is None:
             self.mm_projector = build_vision_projector(self.config)
         else:
+            self.mm_projector[-1].weight.set_value(paddle.ones(self.mm_projector[-1].weight.shape, dtype="float32"))
+            self.mm_projector[-1].bias.set_value(paddle.ones(self.mm_projector[-1].bias.shape, dtype="float32"))
+            self.mm_projector[0].weight.set_value(paddle.ones(self.mm_projector[0].weight.shape, dtype="float32"))
+            self.mm_projector[0].bias.set_value(paddle.ones(self.mm_projector[0].bias.shape, dtype="float32"))
+
             for p in self.mm_projector.parameters():
                 p.stop_gradient = not True
         if pretrain_mm_mlp_adapter is not None:
@@ -130,6 +137,12 @@ def unpad_image(tensor, original_size):
 
 
 class LlavaMetaForCausalLM:
+    # class LlavaMetaForCausalLM(ABC):
+
+    # @abstractmethod
+    # def get_model(self):
+    #     pass
+
     def get_vision_tower(self):
         return self.get_model().get_vision_tower()
 

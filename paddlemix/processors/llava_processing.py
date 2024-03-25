@@ -37,7 +37,7 @@ class LlavaProcessor(ProcessorMixin):
     def __init__(self, image_processor, tokenizer, **kwargs):
         super().__init__(image_processor, tokenizer)
         self.max_len = kwargs.get("max_length", 2048)
-        self.image_aspect_ratio = kwargs.get("image_aspect_ratio", "pad")
+        self.image_aspect_ratio = kwargs.get("image_aspect_ratio", "square")
         self.version = kwargs.get("version", "1")
 
     def __call__(
@@ -64,7 +64,7 @@ class LlavaProcessor(ProcessorMixin):
                 image = process_anyres_image(image, self.image_processor, self.image_processor.image_grid_pinpoints)
 
             else:  # hk 1
-                image = self.image_processor(image, return_tensors="pt")["pixel_values"][0]
+                image = self.image_processor(image, return_tensors="pd")["pixel_values"][0]
             images.append(image)
 
         if mode == "train":
