@@ -84,11 +84,6 @@ class LlavaMetaModel:
         if getattr(self, "mm_projector", None) is None:
             self.mm_projector = build_vision_projector(self.config)
         else:
-            self.mm_projector[-1].weight.set_value(paddle.ones(self.mm_projector[-1].weight.shape, dtype="float32"))
-            self.mm_projector[-1].bias.set_value(paddle.ones(self.mm_projector[-1].bias.shape, dtype="float32"))
-            self.mm_projector[0].weight.set_value(paddle.ones(self.mm_projector[0].weight.shape, dtype="float32"))
-            self.mm_projector[0].bias.set_value(paddle.ones(self.mm_projector[0].bias.shape, dtype="float32"))
-
             for p in self.mm_projector.parameters():
                 p.stop_gradient = not True
         if pretrain_mm_mlp_adapter is not None:

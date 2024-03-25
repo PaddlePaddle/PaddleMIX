@@ -53,20 +53,9 @@ def build_vision_projector(config, delay_load=False, **kwargs):
         mlp_depth = int(mlp_gelu_match.group(1))
         modules = [paddle.nn.Linear(in_features=config.mm_hidden_size, out_features=config.hidden_size)]
 
-        modules[-1].weight.set_value(paddle.ones(modules[-1].weight.shape, dtype="float32"))
-        modules[-1].bias.set_value(paddle.ones(modules[-1].bias.shape, dtype="float32"))
-
-        print("L1[-1]weight", modules[-1].weight.abs().mean())
-        print("L1[-1]bias", modules[-1].bias.abs().mean())
-
         for _ in range(1, mlp_depth):
             modules.append(paddle.nn.GELU())
             modules.append(paddle.nn.Linear(in_features=config.hidden_size, out_features=config.hidden_size))
-            modules[-1].weight.set_value(paddle.ones(modules[-1].weight.shape, dtype="float32"))
-            modules[-1].bias.set_value(paddle.ones(modules[-1].bias.shape, dtype="float32"))
-
-            print("L-1[-1]weight", modules[-1].weight.abs().mean())
-            print("L-1[-1]bias", modules[-1].bias.abs().mean())
 
         return paddle.nn.Sequential(*modules)
     if projector_type == "identity":
