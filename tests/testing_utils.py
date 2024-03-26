@@ -44,6 +44,7 @@ def get_bool_from_env(key, default_value=False):
 
 
 _run_slow_test = get_bool_from_env("RUN_SLOW_TEST")
+ai_studio_token = os.getenv("AI_STUDIO_TOKEN")
 
 
 def slow(test):
