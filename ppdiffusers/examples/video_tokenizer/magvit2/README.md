@@ -34,6 +34,10 @@ cd PaddleMIX/ppdiffusers/examples/video_tokenizer/magvit2
 python example.py
 ```
 
+## 4. 模型训练
+注意：当前版本非官方实现，谨慎直接使用。同时，欢迎大家参与优化。
+参考 train.py
+
 ## 4. 参考资料
 ```bibtex
 @misc{yu2023language,
