@@ -52,7 +52,7 @@ def once(fn):
 print_once = once(print)
 
 
-def create_causal_mask(i, j, device):
+def create_causal_mask(i, j):
     return paddle.ones(shape=(i, j), dtype="bool").triu(diagonal=j - i + 1)
 
 
@@ -85,11 +85,9 @@ class Attend(paddle.nn.Layer):
         self.sdp_kwargs = sdp_kwargs
 
     def flash_attn(self, q, k, v, mask=None, attn_bias=None):
-        heads, dtype = tuple(k.shape)[-2], q.dtype
-        batch, q_len, _, k_len, device = (
-            *tuple(q.shape),
-            q.place,
-        )
+        q_dtype = q.dtype
+        batch, heads, q_len, _ = q.shape
+        k_len = k.shape[-2]
         q, k, v = map(lambda t: t, (q, k, v))
         if exists(self.scale):
             q = q * self.scale / tuple(q.shape)[-1] ** -0.5
@@ -99,8 +97,9 @@ class Attend(paddle.nn.Layer):
         if exists(mask):
             assert mask.ndim == 4
             mask = mask.expand(shape=[batch, heads, q_len, k_len])
+
         if k_len > q_len and causal:
-            causal_mask = self.create_causal_mask(q_len, k_len, device=device)
+            causal_mask = self.create_causal_mask(q_len, k_len)
             if not exists(mask):
                 mask = ~causal_mask
             else:
@@ -108,7 +107,7 @@ class Attend(paddle.nn.Layer):
             causal = False
         row_is_entirely_masked = None
         if exists(mask) and causal:
-            causal_mask = self.create_causal_mask(q_len, k_len, device=device)
+            causal_mask = self.create_causal_mask(q_len, k_len)
             mask = mask & ~causal_mask
             row_is_entirely_masked = ~mask.astype("bool").any(axis=-1)
             mask[..., 0] = mask[..., 0] | row_is_entirely_masked
@@ -119,26 +118,28 @@ class Attend(paddle.nn.Layer):
             if exists(mask):
                 attn_bias = attn_bias.masked_fill(mask=~mask, value=mask_value // 2)
             elif causal:
-                causal_mask = self.create_causal_mask(q_len, k_len, device=device)
+                causal_mask = self.create_causal_mask(q_len, k_len)
                 attn_bias = attn_bias.masked_fill(mask=causal_mask, value=mask_value // 2)
                 causal = False
             mask = attn_bias
+
         out = paddle.nn.functional.scaled_dot_product_attention(
-            q.astype("float16"),
-            k.astype("float16"),
-            v.astype("float16"),
-            attn_mask=mask,
+            paddle.cast(q, paddle.bfloat16),
+            paddle.cast(k, paddle.bfloat16),
+            paddle.cast(v, paddle.bfloat16),
+            attn_mask=paddle.cast(mask, paddle.bfloat16) if mask is not None else None,
             dropout_p=self.dropout if self.training else 0.0,
             is_causal=causal,
         )
-        out = paddle.cast(dtype)
+
+        out = paddle.cast(out, q_dtype)
         if exists(row_is_entirely_masked):
             out = out.masked_fill(mask=row_is_entirely_masked[..., None], value=0.0)
         return out
 
     def forward(self, q, k, v, mask=None, attn_bias=None, prev_attn=None):
 
-        n, device = tuple(q.shape)[-2], q.place
+        n, device = tuple(q.shape)[-2]
         scale = default(self.scale, tuple(q.shape)[-1] ** -0.5)
         causal = self.causal
         if n == 1 and causal:
@@ -158,7 +159,7 @@ class Attend(paddle.nn.Layer):
         if exists(mask):
             dots = dots.masked_fill(mask=~mask, value=mask_value)
         if causal:
-            causal_mask = self.create_causal_mask(i, j, device=device)
+            causal_mask = self.create_causal_mask(i, j)
             dots = dots.masked_fill(mask=causal_mask, value=mask_value)
         attn = paddle.nn.functional.softmax(dots, axis=-1)
         attn = self.attn_dropout(attn)
