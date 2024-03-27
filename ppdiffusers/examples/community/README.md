@@ -18,6 +18,7 @@
 |EDICT Image Editing Pipeline| 一个用于文本引导的图像编辑的 Stable Diffusion Pipeline|[EDICT Image Editing Pipeline](#edict_pipeline)||
 |FABRIC - Stable Diffusion with feedback Pipeline| 一个用于喜欢图片和不喜欢图片的反馈 Pipeline|[FABRIC - Stable Diffusion with feedback Pipeline](#fabric_pipeline)||
 |Stable Diffusion XL Long Weighted Prompt Pipeline| 一个不限制 prompt 长度的 Pipeline|[Stable Diffusion XL Long Weighted Prompt Pipeline](#stable-diffusion-xl-long-weighted-prompt-pipeline)||
+|Checkpoint Merger Pipeline|一个支持合并模型checkpoints的Diffusion Pipeline|[Checkpoint Merger Pipeline](#checkpoint-merger-pipeline)||
 
 ## Example usages
 
@@ -892,3 +893,67 @@ images.save("out.png")
 
 生成的图片如下所示：
 <center><img src="https://github.com/PaddlePaddle/PaddleMIX/assets/4617245/938e44c1-a0c1-4a34-8496-f63bc1592673" width=100%></center>
+
+### Checkpoint Merger Pipeline
+
+一个支持合并模型checkpoints的Diffusion Pipeline，使用方式如下所示：
+
+``` python
+from ppdiffusers import DiffusionPipeline
+
+# Return a CheckpointMergerPipeline class that allows you to merge checkpoints.
+# The checkpoint passed here is ignored. But still pass one of the checkpoints you plan to
+# merge for convenience
+pipe = DiffusionPipeline.from_pretrained(
+    "CompVis/stable-diffusion-v1-4",
+    custom_pipeline="checkpoint_merger",
+)
+
+# There are multiple possible scenarios:
+# The pipeline with the merged checkpoints is returned in all the scenarios
+
+# Compatible checkpoints a.k.a matched model_index.json files. Ignores the meta attributes in model_index.json during comparison.( attrs with _ as prefix )
+merged_pipe = pipe.merge(
+    ["CompVis/stable-diffusion-v1-4", "runwayml/stable-diffusion-v1-5"],
+    interp="sigmoid",
+    alpha=0.4,
+)
+
+# Incompatible checkpoints in model_index.json but merge might be possible. Use force = True to ignore model_index.json compatibility
+merged_pipe_1 = pipe.merge(
+    ["CompVis/stable-diffusion-v1-4", "prompthero/openjourney"],
+    force=True,
+    interp="sigmoid",
+    alpha=0.4,
+)
+
+# Three checkpoint merging. Only "add_difference" method actually works on all three checkpoints. Using any other options will ignore the 3rd checkpoint.
+merged_pipe_2 = pipe.merge(
+    [
+        "CompVis/stable-diffusion-v1-4",
+        "runwayml/stable-diffusion-v1-5",
+        "prompthero/openjourney",
+    ],
+    force=True,
+    interp="add_difference",
+    alpha=0.4,
+)
+
+prompt = "An astronaut riding a horse on Mars"
+
+image = merged_pipe(prompt).images[0]
+image.save("CompVis_runwayml.jpg")
+image = merged_pipe_1(prompt).images[0]
+image.save("CompVis_prompthero.jpg")
+image = merged_pipe_2(prompt).images[0]
+image.save("CompVis_runwayml_prompthero.jpg")
+```
+
+一些示例图片以及合并详细信息如下：
+
+1. "CompVis/stable-diffusion-v1-4" + "runwayml/stable-diffusion-v1-5" ; Sigmoid interpolation; alpha = 0.4
+<center><img src="https://github.com/PaddlePaddle/PaddleMIX/assets/93063038/12d5a600-0024-4306-b611-cc7a5ec48fef" width=100%></center>
+2. "CompVis/stable-diffusion-v1-4" + "prompthero/openjourney" ; Sigmoid interpolation; alpha = 0.4
+<center><img src="https://github.com/PaddlePaddle/PaddleMIX/assets/93063038/87452dfe-b6ac-49ed-badc-30880de7e693" width=100%></center>
+3. "CompVis/stable-diffusion-v1-4" + "runwayml/stable-diffusion-v1-5" + "prompthero/openjourney" ; Add Difference interpolation; alpha = 0.4
+<center><img src="https://github.com/PaddlePaddle/PaddleMIX/assets/93063038/a23418c2-3c25-40f4-8c67-ac8c0277b9f5" width=100%></center>
