@@ -198,7 +198,7 @@ def load_image(image_file):
         )
         image = Image.open(BytesIO(response.content)).convert("RGB")
     else:
-        image = Image.open("/paddle/data/GCC/images/" + image_file).convert("RGB")
+        image = Image.open(image_file).convert("RGB")
     return image
 
 
@@ -439,22 +439,6 @@ def preprocess_plain(sources: Sequence[str], tokenizer: PretrainedTokenizer) -> 
         tokenized_len = len(tokenizer_image_token(source[0], tokenizer))
         target[:tokenized_len] = IGNORE_INDEX
     return dict(input_ids=input_ids, labels=targets)
-
-
-# def preprocess_plain(sources: Sequence[str], tokenizer: PretrainedTokenizer) -> Dict:
-#     conversations = []
-#     for source in sources:
-#         assert len(source) == 2
-#         assert DEFAULT_IMAGE_TOKEN in source[0]["value"]
-#         source[0]["value"] = DEFAULT_IMAGE_TOKEN
-#         conversation = source[0]["value"] + source[1]["value"] + conversation_lib.default_conversation.sep
-#         conversations.append(conversation)
-#     input_ids = [tokenizer_image_token(prompt, tokenizer, return_tensors="pd") for prompt in conversations]
-#     targets = copy.deepcopy(input_ids)
-#     for target, source in zip(targets, sources):
-#         tokenized_len = len(tokenizer_image_token(source[0]["value"], tokenizer))
-#         target[:tokenized_len] = IGNORE_INDEX
-#     return dict(input_ids=input_ids, labels=targets)
 
 
 def get_conversation(

@@ -13,7 +13,6 @@
 # limitations under the License.
 
 
-# from abc import ABC, abstractmethod
 import paddle
 
 from .clip_encoder import build_vision_tower
@@ -132,12 +131,6 @@ def unpad_image(tensor, original_size):
 
 
 class LlavaMetaForCausalLM:
-    # class LlavaMetaForCausalLM(ABC):
-
-    # @abstractmethod
-    # def get_model(self):
-    #     pass
-
     def get_vision_tower(self):
         return self.get_model().get_vision_tower()
 
