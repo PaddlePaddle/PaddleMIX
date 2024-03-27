@@ -36,6 +36,7 @@ except OptionalDependencyNotAvailable:
 else:
     _import_structure["pipeline_latent_diffusion"] = ["LDMBertModel", "LDMBertConfig", "LDMTextToImagePipeline"]
     _import_structure["pipeline_latent_diffusion_uvit"] = ["LDMTextToImageUViTPipeline"]
+    _import_structure["pipeline_latent_diffusion_largedit"] = ["LDMTextToImageLargeDiTPipeline"]
     _import_structure["pipeline_latent_diffusion_superresolution"] = ["LDMSuperResolutionPipeline"]
 
 
@@ -52,6 +53,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             LDMBertModel,
             LDMTextToImagePipeline,
         )
+        from .pipeline_latent_diffusion_largedit import LDMTextToImageLargeDiTPipeline
         from .pipeline_latent_diffusion_superresolution import (
             LDMSuperResolutionPipeline,
         )

@@ -1,4 +1,4 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,23 +13,16 @@
 # limitations under the License.
 
 import paddle
+from paddlenlp.trainer import set_seed
 
-from ppdiffusers import DiTPipeline, DPMSolverMultistepScheduler
+from ppdiffusers import DPMSolverMultistepScheduler
+from ppdiffusers.pipelines import LDMTextToImageLargeDiTPipeline
 
-pipe = DiTPipeline.from_pretrained("facebook/DiT-XL-2-256", paddle_dtype=paddle.float16)
+dtype = paddle.bfloat16
+pipe = LDMTextToImageLargeDiTPipeline.from_pretrained("Alpha-VLLM/Large-DiT-T2I-3B-1024", paddle_dtype=dtype)
 pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
+set_seed(42)
 
-# pick words from Imagenet class labels
-pipe.labels  # to print all available words
-
-# pick words that exist in ImageNet
-words = ["white shark", "umbrella"]
-
-class_ids = pipe.get_label_ids(words)
-
-generator = paddle.Generator().manual_seed(33)
-output = pipe(class_labels=class_ids, num_inference_steps=25, generator=generator)
-
-image = output.images[0]  # label 'white shark'
-
-image.save("text_to_image_generation_dit.png")
+prompt = "a dog is running on the grass"
+image = pipe(prompt, height=1024, width=1024, guidance_scale=4, num_inference_steps=10).images[0]
+image.save("text_to_image_generation-large_dit_t2i_3b_1024-result.png")
