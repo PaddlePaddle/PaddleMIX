@@ -138,7 +138,7 @@ def parse_arguments():
     parser.add_argument(
         "--benchmark_steps",
         type=int,
-        default=10,
+        default=1,
         help="The number of performance benchmark steps.",
     )
     parser.add_argument(

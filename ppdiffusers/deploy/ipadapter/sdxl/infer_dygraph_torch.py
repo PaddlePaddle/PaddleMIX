@@ -19,8 +19,6 @@ import time
 # torch.nn.functional.scaled_dot_product_attention_ = torch.nn.functional.scaled_dot_product_attention
 # delattr(torch.nn.functional, "scaled_dot_product_attention")
 import numpy as np
-import PIL
-import requests
 import torch
 from diffusers import (
     DDIMScheduler,
@@ -38,7 +36,6 @@ from diffusers import (
     PNDMScheduler,
     StableDiffusionXLImg2ImgPipeline,
     StableDiffusionXLInpaintPipeline,
-    StableDiffusionXLInstructPix2PixPipeline,
     UniPCMultistepScheduler,
 )
 
@@ -110,14 +107,32 @@ def parse_arguments():
         "--task",
         type=str,
         default="text2img",
-        choices=["text2img", "text2img_with_refiner", "img2img", "inpainting", "instruct_pix2pix"],
+        choices=["text2img", "text2img_with_refiner", "img2img", "inpainting"],
         help="task.",
     )
     parser.add_argument(
         "--pretrained_model_name_or_path",
         type=str,
-        default=None,
+        default="stabilityai/stable-diffusion-xl-base-1.0",
         help="The model directory of diffusion_model.",
+    )
+    parser.add_argument(
+        "--ipadapter_pretrained_model_name_or_path",
+        type=str,
+        default="h94/IP-Adapter",
+        help="Path to the `ppdiffusers`'s ip-adapter checkpoint to convert (either a local directory or on the bos).Example: h94/IP-Adapter",
+    )
+    parser.add_argument(
+        "--ipadapter_model_subfolder",
+        type=str,
+        default="sdxl_models",
+        help="Path to the `ppdiffusers`'s ip-adapter checkpoint to convert (either a local directory or on the bos).Example: models",
+    )
+    parser.add_argument(
+        "--ipadapter_weight_name",
+        type=str,
+        default="ip-adapter_sdxl.safetensors",
+        help="Name of the weight to convert.Example: ip-adapter_sd15.safetensors",
     )
     parser.add_argument("--inference_steps", type=int, default=50, help="The number of unet inference steps.")
     parser.add_argument("--benchmark_steps", type=int, default=1, help="The number of performance benchmark steps.")
@@ -230,6 +245,11 @@ def text2img(args):
         if args.pretrained_model_name_or_path
         else "stabilityai/stable-diffusion-xl-base-1.0",
         torch_dtype=torch_dtype,
+    ).to("cuda")
+    pipe.load_ip_adapter(
+        args.ipadapter_pretrained_model_name_or_path,
+        subfolder=args.ipadapter_model_subfolder,
+        weight_name=args.ipadapter_weight_name,
     )
     scheduler = change_scheduler(pipe, args.scheduler)
     pipe.scheduler = scheduler
@@ -268,14 +288,20 @@ def text2img(args):
         # warmup
         prompt = "beautiful scenery nature glass bottle landscape, purple galaxy bottle"
         negative_prompt = "text, watermark"
-        image = pipe(prompt, negative_prompt=negative_prompt, num_inference_steps=50).images[0]
+        img_url = "https://paddlenlp.bj.bcebos.com/models/community/examples/images/load_neg_embed.png"
+        ip_image = load_image(img_url)
+        image = pipe(
+            prompt, negative_prompt=negative_prompt, ip_adapter_image=ip_image, num_inference_steps=50
+        ).images[0]
         upcast_vae(pipe, target_type=torch_dtype)
 
         print("==> Test text2img performance.")
         for step in trange(args.benchmark_steps):
             start = time.time()
             torch.cuda.manual_seed(seed)
-            image = pipe(prompt, negative_prompt=negative_prompt, num_inference_steps=50).images[0]
+            image = pipe(
+                prompt, negative_prompt=negative_prompt, ip_adapter_image=ip_image, num_inference_steps=50
+            ).images[0]
             upcast_vae(pipe, target_type=torch_dtype)
             latency = time.time() - start
             time_costs += [latency]
@@ -300,6 +326,11 @@ def text2img_with_refiner(args):
         if args.pretrained_model_name_or_path
         else "stabilityai/stable-diffusion-xl-base-1.0",
         torch_dtype=torch_dtype,
+    ).to("cuda")
+    base.load_ip_adapter(
+        args.ipadapter_pretrained_model_name_or_path,
+        subfolder=args.ipadapter_model_subfolder,
+        weight_name=args.ipadapter_weight_name,
     )
     refiner = DiffusionPipeline.from_pretrained(
         "stabilityai/stable-diffusion-xl-refiner-1.0",
@@ -352,9 +383,12 @@ def text2img_with_refiner(args):
         # high_noise_frac = 0.8
         prompt = "A majestic lion jumping from a big stone at night"
         prompt = "a photo of an astronaut riding a horse on mars"
+        img_url = "https://paddlenlp.bj.bcebos.com/models/community/examples/images/load_neg_embed.png"
+        ip_image = load_image(img_url)
         # run both experts
         image = base(
             prompt=prompt,
+            ip_adapter_image=ip_image,
             output_type="latent",
         ).images
         upcast_vae(base, target_type=torch_dtype)
@@ -366,11 +400,13 @@ def text2img_with_refiner(args):
         upcast_vae(refiner, target_type=torch_dtype)
 
         print("==> Test text2img_with_refiner performance.")
+        ip_image = load_image(image)
         for step in trange(args.benchmark_steps):
             start = time.time()
             torch.cuda.manual_seed(seed)
             image = base(
                 prompt=prompt,
+                ip_adapter_image=ip_image,
                 output_type="latent",
             ).images
             upcast_vae(base, target_type=torch_dtype)
@@ -401,8 +437,13 @@ def img2img(args):
     pipe = StableDiffusionXLImg2ImgPipeline.from_pretrained(
         args.pretrained_model_name_or_path
         if args.pretrained_model_name_or_path
-        else "stabilityai/stable-diffusion-xl-refiner-1.0",
+        else "stabilityai/stable-diffusion-xl-base-1.0",
         torch_dtype=torch_dtype,
+    ).to("cuda")
+    pipe.load_ip_adapter(
+        args.ipadapter_pretrained_model_name_or_path,
+        subfolder=args.ipadapter_model_subfolder,
+        weight_name=args.ipadapter_weight_name,
     )
     scheduler = change_scheduler(pipe, args.scheduler)
     pipe.scheduler = scheduler
@@ -439,15 +480,16 @@ def img2img(args):
         # warmup
         url = "https://huggingface.co/datasets/patrickvonplaten/images/resolve/main/aa_xl/000000009.png"
         init_image = load_image(url).convert("RGB")
+        ip_image = load_image(url)
         prompt = "a photo of an astronaut riding a horse on mars"
-        image = pipe(prompt, image=init_image).images[0]
+        image = pipe(prompt, ip_adapter_image=ip_image, image=init_image).images[0]
         upcast_vae(pipe, target_type=torch_dtype)
 
         print("==> Test img2img performance.")
         for step in trange(args.benchmark_steps):
             start = time.time()
             torch.cuda.manual_seed(seed)
-            image = pipe(prompt, image=init_image).images[0]
+            image = pipe(prompt, ip_adapter_image=ip_image, image=init_image).images[0]
             upcast_vae(pipe, target_type=torch_dtype)
             latency = time.time() - start
             time_costs += [latency]
@@ -472,6 +514,11 @@ def inpainting(args):
         if args.pretrained_model_name_or_path
         else "stabilityai/stable-diffusion-xl-base-1.0",
         torch_dtype=torch_dtype,
+    ).to("cuda")
+    pipe.load_ip_adapter(
+        args.ipadapter_pretrained_model_name_or_path,
+        subfolder=args.ipadapter_model_subfolder,
+        weight_name=args.ipadapter_weight_name,
     )
     scheduler = change_scheduler(pipe, args.scheduler)
     pipe.scheduler = scheduler
@@ -510,9 +557,15 @@ def inpainting(args):
         mask_url = "https://raw.githubusercontent.com/CompVis/latent-diffusion/main/data/inpainting_examples/overture-creations-5sI6fQgYIuo_mask.png"
         init_image = load_image(img_url).convert("RGB")
         mask_image = load_image(mask_url).convert("RGB")
+        ip_image = load_image(img_url)
         prompt = "A majestic tiger sitting on a bench"
         image = pipe(
-            prompt=prompt, image=init_image, mask_image=mask_image, num_inference_steps=50, strength=0.80
+            prompt=prompt,
+            image=init_image,
+            mask_image=mask_image,
+            ip_adapter_image=ip_image,
+            num_inference_steps=50,
+            strength=0.80,
         ).images[0]
         upcast_vae(pipe, target_type=torch_dtype)
 
@@ -521,7 +574,12 @@ def inpainting(args):
             start = time.time()
             torch.cuda.manual_seed(seed)
             image = pipe(
-                prompt=prompt, image=init_image, mask_image=mask_image, num_inference_steps=50, strength=0.80
+                prompt=prompt,
+                image=init_image,
+                mask_image=mask_image,
+                ip_adapter_image=ip_image,
+                num_inference_steps=50,
+                strength=0.80,
             ).images[0]
             upcast_vae(pipe, target_type=torch_dtype)
             latency = time.time() - start
@@ -534,97 +592,6 @@ def inpainting(args):
         image.save(f"{folder}/inpainting_torch.png")
 
 
-def instruct_pix2pix(args):
-    if args.tf32:
-        torch.backends.cuda.matmul.allow_tf32 = True
-    else:
-        torch.backends.cuda.matmul.allow_tf32 = False
-
-    seed = 1024
-    torch_dtype = torch.float16 if args.use_fp16 else torch.float32
-    pipe = StableDiffusionXLInstructPix2PixPipeline.from_pretrained(
-        args.pretrained_model_name_or_path
-        if args.pretrained_model_name_or_path
-        else "sayakpaul/sdxl-instructpix2pix-1024-orig",
-        torch_dtype=torch_dtype,
-    )
-    scheduler = change_scheduler(pipe, args.scheduler)
-    pipe.scheduler = scheduler
-    if args.device_id >= 0:
-        pipe.to(f"cuda:{args.device_id}")
-
-    if args.attention_type == "all":
-        args.attention_type = ["raw", "sdp"]
-    else:
-        args.attention_type = [args.attention_type]
-
-    for attention_type in args.attention_type:
-        # attn_prrocessor_cls = AttnProcessor if attention_type == "raw" else AttnProcessor2_0
-        if attention_type == "raw":
-            pipe.unet.set_default_attn_processor()
-            pipe.vae.set_default_attn_processor()
-
-        if args.channels_last:
-            pipe.unet.to(memory_format=torch.channels_last)
-
-        if args.compile:
-            print("Run torch compile")
-            pipe.unet = torch.compile(pipe.unet, mode="reduce-overhead", fullgraph=True)
-
-        # width = args.width
-        # height = args.height
-        pipe.set_progress_bar_config(disable=False)
-
-        folder = f"torch_attn_{attention_type}_fp16" if args.use_fp16 else f"torch_attn_{attention_type}_fp32"
-        os.makedirs(folder, exist_ok=True)
-
-        # instruct_pix2pix
-        time_costs = []
-        # warmup
-        url = "https://datasets-server.huggingface.co/assets/fusing/instructpix2pix-1000-samples/--/fusing--instructpix2pix-1000-samples/train/23/input_image/image.jpg"
-
-        def download_image(url):
-            image = PIL.Image.open(requests.get(url, stream=True).raw)
-            image = PIL.ImageOps.exif_transpose(image)
-            image = image.convert("RGB")
-            return image
-
-        image = download_image(url)
-        prompt = "make it Japan"
-        num_inference_steps = 20
-        image_guidance_scale = 1.5
-        guidance_scale = 10
-        image = pipe(
-            prompt,
-            image=image,
-            num_inference_steps=num_inference_steps,
-            image_guidance_scale=image_guidance_scale,
-            guidance_scale=guidance_scale,
-        ).images[0]
-        upcast_vae(pipe, target_type=torch_dtype)
-
-        print("==> Test instruct_pix2pix performance.")
-        for step in trange(args.benchmark_steps):
-            start = time.time()
-            torch.cuda.manual_seed(seed)
-            image = pipe(
-                prompt,
-                image=image,
-                num_inference_steps=num_inference_steps,
-                image_guidance_scale=image_guidance_scale,
-                guidance_scale=guidance_scale,
-            ).images[0]
-            upcast_vae(pipe, target_type=torch_dtype)
-            latency = time.time() - start
-            time_costs += [latency]
-            print(f"No {step:3d} time cost: {latency:2f} s")
-        print(
-            f"Mean latency: {np.mean(time_costs):2f} s, p50 latency: {np.percentile(time_costs, 50):2f} s, "
-            f"p90 latency: {np.percentile(time_costs, 90):2f} s, p95 latency: {np.percentile(time_costs, 95):2f} s."
-        )
-        image.save(f"{folder}/instruct_pix2pix_torch.png")
-
-
 if __name__ == "__main__":
     args = parse_arguments()
     if args.task == "text2img":
@@ -635,5 +602,3 @@ if __name__ == "__main__":
         img2img(args)
     elif args.task == "inpainting":
         inpainting(args)
-    elif args.task == "instruct_pix2pix":
-        instruct_pix2pix(args)

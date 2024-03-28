@@ -320,9 +320,7 @@ def main(args):
 
     if args.task_name in ["img2img", "all"]:
         # img2img
-        img_url = (
-            "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/sketch-mountains-input.png"
-        )
+        img_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/sketch-mountains-input.png"
         init_image = load_image(img_url)
         ip_image = load_image(img_url)
         prompt = "A fantasy landscape, trending on artstation"

@@ -331,9 +331,7 @@ def main(args):
         images[0].save(f"{folder}/text2img.png")
 
     if args.task_name in ["img2img", "all"]:
-        img_url = (
-            "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/sketch-mountains-input.png"
-        )
+        img_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/sketch-mountains-input.png"
         init_image = load_image(img_url)
         controlnet_cond = get_canny_image(init_image, args)
         prompt = "A fantasy landscape, trending on artstation"
@@ -421,7 +419,6 @@ def main(args):
         else:
             task_name = args.task_name
         images[0].save(f"{folder}/{task_name}.png")
-
 
 if __name__ == "__main__":
     args = parse_arguments()

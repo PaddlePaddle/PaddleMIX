@@ -17,20 +17,19 @@ import os
 import time
 
 # isort: split
-import paddle
-import paddle.inference as paddle_infer
-from paddle.base.framework import in_cinn_mode, in_pir_executor_mode
+import torch
 
 # isort: split
+import sys
+
 import numpy as np
+from diffusers import DiffusionPipeline, StableDiffusionPipeline  # noqa
+from diffusers.utils import load_image
 from paddlenlp.trainer.argparser import strtobool
 from tqdm.auto import trange
 
-from ppdiffusers import (  # noqa
-    DiffusionPipeline,
-    PaddleInferStableDiffusionMegaPipeline,
-)
-from ppdiffusers.utils import load_image
+sys.path.append(".")
+from mega_for_torch import StableDiffusionMegaPipeline
 
 
 def parse_arguments():
@@ -38,7 +37,7 @@ def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--model_dir",
-        default="runwayml/stable-diffusion-v1-5@paddleinfer",
+        default="runwayml/stable-diffusion-v1-5",
         help="The model directory of diffusion_model.",
     )
     parser.add_argument(
@@ -56,8 +55,8 @@ def parse_arguments():
     parser.add_argument(
         "--backend",
         type=str,
-        default="paddle_tensorrt",
-        choices=["paddle", "paddle_tensorrt"],
+        default="torch",
+        choices=["torch"],
         help="The inference runtime backend of unet model and text encoder model.",
     )
     parser.add_argument(
@@ -129,143 +128,20 @@ def parse_arguments():
         default=False,
         help="Whether to tune the shape of tensorrt engine.",
     )
-    
+
     return parser.parse_args()
 
 
-def create_paddle_inference_runtime(
-    model_dir="",
-    model_name="",
-    use_trt=False,
-    precision_mode=paddle_infer.PrecisionType.Half,
-    device_id=0,
-    disable_paddle_trt_ops=[],
-    disable_paddle_pass=[],
-    workspace=24 * 1024 * 1024 * 1024,
-    tune=False,
-):
-    config = paddle_infer.Config()
-    config.enable_memory_optim()
-    shape_file = f"{model_dir}/{model_name}/shape_range_info.pbtxt"
-    if tune:
-        config.collect_shape_range_info(shape_file)
-        config.switch_ir_optim(False)
-    else:
-        config.enable_new_executor()
-        if in_pir_executor_mode():
-            config.enable_new_ir()
-            if in_cinn_mode():
-                config.enable_cinn()
-
-    if device_id != -1:
-        config.use_gpu()
-        config.enable_use_gpu(memory_pool_init_size_mb=2000, device_id=device_id, precision_mode=precision_mode)
-    for pass_name in disable_paddle_pass:
-        config.delete_pass(pass_name)
-    if use_trt:
-        config.enable_tensorrt_engine(
-            workspace_size=workspace,
-            precision_mode=precision_mode,
-            max_batch_size=1,
-            min_subgraph_size=3,
-            use_static=True,
-        )
-        config.enable_tensorrt_memory_optim()
-        config.enable_tuned_tensorrt_dynamic_shape(shape_file, True)
-        cache_file = os.path.join(model_dir, model_name, "_opt_cache/")
-        config.set_optim_cache_dir(cache_file)
-        if precision_mode != paddle_infer.PrecisionType.Half:
-            only_fp16_passes = [
-                "trt_cross_multihead_matmul_fuse_pass",
-                "trt_flash_multihead_matmul_fuse_pass",
-                "preln_elementwise_groupnorm_act_pass",
-                "elementwise_groupnorm_act_pass",
-            ]
-            for curr_pass in only_fp16_passes:
-                config.delete_pass(curr_pass)
-    return config
-
-
 def main(args):
-    if args.device_id == -1:
-        paddle.set_device("cpu")
-    else:
-        paddle.set_device(f"gpu:{args.device_id}")
-
     seed = 1024
     min_image_size = 512
     max_image_size = 768
     max_image_size = max(min_image_size, max_image_size)
-
-    # 4. Init runtime
-    only_fp16_passes = [
-        "trt_cross_multihead_matmul_fuse_pass",
-        "trt_flash_multihead_matmul_fuse_pass",
-        "preln_elementwise_groupnorm_act_pass",
-        "elementwise_groupnorm_act_pass",
-    ]
-    no_need_passes = [
-        "trt_prompt_tuning_embedding_eltwise_layernorm_fuse_pass",
-        "add_support_int8_pass",
-        "auto_mixed_precision_pass",
-        "elementwise_groupnorm_act_pass",
-        "groupnorm_act_pass",
-        "preln_elementwise_groupnorm_act_pass",
-    ]
-    paddle_delete_passes = dict(
-        text_encoder=only_fp16_passes + no_need_passes if not args.use_fp16 else no_need_passes,
-        text_encoder_2=only_fp16_passes + no_need_passes if not args.use_fp16 else no_need_passes,
-        vae_encoder=only_fp16_passes + [] if args.use_fp16 else [],
-        vae_decoder=only_fp16_passes + no_need_passes if not args.use_fp16 else no_need_passes,
-        unet=only_fp16_passes + no_need_passes if not args.use_fp16 else no_need_passes,
-        image_encoder=only_fp16_passes + no_need_passes if not args.use_fp16 else no_need_passes,
-    )
-    args.use_trt = args.backend == "paddle_tensorrt"
-    precision_mode = paddle_infer.PrecisionType.Half if args.use_fp16 else paddle_infer.PrecisionType.Float32
-    infer_configs = dict(
-        text_encoder=create_paddle_inference_runtime(
-            model_dir=args.model_dir,
-            use_trt=False,
-            model_name="text_encoder",
-            precision_mode=paddle_infer.PrecisionType.Half,
-            device_id=args.device_id,
-            disable_paddle_trt_ops=["range", "lookup_table_v2"],
-            disable_paddle_pass=paddle_delete_passes.get("text_encoder", []),
-            tune=False,
-        ),
-        vae_encoder=create_paddle_inference_runtime(
-            model_dir=args.model_dir,
-            model_name="vae_encoder",
-            use_trt=False,
-            precision_mode=paddle_infer.PrecisionType.Half,
-            device_id=args.device_id,
-            disable_paddle_pass=paddle_delete_passes.get("vae_encoder", []),
-            tune=False,
-        ),
-        vae_decoder=create_paddle_inference_runtime(
-            model_dir=args.model_dir,
-            model_name="vae_decoder",
-            use_trt=False,
-            precision_mode=paddle_infer.PrecisionType.Float32,
-            device_id=args.device_id,
-            disable_paddle_pass=paddle_delete_passes.get("vae_decoder", []),
-            tune=False,
-        ),
-        unet=create_paddle_inference_runtime(
-            model_dir=args.model_dir,
-            model_name="unet",
-            use_trt=args.use_trt,
-            precision_mode=precision_mode,
-            device_id=args.device_id,
-            disable_paddle_pass=no_need_passes,
-            tune=args.tune,
-        ),
-    )
-    pipe = PaddleInferStableDiffusionMegaPipeline.from_pretrained(
+    pipe = StableDiffusionMegaPipeline.from_pretrained(
         args.model_dir,
-        infer_configs=infer_configs,
-        use_optim_cache=False,
-    )
+        image_encoder=None,
+        torch_dtype=torch.float16 if args.use_fp16 else torch.float32,
+    ).to("cuda")
     pipe.set_progress_bar_config(disable=False)
     pipe.change_scheduler(args.scheduler)
     parse_prompt_type = args.parse_prompt_type
@@ -284,19 +160,19 @@ def main(args):
             num_inference_steps=20,
             height=height,
             width=width,
-            # parse_prompt_type=parse_prompt_type,
+            parse_prompt_type=parse_prompt_type,
         )
         print("==> Test text2img performance.")
         for step in trange(args.benchmark_steps):
             start = time.time()
-            paddle.seed(seed)
+            torch.manual_seed(seed)
             images = pipe.text2img(
                 prompt,
                 output_type="pil",
                 num_inference_steps=args.inference_steps,
                 height=height,
                 width=width,
-                # parse_prompt_type=parse_prompt_type,
+                parse_prompt_type=parse_prompt_type,
             ).images
             latency = time.time() - start
             time_costs += [latency]
@@ -309,7 +185,9 @@ def main(args):
 
     if args.task_name in ["img2img", "all"]:
         # img2img
-        img_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/sketch-mountains-input.png"
+        img_url = (
+            "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/sketch-mountains-input.png"
+        )
         init_image = load_image(img_url)
         prompt = "A fantasy landscape, trending on artstation"
         time_costs = []
@@ -320,19 +198,19 @@ def main(args):
             num_inference_steps=20,
             height=height,
             width=width,
-            # parse_prompt_type=parse_prompt_type,
+            parse_prompt_type=parse_prompt_type,
         )
         print("==> Test img2img performance.")
         for step in trange(args.benchmark_steps):
             start = time.time()
-            paddle.seed(seed)
+            torch.manual_seed(seed)
             images = pipe.img2img(
                 prompt,
                 image=init_image,
                 num_inference_steps=args.inference_steps,
                 height=height,
                 width=width,
-                # parse_prompt_type=parse_prompt_type,
+                parse_prompt_type=parse_prompt_type,
             ).images
             latency = time.time() - start
             time_costs += [latency]
@@ -371,7 +249,7 @@ def main(args):
         print(f"==> Test {task_name} performance.")
         for step in trange(args.benchmark_steps):
             start = time.time()
-            paddle.seed(seed)
+            torch.manual_seed(seed)
             images = call_fn(
                 prompt,
                 image=init_image,
@@ -390,6 +268,7 @@ def main(args):
         )
 
         images[0].save(f"{folder}/{task_name}.png")
+
 
 if __name__ == "__main__":
     args = parse_arguments()

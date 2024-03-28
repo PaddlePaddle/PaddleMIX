@@ -19,8 +19,6 @@ import warnings
 
 import numpy as np
 import paddle
-import PIL
-import requests
 from paddlenlp.trainer.argparser import strtobool
 from paddlenlp.utils.log import logger
 from tqdm.auto import trange
@@ -29,7 +27,6 @@ from ppdiffusers import (
     DiffusionPipeline,
     StableDiffusionXLImg2ImgPipeline,
     StableDiffusionXLInpaintPipeline,
-    StableDiffusionXLInstructPix2PixPipeline,
 )
 from ppdiffusers.utils import load_image
 
@@ -42,14 +39,32 @@ def parse_arguments():
     parser.add_argument(
         "--pretrained_model_name_or_path",
         type=str,
-        default=None,
+        default="stabilityai/stable-diffusion-xl-base-1.0",
         help="The model directory of diffusion_model.",
+    )
+    parser.add_argument(
+        "--ipadapter_pretrained_model_name_or_path",
+        type=str,
+        default="h94/IP-Adapter",
+        help="Path to the `ppdiffusers`'s ip-adapter checkpoint to convert (either a local directory or on the bos).Example: h94/IP-Adapter",
+    )
+    parser.add_argument(
+        "--ipadapter_model_subfolder",
+        type=str,
+        default="sdxl_models",
+        help="Path to the `ppdiffusers`'s ip-adapter checkpoint to convert (either a local directory or on the bos).Example: models",
+    )
+    parser.add_argument(
+        "--ipadapter_weight_name",
+        type=str,
+        default="ip-adapter_sdxl.safetensors",
+        help="Name of the weight to convert.Example: ip-adapter_sd15.safetensors",
     )
     parser.add_argument(
         "--task",
         type=str,
         default="text2img",
-        choices=["text2img", "text2img_with_refiner", "img2img", "inpainting", "instruct_pix2pix"],
+        choices=["text2img", "text2img_with_refiner", "img2img", "inpainting"],
         help="task.",
     )
     parser.add_argument("--inference_steps", type=int, default=50, help="The number of unet inference steps.")
@@ -77,6 +92,11 @@ def text2img(args):
         if args.pretrained_model_name_or_path
         else "stabilityai/stable-diffusion-xl-base-1.0",
         paddle_dtype=paddle_dtype,
+    )
+    pipe.load_ip_adapter(
+        args.ipadapter_pretrained_model_name_or_path,
+        subfolder=args.ipadapter_model_subfolder,
+        weight_name=args.ipadapter_weight_name,
     )
     pipe.set_progress_bar_config(disable=False)
     if args.attention_type == "all":
@@ -108,15 +128,21 @@ def text2img(args):
         # text2img
         time_costs = []
         # warmup
+        img_url = "https://paddlenlp.bj.bcebos.com/models/community/examples/images/load_neg_embed.png"
+        ip_image = load_image(img_url)
         prompt = "beautiful scenery nature glass bottle landscape, purple galaxy bottle"
         negative_prompt = "text, watermark"
-        image = pipe(prompt, negative_prompt=negative_prompt, num_inference_steps=50).images[0]
+        image = pipe(
+            prompt, negative_prompt=negative_prompt, ip_adapter_image=ip_image, num_inference_steps=50
+        ).images[0]
 
         print("==> Test text2img performance.")
         for step in trange(args.benchmark_steps):
             start = time.time()
             paddle.seed(seed)
-            image = pipe(prompt, negative_prompt=negative_prompt, num_inference_steps=50).images[0]
+            image = pipe(
+                prompt, negative_prompt=negative_prompt, ip_adapter_image=ip_image, num_inference_steps=50
+            ).images[0]
             latency = time.time() - start
             time_costs += [latency]
             print(f"No {step:3d} time cost: {latency:2f} s")
@@ -140,6 +166,11 @@ def text2img_with_refiner(args):
         if args.pretrained_model_name_or_path
         else "stabilityai/stable-diffusion-xl-base-1.0",
         paddle_dtype=paddle_dtype,
+    )
+    base.load_ip_adapter(
+        args.ipadapter_pretrained_model_name_or_path,
+        subfolder=args.ipadapter_model_subfolder,
+        weight_name=args.ipadapter_weight_name,
     )
     refiner = DiffusionPipeline.from_pretrained(
         "stabilityai/stable-diffusion-xl-refiner-1.0",
@@ -186,9 +217,12 @@ def text2img_with_refiner(args):
         # high_noise_frac = 0.8
         prompt = "A majestic lion jumping from a big stone at night"
         prompt = "a photo of an astronaut riding a horse on mars"
+        img_url = "https://paddlenlp.bj.bcebos.com/models/community/examples/images/load_neg_embed.png"
+        ip_image = load_image(img_url)
         # run both experts
         image = base(
             prompt=prompt,
+            ip_adapter_image=ip_image,
             output_type="latent",
         ).images
         image = refiner(
@@ -197,11 +231,13 @@ def text2img_with_refiner(args):
         ).images[0]
 
         print("==> Test text2img_with_refiner performance.")
+        ip_image = load_image(image)
         for step in trange(args.benchmark_steps):
             start = time.time()
             paddle.seed(seed)
             image = base(
                 prompt=prompt,
+                ip_adapter_image=ip_image,
                 output_type="latent",
             ).images
             image = refiner(
@@ -231,6 +267,11 @@ def img2img(args):
         if args.pretrained_model_name_or_path
         else "stabilityai/stable-diffusion-xl-refiner-1.0",
         paddle_dtype=paddle_dtype,
+    )
+    pipe.load_ip_adapter(
+        args.ipadapter_pretrained_model_name_or_path,
+        subfolder=args.ipadapter_model_subfolder,
+        weight_name=args.ipadapter_weight_name,
     )
     pipe.set_progress_bar_config(disable=False)
     if args.attention_type == "all":
@@ -264,14 +305,15 @@ def img2img(args):
         # warmup
         url = "https://paddlenlp.bj.bcebos.com/models/community/westfish/develop-0-19-3/000000009.png"
         init_image = load_image(url).convert("RGB")
+        ip_image = load_image(url)
         prompt = "a photo of an astronaut riding a horse on mars"
-        image = pipe(prompt, image=init_image).images[0]
+        image = pipe(prompt, ip_adapter_image=ip_image, image=init_image).images[0]
 
         print("==> Test img2img performance.")
         for step in trange(args.benchmark_steps):
             start = time.time()
             paddle.seed(seed)
-            image = pipe(prompt, image=init_image).images[0]
+            image = pipe(prompt, ip_adapter_image=ip_image, image=init_image).images[0]
             latency = time.time() - start
             time_costs += [latency]
             print(f"No {step:3d} time cost: {latency:2f} s")
@@ -296,6 +338,11 @@ def inpainting(args):
         else "stabilityai/stable-diffusion-xl-base-1.0",
         paddle_dtype=paddle_dtype,
         variant="fp16",
+    )
+    pipe.load_ip_adapter(
+        args.ipadapter_pretrained_model_name_or_path,
+        subfolder=args.ipadapter_model_subfolder,
+        weight_name=args.ipadapter_weight_name,
     )
     pipe.set_progress_bar_config(disable=False)
     if args.attention_type == "all":
@@ -331,9 +378,15 @@ def inpainting(args):
         mask_url = "https://raw.githubusercontent.com/CompVis/latent-diffusion/main/data/inpainting_examples/overture-creations-5sI6fQgYIuo_mask.png"
         init_image = load_image(img_url).convert("RGB")
         mask_image = load_image(mask_url).convert("RGB")
+        ip_image = load_image(img_url)
         prompt = "A majestic tiger sitting on a bench"
         image = pipe(
-            prompt=prompt, image=init_image, mask_image=mask_image, num_inference_steps=50, strength=0.80
+            prompt=prompt,
+            image=init_image,
+            mask_image=mask_image,
+            ip_adapter_image=ip_image,
+            num_inference_steps=50,
+            strength=0.80,
         ).images[0]
 
         print("==> Test inpainting performance.")
@@ -341,7 +394,12 @@ def inpainting(args):
             start = time.time()
             paddle.seed(seed)
             image = pipe(
-                prompt=prompt, image=init_image, mask_image=mask_image, num_inference_steps=50, strength=0.80
+                prompt=prompt,
+                image=init_image,
+                mask_image=mask_image,
+                ip_adapter_image=ip_image,
+                num_inference_steps=50,
+                strength=0.80,
             ).images[0]
             latency = time.time() - start
             time_costs += [latency]
@@ -351,90 +409,6 @@ def inpainting(args):
             f"p90 latency: {np.percentile(time_costs, 90):2f} s, p95 latency: {np.percentile(time_costs, 95):2f} s."
         )
         image.save(f"{folder}/inpainting.png")
-
-
-def instruct_pix2pix(args):
-    if args.device_id == -1:
-        paddle.set_device("cpu")
-    else:
-        paddle.set_device(f"gpu:{args.device_id}")
-
-    seed = 1024
-    paddle_dtype = paddle.float16 if args.use_fp16 else paddle.float32
-    pipe = StableDiffusionXLInstructPix2PixPipeline.from_pretrained(
-        args.pretrained_model_name_or_path if args.pretrained_model_name_or_path else "sayakpaul/sdxl-instructpix2pix",
-        paddle_dtype=paddle_dtype,
-    )
-    pipe.set_progress_bar_config(disable=False)
-    if args.attention_type == "all":
-        args.attention_type = ["raw", "cutlass", "flash"]
-    else:
-        args.attention_type = [args.attention_type]
-
-    for attention_type in args.attention_type:
-        if attention_type == "raw":
-            pipe.unet.set_default_attn_processor()
-            pipe.vae.set_default_attn_processor()
-        else:
-            try:
-                pipe.enable_xformers_memory_efficient_attention(attention_type)
-            except Exception as e:
-                if attention_type == "flash":
-                    warnings.warn(
-                        "Attention type flash is not supported on your GPU! We need to use 3060、3070、3080、3090、4060、4070、4080、4090、A30、A100 etc."
-                    )
-                    continue
-                else:
-                    raise ValueError(e)
-
-        # width = args.width
-        # height = args.height
-        folder = f"attn_{attention_type}_fp16" if args.use_fp16 else f"attn_{attention_type}_fp32"
-        os.makedirs(folder, exist_ok=True)
-
-        # instruct_pix2pix
-        time_costs = []
-        # warmup
-        url = "https://datasets-server.huggingface.co/assets/fusing/instructpix2pix-1000-samples/--/fusing--instructpix2pix-1000-samples/train/23/input_image/image.jpg"
-
-        def download_image(url):
-            image = PIL.Image.open(requests.get(url, stream=True).raw)
-            image = PIL.ImageOps.exif_transpose(image)
-            image = image.convert("RGB")
-            return image
-
-        image = download_image(url)
-        prompt = "make it Japan"
-        num_inference_steps = 20
-        image_guidance_scale = 1.5
-        guidance_scale = 10
-        image = pipe(
-            prompt,
-            image=image,
-            num_inference_steps=num_inference_steps,
-            image_guidance_scale=image_guidance_scale,
-            guidance_scale=guidance_scale,
-        ).images[0]
-
-        print("==> Test instruct_pix2pix performance.")
-        for step in trange(args.benchmark_steps):
-            start = time.time()
-            paddle.seed(seed)
-            image = pipe(
-                prompt,
-                image=image,
-                num_inference_steps=num_inference_steps,
-                image_guidance_scale=image_guidance_scale,
-                guidance_scale=guidance_scale,
-            ).images[0]
-            latency = time.time() - start
-            time_costs += [latency]
-            print(f"No {step:3d} time cost: {latency:2f} s")
-        print(
-            f"Mean latency: {np.mean(time_costs):2f} s, p50 latency: {np.percentile(time_costs, 50):2f} s, "
-            f"p90 latency: {np.percentile(time_costs, 90):2f} s, p95 latency: {np.percentile(time_costs, 95):2f} s."
-        )
-        image.save(f"{folder}/instruct_pix2pix.png")
 
 
 if __name__ == "__main__":
@@ -447,5 +421,3 @@ if __name__ == "__main__":
         img2img(args)
     elif args.task == "inpainting":
         inpainting(args)
-    elif args.task == "instruct_pix2pix":
-        instruct_pix2pix(args)
