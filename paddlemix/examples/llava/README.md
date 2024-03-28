@@ -12,7 +12,7 @@
 
 注：图片引用自[LLaVA](https://github.com/haotian-liu/LLaVA).
 
-本仓库提供paddle版本的Llava-v1.5-7b、Llava-v1.5-13b、Llava-v1.6-7b模型。
+本仓库提供paddle版本的Llava-v1.5-7b、Llava-v1.5-13b、Llava-v1.6-7b以及预训练所用的vicuna-13b-v1.5模型。
 
 
 ## 2 环境准备
@@ -22,7 +22,7 @@
 ## 3 快速开始
 完成环境准备后，我们提供多轮对话示例：
 
-## a. 多轮对话启动
+### 多轮对话启动
 ```bash
 # llava
 python paddlemix/examples/llava/run_predict_multiround.py \
@@ -45,13 +45,56 @@ ASSISTANT: 0.23, 0.33, 0.79, 0.78
 ```
 
 ## 4 预训练
+我们提供`pretrain.py`脚本，用于预训练llava模型。
 
+### 4.1 数据准备
+将自己的数据放到一个列表中并存入json文件中，示例如下,或参考[llava_train_part_examples](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/llava/llava_train_examples.json)：
+```json
+[
+    {
+        "image": "http://ecx.images-amazon.com/images/I/51ntbts0gmL.jpg",
+        "conversations": [
+            [
+                "<image>\nWhat is the genre of this book?",
+                "Literature & Fiction"
+            ]
+
+        ]
+    },
+    {
+        "image": "http://ecx.images-amazon.com/images/I/51cc3XrLevL.jpg",
+        "conversations": [
+            [
+                "<image>\nWhat is the title of this book?",
+                "Beyond Bigger Leaner Stronger: The Advanced Guide to Building Muscle, Staying Lean, and Getting Strong (The Build Muscle, Get Lean, and Stay Healthy Series)"
+            ]
+        ]
+    },
+    {
+        "image": "http://ecx.images-amazon.com/images/I/517lfifp%2BqL.jpg",
+        "conversations": [
+            [
+                "<image>\nIs this a romantic book?",
+                "No"
+            ]
+        ]
+    }
+]
+
+```
+其中，"image"可以是本地的图片或网络地址；“conversations”是对话列表，每个对话包含两个元素，第一个为用户输入，第二个为系统回复。
+
+
+### 4.2 预训练
+预训练时使用`paddlemix/examples/llava/pretrain.py`程序进行训练，并使用`paddlemix/config/llava/pretrain.json`进行参数配置，**训练前请先检查数据集路径,如果使用url，请确保环境网络正常**。
+
+预训练命令：
 ```bash
 python paddlemix/examples/llava/pretrain.py paddlemix/config/llava/pretrain.json
 ```
 
 ## 5 模型微调
-Llava 基于 PaddleMIX tool 统一微调工具链，支持全参数、lora微调，具体可参考 [tools](../../tools/README.md)
+Llava 基于 PaddleMIX tool 统一微调工具链，支持全参数、lora微调，数据准备及参数配置等可参考 [tools](../../tools/README.md)
 
 ```bash
 # llava lora微调
