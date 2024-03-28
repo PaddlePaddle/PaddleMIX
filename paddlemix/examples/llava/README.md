@@ -30,7 +30,7 @@ python paddlemix/examples/llava/run_predict_multiround.py \
 --image-file "https://bj.bcebos.com/v1/paddlenlp/models/community/GroundingDino/000000004505.jpg" \
 ```
 可配置参数说明：
-  * `model-path`: 指定llava系列的模型名字或权重路径 ，支持 'paddlemix/llava/llava-v1.5-7b','paddlemix/llava/llava-v1.5-13b','paddlemix/llava/llava-v1.6-7b'
+  * `model-path`: 指定llava系列的模型名字或权重路径 ，支持 'paddlemix/llava/llava-v1.5-7b','paddlemix/llava/llava-v1.5-13b','paddlemix/llava/llava-v1.6-vicuna-7b'
   * `image-flie` :输入图片路径或url，默认None。
 
 
@@ -98,10 +98,10 @@ Llava 基于 PaddleMIX tool 统一微调工具链，支持全参数、lora微调
 
 ```bash
 # llava lora微调
-python paddlemix/tools/supervised_finetune.py paddlemix/config/llava/lora_sft_argument.json
+python paddlemix/tools/supervised_finetune.py paddlemix/config/llava/v1_5/lora_sft_argument.json
 
 # llava full参数微调
-python paddlemix/tools/supervised_finetune.py paddlemix/config/llava/sft_argument.json
+python paddlemix/tools/supervised_finetune.py paddlemix/config/llava/v1_5/sft_argument.json
 ```
 
 ### 参考文献
