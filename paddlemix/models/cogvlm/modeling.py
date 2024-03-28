@@ -28,8 +28,8 @@ from paddlenlp.transformers.model_outputs import (
 )
 from paddlenlp.transformers.model_utils import PretrainedModel
 
-from .configuration import CogAgentConfig
-from .cross_visual import CrossVisionModel, EVA2CLIPModel
+from .configuration import CogModelConfig
+from .visual import CrossVisionModel, EVA2CLIPModel
 
 if TYPE_CHECKING:
     logger = transformers.utils.logging.get_logger(__name__)
@@ -362,16 +362,18 @@ class CrossAttention(paddle.nn.Layer):
         return attn_output, None, past_key_value
 
 
-class CogAgentDecoderLayer(paddle.nn.Layer):
+class CogModelDecoderLayer(paddle.nn.Layer):
     def __init__(self, config):
         super().__init__()
+        self.model_type = config.model_type
         self.hidden_size = config.hidden_size
         self.self_attn = VisionExpertAttention(config=config)
-        self.cross_attn = CrossAttention(config=config)
+        if self.model_type == "cogagent":
+            self.cross_attn = CrossAttention(config=config)
+            self.post_cross_attention_layernorm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.mlp = VisionExpertMLP(config)
         self.input_layernorm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.post_attention_layernorm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-        self.post_cross_attention_layernorm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
 
     def forward(
         self,
@@ -387,42 +389,55 @@ class CogAgentDecoderLayer(paddle.nn.Layer):
     ) -> Tuple[paddle.Tensor, Optional[Tuple[paddle.Tensor, paddle.Tensor]]]:
         residual = hidden_states
         hidden_states = self.input_layernorm(hidden_states)
+        if self.model_type == "cogagent":
+            past_key_value = past_key_value[:2] if past_key_value is not None else None
         hidden_states, self_attn_weights, present_key_value = self.self_attn(
             hidden_states=hidden_states,
             token_type_ids=token_type_ids,
             position_ids=position_ids,
             attention_mask=attention_mask,
-            past_key_value=past_key_value[:2] if past_key_value is not None else None,
+            past_key_value=past_key_value,
             output_attentions=output_attentions,
             use_cache=use_cache,
         )
         hidden_states = residual + hidden_states
-        cross_input = self.post_cross_attention_layernorm(hidden_states)
-        (attention_output, self_cross_attn_weights, present_cross_key_value) = self.cross_attn(
-            hidden_states=cross_input,
-            encoder_outputs=encoder_outputs,
-            attention_mask=cross_attention_mask,
-            past_key_value=past_key_value[-2:] if past_key_value is not None else None,
-            output_attentions=output_attentions,
-            use_cache=use_cache,
-        )
-        hidden_states = hidden_states + attention_output
-        mlp_input = self.post_attention_layernorm(hidden_states)
-        mlp_output = self.mlp(mlp_input, token_type_ids=token_type_ids)
-        hidden_states = mlp_output + hidden_states
+        if self.model_type == "cogagent":
+            cross_input = self.post_cross_attention_layernorm(hidden_states)
+            (attention_output, self_cross_attn_weights, present_cross_key_value) = self.cross_attn(
+                hidden_states=cross_input,
+                encoder_outputs=encoder_outputs,
+                attention_mask=cross_attention_mask,
+                past_key_value=past_key_value[-2:] if past_key_value is not None else None,
+                output_attentions=output_attentions,
+                use_cache=use_cache,
+            )
+            hidden_states = hidden_states + attention_output
+            mlp_input = self.post_attention_layernorm(hidden_states)
+            mlp_output = self.mlp(mlp_input, token_type_ids=token_type_ids)
+            hidden_states = mlp_output + hidden_states
+        elif self.model_type == "cogvlm":
+            residual = hidden_states
+            hidden_states = self.post_attention_layernorm(hidden_states)
+            hidden_states = self.mlp(hidden_states, token_type_ids=token_type_ids)
+            hidden_states = residual + hidden_states
+        else:
+            raise ValueError("model_type in config must be cogagent or cogvlm, but got {}".format(self.model_type))
         outputs = (hidden_states,)
         if output_attentions:
             outputs += (self_attn_weights,)
         if use_cache:
-            outputs += (present_key_value + present_cross_key_value,)
+            if self.model_type == "cogagent":
+                outputs += (present_key_value + present_cross_key_value,)
+            else:
+                outputs += (present_key_value,)
         return outputs
 
 
-class CogAgentPreTrainedModel(PretrainedModel):
-    config_class = CogAgentConfig
+class CogPreTrainedModel(PretrainedModel):
+    config_class = CogModelConfig
     base_model_prefix = "model"
     supports_gradient_checkpointing = False
-    _no_split_modules = ["CogAgentDecoderLayer", "TransformerLayer", "Block"]
+    _no_split_modules = ["CogModelDecoderLayer", "TransformerLayer", "Block"]
     _skip_keys_device_placement = "past_key_values"
 
 
@@ -455,16 +470,17 @@ def build_position_ids(x, attention_mask):
     return y
 
 
-class CogAgentModel(CogAgentPreTrainedModel):
+class CogModel(CogPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
+        self.model_type = config.model_type
         self.padding_idx = config.pad_token_id
         self.vocab_size = config.vocab_size
         self.embed_tokens = paddle.nn.Embedding(
             num_embeddings=config.vocab_size, embedding_dim=config.hidden_size, padding_idx=self.padding_idx
         )
         self.layers = paddle.nn.LayerList(
-            sublayers=[CogAgentDecoderLayer(config) for _ in range(config.num_hidden_layers)]
+            sublayers=[CogModelDecoderLayer(config) for _ in range(config.num_hidden_layers)]
         )
         self.norm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.vision = EVA2CLIPModel(config)
@@ -509,7 +525,10 @@ class CogAgentModel(CogAgentPreTrainedModel):
     ) -> Union[Tuple, BaseModelOutputWithPast]:
         """take care of image_encode, token_type_ids, position_ids and (attention_mask = None is fine)"""
         if past_key_values is not None:
-            encoder_outputs = None
+            if self.model_type == "cogagent" or self.model_type == "cogvlm":
+                encoder_outputs = None
+            else:
+                raise ValueError("model_type in config must be cogagent or cogvlm, but got {}".format(self.model_type))
         else:
             assert input_ids is not None and inputs_embeds is None, f"{input_ids} {inputs_embeds}"
             if not is_empty(images):
@@ -517,10 +536,16 @@ class CogAgentModel(CogAgentPreTrainedModel):
                 assert len(input_ids) == len(images), f"{len(input_ids)} {len(images)}"
                 inputs_embeds = self.embed_tokens(input_ids)
                 images_features = self.encode_images(images)
-                encoder_outputs = self.encode_cross_images(cross_images)
+                encoder_outputs = None
+                if self.model_type == "cogagent":
+                    encoder_outputs = self.encode_cross_images(cross_images)
+                elif self.model_type != "cogvlm":
+                    raise ValueError(
+                        "model_type in config must be cogagent or cogvlm, but got {}".format(self.model_type)
+                    )
                 images_features = rearrange(images_features, "b n d -> (b n) d")
 
-                images_features = images_features.to("float32")
+                images_features = images_features.to(dtype=inputs_embeds.dtype, device=inputs_embeds.place)
                 inputs_embeds = inputs_embeds.index_put([token_type_ids == VISION_TOKEN_TYPE], images_features)
             else:
                 if token_type_ids is None:
@@ -564,7 +589,6 @@ class CogAgentModel(CogAgentPreTrainedModel):
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
     ) -> Union[Tuple, BaseModelOutputWithPast]:
-        """largely copy from llama forward and adapt for CogAgent with `token_type_ids`"""
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
@@ -596,7 +620,7 @@ class CogAgentModel(CogAgentPreTrainedModel):
             inputs_embeds = self.embed_tokens(input_ids)
         if attention_mask is None:
             attention_mask = paddle.ones(shape=(batch_size, seq_length_with_past), dtype="bool")
-        if cross_attention_mask is None:
+        if self.model_type == "cogagent" and cross_attention_mask is None:
             cross_attention_mask = paddle.ones(shape=(batch_size, 1), dtype="bool")
 
         attention_mask = self._prepare_decoder_attention_mask(
@@ -632,7 +656,7 @@ class CogAgentModel(CogAgentPreTrainedModel):
         next_cache = next_decoder_cache if use_cache else None
         if not return_dict:
             return tuple(v for v in [hidden_states, next_cache, all_hidden_states, all_self_attns] if v is not None)
-        return transformers.model_outputs.BaseModelOutputWithPast(
+        return BaseModelOutputWithPast(
             last_hidden_state=hidden_states,
             past_key_values=next_cache,
             hidden_states=all_hidden_states,
@@ -689,7 +713,7 @@ def base_history_to_prompt(history, query):
     return prompt
 
 
-_history_to_prompt = {
+_history_to_prompt_for_cogagent = {
     "base": base_history_to_prompt,
     "chat": chat_history_to_prompt,
     "chat_old": chat_old_history_to_prompt,
@@ -697,17 +721,33 @@ _history_to_prompt = {
 }
 
 
-class CogAgentForCausalLM(CogAgentPreTrainedModel):
+def _history_to_prompt_for_cogvlm(signal_type, history, query):
+    if signal_type == "base":
+        return query
+    elif signal_type == "vqa":
+        answer_format = "Short answer:"
+    elif signal_type == "chat":
+        answer_format = "Answer:"
+    else:
+        assert False, f"Unknown signal type {signal_type}"
+    prompt = ""
+    for i, (old_query, response) in enumerate(history):
+        prompt += "Question: " + old_query + " {} ".format(answer_format) + response + "\n"
+    prompt += "Question: {} {}".format(query, answer_format)
+    return prompt
+
+
+class CogModelForCausalLM(CogPreTrainedModel):
     _auto_class = "AutoModelForCausalLM"
 
     def __init__(self, config):
         super().__init__(config)
-        self.model = CogAgentModel(config)
+        self.model_type = config.model_type
+        self.model = CogModel(config)
         self.vocab_size = config.vocab_size
         self.lm_head = paddle.nn.Linear(
             in_features=config.hidden_size, out_features=config.vocab_size, bias_attr=False
         )
-        # self._post_init()
 
     def get_input_embeddings(self):
         return self.model.embed_tokens
@@ -777,7 +817,7 @@ class CogAgentForCausalLM(CogAgentPreTrainedModel):
         if not return_dict:
             output = (logits,) + outputs[1:]
             return (loss,) + output if loss is not None else output
-        return transformers.model_outputs.CausalLMOutputWithPast(
+        return CausalLMOutputWithPast(
             loss=loss,
             logits=logits,
             past_key_values=outputs.past_key_values,
@@ -877,16 +917,22 @@ class CogAgentForCausalLM(CogAgentPreTrainedModel):
         template_version: Optional[Literal["base", "chat", "vqa"]] = None
     ):
         image_size: int = self.config.vision_config["image_size"]
-        cross_image_size: int = self.config.cross_image_size
+        if self.model_type == "cogagent":
+            cross_image_size: int = self.config.cross_image_size
         patch_size: int = self.config.vision_config["patch_size"]
         template_version = template_version or self.config.template_version
         assert images is None or len(images) <= 1, "not support multi images by now."
         history = history or []
-        text = _history_to_prompt[template_version](history, query)
+        if self.model_type == "cogagent":
+            text = _history_to_prompt_for_cogagent[template_version](history, query)
+        elif self.model_type == "cogvlm":
+            text = _history_to_prompt_for_cogvlm(template_version, history, query)
+        else:
+            raise ValueError("model_type in config must be cogagent or cogvlm, but got {}".format(self.model_type))
+
         input_ids = [tokenizer.bos_token_id]
         token_type_ids = [LANGUAGE_TOKEN_TYPE]
         if images is not None and len(images) == 1:
-            ori = images
             transform = paddle.vision.transforms.Compose(
                 [
                     paddle.vision.transforms.Resize((image_size, image_size), interpolation="bicubic"),
@@ -896,17 +942,24 @@ class CogAgentForCausalLM(CogAgentPreTrainedModel):
                     ),
                 ]
             )
-            images = [transform(ori[0])]
-            cross_transform = paddle.vision.transforms.Compose(
-                [
-                    paddle.vision.transforms.Resize((cross_image_size, cross_image_size), interpolation="bicubic"),
-                    paddle.vision.transforms.ToTensor(),
-                    paddle.vision.transforms.Normalize(
-                        (0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711)
-                    ),
-                ]
-            )
-            cross_images = [cross_transform(ori[0])]
+            if self.model_type == "cogagent":
+                ori = images
+                images = [transform(ori[0])]
+                cross_transform = paddle.vision.transforms.Compose(
+                    [
+                        paddle.vision.transforms.Resize((cross_image_size, cross_image_size), interpolation="bicubic"),
+                        paddle.vision.transforms.ToTensor(),
+                        paddle.vision.transforms.Normalize(
+                            (0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711)
+                        ),
+                    ]
+                )
+                cross_images = [cross_transform(ori[0])]
+            elif self.model_type == "cogvlm":
+                images = [transform(images[0])]
+                cross_images = None
+            else:
+                raise ValueError("model_type in config must be cogagent or cogvlm, but got {}".format(self.model_type))
             vision_token_num = image_size // patch_size * (image_size // patch_size) + 2
             input_ids += [tokenizer.pad_token_id] * vision_token_num
             token_type_ids += [VISION_TOKEN_TYPE] * vision_token_num

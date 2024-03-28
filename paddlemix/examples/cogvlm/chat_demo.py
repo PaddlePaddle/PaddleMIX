@@ -31,7 +31,7 @@ from paddlemix.auto.tokenizer import AutoTokenizerMIX
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument("--from_pretrained", type=str, default="THUDM/cogagent-chat", help="pretrained ckpt and tokenizer")
+parser.add_argument("--from_pretrained", type=str, default="THUDM/cogvlm-chat", help="pretrained ckpt and tokenizer")
 args = parser.parse_args()
 MODEL_PATH = args.from_pretrained
 TOKENIZER_PATH = MODEL_PATH

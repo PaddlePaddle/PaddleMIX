@@ -17,7 +17,7 @@ from typing import Literal
 from paddlenlp import transformers
 
 
-class CogAgentConfig(transformers.PretrainedConfig):
+class CogModelConfig(transformers.PretrainedConfig):
     _auto_class = "AutoConfig"
 
     def __init__(
@@ -40,6 +40,7 @@ class CogAgentConfig(transformers.PretrainedConfig):
         eos_token_id=2,
         tie_word_embeddings=False,
         use_cache=True,
+        model_type="cogagent",
         **kwargs
     ):
         self.hidden_size = hidden_size
@@ -56,6 +57,7 @@ class CogAgentConfig(transformers.PretrainedConfig):
         self.hidden_act = hidden_act
         self.template_version = template_version
         self.use_cache = use_cache
+        self.model_type = model_type
         super().__init__(
             pad_token_id=pad_token_id,
             bos_token_id=bos_token_id,
