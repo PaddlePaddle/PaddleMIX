@@ -1,4 +1,3 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,22 +11,30 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Callable, List, Optional, Union
+
+from typing import Callable, Dict, List, Optional, Union
 
 import paddle
-import paddlenlp
-import PIL
+import PIL.Image
+
+from ppdiffusers.transformers import (
+    CLIPImageProcessor,
+    CLIPTextModelWithProjection,
+    CLIPTokenizer,
+    CLIPVisionModelWithProjection,
+)
 
 from ...models import PriorTransformer, UNet2DConditionModel, VQModel
 from ...schedulers import DDPMScheduler, UnCLIPScheduler
-from ...utils import logging, replace_example_docstring
+from ...utils import deprecate, logging, replace_example_docstring
 from ..pipeline_utils import DiffusionPipeline
 from .pipeline_kandinsky2_2 import KandinskyV22Pipeline
 from .pipeline_kandinsky2_2_img2img import KandinskyV22Img2ImgPipeline
 from .pipeline_kandinsky2_2_inpainting import KandinskyV22InpaintPipeline
 from .pipeline_kandinsky2_2_prior import KandinskyV22PriorPipeline
 
-logger = logging.get_logger(__name__)
+logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
+
 TEXT2IMAGE_EXAMPLE_DOC_STRING = """
     Examples:
         ```py
@@ -43,6 +50,7 @@ TEXT2IMAGE_EXAMPLE_DOC_STRING = """
         image = pipe(prompt=prompt, num_inference_steps=25).images[0]
         ```
 """
+
 IMAGE2IMAGE_EXAMPLE_DOC_STRING = """
     Examples:
         ```py
@@ -69,6 +77,7 @@ IMAGE2IMAGE_EXAMPLE_DOC_STRING = """
         image = pipe(prompt=prompt, image=original_image, num_inference_steps=25).images[0]
         ```
 """
+
 INPAINT_EXAMPLE_DOC_STRING = """
     Examples:
         ```py
@@ -85,7 +94,7 @@ INPAINT_EXAMPLE_DOC_STRING = """
         negative_prompt = "low quality, bad quality"
 
         original_image = load_image(
-            "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main" "/kandinsky/cat.png"
+            "https://hf-mirror.com/datasets/hf-internal-testing/diffusers-images/resolve/main/kandinsky/cat.png"
         )
 
         mask = np.zeros((768, 768), dtype=np.float32)
@@ -126,6 +135,7 @@ class KandinskyV22CombinedPipeline(DiffusionPipeline):
             A image_processor to be used to preprocess image from clip.
     """
 
+    model_cpu_offload_seq = "prior_text_encoder->prior_image_encoder->unet->movq"
     _load_connected_pipes = True
 
     def __init__(
@@ -134,13 +144,14 @@ class KandinskyV22CombinedPipeline(DiffusionPipeline):
         scheduler: DDPMScheduler,
         movq: VQModel,
         prior_prior: PriorTransformer,
-        prior_image_encoder: paddlenlp.transformers.CLIPVisionModelWithProjection,
-        prior_text_encoder: paddlenlp.transformers.CLIPTextModelWithProjection,
-        prior_tokenizer: paddlenlp.transformers.CLIPTokenizer,
+        prior_image_encoder: CLIPVisionModelWithProjection,
+        prior_text_encoder: CLIPTextModelWithProjection,
+        prior_tokenizer: CLIPTokenizer,
         prior_scheduler: UnCLIPScheduler,
-        prior_image_processor: paddlenlp.transformers.CLIPImageProcessor,
+        prior_image_processor: CLIPImageProcessor,
     ):
         super().__init__()
+
         self.register_modules(
             unet=unet,
             scheduler=scheduler,
@@ -160,11 +171,19 @@ class KandinskyV22CombinedPipeline(DiffusionPipeline):
             scheduler=prior_scheduler,
             image_processor=prior_image_processor,
         )
-        self.decoder_pipe = KandinskyV22Pipeline(unet=unet, scheduler=scheduler, movq=movq)
+        self.decoder_pipe = KandinskyV22Pipeline(
+            unet=unet,
+            scheduler=scheduler,
+            movq=movq,
+        )
+
+    def enable_xformers_memory_efficient_attention(self, attention_op: Optional[Callable] = None):
+        self.decoder_pipe.enable_xformers_memory_efficient_attention(attention_op)
 
     def progress_bar(self, iterable=None, total=None):
         self.prior_pipe.progress_bar(iterable=iterable, total=total)
         self.decoder_pipe.progress_bar(iterable=iterable, total=total)
+        self.decoder_pipe.enable_model_cpu_offload()
 
     def set_progress_bar_config(self, **kwargs):
         self.prior_pipe.set_progress_bar_config(**kwargs)
@@ -189,6 +208,10 @@ class KandinskyV22CombinedPipeline(DiffusionPipeline):
         callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
         callback_steps: int = 1,
         return_dict: bool = True,
+        prior_callback_on_step_end: Optional[Callable[[int, int, Dict], None]] = None,
+        prior_callback_on_step_end_tensor_inputs: List[str] = ["latents"],
+        callback_on_step_end: Optional[Callable[[int, int, Dict], None]] = None,
+        callback_on_step_end_tensor_inputs: List[str] = ["latents"],
     ):
         """
         Function invoked when calling the pipeline for generation.
@@ -224,23 +247,33 @@ class KandinskyV22CombinedPipeline(DiffusionPipeline):
                 1`. Higher guidance scale encourages to generate images that are closely linked to the text `prompt`,
                 usually at the expense of lower image quality.
             generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
-                One or a list of paddle generator(s).
-                to make generation deterministic.
+                One or a list of [paddle generator(s)] to make generation deterministic.
             latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents, sampled from a Gaussian distribution, to be used as inputs for image
                 generation. Can be used to tweak the same generation with different prompts. If not provided, a latents
                 tensor will ge generated by sampling using the supplied random `generator`.
             output_type (`str`, *optional*, defaults to `"pil"`):
                 The output format of the generate image. Choose between: `"pil"` (`PIL.Image.Image`), `"np"`
-                (`np.array`) or `"pt"` (`paddle.Tensor`).
-            callback (`Callable`, *optional*):
-                A function that calls every `callback_steps` steps during inference. The function is called with the
-                following arguments: `callback(step: int, timestep: int, latents: paddle.Tensor)`.
-            callback_steps (`int`, *optional*, defaults to 1):
-                The frequency at which the `callback` function is called. If not specified, the callback is called at
-                every step.
+                (`np.array`) or `"pd"` (`paddle.Tensor`).
             return_dict (`bool`, *optional*, defaults to `True`):
                 Whether or not to return a [`~pipelines.ImagePipelineOutput`] instead of a plain tuple.
+            prior_callback_on_step_end (`Callable`, *optional*):
+                A function that calls at the end of each denoising steps during the inference of the prior pipeline.
+                The function is called with the following arguments: `prior_callback_on_step_end(self:
+                DiffusionPipeline, step: int, timestep: int, callback_kwargs: Dict)`.
+            prior_callback_on_step_end_tensor_inputs (`List`, *optional*):
+                The list of tensor inputs for the `prior_callback_on_step_end` function. The tensors specified in the
+                list will be passed as `callback_kwargs` argument. You will only be able to include variables listed in
+                the `._callback_tensor_inputs` attribute of your prior pipeline class.
+            callback_on_step_end (`Callable`, *optional*):
+                A function that calls at the end of each denoising steps during the inference of the decoder pipeline.
+                The function is called with the following arguments: `callback_on_step_end(self: DiffusionPipeline,
+                step: int, timestep: int, callback_kwargs: Dict)`. `callback_kwargs` will include a list of all tensors
+                as specified by `callback_on_step_end_tensor_inputs`.
+            callback_on_step_end_tensor_inputs (`List`, *optional*):
+                The list of tensor inputs for the `callback_on_step_end` function. The tensors specified in the list
+                will be passed as `callback_kwargs` argument. You will only be able to include variables listed in the
+                `._callback_tensor_inputs` attribute of your pipeline class.
 
         Examples:
 
@@ -257,12 +290,17 @@ class KandinskyV22CombinedPipeline(DiffusionPipeline):
             guidance_scale=prior_guidance_scale,
             output_type="pd",
             return_dict=False,
+            callback_on_step_end=prior_callback_on_step_end,
+            callback_on_step_end_tensor_inputs=prior_callback_on_step_end_tensor_inputs,
         )
         image_embeds = prior_outputs[0]
         negative_image_embeds = prior_outputs[1]
+
         prompt = [prompt] if not isinstance(prompt, (list, tuple)) else prompt
+
         if len(prompt) < image_embeds.shape[0] and image_embeds.shape[0] % len(prompt) == 0:
-            prompt = image_embeds.shape[0] // len(prompt) * prompt
+            prompt = (image_embeds.shape[0] // len(prompt)) * prompt
+
         outputs = self.decoder_pipe(
             image_embeds=image_embeds,
             negative_image_embeds=negative_image_embeds,
@@ -275,7 +313,10 @@ class KandinskyV22CombinedPipeline(DiffusionPipeline):
             callback=callback,
             callback_steps=callback_steps,
             return_dict=return_dict,
+            callback_on_step_end=callback_on_step_end,
+            callback_on_step_end_tensor_inputs=callback_on_step_end_tensor_inputs,
         )
+
         return outputs
 
 
@@ -308,6 +349,7 @@ class KandinskyV22Img2ImgCombinedPipeline(DiffusionPipeline):
             A image_processor to be used to preprocess image from clip.
     """
 
+    model_cpu_offload_seq = "prior_text_encoder->prior_image_encoder->unet->movq"
     _load_connected_pipes = True
 
     def __init__(
@@ -316,13 +358,14 @@ class KandinskyV22Img2ImgCombinedPipeline(DiffusionPipeline):
         scheduler: DDPMScheduler,
         movq: VQModel,
         prior_prior: PriorTransformer,
-        prior_image_encoder: paddlenlp.transformers.CLIPVisionModelWithProjection,
-        prior_text_encoder: paddlenlp.transformers.CLIPTextModelWithProjection,
-        prior_tokenizer: paddlenlp.transformers.CLIPTokenizer,
+        prior_image_encoder: CLIPVisionModelWithProjection,
+        prior_text_encoder: CLIPTextModelWithProjection,
+        prior_tokenizer: CLIPTokenizer,
         prior_scheduler: UnCLIPScheduler,
-        prior_image_processor: paddlenlp.transformers.CLIPImageProcessor,
+        prior_image_processor: CLIPImageProcessor,
     ):
         super().__init__()
+
         self.register_modules(
             unet=unet,
             scheduler=scheduler,
@@ -342,11 +385,29 @@ class KandinskyV22Img2ImgCombinedPipeline(DiffusionPipeline):
             scheduler=prior_scheduler,
             image_processor=prior_image_processor,
         )
-        self.decoder_pipe = KandinskyV22Img2ImgPipeline(unet=unet, scheduler=scheduler, movq=movq)
+        self.decoder_pipe = KandinskyV22Img2ImgPipeline(
+            unet=unet,
+            scheduler=scheduler,
+            movq=movq,
+        )
+
+    def enable_xformers_memory_efficient_attention(self, attention_op: Optional[Callable] = None):
+        self.decoder_pipe.enable_xformers_memory_efficient_attention(attention_op)
+
+    def enable_model_cpu_offload(self, gpu_id=0):
+        r"""
+        Offloads all models to CPU using accelerate, reducing memory usage with a low impact on performance. Compared
+        to `enable_sequential_cpu_offload`, this method moves one whole model at a time to the GPU when its `forward`
+        method is called, and the model remains in GPU until the next model runs. Memory savings are lower than with
+        `enable_sequential_cpu_offload`, but performance is much better due to the iterative execution of the `unet`.
+        """
+        self.prior_pipe.enable_model_cpu_offload()
+        self.decoder_pipe.enable_model_cpu_offload()
 
     def progress_bar(self, iterable=None, total=None):
         self.prior_pipe.progress_bar(iterable=iterable, total=total)
         self.decoder_pipe.progress_bar(iterable=iterable, total=total)
+        self.decoder_pipe.enable_model_cpu_offload()
 
     def set_progress_bar_config(self, **kwargs):
         self.prior_pipe.set_progress_bar_config(**kwargs)
@@ -373,6 +434,10 @@ class KandinskyV22Img2ImgCombinedPipeline(DiffusionPipeline):
         callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
         callback_steps: int = 1,
         return_dict: bool = True,
+        prior_callback_on_step_end: Optional[Callable[[int, int, Dict], None]] = None,
+        prior_callback_on_step_end_tensor_inputs: List[str] = ["latents"],
+        callback_on_step_end: Optional[Callable[[int, int, Dict], None]] = None,
+        callback_on_step_end_tensor_inputs: List[str] = ["latents"],
     ):
         """
         Function invoked when calling the pipeline for generation.
@@ -382,7 +447,7 @@ class KandinskyV22Img2ImgCombinedPipeline(DiffusionPipeline):
                 The prompt or prompts to guide the image generation.
             image (`paddle.Tensor`, `PIL.Image.Image`, `np.ndarray`, `List[paddle.Tensor]`, `List[PIL.Image.Image]`, or `List[np.ndarray]`):
                 `Image`, or tensor representing an image batch, that will be used as the starting point for the
-                process. Can also accpet image latents as `image`, if passing latents directly, it will not be encoded
+                process. Can also accept image latents as `image`, if passing latents directly, it will not be encoded
                 again.
             negative_prompt (`str` or `List[str]`, *optional*):
                 The prompt or prompts not to guide the image generation. Ignored when not using guidance (i.e., ignored
@@ -418,15 +483,14 @@ class KandinskyV22Img2ImgCombinedPipeline(DiffusionPipeline):
                 The number of denoising steps. More denoising steps usually lead to a higher quality image at the
                 expense of slower inference.
             generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
-                One or a list of paddle generator(s).
-                to make generation deterministic.
+                One or a list of [paddle generator(s)] to make generation deterministic.
             latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents, sampled from a Gaussian distribution, to be used as inputs for image
                 generation. Can be used to tweak the same generation with different prompts. If not provided, a latents
                 tensor will ge generated by sampling using the supplied random `generator`.
             output_type (`str`, *optional*, defaults to `"pil"`):
                 The output format of the generate image. Choose between: `"pil"` (`PIL.Image.Image`), `"np"`
-                (`np.array`) or `"pt"` (`paddle.Tensor`).
+                (`np.array`) or `"pd"` (`paddle.Tensor`).
             callback (`Callable`, *optional*):
                 A function that calls every `callback_steps` steps during inference. The function is called with the
                 following arguments: `callback(step: int, timestep: int, latents: paddle.Tensor)`.
@@ -451,19 +515,25 @@ class KandinskyV22Img2ImgCombinedPipeline(DiffusionPipeline):
             guidance_scale=prior_guidance_scale,
             output_type="pd",
             return_dict=False,
+            callback_on_step_end=prior_callback_on_step_end,
+            callback_on_step_end_tensor_inputs=prior_callback_on_step_end_tensor_inputs,
         )
         image_embeds = prior_outputs[0]
         negative_image_embeds = prior_outputs[1]
+
         prompt = [prompt] if not isinstance(prompt, (list, tuple)) else prompt
         image = [image] if isinstance(prompt, PIL.Image.Image) else image
+
         if len(prompt) < image_embeds.shape[0] and image_embeds.shape[0] % len(prompt) == 0:
-            prompt = image_embeds.shape[0] // len(prompt) * prompt
+            prompt = (image_embeds.shape[0] // len(prompt)) * prompt
+
         if (
             isinstance(image, (list, tuple))
             and len(image) < image_embeds.shape[0]
             and image_embeds.shape[0] % len(image) == 0
         ):
-            image = image_embeds.shape[0] // len(image) * image
+            image = (image_embeds.shape[0] // len(image)) * image
+
         outputs = self.decoder_pipe(
             image=image,
             image_embeds=image_embeds,
@@ -478,7 +548,10 @@ class KandinskyV22Img2ImgCombinedPipeline(DiffusionPipeline):
             callback=callback,
             callback_steps=callback_steps,
             return_dict=return_dict,
+            callback_on_step_end=callback_on_step_end,
+            callback_on_step_end_tensor_inputs=callback_on_step_end_tensor_inputs,
         )
+
         return outputs
 
 
@@ -511,6 +584,7 @@ class KandinskyV22InpaintCombinedPipeline(DiffusionPipeline):
             A image_processor to be used to preprocess image from clip.
     """
 
+    model_cpu_offload_seq = "prior_text_encoder->prior_image_encoder->unet->movq"
     _load_connected_pipes = True
 
     def __init__(
@@ -519,13 +593,14 @@ class KandinskyV22InpaintCombinedPipeline(DiffusionPipeline):
         scheduler: DDPMScheduler,
         movq: VQModel,
         prior_prior: PriorTransformer,
-        prior_image_encoder: paddlenlp.transformers.CLIPVisionModelWithProjection,
-        prior_text_encoder: paddlenlp.transformers.CLIPTextModelWithProjection,
-        prior_tokenizer: paddlenlp.transformers.CLIPTokenizer,
+        prior_image_encoder: CLIPVisionModelWithProjection,
+        prior_text_encoder: CLIPTextModelWithProjection,
+        prior_tokenizer: CLIPTokenizer,
         prior_scheduler: UnCLIPScheduler,
-        prior_image_processor: paddlenlp.transformers.CLIPImageProcessor,
+        prior_image_processor: CLIPImageProcessor,
     ):
         super().__init__()
+
         self.register_modules(
             unet=unet,
             scheduler=scheduler,
@@ -545,11 +620,19 @@ class KandinskyV22InpaintCombinedPipeline(DiffusionPipeline):
             scheduler=prior_scheduler,
             image_processor=prior_image_processor,
         )
-        self.decoder_pipe = KandinskyV22InpaintPipeline(unet=unet, scheduler=scheduler, movq=movq)
+        self.decoder_pipe = KandinskyV22InpaintPipeline(
+            unet=unet,
+            scheduler=scheduler,
+            movq=movq,
+        )
+
+    def enable_xformers_memory_efficient_attention(self, attention_op: Optional[Callable] = None):
+        self.decoder_pipe.enable_xformers_memory_efficient_attention(attention_op)
 
     def progress_bar(self, iterable=None, total=None):
         self.prior_pipe.progress_bar(iterable=iterable, total=total)
         self.decoder_pipe.progress_bar(iterable=iterable, total=total)
+        self.decoder_pipe.enable_model_cpu_offload()
 
     def set_progress_bar_config(self, **kwargs):
         self.prior_pipe.set_progress_bar_config(**kwargs)
@@ -573,9 +656,12 @@ class KandinskyV22InpaintCombinedPipeline(DiffusionPipeline):
         generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
         latents: Optional[paddle.Tensor] = None,
         output_type: Optional[str] = "pil",
-        callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
-        callback_steps: int = 1,
         return_dict: bool = True,
+        prior_callback_on_step_end: Optional[Callable[[int, int, Dict], None]] = None,
+        prior_callback_on_step_end_tensor_inputs: List[str] = ["latents"],
+        callback_on_step_end: Optional[Callable[[int, int, Dict], None]] = None,
+        callback_on_step_end_tensor_inputs: List[str] = ["latents"],
+        **kwargs,
     ):
         """
         Function invoked when calling the pipeline for generation.
@@ -585,7 +671,7 @@ class KandinskyV22InpaintCombinedPipeline(DiffusionPipeline):
                 The prompt or prompts to guide the image generation.
             image (`paddle.Tensor`, `PIL.Image.Image`, `np.ndarray`, `List[paddle.Tensor]`, `List[PIL.Image.Image]`, or `List[np.ndarray]`):
                 `Image`, or tensor representing an image batch, that will be used as the starting point for the
-                process. Can also accpet image latents as `image`, if passing latents directly, it will not be encoded
+                process. Can also accept image latents as `image`, if passing latents directly, it will not be encoded
                 again.
             mask_image (`np.array`):
                 Tensor representing an image batch, to mask `image`. White pixels in the mask will be repainted, while
@@ -620,29 +706,56 @@ class KandinskyV22InpaintCombinedPipeline(DiffusionPipeline):
                 The number of denoising steps. More denoising steps usually lead to a higher quality image at the
                 expense of slower inference.
             generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
-                One or a list of paddle generator(s).
-                to make generation deterministic.
+                One or a list of [paddle generator(s)] to make generation deterministic.
             latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents, sampled from a Gaussian distribution, to be used as inputs for image
                 generation. Can be used to tweak the same generation with different prompts. If not provided, a latents
                 tensor will ge generated by sampling using the supplied random `generator`.
             output_type (`str`, *optional*, defaults to `"pil"`):
                 The output format of the generate image. Choose between: `"pil"` (`PIL.Image.Image`), `"np"`
-                (`np.array`) or `"pt"` (`paddle.Tensor`).
-            callback (`Callable`, *optional*):
-                A function that calls every `callback_steps` steps during inference. The function is called with the
-                following arguments: `callback(step: int, timestep: int, latents: paddle.Tensor)`.
-            callback_steps (`int`, *optional*, defaults to 1):
-                The frequency at which the `callback` function is called. If not specified, the callback is called at
-                every step.
+                (`np.array`) or `"pd"` (`paddle.Tensor`).
             return_dict (`bool`, *optional*, defaults to `True`):
                 Whether or not to return a [`~pipelines.ImagePipelineOutput`] instead of a plain tuple.
+            prior_callback_on_step_end (`Callable`, *optional*):
+                A function that calls at the end of each denoising steps during the inference. The function is called
+                with the following arguments: `prior_callback_on_step_end(self: DiffusionPipeline, step: int, timestep:
+                int, callback_kwargs: Dict)`.
+            prior_callback_on_step_end_tensor_inputs (`List`, *optional*):
+                The list of tensor inputs for the `prior_callback_on_step_end` function. The tensors specified in the
+                list will be passed as `callback_kwargs` argument. You will only be able to include variables listed in
+                the `._callback_tensor_inputs` attribute of your pipeline class.
+            callback_on_step_end (`Callable`, *optional*):
+                A function that calls at the end of each denoising steps during the inference. The function is called
+                with the following arguments: `callback_on_step_end(self: DiffusionPipeline, step: int, timestep: int,
+                callback_kwargs: Dict)`. `callback_kwargs` will include a list of all tensors as specified by
+                `callback_on_step_end_tensor_inputs`.
+            callback_on_step_end_tensor_inputs (`List`, *optional*):
+                The list of tensor inputs for the `callback_on_step_end` function. The tensors specified in the list
+                will be passed as `callback_kwargs` argument. You will only be able to include variables listed in the
+                `._callback_tensor_inputs` attribute of your pipeline class.
+
 
         Examples:
 
         Returns:
             [`~pipelines.ImagePipelineOutput`] or `tuple`
         """
+        prior_kwargs = {}
+        if kwargs.get("prior_callback", None) is not None:
+            prior_kwargs["callback"] = kwargs.pop("prior_callback")
+            deprecate(
+                "prior_callback",
+                "1.0.0",
+                "Passing `prior_callback` as an input argument to `__call__` is deprecated, consider use `prior_callback_on_step_end`",
+            )
+        if kwargs.get("prior_callback_steps", None) is not None:
+            deprecate(
+                "prior_callback_steps",
+                "1.0.0",
+                "Passing `prior_callback_steps` as an input argument to `__call__` is deprecated, consider use `prior_callback_on_step_end`",
+            )
+            prior_kwargs["callback_steps"] = kwargs.pop("prior_callback_steps")
+
         prior_outputs = self.prior_pipe(
             prompt=prompt,
             negative_prompt=negative_prompt,
@@ -653,26 +766,34 @@ class KandinskyV22InpaintCombinedPipeline(DiffusionPipeline):
             guidance_scale=prior_guidance_scale,
             output_type="pd",
             return_dict=False,
+            callback_on_step_end=prior_callback_on_step_end,
+            callback_on_step_end_tensor_inputs=prior_callback_on_step_end_tensor_inputs,
+            **prior_kwargs,
         )
         image_embeds = prior_outputs[0]
         negative_image_embeds = prior_outputs[1]
+
         prompt = [prompt] if not isinstance(prompt, (list, tuple)) else prompt
         image = [image] if isinstance(prompt, PIL.Image.Image) else image
         mask_image = [mask_image] if isinstance(mask_image, PIL.Image.Image) else mask_image
+
         if len(prompt) < image_embeds.shape[0] and image_embeds.shape[0] % len(prompt) == 0:
-            prompt = image_embeds.shape[0] // len(prompt) * prompt
+            prompt = (image_embeds.shape[0] // len(prompt)) * prompt
+
         if (
             isinstance(image, (list, tuple))
             and len(image) < image_embeds.shape[0]
             and image_embeds.shape[0] % len(image) == 0
         ):
-            image = image_embeds.shape[0] // len(image) * image
+            image = (image_embeds.shape[0] // len(image)) * image
+
         if (
             isinstance(mask_image, (list, tuple))
             and len(mask_image) < image_embeds.shape[0]
             and image_embeds.shape[0] % len(mask_image) == 0
         ):
-            mask_image = image_embeds.shape[0] // len(mask_image) * mask_image
+            mask_image = (image_embeds.shape[0] // len(mask_image)) * mask_image
+
         outputs = self.decoder_pipe(
             image=image,
             mask_image=mask_image,
@@ -684,8 +805,10 @@ class KandinskyV22InpaintCombinedPipeline(DiffusionPipeline):
             generator=generator,
             guidance_scale=guidance_scale,
             output_type=output_type,
-            callback=callback,
-            callback_steps=callback_steps,
             return_dict=return_dict,
+            callback_on_step_end=callback_on_step_end,
+            callback_on_step_end_tensor_inputs=callback_on_step_end_tensor_inputs,
+            **kwargs,
         )
+
         return outputs

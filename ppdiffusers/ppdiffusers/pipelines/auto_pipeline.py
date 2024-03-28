@@ -1,5 +1,5 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
-# Copyright 2023 The HuggingFace Team. All rights reserved.
+# coding=utf-8
+# Copyright 2023 The HuggingFace Inc. team.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,14 +12,17 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 import inspect
 from collections import OrderedDict
 
 from ..configuration_utils import ConfigMixin
+from ..utils import DIFFUSERS_CACHE, FROM_AISTUDIO, FROM_HF_HUB, PPDIFFUSERS_CACHE
 from .controlnet import (
     StableDiffusionControlNetImg2ImgPipeline,
     StableDiffusionControlNetInpaintPipeline,
     StableDiffusionControlNetPipeline,
+    StableDiffusionXLControlNetImg2ImgPipeline,
     StableDiffusionXLControlNetPipeline,
 )
 from .deepfloyd_if import IFImg2ImgPipeline, IFInpaintingPipeline, IFPipeline
@@ -39,6 +42,12 @@ from .kandinsky2_2 import (
     KandinskyV22InpaintPipeline,
     KandinskyV22Pipeline,
 )
+from .kandinsky3 import Kandinsky3Img2ImgPipeline, Kandinsky3Pipeline
+from .latent_consistency_models import (
+    LatentConsistencyModelImg2ImgPipeline,
+    LatentConsistencyModelPipeline,
+)
+from .pixart_alpha import PixArtAlphaPipeline
 from .stable_diffusion import (
     StableDiffusionImg2ImgPipeline,
     StableDiffusionInpaintPipeline,
@@ -49,6 +58,7 @@ from .stable_diffusion_xl import (
     StableDiffusionXLInpaintPipeline,
     StableDiffusionXLPipeline,
 )
+from .wuerstchen import WuerstchenCombinedPipeline, WuerstchenDecoderPipeline
 
 AUTO_TEXT2IMAGE_PIPELINES_MAPPING = OrderedDict(
     [
@@ -57,10 +67,15 @@ AUTO_TEXT2IMAGE_PIPELINES_MAPPING = OrderedDict(
         ("if", IFPipeline),
         ("kandinsky", KandinskyCombinedPipeline),
         ("kandinsky22", KandinskyV22CombinedPipeline),
+        ("kandinsky3", Kandinsky3Pipeline),
         ("stable-diffusion-controlnet", StableDiffusionControlNetPipeline),
         ("stable-diffusion-xl-controlnet", StableDiffusionXLControlNetPipeline),
+        ("wuerstchen", WuerstchenCombinedPipeline),
+        ("lcm", LatentConsistencyModelPipeline),
+        ("pixart", PixArtAlphaPipeline),
     ]
 )
+
 AUTO_IMAGE2IMAGE_PIPELINES_MAPPING = OrderedDict(
     [
         ("stable-diffusion", StableDiffusionImg2ImgPipeline),
@@ -68,9 +83,13 @@ AUTO_IMAGE2IMAGE_PIPELINES_MAPPING = OrderedDict(
         ("if", IFImg2ImgPipeline),
         ("kandinsky", KandinskyImg2ImgCombinedPipeline),
         ("kandinsky22", KandinskyV22Img2ImgCombinedPipeline),
+        ("kandinsky3", Kandinsky3Img2ImgPipeline),
         ("stable-diffusion-controlnet", StableDiffusionControlNetImg2ImgPipeline),
+        ("stable-diffusion-xl-controlnet", StableDiffusionXLControlNetImg2ImgPipeline),
+        ("lcm", LatentConsistencyModelImg2ImgPipeline),
     ]
 )
+
 AUTO_INPAINT_PIPELINES_MAPPING = OrderedDict(
     [
         ("stable-diffusion", StableDiffusionInpaintPipeline),
@@ -81,15 +100,27 @@ AUTO_INPAINT_PIPELINES_MAPPING = OrderedDict(
         ("stable-diffusion-controlnet", StableDiffusionControlNetInpaintPipeline),
     ]
 )
+
 _AUTO_TEXT2IMAGE_DECODER_PIPELINES_MAPPING = OrderedDict(
-    [("kandinsky", KandinskyPipeline), ("kandinsky22", KandinskyV22Pipeline)]
+    [
+        ("kandinsky", KandinskyPipeline),
+        ("kandinsky22", KandinskyV22Pipeline),
+        ("wuerstchen", WuerstchenDecoderPipeline),
+    ]
 )
 _AUTO_IMAGE2IMAGE_DECODER_PIPELINES_MAPPING = OrderedDict(
-    [("kandinsky", KandinskyImg2ImgPipeline), ("kandinsky22", KandinskyV22Img2ImgPipeline)]
+    [
+        ("kandinsky", KandinskyImg2ImgPipeline),
+        ("kandinsky22", KandinskyV22Img2ImgPipeline),
+    ]
 )
 _AUTO_INPAINT_DECODER_PIPELINES_MAPPING = OrderedDict(
-    [("kandinsky", KandinskyInpaintPipeline), ("kandinsky22", KandinskyV22InpaintPipeline)]
+    [
+        ("kandinsky", KandinskyInpaintPipeline),
+        ("kandinsky22", KandinskyV22InpaintPipeline),
+    ]
 )
+
 SUPPORTED_TASKS_MAPPINGS = [
     AUTO_TEXT2IMAGE_PIPELINES_MAPPING,
     AUTO_IMAGE2IMAGE_PIPELINES_MAPPING,
@@ -122,10 +153,12 @@ def _get_task_class(mapping, pipeline_class_name, throw_error_if_not_exist: bool
                     return model_name
 
     model_name = get_model(pipeline_class_name)
+
     if model_name is not None:
         task_class = mapping.get(model_name, None)
         if task_class is not None:
             return task_class
+
     if throw_error_if_not_exist:
         raise ValueError(f"AutoPipeline can't find a pipeline linked to {pipeline_class_name} for {model_name}")
 
@@ -139,18 +172,13 @@ def _get_signature_keys(obj):
 
 
 class AutoPipelineForText2Image(ConfigMixin):
-    """
+    r"""
 
-    AutoPipeline for text-to-image generation.
+    [`AutoPipelineForText2Image`] is a generic pipeline class that instantiates a text-to-image pipeline class. The
+    specific underlying pipeline class is automatically selected from either the
+    [`~AutoPipelineForText2Image.from_pretrained`] or [`~AutoPipelineForText2Image.from_pipe`] methods.
 
-    [`AutoPipelineForText2Image`] is a generic pipeline class that will be instantiated as one of the text-to-image
-    pipeline class in ppdiffusers.
-
-    The pipeline type (for example [`StableDiffusionPipeline`]) is automatically selected when created with the
-    AutoPipelineForText2Image.from_pretrained(pretrained_model_name_or_path) or
-    AutoPipelineForText2Image.from_pipe(pipeline) class methods .
-
-    This class cannot be instantiated using __init__() (throws an error).
+    This class cannot be instantiated using `__init__()` (throws an error).
 
     Class attributes:
 
@@ -163,12 +191,14 @@ class AutoPipelineForText2Image(ConfigMixin):
 
     def __init__(self, *args, **kwargs):
         raise EnvironmentError(
-            f"{self.__class__.__name__} is designed to be instantiated using the `{self.__class__.__name__}.from_pretrained(pretrained_model_name_or_path)` or `{self.__class__.__name__}.from_pipe(pipeline)` methods."
+            f"{self.__class__.__name__} is designed to be instantiated "
+            f"using the `{self.__class__.__name__}.from_pretrained(pretrained_model_name_or_path)` or "
+            f"`{self.__class__.__name__}.from_pipe(pipeline)` methods."
         )
 
     @classmethod
     def from_pretrained(cls, pretrained_model_or_path, **kwargs):
-        """
+        r"""
         Instantiates a text-to-image Paddle diffusion pipeline from pretrained pipeline weight.
 
         The from_pretrained() method takes care of returning the correct pipeline class instance by:
@@ -218,20 +248,41 @@ class AutoPipelineForText2Image(ConfigMixin):
             local_files_only (`bool`, *optional*, defaults to `False`):
                 Whether to only load local model weights and configuration files or not. If set to `True`, the model
                 won't be downloaded from the Hub.
+            use_auth_token (`str` or *bool*, *optional*):
+                The token to use as HTTP bearer authorization for remote files. If `True`, the token generated from
+                `diffusers-cli login` (stored in `~/.huggingface`) is used.
             revision (`str`, *optional*, defaults to `"main"`):
                 The specific model version to use. It can be a branch name, a tag name, a commit id, or any identifier
                 allowed by Git.
             custom_revision (`str`, *optional*, defaults to `"main"`):
                 The specific model version to use. It can be a branch name, a tag name, or a commit id similar to
-                `revision` when loading a custom pipeline from the Hub. It can be a ppdiffusers version when loading a
+                `revision` when loading a custom pipeline from the Hub. It can be a 🤗 Diffusers version when loading a
                 custom pipeline from GitHub, otherwise it defaults to `"main"` when loading from the Hub.
             mirror (`str`, *optional*):
                 Mirror source to resolve accessibility issues if you’re downloading a model in China. We do not
                 guarantee the timeliness or safety of the source, and you should refer to the mirror site for more
                 information.
+            device_map (`str` or `Dict[str, Union[int, str, paddle.device]]`, *optional*):
+                A map that specifies where each submodule should go. It doesn’t need to be defined for each
+                parameter/buffer name; once a given module name is inside, every submodule of it will be sent to the
+                same device.
+
+                Set `device_map="auto"` to have 🤗 Accelerate automatically compute the most optimized `device_map`. For
+                more information about each option see [designing a device
+                map](https://hf.co/docs/accelerate/main/en/usage_guides/big_modeling#designing-a-device-map).
             max_memory (`Dict`, *optional*):
                 A dictionary device identifier for the maximum memory. Will default to the maximum memory available for
                 each GPU and the available CPU RAM if unset.
+            offload_folder (`str` or `os.PathLike`, *optional*):
+                The path to offload weights if device_map contains the value `"disk"`.
+            offload_state_dict (`bool`, *optional*):
+                If `True`, temporarily offloads the CPU state dict to the hard drive to avoid running out of CPU RAM if
+                the weight of the CPU state dict + the biggest shard of the checkpoint does not fit. Defaults to `True`
+                when there is some disk offload.
+            low_cpu_mem_usage (`bool`, *optional*, defaults to `True` if paddle version >= 2.5.0 else `False`):
+                Speed up model loading only loading the pretrained weights and not initializing the weights. This also
+                tries to not use more than 1x model size in CPU memory (including peak memory) while loading the model.
+                Only supported for Paddle >= 2.5.0. If you are using an older version of Paddle, setting this
                 argument to `True` will raise an error.
             use_safetensors (`bool`, *optional*, defaults to `None`):
                 If set to `None`, the safetensors weights are downloaded if they're available **and** if the
@@ -255,22 +306,55 @@ class AutoPipelineForText2Image(ConfigMixin):
         Examples:
 
         ```py
-        >>> from ppdiffusers import AutoPipelineForTextToImage
+        >>> from ppdiffusers import AutoPipelineForText2Image
 
-        >>> pipeline = AutoPipelineForTextToImage.from_pretrained("runwayml/stable-diffusion-v1-5")
-        >>> print(pipeline.__class__)
+        >>> pipeline = AutoPipelineForText2Image.from_pretrained("runwayml/stable-diffusion-v1-5")
+        >>> image = pipeline(prompt).images[0]
         ```
         """
-        config = cls.load_config(pretrained_model_or_path)
+        from_hf_hub = kwargs.pop("from_hf_hub", FROM_HF_HUB)
+        from_aistudio = kwargs.pop("from_aistudio", FROM_AISTUDIO)
+        cache_dir = kwargs.pop("cache_dir", None)
+        if cache_dir is None:
+            if from_aistudio:
+                cache_dir = None  # TODO, check aistudio cache
+            elif from_hf_hub:
+                cache_dir = DIFFUSERS_CACHE
+            else:
+                cache_dir = PPDIFFUSERS_CACHE
+        force_download = kwargs.pop("force_download", False)
+        resume_download = kwargs.pop("resume_download", False)
+        proxies = kwargs.pop("proxies", None)
+        use_auth_token = kwargs.pop("use_auth_token", None)
+        local_files_only = kwargs.pop("local_files_only", False)
+        revision = kwargs.pop("revision", None)
+
+        load_config_kwargs = {
+            "cache_dir": cache_dir,
+            "force_download": force_download,
+            "resume_download": resume_download,
+            "proxies": proxies,
+            "use_auth_token": use_auth_token,
+            "local_files_only": local_files_only,
+            "revision": revision,
+            "from_hf_hub": from_hf_hub,
+            "from_aistudio": from_aistudio,
+        }
+
+        config = cls.load_config(pretrained_model_or_path, **load_config_kwargs)
         orig_class_name = config["_class_name"]
+
         if "controlnet" in kwargs:
             orig_class_name = config["_class_name"].replace("Pipeline", "ControlNetPipeline")
+
         text_2_image_cls = _get_task_class(AUTO_TEXT2IMAGE_PIPELINES_MAPPING, orig_class_name)
+
+        kwargs = {**load_config_kwargs, **kwargs}
         return text_2_image_cls.from_pretrained(pretrained_model_or_path, **kwargs)
 
     @classmethod
     def from_pipe(cls, pipeline, **kwargs):
-        """
+        r"""
         Instantiates a text-to-image Paddle diffusion pipeline from another instantiated diffusion pipeline class.
 
         The from_pipe() method takes care of returning the correct pipeline class instance by finding the text-to-image
@@ -286,13 +370,14 @@ class AutoPipelineForText2Image(ConfigMixin):
                 an instantiated `DiffusionPipeline` object
 
         ```py
-        >>> from ppdiffusers import AutoPipelineForTextToImage, AutoPipelineForImageToImage
+        >>> from ppdiffusers import AutoPipelineForText2Image, AutoPipelineForImage2Image
 
         >>> pipe_i2i = AutoPipelineForImage2Image.from_pretrained(
         ...     "runwayml/stable-diffusion-v1-5", requires_safety_checker=False
         ... )
 
-        >>> pipe_t2i = AutoPipelineForTextToImage.from_pipe(pipe_t2i)
+        >>> pipe_t2i = AutoPipelineForText2Image.from_pipe(pipe_i2i)
+        >>> image = pipe_t2i(prompt).images[0]
         ```
         """
 
@@ -302,8 +387,21 @@ class AutoPipelineForText2Image(ConfigMixin):
         # derive the pipeline class to instantiate
         text_2_image_cls = _get_task_class(AUTO_TEXT2IMAGE_PIPELINES_MAPPING, original_cls_name)
 
+        if "controlnet" in kwargs:
+            if kwargs["controlnet"] is not None:
+                text_2_image_cls = _get_task_class(
+                    AUTO_TEXT2IMAGE_PIPELINES_MAPPING,
+                    text_2_image_cls.__name__.replace("ControlNet", "").replace("Pipeline", "ControlNetPipeline"),
+                )
+            else:
+                text_2_image_cls = _get_task_class(
+                    AUTO_TEXT2IMAGE_PIPELINES_MAPPING,
+                    text_2_image_cls.__name__.replace("ControlNetPipeline", "Pipeline"),
+                )
+
         # define expected module and optional kwargs given the pipeline signature
         expected_modules, optional_kwargs = _get_signature_keys(text_2_image_cls)
+
         pretrained_model_name_or_path = original_config.pop("_name_or_path", None)
 
         # allow users pass modules in `kwargs` to override the original pipeline's components
@@ -331,6 +429,7 @@ class AutoPipelineForText2Image(ConfigMixin):
         ]
         for k in additional_pipe_kwargs:
             original_pipe_kwargs[k] = original_config.pop(f"_{k}")
+
         text_2_image_kwargs = {**passed_class_obj, **original_class_obj, **passed_pipe_kwargs, **original_pipe_kwargs}
 
         # store unused config as private attribute
@@ -339,30 +438,29 @@ class AutoPipelineForText2Image(ConfigMixin):
             for k, v in original_config.items()
             if k not in text_2_image_kwargs
         }
+
         missing_modules = set(expected_modules) - set(pipeline._optional_components) - set(text_2_image_kwargs.keys())
+
         if len(missing_modules) > 0:
             raise ValueError(
                 f"Pipeline {text_2_image_cls} expected {expected_modules}, but only {set(list(passed_class_obj.keys()) + list(original_class_obj.keys()))} were passed"
             )
+
         model = text_2_image_cls(**text_2_image_kwargs)
         model.register_to_config(_name_or_path=pretrained_model_name_or_path)
         model.register_to_config(**unused_original_config)
+
         return model
 
 
 class AutoPipelineForImage2Image(ConfigMixin):
-    """
+    r"""
 
-    AutoPipeline for image-to-image generation.
+    [`AutoPipelineForImage2Image`] is a generic pipeline class that instantiates an image-to-image pipeline class. The
+    specific underlying pipeline class is automatically selected from either the
+    [`~AutoPipelineForImage2Image.from_pretrained`] or [`~AutoPipelineForImage2Image.from_pipe`] methods.
 
-    [`AutoPipelineForImage2Image`] is a generic pipeline class that will be instantiated as one of the image-to-image
-    pipeline classes in ppdiffusers.
-
-    The pipeline type (for example [`StableDiffusionImg2ImgPipeline`]) is automatically selected when created with the
-    `AutoPipelineForImage2Image.from_pretrained(pretrained_model_name_or_path)` or
-    `AutoPipelineForImage2Image.from_pipe(pipeline)` class methods.
-
-    This class cannot be instantiated using __init__() (throws an error).
+    This class cannot be instantiated using `__init__()` (throws an error).
 
     Class attributes:
 
@@ -375,12 +473,14 @@ class AutoPipelineForImage2Image(ConfigMixin):
 
     def __init__(self, *args, **kwargs):
         raise EnvironmentError(
-            f"{self.__class__.__name__} is designed to be instantiated using the `{self.__class__.__name__}.from_pretrained(pretrained_model_name_or_path)` or `{self.__class__.__name__}.from_pipe(pipeline)` methods."
+            f"{self.__class__.__name__} is designed to be instantiated "
+            f"using the `{self.__class__.__name__}.from_pretrained(pretrained_model_name_or_path)` or "
+            f"`{self.__class__.__name__}.from_pipe(pipeline)` methods."
         )
 
     @classmethod
     def from_pretrained(cls, pretrained_model_or_path, **kwargs):
-        """
+        r"""
         Instantiates a image-to-image Paddle diffusion pipeline from pretrained pipeline weight.
 
         The from_pretrained() method takes care of returning the correct pipeline class instance by:
@@ -389,7 +489,8 @@ class AutoPipelineForImage2Image(ConfigMixin):
             2. Find the image-to-image pipeline linked to the pipeline class using pattern matching on pipeline class
                name.
 
-        If a `controlnet` argument is passed, it will instantiate a StableDiffusionControlNetImg2ImgPipeline object.
+        If a `controlnet` argument is passed, it will instantiate a [`StableDiffusionControlNetImg2ImgPipeline`]
+        object.
 
         The pipeline is set in evaluation mode (`model.eval()`) by default.
 
@@ -430,20 +531,42 @@ class AutoPipelineForImage2Image(ConfigMixin):
             local_files_only (`bool`, *optional*, defaults to `False`):
                 Whether to only load local model weights and configuration files or not. If set to `True`, the model
                 won't be downloaded from the Hub.
+            use_auth_token (`str` or *bool*, *optional*):
+                The token to use as HTTP bearer authorization for remote files. If `True`, the token generated from
+                `diffusers-cli login` (stored in `~/.huggingface`) is used.
             revision (`str`, *optional*, defaults to `"main"`):
                 The specific model version to use. It can be a branch name, a tag name, a commit id, or any identifier
                 allowed by Git.
             custom_revision (`str`, *optional*, defaults to `"main"`):
                 The specific model version to use. It can be a branch name, a tag name, or a commit id similar to
-                `revision` when loading a custom pipeline from the Hub. It can be a ppdiffusers version when loading a
+                `revision` when loading a custom pipeline from the Hub. It can be a 🤗 Diffusers version when loading a
                 custom pipeline from GitHub, otherwise it defaults to `"main"` when loading from the Hub.
             mirror (`str`, *optional*):
                 Mirror source to resolve accessibility issues if you’re downloading a model in China. We do not
                 guarantee the timeliness or safety of the source, and you should refer to the mirror site for more
                 information.
+            device_map (`str` or `Dict[str, Union[int, str, paddle.device]]`, *optional*):
+                A map that specifies where each submodule should go. It doesn’t need to be defined for each
+                parameter/buffer name; once a given module name is inside, every submodule of it will be sent to the
+                same device.
+
+                Set `device_map="auto"` to have 🤗 Accelerate automatically compute the most optimized `device_map`. For
+                more information about each option see [designing a device
+                map](https://hf.co/docs/accelerate/main/en/usage_guides/big_modeling#designing-a-device-map).
             max_memory (`Dict`, *optional*):
                 A dictionary device identifier for the maximum memory. Will default to the maximum memory available for
                 each GPU and the available CPU RAM if unset.
+            offload_folder (`str` or `os.PathLike`, *optional*):
+                The path to offload weights if device_map contains the value `"disk"`.
+            offload_state_dict (`bool`, *optional*):
+                If `True`, temporarily offloads the CPU state dict to the hard drive to avoid running out of CPU RAM if
+                the weight of the CPU state dict + the biggest shard of the checkpoint does not fit. Defaults to `True`
+                when there is some disk offload.
+            low_cpu_mem_usage (`bool`, *optional*, defaults to `True` if paddle version >= 2.5.0 else `False`):
+                Speed up model loading only loading the pretrained weights and not initializing the weights. This also
+                tries to not use more than 1x model size in CPU memory (including peak memory) while loading the model.
+                Only supported for Paddle >= 2.5.0. If you are using an older version of Paddle, setting this
+                argument to `True` will raise an error.
             use_safetensors (`bool`, *optional*, defaults to `None`):
                 If set to `None`, the safetensors weights are downloaded if they're available **and** if the
                 safetensors library is installed. If set to `True`, the model is forcibly loaded from safetensors
@@ -466,22 +589,54 @@ class AutoPipelineForImage2Image(ConfigMixin):
         Examples:
 
         ```py
-        >>> from ppdiffusers import AutoPipelineForTextToImage
+        >>> from ppdiffusers import AutoPipelineForImage2Image
 
-        >>> pipeline = AutoPipelineForImageToImage.from_pretrained("runwayml/stable-diffusion-v1-5")
-        >>> print(pipeline.__class__)
+        >>> pipeline = AutoPipelineForImage2Image.from_pretrained("runwayml/stable-diffusion-v1-5")
+        >>> image = pipeline(prompt, image).images[0]
         ```
         """
-        config = cls.load_config(pretrained_model_or_path)
+        from_hf_hub = kwargs.pop("from_hf_hub", FROM_HF_HUB)
+        from_aistudio = kwargs.pop("from_aistudio", FROM_AISTUDIO)
+        cache_dir = kwargs.pop("cache_dir", None)
+        if cache_dir is None:
+            if from_aistudio:
+                cache_dir = None  # TODO, check aistudio cache
+            elif from_hf_hub:
+                cache_dir = DIFFUSERS_CACHE
+            else:
+                cache_dir = PPDIFFUSERS_CACHE
+        force_download = kwargs.pop("force_download", False)
+        resume_download = kwargs.pop("resume_download", False)
+        proxies = kwargs.pop("proxies", None)
+        use_auth_token = kwargs.pop("use_auth_token", None)
+        local_files_only = kwargs.pop("local_files_only", False)
+        revision = kwargs.pop("revision", None)
+
+        load_config_kwargs = {
+            "cache_dir": cache_dir,
+            "force_download": force_download,
+            "resume_download": resume_download,
+            "proxies": proxies,
+            "use_auth_token": use_auth_token,
+            "local_files_only": local_files_only,
+            "revision": revision,
+            "from_hf_hub": from_hf_hub,
+            "from_aistudio": from_aistudio,
+        }
+        config = cls.load_config(pretrained_model_or_path, **load_config_kwargs)
         orig_class_name = config["_class_name"]
+
         if "controlnet" in kwargs:
             orig_class_name = config["_class_name"].replace("Pipeline", "ControlNetPipeline")
+
         image_2_image_cls = _get_task_class(AUTO_IMAGE2IMAGE_PIPELINES_MAPPING, orig_class_name)
+
+        kwargs = {**load_config_kwargs, **kwargs}
         return image_2_image_cls.from_pretrained(pretrained_model_or_path, **kwargs)
 
     @classmethod
     def from_pipe(cls, pipeline, **kwargs):
-        """
+        r"""
         Instantiates a image-to-image Paddle diffusion pipeline from another instantiated diffusion pipeline class.
 
         The from_pipe() method takes care of returning the correct pipeline class instance by finding the
@@ -499,23 +654,40 @@ class AutoPipelineForImage2Image(ConfigMixin):
         Examples:
 
         ```py
-        >>> from ppdiffusers import AutoPipelineForTextToImage, AutoPipelineForImageToImage
+        >>> from ppdiffusers import AutoPipelineForText2Image, AutoPipelineForImage2Image
 
         >>> pipe_t2i = AutoPipelineForText2Image.from_pretrained(
         ...     "runwayml/stable-diffusion-v1-5", requires_safety_checker=False
         ... )
 
-        >>> pipe_i2i = AutoPipelineForImageToImage.from_pipe(pipe_t2i)
+        >>> pipe_i2i = AutoPipelineForImage2Image.from_pipe(pipe_t2i)
+        >>> image = pipe_i2i(prompt, image).images[0]
         ```
         """
+
         original_config = dict(pipeline.config)
         original_cls_name = pipeline.__class__.__name__
 
         # derive the pipeline class to instantiate
         image_2_image_cls = _get_task_class(AUTO_IMAGE2IMAGE_PIPELINES_MAPPING, original_cls_name)
 
+        if "controlnet" in kwargs:
+            if kwargs["controlnet"] is not None:
+                image_2_image_cls = _get_task_class(
+                    AUTO_IMAGE2IMAGE_PIPELINES_MAPPING,
+                    image_2_image_cls.__name__.replace("ControlNet", "").replace(
+                        "Img2ImgPipeline", "ControlNetImg2ImgPipeline"
+                    ),
+                )
+            else:
+                image_2_image_cls = _get_task_class(
+                    AUTO_IMAGE2IMAGE_PIPELINES_MAPPING,
+                    image_2_image_cls.__name__.replace("ControlNetImg2ImgPipeline", "Img2ImgPipeline"),
+                )
+
         # define expected module and optional kwargs given the pipeline signature
         expected_modules, optional_kwargs = _get_signature_keys(image_2_image_cls)
+
         pretrained_model_name_or_path = original_config.pop("_name_or_path", None)
 
         # allow users pass modules in `kwargs` to override the original pipeline's components
@@ -543,6 +715,7 @@ class AutoPipelineForImage2Image(ConfigMixin):
         ]
         for k in additional_pipe_kwargs:
             original_pipe_kwargs[k] = original_config.pop(f"_{k}")
+
         image_2_image_kwargs = {**passed_class_obj, **original_class_obj, **passed_pipe_kwargs, **original_pipe_kwargs}
 
         # store unused config as private attribute
@@ -551,30 +724,29 @@ class AutoPipelineForImage2Image(ConfigMixin):
             for k, v in original_config.items()
             if k not in image_2_image_kwargs
         }
+
         missing_modules = set(expected_modules) - set(pipeline._optional_components) - set(image_2_image_kwargs.keys())
+
         if len(missing_modules) > 0:
             raise ValueError(
                 f"Pipeline {image_2_image_cls} expected {expected_modules}, but only {set(list(passed_class_obj.keys()) + list(original_class_obj.keys()))} were passed"
             )
+
         model = image_2_image_cls(**image_2_image_kwargs)
         model.register_to_config(_name_or_path=pretrained_model_name_or_path)
         model.register_to_config(**unused_original_config)
+
         return model
 
 
 class AutoPipelineForInpainting(ConfigMixin):
-    """
+    r"""
 
-    AutoPipeline for inpainting generation.
+    [`AutoPipelineForInpainting`] is a generic pipeline class that instantiates an inpainting pipeline class. The
+    specific underlying pipeline class is automatically selected from either the
+    [`~AutoPipelineForInpainting.from_pretrained`] or [`~AutoPipelineForInpainting.from_pipe`] methods.
 
-    [`AutoPipelineForInpainting`] is a generic pipeline class that will be instantiated as one of the inpainting
-    pipeline class in ppdiffusers.
-
-    The pipeline type (for example [`IFInpaintingPipeline`]) is automatically selected when created with the
-    AutoPipelineForInpainting.from_pretrained(pretrained_model_name_or_path) or
-    AutoPipelineForInpainting.from_pipe(pipeline) class methods .
-
-    This class cannot be instantiated using __init__() (throws an error).
+    This class cannot be instantiated using `__init__()` (throws an error).
 
     Class attributes:
 
@@ -587,12 +759,14 @@ class AutoPipelineForInpainting(ConfigMixin):
 
     def __init__(self, *args, **kwargs):
         raise EnvironmentError(
-            f"{self.__class__.__name__} is designed to be instantiated using the `{self.__class__.__name__}.from_pretrained(pretrained_model_name_or_path)` or `{self.__class__.__name__}.from_pipe(pipeline)` methods."
+            f"{self.__class__.__name__} is designed to be instantiated "
+            f"using the `{self.__class__.__name__}.from_pretrained(pretrained_model_name_or_path)` or "
+            f"`{self.__class__.__name__}.from_pipe(pipeline)` methods."
         )
 
     @classmethod
     def from_pretrained(cls, pretrained_model_or_path, **kwargs):
-        """
+        r"""
         Instantiates a inpainting Paddle diffusion pipeline from pretrained pipeline weight.
 
         The from_pretrained() method takes care of returning the correct pipeline class instance by:
@@ -600,7 +774,8 @@ class AutoPipelineForInpainting(ConfigMixin):
                config object
             2. Find the inpainting pipeline linked to the pipeline class using pattern matching on pipeline class name.
 
-        If a `controlnet` argument is passed, it will instantiate a StableDiffusionControlNetInpaintPipeline object.
+        If a `controlnet` argument is passed, it will instantiate a [`StableDiffusionControlNetInpaintPipeline`]
+        object.
 
         The pipeline is set in evaluation mode (`model.eval()`) by default.
 
@@ -641,20 +816,42 @@ class AutoPipelineForInpainting(ConfigMixin):
             local_files_only (`bool`, *optional*, defaults to `False`):
                 Whether to only load local model weights and configuration files or not. If set to `True`, the model
                 won't be downloaded from the Hub.
+            use_auth_token (`str` or *bool*, *optional*):
+                The token to use as HTTP bearer authorization for remote files. If `True`, the token generated from
+                `diffusers-cli login` (stored in `~/.huggingface`) is used.
             revision (`str`, *optional*, defaults to `"main"`):
                 The specific model version to use. It can be a branch name, a tag name, a commit id, or any identifier
                 allowed by Git.
             custom_revision (`str`, *optional*, defaults to `"main"`):
                 The specific model version to use. It can be a branch name, a tag name, or a commit id similar to
-                `revision` when loading a custom pipeline from the Hub. It can be a ppdiffusers version when loading a
+                `revision` when loading a custom pipeline from the Hub. It can be a 🤗 Diffusers version when loading a
                 custom pipeline from GitHub, otherwise it defaults to `"main"` when loading from the Hub.
             mirror (`str`, *optional*):
                 Mirror source to resolve accessibility issues if you’re downloading a model in China. We do not
                 guarantee the timeliness or safety of the source, and you should refer to the mirror site for more
                 information.
+            device_map (`str` or `Dict[str, Union[int, str, paddle.device]]`, *optional*):
+                A map that specifies where each submodule should go. It doesn’t need to be defined for each
+                parameter/buffer name; once a given module name is inside, every submodule of it will be sent to the
+                same device.
+
+                Set `device_map="auto"` to have 🤗 Accelerate automatically compute the most optimized `device_map`. For
+                more information about each option see [designing a device
+                map](https://hf.co/docs/accelerate/main/en/usage_guides/big_modeling#designing-a-device-map).
             max_memory (`Dict`, *optional*):
                 A dictionary device identifier for the maximum memory. Will default to the maximum memory available for
                 each GPU and the available CPU RAM if unset.
+            offload_folder (`str` or `os.PathLike`, *optional*):
+                The path to offload weights if device_map contains the value `"disk"`.
+            offload_state_dict (`bool`, *optional*):
+                If `True`, temporarily offloads the CPU state dict to the hard drive to avoid running out of CPU RAM if
+                the weight of the CPU state dict + the biggest shard of the checkpoint does not fit. Defaults to `True`
+                when there is some disk offload.
+            low_cpu_mem_usage (`bool`, *optional*, defaults to `True` if paddle version >= 2.5.0 else `False`):
+                Speed up model loading only loading the pretrained weights and not initializing the weights. This also
+                tries to not use more than 1x model size in CPU memory (including peak memory) while loading the model.
+                Only supported for Paddle >= 2.5.0. If you are using an older version of Paddle, setting this
+                argument to `True` will raise an error.
             use_safetensors (`bool`, *optional*, defaults to `None`):
                 If set to `None`, the safetensors weights are downloaded if they're available **and** if the
                 safetensors library is installed. If set to `True`, the model is forcibly loaded from safetensors
@@ -677,22 +874,55 @@ class AutoPipelineForInpainting(ConfigMixin):
         Examples:
 
         ```py
-        >>> from ppdiffusers import AutoPipelineForTextToImage
+        >>> from ppdiffusers import AutoPipelineForInpainting
 
-        >>> pipeline = AutoPipelineForImageToImage.from_pretrained("runwayml/stable-diffusion-v1-5")
-        >>> print(pipeline.__class__)
+        >>> pipeline = AutoPipelineForInpainting.from_pretrained("runwayml/stable-diffusion-v1-5")
+        >>> image = pipeline(prompt, image=init_image, mask_image=mask_image).images[0]
         ```
         """
-        config = cls.load_config(pretrained_model_or_path)
+        from_hf_hub = kwargs.pop("from_hf_hub", FROM_HF_HUB)
+        from_aistudio = kwargs.pop("from_aistudio", FROM_AISTUDIO)
+        cache_dir = kwargs.pop("cache_dir", None)
+        if cache_dir is None:
+            if from_aistudio:
+                cache_dir = None  # TODO, check aistudio cache
+            elif from_hf_hub:
+                cache_dir = DIFFUSERS_CACHE
+            else:
+                cache_dir = PPDIFFUSERS_CACHE
+        force_download = kwargs.pop("force_download", False)
+        resume_download = kwargs.pop("resume_download", False)
+        proxies = kwargs.pop("proxies", None)
+        use_auth_token = kwargs.pop("use_auth_token", None)
+        local_files_only = kwargs.pop("local_files_only", False)
+        revision = kwargs.pop("revision", None)
+
+        load_config_kwargs = {
+            "cache_dir": cache_dir,
+            "force_download": force_download,
+            "resume_download": resume_download,
+            "proxies": proxies,
+            "use_auth_token": use_auth_token,
+            "local_files_only": local_files_only,
+            "revision": revision,
+            "from_hf_hub": from_hf_hub,
+            "from_aistudio": from_aistudio,
+        }
+
+        config = cls.load_config(pretrained_model_or_path, **load_config_kwargs)
         orig_class_name = config["_class_name"]
+
         if "controlnet" in kwargs:
             orig_class_name = config["_class_name"].replace("Pipeline", "ControlNetPipeline")
+
         inpainting_cls = _get_task_class(AUTO_INPAINT_PIPELINES_MAPPING, orig_class_name)
+
+        kwargs = {**load_config_kwargs, **kwargs}
         return inpainting_cls.from_pretrained(pretrained_model_or_path, **kwargs)
 
     @classmethod
     def from_pipe(cls, pipeline, **kwargs):
-        """
+        r"""
         Instantiates a inpainting Paddle diffusion pipeline from another instantiated diffusion pipeline class.
 
         The from_pipe() method takes care of returning the correct pipeline class instance by finding the inpainting
@@ -710,13 +940,14 @@ class AutoPipelineForInpainting(ConfigMixin):
         Examples:
 
         ```py
-        >>> from ppdiffusers import AutoPipelineForTextToImage, AutoPipelineForInpainting
+        >>> from ppdiffusers import AutoPipelineForText2Image, AutoPipelineForInpainting
 
         >>> pipe_t2i = AutoPipelineForText2Image.from_pretrained(
         ...     "DeepFloyd/IF-I-XL-v1.0", requires_safety_checker=False
         ... )
 
         >>> pipe_inpaint = AutoPipelineForInpainting.from_pipe(pipe_t2i)
+        >>> image = pipe_inpaint(prompt, image=init_image, mask_image=mask_image).images[0]
         ```
         """
         original_config = dict(pipeline.config)
@@ -725,8 +956,23 @@ class AutoPipelineForInpainting(ConfigMixin):
         # derive the pipeline class to instantiate
         inpainting_cls = _get_task_class(AUTO_INPAINT_PIPELINES_MAPPING, original_cls_name)
 
+        if "controlnet" in kwargs:
+            if kwargs["controlnet"] is not None:
+                inpainting_cls = _get_task_class(
+                    AUTO_INPAINT_PIPELINES_MAPPING,
+                    inpainting_cls.__name__.replace("ControlNet", "").replace(
+                        "InpaintPipeline", "ControlNetInpaintPipeline"
+                    ),
+                )
+            else:
+                inpainting_cls = _get_task_class(
+                    AUTO_INPAINT_PIPELINES_MAPPING,
+                    inpainting_cls.__name__.replace("ControlNetInpaintPipeline", "InpaintPipeline"),
+                )
+
         # define expected module and optional kwargs given the pipeline signature
         expected_modules, optional_kwargs = _get_signature_keys(inpainting_cls)
+
         pretrained_model_name_or_path = original_config.pop("_name_or_path", None)
 
         # allow users pass modules in `kwargs` to override the original pipeline's components
@@ -754,6 +1000,7 @@ class AutoPipelineForInpainting(ConfigMixin):
         ]
         for k in additional_pipe_kwargs:
             original_pipe_kwargs[k] = original_config.pop(f"_{k}")
+
         inpainting_kwargs = {**passed_class_obj, **original_class_obj, **passed_pipe_kwargs, **original_pipe_kwargs}
 
         # store unused config as private attribute
@@ -762,12 +1009,16 @@ class AutoPipelineForInpainting(ConfigMixin):
             for k, v in original_config.items()
             if k not in inpainting_kwargs
         }
+
         missing_modules = set(expected_modules) - set(pipeline._optional_components) - set(inpainting_kwargs.keys())
+
         if len(missing_modules) > 0:
             raise ValueError(
                 f"Pipeline {inpainting_cls} expected {expected_modules}, but only {set(list(passed_class_obj.keys()) + list(original_class_obj.keys()))} were passed"
             )
+
         model = inpainting_cls(**inpainting_kwargs)
         model.register_to_config(_name_or_path=pretrained_model_name_or_path)
         model.register_to_config(**unused_original_config)
+
         return model

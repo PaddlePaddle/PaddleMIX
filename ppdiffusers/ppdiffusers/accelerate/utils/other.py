@@ -1,0 +1,239 @@
+# Copyright 2022 The HuggingFace Team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import os
+import platform
+import re
+import socket
+from contextlib import contextmanager
+from functools import partial
+from types import MethodType
+
+import paddle
+from packaging.version import Version
+from safetensors.paddle import save_file as safe_save_file
+
+from ..logging import get_logger
+from ..state import PartialState
+
+logger = get_logger(__name__)
+
+
+def extract_model_from_parallel(model, keep_fp32_wrapper: bool = True):
+    """
+    Extract a model from its distributed containers.
+
+    Args:
+        model (`paddle.nn.Layer`):
+            The model to extract.
+        keep_fp32_wrapper (`bool`, *optional*):
+            Whether to remove mixed precision hooks from the model.
+
+    Returns:
+        `paddle.nn.Layer`: The extracted model.
+    """
+    options = paddle.DataParallel
+
+    while isinstance(model, options):
+        model = model._layers
+
+    if not keep_fp32_wrapper:
+        forward = getattr(model, "forward")
+        original_forward = model.__dict__.pop("_original_forward", None)
+        if original_forward is not None:
+            while hasattr(forward, "__wrapped__"):
+                forward = forward.__wrapped__
+                if forward == original_forward:
+                    break
+            model.forward = MethodType(forward, model)
+
+    return model
+
+
+def wait_for_everyone():
+    """
+    Introduces a blocking point in the script, making sure all processes have reached this point before continuing.
+
+    <Tip warning={true}>
+
+    Make sure all processes will reach this instruction otherwise one of your processes will hang forever.
+
+    </Tip>
+    """
+    PartialState().wait_for_everyone()
+
+
+def save(obj, f, save_on_each_node: bool = False, safe_serialization: bool = False):
+    """
+    Save the data to disk. Use in place of `torch.save()`.
+
+    Args:
+        obj:
+            The data to save
+        f:
+            The file (or file-like object) to use to save the data
+        save_on_each_node (`bool`, *optional*, defaults to `False`):
+            Whether to only save on the global main process
+        safe_serialization (`bool`, *optional*, defaults to `False`):
+            Whether to save `obj` using `safetensors` or the traditional PyTorch way (that uses `pickle`).
+    """
+    # Check if it's a model and remove duplicates
+    if safe_serialization:
+        save_func = partial(safe_save_file, metadata={"format": "pd"})
+    else:
+        save_func = paddle.save
+
+    if PartialState().is_main_process and not save_on_each_node:
+        save_func(obj, f)
+    elif PartialState().is_local_main_process and save_on_each_node:
+        save_func(obj, f)
+
+
+@contextmanager
+def clear_environment():
+    """
+    A context manager that will cache origin `os.environ` and replace it with a empty dictionary in this context.
+
+    When this context exits, the cached `os.environ` will be back.
+
+    Example:
+
+    ```python
+    >>> import os
+    >>> from accelerate.utils import clear_environment
+
+    >>> os.environ["FOO"] = "bar"
+    >>> with clear_environment():
+    ...     print(os.environ)
+    ...     os.environ["FOO"] = "new_bar"
+    ...     print(os.environ["FOO"])
+    {}
+    new_bar
+
+    >>> print(os.environ["FOO"])
+    bar
+    ```
+    """
+    _old_os_environ = os.environ
+    os.environ = dict()
+
+    yield
+
+    os.environ = _old_os_environ
+
+
+@contextmanager
+def patch_environment(**kwargs):
+    """
+    A context manager that will add each keyword argument passed to `os.environ` and remove them when exiting.
+
+    Will convert the values in `kwargs` to strings and upper-case all the keys.
+
+    Example:
+
+    ```python
+    >>> import os
+    >>> from accelerate.utils import patch_environment
+
+    >>> with patch_environment(FOO="bar"):
+    ...     print(os.environ["FOO"])  # prints "bar"
+    >>> print(os.environ["FOO"])  # raises KeyError
+    ```
+    """
+    existing_vars = {}
+    for key, value in kwargs.items():
+        key = key.upper()
+        if key in os.environ:
+            existing_vars[key] = os.environ[key]
+        os.environ[key] = str(value)
+
+    yield
+
+    for key in kwargs:
+        key = key.upper()
+        if key in existing_vars:
+            # restore previous value
+            os.environ[key] = existing_vars[key]
+        else:
+            os.environ.pop(key, None)
+
+
+def get_pretty_name(obj):
+    """
+    Gets a pretty name from `obj`.
+    """
+    if not hasattr(obj, "__qualname__") and not hasattr(obj, "__name__"):
+        obj = getattr(obj, "__class__", obj)
+    if hasattr(obj, "__qualname__"):
+        return obj.__qualname__
+    if hasattr(obj, "__name__"):
+        return obj.__name__
+    return str(obj)
+
+
+def merge_dicts(source, destination):
+    """
+    Recursively merges two dictionaries.
+
+    Args:
+        source (`dict`): The dictionary to merge into `destination`.
+        destination (`dict`): The dictionary to merge `source` into.
+    """
+    for key, value in source.items():
+        if isinstance(value, dict):
+            node = destination.setdefault(key, {})
+            merge_dicts(value, node)
+        else:
+            destination[key] = value
+
+    return destination
+
+
+def is_port_in_use(port: int = None) -> bool:
+    """
+    Checks if a port is in use on `localhost`. Useful for checking if multiple `accelerate launch` commands have been
+    run and need to see if the port is already in use.
+    """
+    if port is None:
+        port = 29500
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        return s.connect_ex(("localhost", port)) == 0
+
+
+def convert_bytes(size):
+    "Converts `size` from bytes to the largest possible unit"
+    for x in ["bytes", "KB", "MB", "GB", "TB"]:
+        if size < 1024.0:
+            return f"{round(size, 2)} {x}"
+        size /= 1024.0
+
+    return f"{round(size, 2)} PB"
+
+
+def check_os_kernel():
+    """Warns if the kernel version is below the recommended minimum on Linux."""
+    # see issue #1929
+    info = platform.uname()
+    system = info.system
+    if system != "Linux":
+        return
+
+    _, version, *_ = re.split(r"(\d+\.\d+\.\d+)", info.release)
+    min_version = "5.5.0"
+    if Version(version) < Version(min_version):
+        msg = (
+            f"Detected kernel version {version}, which is below the recommended minimum of {min_version}; this can "
+            "cause the process to hang. It is recommended to upgrade the kernel to the minimum version or higher."
+        )
+        logger.warning(msg, main_process_only=True)

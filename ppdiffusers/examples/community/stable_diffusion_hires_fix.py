@@ -19,7 +19,6 @@ from typing import Any, Callable, Dict, List, Optional, Union
 
 import paddle
 from packaging import version
-from paddlenlp.transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
 
 from ppdiffusers import AutoencoderKL, DiffusionPipeline, UNet2DConditionModel
 from ppdiffusers.configuration_utils import FrozenDict
@@ -28,6 +27,7 @@ from ppdiffusers.pipelines.stable_diffusion.safety_checker import (
     StableDiffusionSafetyChecker,
 )
 from ppdiffusers.schedulers import KarrasDiffusionSchedulers
+from ppdiffusers.transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
 from ppdiffusers.utils import (
     deprecate,
     logging,
@@ -392,7 +392,7 @@ class StableDiffusionHiresFixPipeline(DiffusionPipeline):
             raise ValueError(f"`prompt` has to be of type `str` or `list` but is {type(prompt)}")
 
         if hr_scale < 0:
-            raise ValueError("hr_scale shoule be greater that 0, but received {hr_scale}")
+            raise ValueError("hr_scale shoule be greater that 0, but acceived {hr_scale}")
 
         if hr_resize_height % 8 != 0 or hr_resize_width % 8 != 0:
             raise ValueError(
@@ -400,7 +400,7 @@ class StableDiffusionHiresFixPipeline(DiffusionPipeline):
             )
 
         if denoising_strength > 1 or denoising_strength < 0:
-            raise ValueError(f"denoising_strength should be set between 0 and 1., but received {denoising_strength}")
+            raise ValueError(f"denoising_strength should be set between 0 and 1., but acceived {denoising_strength}")
 
         if negative_prompt is not None and negative_prompt_embeds is not None:
             raise ValueError(
@@ -410,7 +410,7 @@ class StableDiffusionHiresFixPipeline(DiffusionPipeline):
 
         if latent_scale_mode not in ["nearest", "bilinear", "bicubic", "area"]:
             raise ValueError(
-                f"Only such interpolate method supported for latent_scale_mode in [nearest, bilinear, bicubic, area]. but received {latent_scale_mode}."
+                f"Only such interpolate method supported for latent_scale_mode in [nearest, bilinear, bicubic, area]. but acceived {latent_scale_mode}."
             )
 
         if prompt_embeds is not None and negative_prompt_embeds is not None:

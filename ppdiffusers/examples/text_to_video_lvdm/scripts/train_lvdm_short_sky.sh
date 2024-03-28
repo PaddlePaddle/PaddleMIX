@@ -43,4 +43,6 @@ python -u train_lvdm_short.py \
     --weight_decay 0.01 \
     --max_grad_norm 0 \
     --overwrite_output_dir False \
-    --pretrained_model_name_or_path westfish/lvdm_short_sky_no_ema
+    --pretrained_model_name_or_path westfish/lvdm_short_sky_no_ema \
+    --train_data_root your_data_path_to/sky_timelapse_lvdm \
+    --eval_data_root your_data_path_to/sky_timelapse_lvdm

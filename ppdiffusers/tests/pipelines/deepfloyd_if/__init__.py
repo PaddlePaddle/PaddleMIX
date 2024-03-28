@@ -16,11 +16,11 @@ import tempfile
 
 import numpy as np
 import paddle
-from paddlenlp.transformers import AutoTokenizer, T5EncoderModel
 
 from ppdiffusers import DDPMScheduler, UNet2DConditionModel
 from ppdiffusers.models.attention_processor import AttnAddedKVProcessor
 from ppdiffusers.pipelines.deepfloyd_if import IFWatermarker
+from ppdiffusers.transformers import AutoTokenizer, T5EncoderModel
 
 from ..test_pipelines_common import to_np
 

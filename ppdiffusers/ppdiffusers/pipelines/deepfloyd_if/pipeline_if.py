@@ -1,4 +1,4 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,7 +19,8 @@ import urllib.parse as ul
 from typing import Any, Callable, Dict, List, Optional, Union
 
 import paddle
-from paddlenlp.transformers import CLIPImageProcessor, T5EncoderModel, T5Tokenizer
+
+from ppdiffusers.transformers import CLIPImageProcessor, T5EncoderModel, T5Tokenizer
 
 from ...loaders import LoraLoaderMixin
 from ...models import UNet2DConditionModel
@@ -29,11 +30,11 @@ from ...utils import (
     is_bs4_available,
     is_ftfy_available,
     logging,
-    randn_tensor,
     replace_example_docstring,
 )
+from ...utils.paddle_utils import randn_tensor
 from ..pipeline_utils import DiffusionPipeline
-from . import IFPipelineOutput
+from .pipeline_output import IFPipelineOutput
 from .safety_checker import IFSafetyChecker
 from .watermark import IFWatermarker
 
@@ -44,6 +45,7 @@ if is_bs4_available():
 
 if is_ftfy_available():
     import ftfy
+
 
 EXAMPLE_DOC_STRING = """
     Examples:
@@ -106,10 +108,23 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
     watermarker: Optional[IFWatermarker]
 
     bad_punct_regex = re.compile(
-        r"[" + "#®•©™&@·º½¾¿¡§~" + "\)" + "\(" + "\]" + "\[" + "\}" + "\{" + "\|" + "\\" + "\/" + "\*" + r"]{1,}"
+        r"["
+        + "#®•©™&@·º½¾¿¡§~"
+        + r"\)"
+        + r"\("
+        + r"\]"
+        + r"\["
+        + r"\}"
+        + r"\{"
+        + r"\|"
+        + "\\"
+        + r"\/"
+        + r"\*"
+        + r"]{1,}"
     )  # noqa
 
     _optional_components = ["tokenizer", "text_encoder", "safety_checker", "feature_extractor", "watermarker"]
+    model_cpu_offload_seq = "text_encoder->unet"
 
     def __init__(
         self,
@@ -154,10 +169,10 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
     @paddle.no_grad()
     def encode_prompt(
         self,
-        prompt,
-        do_classifier_free_guidance=True,
-        num_images_per_prompt=1,
-        negative_prompt=None,
+        prompt: Union[str, List[str]],
+        do_classifier_free_guidance: bool = True,
+        num_images_per_prompt: int = 1,
+        negative_prompt: Optional[Union[str, List[str]]] = None,
         prompt_embeds: Optional[paddle.Tensor] = None,
         negative_prompt_embeds: Optional[paddle.Tensor] = None,
         clean_caption: bool = False,
@@ -168,10 +183,10 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
         Args:
             prompt (`str` or `List[str]`, *optional*):
                 prompt to be encoded
-            num_images_per_prompt (`int`, *optional*, defaults to 1):
-                number of images that should be generated per prompt
             do_classifier_free_guidance (`bool`, *optional*, defaults to `True`):
                 whether to use classifier free guidance or not
+            num_images_per_prompt (`int`, *optional*, defaults to 1):
+                number of images that should be generated per prompt
             negative_prompt (`str` or `List[str]`, *optional*):
                 The prompt or prompts not to guide the image generation. If not defined, one has to pass
                 `negative_prompt_embeds`. instead. If not defined, one has to pass `negative_prompt_embeds`. instead.
@@ -183,6 +198,8 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
                 Pre-generated negative text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt
                 weighting. If not provided, negative_prompt_embeds will be generated from `negative_prompt` input
                 argument.
+            clean_caption (bool, defaults to `False`):
+                If `True`, the function will preprocess and clean the provided caption before encoding.
         """
         if prompt is not None and negative_prompt is not None:
             if type(prompt) is not type(negative_prompt):
@@ -213,6 +230,7 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
             )
             text_input_ids = text_inputs.input_ids
             untruncated_ids = self.tokenizer(prompt, padding="longest", return_tensors="pd").input_ids
+
             if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(
                 text_input_ids, untruncated_ids
             ):
@@ -223,6 +241,7 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
                 )
 
             attention_mask = text_inputs.attention_mask
+
             prompt_embeds = self.text_encoder(
                 text_input_ids,
                 attention_mask=attention_mask,
@@ -238,6 +257,7 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
 
         if dtype is not None:
             prompt_embeds = prompt_embeds.cast(dtype)
+
         bs_embed, seq_len, _ = prompt_embeds.shape
         # duplicate text embeddings for each generation per prompt, using mps friendly method
         prompt_embeds = prompt_embeds.tile([1, num_images_per_prompt, 1])
@@ -551,13 +571,13 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
             prompt (`str` or `List[str]`, *optional*):
                 The prompt or prompts to guide the image generation. If not defined, one has to pass `prompt_embeds`.
                 instead.
-            num_inference_steps (`int`, *optional*, defaults to 50):
+            num_inference_steps (`int`, *optional*, defaults to 100):
                 The number of denoising steps. More denoising steps usually lead to a higher quality image at the
                 expense of slower inference.
             timesteps (`List[int]`, *optional*):
                 Custom timesteps to use for the denoising process. If not defined, equal spaced `num_inference_steps`
                 timesteps are used. Must be in descending order.
-            guidance_scale (`float`, *optional*, defaults to 7.5):
+            guidance_scale (`float`, *optional*, defaults to 7.0):
                 Guidance scale as defined in [Classifier-Free Diffusion Guidance](https://arxiv.org/abs/2207.12598).
                 `guidance_scale` is defined as `w` of equation 2. of [Imagen
                 Paper](https://arxiv.org/pdf/2205.11487.pdf). Guidance scale is enabled by setting `guidance_scale >
@@ -602,7 +622,8 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
                 prompt.
             cross_attention_kwargs (`dict`, *optional*):
                 A kwargs dictionary that if specified is passed along to the `AttentionProcessor` as defined under
-                `self.processor` in ppdiffusers.cross_attention.
+                `self.processor` in
+                [ppdiffusers.models.attention_processor](https://github.com/huggingface/diffusers/blob/main/src/diffusers/models/attention_processor.py).
 
         Examples:
 
@@ -697,9 +718,10 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
                     )
                     noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
                     noise_pred = paddle.concat([noise_pred, predicted_variance], axis=1)
+
                 if self.scheduler.config.variance_type not in ["learned", "learned_range"]:
                     noise_pred, _ = noise_pred.split(
-                        [model_input.shape[1], noise_pred_uncond.shape[1] - model_input.shape[1]], axis=1
+                        [model_input.shape[1], noise_pred.shape[1] - model_input.shape[1]], axis=1
                     )
 
                 # compute the previous noisy sample x_t -> x_t-1
@@ -718,7 +740,7 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
         if output_type == "pil":
             # 8. Post-processing
             image = (image / 2 + 0.5).clip(0, 1)
-            image = image.cpu().transpose([0, 2, 3, 1]).cast("float32").numpy()
+            image = image.transpose([0, 2, 3, 1]).cast("float32").cpu().numpy()
 
             # 9. Run safety checker
             image, nsfw_detected, watermark_detected = self.run_safety_checker(image, prompt_embeds.dtype)
@@ -736,7 +758,7 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
         else:
             # 8. Post-processing
             image = (image / 2 + 0.5).clip(0, 1)
-            image = image.cpu().transpose([0, 2, 3, 1]).cast("float32").numpy()
+            image = image.transpose([0, 2, 3, 1]).cast("float32").cpu().numpy()
 
             # 9. Run safety checker
             image, nsfw_detected, watermark_detected = self.run_safety_checker(image, prompt_embeds.dtype)

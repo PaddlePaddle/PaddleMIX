@@ -135,6 +135,7 @@ class LVDMUncondPipeline(DiffusionPipeline):
         save_name=None,
         scale_factor: Optional[float] = 0.33422927,
         shift_factor: Optional[float] = 1.4606637,
+        save_fps: Optional[int] = 8,
         **kwargs,
     ) -> Union[Tuple, VideoPipelineOutput]:
         r"""
@@ -171,6 +172,8 @@ class LVDMUncondPipeline(DiffusionPipeline):
                 A scale factor to apply to the generated video.
             shift_factor (`float`, *optional*, defaults to 1.4606637):
                 A shift factor to apply to the generated video.
+            save_fps (`int`, *optional*, defaults to 8):
+                The number of frames per second to save.
 
         Returns:
             [`~pipeline_utils.VideoPipelineOutput`] or `tuple`: [`~pipeline_utils.VideoPipelineOutput`] if
@@ -270,5 +273,5 @@ class LVDMUncondPipeline(DiffusionPipeline):
         if not save_dir:
             save_dir = "."
         os.makedirs(save_dir, exist_ok=True)
-        save_results(all_videos, save_dir=save_dir, save_name=save_name, save_fps=8)
+        save_results(all_videos, save_dir=save_dir, save_name=save_name, save_fps=save_fps)
         return VideoPipelineOutput(frames=videos_frames, samples=sampled_videos)

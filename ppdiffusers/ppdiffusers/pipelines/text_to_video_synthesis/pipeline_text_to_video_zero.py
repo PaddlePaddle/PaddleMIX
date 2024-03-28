@@ -1,5 +1,4 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
-# Copyright 2023 The HuggingFace Team. All rights reserved.
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,14 +11,16 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 import copy
 from dataclasses import dataclass
 from typing import Callable, List, Optional, Union
 
 import numpy as np
 import paddle
-import PIL
-from paddlenlp.transformers import CLIPImageProcessor, CLIPTextModel, CLIPTokenizer
+import paddle.nn.functional as F
+import PIL.Image
+from paddle.nn.functional import grid_sample
 
 from ppdiffusers.models import AutoencoderKL, UNet2DConditionModel
 from ppdiffusers.pipelines.stable_diffusion import (
@@ -27,28 +28,30 @@ from ppdiffusers.pipelines.stable_diffusion import (
     StableDiffusionSafetyChecker,
 )
 from ppdiffusers.schedulers import KarrasDiffusionSchedulers
-from ppdiffusers.utils import BaseOutput
+from ppdiffusers.transformers import CLIPImageProcessor, CLIPTextModel, CLIPTokenizer
+from ppdiffusers.utils import BaseOutput, is_ppxformers_available
+from ppdiffusers.utils.paddle_utils import randn_tensor
 
 
 def rearrange_0(tensor, f):
     F, C, H, W = tensor.shape
-    tensor = paddle.transpose(x=paddle.reshape(x=tensor, shape=(F // f, f, C, H, W)), perm=(0, 2, 1, 3, 4))
+    tensor = paddle.transpose(paddle.reshape(tensor, (F // f, f, C, H, W)), (0, 2, 1, 3, 4))
     return tensor
 
 
 def rearrange_1(tensor):
     B, C, F, H, W = tensor.shape
-    return paddle.reshape(x=paddle.transpose(x=tensor, perm=(0, 2, 1, 3, 4)), shape=(B * F, C, H, W))
+    return paddle.reshape(paddle.transpose(tensor, (0, 2, 1, 3, 4)), (B * F, C, H, W))
 
 
 def rearrange_3(tensor, f):
     F, D, C = tensor.shape
-    return paddle.reshape(x=tensor, shape=(F // f, f, D, C))
+    return paddle.reshape(tensor, (F // f, f, D, C))
 
 
 def rearrange_4(tensor):
     B, F, D, C = tensor.shape
-    return paddle.reshape(x=tensor, shape=(B * F, D, C))
+    return paddle.reshape(tensor, (B * F, D, C))
 
 
 class CrossFrameAttnProcessor:
@@ -68,11 +71,13 @@ class CrossFrameAttnProcessor:
         batch_size, sequence_length, _ = hidden_states.shape
         attention_mask = attn.prepare_attention_mask(attention_mask, sequence_length, batch_size)
         query = attn.to_q(hidden_states)
+
         is_cross_attention = encoder_hidden_states is not None
         if encoder_hidden_states is None:
             encoder_hidden_states = hidden_states
         elif attn.norm_cross:
             encoder_hidden_states = attn.norm_encoder_hidden_states(encoder_hidden_states)
+
         key = attn.to_k(encoder_hidden_states)
         value = attn.to_v(encoder_hidden_states)
 
@@ -83,32 +88,110 @@ class CrossFrameAttnProcessor:
 
             # rearrange keys to have batch and frames in the 1st and 2nd dims respectively
             key = rearrange_3(key, video_length)
-            key = key.index_select(paddle.to_tensor(first_frame_index), 1)
+            key = key[:, first_frame_index]
             # rearrange values to have batch and frames in the 1st and 2nd dims respectively
             value = rearrange_3(value, video_length)
-            value = value.index_select(paddle.to_tensor(first_frame_index), 1)
+            value = value[:, first_frame_index]
 
             # rearrange back to original shape
             key = rearrange_4(key)
             value = rearrange_4(value)
-        query = attn.head_to_batch_dim(query, out_dim=3)
-        key = attn.head_to_batch_dim(key, out_dim=3)
-        value = attn.head_to_batch_dim(value, out_dim=3)
+
+        query = attn.head_to_batch_dim(query)
+        key = attn.head_to_batch_dim(key)
+        value = attn.head_to_batch_dim(value)
+
         attention_probs = attn.get_attention_scores(query, key, attention_mask)
-        hidden_states = paddle.bmm(x=attention_probs, y=value)
+        hidden_states = paddle.bmm(attention_probs, value)
         hidden_states = attn.batch_to_head_dim(hidden_states)
 
         # linear proj
         hidden_states = attn.to_out[0](hidden_states)
         # dropout
+        hidden_states = attn.to_out[1](hidden_states)
 
+        return hidden_states
+
+
+class CrossFrameAttnProcessor2_5:
+    """
+    Cross frame attention processor with scaled_dot_product attention of Paddle 2.6.
+
+    Args:
+        batch_size: The number that represents actual batch size, other than the frames.
+            For example, calling unet with a single prompt and num_images_per_prompt=1, batch_size should be equal to
+            2, due to classifier-free guidance.
+    """
+
+    def __init__(self, batch_size=2, attention_op: Optional[str] = None):
+        assert attention_op in [None, "math", "auto", "flash", "cutlass", "memory_efficient"]
+        self.attention_op = attention_op
+        self.batch_size = batch_size
+
+    def __call__(self, attn, hidden_states, encoder_hidden_states=None, attention_mask=None, **kwargs):
+        batch_size, sequence_length, _ = (
+            hidden_states.shape if encoder_hidden_states is None else encoder_hidden_states.shape
+        )
+        inner_dim = hidden_states.shape[-1]
+
+        if attention_mask is not None:
+            attention_mask = attn.prepare_attention_mask(attention_mask, sequence_length, batch_size)
+
+        query = attn.to_q(hidden_states)
+
+        is_cross_attention = encoder_hidden_states is not None
+        if encoder_hidden_states is None:
+            encoder_hidden_states = hidden_states
+        elif attn.norm_cross:
+            encoder_hidden_states = attn.norm_encoder_hidden_states(encoder_hidden_states)
+
+        key = attn.to_k(encoder_hidden_states)
+        value = attn.to_v(encoder_hidden_states)
+
+        # Cross Frame Attention
+        if not is_cross_attention:
+            video_length = max(1, key.shape[0] // self.batch_size)
+            first_frame_index = [0] * video_length
+
+            # rearrange keys to have batch and frames in the 1st and 2nd dims respectively
+            key = rearrange_3(key, video_length)
+            key = key[:, first_frame_index]
+            # rearrange values to have batch and frames in the 1st and 2nd dims respectively
+            value = rearrange_3(value, video_length)
+            value = value[:, first_frame_index]
+
+            # rearrange back to original shape
+            key = rearrange_4(key)
+            value = rearrange_4(value)
+
+        head_dim = inner_dim // attn.heads
+        query = query.reshape([batch_size, -1, attn.heads, head_dim])
+        key = key.reshape([batch_size, -1, attn.heads, head_dim])
+        value = value.reshape([batch_size, -1, attn.heads, head_dim])
+
+        hidden_states = F.scaled_dot_product_attention_(
+            query,
+            key,
+            value,
+            attn_mask=attention_mask,
+            scale=attn.scale,
+            dropout_p=0.0,
+            training=attn.training,
+            attention_op=self.attention_op,
+        )
+        hidden_states = hidden_states.reshape([batch_size, -1, attn.heads * head_dim])
+        hidden_states = hidden_states.cast(query.dtype)
+
+        # linear proj
+        hidden_states = attn.to_out[0](hidden_states)
+        # dropout
         hidden_states = attn.to_out[1](hidden_states)
         return hidden_states
 
 
 @dataclass
 class TextToVideoPipelineOutput(BaseOutput):
-    """
+    r"""
     Output class for zero-shot text-to-video pipeline.
 
     Args:
@@ -126,9 +209,9 @@ class TextToVideoPipelineOutput(BaseOutput):
 
 def coords_grid(batch, ht, wd):
     # Adapted from https://github.com/princeton-vl/RAFT/blob/master/core/utils/utils.py
-    coords = paddle.meshgrid(paddle.arange(end=ht), paddle.arange(end=wd))
-    coords = paddle.stack(x=coords[::-1], axis=0).astype(dtype="float32")
-    return coords[None].tile(repeat_times=[batch, 1, 1, 1])
+    coords = paddle.meshgrid(paddle.arange(ht), paddle.arange(wd))
+    coords = paddle.stack(coords[::-1], axis=0).cast("float32")
+    return coords[None].tile([batch, 1, 1, 1])
 
 
 def warp_single_latent(latent, reference_flow):
@@ -145,13 +228,16 @@ def warp_single_latent(latent, reference_flow):
     _, _, H, W = reference_flow.shape
     _, _, h, w = latent.shape
     coords0 = coords_grid(1, H, W).cast(latent.dtype)
+
     coords_t0 = coords0 + reference_flow
     coords_t0[:, 0] /= W
     coords_t0[:, 1] /= H
+
     coords_t0 = coords_t0 * 2.0 - 1.0
-    coords_t0 = paddle.nn.functional.interpolate(x=coords_t0, size=(h, w), mode="bilinear")
-    coords_t0 = paddle.transpose(x=coords_t0, perm=(0, 2, 3, 1))
-    warped = paddle.nn.functional.grid_sample(x=latent, grid=coords_t0, mode="nearest", padding_mode="reflection")
+    coords_t0 = F.interpolate(coords_t0, size=(h, w), mode="bilinear")
+    coords_t0 = paddle.transpose(coords_t0, (0, 2, 3, 1))
+
+    warped = grid_sample(latent, coords_t0, mode="nearest", padding_mode="reflection")
     return warped
 
 
@@ -170,10 +256,10 @@ def create_motion_field(motion_field_strength_x, motion_field_strength_y, frame_
 
     """
     seq_length = len(frame_ids)
-    reference_flow = paddle.zeros(shape=(seq_length, 2, 512, 512), dtype=dtype)
+    reference_flow = paddle.zeros((seq_length, 2, 512, 512), dtype=dtype)
     for fr_idx in range(seq_length):
-        reference_flow[fr_idx, 0, :, :] = motion_field_strength_x * frame_ids[fr_idx]
-        reference_flow[fr_idx, 1, :, :] = motion_field_strength_y * frame_ids[fr_idx]
+        reference_flow[fr_idx, 0, :, :] = motion_field_strength_x * (frame_ids[fr_idx])
+        reference_flow[fr_idx, 1, :, :] = motion_field_strength_y * (frame_ids[fr_idx])
     return reference_flow
 
 
@@ -204,7 +290,7 @@ def create_motion_field_and_warp_latents(motion_field_strength_x, motion_field_s
 
 
 class TextToVideoZeroPipeline(StableDiffusionPipeline):
-    """
+    r"""
     Pipeline for zero-shot text-to-video generation using Stable Diffusion.
 
     This model inherits from [`DiffusionPipeline`]. Check the superclass documentation for the generic methods
@@ -242,9 +328,21 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
         requires_safety_checker: bool = True,
     ):
         super().__init__(
-            vae, text_encoder, tokenizer, unet, scheduler, safety_checker, feature_extractor, requires_safety_checker
+            vae,
+            text_encoder,
+            tokenizer,
+            unet,
+            scheduler,
+            safety_checker,
+            feature_extractor,
+            None,  # fix this initialization
+            requires_safety_checker,
         )
-        processor = CrossFrameAttnProcessor(batch_size=2)
+        processor = (
+            CrossFrameAttnProcessor2_5(batch_size=2)
+            if is_ppxformers_available()
+            else CrossFrameAttnProcessor(batch_size=2)
+        )
         self.unet.set_attn_processor(processor)
 
     def forward_loop(self, x_t0, t0, t1, generator):
@@ -259,16 +357,16 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
             t1:
                 Timestamp at t1.
             generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
-                A [`paddle.Generator`](https://pytorch.org/docs/stable/generated/paddle.Generator.html) to make
-                generation deterministic.
+                                A [`paddle.Generator`] to make generation deterministic.
+
 
         Returns:
             x_t1:
                 Forward process applied to x_t0 from time t0 to t1.
         """
-        eps = paddle.randn(shape=x_t0.shape, generator=generator, dtype=x_t0.dtype)
-        alpha_vec = paddle.prod(x=self.scheduler.alphas[t0:t1])
-        x_t1 = paddle.sqrt(x=alpha_vec) * x_t0 + paddle.sqrt(x=1 - alpha_vec) * eps
+        eps = randn_tensor(x_t0.shape, generator=generator, dtype=x_t0.dtype)
+        alpha_vec = paddle.prod(self.scheduler.alphas[t0:t1])
+        x_t1 = paddle.sqrt(alpha_vec) * x_t0 + paddle.sqrt(1 - alpha_vec) * eps
         return x_t1
 
     def backward_loop(
@@ -306,7 +404,7 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
                 Extra_step_kwargs.
             cross_attention_kwargs:
                 A kwargs dictionary that if specified is passed along to the [`AttentionProcessor`] as defined in
-                [`self.processor`](https://github.com/huggingface/diffusers/blob/main/src/diffusers/models/cross_attention.py).
+                [`self.processor`](https://github.com/huggingface/diffusers/blob/main/src/diffusers/models/attention_processor.py).
             num_warmup_steps:
                 number of warmup steps.
 
@@ -319,7 +417,7 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
         with self.progress_bar(total=num_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(x=[latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = paddle.concat([latents] * 2) if do_classifier_free_guidance else latents
                 latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
                 # predict the noise residual
@@ -332,17 +430,18 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
 
                 # perform guidance
                 if do_classifier_free_guidance:
-                    noise_pred_uncond, noise_pred_text = noise_pred.chunk(chunks=2)
+                    noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
                     noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
 
                 # compute the previous noisy sample x_t -> x_t-1
                 latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs).prev_sample
 
                 # call the callback, if provided
-                if i == len(timesteps) - 1 or i + 1 > num_warmup_steps and (i + 1) % self.scheduler.order == 0:
+                if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
                     progress_bar.update()
                     if callback is not None and i % callback_steps == 0:
-                        callback(i, t, latents)
+                        step_idx = i // getattr(self.scheduler, "order", 1)
+                        callback(step_idx, t, latents)
         return latents.clone().detach()
 
     @paddle.no_grad()
@@ -396,8 +495,8 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
                 Corresponds to parameter eta (η) from the [DDIM](https://arxiv.org/abs/2010.02502) paper. Only applies
                 to the [`~schedulers.DDIMScheduler`], and is ignored in other schedulers.
             generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
-                A [`paddle.Generator`](https://pytorch.org/docs/stable/generated/paddle.Generator.html) to make
-                generation deterministic.
+                                A [`paddle.Generator`] to make generation deterministic.
+
             latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents sampled from a Gaussian distribution, to be used as inputs for video
                 generation. Can be used to tweak the same generation with different prompts. If not provided, a latents
@@ -440,7 +539,9 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
         if frame_ids is None:
             frame_ids = list(range(video_length))
         assert len(frame_ids) == video_length
+
         assert num_videos_per_prompt == 1
+
         if isinstance(prompt, str):
             prompt = [prompt]
         if isinstance(negative_prompt, str):
@@ -481,7 +582,6 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
             generator,
             latents,
         )
-
         # Prepare extra step kwargs.
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
         num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
@@ -512,7 +612,7 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
         )
 
         # Propagate first frame latents at time T_0 to remaining frames
-        x_2k_t0 = x_1_t0.tile(repeat_times=[video_length - 1, 1, 1, 1])
+        x_2k_t0 = x_1_t0.tile([video_length - 1, 1, 1, 1])
 
         # Add motion in latents at time T_0
         x_2k_t0 = create_motion_field_and_warp_latents(
@@ -524,15 +624,17 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
 
         # Perform forward process up to time T_1
         x_2k_t1 = self.forward_loop(
-            x_t0=x_2k_t0, t0=timesteps[-t0 - 1].item(), t1=timesteps[-t1 - 1].item(), generator=generator
+            x_t0=x_2k_t0,
+            t0=timesteps[-t0 - 1].item(),
+            t1=timesteps[-t1 - 1].item(),
+            generator=generator,
         )
 
         # Perform backward process from time T_1 to 0
-        x_1k_t1 = paddle.concat(x=[x_1_t1, x_2k_t1])
+        x_1k_t1 = paddle.concat([x_1_t1, x_2k_t1])
         b, l, d = prompt_embeds.shape
-        prompt_embeds = (
-            prompt_embeds[:, None].tile(repeat_times=[1, video_length, 1, 1]).reshape(b * video_length, l, d)
-        )
+        prompt_embeds = prompt_embeds[:, None].tile([1, video_length, 1, 1]).reshape([b * video_length, l, d])
+
         self.scheduler = scheduler_copy
         x_1k_0 = self.backward_loop(
             timesteps=timesteps[-t1 - 1 :],
@@ -545,7 +647,7 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
             num_warmup_steps=0,
         )
         latents = x_1k_0
-        paddle.device.cuda.empty_cache()
+
         if output_type == "latent":
             image = latents
             has_nsfw_concept = None
@@ -555,5 +657,6 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
             image, has_nsfw_concept = self.run_safety_checker(image, prompt_embeds.dtype)
 
         if not return_dict:
-            return image, has_nsfw_concept
+            return (image, has_nsfw_concept)
+
         return TextToVideoPipelineOutput(images=image, nsfw_content_detected=has_nsfw_concept)

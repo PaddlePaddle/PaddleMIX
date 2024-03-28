@@ -22,15 +22,15 @@ import paddle
 import paddle.amp
 import paddle.nn as nn
 import paddle.nn.functional as F
-from paddlenlp.transformers import (
-    AutoTokenizer,
-    CLIPTextModel,
-    CLIPTextModelWithProjection,
-)
 from paddlenlp.utils.log import logger
 
 from ppdiffusers import AutoencoderKL, DDPMScheduler, UNet2DConditionModel
 from ppdiffusers.training_utils import freeze_params
+from ppdiffusers.transformers import (
+    AutoTokenizer,
+    CLIPTextModel,
+    CLIPTextModelWithProjection,
+)
 from ppdiffusers.utils.initializer_utils import reset_initialized_parameter
 
 from .lcm_scheduler import LCMScheduler
@@ -653,6 +653,9 @@ class LCMModel(nn.Layer):
         )
         prompt_embeds = encoded_text.pop("prompt_embeds")
 
+        shape = [prompt_embeds.shape[0], 4, height // self.vae_scale_factor, width // self.vae_scale_factor]
+        latents = paddle.randn(shape, dtype=prompt_embeds.dtype) * self.eval_scheduler.init_noise_sigma
+
         do_classifier_free_guidance = guidance_scale > 1 and self.time_cond_proj_dim is None
         if do_classifier_free_guidance:
             prompt_embeds = paddle.concat([paddle.zeros_like(prompt_embeds), prompt_embeds], axis=0)
@@ -662,16 +665,13 @@ class LCMModel(nn.Layer):
                 time_ids = encoded_text.pop("time_ids")
                 encoded_text["time_ids"] = paddle.concat([time_ids, time_ids], axis=0)
 
-        batch_size = prompt_embeds.shape[0]
         timesteps, num_inference_steps = retrieve_timesteps(self.eval_scheduler, num_inference_steps, timesteps)
-        shape = [batch_size, 4, height // self.vae_scale_factor, width // self.vae_scale_factor]
-        latents = paddle.randn(shape, dtype=prompt_embeds.dtype) * self.eval_scheduler.init_noise_sigma
 
         timestep_cond = None
         if self.time_cond_proj_dim is not None:
             guidance_scale_tensor = paddle.to_tensor([guidance_scale - 1]).tile(
                 [
-                    batch_size,
+                    prompt_embeds.shape[0],
                 ]
             )
             timestep_cond = get_guidance_scale_embedding(guidance_scale_tensor, embedding_dim=self.time_cond_proj_dim)

@@ -1,5 +1,5 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
-# Copyright 2023 The HuggingFace Team. All rights reserved.
+# coding=utf-8
+# Copyright 2023 The HuggingFace Inc. team.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -28,7 +28,8 @@ from urllib import request
 from huggingface_hub import HfFolder, cached_download, hf_hub_download, model_info
 from packaging import version
 
-from . import PPDIFFUSERS_DYNAMIC_MODULE_NAME, PPDIFFUSERS_MODULES_CACHE, logging
+from . import logging
+from .constants import PPDIFFUSERS_DYNAMIC_MODULE_NAME, PPDIFFUSERS_MODULES_CACHE
 
 COMMUNITY_PIPELINES_URL = (
     "https://raw.githubusercontent.com/PaddlePaddle/PaddleMIX/{revision}/ppdiffusers/examples/community/{pipeline}.py"
@@ -36,6 +37,7 @@ COMMUNITY_PIPELINES_URL = (
 GITEE_COMMUNITY_PIPELINES_URL = (
     "https://gitee.com/paddlepaddle/PaddleMIX/raw/{revision}/ppdiffusers/examples/community/{pipeline}.py"
 )
+
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -89,9 +91,9 @@ def get_relative_imports(module_file):
         content = f.read()
 
     # Imports of the form `import .xxx`
-    relative_imports = re.findall("^\s*import\s+\.(\S+)\s*$", content, flags=re.MULTILINE)
+    relative_imports = re.findall(r"^\s*import\s+\.(\S+)\s*$", content, flags=re.MULTILINE)
     # Imports of the form `from .xxx import yyy`
-    relative_imports += re.findall("^\s*from\s+\.(\S+)\s+import", content, flags=re.MULTILINE)
+    relative_imports += re.findall(r"^\s*from\s+\.(\S+)\s+import", content, flags=re.MULTILINE)
     # Unique-ify
     return list(set(relative_imports))
 
@@ -133,9 +135,9 @@ def check_imports(filename):
         content = f.read()
 
     # Imports of the form `import xxx`
-    imports = re.findall("^\s*import\s+(\S+)\s*$", content, flags=re.MULTILINE)
+    imports = re.findall(r"^\s*import\s+(\S+)\s*$", content, flags=re.MULTILINE)
     # Imports of the form `from xxx import yyy`
-    imports += re.findall("^\s*from\s+(\S+)\s+import", content, flags=re.MULTILINE)
+    imports += re.findall(r"^\s*from\s+(\S+)\s+import", content, flags=re.MULTILINE)
     # Only keep the top-level module
     imports = [imp.split(".")[0] for imp in imports if not imp.startswith(".")]
 
@@ -146,6 +148,8 @@ def check_imports(filename):
         try:
             importlib.import_module(imp)
         except ImportError:
+            if imp == "ligo":
+                imp = "ligo-segments"
             missing_packages.append(imp)
 
     if len(missing_packages) > 0:
@@ -237,7 +241,7 @@ def get_cached_module_file(
         use_auth_token (`str` or *bool*, *optional*):
             The token to use as HTTP bearer authorization for remote files. If `True`, will use the token generated
             when running `transformers-cli login` (stored in `~/.huggingface`).
-        revision (`str`, *optional*, defaults to `"develop"`):
+        revision (`str`, *optional*, defaults to `"main"`):
             The specific model version to use. It can be a branch name, a tag name, or a commit id, since we use a
             git-based system for storing models and other artifacts on huggingface.co, so `revision` can be any
             identifier allowed by git.
@@ -278,7 +282,7 @@ def get_cached_module_file(
                 proxies=proxies,
                 resume_download=resume_download,
                 local_files_only=local_files_only,
-                use_auth_token=False,
+                token=False,
             )
             submodule = "git"
             module_file = pretrained_model_name_or_path + ".py"
@@ -290,13 +294,13 @@ def get_cached_module_file(
             # Load from URL or cache if already cached
             resolved_module_file = hf_hub_download(
                 pretrained_model_name_or_path,
-                filename=module_file,
+                module_file,
                 cache_dir=cache_dir,
                 force_download=force_download,
                 proxies=proxies,
                 resume_download=resume_download,
                 local_files_only=local_files_only,
-                use_auth_token=use_auth_token,
+                token=use_auth_token,
             )
             submodule = os.path.join("local", "--".join(pretrained_model_name_or_path.split("/")))
         except EnvironmentError:

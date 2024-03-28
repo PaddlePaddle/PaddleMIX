@@ -18,7 +18,6 @@ import unittest
 
 import numpy as np
 import paddle
-from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, XLMRobertaTokenizer
 
 import ppdiffusers  # noqa F401
 from ppdiffusers import (
@@ -32,6 +31,7 @@ from ppdiffusers.pipelines.alt_diffusion.modeling_roberta_series import (
     RobertaSeriesConfig,
     RobertaSeriesModelWithTransformation,
 )
+from ppdiffusers.transformers import CLIPTextConfig, CLIPTextModel, XLMRobertaTokenizer
 from ppdiffusers.utils import slow
 from ppdiffusers.utils.testing_utils import enable_full_determinism, require_paddle_gpu
 

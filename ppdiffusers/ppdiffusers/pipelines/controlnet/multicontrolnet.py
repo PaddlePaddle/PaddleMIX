@@ -1,5 +1,4 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
-# Copyright 2023 The HuggingFace Team. All rights reserved.
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,10 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 import os
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import paddle
+from paddle import nn
 
 from ...models.controlnet import ControlNetModel, ControlNetOutput
 from ...models.modeling_utils import ModelMixin
@@ -25,7 +26,7 @@ logger = logging.get_logger(__name__)
 
 
 class MultiControlNetModel(ModelMixin):
-    """
+    r"""
     Multiple `ControlNetModel` wrapper class for Multi-ControlNet
 
     This module is a wrapper for multiple instances of the `ControlNetModel`. The `forward()` API is designed to be
@@ -39,18 +40,19 @@ class MultiControlNetModel(ModelMixin):
 
     def __init__(self, controlnets: Union[List[ControlNetModel], Tuple[ControlNetModel]]):
         super().__init__()
-        self.nets = paddle.nn.LayerList(sublayers=controlnets)
+        self.nets = nn.LayerList(controlnets)
 
     def forward(
         self,
         sample: paddle.Tensor,
         timestep: Union[paddle.Tensor, float, int],
         encoder_hidden_states: paddle.Tensor,
-        controlnet_cond: List[paddle.to_tensor],
+        controlnet_cond: List[paddle.Tensor],
         conditioning_scale: List[float],
         class_labels: Optional[paddle.Tensor] = None,
         timestep_cond: Optional[paddle.Tensor] = None,
         attention_mask: Optional[paddle.Tensor] = None,
+        added_cond_kwargs: Optional[Dict[str, paddle.Tensor]] = None,
         cross_attention_kwargs: Optional[Dict[str, Any]] = None,
         guess_mode: bool = False,
         return_dict: bool = True,
@@ -65,6 +67,7 @@ class MultiControlNetModel(ModelMixin):
                 class_labels=class_labels,
                 timestep_cond=timestep_cond,
                 attention_mask=attention_mask,
+                added_cond_kwargs=added_cond_kwargs,
                 cross_attention_kwargs=cross_attention_kwargs,
                 guess_mode=guess_mode,
                 return_dict=return_dict,
@@ -72,13 +75,14 @@ class MultiControlNetModel(ModelMixin):
 
             # merge samples
             if i == 0:
-                down_block_res_samples, mid_block_res_sample = (down_samples, mid_sample)
+                down_block_res_samples, mid_block_res_sample = down_samples, mid_sample
             else:
                 down_block_res_samples = [
-                    (samples_prev + samples_curr)
+                    samples_prev + samples_curr
                     for samples_prev, samples_curr in zip(down_block_res_samples, down_samples)
                 ]
                 mid_block_res_sample += mid_sample
+
         return down_block_res_samples, mid_block_res_sample
 
     def save_pretrained(
@@ -86,7 +90,7 @@ class MultiControlNetModel(ModelMixin):
         save_directory: Union[str, os.PathLike],
         is_main_process: bool = True,
         save_function: Callable = None,
-        safe_serialization: bool = False,
+        safe_serialization: bool = True,
         variant: Optional[str] = None,
     ):
         """
@@ -103,8 +107,8 @@ class MultiControlNetModel(ModelMixin):
             save_function (`Callable`):
                 The function to use to save the state dictionary. Useful on distributed training like TPUs when one
                 need to replace `paddle.save` by another method. Can be configured with the environment variable
-                `DIFFUSERS_SAVE_MODE`.
-            safe_serialization (`bool`, *optional*, defaults to `False`):
+                `PPDIFFUSERS_SAVE_MODE`.
+            safe_serialization (`bool`, *optional*, defaults to `True`):
                 Whether to save the model using `safetensors` or the traditional PyTorch way (that uses `pickle`).
             variant (`str`, *optional*):
                 If specified, weights are saved in the format pytorch_model.<variant>.bin.
@@ -119,12 +123,13 @@ class MultiControlNetModel(ModelMixin):
                 safe_serialization=safe_serialization,
                 variant=variant,
             )
+
             idx += 1
             model_path_to_save = model_path_to_save + f"_{idx}"
 
     @classmethod
     def from_pretrained(cls, pretrained_model_path: Optional[Union[str, os.PathLike]], **kwargs):
-        """
+        r"""
         Instantiate a pretrained MultiControlNet model from multiple pre-trained controlnet models.
 
         The model is set in evaluation mode by default using `model.eval()` (Dropout modules are deactivated). To train
@@ -150,14 +155,13 @@ class MultiControlNetModel(ModelMixin):
             max_memory (`Dict`, *optional*):
                 A dictionary device identifier to maximum memory. Will default to the maximum memory available for each
                 GPU and the available CPU RAM if unset.
-            low_cpu_mem_usage (`bool`, *optional*, defaults to `True` if torch version >= 1.9.0 else `False`):
+            low_cpu_mem_usage (`bool`, *optional*, defaults to `True` if paddle version >= 2.5.2 else `False`):
                 Speed up model loading by not initializing the weights and only loading the pre-trained weights. This
                 also tries to not use more than 1x model size in CPU memory (including peak memory) while loading the
-                model. This is only supported when torch version >= 1.9.0. If you are using an older version of torch,
+                model. This is only supported when paddle version >= 2.5.2. If you are using an older version of paddle,
                 setting this argument to `True` will raise an error.
             variant (`str`, *optional*):
-                If specified load weights from `variant` filename, *e.g.* pytorch_model.<variant>.bin. `variant` is
-                ignored when using `from_flax`.
+                If specified load weights from `variant` filename, *e.g.* model_state.<variant>.pdparams.
             use_safetensors (`bool`, *optional*, defaults to `None`):
                 If set to `None`, the `safetensors` weights will be downloaded if they're available **and** if the
                 `safetensors` library is installed. If set to `True`, the model will be forcibly loaded from
@@ -173,11 +177,15 @@ class MultiControlNetModel(ModelMixin):
         while os.path.isdir(model_path_to_load):
             controlnet = ControlNetModel.from_pretrained(model_path_to_load, **kwargs)
             controlnets.append(controlnet)
+
             idx += 1
             model_path_to_load = pretrained_model_path + f"_{idx}"
+
         logger.info(f"{len(controlnets)} controlnets loaded from {pretrained_model_path}.")
+
         if len(controlnets) == 0:
             raise ValueError(
                 f"No ControlNets found under {os.path.dirname(pretrained_model_path)}. Expected at least {pretrained_model_path + '_0'}."
             )
+
         return cls(controlnets)

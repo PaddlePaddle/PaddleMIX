@@ -1,4 +1,3 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,7 +16,7 @@ Generic utilities
 """
 
 from collections import OrderedDict
-from dataclasses import fields
+from dataclasses import fields, is_dataclass
 from typing import Any, Tuple
 
 import numpy as np
@@ -32,8 +31,7 @@ def is_tensor(x):
     if is_paddle_available():
         import paddle
 
-        if isinstance(x, paddle.Tensor):
-            return True
+        return paddle.is_tensor(x)
 
     return isinstance(x, np.ndarray)
 
@@ -52,7 +50,7 @@ class BaseOutput(OrderedDict):
     </Tip>
     """
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         class_fields = fields(self)
 
         # Safety and consistency checks
@@ -83,14 +81,14 @@ class BaseOutput(OrderedDict):
     def update(self, *args, **kwargs):
         raise Exception(f"You cannot use ``update`` on a {self.__class__.__name__} instance.")
 
-    def __getitem__(self, k):
+    def __getitem__(self, k: Any) -> Any:
         if isinstance(k, str):
             inner_dict = dict(self.items())
             return inner_dict[k]
         else:
             return self.to_tuple()[k]
 
-    def __setattr__(self, name, value):
+    def __setattr__(self, name: Any, value: Any) -> None:
         if name in self.keys() and value is not None:
             # Don't call self.__setitem__ to avoid recursion errors
             super().__setitem__(name, value)
@@ -101,6 +99,13 @@ class BaseOutput(OrderedDict):
         super().__setitem__(key, value)
         # Don't call self.__setattr__ to avoid recursion errors
         super().__setattr__(key, value)
+
+    def __reduce__(self):
+        if not is_dataclass(self):
+            return super().__reduce__()
+        callable, _args, *remaining = super().__reduce__()
+        args = tuple(getattr(self, field.name) for field in fields(self))
+        return callable, args, *remaining
 
     def to_tuple(self) -> Tuple[Any]:
         """

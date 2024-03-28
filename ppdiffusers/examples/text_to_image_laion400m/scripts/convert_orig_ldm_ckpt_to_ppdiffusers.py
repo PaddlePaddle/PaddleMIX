@@ -24,18 +24,17 @@ except ImportError:
     raise ImportError(
         "OmegaConf is required to convert the LDM checkpoints. Please install it with `pip install OmegaConf`."
     )
-from paddlenlp.transformers import BertTokenizer
-
 from ppdiffusers import (
     AutoencoderKL,
     DDIMScheduler,
     EulerAncestralDiscreteScheduler,
-    LDMBertModel,
     LDMTextToImagePipeline,
     LMSDiscreteScheduler,
     PNDMScheduler,
     UNet2DConditionModel,
 )
+from ppdiffusers.pipelines.latent_diffusion import LDMBertModel
+from ppdiffusers.transformers import BertTokenizer
 
 paddle.set_device("cpu")
 

@@ -15,7 +15,8 @@
 from typing import Optional, Tuple
 
 import paddle
-from paddlenlp.transformers.clip.modeling import CLIPTextModel
+
+from ppdiffusers.transformers.clip.modeling import CLIPTextModel
 
 
 class CLIPTextModelHousing(CLIPTextModel):
