@@ -8,7 +8,7 @@ PaddleMIX工具箱秉承了飞桨套件一站式体验、性能极致、生态�
 | [qwen_vl](../examples/qwen_vl/) | ✅  | ❌  | ✅  | ✅  |  ✅ |
 | [blip2](../examples/blip2/) | ✅  | ✅ | ✅  | ✅ | ✅  |
 | [visualglm](../examples/visualglm/) | ✅ | ❌ | ✅ | ✅ | ❌ |
-| [llava](../examples/llava/) | ✅  | ❌  | ✅  | ✅  | 🚧  |
+| [llava](../examples/llava/) | ✅  | ✅   | ✅  | ✅  | 🚧  |
 
 * ✅: Supported
 * 🚧: In Progress

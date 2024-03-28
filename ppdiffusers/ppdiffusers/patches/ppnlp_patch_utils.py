@@ -1240,7 +1240,7 @@ if is_paddle_available() and is_paddlenlp_available():
         save_dir: str,
         is_main_process: bool = True,
         state_dict=None,
-        save_function: Callable = paddle.save,
+        save_function: Callable = None,
         max_shard_size="10GB",
         safe_serialization: bool = False,
         variant: Optional[str] = None,
