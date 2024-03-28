@@ -15,11 +15,9 @@ import os
 import sys
 
 import paddle
-from paddlenlp.peft import LoRAConfig, LoRAModel
 from paddlenlp.trainer import PdArgumentParser, get_last_checkpoint
 from paddlenlp.utils.log import logger
 
-from paddlemix import QWenVLTokenizer
 from paddlemix.auto import AutoConfigMIX, AutoModelMIX, AutoProcessorMIX
 from paddlemix.datasets import MixDataset, MIXTokenMapDataset
 from paddlemix.trainer import (
@@ -73,7 +71,7 @@ def main():
         dtype = "float32"
 
     # Load model config
-    model_config = AutoConfigMIX.from_pretrained(model_args.model_name_or_path, dtype=dtype)  # freeze_mm_mlp_adapter
+    model_config = AutoConfigMIX.from_pretrained(model_args.model_name_or_path, dtype=dtype)
     model_config.use_flash_attention = model_args.use_flash_attention
 
     # Load model
@@ -93,6 +91,8 @@ def main():
         text_model_name_or_path=model_args.text_model_name_or_path,
         train="train",
         max_length=data_args.max_length,
+        version=model_config.version,
+        image_aspect_ratio=model_config.get("image_aspect_ratio", "square"),
     )
     if training_args.do_eval:
         eval_processor, _ = AutoProcessorMIX.from_pretrained(
@@ -100,10 +100,9 @@ def main():
             text_model_name_or_path=model_args.text_model_name_or_path,
             eval="eval",
             max_length=data_args.max_length,
+            version=model_config.version,
+            image_aspect_ratio=model_config.get("image_aspect_ratio", "square"),
         )
-
-    if isinstance(tokenizer, QWenVLTokenizer):
-        tokenizer.pad_token_id = tokenizer.eod_id
 
     # Load dataset
     train_ds = None
@@ -132,25 +131,6 @@ def main():
         train_ds = mixtoken_dataset(
             train_ds, max_length=data_args.max_length, processor=train_processor, tokenizer=tokenizer
         )
-
-    # lora
-    if model_args.lora:
-        if model_args.lora_path is None:
-            target_modules = model_args.lora_target_modules
-            lora_config = LoRAConfig(
-                target_modules=target_modules,
-                r=model_args.lora_rank,
-                lora_alpha=model_args.lora_alpha,
-                lora_dropout=model_args.lora_dropout,
-                merge_weights=False,
-                tensor_parallel_degree=training_args.tensor_parallel_degree,
-                dtype=dtype,
-            )
-            model = LoRAModel(model, lora_config)
-        else:
-            model = LoRAModel.from_pretrained(model=model, lora_path=model_args.lora_path)
-        model.mark_only_lora_as_trainable()
-        model.print_trainable_parameters()
 
     # get Trainer
     trainer = get_trainer(

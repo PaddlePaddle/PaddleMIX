@@ -92,6 +92,8 @@ class QwenVLProcessor(ProcessorMixin):
 
         image_pattern = re.compile(r"<img>.*</img>")
         image_path = []
+        if isinstance(sources, dict) and "conversations" in sources.keys():
+            sources = sources["conversations"]
         if "<img>" in sources:
             result = image_pattern.findall(sources)
             for ele in result:

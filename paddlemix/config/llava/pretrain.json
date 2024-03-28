@@ -1,0 +1,34 @@
+{
+  "model_name_or_path": "paddlemix/llava/vicuna-13b-v1.5",
+  "dataset": {
+    "train":[{"name": "chatml_dataset", "data_files": "train.json"}],
+    "eval":[{"name": "chatml_dataset", "data_files": "val.json"}]
+  },
+  "mixtoken": false,
+  "output_dir": "./checkpoints/llava_pretrain_ckpts",
+  "overwrite_output_dir": true,
+  "recompute": true,
+  "per_device_train_batch_size": 1,
+  "gradient_accumulation_steps":1,
+  "per_device_eval_batch_size": 1,
+  "eval_accumulation_steps":16,
+  "group_by_modality_length": false,
+  "num_train_epochs": 1,
+  "learning_rate": 1e-03,
+  "warmup_ratio": 0.03,
+  "lr_scheduler_type": "cosine",
+  "logging_steps": 1,
+  "save_steps": 100,
+  "evaluation_strategy": "epoch",
+  "save_strategy": "epoch",
+  "max_length": 2048,
+  "fp16": false,
+  "fp16_opt_level": "O1",
+  "do_train": true,
+  "do_eval": false,
+  "disable_tqdm": true,
+  "save_total_limit": 1,
+  "eval_steps": 120,
+  "version":"plain"
+
+}

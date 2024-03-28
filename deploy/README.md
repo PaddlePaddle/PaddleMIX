@@ -47,6 +47,7 @@ Python端预测部署主要包含两个步骤：
 - [blip2](./blip2/README.md)
 - [groundingdino](./groundingdino/README.md)
 - [sam](./sam/README.md)
+- [qwen_vl](./qwen_vl/README.md)
 
 以 groundingdino 为例子。
 
