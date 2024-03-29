@@ -1,0 +1,4 @@
+wget https://bj.bcebos.com/v1/paddlenlp/datasets/paddlemix/coco256_features/run_vis.tar
+wget https://bj.bcebos.com/v1/paddlenlp/datasets/paddlemix/coco256_features/empty_context.npy
+wget https://bj.bcebos.com/v1/paddlenlp/datasets/paddlemix/coco256_features/val.tar
+wget https://bj.bcebos.com/v1/paddlenlp/datasets/paddlemix/coco256_features/train.tar

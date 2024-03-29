@@ -1,4 +1,4 @@
-# Copyright 2022 Kakao Brain and The HuggingFace Team. All rights reserved.
+# Copyright 2023 Kakao Brain and The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -38,8 +38,12 @@ class UnCLIPTextProjModel(ModelMixin, ConfigMixin):
     ):
         super().__init__()
 
-        self.learned_classifier_free_guidance_embeddings = self.create_parameter(
-            (clip_embeddings_dim,), dtype=paddle.get_default_dtype(), default_initializer=nn.initializer.Constant(0.0)
+        self.learned_classifier_free_guidance_embeddings = nn.Parameter(
+            paddle.zeros(
+                [
+                    clip_embeddings_dim,
+                ]
+            )
         )
 
         # parameters for additional clip time embeddings
@@ -55,9 +59,6 @@ class UnCLIPTextProjModel(ModelMixin, ConfigMixin):
         self.text_encoder_hidden_states_norm = nn.LayerNorm(cross_attention_dim)
 
     def forward(self, *, image_embeddings, prompt_embeds, text_encoder_hidden_states, do_classifier_free_guidance):
-
-        image_embeddings = image_embeddings.cast(self.dtype)
-
         if do_classifier_free_guidance:
             # Add the classifier free guidance embeddings to the image embeddings
             image_embeddings_batch_size = image_embeddings.shape[0]
@@ -65,7 +66,13 @@ class UnCLIPTextProjModel(ModelMixin, ConfigMixin):
             classifier_free_guidance_embeddings = classifier_free_guidance_embeddings.expand(
                 [image_embeddings_batch_size, -1]
             )
-            image_embeddings = paddle.concat([classifier_free_guidance_embeddings, image_embeddings], axis=0)
+            image_embeddings = paddle.concat(
+                [
+                    classifier_free_guidance_embeddings,
+                    image_embeddings.cast(classifier_free_guidance_embeddings.dtype),
+                ],
+                axis=0,
+            )
 
         # The image embeddings batch size and the text embeddings batch size are equal
         assert image_embeddings.shape[0] == prompt_embeds.shape[0]

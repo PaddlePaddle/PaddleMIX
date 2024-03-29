@@ -1,4 +1,3 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,13 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
 from typing import List, Optional, Tuple, Union
 
 import paddle
 
 from ...models import UNet2DModel
 from ...schedulers import PNDMScheduler
-from ...utils import randn_tensor
+from ...utils.paddle_utils import randn_tensor
 from ..pipeline_utils import DiffusionPipeline, ImagePipelineOutput
 
 
@@ -67,8 +67,7 @@ class PNDMPipeline(DiffusionPipeline):
                 The number of denoising steps. More denoising steps usually lead to a higher quality image at the
                 expense of slower inference.
             generator (`paddle.Generator`, `optional`):
-                A [`paddle.Generator`](https://pytorch.org/docs/stable/generated/paddle.Generator.html) to make
-                generation deterministic.
+                A [`paddle.Generator`] to make generation deterministic.
             output_type (`str`, `optional`, defaults to `"pil"`):
                 The output format of the generated image. Choose between `PIL.Image` or `np.array`.
             return_dict (`bool`, *optional*, defaults to `True`):
@@ -110,7 +109,7 @@ class PNDMPipeline(DiffusionPipeline):
             image = self.scheduler.step(model_output, t, image).prev_sample
 
         image = (image / 2 + 0.5).clip(0, 1)
-        image = image.transpose([0, 2, 3, 1]).cast("float32").numpy()
+        image = image.transpose([0, 2, 3, 1]).cast("float32").cpu().numpy()
         if output_type == "pil":
             image = self.numpy_to_pil(image)
 

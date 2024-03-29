@@ -1,4 +1,4 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ import paddle
 
 from ...models import UNet2DModel, VQModel
 from ...schedulers import DDIMScheduler
-from ...utils import randn_tensor
+from ...utils.paddle_utils import randn_tensor
 from ..pipeline_utils import DiffusionPipeline, ImagePipelineOutput
 
 
@@ -52,7 +52,7 @@ class LDMPipeline(DiffusionPipeline):
         num_inference_steps: int = 50,
         output_type: Optional[str] = "pil",
         return_dict: bool = True,
-        **kwargs
+        **kwargs,
     ) -> Union[Tuple, ImagePipelineOutput]:
         r"""
         The call function to the pipeline for generation.
@@ -61,8 +61,7 @@ class LDMPipeline(DiffusionPipeline):
             batch_size (`int`, *optional*, defaults to 1):
                 Number of images to generate.
             generator (`paddle.Generator`, *optional*):
-                A [`paddle.Generator`](https://pytorch.org/docs/stable/generated/paddle.Generator.html) to make
-                generation deterministic.
+                A [`paddle.Generator`] to make generation deterministic.
             num_inference_steps (`int`, *optional*, defaults to 50):
                 The number of denoising steps. More denoising steps usually lead to a higher quality image at the
                 expense of slower inference.
@@ -101,20 +100,29 @@ class LDMPipeline(DiffusionPipeline):
 
         # prepare extra kwargs for the scheduler step, since not all schedulers have the same signature
         accepts_eta = "eta" in set(inspect.signature(self.scheduler.step).parameters.keys())
+
         extra_kwargs = {}
         if accepts_eta:
             extra_kwargs["eta"] = eta
+
         for t in self.progress_bar(self.scheduler.timesteps):
             latent_model_input = self.scheduler.scale_model_input(latents, t)
             # predict the noise residual
             noise_prediction = self.unet(latent_model_input, t).sample
             # compute the previous noisy sample x_t -> x_t-1
             latents = self.scheduler.step(noise_prediction, t, latents, **extra_kwargs).prev_sample
+
+        # adjust latents with inverse of vae scale
+        latents = latents / self.vqvae.config.scaling_factor
+        # decode the image latents with the VAE
         image = self.vqvae.decode(latents).sample
-        image = (image / 2 + 0.5).clip(min=0, max=1)
-        image = image.cpu().transpose(perm=[0, 2, 3, 1]).numpy()
+
+        image = (image / 2 + 0.5).clip(0, 1)
+        image = image.transpose([0, 2, 3, 1]).cpu().numpy()
         if output_type == "pil":
             image = self.numpy_to_pil(image)
+
         if not return_dict:
             return (image,)
+
         return ImagePipelineOutput(images=image)

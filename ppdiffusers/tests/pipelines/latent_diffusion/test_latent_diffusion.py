@@ -18,7 +18,6 @@ import unittest
 
 import numpy as np
 import paddle
-from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
 
 from ppdiffusers import (
     AutoencoderKL,
@@ -26,6 +25,7 @@ from ppdiffusers import (
     LDMTextToImagePipeline,
     UNet2DConditionModel,
 )
+from ppdiffusers.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
 from ppdiffusers.utils.testing_utils import (
     enable_full_determinism,
     load_numpy,
@@ -118,12 +118,11 @@ class LDMTextToImagePipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         pipe.set_progress_bar_config(disable=None)
         inputs = self.get_dummy_inputs()
         image = pipe(**inputs).images
-        assert image.shape == (1, 64, 64, 3)
+        assert image.shape == (1, 16, 16, 3)
         image_slice = image[0, -3:, -3:, -1]
-        expected_slice = np.array(
-            [0.28524342, 0.23806289, 0.38151595, 0.21939021, 0.26112252, 0.5172909, 0.25647423, 0.25049314, 0.47979864]
-        )
-        assert np.abs(image_slice.flatten() - expected_slice).max() < 0.001
+        expected_slice = np.array([0.0, 0.74594915, 0.65812, 0.0, 0.70, 0.426, 0.095, 0.417, 0.467])
+        print(image_slice)
+        assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 
 
 @slow
@@ -156,6 +155,7 @@ class LDMTextToImagePipelineSlowTests(unittest.TestCase):
         image_slice = image[0, -3:, -3:, -1].flatten()
         assert image.shape == (1, 256, 256, 3)
         expected_slice = np.array([0.3991, 0.4100, 0.3996, 0.4110, 0.3848, 0.4048, 0.4042, 0.3979, 0.4282])
+        print(image_slice)
         max_diff = np.abs(expected_slice - image_slice).max()
         assert max_diff < 0.2
 

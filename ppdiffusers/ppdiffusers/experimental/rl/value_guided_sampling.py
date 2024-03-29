@@ -1,4 +1,3 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,15 +17,17 @@ import paddle
 
 from ...models.unet_1d import UNet1DModel
 from ...pipelines import DiffusionPipeline
-from ...utils import randn_tensor
 from ...utils.dummy_paddle_objects import DDPMScheduler
+from ...utils.paddle_utils import randn_tensor
 
 
 class ValueGuidedRLPipeline(DiffusionPipeline):
     r"""
     Pipeline for value-guided sampling from a diffusion model trained to predict sequences of states.
+
     This model inherits from [`DiffusionPipeline`]. Check the superclass documentation for the generic methods
     implemented for all pipelines (downloading, saving, running on a particular device, etc.).
+
     Parameters:
         value_function ([`UNet1DModel`]):
             A specialized UNet for fine-tuning trajectories base on reward.
@@ -74,7 +75,7 @@ class ValueGuidedRLPipeline(DiffusionPipeline):
         return x_in * self.stds[key] + self.means[key]
 
     def to_paddle(self, x_in):
-        if type(x_in) is dict:
+        if isinstance(x_in, dict):
             return {k: self.to_paddle(v) for k, v in x_in.items()}
         elif paddle.is_tensor(x_in):
             return x_in

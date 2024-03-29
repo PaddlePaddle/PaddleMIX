@@ -1,4 +1,3 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,7 +17,7 @@ from typing import List, Optional, Tuple, Union
 import paddle
 
 from ...schedulers import DDIMScheduler
-from ...utils import randn_tensor
+from ...utils.paddle_utils import randn_tensor
 from ..pipeline_utils import DiffusionPipeline, ImagePipelineOutput
 
 
@@ -37,8 +36,11 @@ class DDIMPipeline(DiffusionPipeline):
             [`DDPMScheduler`], or [`DDIMScheduler`].
     """
 
+    model_cpu_offload_seq = "unet"
+
     def __init__(self, unet, scheduler):
         super().__init__()
+
         # make sure scheduler can always be converted to DDIM
         scheduler = DDIMScheduler.from_config(scheduler.config)
 
@@ -62,7 +64,7 @@ class DDIMPipeline(DiffusionPipeline):
             batch_size (`int`, *optional*, defaults to 1):
                 The number of images to generate.
             generator (`paddle.Generator`, *optional*):
-                One or a list of paddle generator(s) to make generation deterministic.
+                A [`paddle.Generator`] to make generation deterministic.
             eta (`float`, *optional*, defaults to 0.0):
                 Corresponds to parameter eta (η) from the [DDIM](https://arxiv.org/abs/2010.02502) paper. Only applies
                 to the [`~schedulers.DDIMScheduler`], and is ignored in other schedulers. A value of `0` corresponds to
@@ -92,7 +94,7 @@ class DDIMPipeline(DiffusionPipeline):
         >>> image = pipe(eta=0.0, num_inference_steps=50)
 
         >>> # process image to PIL
-        >>> image_processed = image.cpu().permute(0, 2, 3, 1)
+        >>> image_processed = image.transpose([0, 2, 3, 1]).cpu()
         >>> image_processed = (image_processed + 1.0) * 127.5
         >>> image_processed = image_processed.numpy().astype(np.uint8)
         >>> image_pil = PIL.Image.fromarray(image_processed[0])
@@ -117,9 +119,11 @@ class DDIMPipeline(DiffusionPipeline):
             )
         else:
             image_shape = (batch_size, self.unet.config.in_channels, *self.unet.config.sample_size)
+
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
-                f"You have passed a list of generators of length {len(generator)}, but requested an effective batch size of {batch_size}. Make sure the batch size matches the length of the generators."
+                f"You have passed a list of generators of length {len(generator)}, but requested an effective batch"
+                f" size of {batch_size}. Make sure the batch size matches the length of the generators."
             )
 
         image = randn_tensor(image_shape, generator=generator, dtype=self.unet.dtype)
@@ -137,12 +141,13 @@ class DDIMPipeline(DiffusionPipeline):
             image = self.scheduler.step(
                 model_output, t, image, eta=eta, use_clipped_model_output=use_clipped_model_output, generator=generator
             ).prev_sample
-        image = (image / 2 + 0.5).clip(min=0, max=1)
-        image = image.cpu().transpose(perm=[0, 2, 3, 1]).numpy()
 
+        image = (image / 2 + 0.5).clip(0, 1)
+        image = image.transpose([0, 2, 3, 1]).cpu().numpy()
         if output_type == "pil":
             image = self.numpy_to_pil(image)
 
         if not return_dict:
             return (image,)
+
         return ImagePipelineOutput(images=image)

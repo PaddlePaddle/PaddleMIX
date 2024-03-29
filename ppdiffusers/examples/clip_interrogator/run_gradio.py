@@ -113,7 +113,7 @@ def inference(
 
 
 inputs = [
-    gr.inputs.Image(type="pil"),
+    gr.Image(type="pil"),
     gr.Radio(["best", "classic", "fast"], label="Mode", value="fast"),
     gr.Dropdown(CLIP_PRETRAINED_MODEL_ARCHIVE_LIST, value=args.clip, label="CLIP Model"),
     gr.Dropdown(BLIP_PRETRAINED_MODEL_ARCHIVE_LIST, value=args.blip, label="BLIP Model"),
@@ -125,7 +125,7 @@ inputs = [
     gr.Number(value=64, label="Caption Num Beams, when Sample is false"),
 ]
 outputs = [
-    gr.outputs.Textbox(label="Image Caption Output"),
+    gr.Textbox(label="Image Caption Output"),
 ]
 
 io = gr.Interface(

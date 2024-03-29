@@ -1,0 +1,16 @@
+pretrained_base_model_path: "runwayml/stable-diffusion-v1-5"
+pretrained_vae_path: "stabilityai/sd-vae-ft-mse"
+image_encoder_path: "lambdalabs/sd-image-variations-diffusers/image_encoder"
+
+denoising_unet_config_path: "./pretrained_weights/Tsaiyue/AnimateAnyone/config.json"
+denoising_unet_path: "./pretrained_weights/Tsaiyue/AnimateAnyone/denoising_unet.pdparams"
+reference_unet_path: "./pretrained_weights/Tsaiyue/AnimateAnyone/reference_unet.pdparams"
+pose_guider_path: "./pretrained_weights/Tsaiyue/AnimateAnyone/pose_guider.pdparams"
+motion_module_path: "./pretrained_weights/Tsaiyue/AnimateAnyone/motion_module.pdparams"
+
+inference_config: "./configs/inference/inference_v2.yaml"
+weight_dtype: 'fp16'
+
+test_cases:
+  "./configs/inference/ref_images/anyone-10.png":
+    - "./configs/inference/pose_videos/anyone-video-1_kps.mp4" 

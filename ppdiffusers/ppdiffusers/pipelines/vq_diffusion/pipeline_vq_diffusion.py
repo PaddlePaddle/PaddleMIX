@@ -1,5 +1,4 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
-# Copyright 2022 Microsoft and The HuggingFace Team. All rights reserved.
+# Copyright 2023 Microsoft and The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,7 +16,8 @@ from typing import Callable, List, Optional, Tuple, Union
 
 import paddle
 import paddle.nn as nn
-from paddlenlp.transformers import CLIPTextModel, CLIPTokenizer
+
+from ppdiffusers.transformers import CLIPTextModel, CLIPTokenizer
 
 from ...configuration_utils import ConfigMixin, register_to_config
 from ...models import ModelMixin, Transformer2DModel, VQModel
@@ -25,14 +25,15 @@ from ...schedulers import VQDiffusionScheduler
 from ...utils import logging
 from ..pipeline_utils import DiffusionPipeline, ImagePipelineOutput
 
-logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
-
 INF = 1e9
 
 
 # paddle logsumexp may has bug
 def logsumexp(x, axis=None, keepdim=False):
     return paddle.log(x.exp().sum(axis=axis, keepdim=keepdim))
+
+
+logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
 
 class LearnedClassifierFreeSamplingEmbeddings(ModelMixin, ConfigMixin):
@@ -51,9 +52,8 @@ class LearnedClassifierFreeSamplingEmbeddings(ModelMixin, ConfigMixin):
             assert length is not None, "learnable=True requires `length` to be set"
 
             embeddings = paddle.zeros([length, hidden_size])
-            self.embeddings = self.create_parameter(
-                embeddings.shape, default_initializer=nn.initializer.Assign(embeddings)
-            )
+            self.embeddings = nn.Parameter(embeddings)
+
         else:
             self.embeddings = None
 
@@ -135,10 +135,8 @@ class VQDiffusionPipeline(DiffusionPipeline):
         # https://github.com/huggingface/transformers/blob/d92e22d1f28324f513f3080e5c47c071a3916721/src/transformers/models/clip/modeling_clip.py#L1052-L1053
         prompt_embeds = prompt_embeds / prompt_embeds.norm(axis=-1, keepdim=True)
 
-        # duplicate text embeddings for each generation per prompt, using mps friendly method
-        bs_embed, seq_len, _ = prompt_embeds.shape
-        prompt_embeds = prompt_embeds.tile([1, num_images_per_prompt, 1])
-        prompt_embeds = prompt_embeds.reshape([bs_embed * num_images_per_prompt, seq_len, -1])
+        # duplicate text embeddings for each generation per prompt
+        prompt_embeds = prompt_embeds.repeat_interleave(num_images_per_prompt, axis=0)
 
         if do_classifier_free_guidance:
             if self.learned_classifier_free_sampling_embeddings.learnable:
@@ -184,7 +182,7 @@ class VQDiffusionPipeline(DiffusionPipeline):
         output_type: Optional[str] = "pil",
         return_dict: bool = True,
         callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
-        callback_steps: Optional[int] = 1,
+        callback_steps: int = 1,
     ) -> Union[ImagePipelineOutput, Tuple]:
         """
         The call function to the pipeline for generation.
@@ -205,8 +203,7 @@ class VQDiffusionPipeline(DiffusionPipeline):
             num_images_per_prompt (`int`, *optional*, defaults to 1):
                 The number of images to generate per prompt.
             generator (`paddle.Generator`, *optional*):
-                A [`paddle.Generator`](https://pytorch.org/docs/stable/generated/paddle.Generator.html) to make
-                generation deterministic.
+                A [`paddle.Generator`] to make generation deterministic.
             latents (`paddle.Tensor` of shape (batch), *optional*):
                 Pre-generated noisy latents sampled from a Gaussian distribution, to be used as inputs for image
                 generation. Must be valid embedding indices.If not provided, a latents tensor will be generated of
@@ -319,7 +316,7 @@ class VQDiffusionPipeline(DiffusionPipeline):
         """
         sorted_log_p_x_0, indices = paddle.topk(log_p_x_0, k=log_p_x_0.shape[1], axis=1)
         sorted_p_x_0 = paddle.exp(sorted_log_p_x_0)
-        keep_mask = (sorted_p_x_0.cumsum(axis=1) < truncation_rate).cast("int64")
+        keep_mask = (sorted_p_x_0.cumsum(1) < truncation_rate).cast("int64")
 
         # Ensure that at least the largest probability is not zeroed out
         all_true = paddle.full_like(keep_mask[:, 0:1, :], 1)

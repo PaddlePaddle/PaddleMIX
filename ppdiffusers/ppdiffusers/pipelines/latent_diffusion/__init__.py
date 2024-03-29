@@ -1,5 +1,4 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
-# Copyright 2023 The HuggingFace Team. All rights reserved.
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,13 +12,60 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# flake8: noqa
-from ...utils import is_paddlenlp_available
-from .pipeline_latent_diffusion_superresolution import LDMSuperResolutionPipeline
+from typing import TYPE_CHECKING
 
-if is_paddlenlp_available():
-    from .pipeline_latent_diffusion import (
-        LDMBertConfig,
-        LDMBertModel,
-        LDMTextToImagePipeline,
+from ...utils import (
+    PPDIFFUSERS_SLOW_IMPORT,
+    OptionalDependencyNotAvailable,
+    _LazyModule,
+    get_objects_from_module,
+    is_paddle_available,
+    is_paddlenlp_available,
+)
+
+_dummy_objects = {}
+_import_structure = {}
+
+try:
+    if not (is_paddlenlp_available() and is_paddle_available()):
+        raise OptionalDependencyNotAvailable()
+except OptionalDependencyNotAvailable:
+    from ...utils import dummy_paddle_and_paddlenlp_objects  # noqa F403
+
+    _dummy_objects.update(get_objects_from_module(dummy_paddle_and_paddlenlp_objects))
+else:
+    _import_structure["pipeline_latent_diffusion"] = ["LDMBertModel", "LDMBertConfig", "LDMTextToImagePipeline"]
+    _import_structure["pipeline_latent_diffusion_uvit"] = ["LDMTextToImageUViTPipeline"]
+    _import_structure["pipeline_latent_diffusion_superresolution"] = ["LDMSuperResolutionPipeline"]
+
+
+if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
+    try:
+        if not (is_paddlenlp_available() and is_paddle_available()):
+            raise OptionalDependencyNotAvailable()
+
+    except OptionalDependencyNotAvailable:
+        from ...utils.dummy_paddle_and_paddlenlp_objects import *
+    else:
+        from .pipeline_latent_diffusion import (
+            LDMBertConfig,
+            LDMBertModel,
+            LDMTextToImagePipeline,
+        )
+        from .pipeline_latent_diffusion_superresolution import (
+            LDMSuperResolutionPipeline,
+        )
+        from .pipeline_latent_diffusion_uvit import LDMTextToImageUViTPipeline
+
+else:
+    import sys
+
+    sys.modules[__name__] = _LazyModule(
+        __name__,
+        globals()["__file__"],
+        _import_structure,
+        module_spec=__spec__,
     )
+
+    for name, value in _dummy_objects.items():
+        setattr(sys.modules[__name__], name, value)

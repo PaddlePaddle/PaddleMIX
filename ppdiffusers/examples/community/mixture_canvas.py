@@ -22,13 +22,13 @@ import numpy as np
 import paddle
 from numpy import exp, pi, sqrt
 from paddle.vision.transforms import functional as F
-from paddlenlp.transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
 from tqdm.auto import tqdm
 
 from ppdiffusers.models import AutoencoderKL, UNet2DConditionModel
 from ppdiffusers.pipelines.pipeline_utils import DiffusionPipeline
 from ppdiffusers.pipelines.stable_diffusion import StableDiffusionSafetyChecker
 from ppdiffusers.schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
+from ppdiffusers.transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
 
 
 def preprocess_image(image):

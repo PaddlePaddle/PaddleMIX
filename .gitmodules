@@ -1,0 +1,3 @@
+[submodule "PaddleNLP"]
+	path = PaddleNLP
+	url = https://github.com/PaddlePaddle/PaddleNLP

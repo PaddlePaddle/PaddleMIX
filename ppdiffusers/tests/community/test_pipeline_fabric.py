@@ -42,7 +42,7 @@ image = pipe(
 image.save("horse_to_elephant.jpg")
 
 # let's try another example with feedback
-url = "https://raw.githubusercontent.com/ChenWu98/cycle-diffusion/main/data/dalle2/A%20black%20colored%20car.png"
+url = "https://paddlenlp.bj.bcebos.com/models/community/hf-internal-testing/diffusers-images/Ablackcoloredcar.png"
 response = requests.get(url)
 init_image = Image.open(BytesIO(response.content)).convert("RGB")
 

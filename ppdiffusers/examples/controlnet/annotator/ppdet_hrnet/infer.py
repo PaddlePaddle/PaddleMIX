@@ -219,7 +219,7 @@ class Detector(object):
         if run_benchmark:
             for i in range(repeats):
                 self.predictor.run()
-                paddle.device.cuda.synchronize()
+                paddle.device.synchronize()
             result = dict(boxes=np_boxes, masks=np_masks, boxes_num=np_boxes_num)
             return result
 
@@ -617,7 +617,7 @@ class DetectorSOLOv2(Detector):
         if run_benchmark:
             for i in range(repeats):
                 self.predictor.run()
-                paddle.device.cuda.synchronize()
+                paddle.device.synchronize()
             result = dict(segm=np_segms, label=np_label, score=np_score, boxes_num=np_boxes_num)
             return result
 
@@ -710,7 +710,7 @@ class DetectorPicoDet(Detector):
         if run_benchmark:
             for i in range(repeats):
                 self.predictor.run()
-                paddle.device.cuda.synchronize()
+                paddle.device.synchronize()
             result = dict(boxes=np_score_list, boxes_num=np_boxes_list)
             return result
 

@@ -167,7 +167,7 @@ def main(args):
             os.path.abspath(os.path.join(os.getcwd(), "../..")), "examples/community/stable_diffusion_mega.py"
         ),
     )
-    pipe.set_progress_bar_config(disable=True)
+    pipe.set_progress_bar_config(disable=False)
     pipe.change_scheduler(args.scheduler)
     parse_prompt_type = args.parse_prompt_type
 

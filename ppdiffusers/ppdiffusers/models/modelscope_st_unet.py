@@ -14,15 +14,16 @@
 
 import math
 from dataclasses import dataclass
-from typing import List, Optional, Tuple, Union
+from typing import List, Tuple, Union
 
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
-from einops import rearrange
+from einops import rearrange, repeat
 
 from ..configuration_utils import ConfigMixin, register_to_config
 from ..utils import BaseOutput
+from .lvdm_util import avg_pool_nd, conv_nd
 from .modeling_utils import ModelMixin
 
 USE_TEMPORAL_TRANSFORMER = True
@@ -534,7 +535,7 @@ class ResBlock(nn.Layer):
             emb_out = emb_out[..., None]
         if self.use_scale_shift_norm:
             out_norm, out_rest = self.out_layers[0], self.out_layers[1:]
-            scale, shift = th.chunk(emb_out, 2, dim=1)
+            scale, shift = paddle.chunk(emb_out, 2, axis=1)
             h = out_norm(h) * (1 + scale) + shift
             h = out_rest(h)
         else:
@@ -574,7 +575,7 @@ class TemporalAttentionBlock(nn.Layer):
     def forward(self, x, pos_bias=None, focus_present_mask=None, video_mask=None):
 
         identity = x
-        n, height, device = x.shape[2], x.shape[-2], x.device
+        n, height = x.shape[2], x.shape[-2]
         x = self.norm(x)
         x = rearrange(x, "b c f h w -> b (h w) f c")
         qkv = paddle.chunk(self.to_qkv(x), chunks=3, axis=-1)
@@ -846,7 +847,9 @@ class STUNetModel(ModelMixin, ConfigMixin):
                         head_dim,
                         rotary_emb=self.rotary_emb,
                         temporal_attn_times=temporal_attn_times,
-                        use_image_dataset=use_image_dataset))
+                        use_image_dataset=use_image_dataset,
+                    )
+                )
 
         self.input_blocks.append(init_block)
         shortcut_dims.append(dim)

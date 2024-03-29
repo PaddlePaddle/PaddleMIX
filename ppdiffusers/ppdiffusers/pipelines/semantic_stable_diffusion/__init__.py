@@ -1,5 +1,4 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
-# Copyright 2023 The HuggingFace Team. All rights reserved.
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,43 +12,51 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# flake8: noqa
-from dataclasses import dataclass
-from typing import List, Optional, Union
-
-import numpy as np
-import PIL.Image
+from typing import TYPE_CHECKING
 
 from ...utils import (
-    BaseOutput,
+    PPDIFFUSERS_SLOW_IMPORT,
     OptionalDependencyNotAvailable,
+    _LazyModule,
+    get_objects_from_module,
     is_paddle_available,
     is_paddlenlp_available,
 )
 
-
-@dataclass
-class SemanticStableDiffusionPipelineOutput(BaseOutput):
-    """
-    Output class for Stable Diffusion pipelines.
-
-    Args:
-        images (`List[PIL.Image.Image]` or `np.ndarray`)
-            List of denoised PIL images of length `batch_size` or NumPy array of shape `(batch_size, height, width,
-            num_channels)`.
-        nsfw_content_detected (`List[bool]`)
-            List indicating whether the corresponding generated image contains “not-safe-for-work” (nsfw) content or
-            `None` if safety checking could not be performed.
-    """
-
-    images: Union[List[PIL.Image.Image], np.ndarray]
-    nsfw_content_detected: Optional[List[bool]]
-
+_dummy_objects = {}
+_import_structure = {}
 
 try:
     if not (is_paddlenlp_available() and is_paddle_available()):
         raise OptionalDependencyNotAvailable()
 except OptionalDependencyNotAvailable:
-    from ...utils.dummy_paddle_and_paddlenlp_objects import *  # noqa F403
+    from ...utils import dummy_paddle_and_paddlenlp_objects  # noqa F403
+
+    _dummy_objects.update(get_objects_from_module(dummy_paddle_and_paddlenlp_objects))
 else:
-    from .pipeline_semantic_stable_diffusion import SemanticStableDiffusionPipeline
+    _import_structure["pipeline_output"] = ["SemanticStableDiffusionPipelineOutput"]
+    _import_structure["pipeline_semantic_stable_diffusion"] = ["SemanticStableDiffusionPipeline"]
+
+
+if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
+    try:
+        if not (is_paddlenlp_available() and is_paddle_available()):
+            raise OptionalDependencyNotAvailable()
+
+    except OptionalDependencyNotAvailable:
+        from ...utils.dummy_paddle_and_paddlenlp_objects import *
+    else:
+        from .pipeline_semantic_stable_diffusion import SemanticStableDiffusionPipeline
+
+else:
+    import sys
+
+    sys.modules[__name__] = _LazyModule(
+        __name__,
+        globals()["__file__"],
+        _import_structure,
+        module_spec=__spec__,
+    )
+
+    for name, value in _dummy_objects.items():
+        setattr(sys.modules[__name__], name, value)
