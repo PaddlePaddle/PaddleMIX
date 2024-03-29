@@ -24,6 +24,8 @@ class TrainingArguments(TrainingArguments):
     warmup_start_lr: float = field(default=1e-6, metadata={"help": "Initial learning rate of warm up."})
     eta_min: float = field(default=1e-5, metadata={"help": "The minimum value of learning rate."})
     lr_scheduler_name: str = field(default="CosineDecayWithWarmup", metadata={"help": "The scheduler name to use."})
+    group_by_modality_length: bool = field(default=False)
+    mm_projector_lr: Optional[float] = None
 
 
 @dataclass
