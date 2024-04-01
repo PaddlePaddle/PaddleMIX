@@ -13,9 +13,10 @@
 # limitations under the License.
 
 import os
-
 import paddle
-from paddlenlp.transformers import CLIPVisionConfig, CLIPVisionModel
+
+from .clip_model import CLIPVisionModel
+from paddlenlp.transformers import CLIPVisionConfig
 
 __all__ = ["CLIPVisionTower"]
 
