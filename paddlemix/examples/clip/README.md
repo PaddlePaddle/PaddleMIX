@@ -111,6 +111,10 @@ laiondata-pathdir/part-00001
 ```
 更多可参考数据集中的`annotations/coco_karpathy_train.json`文件。
 
+4) 验证数据集-ImageNet1K
+
+请点击[DownLoad imagenet-val.tar](https://bj.bcebos.com/v1/paddlenlp/datasets/paddlemix/ILSVRC2012/imagenet-val.tar)下载并解压数据，并将下述训练脚本里的`IN_1K_DIR`内容填写为解压后的路径。
+
 ## 4. 使用说明
 
 ### 4.1 训练
