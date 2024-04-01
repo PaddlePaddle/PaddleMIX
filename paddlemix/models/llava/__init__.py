@@ -13,6 +13,8 @@
 # limitations under the License.
 
 from .clip_encoder import *
+from .clip_model import *
+from .clip_vision_config import *
 from .configuration import *
 from .mm_utils import *
 from .modeling import *
