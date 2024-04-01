@@ -205,6 +205,8 @@ class ModelTesterMixin:
 
         if not hasattr(model, "set_attn_processor"):
             # If not has `set_attn_processor`, skip test
+            os.environ["FLAGS_cudnn_deterministic"] = "True"
+            os.environ["FLAGS_cpu_deterministic"] = "True"
             return
 
         assert all(type(proc) == AttnProcessor2_5 for proc in model.attn_processors.values())
