@@ -17,7 +17,7 @@ import os
 import paddle
 
 from .clip_model import CLIPVisionModel
-from .clip_vision_config import CLIPVisionConfig
+from paddlenlp.transformers import CLIPVisionConfig
 
 __all__ = ["CLIPVisionTower"]
 
