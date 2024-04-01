@@ -109,7 +109,7 @@ def main(args):
         with paddle.no_grad():
             output_ids = model.generate(
                 input_ids=data_dict["input_ids"],
-                images=data_dict["images"],
+                images=paddle.cast(data_dict["images"],compute_dtype),
                 image_sizes=[image_size],
                 decode_strategy="sampling" if args.temperature > 0 else "greedy_search",
                 temperature=args.temperature,
