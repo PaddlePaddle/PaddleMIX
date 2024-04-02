@@ -999,7 +999,12 @@ class ModelMixin(nn.Layer):
                 raise NotImplementedError(
                     "Tensor parallel is only supported for models that inherit from `ConversionMixin`."
                 )
-            tensor_parallel_split_mapping = cls.get_tensor_parallel_convert_actions(config)
+            if len(resolved_model_files) > 1:
+                raise NotImplementedError(
+                    "Tensor parallel is not supported for multiple shards yet."
+                )
+            tmp_state_dict = smart_load(resolved_model_files[0], return_numpy=True)
+            tensor_parallel_split_mapping = cls.get_tensor_parallel_convert_actions(config, tmp_state_dict.keys())
         else:
             tensor_parallel_split_mapping = None
 
