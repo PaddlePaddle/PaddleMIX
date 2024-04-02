@@ -995,7 +995,7 @@ class ModelMixin(nn.Layer):
         if tensor_parallel_degree > 1:
             from paddlenlp.transformers.conversion_utils import ConversionMixin
 
-            if cls is not ConversionMixin:
+            if not issubclass(cls, ConversionMixin):
                 raise NotImplementedError(
                     "Tensor parallel is only supported for models that inherit from `ConversionMixin`."
                 )
