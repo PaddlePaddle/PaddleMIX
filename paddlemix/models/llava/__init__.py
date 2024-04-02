@@ -14,6 +14,7 @@
 
 from .clip_encoder import *
 from .configuration import *
+from .clip_model import *
 from .mm_utils import *
 from .modeling import *
 from .tokenizer import *
