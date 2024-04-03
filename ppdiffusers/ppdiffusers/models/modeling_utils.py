@@ -517,6 +517,10 @@ class ModelMixin(nn.Layer):
             kwargs (`Dict[str, Any]`, *optional*):
                 Additional keyword arguments passed along to the [`~utils.PushToHubMixin.push_to_hub`] method.
         """
+        # distributed kwargs
+        merge_tensor_parallel = kwargs.get("merge_tensor_parallel", False)
+        tensor_parallel_degree = kwargs.pop("tensor_parallel_degree", 1)
+
         if to_diffusers is None:
             to_diffusers = TO_DIFFUSERS
 
@@ -566,6 +570,14 @@ class ModelMixin(nn.Layer):
 
         # Save the model
         state_dict = model_to_save.state_dict()
+        if tensor_parallel_degree > 1:
+            if merge_tensor_parallel:
+                config_to_save = model_to_save._internal_dict
+                state_dict = model_to_save.merge_tensor_parallel(state_dict, config_to_save)
+                tensor_parallel_degree = 1
+                if paddle.distributed.fleet.get_hybrid_communicate_group().get_model_parallel_rank() != 0:
+                    logger.info("Saving with merge_tensor_parallel, tensor_parallel_rank > 0 don't need save")
+                    return
 
         if to_diffusers:
             if not is_torch_available() and not safe_serialization:
