@@ -1202,6 +1202,7 @@ class InternLMXComposer2ForCausalLM(InternLM2PretrainedModel):
             outputs = outputs[0].cpu().tolist()[len(inputs['input_ids'][0]):]
         else:
             outputs = outputs[0].cpu().tolist()
+        outputs = outputs[0]
         response = tokenizer.decode(outputs, skip_special_tokens=True)
         response = response.split('[UNUSED_TOKEN_145]')[0]
         history = history + [(query, response)]
