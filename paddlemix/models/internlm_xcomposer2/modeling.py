@@ -1188,7 +1188,7 @@ class InternLMXComposer2ForCausalLM(InternLM2PretrainedModel):
             inputs, im_mask = self.interleav_wrap_chat(tokenizer, query, image, history, meta_instruction)
         inputs = {k: v for k, v in inputs.items() if paddle.is_tensor(x=v)}
         eos_token_id = [tokenizer.eos_token_id, tokenizer. convert_tokens_to_ids(['[UNUSED_TOKEN_145]'])[0]]
-        outputs = self.generate(**inputs, 
+        outputs, _ = self.generate(**inputs, 
                                 streamer=streamer, 
                                 max_new_tokens=max_new_tokens, 
                                 do_sample=do_sample, 
@@ -1202,7 +1202,6 @@ class InternLMXComposer2ForCausalLM(InternLM2PretrainedModel):
             outputs = outputs[0].cpu().tolist()[len(inputs['input_ids'][0]):]
         else:
             outputs = outputs[0].cpu().tolist()
-        outputs = outputs[0]
         response = tokenizer.decode(outputs, skip_special_tokens=True)
         response = response.split('[UNUSED_TOKEN_145]')[0]
         history = history + [(query, response)]
