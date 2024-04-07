@@ -683,8 +683,7 @@ class InternLM2Model(InternLM2PretrainedModel):
         self.padding_idx = config.pad_token_id
         self.vocab_size = config.vocab_size
         self.tok_embeddings = paddle.nn.Embedding(num_embeddings=config.
-            vocab_size, embedding_dim=config.hidden_size, padding_idx=self.
-            padding_idx)
+            vocab_size, embedding_dim=config.hidden_size)
         self.layers = paddle.nn.LayerList(sublayers=[InternLM2DecoderLayer(
             config) for _ in range(config.num_hidden_layers)])
         self.norm = InternLM2RMSNorm(config.hidden_size, eps=config.
