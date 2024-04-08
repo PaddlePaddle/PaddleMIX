@@ -1,4 +1,4 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,8 +21,9 @@ from typing import Any, Callable, Dict, List, Optional, Union
 import numpy as np
 import paddle
 import paddle.nn.functional as F
-import PIL
-from paddlenlp.transformers import CLIPImageProcessor, T5EncoderModel, T5Tokenizer
+import PIL.Image
+
+from ppdiffusers.transformers import CLIPImageProcessor, T5EncoderModel, T5Tokenizer
 
 from ...loaders import LoraLoaderMixin
 from ...models import UNet2DConditionModel
@@ -32,11 +33,11 @@ from ...utils import (
     is_bs4_available,
     is_ftfy_available,
     logging,
-    randn_tensor,
     replace_example_docstring,
 )
+from ...utils.paddle_utils import randn_tensor
 from ..pipeline_utils import DiffusionPipeline
-from . import IFPipelineOutput
+from .pipeline_output import IFPipelineOutput
 from .safety_checker import IFSafetyChecker
 from .watermark import IFWatermarker
 
@@ -46,7 +47,9 @@ if is_bs4_available():
 if is_ftfy_available():
     import ftfy
 
+
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
+
 
 EXAMPLE_DOC_STRING = """
     Examples:
@@ -92,10 +95,23 @@ class IFSuperResolutionPipeline(DiffusionPipeline, LoraLoaderMixin):
     watermarker: Optional[IFWatermarker]
 
     bad_punct_regex = re.compile(
-        r"[" + "#®•©™&@·º½¾¿¡§~" + "\)" + "\(" + "\]" + "\[" + "\}" + "\{" + "\|" + "\\" + "\/" + "\*" + r"]{1,}"
+        r"["
+        + "#®•©™&@·º½¾¿¡§~"
+        + r"\)"
+        + r"\("
+        + r"\]"
+        + r"\["
+        + r"\}"
+        + r"\{"
+        + r"\|"
+        + "\\"
+        + r"\/"
+        + r"\*"
+        + r"]{1,}"
     )  # noqa
 
     _optional_components = ["tokenizer", "text_encoder", "safety_checker", "feature_extractor", "watermarker"]
+    model_cpu_offload_seq = "text_encoder->unet"
 
     def __init__(
         self,
@@ -288,10 +304,10 @@ class IFSuperResolutionPipeline(DiffusionPipeline, LoraLoaderMixin):
     # Copied from ppdiffusers.pipelines.deepfloyd_if.pipeline_if.IFPipeline.encode_prompt
     def encode_prompt(
         self,
-        prompt,
-        do_classifier_free_guidance=True,
-        num_images_per_prompt=1,
-        negative_prompt=None,
+        prompt: Union[str, List[str]],
+        do_classifier_free_guidance: bool = True,
+        num_images_per_prompt: int = 1,
+        negative_prompt: Optional[Union[str, List[str]]] = None,
         prompt_embeds: Optional[paddle.Tensor] = None,
         negative_prompt_embeds: Optional[paddle.Tensor] = None,
         clean_caption: bool = False,
@@ -302,10 +318,10 @@ class IFSuperResolutionPipeline(DiffusionPipeline, LoraLoaderMixin):
         Args:
             prompt (`str` or `List[str]`, *optional*):
                 prompt to be encoded
-            num_images_per_prompt (`int`, *optional*, defaults to 1):
-                number of images that should be generated per prompt
             do_classifier_free_guidance (`bool`, *optional*, defaults to `True`):
                 whether to use classifier free guidance or not
+            num_images_per_prompt (`int`, *optional*, defaults to 1):
+                number of images that should be generated per prompt
             negative_prompt (`str` or `List[str]`, *optional*):
                 The prompt or prompts not to guide the image generation. If not defined, one has to pass
                 `negative_prompt_embeds`. instead. If not defined, one has to pass `negative_prompt_embeds`. instead.
@@ -317,6 +333,8 @@ class IFSuperResolutionPipeline(DiffusionPipeline, LoraLoaderMixin):
                 Pre-generated negative text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt
                 weighting. If not provided, negative_prompt_embeds will be generated from `negative_prompt` input
                 argument.
+            clean_caption (bool, defaults to `False`):
+                If `True`, the function will preprocess and clean the provided caption before encoding.
         """
         if prompt is not None and negative_prompt is not None:
             if type(prompt) is not type(negative_prompt):
@@ -358,6 +376,7 @@ class IFSuperResolutionPipeline(DiffusionPipeline, LoraLoaderMixin):
                 )
 
             attention_mask = text_inputs.attention_mask
+
             prompt_embeds = self.text_encoder(
                 text_input_ids,
                 attention_mask=attention_mask,
@@ -373,6 +392,7 @@ class IFSuperResolutionPipeline(DiffusionPipeline, LoraLoaderMixin):
 
         if dtype is not None:
             prompt_embeds = prompt_embeds.cast(dtype)
+
         bs_embed, seq_len, _ = prompt_embeds.shape
         # duplicate text embeddings for each generation per prompt, using mps friendly method
         prompt_embeds = prompt_embeds.tile([1, num_images_per_prompt, 1])
@@ -620,19 +640,19 @@ class IFSuperResolutionPipeline(DiffusionPipeline, LoraLoaderMixin):
             prompt (`str` or `List[str]`, *optional*):
                 The prompt or prompts to guide the image generation. If not defined, one has to pass `prompt_embeds`.
                 instead.
-            height (`int`, *optional*, defaults to self.unet.config.sample_size):
+            height (`int`, *optional*, defaults to None):
                 The height in pixels of the generated image.
-            width (`int`, *optional*, defaults to self.unet.config.sample_size):
+            width (`int`, *optional*, defaults to None):
                 The width in pixels of the generated image.
             image (`PIL.Image.Image`, `np.ndarray`, `paddle.Tensor`):
                 The image to be upscaled.
             num_inference_steps (`int`, *optional*, defaults to 50):
                 The number of denoising steps. More denoising steps usually lead to a higher quality image at the
                 expense of slower inference.
-            timesteps (`List[int]`, *optional*):
+            timesteps (`List[int]`, *optional*, defaults to None):
                 Custom timesteps to use for the denoising process. If not defined, equal spaced `num_inference_steps`
                 timesteps are used. Must be in descending order.
-            guidance_scale (`float`, *optional*, defaults to 7.5):
+            guidance_scale (`float`, *optional*, defaults to 4.0):
                 Guidance scale as defined in [Classifier-Free Diffusion Guidance](https://arxiv.org/abs/2207.12598).
                 `guidance_scale` is defined as `w` of equation 2. of [Imagen
                 Paper](https://arxiv.org/pdf/2205.11487.pdf). Guidance scale is enabled by setting `guidance_scale >
@@ -669,7 +689,8 @@ class IFSuperResolutionPipeline(DiffusionPipeline, LoraLoaderMixin):
                 called at every step.
             cross_attention_kwargs (`dict`, *optional*):
                 A kwargs dictionary that if specified is passed along to the `AttentionProcessor` as defined under
-                `self.processor` in ppdiffusers.cross_attention.
+                `self.processor` in
+                [ppdiffusers.models.attention_processor](https://github.com/huggingface/diffusers/blob/main/src/diffusers/models/attention_processor.py).
             noise_level (`int`, *optional*, defaults to 250):
                 The amount of noise to add to the upscaled image. Must be in the range `[0, 1000)`
             clean_caption (`bool`, *optional*, defaults to `True`):
@@ -796,7 +817,9 @@ class IFSuperResolutionPipeline(DiffusionPipeline, LoraLoaderMixin):
                     noise_pred = paddle.concat([noise_pred, predicted_variance], axis=1)
 
                 if self.scheduler.config.variance_type not in ["learned", "learned_range"]:
-                    noise_pred, _ = noise_pred.split(noise_pred.shape[1] // intermediate_images.shape[1], axis=1)
+                    noise_pred, _ = noise_pred.split(
+                        [intermediate_images.shape[1], noise_pred.shape[1] - intermediate_images.shape[1]], axis=1
+                    )
 
                 # compute the previous noisy sample x_t -> x_t-1
                 intermediate_images = self.scheduler.step(

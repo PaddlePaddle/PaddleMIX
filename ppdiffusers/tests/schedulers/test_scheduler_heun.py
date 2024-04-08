@@ -1,4 +1,4 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 import paddle
 
 from ppdiffusers import HeunDiscreteScheduler
+from ppdiffusers.utils.testing_utils import paddle_device
 
 from .test_schedulers import SchedulerCommonTest
 
@@ -46,6 +47,10 @@ class HeunDiscreteSchedulerTest(SchedulerCommonTest):
         for schedule in ["linear", "scaled_linear", "exp"]:
             self.check_over_configs(beta_schedule=schedule)
 
+    def test_clip_sample(self):
+        for clip_sample_range in [1.0, 2.0, 3.0]:
+            self.check_over_configs(clip_sample_range=clip_sample_range, clip_sample=True)
+
     def test_prediction_type(self):
         for prediction_type in ["epsilon", "v_prediction", "sample"]:
             self.check_over_configs(prediction_type=prediction_type)
@@ -71,9 +76,13 @@ class HeunDiscreteSchedulerTest(SchedulerCommonTest):
         result_sum = paddle.sum(paddle.abs(sample))
         result_mean = paddle.mean(paddle.abs(sample))
 
-        # CUDA
-        assert abs(result_sum.item() - 0.1233) < 1e-2
-        assert abs(result_mean.item() - 0.0002) < 1e-3
+        if paddle_device in ["cpu", "mps"]:
+            assert abs(result_sum.item() - 0.1233) < 1e-2
+            assert abs(result_mean.item() - 0.0002) < 1e-3
+        else:
+            # CUDA
+            assert abs(result_sum.item() - 0.1233) < 1e-2
+            assert abs(result_mean.item() - 0.0002) < 1e-3
 
     def test_full_loop_with_v_prediction(self):
         scheduler_class = self.scheduler_classes[0]
@@ -96,9 +105,13 @@ class HeunDiscreteSchedulerTest(SchedulerCommonTest):
         result_sum = paddle.sum(paddle.abs(sample))
         result_mean = paddle.mean(paddle.abs(sample))
 
-        # CUDA
-        assert abs(result_sum.item() - 4.693428650170972e-07) < 1e-2
-        assert abs(result_mean.item() - 0.0002) < 1e-3
+        if paddle_device in ["cpu", "mps"]:
+            assert abs(result_sum.item() - 4.6934e-07) < 1e-2
+            assert abs(result_mean.item() - 6.1112e-10) < 1e-3
+        else:
+            # CUDA
+            assert abs(result_sum.item() - 4.693428650170972e-07) < 1e-2
+            assert abs(result_mean.item() - 0.0002) < 1e-3
 
     def test_full_loop_device(self):
         scheduler_class = self.scheduler_classes[0]
@@ -121,9 +134,17 @@ class HeunDiscreteSchedulerTest(SchedulerCommonTest):
         result_sum = paddle.sum(paddle.abs(sample))
         result_mean = paddle.mean(paddle.abs(sample))
 
-        # CUDA
-        assert abs(result_sum.item() - 0.1233) < 1e-2
-        assert abs(result_mean.item() - 0.0002) < 1e-3
+        if str(paddle_device).startswith("cpu"):
+            # The following sum varies between 148 and 156 on mps. Why?
+            assert abs(result_sum.item() - 0.1233) < 1e-2
+            assert abs(result_mean.item() - 0.0002) < 1e-3
+        elif str(paddle_device).startswith("mps"):
+            # Larger tolerance on mps
+            assert abs(result_mean.item() - 0.0002) < 1e-2
+        else:
+            # CUDA
+            assert abs(result_sum.item() - 0.1233) < 1e-2
+            assert abs(result_mean.item() - 0.0002) < 1e-3
 
     def test_full_loop_device_karras_sigmas(self):
         scheduler_class = self.scheduler_classes[0]
@@ -148,3 +169,32 @@ class HeunDiscreteSchedulerTest(SchedulerCommonTest):
 
         assert abs(result_sum.item() - 0.00015) < 1e-2
         assert abs(result_mean.item() - 1.9869554535034695e-07) < 1e-2
+
+    def test_full_loop_with_noise(self):
+        scheduler_class = self.scheduler_classes[0]
+        scheduler_config = self.get_scheduler_config()
+        scheduler = scheduler_class(**scheduler_config)
+
+        scheduler.set_timesteps(self.num_inference_steps)
+
+        model = self.dummy_model()
+        sample = self.dummy_sample_deter * scheduler.init_noise_sigma
+
+        t_start = self.num_inference_steps - 2
+        noise = self.dummy_noise_deter
+        timesteps = scheduler.timesteps[t_start * scheduler.order :]
+        sample = scheduler.add_noise(sample, noise, timesteps[:1])
+
+        for i, t in enumerate(timesteps):
+            sample = scheduler.scale_model_input(sample, t)
+
+            model_output = model(sample, t)
+
+            output = scheduler.step(model_output, t, sample)
+            sample = output.prev_sample
+
+        result_sum = paddle.sum(paddle.abs(sample))
+        result_mean = paddle.mean(paddle.abs(sample))
+
+        assert abs(result_sum.item() - 75074.8906) < 1e-2, f" expected result sum 75074.8906, but get {result_sum}"
+        assert abs(result_mean.item() - 97.7538) < 1e-3, f" expected result mean 97.7538, but get {result_mean}"

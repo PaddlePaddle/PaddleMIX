@@ -1,4 +1,3 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,20 +11,26 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 from copy import deepcopy
-from typing import Callable, List, Optional, Union
+from typing import Callable, Dict, List, Optional, Union
 
 import numpy as np
 import paddle
-import PIL
+import paddle.nn.functional as F
+import PIL.Image
+from packaging import version
 from PIL import Image
 
+from ... import __version__
 from ...models import UNet2DConditionModel, VQModel
 from ...schedulers import DDPMScheduler
-from ...utils import logging, randn_tensor, replace_example_docstring
+from ...utils import deprecate, logging
+from ...utils.paddle_utils import randn_tensor
 from ..pipeline_utils import DiffusionPipeline, ImagePipelineOutput
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
+
 EXAMPLE_DOC_STRING = """
     Examples:
         ```py
@@ -46,7 +51,7 @@ EXAMPLE_DOC_STRING = """
         ... )
 
         >>> init_image = load_image(
-        ...     "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main"
+        ...     "https://hf-mirror.com/datasets/hf-internal-testing/diffusers-images/resolve/main"
         ...     "/kandinsky/cat.png"
         ... )
 
@@ -90,23 +95,24 @@ def prepare_mask(masks):
                 if old_mask[0][i][j] == 1:
                     continue
                 if i != 0:
-                    mask[:, (i - 1), (j)] = 0
+                    mask[:, i - 1, j] = 0
                 if j != 0:
-                    mask[:, (i), (j - 1)] = 0
+                    mask[:, i, j - 1] = 0
                 if i != 0 and j != 0:
-                    mask[:, (i - 1), (j - 1)] = 0
+                    mask[:, i - 1, j - 1] = 0
                 if i != mask.shape[1] - 1:
-                    mask[:, (i + 1), (j)] = 0
+                    mask[:, i + 1, j] = 0
                 if j != mask.shape[2] - 1:
-                    mask[:, (i), (j + 1)] = 0
+                    mask[:, i, j + 1] = 0
                 if i != mask.shape[1] - 1 and j != mask.shape[2] - 1:
-                    mask[:, (i + 1), (j + 1)] = 0
+                    mask[:, i + 1, j + 1] = 0
         prepared_masks.append(mask)
-    return paddle.stack(x=prepared_masks, axis=0)
+    return paddle.stack(prepared_masks, axis=0)
 
 
+# Copied from ppdiffusers.pipelines.kandinsky.pipeline_kandinsky_inpaint.prepare_mask_and_masked_image
 def prepare_mask_and_masked_image(image, mask, height, width):
-    """
+    r"""
     Prepares a pair (mask, image) to be consumed by the Kandinsky inpaint pipeline. This means that those inputs will
     be converted to ``paddle.Tensor`` with shapes ``batch x channels x height x width`` where ``channels`` is ``3`` for
     the ``image`` and ``1`` for the ``mask``.
@@ -137,31 +143,36 @@ def prepare_mask_and_masked_image(image, mask, height, width):
         tuple[paddle.Tensor]: The pair (mask, image) as ``paddle.Tensor`` with 4
             dimensions: ``batch x channels x height x width``.
     """
+
     if image is None:
         raise ValueError("`image` input cannot be undefined.")
+
     if mask is None:
         raise ValueError("`mask_image` input cannot be undefined.")
+
     if isinstance(image, paddle.Tensor):
         if not isinstance(mask, paddle.Tensor):
             raise TypeError(f"`image` is a paddle.Tensor but `mask` (type: {type(mask)} is not")
+
         # Batch single image
         if image.ndim == 3:
             assert image.shape[0] == 3, "Image outside a batch should be of shape (3, H, W)"
-            image = image.unsqueeze(axis=0)
+            image = image.unsqueeze(0)
 
         # Batch and add channel dim for single mask
         if mask.ndim == 2:
-            mask = mask.unsqueeze(axis=0).unsqueeze(axis=0)
+            mask = mask.unsqueeze(0).unsqueeze(0)
 
         # Batch single mask or add channel dim
         if mask.ndim == 3:
             # Single batched mask, no channel dim or single mask not batched but channel dim
             if mask.shape[0] == 1:
-                mask = mask.unsqueeze(axis=0)
+                mask = mask.unsqueeze(0)
 
             # Batched masks no channel dim
             else:
-                mask = mask.unsqueeze(axis=1)
+                mask = mask.unsqueeze(1)
+
         assert image.ndim == 4 and mask.ndim == 4, "Image and Mask must have 4 dimensions"
         assert image.shape[-2:] == mask.shape[-2:], "Image and Mask must have the same spatial dimensions"
         assert image.shape[0] == mask.shape[0], "Image and Mask must have the same batch size"
@@ -179,36 +190,42 @@ def prepare_mask_and_masked_image(image, mask, height, width):
         mask[mask >= 0.5] = 1
 
         # Image as float32
-        image = image.cast(dtype="float32")
+        image = image.cast(dtype=paddle.float32)
     elif isinstance(mask, paddle.Tensor):
         raise TypeError(f"`mask` is a paddle.Tensor but `image` (type: {type(image)} is not")
     else:
         # preprocess image
         if isinstance(image, (PIL.Image.Image, np.ndarray)):
             image = [image]
+
         if isinstance(image, list) and isinstance(image[0], PIL.Image.Image):
             # resize all images w.r.t passed height an width
             image = [i.resize((width, height), resample=Image.BICUBIC, reducing_gap=1) for i in image]
-            image = [np.array(i.convert("RGB"))[(None), :] for i in image]
+            image = [np.array(i.convert("RGB"))[None, :] for i in image]
             image = np.concatenate(image, axis=0)
         elif isinstance(image, list) and isinstance(image[0], np.ndarray):
-            image = np.concatenate([i[(None), :] for i in image], axis=0)
+            image = np.concatenate([i[None, :] for i in image], axis=0)
+
         image = image.transpose(0, 3, 1, 2)
-        image = paddle.to_tensor(data=image).cast(dtype="float32") / 127.5 - 1.0
+        image = paddle.to_tensor(image).cast(dtype=paddle.float32) / 127.5 - 1.0
 
         # preprocess mask
         if isinstance(mask, (PIL.Image.Image, np.ndarray)):
             mask = [mask]
+
         if isinstance(mask, list) and isinstance(mask[0], PIL.Image.Image):
             mask = [i.resize((width, height), resample=PIL.Image.LANCZOS) for i in mask]
-            mask = np.concatenate([np.array(m.convert("L"))[(None), (None), :] for m in mask], axis=0)
+            mask = np.concatenate([np.array(m.convert("L"))[None, None, :] for m in mask], axis=0)
             mask = mask.astype(np.float32) / 255.0
         elif isinstance(mask, list) and isinstance(mask[0], np.ndarray):
-            mask = np.concatenate([m[(None), (None), :] for m in mask], axis=0)
+            mask = np.concatenate([m[None, None, :] for m in mask], axis=0)
+
         mask[mask < 0.5] = 0
         mask[mask >= 0.5] = 1
-        mask = paddle.to_tensor(data=mask)
+        mask = paddle.to_tensor(mask)
+
     mask = 1 - mask
+
     return mask, image
 
 
@@ -228,9 +245,22 @@ class KandinskyV22InpaintPipeline(DiffusionPipeline):
             MoVQ Decoder to generate the image from the latents.
     """
 
-    def __init__(self, unet: UNet2DConditionModel, scheduler: DDPMScheduler, movq: VQModel):
+    model_cpu_offload_seq = "unet->movq"
+    _callback_tensor_inputs = ["latents", "image_embeds", "negative_image_embeds", "masked_image", "mask_image"]
+
+    def __init__(
+        self,
+        unet: UNet2DConditionModel,
+        scheduler: DDPMScheduler,
+        movq: VQModel,
+    ):
         super().__init__()
-        self.register_modules(unet=unet, scheduler=scheduler, movq=movq)
+
+        self.register_modules(
+            unet=unet,
+            scheduler=scheduler,
+            movq=movq,
+        )
         self.movq_scale_factor = 2 ** (len(self.movq.config.block_out_channels) - 1)
         self._warn_has_been_called = False
 
@@ -239,13 +269,26 @@ class KandinskyV22InpaintPipeline(DiffusionPipeline):
         if latents is None:
             latents = randn_tensor(shape, generator=generator, dtype=dtype)
         else:
-            if latents.shape != shape:
-                raise ValueError(f"Unexpected latents shape, got {latents.shape}, expected {shape}")
+            if latents.shape != list(shape):
+                raise ValueError(f"Unexpected latents shape, got {latents.shape}, expected {list(shape)}")
+            latents = latents.cast(dtype)
+
         latents = latents * scheduler.init_noise_sigma
         return latents
 
+    @property
+    def guidance_scale(self):
+        return self._guidance_scale
+
+    @property
+    def do_classifier_free_guidance(self):
+        return self._guidance_scale > 1
+
+    @property
+    def num_timesteps(self):
+        return self._num_timesteps
+
     @paddle.no_grad()
-    @replace_example_docstring(EXAMPLE_DOC_STRING)
     def __call__(
         self,
         image_embeds: Union[paddle.Tensor, List[paddle.Tensor]],
@@ -260,15 +303,16 @@ class KandinskyV22InpaintPipeline(DiffusionPipeline):
         generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
         latents: Optional[paddle.Tensor] = None,
         output_type: Optional[str] = "pil",
-        callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
-        callback_steps: int = 1,
         return_dict: bool = True,
+        callback_on_step_end: Optional[Callable[[int, int, Dict], None]] = None,
+        callback_on_step_end_tensor_inputs: List[str] = ["latents"],
+        **kwargs,
     ):
         """
         Function invoked when calling the pipeline for generation.
 
         Args:
-            image_embeds (`paddle.Tensor `List[paddle.Tensor]`):
+            image_embeds (`paddle.Tensor` or `List[paddle.Tensor]`):
                 The clip image embeddings for text prompt, that will be used to condition the image generation.
             image (`PIL.Image.Image`):
                 `Image`, or tensor representing an image batch which will be inpainted, *i.e.* parts of the image will
@@ -296,70 +340,128 @@ class KandinskyV22InpaintPipeline(DiffusionPipeline):
             num_images_per_prompt (`int`, *optional*, defaults to 1):
                 The number of images to generate per prompt.
             generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
-                One or a list of paddle generator(s).
-                to make generation deterministic.
+                One or a list of [paddle generator(s)] to make generation deterministic.
             latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents, sampled from a Gaussian distribution, to be used as inputs for image
                 generation. Can be used to tweak the same generation with different prompts. If not provided, a latents
                 tensor will ge generated by sampling using the supplied random `generator`.
             output_type (`str`, *optional*, defaults to `"pil"`):
                 The output format of the generate image. Choose between: `"pil"` (`PIL.Image.Image`), `"np"`
-                (`np.array`) or `"pt"` (`paddle.Tensor`).
-            callback (`Callable`, *optional*):
-                A function that calls every `callback_steps` steps during inference. The function is called with the
-                following arguments: `callback(step: int, timestep: int, latents: paddle.Tensor)`.
-            callback_steps (`int`, *optional*, defaults to 1):
-                The frequency at which the `callback` function is called. If not specified, the callback is called at
-                every step.
+                (`np.array`) or `"pd"` (`paddle.Tensor`).
             return_dict (`bool`, *optional*, defaults to `True`):
                 Whether or not to return a [`~pipelines.ImagePipelineOutput`] instead of a plain tuple.
+            callback_on_step_end (`Callable`, *optional*):
+                A function that calls at the end of each denoising steps during the inference. The function is called
+                with the following arguments: `callback_on_step_end(self: DiffusionPipeline, step: int, timestep: int,
+                callback_kwargs: Dict)`. `callback_kwargs` will include a list of all tensors as specified by
+                `callback_on_step_end_tensor_inputs`.
+            callback_on_step_end_tensor_inputs (`List`, *optional*):
+                The list of tensor inputs for the `callback_on_step_end` function. The tensors specified in the list
+                will be passed as `callback_kwargs` argument. You will only be able to include variables listed in the
+                `._callback_tensor_inputs` attribute of your pipeline class.
 
         Examples:
 
         Returns:
             [`~pipelines.ImagePipelineOutput`] or `tuple`
         """
-        do_classifier_free_guidance = guidance_scale > 1.0
+        if not self._warn_has_been_called and version.parse(version.parse(__version__).base_version) < version.parse(
+            "0.23.0.dev0"
+        ):
+            logger.warn(
+                "Please note that the expected format of `mask_image` has recently been changed. "
+                "Before diffusers == 0.19.0, Kandinsky Inpainting pipelines repainted black pixels and preserved black pixels. "
+                "As of diffusers==0.19.0 this behavior has been inverted. Now white pixels are repainted and black pixels are preserved. "
+                "This way, Kandinsky's masking behavior is aligned with Stable Diffusion. "
+                "THIS means that you HAVE to invert the input mask to have the same behavior as before as explained in https://github.com/huggingface/diffusers/pull/4207. "
+                "This warning will be surpressed after the first inference call and will be removed in diffusers>0.23.0"
+            )
+            self._warn_has_been_called = True
+
+        callback = kwargs.pop("callback", None)
+        callback_steps = kwargs.pop("callback_steps", None)
+
+        if callback is not None:
+            deprecate(
+                "callback",
+                "1.0.0",
+                "Passing `callback` as an input argument to `__call__` is deprecated, consider use `callback_on_step_end`",
+            )
+        if callback_steps is not None:
+            deprecate(
+                "callback_steps",
+                "1.0.0",
+                "Passing `callback_steps` as an input argument to `__call__` is deprecated, consider use `callback_on_step_end`",
+            )
+
+        if callback_on_step_end_tensor_inputs is not None and not all(
+            k in self._callback_tensor_inputs for k in callback_on_step_end_tensor_inputs
+        ):
+            raise ValueError(
+                f"`callback_on_step_end_tensor_inputs` has to be in {self._callback_tensor_inputs}, but found {[k for k in callback_on_step_end_tensor_inputs if k not in self._callback_tensor_inputs]}"
+            )
+
+        self._guidance_scale = guidance_scale
+
         if isinstance(image_embeds, list):
-            image_embeds = paddle.concat(x=image_embeds, axis=0)
+            image_embeds = paddle.concat(image_embeds, axis=0)
         batch_size = image_embeds.shape[0] * num_images_per_prompt
         if isinstance(negative_image_embeds, list):
-            negative_image_embeds = paddle.concat(x=negative_image_embeds, axis=0)
-        if do_classifier_free_guidance:
-            image_embeds = image_embeds.repeat_interleave(repeats=num_images_per_prompt, axis=0)
-            negative_image_embeds = negative_image_embeds.repeat_interleave(repeats=num_images_per_prompt, axis=0)
-            negative_image_embeds = negative_image_embeds.cast(self.unet.dtype)
-            image_embeds = image_embeds.cast(self.unet.dtype)
-            image_embeds = paddle.concat(x=[negative_image_embeds, image_embeds], axis=0).cast(dtype=self.unet.dtype)
+            negative_image_embeds = paddle.concat(negative_image_embeds, axis=0)
+
+        if self.do_classifier_free_guidance:
+            image_embeds = image_embeds.repeat_interleave(num_images_per_prompt, axis=0)
+            negative_image_embeds = negative_image_embeds.repeat_interleave(num_images_per_prompt, axis=0)
+
+            image_embeds = paddle.concat([negative_image_embeds, image_embeds], axis=0).cast(dtype=self.unet.dtype)
+
         self.scheduler.set_timesteps(num_inference_steps)
-        timesteps_tensor = self.scheduler.timesteps
-        mask_image, image = prepare_mask_and_masked_image(image, mask_image, height, width)
+        timesteps = self.scheduler.timesteps
 
         # preprocess image and mask
+        mask_image, image = prepare_mask_and_masked_image(image, mask_image, height, width)
+
         image = image.cast(dtype=image_embeds.dtype)
         image = self.movq.encode(image)["latents"]
+
         mask_image = mask_image.cast(dtype=image_embeds.dtype)
+
         image_shape = tuple(image.shape[-2:])
-        mask_image = paddle.nn.functional.interpolate(x=mask_image, size=image_shape, mode="nearest")
+        mask_image = F.interpolate(
+            mask_image,
+            image_shape,
+            mode="nearest",
+        )
         mask_image = prepare_mask(mask_image)
         masked_image = image * mask_image
-        mask_image = mask_image.repeat_interleave(repeats=num_images_per_prompt, axis=0)
-        masked_image = masked_image.repeat_interleave(repeats=num_images_per_prompt, axis=0)
-        if do_classifier_free_guidance:
-            mask_image = mask_image.tile(repeat_times=[2, 1, 1, 1])
-            masked_image = masked_image.tile(repeat_times=[2, 1, 1, 1])
+
+        mask_image = mask_image.repeat_interleave(num_images_per_prompt, axis=0)
+        masked_image = masked_image.repeat_interleave(num_images_per_prompt, axis=0)
+        if self.do_classifier_free_guidance:
+            mask_image = mask_image.tile([2, 1, 1, 1])
+            masked_image = masked_image.tile([2, 1, 1, 1])
+
         num_channels_latents = self.movq.config.latent_channels
+
         height, width = downscale_height_and_width(height, width, self.movq_scale_factor)
 
         # create initial latent
         latents = self.prepare_latents(
-            (batch_size, num_channels_latents, height, width), image_embeds.dtype, generator, latents, self.scheduler
+            [batch_size, num_channels_latents, height, width],
+            image_embeds.dtype,
+            generator,
+            latents,
+            self.scheduler,
         )
-        noise = paddle.clone(x=latents)
-        for i, t in enumerate(self.progress_bar(timesteps_tensor)):
+        noise = paddle.clone(latents)
+
+        self._num_timesteps = len(timesteps)
+        for i, t in enumerate(self.progress_bar(timesteps)):
+            latents = latents.cast(dtype=self.unet.dtype)
             # expand the latents if we are doing classifier free guidance
-            latent_model_input = paddle.concat(x=[latents] * 2) if do_classifier_free_guidance else latents
-            latent_model_input = paddle.concat(x=[latent_model_input, masked_image, mask_image], axis=1)
+            latent_model_input = paddle.concat([latents] * 2) if self.do_classifier_free_guidance else latents
+            latent_model_input = paddle.concat([latent_model_input, masked_image, mask_image], axis=1)
+
             added_cond_kwargs = {"image_embeds": image_embeds}
             noise_pred = self.unet(
                 sample=latent_model_input,
@@ -368,43 +470,80 @@ class KandinskyV22InpaintPipeline(DiffusionPipeline):
                 added_cond_kwargs=added_cond_kwargs,
                 return_dict=False,
             )[0]
-            if do_classifier_free_guidance:
-                noise_pred, variance_pred = noise_pred.split(noise_pred.shape[1] // latents.shape[1], axis=1)
-                noise_pred_uncond, noise_pred_text = noise_pred.chunk(chunks=2)
-                _, variance_pred_text = variance_pred.chunk(chunks=2)
-                noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
-                noise_pred = paddle.concat(x=[noise_pred, variance_pred_text], axis=1)
+
+            if self.do_classifier_free_guidance:
+                noise_pred, variance_pred = noise_pred.split(
+                    [latents.shape[1], noise_pred.shape[1] - latents.shape[1]], axis=1
+                )
+                noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
+                _, variance_pred_text = variance_pred.chunk(2)
+                noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_text - noise_pred_uncond)
+                noise_pred = paddle.concat([noise_pred, variance_pred_text], axis=1)
+
             if not (
                 hasattr(self.scheduler.config, "variance_type")
                 and self.scheduler.config.variance_type in ["learned", "learned_range"]
             ):
-                noise_pred, _ = noise_pred.split(noise_pred.shape[1] // latents.shape[1], axis=1)
+                noise_pred, _ = noise_pred.split([latents.shape[1], noise_pred.shape[1] - latents.shape[1]], axis=1)
 
             # compute the previous noisy sample x_t -> x_t-1
-            latents = self.scheduler.step(noise_pred, t, latents, generator=generator)[0]
+            latents = self.scheduler.step(
+                noise_pred,
+                t,
+                latents,
+                generator=generator,
+            )[0]
             init_latents_proper = image[:1]
             init_mask = mask_image[:1]
-            if i < len(timesteps_tensor) - 1:
-                noise_timestep = timesteps_tensor[i + 1]
+
+            if i < len(timesteps) - 1:
+                noise_timestep = timesteps[i + 1]
                 init_latents_proper = self.scheduler.add_noise(
-                    init_latents_proper, noise, paddle.to_tensor(data=[noise_timestep])
+                    init_latents_proper, noise, paddle.to_tensor([noise_timestep])
                 )
+
             latents = init_mask * init_latents_proper + (1 - init_mask) * latents
+
+            if callback_on_step_end is not None:
+                callback_kwargs = {}
+                for k in callback_on_step_end_tensor_inputs:
+                    callback_kwargs[k] = locals()[k]
+                callback_outputs = callback_on_step_end(self, i, t, callback_kwargs)
+
+                latents = callback_outputs.pop("latents", latents)
+                image_embeds = callback_outputs.pop("image_embeds", image_embeds)
+                negative_image_embeds = callback_outputs.pop("negative_image_embeds", negative_image_embeds)
+                masked_image = callback_outputs.pop("masked_image", masked_image)
+                mask_image = callback_outputs.pop("mask_image", mask_image)
+
             if callback is not None and i % callback_steps == 0:
-                callback(i, t, latents)
+                step_idx = i // getattr(self.scheduler, "order", 1)
+                callback(step_idx, t, latents)
 
         # post-processing
         latents = mask_image[:1] * image[:1] + (1 - mask_image[:1]) * latents
-        image = self.movq.decode(latents, force_not_quantize=True)["sample"]
 
-        if output_type not in ["pd", "np", "pil"]:
-            raise ValueError(f"Only the output types `pt`, `pil` and `np` are supported not output_type={output_type}")
-        if output_type in ["np", "pil"]:
-            image = image * 0.5 + 0.5
-            image = image.clip(min=0, max=1)
-            image = image.cpu().transpose(perm=[0, 2, 3, 1]).astype(dtype="float32").numpy()
-        if output_type == "pil":
-            image = self.numpy_to_pil(image)
+        if output_type not in ["pd", "np", "pil", "latent"]:
+            raise ValueError(
+                f"Only the output types `pd`, `pil`, `np` and `latent` are supported not output_type={output_type}"
+            )
+
+        if not output_type == "latent":
+            image = self.movq.decode(latents, force_not_quantize=True)["sample"]
+
+            if output_type in ["np", "pil"]:
+                image = image * 0.5 + 0.5
+                image = image.clip(0, 1)
+                image = image.transpose([0, 2, 3, 1]).cast("float32").cpu().numpy()
+
+            if output_type == "pil":
+                image = self.numpy_to_pil(image)
+        else:
+            image = latents
+
+        # Offload all models
+
         if not return_dict:
             return (image,)
+
         return ImagePipelineOutput(images=image)

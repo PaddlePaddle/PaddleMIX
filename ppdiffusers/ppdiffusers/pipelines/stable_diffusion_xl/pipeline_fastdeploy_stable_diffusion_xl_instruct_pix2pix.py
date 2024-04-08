@@ -19,12 +19,14 @@ import paddle
 import paddlenlp
 import PIL.Image
 
+from ...image_processor import PipelineImageInput
+from ...loaders import IPAdapterMixin
 from ...schedulers import KarrasDiffusionSchedulers
 from ...utils import deprecate, logging
 from ..fastdeploy_utils import FastDeployRuntimeModel
+from ..fastdeployxl_utils import FastDeployDiffusionXLPipelineMixin
 from ..pipeline_utils import DiffusionPipeline
 from . import StableDiffusionXLPipelineOutput
-from .fastdeployxl_utils import FastDeployDiffusionXLPipelineMixin
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -43,7 +45,9 @@ def rescale_noise_cfg(noise_cfg, noise_pred_text, guidance_rescale=0.0):
     return noise_cfg
 
 
-class FastDeployStableDiffusionXLInstructPix2PixPipeline(DiffusionPipeline, FastDeployDiffusionXLPipelineMixin):
+class FastDeployStableDiffusionXLInstructPix2PixPipeline(
+    DiffusionPipeline, FastDeployDiffusionXLPipelineMixin, IPAdapterMixin
+):
     """
     Pipeline for pixel-level image editing by following text instructions. Based on Stable Diffusion XL.
 
@@ -82,6 +86,8 @@ class FastDeployStableDiffusionXLInstructPix2PixPipeline(DiffusionPipeline, Fast
             [`DDIMScheduler`], [`LMSDiscreteScheduler`], or [`PNDMScheduler`].
     """
 
+    _optional_components = ["image_encoder", "safety_checker", "feature_extractor"]
+
     def __init__(
         self,
         vae_encoder: FastDeployRuntimeModel,
@@ -91,6 +97,7 @@ class FastDeployStableDiffusionXLInstructPix2PixPipeline(DiffusionPipeline, Fast
         tokenizer: paddlenlp.transformers.CLIPTokenizer,
         tokenizer_2: paddlenlp.transformers.CLIPTokenizer,
         unet: FastDeployRuntimeModel,
+        image_encoder: FastDeployRuntimeModel,
         scheduler: KarrasDiffusionSchedulers,
         force_zeros_for_empty_prompt: bool = True,
         requires_aesthetics_score: bool = False,
@@ -105,6 +112,7 @@ class FastDeployStableDiffusionXLInstructPix2PixPipeline(DiffusionPipeline, Fast
             tokenizer=tokenizer,
             tokenizer_2=tokenizer_2,
             unet=unet,
+            image_encoder=image_encoder,
             scheduler=scheduler,
         )
         self.register_to_config(force_zeros_for_empty_prompt=force_zeros_for_empty_prompt)
@@ -210,6 +218,7 @@ class FastDeployStableDiffusionXLInstructPix2PixPipeline(DiffusionPipeline, Fast
         negative_prompt_embeds: Optional[paddle.Tensor] = None,
         pooled_prompt_embeds: Optional[paddle.Tensor] = None,
         negative_pooled_prompt_embeds: Optional[paddle.Tensor] = None,
+        ip_adapter_image: Optional[PipelineImageInput] = None,
         output_type: Optional[str] = "pil",
         return_dict: bool = True,
         callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
@@ -276,6 +285,7 @@ class FastDeployStableDiffusionXLInstructPix2PixPipeline(DiffusionPipeline, Fast
                 Pre-generated negative pooled text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt
                 weighting. If not provided, pooled negative_prompt_embeds will be generated from `negative_prompt`
                 input argument.
+            ip_adapter_image: (`PipelineImageInput`, *optional*): Optional image input to work with IP Adapters.
             output_type (`str`, *optional*, defaults to `"pil"`):
                 The output format of the generate image. Choose between
                 [PIL](https://pillow.readthedocs.io/en/stable/): `PIL.Image.Image` or `np.array`.
@@ -362,6 +372,13 @@ class FastDeployStableDiffusionXLInstructPix2PixPipeline(DiffusionPipeline, Fast
             infer_op=infer_op_dict.get("text_encoder", None),
         )
 
+        if ip_adapter_image is not None:
+            image_embeds, negative_image_embeds = self.encode_image(
+                ip_adapter_image, num_images_per_prompt, infer_op=infer_op_dict.get("image_encoder", None)
+            )
+            if do_classifier_free_guidance:
+                image_embeds = paddle.concat([negative_image_embeds, image_embeds])
+
         # 4. Preprocess image
         image = self.image_processor.preprocess(image, height, width)
         height, width = image.shape[-2:]
@@ -431,8 +448,7 @@ class FastDeployStableDiffusionXLInstructPix2PixPipeline(DiffusionPipeline, Fast
                     x=[scaled_latent_model_input, image_latents.cast(scaled_latent_model_input.dtype)], axis=1
                 )
 
-                # predict the noise residual
-                noise_pred = self.unet(
+                unet_inputs = dict(
                     sample=latent_model_input,
                     timestep=t,
                     encoder_hidden_states=prompt_embeds,
@@ -440,7 +456,14 @@ class FastDeployStableDiffusionXLInstructPix2PixPipeline(DiffusionPipeline, Fast
                     time_ids=add_time_ids,
                     infer_op=infer_op_dict.get("unet", None),
                     output_shape=latent_model_input.shape,
-                )[0]
+                )
+                # Add image embeds for IP-Adapter
+                # added_cond_kwargs = {"image_embeds": image_embeds} if ip_adapter_image is not None else None
+                if ip_adapter_image:
+                    unet_inputs["image_embeds"] = image_embeds
+
+                # predict the noise residual
+                noise_pred = self.unet(**unet_inputs)[0]
 
                 # Hack:
                 # For karras style schedulers the model does classifer free guidance using the

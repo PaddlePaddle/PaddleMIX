@@ -34,11 +34,14 @@ class LitEma(nn.Layer):
             raise ValueError("Decay must be between 0 and 1")
 
         self.m_name2s_name = {}
-        self.register_buffer("decay", paddle.to_tensor(decay, dtype=paddle.float32))
-        self.register_buffer(
-            "num_updates",
-            paddle.to_tensor(0, dtype=paddle.int64) if use_num_upates else paddle.to_tensor(-1, dtype=paddle.int64),
-        )
+        #  0-d tensor broadcasting is not supported during the Sharding initialization phase
+        # self.register_buffer("decay", paddle.to_tensor(decay, dtype=paddle.float32))
+        # self.register_buffer(
+        #     "num_updates",
+        #     paddle.to_tensor(0, dtype=paddle.int64) if use_num_upates else paddle.to_tensor(-1, dtype=paddle.int64),
+        # )
+        self.decay = decay
+        self.num_updates = 0 if use_num_upates else -1
 
         for name, p in model.named_parameters():
             if not p.stop_gradient:
@@ -75,7 +78,8 @@ class LitEma(nn.Layer):
         shadow_params = dict(self.named_buffers())
         for key in m_param:
             if not m_param[key].stop_gradient:
-                m_param[key].copy_(shadow_params[self.m_name2s_name[key]], False)
+                # allow dtype cast
+                m_param[key].copy_(shadow_params[self.m_name2s_name[key]].cast(m_param[key].dtype), False)
             else:
                 assert key not in self.m_name2s_name
 
@@ -100,5 +104,6 @@ class LitEma(nn.Layer):
             updated with the stored parameters.
         """
         for c_param, param in zip(self.collected_params, parameters):
-            param.copy_(c_param, False)
+            # allow dtype cast
+            param.copy_(c_param.cast(param.dtype), False)
         self.collected_params = None

@@ -18,11 +18,12 @@
 
 # import numpy as np
 # import paddle
-# from paddlenlp.transformers import (
+# from ppdiffusers.transformers import (
 #     CLIPTextConfig,
 #     CLIPTextModel,
 #     CLIPTextModelWithProjection,
 #     CLIPTokenizer,
+#     CLIPVisionModelWithProjection
 # )
 # from PIL import Image
 
@@ -70,7 +71,7 @@
 #             addition_embed_type="text_time",
 #             addition_time_embed_dim=8,
 #             transformer_layers_per_block=(1, 2),
-#             projection_class_embeddings_input_dim=72,
+#             projection_class_embeddings_input_dim=80,
 #             cross_attention_dim=64 if not skip_first_text_encoder else 32,
 #         )
 #         scheduler = EulerDiscreteScheduler(

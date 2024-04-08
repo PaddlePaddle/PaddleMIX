@@ -1,4 +1,3 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,11 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
 from typing import List, Optional, Tuple, Union
 
 import paddle
 
-from ...utils import randn_tensor
+from ...utils.paddle_utils import randn_tensor
 from ..pipeline_utils import DiffusionPipeline, ImagePipelineOutput
 
 
@@ -35,6 +35,8 @@ class DDPMPipeline(DiffusionPipeline):
             A scheduler to be used in combination with `unet` to denoise the encoded image. Can be one of
             [`DDPMScheduler`], or [`DDIMScheduler`].
     """
+
+    model_cpu_offload_seq = "unet"
 
     def __init__(self, unet, scheduler):
         super().__init__()
@@ -56,7 +58,7 @@ class DDPMPipeline(DiffusionPipeline):
             batch_size (`int`, *optional*, defaults to 1):
                 The number of images to generate.
             generator (`paddle.Generator`, *optional*):
-                One or a list of paddle generator(s) to make generation deterministic.
+                A [`paddle.Generator`] to make generation deterministic.
             num_inference_steps (`int`, *optional*, defaults to 1000):
                 The number of denoising steps. More denoising steps usually lead to a higher quality image at the
                 expense of slower inference.
@@ -95,19 +97,25 @@ class DDPMPipeline(DiffusionPipeline):
             )
         else:
             image_shape = (batch_size, self.unet.config.in_channels, *self.unet.config.sample_size)
-        image = randn_tensor(image_shape, generator=generator)
+
+        image = randn_tensor(image_shape, generator=generator, dtype=self.unet.dtype)
+
         # set step values
         self.scheduler.set_timesteps(num_inference_steps)
+
         for t in self.progress_bar(self.scheduler.timesteps):
             # 1. predict noise model_output
             model_output = self.unet(image, t).sample
 
             # 2. compute previous image: x_t -> x_t-1
             image = self.scheduler.step(model_output, t, image, generator=generator).prev_sample
-        image = (image / 2 + 0.5).clip(min=0, max=1)
-        image = image.cpu().transpose(perm=[0, 2, 3, 1]).numpy()
+
+        image = (image / 2 + 0.5).clip(0, 1)
+        image = image.transpose([0, 2, 3, 1]).cpu().numpy()
         if output_type == "pil":
             image = self.numpy_to_pil(image)
+
         if not return_dict:
             return (image,)
+
         return ImagePipelineOutput(images=image)

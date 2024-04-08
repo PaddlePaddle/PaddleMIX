@@ -1,4 +1,3 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -57,9 +56,9 @@ class UNet1DModel(ModelMixin, ConfigMixin):
         freq_shift (`float`, *optional*, defaults to 0.0): Frequency shift for Fourier time embedding.
         flip_sin_to_cos (`bool`, *optional*, defaults to `False`):
             Whether to flip sin to cos for Fourier time embedding.
-        down_block_types (`Tuple[str]`, *optional*, defaults to `("DownBlock1D", "DownBlock1DNoSkip", "AttnDownBlock1D")`):
+        down_block_types (`Tuple[str]`, *optional*, defaults to `("DownBlock1DNoSkip", "DownBlock1D", "AttnDownBlock1D")`):
             Tuple of downsample block types.
-        up_block_types (`Tuple[str]`, *optional*, defaults to `("UpBlock1D", "UpBlock1DNoSkip", "AttnUpBlock1D")`):
+        up_block_types (`Tuple[str]`, *optional*, defaults to `("AttnUpBlock1D", "UpBlock1D", "UpBlock1DNoSkip")`):
             Tuple of upsample block types.
         block_out_channels (`Tuple[int]`, *optional*, defaults to `(32, 32, 64)`):
             Tuple of block output channels.
@@ -214,7 +213,7 @@ class UNet1DModel(ModelMixin, ConfigMixin):
                 If `return_dict` is True, an [`~models.unet_1d.UNet1DOutput`] is returned, otherwise a `tuple` is
                 returned where the first element is the sample tensor.
         """
-
+        # support pure fp16
         sample = sample.cast(self.dtype)
         # 1. time
         timesteps = timestep

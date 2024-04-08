@@ -1,5 +1,5 @@
-paddlenlp>=2.6.0rc0
-ppdiffusers>=0.16.1
+paddlenlp>=2.7.2
+ppdiffusers>=0.24.0
 scipy
 safetensors
 pyyaml

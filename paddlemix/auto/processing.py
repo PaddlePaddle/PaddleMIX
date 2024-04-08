@@ -72,8 +72,8 @@ def get_processor_mapping():
 
 class AutoProcessorMIX:
     """
-    Autoprocessor is a generic processor class that will be instantiated as one of the
-    base processor classes when created with the Autoprocessor.from_pretrained() classmethod.
+    AutoProcessor is a generic processor class that will be instantiated as one of the
+    base processor classes when created with the AutoProcessor.from_pretrained() classmethod.
     """
 
     MAPPING_NAMES = get_processor_mapping()
@@ -118,7 +118,7 @@ class AutoProcessorMIX:
             text_model_name_or_path = pretrained_model_name_or_path
 
         for names, processor_class in cls._processor_mapping.items():
-            if names.lower() in pretrained_model_name_or_path.lower().replace("-", "_"):
+            if names.lower() in pretrained_model_name_or_path.lower().replace("-", "_").replace("vicuna", "llava"):
                 attributes = processor_class["processor"].attributes
                 attributes_dict = {}
 
@@ -130,9 +130,13 @@ class AutoProcessorMIX:
                     else:
                         class_name = attr + "_class"
                         class_name = getattr(processor_class["processor"], class_name)
-                        attributes_dict[attr] = import_module(f"paddlenlp.transformers.{class_name}")
+                        attributes_dict[attr] = import_module(f"paddlenlp.transformers.{class_name}").from_pretrained(
+                            name_or_path, **kwargs
+                        )
 
                 if "tokenizer" in attributes:
+                    if "max_length" in kwargs:
+                        kwargs["model_max_length"] = kwargs.get("max_length", None)
                     tokenizer = AutoTokenizerMIX.from_pretrained(text_model_name_or_path, **kwargs)
                     attributes_dict["tokenizer"] = tokenizer
 

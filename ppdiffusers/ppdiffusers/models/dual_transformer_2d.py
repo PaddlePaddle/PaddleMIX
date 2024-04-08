@@ -1,4 +1,3 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -100,23 +99,29 @@ class DualTransformer2DModel(nn.Layer):
         hidden_states,
         encoder_hidden_states,
         timestep=None,
+        added_cond_kwargs=None,
+        class_labels=None,
+        cross_attention_kwargs=None,
         attention_mask=None,
         encoder_attention_mask=None,
-        cross_attention_kwargs=None,
         return_dict: bool = True,
     ):
         """
         Args:
             hidden_states ( When discrete, `paddle.Tensor` of shape `(batch size, num latent pixels)`.
                 When continuous, `paddle.Tensor` of shape `(batch size, channel, height, width)`): Input
-                hidden_states
+                hidden_states.
             encoder_hidden_states ( `paddle.Tensor` of shape `(batch size, encoder_hidden_states dim)`, *optional*):
                 Conditional embeddings for cross attention layer. If not given, cross-attention defaults to
                 self-attention.
             timestep ( `paddle.Tensor`, *optional*):
                 Optional timestep to be applied as an embedding in AdaLayerNorm's. Used to indicate denoising step.
             attention_mask (`paddle.Tensor`, *optional*):
-                Optional attention mask to be applied in Attention
+                Optional attention mask to be applied in Attention.
+            cross_attention_kwargs (`dict`, *optional*):
+                A kwargs dictionary that if specified is passed along to the `AttentionProcessor` as defined under
+                `self.processor` in
+                [diffusers.models.attention_processor](https://github.com/huggingface/diffusers/blob/main/src/diffusers/models/attention_processor.py).
             return_dict (`bool`, *optional*, defaults to `True`):
                 Whether or not to return a [`models.unet_2d_condition.UNet2DConditionOutput`] instead of a plain tuple.
 

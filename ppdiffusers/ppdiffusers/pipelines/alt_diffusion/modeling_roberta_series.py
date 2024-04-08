@@ -1,5 +1,4 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
-# Copyright 2023 The HuggingFace Team. All rights reserved.
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,26 +17,13 @@ from typing import Optional, Tuple
 
 import paddle
 from paddle import nn
-from paddlenlp.transformers import RobertaConfig as XLMRobertaConfig
-from paddlenlp.transformers import RobertaModel as XLMRobertaModel
-from paddlenlp.transformers import RobertaPretrainedModel
 from paddlenlp.transformers.model_outputs import ModelOutput
 
-
-def create_position_ids_from_input_ids(input_ids, padding_idx, past_key_values_length=0):
-    """
-    Replace non-padding symbols with their position numbers. Position numbers begin at padding_idx+1. Padding symbols
-    are ignored. This is modified from fairseq's `utils.make_positions`.
-
-    Args:
-        x: paddle.Tensor x:
-    Returns: paddle.Tensor
-
-    """
-    # The series of casts and type-conversions here are carefully balanced to both work with ONNX export and XLA.
-    mask = (input_ids != padding_idx).cast("int64")
-    incremental_indices = (paddle.cumsum(mask, axis=1) + past_key_values_length) * mask
-    return incremental_indices + padding_idx
+from ppdiffusers.transformers import (
+    XLMRobertaConfig,
+    XLMRobertaModel,
+    XLMRobertaPretrainedModel,
+)
 
 
 @dataclass
@@ -70,8 +56,6 @@ class TransformationModelOutput(ModelOutput):
 
 
 class RobertaSeriesConfig(XLMRobertaConfig):
-    model_type = "roberta"
-
     def __init__(
         self,
         pad_token_id=1,
@@ -91,23 +75,21 @@ class RobertaSeriesConfig(XLMRobertaConfig):
         self.use_attention_mask = use_attention_mask
 
 
-class RobertaSeriesModelWithTransformation(RobertaPretrainedModel):
+class RobertaSeriesModelWithTransformation(XLMRobertaPretrainedModel):
     _keys_to_ignore_on_load_unexpected = [r"pooler", r"logit_scale"]
     _keys_to_ignore_on_load_missing = [r"position_ids", r"predictions.decoder.bias"]
     base_model_prefix = "roberta"
     config_class = RobertaSeriesConfig
 
-    def __init__(self, config: RobertaSeriesConfig):
+    def __init__(self, config):
         super().__init__(config)
         self.roberta = XLMRobertaModel(config)
-        # must reset _padding_idx
-        self.roberta.embeddings.word_embeddings._padding_idx = None
         self.transformation = nn.Linear(config.hidden_size, config.project_dim)
         self.has_pre_transformation = getattr(config, "has_pre_transformation", False)
         if self.has_pre_transformation:
             self.transformation_pre = nn.Linear(config.hidden_size, config.project_dim)
-            self.pre_LN = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-        self.init_weights()
+            self.pre_LN = nn.LayerNorm(config.hidden_size, epsilon=config.layer_norm_eps)
+        self.post_init()
 
     def forward(
         self,
@@ -115,19 +97,24 @@ class RobertaSeriesModelWithTransformation(RobertaPretrainedModel):
         attention_mask: Optional[paddle.Tensor] = None,
         token_type_ids: Optional[paddle.Tensor] = None,
         position_ids: Optional[paddle.Tensor] = None,
+        inputs_embeds: Optional[paddle.Tensor] = None,
+        encoder_hidden_states: Optional[paddle.Tensor] = None,
+        encoder_attention_mask: Optional[paddle.Tensor] = None,
         output_attentions: Optional[bool] = None,
         return_dict: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
     ):
+
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
-        if position_ids is None:
-            position_ids = create_position_ids_from_input_ids(input_ids, self.config.pad_token_id)
-        outputs = self.base_model(
+        outputs = self.roberta(
             input_ids=input_ids,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
             position_ids=position_ids,
+            inputs_embeds=inputs_embeds,
+            encoder_hidden_states=encoder_hidden_states,
+            encoder_attention_mask=encoder_attention_mask,
             output_attentions=output_attentions,
             output_hidden_states=True if self.has_pre_transformation else output_hidden_states,
             return_dict=return_dict,

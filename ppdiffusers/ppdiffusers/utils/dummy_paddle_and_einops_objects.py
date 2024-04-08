@@ -32,7 +32,7 @@ class LVDMUncondPipeline(metaclass=DummyObject):
         requires_backends(cls, ["paddle", "einops"])
 
 
-class UViTModel(metaclass=DummyObject):
+class UViTT2IModel(metaclass=DummyObject):
     _backends = ["paddle", "einops"]
 
     def __init__(self, *args, **kwargs):

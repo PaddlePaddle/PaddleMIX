@@ -12,10 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import librosa
+import numpy as np
 import paddle
 import paddle.nn as nn
-import numpy as np
-import librosa
+
 
 def interpolate(x, ratio):
     """Interpolate data in time domain. This is used to compensate the
@@ -31,6 +32,7 @@ def interpolate(x, ratio):
     upsampled = x[:, :, None, :].repeat_interleave(ratio, 2)
     upsampled = upsampled.reshape([batch_size, time_steps * ratio, classes_num])
     return upsampled
+
 
 def do_mixup(x, mixup_lambda):
     """
@@ -52,8 +54,7 @@ def do_mixup(x, mixup_lambda):
 
 class DFTBase(nn.Layer):
     def __init__(self):
-        r"""Base class for DFT and IDFT matrix.
-        """
+        r"""Base class for DFT and IDFT matrix."""
         super(DFTBase, self).__init__()
 
     def dft_matrix(self, n):
@@ -70,9 +71,17 @@ class DFTBase(nn.Layer):
 
 
 class STFT(DFTBase):
-    def __init__(self, n_fft=2048, hop_length=None, win_length=None,
-        window='hann', center=True, pad_mode='reflect', freeze_parameters=True):
-        r"""Paddle implementation of STFT with Conv1d. The function has the 
+    def __init__(
+        self,
+        n_fft=2048,
+        hop_length=None,
+        win_length=None,
+        window="hann",
+        center=True,
+        pad_mode="reflect",
+        freeze_parameters=True,
+    ):
+        r"""Paddle implementation of STFT with Conv1d. The function has the
         same output as librosa.stft.
 
         Args:
@@ -87,7 +96,7 @@ class STFT(DFTBase):
         """
         super(STFT, self).__init__()
 
-        assert pad_mode in ['constant', 'reflect']
+        assert pad_mode in ["constant", "reflect"]
 
         self.n_fft = n_fft
         self.hop_length = hop_length
@@ -116,21 +125,37 @@ class STFT(DFTBase):
 
         weight_attr = paddle.ParamAttr(
             initializer=nn.initializer.Assign(
-                paddle.to_tensor(
-                np.real(self.W[:, 0 : out_channels] * fft_window[:, None]).T)[:, None, :]
-            ))
-        self.conv_real = nn.Conv1D(in_channels=1, out_channels=out_channels,
-            kernel_size=n_fft, stride=self.hop_length, padding=0, dilation=1,
-            groups=1, weight_attr=weight_attr, bias_attr=False)
+                paddle.to_tensor(np.real(self.W[:, 0:out_channels] * fft_window[:, None]).T)[:, None, :]
+            )
+        )
+        self.conv_real = nn.Conv1D(
+            in_channels=1,
+            out_channels=out_channels,
+            kernel_size=n_fft,
+            stride=self.hop_length,
+            padding=0,
+            dilation=1,
+            groups=1,
+            weight_attr=weight_attr,
+            bias_attr=False,
+        )
 
         weight_attr = paddle.ParamAttr(
             initializer=nn.initializer.Assign(
-                paddle.to_tensor(
-                np.imag(self.W[:, 0 : out_channels] * fft_window[:, None]).T)[:, None, :]
-            ))
-        self.conv_imag = nn.Conv1D(in_channels=1, out_channels=out_channels,
-            kernel_size=n_fft, stride=self.hop_length, padding=0, dilation=1,
-            groups=1, weight_attr=weight_attr, bias_attr=False)
+                paddle.to_tensor(np.imag(self.W[:, 0:out_channels] * fft_window[:, None]).T)[:, None, :]
+            )
+        )
+        self.conv_imag = nn.Conv1D(
+            in_channels=1,
+            out_channels=out_channels,
+            kernel_size=n_fft,
+            stride=self.hop_length,
+            padding=0,
+            dilation=1,
+            groups=1,
+            weight_attr=weight_attr,
+            bias_attr=False,
+        )
 
         if freeze_parameters:
             for param in self.parameters():
@@ -139,7 +164,7 @@ class STFT(DFTBase):
     def forward(self, input):
         r"""Calculate STFT of batch of signals.
 
-        Args: 
+        Args:
             input: (batch_size, data_length), input signals.
 
         Returns:
@@ -147,7 +172,7 @@ class STFT(DFTBase):
             imag: (batch_size, 1, time_steps, n_fft // 2 + 1)
         """
 
-        x = input[:, None, :]   # (batch_size, channels_num, data_length)
+        x = input[:, None, :]  # (batch_size, channels_num, data_length)
 
         if self.center:
             x = nn.functional.pad(x, pad=(self.n_fft // 2, self.n_fft // 2), mode=self.pad_mode, data_format="NCL")
@@ -161,26 +186,40 @@ class STFT(DFTBase):
         # (batch_size, 1, time_steps, n_fft // 2 + 1)
 
         return real, imag
-    
+
 
 class Spectrogram(nn.Layer):
-    def __init__(self, n_fft=2048, hop_length=None, win_length=None,
-        window='hann', center=True, pad_mode='reflect', power=2.0,
-        freeze_parameters=True):
-        r"""Calculate spectrogram using paddle. The STFT is implemented with 
+    def __init__(
+        self,
+        n_fft=2048,
+        hop_length=None,
+        win_length=None,
+        window="hann",
+        center=True,
+        pad_mode="reflect",
+        power=2.0,
+        freeze_parameters=True,
+    ):
+        r"""Calculate spectrogram using paddle. The STFT is implemented with
         Conv1d. The function has the same output of librosa.stft
         """
         super(Spectrogram, self).__init__()
 
         self.power = power
 
-        self.stft = STFT(n_fft=n_fft, hop_length=hop_length,
-            win_length=win_length, window=window, center=center,
-            pad_mode=pad_mode, freeze_parameters=True)
+        self.stft = STFT(
+            n_fft=n_fft,
+            hop_length=hop_length,
+            win_length=win_length,
+            window=window,
+            center=center,
+            pad_mode=pad_mode,
+            freeze_parameters=True,
+        )
 
     def forward(self, input):
         r"""Calculate spectrogram of input signals.
-        Args: 
+        Args:
             input: (batch_size, data_length)
 
         Returns:
@@ -190,7 +229,7 @@ class Spectrogram(nn.Layer):
         (real, imag) = self.stft.forward(input)
         # (batch_size, n_fft // 2 + 1, time_steps)
 
-        spectrogram = real ** 2 + imag ** 2
+        spectrogram = real**2 + imag**2
 
         if self.power == 2.0:
             pass
@@ -198,13 +237,24 @@ class Spectrogram(nn.Layer):
             spectrogram = spectrogram ** (self.power / 2.0)
 
         return spectrogram
-    
+
 
 class LogmelFilterBank(nn.Layer):
-    def __init__(self, sr=22050, n_fft=2048, n_mels=64, fmin=0.0, fmax=None, 
-        is_log=True, ref=1.0, amin=1e-10, top_db=80.0, freeze_parameters=True):
-        r"""Calculate logmel spectrogram using paddle. The mel filter bank is 
-        the paddle implementation of as librosa.filters.mel 
+    def __init__(
+        self,
+        sr=22050,
+        n_fft=2048,
+        n_mels=64,
+        fmin=0.0,
+        fmax=None,
+        is_log=True,
+        ref=1.0,
+        amin=1e-10,
+        top_db=80.0,
+        freeze_parameters=True,
+    ):
+        r"""Calculate logmel spectrogram using paddle. The mel filter bank is
+        the paddle implementation of as librosa.filters.mel
         """
         super(LogmelFilterBank, self).__init__()
 
@@ -212,18 +262,15 @@ class LogmelFilterBank(nn.Layer):
         self.ref = paddle.to_tensor(ref, dtype="float32")
         self.amin = paddle.to_tensor(amin, dtype="float32")
         self.top_db = top_db
-        if fmax == None:
-            fmax = sr//2
+        if fmax is None:
+            fmax = sr // 2
 
-        self.melW = librosa.filters.mel(sr=sr, n_fft=n_fft, n_mels=n_mels,
-            fmin=fmin, fmax=fmax).T
+        self.melW = librosa.filters.mel(sr=sr, n_fft=n_fft, n_mels=n_mels, fmin=fmin, fmax=fmax).T
         # (n_fft // 2 + 1, mel_bins)
 
         self.melW = paddle.to_tensor(self.melW)
         self.melW = paddle.create_parameter(
-            self.melW.shape,
-            str(self.melW.numpy().dtype),
-            default_initializer=nn.initializer.Assign(self.melW)
+            self.melW.shape, str(self.melW.numpy().dtype), default_initializer=nn.initializer.Assign(self.melW)
         )
 
         if freeze_parameters:
@@ -235,8 +282,8 @@ class LogmelFilterBank(nn.Layer):
 
         Args:
             input: (*, n_fft), spectrogram
-        
-        Returns: 
+
+        Returns:
             output: (*, mel_bins), (log) mel spectrogram
         """
 
@@ -252,9 +299,8 @@ class LogmelFilterBank(nn.Layer):
 
         return output
 
-
     def power_to_db(self, input):
-        r"""Power to db, this function is the paddle implementation of 
+        r"""Power to db, this function is the paddle implementation of
         librosa.power_to_lb
         """
         ref_value = self.ref
@@ -263,14 +309,15 @@ class LogmelFilterBank(nn.Layer):
 
         if self.top_db is not None:
             if self.top_db < 0:
-                raise librosa.util.exceptions.ParameterError('top_db must be non-negative')
+                raise librosa.util.exceptions.ParameterError("top_db must be non-negative")
             log_spec = paddle.clip(log_spec, min=log_spec.max().item() - self.top_db, max=None)
 
         return log_spec
-    
+
+
 class DropStripes(nn.Layer):
     def __init__(self, dim, drop_width, stripes_num):
-        """Drop stripes. 
+        """Drop stripes.
 
         Args:
           dim: int, dimension along which to drop
@@ -279,7 +326,7 @@ class DropStripes(nn.Layer):
         """
         super(DropStripes, self).__init__()
 
-        assert dim in [2, 3]    # dim 2: time; dim 3: frequency
+        assert dim in [2, 3]  # dim 2: time; dim 3: frequency
 
         self.dim = dim
         self.drop_width = drop_width
@@ -301,7 +348,7 @@ class DropStripes(nn.Layer):
                 self.transform_slice(input[n], total_width)
 
             return input
-    
+
     def transform_slice(self, e, total_width):
         """e: (channels, time_steps, freq_bins)"""
 
@@ -316,11 +363,10 @@ class DropStripes(nn.Layer):
 
 
 class SpecAugmentation(nn.Layer):
-    def __init__(self, time_drop_width, time_stripes_num, freq_drop_width, 
-        freq_stripes_num):
-        """Spec augmetation. 
-        [ref] Park, D.S., Chan, W., Zhang, Y., Chiu, C.C., Zoph, B., Cubuk, E.D. 
-        and Le, Q.V., 2019. Specaugment: A simple data augmentation method 
+    def __init__(self, time_drop_width, time_stripes_num, freq_drop_width, freq_stripes_num):
+        """Spec augmentation.
+        [ref] Park, D.S., Chan, W., Zhang, Y., Chiu, C.C., Zoph, B., Cubuk, E.D.
+        and Le, Q.V., 2019. Specaugment: A simple data augmentation method
         for automatic speech recognition. arXiv preprint arXiv:1904.08779.
 
         Args:
@@ -332,11 +378,9 @@ class SpecAugmentation(nn.Layer):
 
         super(SpecAugmentation, self).__init__()
 
-        self.time_dropper = DropStripes(dim=2, drop_width=time_drop_width, 
-            stripes_num=time_stripes_num)
+        self.time_dropper = DropStripes(dim=2, drop_width=time_drop_width, stripes_num=time_stripes_num)
 
-        self.freq_dropper = DropStripes(dim=3, drop_width=freq_drop_width, 
-            stripes_num=freq_stripes_num)
+        self.freq_dropper = DropStripes(dim=3, drop_width=freq_drop_width, stripes_num=freq_stripes_num)
 
     def forward(self, input):
         x = self.time_dropper(input)

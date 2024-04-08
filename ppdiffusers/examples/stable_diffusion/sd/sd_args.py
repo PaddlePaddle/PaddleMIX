@@ -28,7 +28,7 @@ __all__ = [
 
 from ppdiffusers.utils import str2bool
 
-if str2bool(os.getenv("FLAG_FUSED_LINEAR", "True")):
+if str2bool(os.getenv("FLAG_FUSED_LINEAR", "False")):
     paddle.nn.Linear = paddle.incubate.nn.FusedLinear
 
 

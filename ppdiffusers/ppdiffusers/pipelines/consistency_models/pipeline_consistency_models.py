@@ -1,4 +1,3 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,16 +11,20 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 from typing import Callable, List, Optional, Union
 
 import paddle
 
 from ...models import UNet2DModel
 from ...schedulers import CMStochasticIterativeScheduler
-from ...utils import logging, randn_tensor, replace_example_docstring
+from ...utils import logging, replace_example_docstring
+from ...utils.paddle_utils import randn_tensor
 from ..pipeline_utils import DiffusionPipeline, ImagePipelineOutput
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
+
+
 EXAMPLE_DOC_STRING = """
     Examples:
         ```py
@@ -52,7 +55,7 @@ EXAMPLE_DOC_STRING = """
 
 
 class ConsistencyModelPipeline(DiffusionPipeline):
-    """
+    r"""
     Pipeline for unconditional or class-conditional image generation.
 
     This model inherits from [`DiffusionPipeline`]. Check the superclass documentation for the generic methods
@@ -66,17 +69,26 @@ class ConsistencyModelPipeline(DiffusionPipeline):
             compatible with [`CMStochasticIterativeScheduler`].
     """
 
+    model_cpu_offload_seq = "unet"
+
     def __init__(self, unet: UNet2DModel, scheduler: CMStochasticIterativeScheduler) -> None:
         super().__init__()
-        self.register_modules(unet=unet, scheduler=scheduler)
+
+        self.register_modules(
+            unet=unet,
+            scheduler=scheduler,
+        )
+
         self.safety_checker = None
 
     def prepare_latents(self, batch_size, num_channels, height, width, dtype, generator, latents=None):
-        shape = batch_size, num_channels, height, width
+        shape = (batch_size, num_channels, height, width)
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
-                f"You have passed a list of generators of length {len(generator)}, but requested an effective batch size of {batch_size}. Make sure the batch size matches the length of the generators."
+                f"You have passed a list of generators of length {len(generator)}, but requested an effective batch"
+                f" size of {batch_size}. Make sure the batch size matches the length of the generators."
             )
+
         if latents is None:
             latents = randn_tensor(shape, generator=generator, dtype=dtype)
         else:
@@ -86,7 +98,7 @@ class ConsistencyModelPipeline(DiffusionPipeline):
         latents = latents * self.scheduler.init_noise_sigma
         return latents
 
-    # Follows ppdiffusers.VaeImageProcessor.postprocess
+    # Follows diffusers.VaeImageProcessor.postprocess
     def postprocess_image(self, sample: paddle.Tensor, output_type: str = "pil"):
         if output_type not in ["pd", "np", "pil"]:
             raise ValueError(
@@ -94,12 +106,12 @@ class ConsistencyModelPipeline(DiffusionPipeline):
             )
 
         # Equivalent to ppdiffusers.VaeImageProcessor.denormalize
-        sample = (sample / 2 + 0.5).clip(min=0, max=1)
+        sample = (sample / 2 + 0.5).clip(0, 1)
         if output_type == "pd":
             return sample
 
         # Equivalent to ppdiffusers.VaeImageProcessor.pt_to_numpy
-        sample = sample.cpu().transpose(perm=[0, 2, 3, 1]).numpy()
+        sample = sample.cast("float32").transpose([0, 2, 3, 1]).cpu().numpy()
         if output_type == "np":
             return sample
 
@@ -110,15 +122,14 @@ class ConsistencyModelPipeline(DiffusionPipeline):
     def prepare_class_labels(self, batch_size, class_labels=None):
         if self.unet.config.num_class_embeds is not None:
             if isinstance(class_labels, list):
-                class_labels = paddle.to_tensor(data=class_labels, dtype="int32")
+                class_labels = paddle.to_tensor(class_labels, dtype=paddle.int64)
             elif isinstance(class_labels, int):
                 assert batch_size == 1, "Batch size must be 1 if classes is an int"
-                class_labels = paddle.to_tensor(data=[class_labels], dtype="int32")
+                class_labels = paddle.to_tensor([class_labels], dtype=paddle.int64)
             elif class_labels is None:
                 # Randomly generate batch_size class labels
                 # TODO: should use generator here? int analogue of randn_tensor is not exposed in ...utils
-                class_labels = paddle.randint(low=0, high=self.unet.config.num_class_embeds, shape=(batch_size,))
-            class_labels = class_labels
+                class_labels = paddle.randint(0, self.unet.config.num_class_embeds, shape=(batch_size,))
         else:
             class_labels = None
         return class_labels
@@ -126,21 +137,24 @@ class ConsistencyModelPipeline(DiffusionPipeline):
     def check_inputs(self, num_inference_steps, timesteps, latents, batch_size, img_size, callback_steps):
         if num_inference_steps is None and timesteps is None:
             raise ValueError("Exactly one of `num_inference_steps` or `timesteps` must be supplied.")
+
         if num_inference_steps is not None and timesteps is not None:
             logger.warning(
-                f"Both `num_inference_steps`: {num_inference_steps} and `timesteps`: {timesteps} are supplied; `timesteps` will be used over `num_inference_steps`."
+                f"Both `num_inference_steps`: {num_inference_steps} and `timesteps`: {timesteps} are supplied;"
+                " `timesteps` will be used over `num_inference_steps`."
             )
+
         if latents is not None:
-            expected_shape = batch_size, 3, img_size, img_size
-            if latents.shape != list(expected_shape):
+            expected_shape = [batch_size, 3, img_size, img_size]
+            if latents.shape != expected_shape:
                 raise ValueError(f"The shape of latents is {latents.shape} but is expected to be {expected_shape}.")
-        if (
-            callback_steps is None
-            or callback_steps is not None
-            and (not isinstance(callback_steps, int) or callback_steps <= 0)
+
+        if (callback_steps is None) or (
+            callback_steps is not None and (not isinstance(callback_steps, int) or callback_steps <= 0)
         ):
             raise ValueError(
-                f"`callback_steps` has to be a positive integer but is {callback_steps} of type {type(callback_steps)}."
+                f"`callback_steps` has to be a positive integer but is {callback_steps} of type"
+                f" {type(callback_steps)}."
             )
 
     @paddle.no_grad()
@@ -158,7 +172,7 @@ class ConsistencyModelPipeline(DiffusionPipeline):
         callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
         callback_steps: int = 1,
     ):
-        """
+        r"""
         Args:
             batch_size (`int`, *optional*, defaults to 1):
                 The number of images to generate.
@@ -171,8 +185,8 @@ class ConsistencyModelPipeline(DiffusionPipeline):
             timesteps (`List[int]`, *optional*):
                 Custom timesteps to use for the denoising process. If not defined, equal spaced `num_inference_steps`
                 timesteps are used. Must be in descending order.
-            generator (`paddle.Generator`, *optional*):
-                One or a list of paddle generator(s) to make generation deterministic.
+            generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
+                A [`paddle.Generator`] to make generation deterministic.
             latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents sampled from a Gaussian distribution, to be used as inputs for image
                 generation. Can be used to tweak the same generation with different prompts. If not provided, a latents
@@ -231,6 +245,7 @@ class ConsistencyModelPipeline(DiffusionPipeline):
             for i, t in enumerate(timesteps):
                 scaled_sample = self.scheduler.scale_model_input(sample, t)
                 model_output = self.unet(scaled_sample, t, class_labels=class_labels, return_dict=False)[0]
+
                 sample = self.scheduler.step(model_output, t, sample, generator=generator)[0]
 
                 # call the callback, if provided
@@ -240,6 +255,8 @@ class ConsistencyModelPipeline(DiffusionPipeline):
 
         # 6. Post-process image sample
         image = self.postprocess_image(sample, output_type=output_type)
+
         if not return_dict:
             return (image,)
+
         return ImagePipelineOutput(images=image)
