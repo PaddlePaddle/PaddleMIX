@@ -246,9 +246,9 @@ class EMAModel:
         for s_param, param in zip(self.shadow_params, parameters):
             with context_manager():
                 if not param.stop_gradient:
-                    s_param.copy_(s_param - one_minus_decay * (s_param - param), False)
+                    s_param.copy_(s_param - one_minus_decay * (s_param - param.cast(s_param.dtype)), False)
                 else:
-                    s_param.copy_(param, False)
+                    s_param.copy_(param.cast(s_param.dtype), False)
 
     def copy_to(self, parameters) -> None:
         """
