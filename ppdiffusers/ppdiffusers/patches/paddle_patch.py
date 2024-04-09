@@ -25,6 +25,7 @@ from typing import Any, Dict, Iterable, Iterator, Mapping, Optional, Tuple, Unio
 import numpy as np
 import paddle
 import paddle.nn as nn
+from paddle.distributed import fleet
 
 try:
     from paddle.base.dygraph.base import param_guard
@@ -195,15 +196,7 @@ raw_gather_nd = paddle.gather_nd
 
 @paddle.jit.not_to_static
 def gather_nd(x, index, name=None):
-    bfp16 = False
-    if x.dtype == paddle.bfloat16:
-        x = x.cast(paddle.float16)
-        bfp16 = True
-
     out = raw_gather_nd(x, index=index, name=name)
-
-    if bfp16:
-        out = out.cast(paddle.bfloat16)
     return out
 
 
@@ -309,9 +302,8 @@ def device_scope(device="cpu"):
 
 
 @contextlib.contextmanager
-def requires_grad_and_without_random(*tensors, seed=0, stop_gradient=False):
+def requires_grad_and_without_random(*tensors, stop_gradient=False):
     raw_rng_state = paddle.get_cuda_rng_state()
-    paddle.seed(seed)
     raw_stop_gradient = [each_tensor.stop_gradient for each_tensor in tensors]
     need_switch_stop_gradient = len(set(raw_stop_gradient)) > 1
     if need_switch_stop_gradient:
@@ -405,6 +397,13 @@ if is_ppxformers_available():
             if attention_op == "flash" and flash_attn_error is not None:
                 raise OSError(flash_attn_error)
 
+        if str2bool(os.getenv("FLAGS_cudnn_deterministic", "no")):
+            if attention_op == "flash":
+                if paddle.nn.functional.flash_attention._select_sdp(query.shape[3]) == "mem_efficient":
+                    attention_op = "math"
+            else:
+                attention_op = "math"
+
         if attention_op == "math":
             if scale is None:
                 scale = 1 / math.sqrt(query.shape[-1])
@@ -439,6 +438,11 @@ if is_ppxformers_available():
                         scale=scale,
                         training=True,
                     )  # make sure we use training=True
+                if query.shape[3] > 256:
+                    if paddle.distributed.get_world_size() > 1 and hasattr(fleet.fleet, "_hcg"):
+                        hcg = fleet.get_hybrid_communicate_group()
+                        mp_group = hcg.get_model_parallel_group()
+                        paddle.distributed.broadcast(output, src=mp_group.ranks[0], group=mp_group, sync_op=True)
             else:
                 assert (
                     variable_length_memory_efficient_attention is not None
@@ -473,6 +477,12 @@ if is_ppxformers_available():
                     is_causal=bool(is_causal),
                     training=training,
                 )
+            # hidden_dimension excel 256 will use mea
+            if query.shape[3] > 256:
+                if paddle.distributed.get_world_size() > 1 and hasattr(fleet.fleet, "_hcg"):
+                    hcg = fleet.get_hybrid_communicate_group()
+                    mp_group = hcg.get_model_parallel_group()
+                    paddle.distributed.broadcast(output, src=mp_group.ranks[0], group=mp_group, sync_op=True)
         else:
             raise ValueError(
                 "ppxformers's attention_op shoulde be in ['auto', 'math', 'cutlass', `memory_efficient`, 'flash']."

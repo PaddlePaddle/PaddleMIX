@@ -90,16 +90,6 @@ class Attention(nn.Layer):
                 raise NotImplementedError(
                     "requires the scaled_dot_product_attention but your PaddlePaddle donot have this. Checkout the instructions on the installation page: https://www.paddlepaddle.org.cn/install/quick and follow the ones that match your environment."
                 )
-            else:
-                try:
-                    _ = F.scaled_dot_product_attention_(
-                        paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
-                        paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
-                        paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
-                        attention_op=attention_op,
-                    )
-                except Exception as e:
-                    raise e
 
         self._use_memory_efficient_attention_xformers = use_memory_efficient_attention_xformers
         self._attention_op = attention_op
