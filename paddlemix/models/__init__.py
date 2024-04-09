@@ -14,6 +14,8 @@
 # limitations under the license.
 
 from .blip2.modeling import *
+from .cogagent.modeling import *
+from .cogagent.configuration import *
 from .imagebind.modeling import *
 from .imagebind.multimodal_preprocessors import *
 from .minigpt4.configuration import *
