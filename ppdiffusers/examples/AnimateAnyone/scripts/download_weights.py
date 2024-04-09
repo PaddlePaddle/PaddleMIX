@@ -26,9 +26,12 @@ def load_weight():
     for file_name in [
         "config.json",
         "denoising_unet.pdparams",
-        "motion_module.pdparams",
+        "motion_module_stage2.pdparams",
         "pose_guider.pdparams",
         "reference_unet.pdparams",
+        "control_v11p_sd15_openpose.pdparams",
+        "animatediff_mm_sd_v15_v2.pdparams",
+        "denoising_unet_initial4stage1.pdparams",
     ]:
         path = Path(file_name)
         saved_path = local_dir / path

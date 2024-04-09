@@ -482,12 +482,14 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin):
         down_block_res_samples = (sample,)
         for downsample_block in self.down_blocks:
             if hasattr(downsample_block, "has_cross_attention") and downsample_block.has_cross_attention:
+
                 sample, res_samples = downsample_block(
                     hidden_states=sample,
                     temb=emb,
                     encoder_hidden_states=encoder_hidden_states,
                     attention_mask=attention_mask,
                 )
+
             else:
                 sample, res_samples = downsample_block(
                     hidden_states=sample,
@@ -563,6 +565,8 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin):
     def from_pretrained_2d(
         cls,
         denoising_unet_config_path: Optional[Union[str, PathLike]],
+        base_model_path: Optional[Union[str, PathLike]] = None,
+        motion_module_path: Optional[Union[str, PathLike]] = None,
         weight_dtype=None,
         unet_additional_kwargs=None,
     ):
@@ -594,5 +598,18 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin):
 
         with ContextManagers(init_contexts):
             model = cls.from_config(unet_config, **unet_additional_kwargs)
+
+        state_dict = paddle.load(base_model_path)
+
+        # motion module updating
+        if motion_module_path is not None:
+            motion_state_dict = paddle.load(motion_module_path)
+            state_dict.update(motion_state_dict)
+
+        for k in state_dict.keys():
+            state_dict[k] = state_dict[k].astype(weight_dtype)
+
+        m, u = model.set_state_dict(state_dict)
+        print(f"### missing keys: {len(m)}; \n### unexpected keys: {len(u)};")
 
         return model

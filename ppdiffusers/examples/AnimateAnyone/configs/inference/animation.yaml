@@ -6,11 +6,17 @@ denoising_unet_config_path: "./pretrained_weights/Tsaiyue/AnimateAnyone/config.j
 denoising_unet_path: "./pretrained_weights/Tsaiyue/AnimateAnyone/denoising_unet.pdparams"
 reference_unet_path: "./pretrained_weights/Tsaiyue/AnimateAnyone/reference_unet.pdparams"
 pose_guider_path: "./pretrained_weights/Tsaiyue/AnimateAnyone/pose_guider.pdparams"
-motion_module_path: "./pretrained_weights/Tsaiyue/AnimateAnyone/motion_module.pdparams"
+
+motion_module_path: "./pretrained_weights/Tsaiyue/AnimateAnyone/motion_module_stage2.pdparams"
 
 inference_config: "./configs/inference/inference_v2.yaml"
 weight_dtype: 'fp16'
 
 test_cases:
-  "./configs/inference/ref_images/anyone-10.png":
-    - "./configs/inference/pose_videos/anyone-video-1_kps.mp4" 
+  "./configs/inference/ref_images/girl_in_black.png":
+    - "./configs/inference/pose_videos/girl_in_black.mp4"
+  "./configs/inference/ref_images/sora_woman.png":
+    - "./configs/inference/pose_videos/fashion1_kps.mp4"
+  "./configs/inference/ref_images/iron_man.png":
+    - "./configs/inference/pose_videos/anyone-video-1_kps.mp4"
+ 
