@@ -203,6 +203,8 @@ def load_state_dict(
                 continue
             # with device_guard():
             t = tmp_state_dict.pop(key)
+            if key in tensor_parallel_split_mapping:
+                t = tensor_parallel_split_mapping[key](t)
             if isinstance(t, dict):
                 if len(t) == 0:
                     state_dict[key] = {}
@@ -515,6 +517,10 @@ class ModelMixin(nn.Layer):
             kwargs (`Dict[str, Any]`, *optional*):
                 Additional keyword arguments passed along to the [`~utils.PushToHubMixin.push_to_hub`] method.
         """
+        # distributed kwargs
+        merge_tensor_parallel = kwargs.get("merge_tensor_parallel", False)
+        tensor_parallel_degree = kwargs.pop("tensor_parallel_degree", 1)
+
         if to_diffusers is None:
             to_diffusers = TO_DIFFUSERS
 
@@ -564,6 +570,14 @@ class ModelMixin(nn.Layer):
 
         # Save the model
         state_dict = model_to_save.state_dict()
+        if tensor_parallel_degree > 1:
+            if merge_tensor_parallel:
+                config_to_save = model_to_save._internal_dict
+                state_dict = model_to_save.merge_tensor_parallel(state_dict, config_to_save)
+                tensor_parallel_degree = 1
+                if paddle.distributed.fleet.get_hybrid_communicate_group().get_model_parallel_rank() != 0:
+                    logger.info("Saving with merge_tensor_parallel, tensor_parallel_rank > 0 don't need save")
+                    return
 
         if to_diffusers:
             if not is_torch_available() and not safe_serialization:
@@ -781,6 +795,9 @@ class ModelMixin(nn.Layer):
         use_safetensors = kwargs.pop("use_safetensors", None)
         ignore_keys = kwargs.pop("ignore_keys", [])
 
+        # distributed kwargs
+        tensor_parallel_degree = kwargs.pop("tensor_parallel_degree", 1)
+
         if use_safetensors is None:
             use_safetensors = True
 
@@ -985,6 +1002,24 @@ class ModelMixin(nn.Layer):
         with ContextManagers(init_contexts):
             model = cls.from_config(config, **unused_kwargs)
 
+        # (westfish) 2024/04/01:
+        #  Tensor parallel is only supported for models that inherit from `ConversionMixin`
+        if tensor_parallel_degree > 1:
+            from paddlenlp.transformers.conversion_utils import ConversionMixin
+
+            if not issubclass(cls, ConversionMixin):
+                raise NotImplementedError(
+                    "Tensor parallel is only supported for models that inherit from `ConversionMixin`."
+                )
+            if len(resolved_model_files) > 1:
+                raise NotImplementedError(
+                    "Tensor parallel is not supported for multiple shards yet."
+                )
+            tmp_state_dict = smart_load(resolved_model_files[0], return_numpy=True)
+            tensor_parallel_split_mapping = cls.get_tensor_parallel_convert_actions(config, tmp_state_dict.keys())
+        else:
+            tensor_parallel_split_mapping = None
+
         model, missing_keys, unexpected_keys, mismatched_keys, error_msgs = cls._load_pretrained_model(
             model,
             resolved_model_files,
@@ -992,7 +1027,8 @@ class ModelMixin(nn.Layer):
             ignore_mismatched_sizes=ignore_mismatched_sizes,
             ignore_keys=ignore_keys,
             from_diffusers=from_diffusers,
-            tensor_parallel_split_mapping=None,
+            tensor_parallel_split_mapping=tensor_parallel_split_mapping,
+            tensor_parallel_degree=tensor_parallel_degree,
         )
 
         loading_info = {
@@ -1024,6 +1060,7 @@ class ModelMixin(nn.Layer):
         ignore_keys=None,
         from_diffusers=False,
         tensor_parallel_split_mapping=None,
+        tensor_parallel_degree=1,
     ):
         state_dict = OrderedDict()
         model_state_dict = model.state_dict()
@@ -1034,6 +1071,8 @@ class ModelMixin(nn.Layer):
 
         if len(resolved_model_files) > 1:
             resolved_model_files = tqdm(resolved_model_files, desc="Loading checkpoint shards")
+            if tensor_parallel_degree > 1:
+                raise NotImplementedError("Tensor parallel is not supported for multiple shards yet.")
 
         # load shard state dict
         for shard_file in resolved_model_files:
