@@ -218,11 +218,6 @@ class Attention(nn.Layer):
         xq, xk = Attention.apply_rotary_emb(xq, xk, freqs_cis=freqs_cis)
         xq, xk = xq.cast(dtype), xk.cast(dtype)
 
-        n_rep = self.n_local_heads // self.n_local_kv_heads
-        if n_rep >= 1:
-            xk = xk.unsqueeze(axis=3).tile([1, 1, 1, n_rep, 1]).flatten(start_axis=2, stop_axis=3)
-            xv = xv.unsqueeze(axis=3).tile([1, 1, 1, n_rep, 1]).flatten(start_axis=2, stop_axis=3)
-
         if dtype in [paddle.float16, paddle.bfloat16]:
             output, _ = flash_attention(
                 xq,
@@ -233,6 +228,11 @@ class Attention(nn.Layer):
                 return_softmax=False,
             )
         else:
+            n_rep = self.n_local_heads // self.n_local_kv_heads
+            if n_rep > 1:
+                xk = xk.unsqueeze(axis=3).tile([1, 1, 1, n_rep, 1]).flatten(start_axis=2, stop_axis=3)
+                xv = xv.unsqueeze(axis=3).tile([1, 1, 1, n_rep, 1]).flatten(start_axis=2, stop_axis=3)
+
             if self.fused_attn:
                 output = F.scaled_dot_product_attention_(
                     xq,

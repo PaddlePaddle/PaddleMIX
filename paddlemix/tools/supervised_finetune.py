@@ -73,7 +73,8 @@ def main():
         dtype = "float32"
 
     # Load model config
-    model_config = AutoConfigMIX.from_pretrained(model_args.model_name_or_path, dtype=dtype)
+    model_config = AutoConfigMIX.from_pretrained(model_args.model_name_or_path, dtype=dtype)  # freeze_mm_mlp_adapter
+    model_config.use_flash_attention = model_args.use_flash_attention
 
     # Load model
     model = AutoModelMIX.from_pretrained(
@@ -91,12 +92,14 @@ def main():
         model_args.model_name_or_path,
         text_model_name_or_path=model_args.text_model_name_or_path,
         train="train",
+        max_length=data_args.max_length,
     )
     if training_args.do_eval:
         eval_processor, _ = AutoProcessorMIX.from_pretrained(
             model_args.model_name_or_path,
             text_model_name_or_path=model_args.text_model_name_or_path,
             eval="eval",
+            max_length=data_args.max_length,
         )
 
     if isinstance(tokenizer, QWenVLTokenizer):
@@ -116,11 +119,19 @@ def main():
     total_samples = len(train_ds) if train_ds is not None else 0
 
     if data_args.mixtoken:
-        if model.base_model_prefix not in ["qwen", "visualglm"] and training_args.pipeline_parallel_degree < 1:
-            raise NotImplementedError("MIXToke data stream is only implemented for QWen-VL Visualglm so far.")
+        if (
+            model.base_model_prefix not in ["qwen", "visualglm", "llava"]
+            and training_args.pipeline_parallel_degree < 1
+        ):
+            raise NotImplementedError("MIXToke data stream is only implemented for QWen-VL Visualglm llava so far.")
+        if model.base_model_prefix == "llava":
+            tokenizer.image_token_span = model.llama.vision_tower.num_patches
+            logger.info("tokenizer image span: {}".format(tokenizer.image_token_span))
         mixtoken_dataset = MIXTokenMapDataset
         logger.info("Creating MIXToken Data Stream. This may take a few minutes.")
-        train_ds = mixtoken_dataset(train_ds, max_length=data_args.max_length, processor=train_processor)
+        train_ds = mixtoken_dataset(
+            train_ds, max_length=data_args.max_length, processor=train_processor, tokenizer=tokenizer
+        )
 
     # lora
     if model_args.lora:
