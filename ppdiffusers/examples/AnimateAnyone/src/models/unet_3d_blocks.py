@@ -445,7 +445,6 @@ class DownBlock3D(paddle.nn.Layer):
         resnets = []
         motion_modules = []
 
-        # use_motion_module = False
         for i in range(num_layers):
             in_channels = in_channels if i == 0 else out_channels
             resnets.append(

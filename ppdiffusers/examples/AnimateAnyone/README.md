@@ -45,12 +45,12 @@ python scripts/download_weights.py
 训练数据由[ubc_fashion](https://vision.cs.ubc.ca/datasets/fashion/)和bili_dance两个数据集组成，其中ubc_fashion包含598组数据，bili_dance包含2451组数据，数据获取方式如下：
 ```bash
 # ubc_fashion数据集下载
-wget https:xxx/ubcNbili_data.tar.gz
+wget https://bj.bcebos.com/paddlenlp/models/community/tsaiyue/ubcNbili_data/ubcNbili_data.tar.gz
 
 # 文件解压
 tar -xzvf ubcNbili_data.tar.gz
 ```
-该数据集由三部分组成，分别为元数据meta_data、原始视频video/以及对应动作视频video_dwpose/，其中元数据记录对应原始视频和动作视频的路径，动作视频提取方式参考自[MooreThreads/Moore-AnimateAnyone](https://github.com/MooreThreads/Moore-AnimateAnyone/tree)，训练数据文件结构如下：
+该数据集由三部分组成，分别为元数据、原始视频以及对应动作视频，其中元数据记录对应原始视频和动作视频的路径，动作视频提取方式参考自[MooreThreads/Moore-AnimateAnyone](https://github.com/MooreThreads/Moore-AnimateAnyone/tree)，训练数据文件结构如下：
 ```bash
 ├── ubcNbili_data  # 训练数据根目录
     ├── meta_data # 元数据文件夹
@@ -67,8 +67,10 @@ tar -xzvf ubcNbili_data.tar.gz
         ├── 03049.mp4
 ```
 ### 4.2 第一阶段训练
-第一阶段由于训练参数规模较大无法在单卡NVIDIA V100 32G GPU或NVIDIA A100 40G上运行，可在单机多卡下开启显存优化分组切片技术--sharding进行训练，训练命令如下：
+第一阶段由于训练参数规模较大无法在单卡 NVIDIA V100 32G GPU 或 NVIDIA A100 40G GPU 上运行，可在单机多卡下开启显存优化分组切片技术 `--sharding` 进行训练，训练命令如下：
 ```shell
+ppdiffusers_path=PaddleMIX/ppdiffusers
+export PYTHONPATH=$ppdiffusers_path:$PYTHONPATH
 python -u -m paddle.distributed.launch --gpus "0,1,2,3" scripts/trainer_stage1.py \
     --do_train \
     --output_dir ./exp_output/stage1 \
@@ -86,10 +88,13 @@ python -u -m paddle.distributed.launch --gpus "0,1,2,3" scripts/trainer_stage1.p
     --report_to all \
     --sharding "stage2"
 ```
-训练脚本基于paddlenlp.trainer实现，支持单卡、多卡训练，可通过`--gpus`指定训练使用的GPU卡号，在多卡环境上支持分组切片技术以降低显存占用。训练过程中的阶段性权重以及可视化训练监控文件将存储于`exp_output/stage1`目录下。训练流程相关参数详见[paddlenlp.trainer](https://github.com/PaddlePaddle/PaddleNLP/blob/a5f69e4543a5371ceb28106b7aa2ea93208620b9/paddlenlp/trainer/training_args.py)，模型与数据相关参数详见 `src/trainer/args_stage1.py`。
+训练脚本基于 paddlenlp.trainer 实现，支持单卡、多卡训练，可通过 `--gpus` 指定训练使用的GPU卡号，在多卡环境上支持分组切片技术以降低显存占用。训练过程中的阶段性权重以及可视化训练监控文件将存储于 `exp_output/stage1` 目录下。训练流程相关参数详见 [paddlenlp.trainer](https://github.com/PaddlePaddle/PaddleNLP/blob/a5f69e4543a5371ceb28106b7aa2ea93208620b9/paddlenlp/trainer/training_args.py)，模型与数据相关参数详见 `src/trainer/args_stage1.py`。
 ### 4.3 第二阶段训练
-第二阶段训练支持单卡NVIDIA V100 32G GPU的硬件环境，训练命令如下：
+第二阶段训练支持单卡 NVIDIA V100 32G GPU 的硬件环境，训练命令如下：
 ```shell
+ppdiffusers_path=PaddleMIX/ppdiffusers
+export PYTHONPATH=$ppdiffusers_path:$PYTHONPATH
+export GLOG_minloglevel=2
 python -u -m paddle.distributed.launch --gpus "0" scripts/trainer_stage2.py \
     --do_train \
     --output_dir ./exp_output/stage2 \
@@ -106,10 +111,10 @@ python -u -m paddle.distributed.launch --gpus "0" scripts/trainer_stage2.py \
     --seed 42 \
     --report_to all
 ```
-该训练脚本同样基于paddlenlp.trainer实现，支持单卡、多卡训练，可通过`--gpus`指定训练使用的GPU卡号。训练过程中的阶段性权重以及可视化训练监控文件将存储于`exp_output/stage2`目录下。训练流程相关参数详见[paddlenlp.trainer](https://github.com/PaddlePaddle/PaddleNLP/blob/a5f69e4543a5371ceb28106b7aa2ea93208620b9/paddlenlp/trainer/training_args.py)，模型与数据相关参数详见`src/trainer/args_stage2.py`。
+该训练脚本同样基于paddlenlp.trainer实现，支持单卡、多卡训练，可通过 `--gpus` 指定训练使用的GPU卡号。训练过程中的阶段性权重以及可视化训练监控文件将存储于 `exp_output/stage2` 目录下。训练流程相关参数详见 [paddlenlp.trainer](https://github.com/PaddlePaddle/PaddleNLP/blob/a5f69e4543a5371ceb28106b7aa2ea93208620b9/paddlenlp/trainer/training_args.py)，模型与数据相关参数详见 `src/trainer/args_stage2.py`。
 
 ### 4.4 第二阶段微调前后对比
-在第二阶段训练中，利用[animatediff初始化权重](https://huggingface.co/guoyww/animatediff)对模型组网中的motion_modules进行微调，微调前后生成效果对比如下：
+在第二阶段训练中，利用 [animatediff初始化权重](https://huggingface.co/guoyww/animatediff)对模型组网中的motion_modules进行微调，微调前后生成效果对比如下：
 | Static Image | Pose Video | Before Fine-tuning | After Fine-tuning |
 |--------------|------------|---------------------|-------------------|
 | <img src="https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/f6c5d27b-0183-4ae5-ad6b-3e36125cb515" width="512" height="668"> | <img src="https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/abe4931d-81ca-453b-b061-510a48b62b02" width="512" height="668"> | <img src="https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/33ddb6ac-d07c-40a2-9d97-7cba9ebea88d" width="512" height="668"> | <img src="https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/8b4ba74c-5a3f-45c3-be0f-645e0ece6bcd" width="552" height="668"> |
@@ -117,14 +122,17 @@ python -u -m paddle.distributed.launch --gpus "0" scripts/trainer_stage2.py \
 
 ## 5. 模型推理
 
-运行以下推理命令，生成指定宽高和帧数的动画，将存储在`./output`下。
+模型可在NVIDIA V100 32G GPU下进行推理。运行以下推理命令，生成指定宽高和帧数的动画，将存储在 `./output` 下。
 
 ```shell
 python -m scripts.pose2vid --config ./configs/inference/animation.yaml -W 600 -H 784 -L 120
 ```
 
 生成效果如下所示：
-<video controls autoplay loop src="https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/4343b522-4449-4db2-be28-fdbbe04f90d4" muted="false"></video>
+| Static Image | Pose Video | Animation Video |
+|--------------|------------|---------------------|
+| <img src="https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/c55a0449-b0f2-4137-9ed0-354bd3c57936" width="512" height="668"> | <img src="https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/f856e8c4-824c-4403-8fb2-6cdf12eacea2" width="512" height="668"> | <img src="https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/23e2e55e-f505-425f-920f-cde7e04bebbe" width="552" height="668"> |
+| <img src="https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/bf3ceacc-ad32-41ea-9f2c-1fb91abb2afe" width="512" height="668"> | <img src="https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/5eec36a8-7ce8-4299-b524-0c45f115bc0c" width="512" height="668"> | <img src="https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/0c7e7088-58f5-476f-8d37-bf5bb768f56c" width="552" height="668"> |
 
 ## 5. 参考资料
 

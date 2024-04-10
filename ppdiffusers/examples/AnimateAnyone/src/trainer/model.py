@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import json
 import random
 
 import paddle
@@ -28,12 +27,6 @@ from src.models.unet_3d import UNet3DConditionModel
 
 from ppdiffusers import AutoencoderKL, DDIMScheduler
 from ppdiffusers.training_utils import freeze_params, unfreeze_params
-
-
-def read_json(file):
-    with open(file, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    return data
 
 
 class AnimateAnyoneModel_stage1(nn.Layer):
@@ -187,7 +180,7 @@ class AnimateAnyoneModel_stage1(nn.Layer):
         timesteps = timesteps.astype(dtype="int64")
 
         tgt_pose_img = batch["tgt_pose"]
-        tgt_pose_img = tgt_pose_img.unsqueeze(2)  # (bs, 3, 1, 512, 512)
+        tgt_pose_img = tgt_pose_img.unsqueeze(2).astype(self.weight_dtype)  # (bs, 3, 1, 512, 512)
 
         uncond_fwd = random.random() < self.uncond_ratio
 
@@ -206,16 +199,16 @@ class AnimateAnyoneModel_stage1(nn.Layer):
             ref_image_list.append(ref_img)
 
         with paddle.no_grad():
-            ref_img = paddle.stack(ref_image_list, axis=0).astype(dtype=self.vae.dtype)
+            ref_img = paddle.stack(ref_image_list, axis=0).astype(dtype=self.weight_dtype)
             ref_image_latents = self.vae.encode(ref_img).latent_dist.sample()  # (bs, d, 64, 64)
             ref_image_latents = ref_image_latents * 0.18215
 
-            clip_img = paddle.stack(clip_image_list, axis=0).astype(dtype=self.image_enc._dtype)
-            clip_image_embeds = self.image_enc(clip_img.astype(dtype=self.weight_dtype)).image_embeds
+            clip_img = paddle.stack(clip_image_list, axis=0)
+            clip_image_embeds = self.image_enc(clip_img).image_embeds
             image_prompt_embeds = clip_image_embeds.unsqueeze(1)  # (bs, 1, d)
 
         # add noise
-        noisy_latents = self.train_noise_scheduler.add_noise(latents, noise, timesteps)
+        noisy_latents = self.train_noise_scheduler.add_noise(latents, noise, timesteps).astype(dtype=self.weight_dtype)
 
         # Get the target for loss depending on the prediction type
         if self.train_noise_scheduler.prediction_type == "epsilon":
@@ -258,7 +251,9 @@ class AnimateAnyoneModel_stage1(nn.Layer):
             loss = loss.mean(axis=list(range(1, len(loss.shape)))) * mse_loss_weights
             loss = loss.mean()
 
-        return loss
+        # print("self.weight_dtype", self.weight_dtype)
+        # exit()
+        return loss.astype(dtype=self.weight_dtype)
 
 
 class AnimateAnyoneModel_stage2(nn.Layer):
@@ -446,7 +441,7 @@ class AnimateAnyoneModel_stage2(nn.Layer):
             ref_image_latents = ref_image_latents * 0.18215
 
             clip_img = paddle.stack(clip_image_list, axis=0).astype(dtype=self.image_enc._dtype)
-            clip_image_embeds = self.image_enc(clip_img.astype(dtype=self.weight_dtype)).image_embeds
+            clip_image_embeds = self.image_enc(clip_img).image_embeds
 
             clip_image_embeds = clip_image_embeds.unsqueeze(1)  # (bs, 1, d)
         # add noise

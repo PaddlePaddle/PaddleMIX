@@ -71,7 +71,7 @@ class ReferenceAttentionControl:
         style_fidelity,
         reference_attn,
         reference_adain,
-        dtype="float16",
+        dtype="float32",
         batch_size=1,
         num_images_per_prompt=1,
         fusion_blocks="midup",
@@ -107,7 +107,8 @@ class ReferenceAttentionControl:
             class_labels: Optional[paddle.Tensor] = None,
             video_length=None,
         ):
-            if self.use_ada_layer_norm:  # False
+
+            if self.use_ada_layer_norm:
                 norm_hidden_states = self.norm1(hidden_states, timestep)
             elif self.use_ada_layer_norm_zero:
                 (norm_hidden_states, gate_msa, shift_mlp, scale_mlp, gate_mlp,) = self.norm1(
@@ -120,7 +121,6 @@ class ReferenceAttentionControl:
                 norm_hidden_states = self.norm1(hidden_states)
 
             # 1. Self-Attention
-            # self.only_cross_attention = False
             cross_attention_kwargs = cross_attention_kwargs if cross_attention_kwargs is not None else {}
             if self.only_cross_attention:
                 attn_output = self.attn1(
@@ -274,7 +274,7 @@ class ReferenceAttentionControl:
                 module.bank = []
                 module.attn_weight = float(i) / float(len(attn_modules))
 
-    def update(self, writer, dtype="float16"):
+    def update(self, writer, dtype="float32"):
         if self.reference_attn:
             if self.fusion_blocks == "midup":
                 reader_attn_modules = [

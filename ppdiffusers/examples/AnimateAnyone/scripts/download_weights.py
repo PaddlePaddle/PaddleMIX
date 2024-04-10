@@ -21,7 +21,7 @@ from ppdiffusers.utils import bos_aistudio_hf_download
 def load_weight():
     print("Preparing AnimateAnyone pretrained weights...")
     local_dir = "./pretrained_weights"
-    pretrained_model_name_or_path = "Tsaiyue/AnimateAnyone"
+    pretrained_model_name_or_path = "tsaiyue/AnimateAnyone_PD"
     os.makedirs(local_dir, exist_ok=True)
     for file_name in [
         "config.json",

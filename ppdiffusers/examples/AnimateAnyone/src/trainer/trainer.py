@@ -119,7 +119,7 @@ class AnimateAnyoneTrainer_stage1(Trainer):
         self.model.reference_control_reader.clear()
         self.model.reference_control_writer.clear()
 
-        if self.state.global_step % self.args.save_steps == 0:
+        if (self.state.global_step > 0) and (self.state.global_step % self.args.save_steps == 0):
             self.save_checkpoints(self.args.output_dir, self.state.global_step, total_limit=self.args.save_total_limit)
 
         return loss.detach()
@@ -215,7 +215,7 @@ class AnimateAnyoneTrainer_stage2(Trainer):
         self.model.reference_control_reader.clear()
         self.model.reference_control_writer.clear()
 
-        if self.state.global_step % self.args.save_steps == 0:
+        if (self.state.global_step > 0) and (self.state.global_step % self.args.save_steps == 0):
             self.save_motion_module(
                 model, self.args.output_dir, self.state.global_step, total_limit=self.args.save_total_limit
             )

@@ -93,12 +93,12 @@ class ModelArguments:
         metadata={"help": "base_model_path"},
     )
     denoising_unet_config_path: Optional[str] = field(
-        default="./pretrained_weights/Tsaiyue/AnimateAnyone/config.json",
+        default="./pretrained_weights/tsaiyue/AnimateAnyone_PD/config.json",
         metadata={"help": "denoising_unet_config_path"},
     )
 
     denoising_unet_base_model_path: Optional[str] = field(
-        default="./pretrained_weights/Tsaiyue/AnimateAnyone/denoising_unet_initial4stage1.pdparams",
+        default="./pretrained_weights/tsaiyue/AnimateAnyone_PD/denoising_unet_initial4stage1.pdparams",
         metadata={"help": "denoising_unet_base_model_path"},
     )
 
@@ -107,7 +107,7 @@ class ModelArguments:
         metadata={"help": "pose_guider_pretrain or not"},
     )
     controlnet_openpose_path: Optional[str] = field(
-        default="./pretrained_weights/Tsaiyue/AnimateAnyone/control_v11p_sd15_openpose.pdparams",
+        default="./pretrained_weights/tsaiyue/AnimateAnyone_PD/control_v11p_sd15_openpose.pdparams",
         metadata={"help": "controlnet_openpose_path"},
     )
 

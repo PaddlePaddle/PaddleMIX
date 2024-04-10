@@ -95,26 +95,26 @@ class ModelArguments:
     )
 
     denoising_unet_config_path: Optional[str] = field(
-        default="./pretrained_weights/Tsaiyue/AnimateAnyone/config.json",
+        default="./pretrained_weights/tsaiyue/AnimateAnyone_PD/config.json",
         metadata={"help": "denoising_unet_config_path"},
     )
 
     denoising_unet_base_model_path: Optional[str] = field(
-        default="./pretrained_weights/Tsaiyue/AnimateAnyone/denoising_unet.pdparams",
+        default="./pretrained_weights/tsaiyue/AnimateAnyone_PD/denoising_unet.pdparams",
         metadata={"help": "denoising_unet_base_model_path"},
     )
 
     motion_module_path: Optional[str] = field(
-        default="./pretrained_weights/Tsaiyue/AnimateAnyone/animatediff_mm_sd_v15_v2.pdparams",
+        default="./pretrained_weights/tsaiyue/AnimateAnyone_PD/animatediff_mm_sd_v15_v2.pdparams",
         metadata={"help": "motion_module_path"},
     )
 
     reference_unet_path: Optional[str] = field(
-        default="./pretrained_weights/Tsaiyue/AnimateAnyone/reference_unet.pdparams",
+        default="./pretrained_weights/tsaiyue/AnimateAnyone_PD/reference_unet.pdparams",
         metadata={"help": "reference_unet_path"},
     )
     pose_guider_path: Optional[str] = field(
-        default="./pretrained_weights/Tsaiyue/AnimateAnyone/pose_guider.pdparams",
+        default="./pretrained_weights/tsaiyue/AnimateAnyone_PD/pose_guider.pdparams",
         metadata={"help": "pose_guider_path"},
     )
     pose_guider_pretrain: Optional[bool] = field(
