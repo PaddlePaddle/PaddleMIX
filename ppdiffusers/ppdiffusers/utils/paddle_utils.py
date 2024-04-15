@@ -204,8 +204,6 @@ if is_paddle_available():
 
         @contextmanager
         def dtype_guard(dtype="float32"):
-            if isinstance(dtype, paddle.dtype):
-                dtype = str(dtype).replace("paddle.", "")
             origin_dtype = paddle.get_default_dtype()
             paddle.set_default_dtype(dtype)
             try:
