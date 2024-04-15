@@ -56,6 +56,8 @@ def main():
     trainer.set_optimizer_grouped_parameters(params_to_train)
 
     trainer.train()
+    trainer.save_model()
+    trainer.save_state()
 
 
 if __name__ == "__main__":

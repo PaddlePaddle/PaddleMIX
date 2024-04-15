@@ -24,7 +24,7 @@ import paddle
 from ppdiffusers.configuration_utils import ConfigMixin, register_to_config
 from ppdiffusers.models.attention_processor import AttentionProcessor
 from ppdiffusers.models.embeddings import TimestepEmbedding, Timesteps
-from ppdiffusers.models.modeling_utils import ModelMixin
+from ppdiffusers.models.modeling_utils import ContextManagers, ModelMixin
 from ppdiffusers.utils import BaseOutput, logging
 
 from .resnet import InflatedConv3d, InflatedGroupNorm
@@ -592,9 +592,8 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin):
         unet_config["mid_block_type"] = "UNetMidBlock3DCrossAttn"
 
         init_contexts = []
-        init_contexts.append(paddle.dtype_guard(weight_dtype))
-
-        from ppdiffusers.models.modeling_utils import ContextManagers
+        if weight_dtype is not None:
+            init_contexts.append(paddle.dtype_guard(weight_dtype))
 
         with ContextManagers(init_contexts):
             model = cls.from_config(unet_config, **unet_additional_kwargs)
@@ -606,8 +605,9 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin):
             motion_state_dict = paddle.load(motion_module_path)
             state_dict.update(motion_state_dict)
 
-        for k in state_dict.keys():
-            state_dict[k] = state_dict[k].astype(weight_dtype)
+        if weight_dtype is not None:
+            for k in state_dict.keys():
+                state_dict[k] = state_dict[k].astype(weight_dtype)
 
         m, u = model.set_state_dict(state_dict)
         print(f"### missing keys: {len(m)}; \n### unexpected keys: {len(u)};")

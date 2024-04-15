@@ -71,7 +71,7 @@ class ReferenceAttentionControl:
         style_fidelity,
         reference_attn,
         reference_adain,
-        dtype="float32",
+        dtype="float16",
         batch_size=1,
         num_images_per_prompt=1,
         fusion_blocks="midup",
@@ -274,7 +274,7 @@ class ReferenceAttentionControl:
                 module.bank = []
                 module.attn_weight = float(i) / float(len(attn_modules))
 
-    def update(self, writer, dtype="float32"):
+    def update(self, writer, dtype="float16"):
         if self.reference_attn:
             if self.fusion_blocks == "midup":
                 reader_attn_modules = [
@@ -297,7 +297,7 @@ class ReferenceAttentionControl:
             reader_attn_modules = sorted(reader_attn_modules, key=lambda x: -x.norm1._normalized_shape[0])
             writer_attn_modules = sorted(writer_attn_modules, key=lambda x: -x.norm1._normalized_shape[0])
             for r, w in zip(reader_attn_modules, writer_attn_modules):
-                r.bank = [v.clone().to(dtype) for v in w.bank]
+                r.bank = [v.clone() for v in w.bank]
                 # w.bank.clear()
 
     def clear(self):

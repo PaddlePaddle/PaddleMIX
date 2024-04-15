@@ -98,6 +98,7 @@ class Pose2VideoPipeline(DiffusionPipeline):
         faster_set_state_dict(self.reference_unet, state_dict_ref)
 
         # loading the pose guider
+
         state_dict_pose_guider = smart_load(config.pose_guider_path)
         faster_set_state_dict(self.pose_guider, state_dict_pose_guider)
 

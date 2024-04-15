@@ -74,9 +74,9 @@ export PYTHONPATH=$ppdiffusers_path:$PYTHONPATH
 python -u -m paddle.distributed.launch --gpus "0,1,2,3" scripts/trainer_stage1.py \
     --do_train \
     --output_dir ./exp_output/stage1 \
-    --save_strategy 'no' \
-    --save_total_limit 5 \
-    --save_steps 800 \
+    --save_strategy 'steps' \
+    --save_total_limit 2 \
+    --save_steps 2000 \
     --per_device_train_batch_size 1 \
     --gradient_accumulation_steps 1 \
     --learning_rate 1.0e-5 \
@@ -86,7 +86,9 @@ python -u -m paddle.distributed.launch --gpus "0,1,2,3" scripts/trainer_stage1.p
     --warmup_steps 1 \
     --seed 42 \
     --report_to all \
-    --sharding "stage2"
+    --sharding "stage1" \
+    --fp16 True \
+    --fp16_opt_level O2
 ```
 训练脚本基于 paddlenlp.trainer 实现，支持单卡、多卡训练，可通过 `--gpus` 指定训练使用的GPU卡号，在多卡环境上支持分组切片技术以降低显存占用。训练过程中的阶段性权重以及可视化训练监控文件将存储于 `exp_output/stage1` 目录下。训练流程相关参数详见 [paddlenlp.trainer](https://github.com/PaddlePaddle/PaddleNLP/blob/a5f69e4543a5371ceb28106b7aa2ea93208620b9/paddlenlp/trainer/training_args.py)，模型与数据相关参数详见 `src/trainer/args_stage1.py`。
 ### 4.3 第二阶段训练
@@ -94,13 +96,12 @@ python -u -m paddle.distributed.launch --gpus "0,1,2,3" scripts/trainer_stage1.p
 ```shell
 ppdiffusers_path=PaddleMIX/ppdiffusers
 export PYTHONPATH=$ppdiffusers_path:$PYTHONPATH
-export GLOG_minloglevel=2
 python -u -m paddle.distributed.launch --gpus "0" scripts/trainer_stage2.py \
     --do_train \
     --output_dir ./exp_output/stage2 \
-    --save_strategy 'no' \
-    --save_total_limit 5 \
-    --save_steps 800 \
+    --save_strategy 'steps' \
+    --save_total_limit 2 \
+    --save_steps 2000 \
     --per_device_train_batch_size 1 \
     --gradient_accumulation_steps 1 \
     --learning_rate 1.0e-5 \
@@ -109,9 +110,15 @@ python -u -m paddle.distributed.launch --gpus "0" scripts/trainer_stage2.py \
     --lr_scheduler_type "constant" \
     --warmup_steps 1 \
     --seed 42 \
-    --report_to all
+    --report_to all \
+    --fp16 True \
+    --fp16_opt_level O2 \
+    --train_width 256 \
+    --train_height 512
 ```
 该训练脚本同样基于paddlenlp.trainer实现，支持单卡、多卡训练，可通过 `--gpus` 指定训练使用的GPU卡号。训练过程中的阶段性权重以及可视化训练监控文件将存储于 `exp_output/stage2` 目录下。训练流程相关参数详见 [paddlenlp.trainer](https://github.com/PaddlePaddle/PaddleNLP/blob/a5f69e4543a5371ceb28106b7aa2ea93208620b9/paddlenlp/trainer/training_args.py)，模型与数据相关参数详见 `src/trainer/args_stage2.py`。
+
+**___Note: 可根据具体算力情况适当调整生成视频分辨率相关参数 `--train_width` 和 `--train_width`，以获得更好的训练效果。___**
 
 ### 4.4 第二阶段微调前后对比
 在第二阶段训练中，利用 [animatediff初始化权重](https://huggingface.co/guoyww/animatediff)对模型组网中的motion_modules进行微调，微调前后生成效果对比如下：

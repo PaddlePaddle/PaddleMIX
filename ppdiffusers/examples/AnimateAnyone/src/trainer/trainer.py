@@ -14,7 +14,6 @@
 
 import os
 import os.path as osp
-import shutil
 from collections import OrderedDict
 from typing import Any, Dict, Union
 
@@ -118,41 +117,23 @@ class AnimateAnyoneTrainer_stage1(Trainer):
 
         self.model.reference_control_reader.clear()
         self.model.reference_control_writer.clear()
-
-        if (self.state.global_step > 0) and (self.state.global_step % self.args.save_steps == 0):
-            self.save_checkpoints(self.args.output_dir, self.state.global_step, total_limit=self.args.save_total_limit)
-
         return loss.detach()
 
-    def save_checkpoints(self, save_dir, ckpt_num, total_limit=None):
+    def _save(self, output_dir=None, state_dict=None, merge_tensor_parallel=False):
+        output_dir = output_dir if output_dir is not None else self.args.output_dir
+        os.makedirs(output_dir, exist_ok=True)
 
-        if total_limit is not None:
-            checkpoints = os.listdir(save_dir)
-            checkpoints = [d for d in checkpoints if d.startswith("checkpoints-")]
-            checkpoints = sorted(checkpoints, key=lambda x: int(x.split("-")[1].split(".")[0]))
+        logger.info(f"Saving model checkpoint to {output_dir}")
 
-            if len(checkpoints) >= total_limit:
-                num_to_remove = len(checkpoints) - total_limit + 1
-                removing_checkpoints = checkpoints[0:num_to_remove]
-                logger.info(
-                    f"{len(checkpoints)} checkpoints already exist, removing {len(removing_checkpoints)} checkpoints"
-                )
-                logger.info(f"removing checkpoints: {', '.join(removing_checkpoints)}")
-
-                for removing_checkpoint in removing_checkpoints:
-                    removing_checkpoint = os.path.join(save_dir, removing_checkpoint)
-                    shutil.rmtree(removing_checkpoint)
-
-        save_dir = osp.join(save_dir, f"checkpoints-{ckpt_num}/")
-        denoising_unet_save_path = osp.join(save_dir, "denoising_unet.pdparams")
+        denoising_unet_save_path = osp.join(output_dir, "denoising_unet.pdparams")
         denoising_unet_state_dict = self.model.denoising_unet.state_dict()
         paddle.save(denoising_unet_state_dict, denoising_unet_save_path)
 
-        reference_unet_save_path = osp.join(save_dir, "reference_unet.pdparams")
+        reference_unet_save_path = osp.join(output_dir, "reference_unet.pdparams")
         reference_unet_state_dict = self.model.reference_unet.state_dict()
         paddle.save(reference_unet_state_dict, reference_unet_save_path)
 
-        pose_guider_save_path = osp.join(save_dir, "pose_guider.pdparams")
+        pose_guider_save_path = osp.join(output_dir, "pose_guider.pdparams")
         pose_guider_state_dict = self.model.pose_guider.state_dict()
         paddle.save(pose_guider_state_dict, pose_guider_save_path)
 
@@ -215,37 +196,20 @@ class AnimateAnyoneTrainer_stage2(Trainer):
         self.model.reference_control_reader.clear()
         self.model.reference_control_writer.clear()
 
-        if (self.state.global_step > 0) and (self.state.global_step % self.args.save_steps == 0):
-            self.save_motion_module(
-                model, self.args.output_dir, self.state.global_step, total_limit=self.args.save_total_limit
-            )
-
         return loss.detach()
 
-    def save_motion_module(self, model, save_dir, ckpt_num, total_limit=None):
-        save_path = osp.join(save_dir, f"motion_module-{ckpt_num}.pdparams")
+    def _save(self, output_dir=None, state_dict=None, merge_tensor_parallel=False):
+        output_dir = output_dir if output_dir is not None else self.args.output_dir
+        os.makedirs(output_dir, exist_ok=True)
 
-        if total_limit is not None:
-            checkpoints = os.listdir(save_dir)
-            checkpoints = [d for d in checkpoints if d.startswith("motion_module")]
-            checkpoints = sorted(checkpoints, key=lambda x: int(x.split("-")[1].split(".")[0]))
+        logger.info(f"Saving model checkpoint to {output_dir}")
 
-            if len(checkpoints) >= total_limit:
-                num_to_remove = len(checkpoints) - total_limit + 1
-                removing_checkpoints = checkpoints[0:num_to_remove]
-                logger.info(
-                    f"{len(checkpoints)} checkpoints already exist, removing {len(removing_checkpoints)} checkpoints"
-                )
-                logger.info(f"removing checkpoints: {', '.join(removing_checkpoints)}")
-
-                for removing_checkpoint in removing_checkpoints:
-                    removing_checkpoint = os.path.join(save_dir, removing_checkpoint)
-                    os.remove(removing_checkpoint)
+        motion_module_save_path = osp.join(output_dir, "motion_module.pdparams")
 
         mm_state_dict = OrderedDict()
-        state_dict = model.state_dict()
+        state_dict = self.model.state_dict()
         for key in state_dict:
             if "motion_module" in key:
                 mm_state_dict[key] = state_dict[key]
 
-        paddle.save(mm_state_dict, save_path)
+        paddle.save(mm_state_dict, motion_module_save_path)

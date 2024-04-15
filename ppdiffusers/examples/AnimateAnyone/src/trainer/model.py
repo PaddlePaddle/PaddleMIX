@@ -33,13 +33,6 @@ class AnimateAnyoneModel_stage1(nn.Layer):
     def __init__(self, model_args):
         super().__init__()
 
-        if model_args.weight_dtype == "fp16":
-            self.weight_dtype = paddle.float16
-        elif model_args.weight_dtype == "fp32":
-            self.weight_dtype = paddle.float32
-        else:
-            raise ValueError(f"Do not support weight dtype: {model_args.weight_dtype} during training")
-
         self.train_noise_scheduler = DDIMScheduler(
             beta_start=model_args.beta_start,
             beta_end=model_args.beta_end,
@@ -55,19 +48,16 @@ class AnimateAnyoneModel_stage1(nn.Layer):
 
         self.vae = AutoencoderKL.from_pretrained(
             model_args.vae_model_path,
-            paddle_dtype=self.weight_dtype,
         )
 
         self.reference_unet = UNet2DConditionModel.from_pretrained(
             model_args.base_model_path,
-            paddle_dtype=self.weight_dtype,
             subfolder="unet",
         )
 
         self.denoising_unet = UNet3DConditionModel.from_pretrained_2d(
             denoising_unet_config_path=model_args.denoising_unet_config_path,
             base_model_path=model_args.denoising_unet_base_model_path,
-            weight_dtype=self.weight_dtype,
             unet_additional_kwargs={
                 "use_motion_module": False,
                 "unet_use_temporal_attention": False,
@@ -89,7 +79,6 @@ class AnimateAnyoneModel_stage1(nn.Layer):
 
         self.image_enc = CLIPVisionModelWithProjection.from_pretrained(
             model_args.image_encoder_path,
-            dtype=self.weight_dtype,
             subfolder="image_encoder",
         )
 
@@ -97,7 +86,6 @@ class AnimateAnyoneModel_stage1(nn.Layer):
             self.pose_guider = PoseGuider(
                 conditioning_embedding_channels=320,
                 block_out_channels=(16, 32, 96, 256),
-                weight_dtype=self.weight_dtype,
             )
 
             # load pretrained controlnet-openpose params for pose_guider
@@ -106,7 +94,7 @@ class AnimateAnyoneModel_stage1(nn.Layer):
             for k in controlnet_openpose_state_dict.keys():
                 if k.startswith("controlnet_cond_embedding.") and k.find("conv_out") < 0:
                     new_k = k.replace("controlnet_cond_embedding.", "")
-                    state_dict_to_load[new_k] = controlnet_openpose_state_dict[k].astype(self.weight_dtype)
+                    state_dict_to_load[new_k] = controlnet_openpose_state_dict[k]
             miss, _ = self.pose_guider.set_state_dict(state_dict=state_dict_to_load)
             logger.info(f"Missing key for pose guider: {len(miss)}")
         else:
@@ -163,7 +151,7 @@ class AnimateAnyoneModel_stage1(nn.Layer):
 
     def forward(self, batch, **kwargs):
 
-        pixel_values = batch["img"].astype(self.weight_dtype)
+        pixel_values = batch["img"]
         with paddle.no_grad():
             latents = self.vae.encode(pixel_values).latent_dist.sample()
             latents = latents.unsqueeze(2)  # (b, c, 1, h, w)
@@ -180,7 +168,7 @@ class AnimateAnyoneModel_stage1(nn.Layer):
         timesteps = timesteps.astype(dtype="int64")
 
         tgt_pose_img = batch["tgt_pose"]
-        tgt_pose_img = tgt_pose_img.unsqueeze(2).astype(self.weight_dtype)  # (bs, 3, 1, 512, 512)
+        tgt_pose_img = tgt_pose_img.unsqueeze(2)  # (bs, 3, 1, 512, 512)
 
         uncond_fwd = random.random() < self.uncond_ratio
 
@@ -199,7 +187,7 @@ class AnimateAnyoneModel_stage1(nn.Layer):
             ref_image_list.append(ref_img)
 
         with paddle.no_grad():
-            ref_img = paddle.stack(ref_image_list, axis=0).astype(dtype=self.weight_dtype)
+            ref_img = paddle.stack(ref_image_list, axis=0)
             ref_image_latents = self.vae.encode(ref_img).latent_dist.sample()  # (bs, d, 64, 64)
             ref_image_latents = ref_image_latents * 0.18215
 
@@ -208,7 +196,7 @@ class AnimateAnyoneModel_stage1(nn.Layer):
             image_prompt_embeds = clip_image_embeds.unsqueeze(1)  # (bs, 1, d)
 
         # add noise
-        noisy_latents = self.train_noise_scheduler.add_noise(latents, noise, timesteps).astype(dtype=self.weight_dtype)
+        noisy_latents = self.train_noise_scheduler.add_noise(latents, noise, timesteps)
 
         # Get the target for loss depending on the prediction type
         if self.train_noise_scheduler.prediction_type == "epsilon":
@@ -251,21 +239,12 @@ class AnimateAnyoneModel_stage1(nn.Layer):
             loss = loss.mean(axis=list(range(1, len(loss.shape)))) * mse_loss_weights
             loss = loss.mean()
 
-        # print("self.weight_dtype", self.weight_dtype)
-        # exit()
-        return loss.astype(dtype=self.weight_dtype)
+        return loss
 
 
 class AnimateAnyoneModel_stage2(nn.Layer):
     def __init__(self, model_args):
         super().__init__()
-
-        if model_args.weight_dtype == "fp16":
-            self.weight_dtype = paddle.float16
-        elif model_args.weight_dtype == "fp32":
-            self.weight_dtype = paddle.float32
-        else:
-            raise ValueError(f"Do not support weight dtype: {model_args.weight_dtype} during training")
 
         self.train_noise_scheduler = DDIMScheduler(
             beta_start=model_args.beta_start,
@@ -282,18 +261,15 @@ class AnimateAnyoneModel_stage2(nn.Layer):
 
         self.vae = AutoencoderKL.from_pretrained(
             model_args.vae_model_path,
-            paddle_dtype=self.weight_dtype,
         )
 
         self.image_enc = CLIPVisionModelWithProjection.from_pretrained(
             model_args.image_encoder_path,
-            dtype=self.weight_dtype,
             subfolder="image_encoder",
         )
 
         self.reference_unet = UNet2DConditionModel.from_pretrained(
             model_args.base_model_path,
-            paddle_dtype=self.weight_dtype,
             subfolder="unet",
         )
 
@@ -303,20 +279,17 @@ class AnimateAnyoneModel_stage2(nn.Layer):
             denoising_unet_config_path=model_args.denoising_unet_config_path,
             base_model_path=model_args.denoising_unet_base_model_path,
             motion_module_path=model_args.motion_module_path,
-            weight_dtype=self.weight_dtype,
             unet_additional_kwargs=OmegaConf.to_container(infer_config.unet_additional_kwargs),
         )
 
-        self.pose_guider = PoseGuider(
-            conditioning_embedding_channels=320, block_out_channels=(16, 32, 96, 256), weight_dtype=self.weight_dtype
-        )
+        self.pose_guider = PoseGuider(conditioning_embedding_channels=320, block_out_channels=(16, 32, 96, 256))
 
         reference_unet_state_dict = paddle.load(
             model_args.reference_unet_path,
         )
 
         for k in reference_unet_state_dict.keys():
-            reference_unet_state_dict[k] = reference_unet_state_dict[k].astype(self.weight_dtype)
+            reference_unet_state_dict[k] = reference_unet_state_dict[k]
 
         self.reference_unet.set_state_dict(
             reference_unet_state_dict,
@@ -326,7 +299,7 @@ class AnimateAnyoneModel_stage2(nn.Layer):
             model_args.pose_guider_path,
         )
         for k in pose_guider_state_dict.keys():
-            pose_guider_state_dict[k] = pose_guider_state_dict[k].astype(self.weight_dtype)
+            pose_guider_state_dict[k] = pose_guider_state_dict[k]
 
         self.pose_guider.set_state_dict(
             pose_guider_state_dict,
@@ -393,7 +366,7 @@ class AnimateAnyoneModel_stage2(nn.Layer):
     def forward(self, batch, **kwargs):
 
         # Convert videos to latent space
-        pixel_values_vid = batch["pixel_values_vid"].astype(self.weight_dtype)
+        pixel_values_vid = batch["pixel_values_vid"]
         with paddle.no_grad():
             video_length = pixel_values_vid.shape[1]
             pixel_values_vid = rearrange(pixel_values_vid, "b f c h w -> (b f) c h w")
@@ -406,15 +379,13 @@ class AnimateAnyoneModel_stage2(nn.Layer):
         if self.noise_offset > 0.0:
             noise += self.noise_offset * paddle.randn((noise.shape[0], noise.shape[1], 1, 1, 1))
 
-        noise = noise.astype(self.weight_dtype)
-
         bsz = latents.shape[0]
         # Sample a random timestep for each video
         timesteps = paddle.randint(0, self.train_noise_scheduler.num_train_timesteps, (bsz,))
 
         timesteps = timesteps.astype(dtype="int64")
 
-        pixel_values_pose = batch["pixel_values_pose"].astype(self.weight_dtype)  # (bs, f, c, H, W)
+        pixel_values_pose = batch["pixel_values_pose"]  # (bs, f, c, H, W)
 
         pixel_values_pose = pixel_values_pose.transpose(perm=[0, 2, 1, 3, 4])  # (bs, c, f, H, W)
 
@@ -445,7 +416,7 @@ class AnimateAnyoneModel_stage2(nn.Layer):
 
             clip_image_embeds = clip_image_embeds.unsqueeze(1)  # (bs, 1, d)
         # add noise
-        noisy_latents = self.train_noise_scheduler.add_noise(latents, noise, timesteps).astype(self.weight_dtype)
+        noisy_latents = self.train_noise_scheduler.add_noise(latents, noise, timesteps)
 
         # Get the target for loss depending on the prediction type
         if self.train_noise_scheduler.prediction_type == "epsilon":
@@ -475,7 +446,6 @@ class AnimateAnyoneModel_stage2(nn.Layer):
 
         if self.snr_gamma == 0:
             loss = F.mse_loss(model_pred.astype("float32"), target.astype("float32"), reduction="mean")
-            loss = loss.astype(self.weight_dtype)
         else:
             snr = self.compute_snr(self.train_noise_scheduler, timesteps)
             if self.train_noise_scheduler.prediction_type == "v_prediction":
@@ -487,6 +457,5 @@ class AnimateAnyoneModel_stage2(nn.Layer):
             loss = F.mse_loss(model_pred.astype("float32"), target.astype("float32"), reduction="none")
             loss = loss.mean(axis=list(range(1, len(loss.shape)))) * mse_loss_weights
             loss = loss.mean()
-            loss = loss.astype(self.weight_dtype)
 
         return loss

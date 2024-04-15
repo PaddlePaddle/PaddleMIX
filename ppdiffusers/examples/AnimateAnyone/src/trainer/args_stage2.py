@@ -31,11 +31,6 @@ class ModelArguments:
         metadata={"help": "profiler_options."},
     )
 
-    weight_dtype: Optional[str] = field(
-        default="fp16",
-        metadata={"help": "weight_dtype, fp32 / fp16"},
-    )
-
     num_train_timesteps: Optional[int] = field(
         default=1000,
         metadata={"help": "num_train_timesteps for scheduler"},
