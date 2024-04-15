@@ -38,10 +38,10 @@ class LlavaMetaModel:
 
             if "unpad" in getattr(config, "mm_patch_merge_type", ""):
                 self.image_newline = paddle.create_parameter(
-                    shape=paddle.empty(shape=[config.hidden_size], dtype=self.dtype).shape,
-                    dtype=self.dtype,
+                    shape=paddle.empty(shape=[config.hidden_size], dtype=self._dtype).shape,
+                    dtype=self._dtype,
                     default_initializer=paddle.nn.initializer.Assign(
-                        paddle.empty(shape=[config.hidden_size], dtype=self.dtype)
+                        paddle.empty(shape=[config.hidden_size], dtype=self._dtype)
                     ),
                 )
                 self.image_newline.stop_gradient = False
@@ -266,10 +266,11 @@ class LlavaMetaForCausalLM:
             for i in range(len(image_token_indices) - 1):
                 cur_input_ids_noim.append(cur_input_ids[image_token_indices[i] + 1 : image_token_indices[i + 1]])
                 cur_labels_noim.append(cur_labels[image_token_indices[i] + 1 : image_token_indices[i + 1]])
+
             split_sizes = [x.shape[0] for x in cur_labels_noim]
+
             cur_input_embeds = self.get_model().embed_tokens(paddle.concat(x=cur_input_ids_noim))
             cur_input_embeds_no_im = paddle.split(x=cur_input_embeds, num_or_sections=split_sizes, axis=0)
-
             cur_new_input_embeds = []
             cur_new_labels = []
 
