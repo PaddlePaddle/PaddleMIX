@@ -16,12 +16,14 @@ import argparse
 import os
 
 import paddle
+from utils import load_real_time_tokens
 
 from paddlemix.auto import AutoConfigMIX, AutoProcessorMIX, AutoTokenizerMIX
 from paddlemix.models.llava.constants import (
     DEFAULT_IM_END_TOKEN,
     DEFAULT_IM_START_TOKEN,
     DEFAULT_IMAGE_TOKEN,
+    IMAGE_TOKEN_INDEX,
 )
 from paddlemix.models.llava.conversation import conv_templates
 from paddlemix.utils.log import logger
@@ -31,9 +33,9 @@ class Predictor(object):
     def __init__(self, args):
 
         self.compute_dtype = "float16" if args.fp16 else "bfloat16"
-        if not paddle.amp.is_bfloat16_supported():
+        if not paddle.amp.is_bfloat16_supported() and self.compute_dtype == "bfloat16":
             logger.warning("bfloat16 is not supported on your device,change to float32")
-        self.compute_dtype = "float32"
+            self.compute_dtype = "float32"
 
         self.args = args
         self.config = AutoConfigMIX.from_pretrained(args.model_name_or_path)
@@ -81,31 +83,89 @@ class Predictor(object):
 
     @paddle.no_grad()
     def generate_with_image_features(self, image_features, input_ids):
-        max_len = self.config.max_length
+        max_len = 2048
+        total_max_length = max_len + 1024
         batch, seq, _ = image_features.shape
+        seq += input_ids.shape[1] - 1
 
-        seq += input_ids.shape[1]
+        _attention_mask = paddle.ones_like(x=input_ids, dtype="bool")
+        input_ids = [
+            cur_input_ids[cur_attention_mask] for cur_input_ids, cur_attention_mask in zip(input_ids, _attention_mask)
+        ]
+        cur_image_idx = 0
+        new_input_ids = []
+        img_pos = []
+        for batch_idx, cur_input_ids in enumerate(input_ids):
+            num_images = (cur_input_ids == IMAGE_TOKEN_INDEX).sum()
 
-        tgt_generation_mask = paddle.full([batch, 1, 1, max_len], 1, dtype=self.compute_dtype)
+            image_token_indices = (
+                [-1]
+                + paddle.where(cur_input_ids == IMAGE_TOKEN_INDEX)[0].squeeze(axis=1).tolist()
+                + [cur_input_ids.shape[0]]
+            )
+            cur_input_ids_noim = []
+
+            for i in range(len(image_token_indices) - 1):
+                cur_input_ids_noim.append(cur_input_ids[image_token_indices[i] + 1 : image_token_indices[i + 1]])
+
+            split_sizes = [x.shape[0] for x in cur_input_ids_noim]
+
+            split_start = 0
+            cur_new_input_ids = []
+            cur_img_pos = []
+
+            for i in range(num_images + 1):
+                cur_new_input_ids.append(cur_input_ids_noim[i])
+
+                if i < num_images:
+                    cur_image_features = image_features[cur_image_idx]
+                    cur_image_idx += 1
+                    cur_new_input_ids.append(paddle.full([cur_image_features.shape[0]], 1, dtype="int64"))
+                    split_start += split_sizes[i - 1] if i > 0 else split_sizes[i]
+                    cur_img_pos.append([split_start, split_start + cur_image_features.shape[0]])
+                    split_start += cur_image_features.shape[0]
+
+            cur_new_input_ids = paddle.concat(x=cur_new_input_ids)
+            new_input_ids.append(cur_new_input_ids)
+            img_pos.append(cur_img_pos)
+
+        new_input_ids = paddle.to_tensor(new_input_ids)
+        img_pos = paddle.to_tensor(img_pos)
+
+        tgt_generation_mask = paddle.full([batch, 1, 1, total_max_length], 1)
+
+        attention_mask = paddle.zeros(
+            shape=(batch, 1, total_max_length, total_max_length),
+            dtype="int64",
+        )
+        length = seq
+        attention_mask[:, 0, :length, :length] = paddle.tril(paddle.ones(shape=(length, length), dtype="int64"))
+
+        position_ids = paddle.full([batch, total_max_length], 0, dtype="int64")
+        position_ids[:, :seq] = paddle.arange(0, seq)
+
         inputs = [
-            input_ids,  # input_ids
+            new_input_ids,  # input_ids
             image_features,  # image_features
+            img_pos,
+            attention_mask,
+            position_ids,
             paddle.full([batch, 1], 1.0, dtype="float32"),  # penalty_score
             paddle.full([batch, 1], 0.0, dtype="float32"),  # frequency_score,
             paddle.full([batch, 1], 0.0, dtype="float32"),  # presence_score,
             paddle.full([batch, 1], 1, dtype="int64"),  # min_length,
             paddle.full([batch, 1], max_len, dtype="int64"),  # max_length,
-            paddle.full([batch, 1], 0.2, dtype="float32"),  # temperature,
-            paddle.full([batch, 1], 0.0, dtype="float32"),  # top_p,
+            paddle.full([batch, 1], 0.7, dtype="float32"),  # temperature,
+            paddle.full([batch, 1], 0.95, dtype="float32"),  # top_p,
             paddle.full([1], self.config.eos_token_id, dtype="int64"),  # eos_token_id,
             paddle.full([batch, 1], seq, dtype="int32"),  # seq_len_encoder,
             paddle.full([batch, 1], seq, dtype="int32"),  # seq_len_decoder,
             paddle.full([batch, 1], 0, dtype="int64"),  # step_idx,
             paddle.full([batch, 1], False, dtype="bool"),  # stop_flags,
-            paddle.full([batch, 1], -123, dtype="int64"),  # tgt_ids can be be initialized arbitrarily
+            paddle.full([batch, 1], 29962, dtype="int64"),  # tgt_ids can be be initialized arbitrarily
             paddle.full([batch, 1], seq - 1, dtype="int64"),  # tgt_pos,
             tgt_generation_mask,  # tgt_generation_mask,
-            paddle.full([batch, max_len], -1, dtype="int64"),  # pre_ids, can be initialized arbitrarily
+            paddle.full([batch, total_max_length], -1, dtype="int64"),  # pre_ids, can be initialized arbitrarily
             paddle.full([1], batch, dtype="int64"),  # stop_nums, be batch
         ]
 
@@ -115,7 +175,7 @@ class Predictor(object):
                     2,
                     batch,
                     self.config.num_attention_heads,
-                    max_len,
+                    total_max_length,
                     self.config.hidden_size // self.config.num_attention_heads,
                 ],
                 dtype=self.compute_dtype,
@@ -124,9 +184,10 @@ class Predictor(object):
             inputs.append(tmp)
 
         self.second_predictor.run(inputs)
-        # tokens = load_real_time_tokens()
-        # generate_ids = tokens.tolist()
-        # return generate_ids, None
+        tokens = load_real_time_tokens()
+        generate_ids = tokens.tolist()
+
+        return generate_ids, None
 
     def pre_processing(self, inp, first_message):
         model_name = self.args.model_name_or_path
@@ -169,9 +230,9 @@ class Predictor(object):
 
         return data_dict
 
-    # def post_processing(self, generate_ids):
-    #     msg = self.processor.batch_decode(generate_ids)
-    #     return msg
+    def post_processing(self, generate_ids):
+        msg = self.tokenizer.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)
+        return msg
 
     def predict(self):
         roles = "user", "assistant"
@@ -195,9 +256,8 @@ class Predictor(object):
                 data_dict["input_ids"],
             )
 
-        # msg = self.post_processing(generate_ids)
-        msg = None
-        return msg
+            msg = self.post_processing(generate_ids)
+            print("Outputs: ", msg)
 
 
 if __name__ == "__main__":
@@ -223,7 +283,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--device", default="gpu", choices=["gpu", "cpu", "xpu"], help="Device selected for inference."
     )
-    parser.add_argument("--seed", default=1234)
+    parser.add_argument("--seed", default=0)
     parser.add_argument("--fp16", action="store_true")
     parser.add_argument("--image_file", type=str, required=True)
     parser.add_argument("--conv_mode", type=str, default=None)
@@ -233,5 +293,4 @@ if __name__ == "__main__":
     paddle.seed(args.seed)
 
     predictor = Predictor(args)
-    msg = predictor.predict()
-    print("Outputs: ", msg)
+    predictor.predict()
