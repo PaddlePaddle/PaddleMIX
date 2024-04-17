@@ -15,19 +15,7 @@
 import av
 import cv2
 import numpy as np
-import paddle
 from PIL import Image
-
-
-def seed_everything(seed):
-    import random
-
-    import numpy as np
-
-    paddle.seed(seed=seed)
-    paddle.seed(seed=seed)
-    np.random.seed(seed % 2**32)
-    random.seed(seed)
 
 
 def read_frames(video_path):

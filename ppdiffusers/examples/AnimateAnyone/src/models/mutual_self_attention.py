@@ -107,7 +107,8 @@ class ReferenceAttentionControl:
             class_labels: Optional[paddle.Tensor] = None,
             video_length=None,
         ):
-            if self.use_ada_layer_norm:  # False
+
+            if self.use_ada_layer_norm:
                 norm_hidden_states = self.norm1(hidden_states, timestep)
             elif self.use_ada_layer_norm_zero:
                 (norm_hidden_states, gate_msa, shift_mlp, scale_mlp, gate_mlp,) = self.norm1(
@@ -120,7 +121,6 @@ class ReferenceAttentionControl:
                 norm_hidden_states = self.norm1(hidden_states)
 
             # 1. Self-Attention
-            # self.only_cross_attention = False
             cross_attention_kwargs = cross_attention_kwargs if cross_attention_kwargs is not None else {}
             if self.only_cross_attention:
                 attn_output = self.attn1(
@@ -297,7 +297,7 @@ class ReferenceAttentionControl:
             reader_attn_modules = sorted(reader_attn_modules, key=lambda x: -x.norm1._normalized_shape[0])
             writer_attn_modules = sorted(writer_attn_modules, key=lambda x: -x.norm1._normalized_shape[0])
             for r, w in zip(reader_attn_modules, writer_attn_modules):
-                r.bank = [v.clone().to(dtype) for v in w.bank]
+                r.bank = [v.clone() for v in w.bank]
                 # w.bank.clear()
 
     def clear(self):
