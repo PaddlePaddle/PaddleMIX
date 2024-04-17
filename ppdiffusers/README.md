@@ -20,6 +20,13 @@
 **PPDiffusers**是一款支持多种模态（如文本图像跨模态、图像、语音）扩散模型（Diffusion Model）训练和推理的国产化工具箱，依托于[**PaddlePaddle**](https://www.paddlepaddle.org.cn/)框架和[**PaddleNLP**](https://github.com/PaddlePaddle/PaddleNLP)自然语言处理开发库。
 
 ## News 📢
+* 🔥 **2024.04.17 发布 0.24.0 版本，支持[Sora相关技术](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/sora)，支持[DiT](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/class_conditional_image_generation/DiT)、[SiT](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/class_conditional_image_generation/DiT#exploring-flow-and-diffusion-based-generative-models-with-scalable-interpolant-transformers-sit)、[UViT](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/text_to_image_mscoco_uvit)训练推理，新增[NaViT](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/navit)、[MAGVIT-v2](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/video_tokenizer/magvit2)模型；
+视频生成能力全面升级；
+新增视频生成模型[SVD](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/stable_video_diffusion)，支持模型微调和推理；
+新增姿态可控视频生成模型[AnimateAnyone](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/AnimateAnyone)、即插即用视频生成模型[AnimateDiff](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/examples/inference/text_to_video_generation_animediff.py)、GIF视频生成模型[Hotshot-XL](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/community/Hotshot-XL)；
+新增高速推理文图生成模型[LCM](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/consistency_distillation)，支持SD/SDXL训练和推理；
+[模型推理部署](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/deploy)全面升级；新增peft，accelerate后端；
+权重加载/保存全面升级，支持分布式、模型切片、safetensors等场景，相关能力已集成DiT、 [IP-Adapter](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/ip_adapter)、[PhotoMaker](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/PhotoMaker)、[InstantID](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/InstantID)等。**
 * 🔥 **2023.12.12 发布 0.19.4 版本，修复已知的部分 BUG，修复 0D Tensor 的 Warning，新增 SDXL 的 FastdeployPipeline。**
 * 🔥 **2023.09.27 发布 0.19.3 版本，新增[SDXL](#文本图像多模)，支持Text2Image、Img2Img、Inpainting、InstructPix2Pix等任务，支持DreamBooth Lora训练；
 新增[UniDiffuser](#文本图像多模)，通过统一的多模态扩散过程支持文生图、图生文等任务；
@@ -34,12 +41,6 @@ Stable Diffusion支持[BF16 O2训练](https://github.com/PaddlePaddle/PaddleMIX/
 新增[StableDiffusionHiresFixPipeline](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/community#stable-diffusion-with-high-resolution-fixing)，支持高分辨率修复；
 新增关键点控制生成任务评价指标[COCOeval](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/scripts/cocoeval_keypoints_score)；
 新增多种模态扩散模型Pipeline，包括视频生成（[Text-to-Video-Synth](#文本视频多模)、[Text-to-Video-Zero](#文本视频多模)）、音频生成（[AudioLDM](#文本音频多模)、[Spectrogram Diffusion](#音频)）；新增文图生成模型[IF](#文本图像多模)。**
-
-* 🔥 **2023.03.29 发布 0.14.0 版本，新增[LoRA](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/dreambooth)、[ControlNet](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/controlnet)，支持训练与推理；
-模型加载升级，[可直接加载HF Diffusers的权重](#加载HF-Diffusers权重)（safetensors和pt）或 [SD等原库的Lightning权重进行推理](#加载原库的Lightning权重)，[支持加载Civitai社区的LoRA权重](#加载Civitai社区的LoRA权重)；
-[支持xformers](#XFormers加速) 训练与推理；
-新增用于超高分辨率生成的VAE tiling；
-新增Instruct Pix2Pix、Semantic guidance、Depth2image等模型。**
 
 
 
