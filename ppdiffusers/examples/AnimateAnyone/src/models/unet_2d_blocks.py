@@ -22,14 +22,12 @@ from ppdiffusers.models.activations import get_activation
 from ppdiffusers.models.attention_processor import Attention
 from ppdiffusers.models.dual_transformer_2d import DualTransformer2DModel
 from ppdiffusers.models.resnet import Downsample2D, ResnetBlock2D, Upsample2D
-
-# TODO, should specific the path of this API
 from ppdiffusers.utils import logging, recompute_use_reentrant
 from ppdiffusers.utils.paddle_utils import apply_freeu
 
 from .transformer_2d import Transformer2DModel
 
-logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
+logger = logging.get_logger(__name__)
 
 
 def get_down_block(
@@ -280,7 +278,6 @@ class UNetMidBlock2D(paddle.nn.Layer):
         if attn_groups is None:
             attn_groups = resnet_groups if resnet_time_scale_shift == "default" else None
 
-        # there is always at least one resnet
         resnets = [
             ResnetBlock2D(
                 in_channels=in_channels,
@@ -640,6 +637,7 @@ class CrossAttnDownBlock2D(paddle.nn.Layer):
                 )
             else:
                 hidden_states = resnet(hidden_states, temb, scale=lora_scale)
+
                 hidden_states, ref_feature = attn(
                     hidden_states,
                     encoder_hidden_states=encoder_hidden_states,

@@ -69,9 +69,12 @@ def main():
 
     inference_config_path = config.inference_config
     infer_config = OmegaConf.load(inference_config_path)
+
     denoising_unet = UNet3DConditionModel.from_pretrained_2d(
-        config.denoising_unet_config_path,
-        weight_dtype,
+        denoising_unet_config_path=config.denoising_unet_config_path,
+        base_model_path=config.denoising_unet_path,
+        motion_module_path=config.motion_module_path,
+        weight_dtype=weight_dtype,
         unet_additional_kwargs=infer_config.unet_additional_kwargs,
     )
 
