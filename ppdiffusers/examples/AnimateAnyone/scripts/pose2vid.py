@@ -22,13 +22,13 @@ from omegaconf import OmegaConf
 from paddle.vision import transforms
 from paddlenlp.transformers import CLIPVisionModelWithProjection
 from PIL import Image
-from src.models.pose_guider import PoseGuider
-from src.models.unet_2d_condition import UNet2DConditionModel
-from src.models.unet_3d import UNet3DConditionModel
 from src.pipelines.pipeline_pose2vid_long import Pose2VideoPipeline
 from src.utils.util import get_fps, read_frames, save_video_as_mp4
 
 from ppdiffusers import AutoencoderKL, DDIMScheduler
+from ppdiffusers.models.AnimateAnyone.pose_guider import PoseGuider
+from ppdiffusers.models.AnimateAnyone.unet_2d_condition import UNet2DConditionModel
+from ppdiffusers.models.AnimateAnyone.unet_3d import UNet3DConditionModel
 
 
 def parse_args():

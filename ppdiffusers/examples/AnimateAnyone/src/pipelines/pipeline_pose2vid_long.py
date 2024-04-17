@@ -22,13 +22,15 @@ import numpy as np
 import paddle
 from einops import rearrange
 from paddlenlp.transformers import CLIPImageProcessor
-from src.models.mutual_self_attention import ReferenceAttentionControl
 from src.pipelines.context import get_context_scheduler
 from src.pipelines.utils import get_tensor_interpolation_method
 from tqdm import tqdm
 
 from ppdiffusers import DiffusionPipeline
 from ppdiffusers.image_processor import VaeImageProcessor
+from ppdiffusers.models.AnimateAnyone.mutual_self_attention import (
+    ReferenceAttentionControl,
+)
 from ppdiffusers.models.modeling_utils import faster_set_state_dict
 from ppdiffusers.schedulers import (
     DDIMScheduler,
@@ -461,20 +463,18 @@ class Pose2VideoPipeline(DiffusionPipeline):
 
                 for context in global_context:
 
-                    latent_model_input = paddle.concat(x=[latents[:, :, c] for c in context]).transpose(
-                        [2, 0, 1, 3, 4]
-                    )
+                    latent_model_input = paddle.concat(x=[latents[:, :, c] for c in context])
+
                     latent_model_input = latent_model_input.tile(
-                        ((2 if do_classifier_free_guidance else 1), 1, 1, 1, 1)
+                        ((2 if do_classifier_free_guidance else 1, 1, 1, 1, 1))
                     )
 
                     latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
                     b, c, f, h, w = latent_model_input.shape
 
-                    latent_pose_input = paddle.concat(x=[pose_fea[:, :, c] for c in context]).transpose(
-                        [2, 0, 1, 3, 4]
-                    )
+                    latent_pose_input = paddle.concat(x=[pose_fea[:, :, c] for c in context])
+
                     latent_pose_input = latent_pose_input.tile((2 if do_classifier_free_guidance else 1, 1, 1, 1, 1))
 
                     pred = self.denoising_unet(
@@ -486,13 +486,8 @@ class Pose2VideoPipeline(DiffusionPipeline):
                     )[0]
 
                     for j, c in enumerate(context):
-
-                        add_pred_noise = noise_pred[:, :, c].transpose([2, 0, 1, 3, 4]) + pred
-                        add_1_conuter = counter[:, :, c].transpose([2, 0, 1, 3, 4]) + 1
-                        for index, value_c in enumerate(c):
-
-                            noise_pred[:, :, value_c] = add_pred_noise[:, :, index]
-                            counter[:, :, value_c] = add_1_conuter[:, :, index]
+                        noise_pred[:, :, c] = noise_pred[:, :, c] + pred
+                        counter[:, :, c] = counter[:, :, c] + 1
 
                 # perform guidance
                 if do_classifier_free_guidance:
