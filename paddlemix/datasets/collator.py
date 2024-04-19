@@ -117,9 +117,6 @@ class QwenVLCollator:
         self.mode = mode
 
     def __call__(self, data_list):
-        import pdb
-
-        pdb.set_trace()
         input_ids = []
         labels = []
         images = []
@@ -292,26 +289,8 @@ class InternLMXComposer2Collator:
             input_tokens=input_tokens,
             input_text=input_text,
         )
-        # import pdb
-        # pdb.set_trace()
         if "images" in instances[0].keys():
             input_images = tuple([instance["images"] for instance in instances])
             batch["images"] = input_images
 
         return dict(samples=batch)
-
-        # for instance in instances:
-        #     input_tokens = instance['input_tokens']
-        #     input_text_parts = instance['text_parts']
-        #     input_images = instance['images']
-
-        # instances = [instance['samples'] for instance in instances]
-        # text_input, data_type = tuple([instance[key] for instance in
-        #     instances] for key in ('text_input', 'data_type'))
-        # if 'image' not in instances[0]:
-        #     text_input = [instance['text_input'][0] for instance in instances]
-        # batch = dict(text_input=text_input, data_type=data_type)
-        # if 'image' in instances[0]:
-        #     images = [instance['image'] for instance in instances]
-        #     batch['image'] = images
-        # return dict(samples=batch)
