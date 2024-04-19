@@ -18,7 +18,7 @@ from typing import Any, Dict, Optional
 import paddle
 from einops import rearrange
 
-from ppdiffusers.models.AnimateAnyone.attention import (
+from ppdiffusers.models.animate_anyone.attention import (
     BasicTransformerBlock,
     TemporalBasicTransformerBlock,
 )

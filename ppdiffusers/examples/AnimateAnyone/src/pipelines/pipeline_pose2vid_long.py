@@ -28,7 +28,7 @@ from tqdm import tqdm
 
 from ppdiffusers import DiffusionPipeline
 from ppdiffusers.image_processor import VaeImageProcessor
-from ppdiffusers.models.AnimateAnyone.mutual_self_attention import (
+from ppdiffusers.models.animate_anyone.mutual_self_attention import (
     ReferenceAttentionControl,
 )
 from ppdiffusers.models.modeling_utils import faster_set_state_dict

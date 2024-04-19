@@ -16,8 +16,8 @@ from typing import Tuple
 
 import paddle
 
-from ppdiffusers.models.AnimateAnyone.motion_module import zero_module
-from ppdiffusers.models.AnimateAnyone.resnet import InflatedConv3d
+from ppdiffusers.models.animate_anyone.motion_module import zero_module
+from ppdiffusers.models.animate_anyone.resnet import InflatedConv3d
 from ppdiffusers.models.modeling_utils import ContextManagers, ModelMixin
 
 
