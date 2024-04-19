@@ -46,7 +46,7 @@ def get_processor_mapping():
             continue
 
         # 2. find the `*processing.py` file as the identifier of ProcessorMixin class,
-        model_name = file_name[:-14]  # remove `.processing.py` 
+        model_name = file_name[:-14]  # remove `.processing.py` suffix
 
         model_module = import_module(f"paddlemix.processors.{file_name[:-3]}")
         for key in dir(model_module):
@@ -114,9 +114,6 @@ class AutoProcessorMIX:
             text_model_name_or_path = pretrained_model_name_or_path
 
         for names, processor_class in cls._processor_mapping.items():
-            if 'intern' in names.lower():
-                import pdb
-                pdb.set_trace()
             if names.lower() in pretrained_model_name_or_path.lower().replace("-", "_").replace("vicuna", "llava"):
                 attributes = processor_class["processor"].attributes
                 attributes_dict = {}
