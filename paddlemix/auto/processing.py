@@ -46,11 +46,7 @@ def get_processor_mapping():
             continue
 
         # 2. find the `*processing.py` file as the identifier of ProcessorMixin class,
-        model_name = None
-        if "qwen_vl" in file_name:  # qwen_vl use qwen_vl_processing
-            model_name = "qwen_vl"
-        else:
-            model_name = file_name.split("_")[0]
+        model_name = file_name[:-14]  # remove `.processing.py` 
 
         model_module = import_module(f"paddlemix.processors.{file_name[:-3]}")
         for key in dir(model_module):
