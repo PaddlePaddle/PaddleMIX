@@ -54,17 +54,14 @@ class InternLMXComposer2ForCausalLMTester:
             "num_key_value_heads": 8,
             "pad_token_id": 2,
             "rms_norm_eps": 1e-05,
-            "rope_scaling": {
-                "factor": 1.0,
-                "type": "dynamic"
-            },
+            "rope_scaling": {"factor": 1.0, "type": "dynamic"},
             "rope_theta": 1000000,
             "tie_word_embeddings": False,
             "torch_dtype": "float32",
             "transformers_version": "4.33.1",
             "use_cache": False,
             "vocab_size": 92544,
-            "img_size": 224
+            "img_size": 224,
         }
 
         return InternLMXcomposer2Config(**test_config)
