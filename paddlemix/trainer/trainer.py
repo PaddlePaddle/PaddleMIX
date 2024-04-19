@@ -20,11 +20,11 @@ from tensorboardX import SummaryWriter
 from paddlemix.datasets.collator import (
     CLIPCollator,
     EVA02Collator,
+    InternLMXComposer2Collator,
     LLaVACollator,
     MiniGPT4Collator,
     QwenVLCollator,
     VisualglmCollator,
-    InternLMXComposer2Collator,
 )
 from paddlemix.metrics.clip_zero_shot import ClipZeroShot
 from paddlemix.models.blip2.utils import BlipCollator
@@ -227,8 +227,6 @@ def get_trainer(
         else:
             collator = None
 
-        import pdb
-        pdb.set_trace()
         return Trainer(
             model=model,
             args=args,
