@@ -87,6 +87,8 @@ def main():
     if model_args.freeze_include or model_args.freeze_exclude:
         freeze_params(model, include=model_args.freeze_include, exclude=model_args.freeze_exclude)
 
+    import pdb
+    pdb.set_trace()
     # Load processor
     train_processor, tokenizer = AutoProcessorMIX.from_pretrained(
         model_args.model_name_or_path,
@@ -111,6 +113,8 @@ def main():
     if data_args.dataset is None:
         raise ValueError(f"Please specific dataset config (got {data_args.dataset})")
     else:
+        import pdb
+        pdb.set_trace()
         if "train" in data_args.dataset.keys():
             train_ds = MixDataset(data_args.dataset["train"])
         if "eval" in data_args.dataset.keys():
@@ -153,6 +157,8 @@ def main():
         model.print_trainable_parameters()
 
     # get Trainer
+    import pdb
+    pdb.set_trace()
     trainer = get_trainer(
         pretrained_model_name_or_path=model_args.model_name_or_path,
         model=model,

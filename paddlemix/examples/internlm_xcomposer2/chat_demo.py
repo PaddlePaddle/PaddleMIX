@@ -2,7 +2,7 @@ import argparse
 import paddle
 
 from paddlemix.models.internlm_xcomposer2.modeling import InternLMXComposer2ForCausalLM
-from paddlemix.models.internlm_xcomposer2.tokenization import InternLMXComposer2Tokenizer
+from paddlemix.models.internlm_xcomposer2.tokenizer import InternLMXComposer2Tokenizer
 
 paddle.set_grad_enabled(False)
 

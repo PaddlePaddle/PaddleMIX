@@ -26,6 +26,8 @@ from paddlenlp.transformers.model_utils import PretrainedModel
 from .configuration import InternLMXcomposer2Config as InternLM2Config
 _CONFIG_FOR_DOC = 'InternLM2Config'
 
+# loss_list = []
+
 def build_vision_tower():
     # vision_tower = 'openai/clip-vit-large-patch14-336'
     vision_tower = '/home/ma-user/work/yk/pd/openai/clip-vit-large-patch14-336'
@@ -890,12 +892,20 @@ class InternLMXComposer2ForCausalLM(InternLM2PretrainedModel):
             shape[1]], dtype='int64') * -100
         return wrapped_img_embeds, wrapped_atts_img, wrapped_target
 
-    def text2emb(self, text, add_special=False):
-        to_regress_tokens = self.tokenizer(text, return_tensors='pd',
-            padding='longest', truncation=True, max_length=self.max_length,
-            add_special_tokens=add_special)
+    # def text2emb(self, text, add_special=False):
+    #     to_regress_tokens = self.tokenizer(text, return_tensors='pd',
+    #         padding='longest', truncation=True, max_length=self.max_length,
+    #         add_special_tokens=add_special)
+    #     targets = self.mask_human_targets(to_regress_tokens.input_ids)
+    #     return to_regress_tokens, targets
+
+    def text2emb(self, to_regress_tokens, add_special=False):
+        # to_regress_tokens = self.tokenizer(text, return_tensors='pd',
+        #     padding='longest', truncation=True, max_length=self.max_length,
+        #     add_special_tokens=add_special)
         targets = self.mask_human_targets(to_regress_tokens.input_ids)
         return to_regress_tokens, targets
+
 
     def interleav_wrap_chat(self, tokenizer, query, image, history, meta_instruction):
         prompt = ''
@@ -933,40 +943,38 @@ class InternLMXComposer2ForCausalLM(InternLM2PretrainedModel):
         inputs = {'inputs_embeds': wrap_embeds}
         return inputs, wrap_im_mask
 
-    def interleav_wrap(self, img_list, text_list):
+    def interleav_wrap(self, img_list, text_tokens_list):
         wrap_embeds_list, wrap_atts_list = [], []
         wrap_target_list, wrap_im_mask_list = [], []
-        for image, text in zip(img_list, text_list):
+        for image, text_tokens in zip(img_list, text_tokens_list):
             img_embeds, atts_img, img_target = self.img2emb(image)
-            text = text[0]
-            parts = text.split('<ImageHere>')
+            # text = text[0]
+            # parts = text.split('<ImageHere>')
             wrap_tokens, wrap_embeds, wrap_atts, wrap_im_mask = [], [], [], []
             temp_len = 0
             image_nums, im_len = img_embeds.shape[:2]
             need_bos = True
-            for idx, part in enumerate(parts):
-                if len(part) > 0:
-                    part_tokens = self.tokenizer(
-                        part, 
-                        return_tensors='pd',
-                        padding='longest', 
-                        add_special_tokens=need_bos)
+            # for idx, part in enumerate(parts):
+            for idx, part_tokens in enumerate(text_tokens):
+                if len(part_tokens) > 0:
+                    # part_tokens = self.tokenizer(
+                    #     part, 
+                    #     return_tensors='pd',
+                    #     padding='longest', 
+                    #     add_special_tokens=need_bos)
                     if need_bos:
                         need_bos = False
-                    wrap_tokens.append(part_tokens.input_ids)
-                    part_embeds = self.model.tok_embeddings(part_tokens.
-                        input_ids)
+                    wrap_tokens.append(part_tokens['input_ids'])
+                    part_embeds = self.model.tok_embeddings(part_tokens['input_ids'])
                     wrap_embeds.append(part_embeds)
-                    wrap_atts.append(part_tokens.attention_mask)
-                    wrap_im_mask.append(paddle.zeros(shape=part_embeds.
-                        shape[:2]).to('float32'))
+                    wrap_atts.append(part_tokens['attention_mask'])
+                    wrap_im_mask.append(paddle.zeros(shape=part_embeds.shape[:2]).to('float32'))
                     temp_len += part_embeds.shape[1]
                 if idx < image_nums:
                     wrap_tokens.append(img_target[idx].unsqueeze(axis=0))
                     wrap_embeds.append(img_embeds[idx].unsqueeze(axis=0))
                     wrap_atts.append(atts_img[idx].unsqueeze(axis=0))
-                    wrap_im_mask.append(paddle.ones_like(x=atts_img[idx].
-                        unsqueeze(axis=0)).to('float32'))
+                    wrap_im_mask.append(paddle.ones_like(x=atts_img[idx].unsqueeze(axis=0)).to('float32'))
                     temp_len += im_len
                 if temp_len > self.max_length:
                     break
@@ -1035,16 +1043,36 @@ class InternLMXComposer2ForCausalLM(InternLM2PretrainedModel):
         """
         samples = kwargs.get('samples', None)
         if samples:
-            if samples['data_type'][0] == 'text':
-                has_img = False
-            elif samples['data_type'][0] == 'multi':
+            # if samples['data_type'][0] == 'text':
+            #     has_img = False
+            # elif samples['data_type'][0] == 'multi':
+            #     has_img = True
+            # else:
+            #     raise NotImplementedError
+            # text = samples['text_input']
+            # if has_img:
+            #     image = samples['image']
+            #     to_regress_embeds, attention_mask, targets, im_mask = (self.interleav_wrap(image, text))
+            # else:
+            #     to_regress_tokens, targets = self.text2emb(text, add_special=True)
+            #     to_regress_embeds = self.model.tok_embeddings(to_regress_tokens.input_ids)
+            #     attention_mask = to_regress_tokens.attention_mask
+            #     im_mask = paddle.zeros(shape=to_regress_embeds.shape[:2])
+            # inputs_embeds = to_regress_embeds[:, :self.max_length]
+            # attention_mask = attention_mask[:, :self.max_length]
+            # targets = targets[:, :self.max_length]
+            # im_mask = im_mask[:, :self.max_length].astype(dtype='bool')
+            # labels = targets
+            if 'images' in samples:
                 has_img = True
             else:
-                raise NotImplementedError
-            text = samples['text_input']
+                has_img = False
+            text = samples['input_text']
+            input_tokens = samples['input_tokens']
+
             if has_img:
-                image = samples['image']
-                to_regress_embeds, attention_mask, targets, im_mask = (self.interleav_wrap(image, text))
+                image = samples['images']
+                to_regress_embeds, attention_mask, targets, im_mask = self.interleav_wrap(image, input_tokens)
             else:
                 to_regress_tokens, targets = self.text2emb(text, add_special=True)
                 to_regress_embeds = self.model.tok_embeddings(to_regress_tokens.input_ids)
@@ -1063,6 +1091,9 @@ class InternLMXComposer2ForCausalLM(InternLM2PretrainedModel):
         output_attentions = (output_attentions if output_attentions is not None else self.config.output_attentions)
         output_hidden_states = (output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states)
         return_dict = (return_dict if return_dict is not None else self.config.use_return_dict)
+        
+        # import pdb
+        # pdb.set_trace()
         outputs = self.model(input_ids=input_ids, 
                              attention_mask=attention_mask, 
                              position_ids=position_ids, 
@@ -1077,6 +1108,8 @@ class InternLMXComposer2ForCausalLM(InternLM2PretrainedModel):
         logits = self.output(hidden_states)
         logits = logits.astype(dtype='float32')
 
+        # import pdb
+        # pdb.set_trace()
         loss = None
         if labels is not None:
             shift_logits = logits[..., :-1, :]
@@ -1085,6 +1118,12 @@ class InternLMXComposer2ForCausalLM(InternLM2PretrainedModel):
             shift_logits = shift_logits.reshape([-1, self.config.vocab_size])
             shift_labels = shift_labels.reshape([-1])
             loss = loss_fct(shift_logits, shift_labels)
+        
+        # loss_list.append(loss)  
+        # if len(loss_list) % 10 == 0:
+        #     import pdb
+        #     pdb.set_trace()
+        
         if not return_dict:
             output = (logits,) + outputs[1:]
             return (loss,) + output if loss is not None else output

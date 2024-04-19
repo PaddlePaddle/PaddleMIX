@@ -18,6 +18,7 @@ from .clip_processing import *
 from .eva02_processing import *
 from .groundingdino_processing import *
 from .imagebind_processing import *
+from .internlmXComposer2_processing import *
 from .llava_processing import *
 from .minigpt4_image_processing import *
 from .minigpt4_processing import *
