@@ -36,6 +36,7 @@ class InternLMXComposer2Processor(ProcessorMixin):
     def __init__(self, tokenizer, **kwargs):
         super().__init__(tokenizer)
         img_size = kwargs.get("img_size", 224)
+        self.max_length = kwargs.get("max_length", 4096)
         self.image_processor = InternLMXComposer2ImageProcessor(img_size)
         self.text_processor = InternLMXComposer2TextProcessor()
 

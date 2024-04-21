@@ -908,7 +908,7 @@ class InternLMXComposer2ForCausalLM(InternLM2PretrainedModel):
         return wrapped_img_embeds, wrapped_atts_img, wrapped_target
 
     def text2emb(self, to_regress_tokens, add_special=False):
-        targets = self.mask_human_targets(to_regress_tokens.input_ids)
+        targets = self.mask_human_targets(to_regress_tokens["input_ids"])
         return to_regress_tokens, targets
 
     def interleav_wrap_chat(self, tokenizer, query, image, history, meta_instruction):
@@ -1048,16 +1048,19 @@ class InternLMXComposer2ForCausalLM(InternLM2PretrainedModel):
                 has_img = True
             else:
                 has_img = False
-            text = samples["input_text"]
             input_tokens = samples["input_tokens"]
 
             if has_img:
                 image = samples["images"]
                 to_regress_embeds, attention_mask, targets, im_mask = self.interleav_wrap(image, input_tokens)
             else:
-                to_regress_tokens, targets = self.text2emb(text, add_special=True)
-                to_regress_embeds = self.model.tok_embeddings(to_regress_tokens.input_ids)
-                attention_mask = to_regress_tokens.attention_mask
+                input_tokens = {  # [{'input_ids': xxx}, {'input_ids': yyy}] to {input_ids: [xxx, yyy]}
+                    "input_ids": paddle.concat([tokens["input_ids"] for tokens in input_tokens]),
+                    "attention_mask": paddle.concat([tokens["attention_mask"] for tokens in input_tokens]),
+                }
+                to_regress_tokens, targets = self.text2emb(input_tokens, add_special=True)
+                to_regress_embeds = self.model.tok_embeddings(to_regress_tokens["input_ids"])
+                attention_mask = to_regress_tokens["attention_mask"]
                 im_mask = paddle.zeros(shape=to_regress_embeds.shape[:2])
             inputs_embeds = to_regress_embeds[:, : self.max_length]
             attention_mask = attention_mask[:, : self.max_length]
