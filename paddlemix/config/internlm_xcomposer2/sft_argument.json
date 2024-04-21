@@ -1,8 +1,8 @@
 {
-    "model_name_or_path": "/home/ma-user/work/yk/pd/pd_internlm/internlm_xcomposer2_7b",
+    "model_name_or_path": "internlm/internlm-xcomposer2-7b",
     "dataset": {
-        "train":[{"name": "chatml_dataset", "data_files": "/home/ma-user/work/yk/pd/pd_internlm/finetune_pd/vl_data.json"}],
-        "eval": [{"name": "chatml_dataset", "data_files": "/home/ma-user/work/yk/pd/pd_internlm/finetune_pd/vl_data_eval.json"}]
+        "train":[{"name": "chatml_dataset", "data_files": "path/to/train.json"}],
+        "eval": [{"name": "chatml_dataset", "data_files": "path/to/eval.json"}]
     },
     "mixtoken": false,
     "output_dir": "./checkpoints/internlm_xcomposer_sft_ckpts",
@@ -15,7 +15,7 @@
     "learning_rate": 1e-05,
     "weight_decay": 0.1,
     "adam_beta2": 0.95,
-    "warmup_ratio": 0.01,
+    "warmup_ratio": 0.0,
     "lr_scheduler_type": "cosine",
     "logging_steps": 1,
     "save_steps": 100,

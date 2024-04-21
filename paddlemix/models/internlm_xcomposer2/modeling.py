@@ -45,8 +45,7 @@ logger = logging.get_logger(__name__)
 
 
 def build_vision_tower():
-    # vision_tower = 'openai/clip-vit-large-patch14-336'
-    vision_tower = "/home/ma-user/work/yk/pd/openai/clip-vit-large-patch14-336"
+    vision_tower = "openai/clip-vit-large-patch14-336"
     return CLIPVisionTower(vision_tower)
 
 
