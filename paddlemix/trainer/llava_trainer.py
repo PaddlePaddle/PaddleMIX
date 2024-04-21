@@ -141,9 +141,6 @@ class LLaVATrainer(Trainer):
 
         opt_model = self.model
 
-        # case pretrain
-        for p in self.model.parameters():
-            p.stop_gradient = True
         for p in self.model.llama.mm_projector.parameters():
             p.stop_gradient = not True
 
