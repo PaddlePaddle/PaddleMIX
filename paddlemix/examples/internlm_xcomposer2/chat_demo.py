@@ -21,19 +21,26 @@ from paddlemix.models.internlm_xcomposer2.tokenizer import InternLMXComposer2Tok
 
 paddle.set_grad_enabled(False)
 
-parser = argparse.ArgumentParser()
-parser.add_argument(
-    "--from_pretrained", type=str, default="internlm/internlm-xcomposer2-7b", help="pretrained ckpt and tokenizer"
-)
-args = parser.parse_args()
 
-MODEL_PATH = args.from_pretrained
-# init model and tokenizer
-model = InternLMXComposer2ForCausalLM.from_pretrained(MODEL_PATH).eval()
-tokenizer = InternLMXComposer2Tokenizer.from_pretrained(MODEL_PATH)
+def main(args):
+    if args.image_path is not None:
+        args.text = "<ImageHere>" + args.text
+    MODEL_PATH = args.from_pretrained
+    # init model and tokenizer
+    model = InternLMXComposer2ForCausalLM.from_pretrained(MODEL_PATH).eval()
+    tokenizer = InternLMXComposer2Tokenizer.from_pretrained(MODEL_PATH)
 
-text = "<ImageHere>Please describe this image in detail."
-image = "../image1.jpg"
-with paddle.no_grad():
-    response, _ = model.chat(tokenizer, query=text, image=image, history=[], do_sample=False)
-print(response)
+    with paddle.no_grad():
+        response, _ = model.chat(tokenizer, query=args.text, image=args.image, history=[], do_sample=False)
+    print(response)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--from_pretrained", type=str, default="internlm/internlm-xcomposer2-7b", help="pretrained ckpt and tokenizer"
+    )
+    parser.add_argument("--image_path", type=str)
+    parser.add_argument("--text", type=str, required=True)
+    args = parser.parse_args()
+    main(args)
