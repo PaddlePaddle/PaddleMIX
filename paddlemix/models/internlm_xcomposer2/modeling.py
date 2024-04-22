@@ -784,29 +784,15 @@ class InternLM2Model(InternLM2PretrainedModel):
             if output_hidden_states:
                 all_hidden_states += (hidden_states,)
             past_key_value = past_key_values[idx] if past_key_values is not None else None
-            if self.gradient_checkpointing and self.training:
-
-                # def create_custom_forward(module):
-
-                #     def custom_forward(*inputs):
-                #         return module(*inputs, output_attentions, None, im_mask
-                #             )
-                #     return custom_forward
-                # layer_outputs = torch.utils.checkpoint.checkpoint(
-                #     create_custom_forward(decoder_layer), hidden_states,
-                #     attention_mask, position_ids, None)
-                pass
-                # todo: checkpoint api in paddle?
-            else:
-                layer_outputs = decoder_layer(
-                    hidden_states,
-                    attention_mask=attention_mask,
-                    position_ids=position_ids,
-                    past_key_value=past_key_value,
-                    output_attentions=output_attentions,
-                    use_cache=use_cache,
-                    im_mask=im_mask,
-                )
+            layer_outputs = decoder_layer(
+                hidden_states,
+                attention_mask=attention_mask,
+                position_ids=position_ids,
+                past_key_value=past_key_value,
+                output_attentions=output_attentions,
+                use_cache=use_cache,
+                im_mask=im_mask,
+            )
             hidden_states = layer_outputs[0]
             if use_cache:
                 next_decoder_cache += (layer_outputs[2 if output_attentions else 1],)
