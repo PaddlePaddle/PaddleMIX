@@ -70,7 +70,7 @@ python paddlemix/examples/internlm_xcomposer2/chat_demo.py \
 ]
 ```
 
-对于带图像输入的内容可表示为 `<img>img_path</img>\n{your prompt}`,"img_path"可以是本地的图片或网络地址。
+对于带图像输入的内容可表示为 `<img>img_path</img>\n{your prompt}`,"img_path"可以是本地的图片或url。
 其中问题为`conversations`列表中的第一个元素，即`conversations[0]`；答案为第二个元素，即`conversations[1]`。
 
 ### 4.2 全参数训练
