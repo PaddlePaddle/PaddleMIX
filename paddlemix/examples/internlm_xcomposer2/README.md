@@ -27,10 +27,14 @@
 ```bash
 python paddlemix/examples/internlm_xcomposer2/chat_demo.py \
 --from_pretrained "internlm/internlm-xcomposer2-7b"
+--image_path "path/to/image.jpg"
+--text "Please describe this image in detail."
 ```
 可配置参数说明：
   * `from_pretrained`: 指定 internlm_xcomposer2 的模型名字或权重路径以及tokenizer, processor 组件，默认 internlm/internlm-xcomposer2-7b
 
+  * `image_path`: 指定图片路径
+  * `text`: 用户指令, 例如 "Please describe this image in detail."
 
 ## 4 模型微调
 我们提供 `supervised_finetune.py` 脚本，用于模型微调。模型微调支持全参数微调，以及lora微调。
