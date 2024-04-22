@@ -16,7 +16,6 @@
 import copy
 import math
 import queue
-import re
 import threading
 import warnings
 from typing import List, Optional, Tuple, Union
@@ -44,26 +43,22 @@ _CONFIG_FOR_DOC = "InternLM2Config"
 logger = logging.get_logger(__name__)
 
 
-def build_vision_tower():
-    vision_tower = "openai/clip-vit-large-patch14-336"
+def build_vision_tower(config):
+    vision_tower = config.vision_tower
     return CLIPVisionTower(vision_tower)
 
 
-def build_vision_projector():
-    projector_type = "mlp2x_gelu"
-    mm_hidden_size = 1024
-    hidden_size = 4096
-    mlp_gelu_match = re.match("^mlp(\\d+)x_gelu$", projector_type)
-    if mlp_gelu_match:
-        mlp_depth = int(mlp_gelu_match.group(1))
+def build_vision_projector(config):
+    mm_hidden_size = config.mm_hidden_size
+    hidden_size = config.hidden_size
+    mlp_depth = config.mlp_depth
+    if mlp_depth > 0:
         modules = [paddle.nn.Linear(in_features=mm_hidden_size, out_features=hidden_size)]
         for _ in range(1, mlp_depth):
             modules.append(paddle.nn.GELU())
             modules.append(paddle.nn.Linear(in_features=hidden_size, out_features=hidden_size))
         return paddle.nn.Sequential(*modules)
-    if projector_type == "identity":
-        return IdentityMap()
-    raise ValueError(f"Unknown projector type: {projector_type}")
+    return IdentityMap()  # mlp_depth == 0
 
 
 class IdentityMap(paddle.nn.Layer):
@@ -824,8 +819,8 @@ class InternLMXComposer2ForCausalLM(InternLM2PretrainedModel):
         self.tokenizer = None
         self.max_length = config.max_length
         print(f"Set max length to {self.max_length}")
-        self.vit = build_vision_tower()
-        self.vision_proj = build_vision_projector()
+        self.vit = build_vision_tower(config)
+        self.vision_proj = build_vision_projector(config.vision_projector)
         self.vis_processor = paddle.vision.transforms.Compose(
             [
                 paddle.vision.transforms.Resize((config.img_size, config.img_size), interpolation="bicubic"),
