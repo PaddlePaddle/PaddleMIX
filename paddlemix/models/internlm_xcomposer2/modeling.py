@@ -49,9 +49,9 @@ def build_vision_tower(config):
 
 
 def build_vision_projector(config):
-    mm_hidden_size = config.mm_hidden_size
-    hidden_size = config.hidden_size
-    mlp_depth = config.mlp_depth
+    mm_hidden_size = config["mm_hidden_size"]
+    hidden_size = config["hidden_size"]
+    mlp_depth = config["mlp_depth"]
     if mlp_depth > 0:
         modules = [paddle.nn.Linear(in_features=mm_hidden_size, out_features=hidden_size)]
         for _ in range(1, mlp_depth):
