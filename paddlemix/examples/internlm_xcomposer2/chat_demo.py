@@ -31,7 +31,7 @@ def main(args):
     tokenizer = InternLMXComposer2Tokenizer.from_pretrained(MODEL_PATH)
 
     with paddle.no_grad():
-        response, _ = model.chat(tokenizer, query=args.text, image=args.image, history=[], do_sample=False)
+        response, _ = model.chat(tokenizer, query=args.text, image=args.image_path, history=[], do_sample=False)
     print(response)
 
 
