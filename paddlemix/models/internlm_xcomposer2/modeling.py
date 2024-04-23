@@ -86,10 +86,11 @@ class CLIPVisionTower(paddle.nn.Layer):
 
     def load_model(self):
         self.vision_tower = transformers.CLIPVisionModel.from_pretrained(self.vision_tower_name)
-        out_0 = self.vision_tower
-        out_0.stop_gradient = not False
-        self.vision_tower = out_0
+        for p in self.vision_tower.parameters():
+            p.stop_gradient = True
         self.is_loaded = True
+        if self.training:
+            self.vision_tower.vision_model.ln_post = paddle.nn.Identity()
 
     def resize_pos(self):
         pos_embed_checkpoint = self.vision_tower.vision_model.positional_embedding.weight
