@@ -43,7 +43,7 @@ function _set_params(){
     speed_log_path=${LOG_PATH_INDEX_DIR:-$(pwd)}
 
     train_log_file=${run_log_path}/${model_repo}_${model_name}_${device_num}_d2sT_log
-    profiling_log_file=${profiling_log_path}/${model_repo}_${model_name}_${device_num}_profiling
+    profiling_log_file=${profiling_log_path}/${model_repo}_${model_name}_${device_num}_d2sT_profiling
     speed_log_file=${speed_log_path}/${model_repo}_${model_name}_${device_num}_d2sT_speed
 }
 
