@@ -38,7 +38,10 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--from_pretrained", type=str, default="internlm/internlm-xcomposer2-7b", help="pretrained ckpt and tokenizer"
+        "--model_name_or_path",
+        type=str,
+        default="internlm/internlm-xcomposer2-7b",
+        help="pretrained ckpt and tokenizer",
     )
     parser.add_argument("--image_path", type=str)
     parser.add_argument("--text", type=str, required=True)
