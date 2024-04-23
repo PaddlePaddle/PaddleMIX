@@ -1,5 +1,6 @@
 {
     "model_name_or_path": "internlm/internlm-xcomposer2-7b",
+    "freeze_exclude": ["*vit*"],
     "dataset": {
         "train":[{"name": "chatml_dataset", "data_files": "path/to/train.json"}],
         "eval": [{"name": "chatml_dataset", "data_files": "path/to/eval.json"}]
