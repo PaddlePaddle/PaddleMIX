@@ -62,6 +62,8 @@ class InternLMXComposer2ForCausalLMTester:
             "use_cache": False,
             "vocab_size": 92544,
             "img_size": 224,
+            "vision_tower": "openai/clip-vit-large-patch14-336",
+            "vision_projector": {"mlp_depth": 2, "mm_hidden_size": 1024, "hidden_size": 4096},
         }
 
         return InternLMXcomposer2Config(**test_config)
