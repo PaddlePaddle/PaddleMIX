@@ -25,7 +25,7 @@ paddle.set_grad_enabled(False)
 def main(args):
     if args.image_path is not None:
         args.text = "<ImageHere>" + args.text
-    MODEL_PATH = args.from_pretrained
+    MODEL_PATH = args.model_name_or_path
     # init model and tokenizer
     model = InternLMXComposer2ForCausalLM.from_pretrained(MODEL_PATH).eval()
     tokenizer = InternLMXComposer2Tokenizer.from_pretrained(MODEL_PATH)
