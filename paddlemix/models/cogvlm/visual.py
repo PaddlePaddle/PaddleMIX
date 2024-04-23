@@ -742,8 +742,6 @@ class EVAVisionTransformer(paddle.nn.Layer):
 
 
 class LayerNorm(paddle.nn.LayerNorm):
-    """Subclass torch's LayerNorm (with cast back to input dtype)."""
-
     def forward(self, x: paddle.Tensor):
         orig_type = x.dtype
         x = paddle.nn.functional.layer_norm(
@@ -1008,6 +1006,7 @@ class GLU(paddle.nn.Layer):
 class EVA2CLIPModel(paddle.nn.Layer):
     def __init__(self, config):
         super().__init__()
+        self.model_type = config.model_type
         vision_config = Namespace(**config.vision_config)
         self.patch_embedding = PatchEmbedding(vision_config)
         self.transformer = Transformer(vision_config)
@@ -1026,29 +1025,37 @@ class EVA2CLIPModel(paddle.nn.Layer):
         )
         out_13.stop_gradient = not True
         self.eoi = out_13
-        out_14 = paddle.create_parameter(
-            shape=paddle.zeros(
-                shape=[(vision_config.image_size // vision_config.patch_size) ** 2, vision_config.hidden_size]
-            ).shape,
-            dtype=paddle.zeros(
-                shape=[(vision_config.image_size // vision_config.patch_size) ** 2, vision_config.hidden_size]
-            )
-            .numpy()
-            .dtype,
-            default_initializer=paddle.nn.initializer.Assign(
-                paddle.zeros(
+        if self.model_type == "cogagent":
+            out_14 = paddle.create_parameter(
+                shape=paddle.zeros(
+                    shape=[(vision_config.image_size // vision_config.patch_size) ** 2, vision_config.hidden_size]
+                ).shape,
+                dtype=paddle.zeros(
                     shape=[(vision_config.image_size // vision_config.patch_size) ** 2, vision_config.hidden_size]
                 )
-            ),
-        )
-        out_14.stop_gradient = not True
-        self.pos_embed = out_14
+                .numpy()
+                .dtype,
+                default_initializer=paddle.nn.initializer.Assign(
+                    paddle.zeros(
+                        shape=[(vision_config.image_size // vision_config.patch_size) ** 2, vision_config.hidden_size]
+                    )
+                ),
+            )
+            out_14.stop_gradient = not True
+            self.pos_embed = out_14
+        elif self.model_type != "cogvlm":
+            raise ValueError("model_type in config must be cogagent or cogvlm, but got {}".format(self.model_type))
 
     def forward(self, images):
         x = self.patch_embedding(images)
         x = self.transformer(x)
         x = x[:, 1:]
-        x = self.linear_proj(x + self.pos_embed.unsqueeze(axis=0))
+        if self.model_type == "cogagent":
+            x = self.linear_proj(x + self.pos_embed.unsqueeze(axis=0))
+        elif self.model_type == "cogvlm":
+            x = self.linear_proj(x)
+        else:
+            raise ValueError("model_type in config must be cogagent or cogvlm, but got {}".format(self.model_type))
         boi = self.boi.expand(shape=[x.shape[0], -1, -1])
         eoi = self.eoi.expand(shape=[x.shape[0], -1, -1])
         x = paddle.concat(x=(boi, x, eoi), axis=1)
