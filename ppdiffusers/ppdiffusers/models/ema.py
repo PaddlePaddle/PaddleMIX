@@ -48,7 +48,7 @@ class LitEma(nn.Layer):
                 # remove as '.'-character is not allowed in buffers
                 s_name = name.replace(".", "")
                 self.m_name2s_name.update({name: s_name})
-                self.register_buffer(s_name, p.clone().detach())
+                self.register_buffer(s_name, p.clone().detach().astype('float32'))
 
         self.collected_params = []
 
@@ -69,7 +69,7 @@ class LitEma(nn.Layer):
                 if not m_param[key].stop_gradient:
                     sname = self.m_name2s_name[key]
                     shadow_params[sname].scale_(decay)
-                    shadow_params[sname].add_(m_param[key] * one_minus_decay)
+                    shadow_params[sname].add_(m_param[key].astype('float32') * one_minus_decay)
                 else:
                     assert key not in self.m_name2s_name
 

@@ -61,7 +61,6 @@ function _train(){
     export FLAG_FUSED_LINEAR=0
     export FLAGS_conv_workspace_size_limit=4096
     export FLAGS_enable_pir_api=True             # 开启 PIR 理想态
-    export ENABLE_FALL_BACK=True  # SOT
     # 是否开启 ema
     export FLAG_USE_EMA=0
     # 是否开启 recompute
