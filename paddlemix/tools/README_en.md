@@ -16,9 +16,8 @@ The PaddleMIX toolkit embodies the design philosophy of one-stop experience, ult
 * ❌: Not Supported
 
 Note:
-1. 开始前请先按照[环境依赖](../../README_EN.md#environment-dependencies)安装环境，不同模型请参考 [examples](../examples/README.md) 下对应的模型目录安装依赖；
-2. 当前**tools**统一接口只支持部分模型的精调能力，其他模型及其他能力后续陆续上线。
-
+1. Before starting, please ensure that you have installed the environment according to the [environment dependencies](../../README_EN.md#installation). For different models, please refer to the corresponding model directory under [examples](../examples/README.md) for installation dependencies.
+2. Currently, the **tools** unified interface only supports fine-tuning capabilities for some models. Fine-tuning capabilities for other models and additional features will be gradually added in the future.
 
 ##  🚀 Quick Start 🚀
 
