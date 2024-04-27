@@ -1,5 +1,6 @@
 ## 📦 PaddleMIX Tools Introduction📦
 The PaddleMIX toolkit embodies the design philosophy of one-stop experience, ultimate performance, and ecosystem compatibility upheld by the PaddlePaddle suite. It aims to provide developers with a unified set of tools for the entire process of cross-modal large-model development, aligning with industry standards. This facilitates low-cost, low-threshold, and rapid customization of cross-modal large models.
+
 [[中文文档](README.md)]
 
 ##  🛠️ Supported Model List 🛠️
