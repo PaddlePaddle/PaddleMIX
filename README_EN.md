@@ -15,7 +15,7 @@
 
 ## Introduction
 
-PaddleMIX is a multi-modal large model development kit based on PaddlePaddle, which aggregates multiple functions such as images, texts, and videos, and covers a variety of multi-modal tasks such as visual language pre-training, textual images, and textual videos. It provides an out-of-the-box development experience while meeting developers’ flexible customization needs and exploring general artificial intelligence.
+PaddleMIX is a large multi-modal development kit based on PaddlePaddle, which aggregates multiple functions such as images, texts, and videos, and covers a variety of multi-modal tasks such as visual language pre-training, textual images, and textual videos. It provides an out-of-the-box development experience while meeting developers’ flexible customization needs and exploring general artificial intelligence.
 
 ## Updates
 **2024.04.17**
@@ -29,8 +29,8 @@ PaddleMIX is a multi-modal large model development kit based on PaddlePaddle, wh
 
 **2023.7.31**
 * Published PaddleMIX version 0.1
-* The PaddleMIX multi-modal large model development toolkit is released for the first time, integrating the PPDiffusers multi-modal diffusion model toolbox and widely supporting the PaddleNLP large-language models.
-* Added 12 new multi-modal large models including EVA-CLIP, BLIP-2, miniGPT-4, Stable Diffusion, ControlNet, etc.
+* The PaddleMIX large multi-modal model development toolkit is released for the first time, integrating the PPDiffusers multi-modal diffusion model toolbox and widely supporting the PaddleNLP large-language models.
+* Added 12 new large multi-modal models including EVA-CLIP, BLIP-2, miniGPT-4, Stable Diffusion, ControlNet, etc.
 
 ## Main Features
 
@@ -73,9 +73,9 @@ pip install -e .
 
 ## Tutorial
 
-- [Quick Start](applications/README.md/#快速开始)
+- [Quick Start](applications/README_en.md/#quick-start)
 - [Fine-Tuning](paddlemix/tools/README.md)
-- [Inference Deployment](deploy/README.md)
+- [Inference Deployment](deploy/README_en.md)
 
 ## Specialized Applications
 
@@ -128,7 +128,7 @@ pip install -e .
             <li><a href="paddlemix/examples/sam">SAM</a></li>
       </ul>
       </ul>
-          <li><b>更多模态预训练模型</b></li>
+          <li><b>More Multi-Modal Pre-trained Models</b></li>
         <ul>
             <li><a href="paddlemix/examples/imagebind">ImageBind</a></li>
       </ul>
@@ -136,7 +136,7 @@ pip install -e .
       <td>
         <ul>
         </ul>
-          <li><b>文生图</b></li>
+          <li><b>Text-to-Image</b></li>
         <ul>
            <li><a href="ppdiffusers/examples/stable_diffusion">Stable Diffusion</a></li>
             <li><a href="ppdiffusers/examples/controlnet">ControlNet</a></li>
