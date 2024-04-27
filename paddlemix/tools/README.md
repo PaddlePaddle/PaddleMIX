@@ -16,7 +16,7 @@ PaddleMIX工具箱秉承了飞桨套件一站式体验、性能极致、生态�
 * ❌: Not Supported
 
 注意：
-1. 开始前请先按照[安装](../../README.md#安装)安装环境依赖，不同模型请参考 [examples](../examples/README.md) 下对应的模型目录安装依赖；
+1. 开始前请先按照[环境依赖](../../README.md#安装)安装环境，不同模型请参考 [examples](../examples/README.md) 下对应的模型目录安装依赖；
 2. 当前**tools**统一接口只支持部分模型的精调能力，其他模型及其他能力后续陆续上线。
 
 
