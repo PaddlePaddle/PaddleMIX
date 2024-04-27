@@ -74,7 +74,7 @@ pip install -e .
 ## Tutorial
 
 - [Quick Start](applications/README_en.md/#quick-start)
-- [Fine-Tuning](paddlemix/tools/README.md)
+- [Fine-Tuning](paddlemix/tools/README_en.md)
 - [Inference Deployment](deploy/README_en.md)
 
 ## Specialized Applications
