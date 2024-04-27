@@ -1,5 +1,7 @@
 # PaddleMIX Inference Deployment
 
+[[中文文档](README.md)]
+
 PaddleMIX utilizes Paddle Inference and provides a Python-based deployment solution. There are two deployment methods:
 
 1. **APPflow Deployment**: 
