@@ -49,6 +49,8 @@ def get_processor_mapping():
         model_name = None
         if "qwen_vl" in file_name:  # qwen_vl use qwen_vl_processing
             model_name = "qwen_vl"
+        elif "internlm_xcomposer2" in file_name:
+            model_name = "internlm_xcomposer2"
         else:
             model_name = file_name.split("_")[0]
 

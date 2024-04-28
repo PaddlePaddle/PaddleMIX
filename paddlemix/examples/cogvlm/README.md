@@ -39,9 +39,9 @@ CogAgent-18B在9个经典的跨模态基准测试中实现了最先进的全能�
 完成环境准备后，我们目前提供多轮对话方式使用：
 
 ```bash
-python paddlemix/examples/cogvlm/chat_demo.py \
---from_pretrained "THUDM/cogvlm-chat"
+python paddlemix/examples/cogagent/chat_demo.py \
+--model_name_or_path "THUDM/cogagent-chat"
 ```
 
 可配置参数说明：
-  * `from_pretrained`: 指定cogvlm的模型名字或权重路径以及tokenizer，默认 THUDM/cogvlm-chat
+  * `model_name_or_path`: 指定CogAgent的模型名字或权重路径以及tokenizer，默认 THUDM/cogagent-chat
