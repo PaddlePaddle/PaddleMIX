@@ -337,20 +337,10 @@ class PaddleInferStableDiffusionPipeline(DiffusionPipeline, PaddleInferDiffusion
                         paddle.device.synchronize()
 
         if not output_type == "latent":
-            os.environ["CUDNN_LOGINFO_DBG"]="1"
-            os.environ["CUDNN_LOG_ERR"]="1"
-            os.environ["CUDNN_LOGWARN_DBG"]="1"
-            os.environ["CUDNN_LOGDEST_DBG"]="stdout"
-            os.environ["CUDNN_LOGERR_DBG"]="1"
             print('[vae decode start]', flush=True)
             image = self._decode_vae_latents(
                 latents / self.vae_scaling_factor, infer_op=infer_op_dict.get("vae_decoder", None)
             )
-            del os.environ["CUDNN_LOGINFO_DBG"]
-            del os.environ["CUDNN_LOG_ERR"]
-            del os.environ["CUDNN_LOGWARN_DBG"]
-            del os.environ["CUDNN_LOGDEST_DBG"]
-            del os.environ["CUDNN_LOGERR_DBG"]
             image, has_nsfw_concept = self.run_safety_checker(image)
         else:
             image = latents
