@@ -17,11 +17,13 @@ clip_image_model_name: str = "openai/clip-vit-large-patch14"
 clip_text_model_name: str = "laion/pp_CLIP-ViT-bigG-14-laion2B-39B-b160k"
 
 # 以下内容请修改为你的模型权重路径
-effnet_checkpoint_path: str = "/root/lxl/0_SC/Paddle-SC/efft_v2s/effnet_paddle/effnet_encoder.pdparams"
-stage_a_checkpoint_path: str = "/root/lxl/0_SC/Paddle-SC/pp2/models/stage_a.pdparams"
+WEIGHTS_PATH = "./stable_cascade_weights"
+
+effnet_checkpoint_path: str = f"{WEIGHTS_PATH}/effnet_encoder.pdparams"
+stage_a_checkpoint_path: str = f"{WEIGHTS_PATH}/stage_a.pdparams"
 model_b_version: str = "700M"  # 700M, 3B可选，700M对应stage_b_lite版
-stage_b_checkpoint_path: str = "/root/lxl/0_SC/Paddle-SC/pp2/models/stage_b_lite.pdparams"
+stage_b_checkpoint_path: str = f"{WEIGHTS_PATH}/stage_b_lite.pdparams"
 model_c_version: str = "1B"  # 1B, 3.6B可选，1B对应stage_c_lite版
-stage_c_checkpoint_path: str = "/root/lxl/0_SC/Paddle-SC/pp2/models/stage_c_lite.pdparams"
-effnet_checkpoint_path: str = "/root/lxl/0_SC/Paddle-SC/efft_v2s/effnet_paddle/effnet_encoder.pdparams"
-previewer_checkpoint_path: str = "/root/lxl/0_SC/Paddle-SC/pp2/models/previewer.pdparams"
+stage_c_checkpoint_path: str = f"{WEIGHTS_PATH}/stage_c_lite.pdparams"
+effnet_checkpoint_path: str = f"{WEIGHTS_PATH}/effnet_encoder.pdparams"
+previewer_checkpoint_path: str = f"{WEIGHTS_PATH}/previewer.pdparams"

@@ -3,10 +3,18 @@
 ![网络结构](assets/network.png)
 ![评估指标](assets/eval.png)
 
-## 权重下载
-下载预训练权重：
+## 模型权重
+### 下载预训练权重
 ```
+wget https://paddlenlp.bj.bcebos.com/models/community/baicai/pp_stable_cascade/stable_cascade_weights.tar.gz
+# 解压到./stable_cascade_weights
+mkdir stable_cascade_weights
+tar -xzvf stable_cascade_weights.tar.gz -C ./stable_cascade_weights
 ```
+如果解压到其他目录，请修改config.py中的`WEIGHTS_PATH`。
+如要自行转换预训练权重，请参考以下脚本：
+- scripts/convert_other_weight.py
+- scipts/convert_unet_weight.py
 
 ## 模型推理
 ```
@@ -22,7 +30,7 @@ model.eval()
 model_b = ModelB()
 model_b.eval()
 
-caption = "A little dog stands on the back of a turtle."
+caption = "A beauty girl in winter"
 batch_size = 2
 seed = 1
 image, latent_c = model.log_image(caption, seed=seed, batch_size=batch_size)
@@ -34,6 +42,7 @@ for i, image_i in enumerate(image_b):
 -- caption，在其中输入我们想要的画面内容
 -- seed，随机种子，控制生成图片的随机性
 -- batch_size，批量大小，控制生产图片数量
+保存的图片为result_0.png、result_1.png
 输出示例：
 <img width="500" src="assets/girl.png">
 
@@ -74,4 +83,4 @@ ${TRAINING_PYTHON} train_stage_c_trainer.py \
 --per_device_train_batch_size 1 每张卡中批量大小
 --max_steps 1000 训练步数
 --output_dir ./train_output 训练后保存路径
-训练后保存后文件在train_output文件夹中。
+训练后保存后文件在train_output文件夹中，可以参考scripts/extract_unet_weights.py提取出训练好的unet权重。

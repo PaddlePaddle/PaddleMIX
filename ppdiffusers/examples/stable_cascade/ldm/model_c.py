@@ -16,6 +16,7 @@ import contextlib
 from math import ceil
 from typing import List
 
+import config
 import numpy as np
 import paddle
 import PIL
@@ -73,17 +74,15 @@ def calculate_latent_sizes(
 
 class ModelC(nn.Layer):
     class Config:
-        dtype: str = "float32"
+        dtype: str = config.dtype
         training: bool = False
         use_ema: bool = False
-        model_version: str = "1B"
-        clip_image_model_name: str = "openai/clip-vit-large-patch14"
-        clip_text_model_name: str = "laion/pp_CLIP-ViT-bigG-14-laion2B-39B-b160k"
-        effnet_checkpoint_path: str = "/root/lxl/0_SC/Paddle-SC/efft_v2s/effnet_paddle/effnet_encoder.pdparams"
-        previewer_checkpoint_path: str = "/root/lxl/0_SC/Paddle-SC/pp2/models/previewer.pdparams"
-        unet_checkpoint_path: str = "/root/lxl/0_SC/Paddle-SC/pp2/models/stage_c_lite.pdparams"
-        # /root/lxl/0_SC/Paddle-SC/sc/global_steps_300.pdparams
-        # /root/lxl/0_SC/Paddle-SC/pp2/models/stage_c_lite.pdparams
+        model_version: str = config.model_c_version
+        clip_image_model_name: str = config.clip_image_model_name
+        clip_text_model_name: str = config.clip_text_model_name
+        effnet_checkpoint_path: str = config.effnet_checkpoint_path
+        previewer_checkpoint_path: str = config.previewer_checkpoint_path
+        unet_checkpoint_path: str = config.stage_c_checkpoint_path
         adaptive_loss_weight: bool = False
         grad_accum_steps: int = 1
 
