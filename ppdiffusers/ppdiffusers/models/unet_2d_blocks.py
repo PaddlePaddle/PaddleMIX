@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import Any, Dict, Optional, Tuple, Union
+import sys
 
 import numpy as np
 import paddle
@@ -73,6 +74,7 @@ def get_down_block(
     attention_head_dim: Optional[int] = None,
     downsample_type: Optional[str] = None,
     dropout: float = 0.0,
+    data_format: str = "NCHW",
 ):
     # If attn head dim is not defined, we default it to the number of heads
     if attention_head_dim is None:
@@ -95,6 +97,7 @@ def get_down_block(
             resnet_groups=resnet_groups,
             downsample_padding=downsample_padding,
             resnet_time_scale_shift=resnet_time_scale_shift,
+            data_format=data_format,
         )
     elif down_block_type == "ResnetDownsampleBlock2D":
         return ResnetDownsampleBlock2D(
@@ -153,6 +156,7 @@ def get_down_block(
             upcast_attention=upcast_attention,
             resnet_time_scale_shift=resnet_time_scale_shift,
             attention_type=attention_type,
+            data_format=data_format,
         )
     elif down_block_type == "SimpleCrossAttnDownBlock2D":
         if cross_attention_dim is None:
@@ -283,6 +287,7 @@ def get_up_block(
     attention_head_dim: Optional[int] = None,
     upsample_type: Optional[str] = None,
     dropout: float = 0.0,
+    data_format: str = "NCHW",
 ) -> nn.Layer:
     # If attn head dim is not defined, we default it to the number of heads
     if attention_head_dim is None:
@@ -306,6 +311,7 @@ def get_up_block(
             resnet_act_fn=resnet_act_fn,
             resnet_groups=resnet_groups,
             resnet_time_scale_shift=resnet_time_scale_shift,
+            data_format=data_format,
         )
     elif up_block_type == "ResnetUpsampleBlock2D":
         return ResnetUpsampleBlock2D(
@@ -348,6 +354,7 @@ def get_up_block(
             upcast_attention=upcast_attention,
             resnet_time_scale_shift=resnet_time_scale_shift,
             attention_type=attention_type,
+            data_format=data_format,
         )
     elif up_block_type == "SimpleCrossAttnUpBlock2D":
         if cross_attention_dim is None:
@@ -663,6 +670,7 @@ class UNetMidBlock2DCrossAttn(nn.Layer):
         use_linear_projection: bool = False,
         upcast_attention: bool = False,
         attention_type: str = "default",
+        data_format: str = "NCHW",
     ):
         super().__init__()
 
@@ -687,6 +695,7 @@ class UNetMidBlock2DCrossAttn(nn.Layer):
                 non_linearity=resnet_act_fn,
                 output_scale_factor=output_scale_factor,
                 pre_norm=resnet_pre_norm,
+                data_format=data_format
             )
         ]
         attentions = []
@@ -704,6 +713,7 @@ class UNetMidBlock2DCrossAttn(nn.Layer):
                         use_linear_projection=use_linear_projection,
                         upcast_attention=upcast_attention,
                         attention_type=attention_type,
+                        data_format=data_format,
                     )
                 )
             else:
@@ -729,6 +739,7 @@ class UNetMidBlock2DCrossAttn(nn.Layer):
                     non_linearity=resnet_act_fn,
                     output_scale_factor=output_scale_factor,
                     pre_norm=resnet_pre_norm,
+                    data_format=data_format,
                 )
             )
 
@@ -1058,6 +1069,7 @@ class CrossAttnDownBlock2D(nn.Layer):
         only_cross_attention: bool = False,
         upcast_attention: bool = False,
         attention_type: str = "default",
+        data_format: str = "NCHW",
     ):
         super().__init__()
         resnets = []
@@ -1082,6 +1094,7 @@ class CrossAttnDownBlock2D(nn.Layer):
                     non_linearity=resnet_act_fn,
                     output_scale_factor=output_scale_factor,
                     pre_norm=resnet_pre_norm,
+                    data_format=data_format,
                 )
             )
             if not dual_cross_attention:
@@ -1097,6 +1110,7 @@ class CrossAttnDownBlock2D(nn.Layer):
                         only_cross_attention=only_cross_attention,
                         upcast_attention=upcast_attention,
                         attention_type=attention_type,
+                        data_format=data_format,
                     )
                 )
             else:
@@ -1117,7 +1131,7 @@ class CrossAttnDownBlock2D(nn.Layer):
             self.downsamplers = nn.LayerList(
                 [
                     Downsample2D(
-                        out_channels, use_conv=True, out_channels=out_channels, padding=downsample_padding, name="op"
+                        out_channels, use_conv=True, out_channels=out_channels, padding=downsample_padding, name="op", data_format=data_format,
                     )
                 ]
             )
@@ -1226,6 +1240,7 @@ class DownBlock2D(nn.Layer):
         output_scale_factor: float = 1.0,
         add_downsample: bool = True,
         downsample_padding: int = 1,
+        data_format: str = "NCHW",
     ):
         super().__init__()
         resnets = []
@@ -1244,6 +1259,7 @@ class DownBlock2D(nn.Layer):
                     non_linearity=resnet_act_fn,
                     output_scale_factor=output_scale_factor,
                     pre_norm=resnet_pre_norm,
+                    data_format=data_format,
                 )
             )
 
@@ -1253,7 +1269,7 @@ class DownBlock2D(nn.Layer):
             self.downsamplers = nn.LayerList(
                 [
                     Downsample2D(
-                        out_channels, use_conv=True, out_channels=out_channels, padding=downsample_padding, name="op"
+                        out_channels, use_conv=True, out_channels=out_channels, padding=downsample_padding, name="op", data_format=data_format,
                     )
                 ]
             )
@@ -2229,6 +2245,7 @@ class CrossAttnUpBlock2D(nn.Layer):
         only_cross_attention: bool = False,
         upcast_attention: bool = False,
         attention_type: str = "default",
+        data_format: str = "NCHW",
     ):
         super().__init__()
         resnets = []
@@ -2236,6 +2253,7 @@ class CrossAttnUpBlock2D(nn.Layer):
 
         self.has_cross_attention = True
         self.num_attention_heads = num_attention_heads
+        self.data_format = data_format
 
         if isinstance(transformer_layers_per_block, int):
             transformer_layers_per_block = [transformer_layers_per_block] * num_layers
@@ -2256,6 +2274,7 @@ class CrossAttnUpBlock2D(nn.Layer):
                     non_linearity=resnet_act_fn,
                     output_scale_factor=output_scale_factor,
                     pre_norm=resnet_pre_norm,
+                    data_format=data_format,
                 )
             )
             if not dual_cross_attention:
@@ -2271,6 +2290,7 @@ class CrossAttnUpBlock2D(nn.Layer):
                         only_cross_attention=only_cross_attention,
                         upcast_attention=upcast_attention,
                         attention_type=attention_type,
+                        data_format=data_format,
                     )
                 )
             else:
@@ -2288,7 +2308,7 @@ class CrossAttnUpBlock2D(nn.Layer):
         self.resnets = nn.LayerList(resnets)
 
         if add_upsample:
-            self.upsamplers = nn.LayerList([Upsample2D(out_channels, use_conv=True, out_channels=out_channels)])
+            self.upsamplers = nn.LayerList([Upsample2D(out_channels, use_conv=True, out_channels=out_channels, data_format=data_format)])
         else:
             self.upsamplers = None
 
@@ -2331,7 +2351,10 @@ class CrossAttnUpBlock2D(nn.Layer):
                     b2=self.b2,
                 )
 
-            hidden_states = paddle.concat([hidden_states, res_hidden_states], axis=1)
+            if self.data_format == "NCHW":
+                hidden_states = paddle.concat([hidden_states, res_hidden_states], axis=1)
+            else:
+                hidden_states = paddle.concat([hidden_states, res_hidden_states], axis=3)
 
             if self.gradient_checkpointing and not hidden_states.stop_gradient:
 
@@ -2409,9 +2432,11 @@ class UpBlock2D(nn.Layer):
         resnet_pre_norm: bool = True,
         output_scale_factor: float = 1.0,
         add_upsample: bool = True,
+        data_format: str = "NCHW",
     ):
         super().__init__()
         resnets = []
+        self.data_format = data_format
 
         for i in range(num_layers):
             res_skip_channels = in_channels if (i == num_layers - 1) else out_channels
@@ -2429,13 +2454,14 @@ class UpBlock2D(nn.Layer):
                     non_linearity=resnet_act_fn,
                     output_scale_factor=output_scale_factor,
                     pre_norm=resnet_pre_norm,
+                    data_format=data_format,
                 )
             )
 
         self.resnets = nn.LayerList(resnets)
 
         if add_upsample:
-            self.upsamplers = nn.LayerList([Upsample2D(out_channels, use_conv=True, out_channels=out_channels)])
+            self.upsamplers = nn.LayerList([Upsample2D(out_channels, use_conv=True, out_channels=out_channels, data_format=data_format)])
         else:
             self.upsamplers = None
 
@@ -2474,7 +2500,10 @@ class UpBlock2D(nn.Layer):
                     b2=self.b2,
                 )
 
-            hidden_states = paddle.concat([hidden_states, res_hidden_states], axis=1)
+            if self.data_format == "NCHW":
+                hidden_states = paddle.concat([hidden_states, res_hidden_states], axis=1)
+            else:
+                hidden_states = paddle.concat([hidden_states, res_hidden_states], axis=3)
 
             if self.gradient_checkpointing and not hidden_states.stop_gradient:
 
