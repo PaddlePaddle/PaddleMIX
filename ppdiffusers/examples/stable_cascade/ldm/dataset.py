@@ -22,11 +22,11 @@ from PIL import Image
 
 
 class MyDataset(paddle.io.Dataset):
-    def __init__(self, dataset_path, image_size=512):
+    def __init__(self, dataset_path, resolution=512):
         self.dataset_path = dataset_path
         self.image_files = sorted([f for f in os.listdir(dataset_path) if f.endswith(".jpg") or f.endswith(".png")])
         self.caption_files = sorted([f for f in os.listdir(dataset_path) if f.endswith(".txt")])
-        self.image_size = image_size
+        self.resolution = resolution
 
     def __getitem__(self, index):
         image_filename = self.image_files[index]
@@ -35,23 +35,24 @@ class MyDataset(paddle.io.Dataset):
         caption_path = os.path.join(self.dataset_path, caption_filename)
 
         image = Image.open(image_path).convert("RGB")
-        # 缩小图像
-        w, h = image.size
-        if w > h:
-            image = image.resize((self.image_size, int(h * self.image_size / w)))
-        else:
-            image = image.resize((int(w * self.image_size / h), self.image_size))
+
+        # 缩小图像，如需对齐torch与paddle的输入可以用以下代码取代后面的T.Resize逻辑
+        # w, h = image.size
+        # if w > h:
+        #     image = image.resize((self.resolution, int(h * self.resolution / w)))
+        # else:
+        #     image = image.resize((int(w * self.resolution / h), self.resolution))
 
         # 读取标注
         with open(caption_path, "r") as file:
             caption = file.read().strip()
 
-        # 图像变换
         img_preprocess = T.Compose(
             [
                 T.ToTensor(),
-                # T.Resize(self.image_size, interpolation="bicubic"),
-                # T.RandomCrop(self.image_size, pad_if_needed=True),
+                T.Resize(self.resolution, interpolation="bicubic"),
+                # 按需进行图像裁剪等操作
+                # T.RandomCrop(self.resolution, pad_if_needed=True),
             ]
         )
 

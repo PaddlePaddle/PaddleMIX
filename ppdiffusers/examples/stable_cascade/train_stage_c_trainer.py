@@ -87,7 +87,10 @@ def main():
     model.set_ema(training_args.use_ema)
 
     # Setup data:
-    train_dataset = MyDataset(dataset_path=data_args.dataset_path)
+    train_dataset = MyDataset(
+        dataset_path=data_args.dataset_path,
+        resolution=data_args.resolution,
+    )
 
     trainer = LatentDiffusionTrainer(
         model=model,
