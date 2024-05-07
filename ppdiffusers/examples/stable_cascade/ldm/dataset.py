@@ -36,7 +36,7 @@ class MyDataset(paddle.io.Dataset):
 
         image = Image.open(image_path).convert("RGB")
 
-        # 缩小图像，如需对齐torch与paddle的输入可以用以下代码取代后面的T.Resize逻辑
+        # 缩小图像，如需对paddle与torch的图像输入可以用以下代码取代后面的T.Resize逻辑
         # w, h = image.size
         # if w > h:
         #     image = image.resize((self.resolution, int(h * self.resolution / w)))

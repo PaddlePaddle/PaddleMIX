@@ -343,9 +343,7 @@ class ModelC(nn.Layer):
         with paddle.no_grad():
             conditions = self.get_conditions(batch, models, extras)
             latents = self.encode_latents(batch, models, extras)
-            print("### latents", latents.sum().item())
             noised, noise, target, logSNR, noise_cond, loss_weight = extras.gdf.diffuse(latents, shift=1, loss_shift=1)
-            print("### noise_cond", noise_cond.sum().item() * 1000)
 
         if self.config.dtype in ["float16", "bfloat16"]:
             with paddle.amp.auto_cast(dtype=self.config.dtype):

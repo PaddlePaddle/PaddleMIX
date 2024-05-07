@@ -35,6 +35,7 @@ ${TRAINING_PYTHON} train_stage_c_trainer.py \
     --per_device_train_batch_size 1 \
     --gradient_accumulation_steps 1 \
     --learning_rate 1.0e-4 \
+    --resolution 512 \
     --weight_decay 0.01 \
     --max_grad_norm 1.0 \
     --max_steps 1000 \
