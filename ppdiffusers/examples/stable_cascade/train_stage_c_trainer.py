@@ -86,7 +86,6 @@ def main():
     model = ModelC(model_args, training_args)
     model.set_ema(training_args.use_ema)
 
-    # Setup data:
     train_dataset = MyDataset(
         dataset_path=data_args.dataset_path,
         resolution=data_args.resolution,
