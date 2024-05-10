@@ -14,6 +14,7 @@
 # limitations under the License.
 
 from typing import Callable, Dict, List, Optional, Union
+import os
 
 import paddle
 import PIL
@@ -338,6 +339,7 @@ class PaddleInferStableDiffusionPipeline(DiffusionPipeline, PaddleInferDiffusion
                         paddle.device.synchronize()
 
         if not output_type == "latent":
+            print('[vae decode start]', flush=True)
             image = self._decode_vae_latents(
                 latents / self.vae_scaling_factor, infer_op=infer_op_dict.get("vae_decoder", None)
             )

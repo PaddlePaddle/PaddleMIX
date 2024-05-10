@@ -129,6 +129,19 @@ def parse_arguments():
         default=False,
         help="Whether to tune the shape of tensorrt engine.",
     )
+    parser.add_argument(
+        "--use_pir",
+        type=strtobool, 
+        nargs='*', 
+        default=['0', '0', '0', '0'],
+    )
+    parser.add_argument(
+        "--use_new_transpose",
+        type=strtobool, 
+        nargs='*', 
+        default=['0', '0', '0', '0'],
+    )
+
 
     return parser.parse_args()
 
@@ -143,6 +156,8 @@ def create_paddle_inference_runtime(
     disable_paddle_pass=[],
     workspace=24 * 1024 * 1024 * 1024,
     tune=False,
+    use_pir=False,
+    use_new_transpose=False,
 ):
     config = paddle_infer.Config()
     config.enable_memory_optim()
@@ -150,12 +165,12 @@ def create_paddle_inference_runtime(
     if tune:
         config.collect_shape_range_info(shape_file)
         config.switch_ir_optim(False)
-    else:
+    if use_pir:
         config.enable_new_executor()
-        if in_pir_executor_mode():
-            config.enable_new_ir()
-            if in_cinn_mode():
-                config.enable_cinn()
+        config.enable_new_ir()
+        if use_new_transpose:
+            config.enable_transfer_layout()
+    
 
     if device_id != -1:
         config.use_gpu()
@@ -232,6 +247,8 @@ def main(args):
             disable_paddle_trt_ops=["range", "lookup_table_v2"],
             disable_paddle_pass=paddle_delete_passes.get("text_encoder", []),
             tune=False,
+            use_pir=args.use_pir[0],
+            use_new_transpose=args.use_new_transpose[0],
         ),
         vae_encoder=create_paddle_inference_runtime(
             model_dir=args.model_dir,
@@ -241,6 +258,8 @@ def main(args):
             device_id=args.device_id,
             disable_paddle_pass=paddle_delete_passes.get("vae_encoder", []),
             tune=False,
+            use_pir=args.use_pir[1],
+            use_new_transpose=args.use_new_transpose[1],
         ),
         vae_decoder=create_paddle_inference_runtime(
             model_dir=args.model_dir,
@@ -250,6 +269,8 @@ def main(args):
             device_id=args.device_id,
             disable_paddle_pass=paddle_delete_passes.get("vae_decoder", []),
             tune=False,
+            use_pir=args.use_pir[2],
+            use_new_transpose=args.use_new_transpose[2],
         ),
         unet=create_paddle_inference_runtime(
             model_dir=args.model_dir,
@@ -259,6 +280,8 @@ def main(args):
             device_id=args.device_id,
             disable_paddle_pass=no_need_passes,
             tune=args.tune,
+            use_pir=args.use_pir[3],
+            use_new_transpose=args.use_new_transpose[3],
         ),
     )
     pipe = PaddleInferStableDiffusionMegaPipeline.from_pretrained(
@@ -279,11 +302,13 @@ def main(args):
         prompt = "a photo of an astronaut riding a horse on mars"
         time_costs = []
         # warmup
+        generator = paddle.Generator().manual_seed(0)
         pipe.text2img(
             prompt,
             num_inference_steps=20,
             height=height,
             width=width,
+            generator=generator,
             # parse_prompt_type=parse_prompt_type,
         )
         print("==> Test text2img performance.")
@@ -296,6 +321,7 @@ def main(args):
                 num_inference_steps=args.inference_steps,
                 height=height,
                 width=width,
+                generator=generator,
                 # parse_prompt_type=parse_prompt_type,
             ).images
             latency = time.time() - start
@@ -305,7 +331,11 @@ def main(args):
             f"Mean latency: {np.mean(time_costs):2f} s, p50 latency: {np.percentile(time_costs, 50):2f} s, "
             f"p90 latency: {np.percentile(time_costs, 90):2f} s, p95 latency: {np.percentile(time_costs, 95):2f} s."
         )
-        images[0].save(f"{folder}/text2img.png")
+        images[0].save("{}/text2img_{}_{}.png".format(
+            folder,
+            '_'.join(map(str, args.use_pir)),
+            '_'.join(map(str, args.use_new_transpose))
+        ))
 
     if args.task_name in ["img2img", "all"]:
         # img2img
