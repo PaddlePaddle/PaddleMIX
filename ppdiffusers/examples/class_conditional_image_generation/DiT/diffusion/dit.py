@@ -31,8 +31,11 @@ from ppdiffusers.models.modeling_utils import ModelMixin
 
 
 def is_model_parrallel():
-    if paddle.distributed.get_world_size() > 1:
-        hcg = paddle.distributed.fleet.get_hybrid_communicate_group()
+    """
+    check whether the current training is model parallel or not.
+    """
+    if paddle.distributed.get_world_size() > 1 and hasattr(fleet.fleet, "_hcg"):
+        hcg = fleet.get_hybrid_communicate_group()
         if hcg.get_model_parallel_world_size() > 1:
             return True
         else:
@@ -154,7 +157,11 @@ class Attention(nn.Layer):
 
         if is_model_parrallel():
             self.qkv = fleet.meta_parallel.ColumnParallelLinear(
-                dim, dim * 3, weight_attr=None, has_bias=qkv_bias, gather_output=True
+                dim,
+                dim * 3,
+                weight_attr=None,
+                has_bias=qkv_bias,
+                gather_output=False,
             )
         else:
             self.qkv = nn.Linear(dim, dim * 3, bias_attr=qkv_bias)
@@ -162,8 +169,12 @@ class Attention(nn.Layer):
         self.k_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
         self.attn_drop = nn.Dropout(attn_drop)
         if is_model_parrallel():
-            self.proj = fleet.meta_parallel.ColumnParallelLinear(
-                dim, dim, weight_attr=None, has_bias=True, gather_output=True
+            self.proj = fleet.meta_parallel.RowParallelLinear(
+                dim,
+                dim,
+                weight_attr=None,
+                has_bias=True,
+                input_is_parallel=True,
             )
         else:
             self.proj = nn.Linear(dim, dim)
@@ -222,16 +233,15 @@ class ParallelTimestepEmbedder(nn.Layer):
                     hidden_size,
                     weight_attr=None,
                     has_bias=True,
-                    gather_output=True,  # TODO: False
+                    gather_output=False,
                 ),
                 nn.Silu(),
-                fleet.meta_parallel.ColumnParallelLinear(
+                fleet.meta_parallel.RowParallelLinear(
                     hidden_size,
                     hidden_size,
                     weight_attr=None,
                     has_bias=True,
-                    gather_output=True,
-                    # input_is_parallel=True,  # TODO: row parallel
+                    input_is_parallel=True,
                 ),
             )
         else:
