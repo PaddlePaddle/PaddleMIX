@@ -453,7 +453,9 @@ class YOLOWorldHead(nn.Layer):
             flatten_objectness,
             batch_img_metas,
         ):
-            ori_shape = img_meta["im0_shape"].squeeze(axis=0)
+            ori_shape = (img_meta["im0_shape"] / img_meta["scale_factor"]).squeeze(
+                axis=0
+            )
             scale_factor = img_meta["scale_factor"].squeeze(axis=0)
             if "pad_param" in img_meta:
                 pad_param = img_meta["pad_param"].squeeze(axis=0)
