@@ -77,4 +77,4 @@ python infer.py \
 
 ## 5. 参考资料
 
-- [GitHub - AILab-CVC/YOLO-World: YOLO-WOrld](https://github.com/AILab-CVC/YOLO-World)
+- [GitHub - AILab-CVC/YOLO-World: YOLO-World](https://github.com/AILab-CVC/YOLO-World)
