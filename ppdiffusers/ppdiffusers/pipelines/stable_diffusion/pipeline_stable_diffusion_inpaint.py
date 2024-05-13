@@ -1131,7 +1131,7 @@ class StableDiffusionInpaintPipeline(
         mask_condition = self.mask_processor.preprocess(mask_image, height=height, width=width)
 
         if masked_image_latents is None:
-            masked_image = init_image * (mask_condition < 0.5)
+            masked_image = init_image * (mask_condition < 0.5).astype(init_image.dtype)
         else:
             masked_image = masked_image_latents
 
