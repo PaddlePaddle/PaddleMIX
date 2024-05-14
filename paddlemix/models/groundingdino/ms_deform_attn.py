@@ -190,7 +190,7 @@ class MSDeformableAttention(nn.Layer):
         )
 
         if reference_points.shape[-1] == 2:
-            offset_normalizer = value_spatial_shapes.flip([1]).reshape([1, 1, 1, self.num_levels, 1, 2])
+            offset_normalizer = value_spatial_shapes.flip([1]).reshape([1, 1, 1, self.num_levels, 1, 2]).astype(sampling_offsets.dtype)
             sampling_locations = (
                 reference_points.reshape([bs, Len_q, 1, self.num_levels, 1, 2]) + sampling_offsets / offset_normalizer
             )
