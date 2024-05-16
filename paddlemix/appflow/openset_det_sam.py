@@ -170,9 +170,10 @@ class OpenSetDetTask(AppTask):
             pred_phrases.append(pred_phrase + f"({str(logit.max().item())[:4]})")
 
         H, W = self._size[1], self._size[0]
+        sizes = paddle.to_tensor([W, H, W, H]).astype(boxes.dtype)
         boxes = []
         for box in zip(boxes_filt):
-            box = box[0] * paddle.to_tensor([W, H, W, H])
+            box = box[0] * sizes
             box[:2] -= box[2:] / 2
             box[2:] += box[:2]
             x0, y0, x1, y1 = box.numpy()
