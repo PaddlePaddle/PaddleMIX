@@ -105,10 +105,9 @@ def gen_encoder_output_proposals(
         grid = paddle.concat([grid_x.unsqueeze(-1), grid_y.unsqueeze(-1)], -1)  # H_, W_, 2
 
         scale = paddle.concat([valid_W.unsqueeze(-1), valid_H.unsqueeze(-1)], 1).reshape([N_, 1, 1, 2])
-        grid = (grid.unsqueeze(0).tile([N_, 1, 1, 1]) + 0.5) / scale
+        grid = (grid.unsqueeze(0).tile([N_, 1, 1, 1]) + 0.5) / scale.astype(grid.dtype)
 
         if learnedwh is not None:
-            # import ipdb; ipdb.set_trace()
             wh = paddle.ones_like(grid) * learnedwh.sigmoid() * (2.0**lvl)
         else:
             wh = paddle.ones_like(grid) * 0.05 * (2.0**lvl)
