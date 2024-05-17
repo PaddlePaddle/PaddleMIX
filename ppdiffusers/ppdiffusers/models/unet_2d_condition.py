@@ -224,10 +224,12 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
         mid_block_only_cross_attention: Optional[bool] = None,
         cross_attention_norm: Optional[str] = None,
         addition_embed_type_num_heads=64,
+        data_format: str = "NCHW",
     ):
         super().__init__()
 
         self.sample_size = sample_size
+        self.data_format = data_format
 
         if num_attention_heads is not None:
             raise ValueError(
@@ -285,7 +287,7 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
         # input
         conv_in_padding = (conv_in_kernel - 1) // 2
         self.conv_in = nn.Conv2D(
-            in_channels, block_out_channels[0], kernel_size=conv_in_kernel, padding=conv_in_padding
+            in_channels, block_out_channels[0], kernel_size=conv_in_kernel, padding=conv_in_padding, data_format=data_format
         )
 
         # time
@@ -478,6 +480,7 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
                 cross_attention_norm=cross_attention_norm,
                 attention_head_dim=attention_head_dim[i] if attention_head_dim[i] is not None else output_channel,
                 dropout=dropout,
+                data_format=data_format,
             )
             self.down_blocks.append(down_block)
 
@@ -499,6 +502,7 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
                 use_linear_projection=use_linear_projection,
                 upcast_attention=upcast_attention,
                 attention_type=attention_type,
+                data_format=data_format,
             )
         elif mid_block_type == "UNetMidBlock2DSimpleCrossAttn":
             self.mid_block = UNetMidBlock2DSimpleCrossAttn(
@@ -590,6 +594,7 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
                 cross_attention_norm=cross_attention_norm,
                 attention_head_dim=attention_head_dim[i] if attention_head_dim[i] is not None else output_channel,
                 dropout=dropout,
+                data_format=data_format,
             )
             self.up_blocks.append(up_block)
             prev_output_channel = output_channel
@@ -597,7 +602,8 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
         # out
         if norm_num_groups is not None:
             self.conv_norm_out = nn.GroupNorm(
-                num_channels=block_out_channels[0], num_groups=norm_num_groups, epsilon=norm_eps
+                num_channels=block_out_channels[0], num_groups=norm_num_groups, epsilon=norm_eps, 
+                data_format=data_format,
             )
 
             self.conv_act = get_activation(act_fn)
@@ -608,7 +614,8 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
 
         conv_out_padding = (conv_out_kernel - 1) // 2
         self.conv_out = nn.Conv2D(
-            block_out_channels[0], out_channels, kernel_size=conv_out_kernel, padding=conv_out_padding
+            block_out_channels[0], out_channels, kernel_size=conv_out_kernel, padding=conv_out_padding, 
+            data_format=data_format,
         )
 
         if attention_type in ["gated", "gated-text-image"]:
@@ -871,6 +878,8 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
         """
         # TODO junnyu, add this to support pure fp16
         sample = sample.cast(self.dtype)
+        if self.data_format == "NHWC":
+            sample = sample.transpose([0, 2, 3, 1])
 
         # By default samples have to be AT least a multiple of the overall upsampling factor.
         # The overall upsampling factor is equal to 2 ** (# num of upsampling layers).
@@ -888,7 +897,11 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
         #         # Forward upsample size to force interpolation output size.
         #         forward_upsample_size = True
         #         break
-        if any(s % default_overall_up_factor != 0 for s in sample.shape[-2:]):
+        if self.data_format == "NCHW":
+            sample_shape = sample.shape[-2:]
+        else:
+            sample_shape = sample.shape[1:3]
+        if any(s % default_overall_up_factor != 0 for s in sample_shape):
             logger.info("Forward upsample size to force interpolation output size.")
             forward_upsample_size = True
 
@@ -1151,7 +1164,10 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
             # if we have not reached the final block and need to forward the
             # upsample size, we do it here
             if not is_final_block and forward_upsample_size:
-                upsample_size = paddle.shape(down_block_res_samples[-1])[2:]  # (NOTE,junnyu) make export happier
+                if self.data_format == "NCHW":
+                    upsample_size = paddle.shape(down_block_res_samples[-1])[2:]  # (NOTE,junnyu) make export happier
+                else:
+                    upsample_size = paddle.shape(down_block_res_samples[-1])[1:3]  # (NOTE,junnyu) make export happier
 
             if hasattr(upsample_block, "has_cross_attention") and upsample_block.has_cross_attention:
                 sample = upsample_block(
@@ -1178,6 +1194,8 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
             sample = self.conv_norm_out(sample)
             sample = self.conv_act(sample)
         sample = self.conv_out(sample)
+        if self.data_format == "NHWC":
+            sample = sample.transpose([0, 3, 1, 2])
 
         if USE_PEFT_BACKEND:
             # remove `lora_scale` from each PEFT layer
