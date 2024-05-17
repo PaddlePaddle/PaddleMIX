@@ -46,7 +46,7 @@ def main(args):
     model = AutoModelMIX.from_pretrained(args.model_path, dtype=compute_dtype)
     model.eval()
 
-    processor, _ = AutoProcessorMIX.from_pretrained(args_model_path, eval="eval", max_length=args.max_new_tokens, image_aspect_ratio=model_config.image_aspect_ratio)
+    processor, _ = AutoProcessorMIX.from_pretrained(args.model_path, eval="eval", max_length=args.max_new_tokens, image_aspect_ratio=model_config.image_aspect_ratio)
 
     model.resize_token_embeddings(len(tokenizer))
     vision_tower = model.get_vision_tower()
