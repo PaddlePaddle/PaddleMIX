@@ -438,11 +438,6 @@ if is_ppxformers_available():
                         scale=scale,
                         training=True,
                     )  # make sure we use training=True
-                if query.shape[3] > 256:
-                    if paddle.distributed.get_world_size() > 1:
-                        hcg = fleet.get_hybrid_communicate_group()
-                        mp_group = hcg.get_model_parallel_group()
-                        paddle.distributed.broadcast(output, src=mp_group.ranks[0], group=mp_group, sync_op=True)
             else:
                 assert (
                     variable_length_memory_efficient_attention is not None
@@ -477,12 +472,6 @@ if is_ppxformers_available():
                     is_causal=bool(is_causal),
                     training=training,
                 )
-            # hidden_dimension excel 256 will use mea
-            if query.shape[3] > 256:
-                if paddle.distributed.get_world_size() > 1:
-                    hcg = fleet.get_hybrid_communicate_group()
-                    mp_group = hcg.get_model_parallel_group()
-                    paddle.distributed.broadcast(output, src=mp_group.ranks[0], group=mp_group, sync_op=True)
         else:
             raise ValueError(
                 "ppxformers's attention_op shoulde be in ['auto', 'math', 'cutlass', `memory_efficient`, 'flash']."
