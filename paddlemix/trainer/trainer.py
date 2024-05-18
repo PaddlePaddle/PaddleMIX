@@ -20,6 +20,7 @@ from tensorboardX import SummaryWriter
 from paddlemix.datasets.collator import (
     CLIPCollator,
     EVA02Collator,
+    InternLMXComposer2Collator,
     LLaVACollator,
     MiniGPT4Collator,
     QwenVLCollator,
@@ -221,6 +222,8 @@ def get_trainer(
             collator = QwenVLCollator(train_processor, mode="train")
         elif "visualglm" in pretrained_model_name_or_path:
             collator = VisualglmCollator(train_processor, mode="train")
+        elif "internlm" in pretrained_model_name_or_path:
+            collator = InternLMXComposer2Collator(train_processor, mode="train")
         else:
             collator = None
 

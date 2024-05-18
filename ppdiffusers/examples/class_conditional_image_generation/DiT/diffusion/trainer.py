@@ -20,8 +20,9 @@ import time
 import numpy as np
 import paddle
 import paddle.amp.auto_cast as autocast
-import paddle.distributed as dist
-from paddlenlp.trainer import PrinterCallback, ProgressCallback, Trainer
+from paddle.distributed import fleet
+from paddle.io import get_worker_info
+from paddlenlp.trainer import Trainer
 from paddlenlp.trainer.integrations import (
     INTEGRATION_TO_CALLBACK,
     TrainerCallback,
@@ -33,10 +34,12 @@ from paddlenlp.utils import profiler
 from paddlenlp.utils.log import logger
 
 from ppdiffusers.optimization import get_scheduler
-from ppdiffusers.training_utils import unwrap_model
+
+from .ema_callback import EmaCallback
 
 PADDLE_WEIGHTS_NAME = "model_state.pdparams"
 TRAINING_ARGS_NAME = "training_args.bin"
+PADDLE_EMA_WEIGHTS_NAME = "ema_state.pdparams"
 
 use_tensorboard = False
 if use_tensorboard:
@@ -44,12 +47,42 @@ if use_tensorboard:
 
 
 def worker_init_fn(_):
-    worker_info = paddle.io.get_worker_info()
+    """
+    初始化函数，用于每个工作者的初始化。
+
+    该函数会获取当前工作者的信息（包括数据集、本地排名、全局排名和工作者ID），并根据这些信息将数据集中的文件ID分配给不同的工作者进行处理。
+
+    返回值是一个随机种子，用于设置每个工作者的随机数生成器状态。
+
+    Args:
+        _ (None): 无参数，仅为了与DataLoader的worker_init_fn函数匹配。
+
+    Returns:
+        int: 一个随机种子，用于设置每个工作者的随机数生成器状态。
+    """
+    worker_info = get_worker_info()
     dataset = worker_info.dataset
     worker_id = worker_info.id
 
-    local_rank = dist.get_rank()
-    # world_size = dist.get_world_size()
+    hcg = getattr(fleet.fleet, "_hcg", None)
+    if hcg is not None:
+        hcg = fleet.get_hybrid_communicate_group()
+
+    # 初始化默认值
+    # world_size = 1
+    local_rank = 0
+
+    # 检查是否处于分布式环境中，并且hcg不为None
+    if paddle.distributed.get_world_size() > 1 and hcg:
+        # dp_size = hcg.get_data_parallel_world_size()
+        dp_rank = hcg.get_data_parallel_rank()
+
+        sd_size = hcg.get_sharding_parallel_world_size()
+        sd_rank = hcg.get_sharding_parallel_rank()
+
+        # world_size = sd_size * dp_size
+        local_rank = dp_rank * sd_size + sd_rank
+
     num_workers = worker_info.num_workers
     worker_id = worker_info.id
     worker_global_id = local_rank * num_workers + worker_id
@@ -226,6 +259,42 @@ if not use_tensorboard:
     INTEGRATION_TO_CALLBACK.update({"custom_visualdl": VisualDLWithImageCallback})
 
 
+def unwrap_model(model):
+    """
+    解包模型，返回最底层的模型。
+    如果模型是被多个层包装的，则递归地进行解包。
+
+    Args:
+        model (Union[tf.keras.Model, tf.keras.layers.Layer]): 需要解包的模型或层。
+
+    Returns:
+        Union[tf.keras.Model, tf.keras.layers.Layer]: 最底层的模型或层。
+    """
+    # since there could be multiple levels of wrapping, unwrap recursively
+    if hasattr(model, "_layers"):
+        return unwrap_model(model._layers)
+    else:
+        return model
+
+
+def create_qk_layernorm_hook(param, accumulation_steps):
+    """create_qk_layernorm_hook"""
+    hcg = fleet.get_hybrid_communicate_group()
+    pg = hcg.get_model_parallel_group().process_group
+    step = [0]
+
+    @paddle.autograd.no_grad()
+    def __impl__():
+        step[0] += 1
+        if (step[0] % accumulation_steps) == 0:
+            if hasattr(param, "main_grad"):
+                pg.allreduce(param.main_grad).wait()
+            else:
+                pg.allreduce(param.grad).wait()
+
+    return __impl__
+
+
 class LatentDiffusionTrainer(Trainer):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -235,23 +304,23 @@ class LatentDiffusionTrainer(Trainer):
                 self.writer = SummaryWriter("output/tensorboard/test")
                 self.logstep = 0
 
-        self.do_grad_scaling = True if self.args.fp16 else False
+        self.benchmark_callback = BenchmarkCallback(
+            benchmark=self.args.benchmark,
+            profiler_options=self.args.profiler_options,
+        )
+        self.add_callback(self.benchmark_callback)
 
-        if self.args.benchmark or self.args.profiler_options is not None:
-            self.add_callback(
-                BenchmarkCallback(
-                    benchmark=self.args.benchmark,
-                    profiler_options=self.args.profiler_options,
-                )
-            )
-            if self.args.benchmark:
-                if self.args.disable_tqdm:
-                    self.pop_callback(PrinterCallback)
-                else:
-                    self.pop_callback(ProgressCallback)
+        self.use_ema = kwargs["model"].use_ema
+        if self.use_ema:
+            self.ema_callback = EmaCallback(kwargs["model"], decay=0.99)
+            self.add_callback(self.ema_callback)
 
     def compute_loss(self, model, inputs, return_outputs=False):
         loss = model(**inputs)
+        if use_tensorboard:
+            if self.rank == 0:
+                self.writer.add_scalar("train/loss", loss.item(), self.logstep)
+                self.logstep += 1
         return loss
 
     def create_optimizer_and_scheduler_for_debug(self, num_training_steps: int):
@@ -323,41 +392,79 @@ class LatentDiffusionTrainer(Trainer):
         )
         return train_dataloader
 
-    def _save_todo(self, output_dir=None, state_dict=None, merge_tensor_parallel=False):
-        # TODO: merge_tensor_parallel
-        output_dir = output_dir if output_dir is not None else self.args.output_dir
-        os.makedirs(output_dir, exist_ok=True)
+    def _save_checkpoint(self, *args, **kwargs):
+        # start_t = time.time()
+        ret = super()._save_checkpoint(*args, **kwargs)
+        if paddle.distributed.is_initialized():
+            paddle.distributed.barrier()
+        # end_t = time.time()
+        # self.benchmark_callback.set_save_time(end_t - start_t)
+        return ret
 
-        if self.args.only_save_updated_model:
-            unwraped_model = unwrap_model(self.model)
-            logger.info(f"Saving transformer DiT checkpoint to {output_dir}/transformer")
-            unwraped_model.transformer.save_pretrained(
-                os.path.join(output_dir, "transformer"),
-                # merge_tensor_parallel=merge_tensor_parallel,
+    def _wrap_model(self, model, training=True):
+        model = super()._wrap_model(model, training)
+
+        if self.args.tensor_parallel_degree > 1:
+            for p in model.parameters():
+                if hasattr(p, "qk_norm_in_tp") and p.trainable:
+                    hook = create_qk_layernorm_hook(p, accumulation_steps=self.args.gradient_accumulation_steps)
+                    p._register_backward_hook(hook)
+
+        return model
+
+    def _save(self, output_dir=None, state_dict=None, merge_tensor_parallel=False):
+        """
+            保存模型参数和训练状态。如果只保存训练状态，则不会保存模型参数。
+        如果merge_tensor_parallel为True，则将tensor parallel的参数合并到一个文件中。
+
+        Args:
+            output_dir (str, optional): 输出目录路径，默认为None，使用args.output_dir。
+            state_dict (dict, optional): 训练状态字典，默认为None，包括了模型参数和其他信息。
+            merge_tensor_parallel (bool, optional): 是否将tensor parallel的参数合并到一个文件中，默认为False。
+
+        Returns:
+            None.
+        """
+        if merge_tensor_parallel:
+            output_dir = output_dir if output_dir is not None else self.args.output_dir
+            os.makedirs(output_dir, exist_ok=True)
+            unwraped = unwrap_model(self.model)
+            logger.info(f"Saving merged checkpoint to {output_dir}")
+            unwraped.dit.save_pretrained(
+                output_dir,
+                merge_tensor_parallel=merge_tensor_parallel,
+                tensor_parallel_degree=self.args.tensor_parallel_degree,
             )
-
-            if unwraped_model.use_ema:
-                logger.info(f"Saving ema transformer DiT checkpoint to {output_dir}/transformer")
-                with unwraped_model.ema_scope():
-                    unwraped_model.transformer.save_pretrained(
-                        os.path.join(output_dir, "transformer"),
-                        # merge_tensor_parallel=merge_tensor_parallel,
-                        variant="ema",
-                    )
-
+            assert not self.use_ema, "Not support ema for merge_tensor_parallel"
         else:
-            logger.info(f"Saving model checkpoint to {output_dir}")
-            if state_dict is None:
-                state_dict = self.model.state_dict()
-            paddle.save(
-                state_dict,
-                os.path.join(
-                    output_dir,
-                    _add_variant(PADDLE_WEIGHTS_NAME, self.args.weight_name_suffix),
-                ),
+            if self.args.only_save_updated_model and state_dict is None:
+                state_dict = {}
+                for n, p in self.model.state_dict().items():
+                    if not p.stop_gradient:
+                        state_dict[n] = p
+            super()._save(output_dir=output_dir, state_dict=state_dict)
+
+    def save_model(self, output_dir=None, merge_tensor_parallel=False):
+        """save_model"""
+        output_dir = output_dir if output_dir is not None else self.args.output_dir
+        super().save_model(output_dir, merge_tensor_parallel)
+        if self.use_ema:
+            ema_state_dict = self.ema_callback.state_dict()
+            save_path = os.path.join(
+                output_dir, _add_variant(PADDLE_EMA_WEIGHTS_NAME, self.args.sharded_name_suffix())
             )
-            if self.args.should_save:
-                paddle.save(self.args, os.path.join(output_dir, TRAINING_ARGS_NAME))
+            logger.info(f"Saved EMA weight to {save_path}")
+            paddle.save(ema_state_dict, save_path)
+
+    def _load_from_checkpoint(self, resume_from_checkpoint=None):
+        super()._load_from_checkpoint(resume_from_checkpoint)
+        if self.use_ema and resume_from_checkpoint:
+            load_path = os.path.join(
+                resume_from_checkpoint, _add_variant(PADDLE_EMA_WEIGHTS_NAME, self.args.sharded_name_suffix())
+            )
+            logger.info(f"Loaded EMA weight from {load_path}")
+            state_dict = paddle.load(load_path)
+            self.ema_callback.set_state_dict(state_dict)
 
 
 def clip_grad_norm_(
