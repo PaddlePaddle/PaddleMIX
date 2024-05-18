@@ -472,7 +472,6 @@ if is_ppxformers_available():
                     is_causal=bool(is_causal),
                     training=training,
                 )
-            # hidden_dimension excel 256 will use mea
         else:
             raise ValueError(
                 "ppxformers's attention_op shoulde be in ['auto', 'math', 'cutlass', `memory_efficient`, 'flash']."
