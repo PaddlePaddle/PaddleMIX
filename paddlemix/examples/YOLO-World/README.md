@@ -54,13 +54,13 @@ python pretrain/torch2paddle.py <path_to_weight.pth> -p <path_to_weight.pdparams
 
 ```bash
 python infer.py \
-    --config <path_to_config_yaml> \
-    -o weights=<path_to_pretrained_weights> \
-    --image=<path_to_image_or_directory> \
-    --text <text or .txt file path>\
-    --topk=<number_of_top_predictions> \
-    --threshold=<confidence_threshold_value> \
-    --output_dir=<output_directory_path>
+    --config <path_to_config_yaml> \  # 配置文件的路径
+    -o weights=<path_to_pretrained_weights> \  # 预训练权重的路径
+    --image=<path_to_image_or_directory> \  # 图像或目录的路径
+    --text <text or .txt file path>\  # 文本或者文本文件的路径
+    --topk=<number_of_top_predictions> \  # 选取topk个预测结果
+    --threshold=<confidence_threshold_value> \  # 置信度阈值
+    --output_dir=<output_directory_path>  # 输出目录路径
 
 # 可以在cli参数中添加 --offline 选项，将会首先使用text model得到 offline text feats，之后的推理中text model将不会被加载。如：
 
