@@ -19,7 +19,7 @@
 
 
 ## Quick Start
-Please confirm if it has been installed first [PaddleMIX](../README.md/#安装) and [ppdiffusers](../README.md/#安装)
+Please confirm if it has been installed first [PaddleMIX](../README_EN.md/#installation) and [ppdiffusers](../README_EN.md/#installation)
 
 ### 1.requirements
 ```shell
