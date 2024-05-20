@@ -16,12 +16,12 @@ import json
 import os
 import re
 
-import numpy as np
 import paddle
 from models.stdit.stdit2 import STDiT2
 from models.text_encoder import T5Encoder
 from models.text_encoder.t5 import text_preprocessing
 from models.vae import VideoAutoencoderKL
+from paddlenlp.trainer import set_seed
 from schedulers.iddpm import IDDPM
 from utils.config_utils import parse_configs
 from utils.utils import read_from_path, save_sample
@@ -139,6 +139,9 @@ def main():
     # ======================================================
     cfg = parse_configs()
     print(cfg)
+
+    if cfg.seed is not None:
+        set_seed(cfg.seed)
 
     if cfg.dtype == "fp16":
         dtype = paddle.float16
@@ -269,8 +272,7 @@ def main():
 
                 # sampling
 
-                numpy_random = np.random.randn(len(batch_prompts), vae.out_channels, *latent_size)
-                z = paddle.to_tensor(numpy_random)
+                z = paddle.randn(shape=(len(batch_prompts), vae.out_channels, *latent_size))
 
                 masks = apply_mask_strategy(z, refs_x, mask_strategy, loop_i)
 

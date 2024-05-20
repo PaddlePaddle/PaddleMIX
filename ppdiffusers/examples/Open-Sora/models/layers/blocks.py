@@ -128,13 +128,6 @@ class PatchEmbed3D(paddle.nn.Layer):
         # padding
 
         _, _, D, H, W = x.shape
-        # if W % self.patch_size[2] != 0:
-
-        #     x = F.pad(x, (0, self.patch_size[2] - W % self.patch_size[2]), data_format='NCDHW')
-        # if H % self.patch_size[1] != 0:
-        #     x = F.pad(x, (0, 0, 0, self.patch_size[1] - H % self.patch_size[1]), data_format='NCDHW')
-        # if D % self.patch_size[0] != 0:
-        #     x = F.pad(x, (0, 0, 0, 0, 0, self.patch_size[0] - D % self.patch_size[0]), data_format='NCDHW')
 
         if W % self.patch_size[2] != 0:
 
@@ -200,42 +193,47 @@ class Attention(paddle.nn.Layer):
             self.rope = True
             self.rotary_emb = rope
 
+        self._use_memory_efficient_attention_xformers = True
+
     def forward(self, x: paddle.Tensor) -> paddle.Tensor:
         B, N, C = x.shape
 
         qkv = self.qkv(x)
         qkv_shape = (B, N, 3, self.num_heads, self.head_dim)
 
-        qkv = qkv.view(qkv_shape).permute(2, 0, 3, 1, 4)
-        q, k, v = qkv.unbind(0)
+        qkv = qkv.view(qkv_shape).permute(2, 0, 3, 1, 4)  # (3, B, num_heads, N, head_dim)
+        q, k, v = qkv.unbind(0)  # (B, num_heads, N, head_dim)
+
         # noq
         if self.rope:
             q = self.rotary_emb(q)
             k = self.rotary_emb(k)
         q, k = self.q_norm(q), self.k_norm(k)
 
-        dtype = q.dtype
-        q = q * self.scale
+        if self._use_memory_efficient_attention_xformers:
+            q = q.transpose((0, 2, 1, 3))
+            k = k.transpose((0, 2, 1, 3))
+            v = v.transpose((0, 2, 1, 3))
+            attn = F.scaled_dot_product_attention_(
+                q,
+                k,
+                v,
+                scale=self.scale,
+                dropout_p=self.attn_drop.p,
+                attention_op=None,
+            )
+        else:
+            q = q * self.scale
+            attn = q @ k.transpose((0, 1, 3, 2))
+            attn = attn.astype(paddle.float32)
+            attn = paddle.nn.functional.softmax(attn, axis=-1)
+            attn = attn.astype(x.dtype)
+            attn = self.attn_drop(attn)
+            attn = attn @ v
+            attn = attn.transpose((0, 2, 1, 3))
 
-        k_perm = list(range(k.dim()))
-        new_perm = k_perm
-        new_perm[-2], new_perm[-1] = k_perm[-1], k_perm[-2]
-        attn = q @ k.transpose(new_perm)
-
-        attn = attn.to("float32")
-        attn = paddle.nn.functional.softmax(attn, axis=-1)
-        attn = attn.to(dtype)  # cast back attn to original dtype
-        attn = self.attn_drop(attn)
-        x = attn @ v
-
-        x_output_shape = (B, N, C)
-
-        perm_4 = list(range(x.ndim))
-        perm_4[1] = 2
-        perm_4[2] = 1
-        x = x.transpose(perm=perm_4)
-
-        x = x.reshape(x_output_shape)
+        x = attn
+        x = x.reshape((B, N, C))
         x = self.proj(x)
         x = self.proj_drop(x)
         return x
@@ -264,12 +262,15 @@ class MultiHeadCrossAttention(paddle.nn.Layer):
         self.d_model = d_model
         self.num_heads = num_heads
         self.head_dim = d_model // num_heads
+        self.scale = 1.0 / self.head_dim**0.5
 
         self.q_linear = paddle.nn.Linear(d_model, d_model)
         self.kv_linear = paddle.nn.Linear(d_model, d_model * 2)
         self.attn_drop = paddle.nn.Dropout(attn_drop)
         self.proj = paddle.nn.Linear(d_model, d_model)
         self.proj_drop = paddle.nn.Dropout(proj_drop)
+
+        self._use_memory_efficient_attention_xformers = True
 
     def forward(self, x, cond, mask=None):
         # query/value: img tokens; key: condition; mask: if padding tokens
@@ -279,18 +280,9 @@ class MultiHeadCrossAttention(paddle.nn.Layer):
         kv = self.kv_linear(cond).reshape((1, -1, 2, self.num_heads, self.head_dim))
         k, v = kv.unbind(2)
 
-        q = q.astype(paddle.float32)
-        k = k.astype(paddle.float32)
-        v = v.astype(paddle.float32)
-
-        scale = 1.0 / q.shape[-1] ** 0.5
-        q = q * scale
-        q = q.transpose((0, 2, 1, 3))
-        k = k.transpose((0, 2, 1, 3))
-        v = v.transpose((0, 2, 1, 3))
-        attn = q @ k.transpose((0, 1, 3, 2))
-
-        attn_bias = paddle.empty(shape=attn.shape[-2:], dtype=attn.dtype)
+        attn_bias_shape = [1, self.num_heads, q.shape[1], k.shape[1]]
+        # attn_bias
+        attn_bias = paddle.empty(shape=attn_bias_shape[-2:], dtype=q.dtype)
         attn_bias.fill_(-math.inf)
         for i, ((q_start, q_end), (k_start, k_end)) in enumerate(
             zip(
@@ -301,23 +293,43 @@ class MultiHeadCrossAttention(paddle.nn.Layer):
 
             attn_bias[q_start:q_end, k_start:k_end] = paddle.zeros(
                 (q_end - q_start, k_end - k_start),
-                dtype=attn.dtype,
+                dtype=q.dtype,
             )
-        for _ in range(len(attn.shape) - 2):
+        for _ in range(len(attn_bias_shape) - 2):
             attn_bias = attn_bias.unsqueeze(0)
-        attn_bias.expand(attn.shape)
+        attn_bias = attn_bias.expand(attn_bias_shape)
 
-        attn = attn + attn_bias
+        if self._use_memory_efficient_attention_xformers:
+            q = q.astype(paddle.float32)
+            k = k.astype(paddle.float32)
+            v = v.astype(paddle.float32)
+            attn = F.scaled_dot_product_attention_(
+                q,
+                k,
+                v,
+                attn_mask=attn_bias,
+                scale=self.scale,
+                dropout_p=self.attn_drop.p,
+                attention_op="math",
+            )
+        else:
 
-        attn = paddle.nn.functional.softmax(attn, axis=-1)
-        attn = F.dropout(attn, self.attn_drop.p)
-        attn = attn @ v
-        x = attn.transpose((0, 2, 1, 3))
+            q = q.transpose((0, 2, 1, 3)).astype(paddle.float32)
+            k = k.transpose((0, 2, 1, 3)).astype(paddle.float32)
+            v = v.transpose((0, 2, 1, 3)).astype(paddle.float32)
+
+            attention_scores = paddle.matmul(q * self.scale, k, transpose_y=True)
+            attention_scores = attention_scores + attn_bias
+
+            attention_probs = F.softmax(attention_scores, axis=-1)
+            attention_probs = self.attn_drop(attention_probs)
+            attn = paddle.matmul(attention_probs, v).cast(x.dtype)
+            attn = attn.transpose((0, 2, 1, 3))
+
+        x = attn
 
         x = x.reshape((B, -1, C))
-
         x = x.astype(paddle.float16)
-
         x = self.proj(x)
         x = self.proj_drop(x)
         return x
@@ -336,10 +348,7 @@ class T2IFinalLayer(paddle.nn.Layer):
         )
         self.linear = paddle.nn.Linear(in_features=hidden_size, out_features=num_patch * out_channels, bias_attr=True)
 
-        np.random.seed(42)
-
-        numpy_random = np.random.randn(2, hidden_size)
-        paddle_random = paddle.to_tensor(numpy_random)
+        paddle_random = paddle.randn([2, hidden_size])
 
         out_1 = paddle.create_parameter(
             shape=(paddle_random / hidden_size**0.5).shape,
@@ -445,9 +454,7 @@ class CaptionEmbedder(paddle.nn.Layer):
             drop=0,
         )
 
-        np.random.seed(42)
-        numpy_random = np.random.randn(token_num, in_channels)
-        paddle_random = paddle.to_tensor(numpy_random)
+        paddle_random = paddle.randn([token_num, in_channels])
 
         self.register_buffer(
             "y_embedding",
@@ -461,9 +468,7 @@ class CaptionEmbedder(paddle.nn.Layer):
         Drops labels to enable classifier-free guidance.
         """
         if force_drop_ids is None:
-            np.random.seed(42)
-            numpy_random = np.random.randn(tuple(caption.shape)[0])
-            paddle_random = paddle.to_tensor(numpy_random)
+            paddle_random = paddle.randn([tuple(caption.shape)[0]])
 
             drop_ids = paddle_random.cuda() < self.uncond_prob
         else:

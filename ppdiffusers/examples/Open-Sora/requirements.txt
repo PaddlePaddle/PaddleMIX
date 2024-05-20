@@ -6,5 +6,3 @@ pyav
 tqdm
 beartype
 pandarallel
-huggingface_hub
-hf-transfer

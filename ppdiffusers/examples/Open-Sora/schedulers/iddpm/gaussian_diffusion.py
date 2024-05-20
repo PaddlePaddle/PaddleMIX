@@ -244,8 +244,7 @@ class GaussianDiffusion:
         """
         if noise is None:
 
-            numpy_random = np.random.randn(x_start.shape)
-            paddle_random = paddle.to_tensor(numpy_random, dtype=x_start.dtype)
+            paddle_random = paddle.randn(x_start.shape, dtype=x_start.dtype)
             noise = paddle_random
 
         assert noise.shape == x_start.shape
@@ -441,8 +440,7 @@ class GaussianDiffusion:
             # x_noise: add noise to x values
             x0 = x.clone()
 
-            numpy_random = np.random.randn(*x.shape)
-            paddle_random = paddle.to_tensor(numpy_random)
+            paddle_random = paddle.randn(x.shape)
 
             x_noise = x0 * _extract_into_tensor(
                 self.sqrt_alphas_cumprod, t, x.shape
@@ -467,8 +465,7 @@ class GaussianDiffusion:
             model_kwargs=model_kwargs,
         )
 
-        numpy_random = np.random.randn(*x.shape)
-        paddle_random = paddle.to_tensor(numpy_random, dtype=x.dtype)
+        paddle_random = paddle.randn(x.shape, dtype=x.dtype)
         noise = paddle_random
 
         nonzero_mask = (t != 0).astype(dtype="float32").reshape((-1, *([1] * (len(tuple(x.shape)) - 1))))
@@ -552,9 +549,7 @@ class GaussianDiffusion:
         if noise is not None:
             img = noise
         else:
-
-            numpy_random = np.random.randn(shape)
-            paddle_random = paddle.to_tensor(numpy_random)
+            paddle_random = paddle.randn(shape)
             img = paddle_random
 
         indices = list(range(self.num_timesteps))[::-1]
@@ -619,8 +614,7 @@ class GaussianDiffusion:
             eta * paddle.sqrt(x=(1 - alpha_bar_prev) / (1 - alpha_bar)) * paddle.sqrt(x=1 - alpha_bar / alpha_bar_prev)
         )
 
-        numpy_random = np.random.randn(x.shape)
-        paddle_random = paddle.to_tensor(numpy_random, dtype=x.dtype)
+        paddle_random = paddle.randn(x.shape, dtype=x.dtype)
         noise = paddle_random
 
         mean_pred = (
@@ -725,9 +719,7 @@ class GaussianDiffusion:
         if noise is not None:
             img = noise
         else:
-
-            numpy_random = np.random.randn(shape)
-            paddle_random = paddle.to_tensor(numpy_random)
+            paddle_random = paddle.randn(shape)
             img = paddle_random
 
         indices = list(range(self.num_timesteps))[::-1]
@@ -795,9 +787,7 @@ class GaussianDiffusion:
         if model_kwargs is None:
             model_kwargs = {}
         if noise is None:
-
-            numpy_random = np.random.randn(x_start.shape)
-            paddle_random = paddle.to_tensor(numpy_random, dtype=x_start.dtype)
+            paddle_random = paddle.randn(x_start.shape, dtype=x_start.dtype)
             noise = paddle_random
         x_t = self.q_sample(x_start, t, noise=noise)
         if mask is not None:
@@ -904,8 +894,7 @@ class GaussianDiffusion:
         for t in list(range(self.num_timesteps))[::-1]:
             t_batch = paddle.to_tensor(data=[t] * batch_size)
 
-            numpy_random = np.random.randn(x_start.shape)
-            paddle_random = paddle.to_tensor(numpy_random, dtype=x_start.dtype)
+            paddle_random = paddle.randn(x_start.shape, dtype=x_start.dtype)
             noise = paddle_random
 
             x_t = self.q_sample(x_start=x_start, t=t_batch, noise=noise)

@@ -34,7 +34,6 @@ class T5Embedder:
 
     def __init__(
         self,
-        # device,
         from_pretrained=None,
         *,
         cache_dir=None,

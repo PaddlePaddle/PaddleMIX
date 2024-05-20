@@ -11,8 +11,8 @@
 # 克隆 PaddleMIX 仓库
 git clone https://github.com/PaddlePaddle/PaddleMIX
 
-# 安装2.6.0版本的paddlepaddle-gpu，当前我们选择了cuda12.0的版本，可以查看 https://www.paddlepaddle.org.cn/ 寻找自己适合的版本
-python -m pip install paddlepaddle-gpu==2.6.0.post120 -f https://www.paddlepaddle.org.cn/whl/linux/mkl/avx/stable.html
+# 安装2.6.1版本的paddlepaddle-gpu，当前我们选择了cuda12.0的版本，可以查看 https://www.paddlepaddle.org.cn/ 寻找自己适合的版本
+python -m pip install paddlepaddle-gpu==2.6.1.post120 -f https://www.paddlepaddle.org.cn/whl/linux/mkl/avx/stable.html
 
 # 进入ppdiffusers目录
 cd PaddleMIX/ppdiffusers
@@ -38,7 +38,7 @@ python scripts/inference.py --prompt "A beautiful sunset over the city" --num-fr
 生成效果如下:
 | **16×280×280**     | **16×224×400**        | **16×400×224**      |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ![demo](https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/926028e0-9f15-4fe0-ad9c-708f41ae9389) | ![demo](https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/bcdd70ad-81b6-402b-a975-38e03069d5fd) | ![demo](https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/c827e09c-aebc-4933-a350-558057690a04) |
+| ![demo](https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/e2730235-e09e-4a65-bf27-604b13535dbd) | ![demo](https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/c51c54a9-63a0-4708-99da-ee7fcd017762) | ![demo](https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/ab6e32fc-d7e6-448d-bd4a-9b9e72b0b1f0) |
 | A soaring drone footage captures the majestic beauty of a coastal cliff, its red and yellow [...]        | The vibrant beauty of a sunflower field. The sunflowers, with their bright yellow petals. [...]    | A majestic beauty of a waterfall cascading down a cliff into a serene lake. The waterfall, with its powerful flow [...]       |
 
 ### 3.2 Image as condition
@@ -47,12 +47,12 @@ python scripts/inference.py --prompt "A beautiful sunset over the city" --num-fr
 ```bash
 ppdiffusers_path=PaddleMIX/ppdiffusers
 export PYTHONPATH=$ppdiffusers_path:$PYTHONPATH
-python scripts/inference-long.py --num-frames 20 --image-size 256 256 --sample-name image-cond --prompt 'A breathtaking sunrise scene.{"reference_path": "assets/images/condition/wave.png","mask_strategy": "0"}'
+python scripts/inference-long.py --num-frames 20 --image-size 224 300 --sample-name image-cond --prompt 'A breathtaking sunrise scene.{"reference_path": "assets/images/condition/wave.png","mask_strategy": "0"}'
 ```
 生成效果如下:
-| **Prompts**     | **Image as condition**        | **20×256×256**      |
+| **Prompts**     | **Image as condition**        | **20×224×300**      |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A breathtaking sunrise scene. | ![demo](./assets/images/condition/wave.png) | ![demo](https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/63aea8e6-cf89-431d-a14e-4895b491d198) |
+| A breathtaking sunrise scene. | ![demo](./assets/images/condition/wave.png) | ![demo](https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/9094d9f5-b70d-4f41-91e2-10f37d1c96ba) |
 
 ### 3.3 Video connecting
 
@@ -60,12 +60,12 @@ python scripts/inference-long.py --num-frames 20 --image-size 256 256 --sample-n
 ```bash
 ppdiffusers_path=PaddleMIX/ppdiffusers
 export PYTHONPATH=$ppdiffusers_path:$PYTHONPATH
-python scripts/inference-long.py --num-frames 16 --image-size 256 256 --sample-name connect --prompt 'A breathtaking sunrise scene.{"reference_path": "assets/images/condition/sunset1.png;assets/images/condition/sunset2.png","mask_strategy": "0;0,1,0,-1,1"}'
+python scripts/inference-long.py --num-frames 18 --image-size 224 300 --sample-name connect --prompt 'A breathtaking sunrise scene.{"reference_path": "assets/images/condition/sunset1.png;assets/images/condition/sunset2.png","mask_strategy": "0;0,1,0,-1,1"}'
 ```
 生成效果如下:
-| **Prompts**     | **First frame**        | **Last frame**        |  16×256×256      |
+| **Prompts**     | **First frame**        | **Last frame**        |  18×224×300      |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------ |------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A breathtaking sunrise scene. | ![demo](./assets/images/condition/sunset1.png) | ![demo](./assets/images/condition/sunset2.png) |![demo](https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/bc0d0dff-c045-459c-9f18-baf9751205da) |
+| A breathtaking sunrise scene. | ![demo](./assets/images/condition/sunset1.png) | ![demo](./assets/images/condition/sunset2.png) |![demo](https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/86fe5d88-6622-424e-bea4-95cdacf0888f) |
 
 
 ### 3.4  Video extending and editting

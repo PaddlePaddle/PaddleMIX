@@ -65,10 +65,7 @@ class STDiT2Block(paddle.nn.Layer):
             qk_norm=qk_norm,
         )
 
-        np.random.seed(42)
-
-        numpy_random = np.random.randn(6, hidden_size)
-        paddle_random = paddle.to_tensor(numpy_random)
+        paddle_random = paddle.randn(shape=(6, hidden_size))
 
         out_2 = paddle.create_parameter(
             shape=(paddle_random / hidden_size**0.5).shape,
@@ -99,10 +96,7 @@ class STDiT2Block(paddle.nn.Layer):
             qk_norm=qk_norm,
         )
 
-        np.random.seed(42)
-
-        numpy_random = np.random.randn(3, hidden_size)
-        paddle_random = paddle.to_tensor(numpy_random)
+        paddle_random = paddle.randn(shape=(3, hidden_size))
         out_3 = paddle.create_parameter(
             shape=(paddle_random / hidden_size**0.5).shape,
             dtype=(paddle_random / hidden_size**0.5).numpy().dtype,
