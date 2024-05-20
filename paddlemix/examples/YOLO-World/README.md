@@ -43,12 +43,15 @@ pip install -e .
 ```
 
 
-## 3. 下载模型
-通过 [Huggingface](https://huggingface.co/wondervictor/YOLO-World/) 下载YOLO-World 的模型权重文件。可以将权重文件放在 `pretrain/` 目录下，下载完成后执行torch2paddle.py脚本将权重转化为paddle格式。
+## 3. 模型下载
 
-```bash
-python pretrain/torch2paddle.py <path_to_weight.pth> -p <path_to_weight.pdparams>
-```
+| model name | weight |
+|:-----|:------:|
+| `yolo_world_v2_s_obj365v1_goldg` | [weight](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/yoloworldv2/yolo_world_v2_s_obj365v1_goldg_pretrain-55b943ea.pdparams) |
+| `yolo_world_v2_m_obj365v1_goldg` | [weight](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/yoloworldv2/yolo_world_v2_m_obj365v1_goldg_pretrain-c6237d5b.pdparams) |
+| `yolo_world_v2_l_obj365v1_goldg` | [weight](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/yoloworldv2/yolo_world_v2_l_obj365v1_goldg_pretrain-a82b1fe3.pdparams) |
+| `yolo_world_v2_x_obj365v1_goldg_cc3mlite` | [weight](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/yoloworldv2/yolo_world_v2_x_obj365v1_goldg_cc3mlite_pretrain-8698fbfa.pdparams) |
+| `yolo_world_v2_xl_obj365v1_goldg_cc3mlite` | [weight](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/yoloworldv2/yolo_world_v2_xl_obj365v1_goldg_cc3mlite_pretrain-5daf1395.pdparams) |
 
 ## 4. 模型推理
 
