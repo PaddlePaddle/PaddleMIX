@@ -135,15 +135,17 @@ class PatchEmbed(nn.Layer):
         bias=True,
         interpolation_scale=1,
         add_pos_embed=True,
+        data_format="NCHW",
     ):
         super().__init__()
 
         num_patches = (height // patch_size) * (width // patch_size)
         self.flatten = flatten
         self.layer_norm = layer_norm
+        self.data_format = data_format
 
         self.proj = nn.Conv2D(
-            in_channels, embed_dim, kernel_size=(patch_size, patch_size), stride=patch_size, bias_attr=bias
+            in_channels, embed_dim, kernel_size=(patch_size, patch_size), stride=patch_size, bias_attr=bias, data_format=data_format,
         )
         if layer_norm:
             norm_elementwise_affine_kwargs = dict(weight_attr=False, bias_attr=False)
@@ -172,11 +174,17 @@ class PatchEmbed(nn.Layer):
             )
 
     def forward(self, latent):
-        height, width = latent.shape[-2] // self.patch_size, latent.shape[-1] // self.patch_size
+        if self.data_format == "NCHW":
+            height, width = latent.shape[-2] // self.patch_size, latent.shape[-1] // self.patch_size
+        else:
+            height, width = latent.shape[-3] // self.patch_size, latent.shape[-2] // self.patch_size
 
         latent = self.proj(latent)
         if self.flatten:
-            latent = latent.flatten(2).transpose([0, 2, 1])  # BCHW -> BNC
+            if self.data_format == "NCHW":
+                latent = latent.flatten(2).transpose([0, 2, 1])  # BCHW -> BNC
+            else:
+                latent = latent.flatten(1, 2)                    # BHWC -> BNC
         if self.layer_norm:
             latent = self.norm(latent)
 
