@@ -252,9 +252,9 @@ class SamImageProcessor(BaseImageProcessor):
         self.original_size = original_image_size
         self.input_size = tuple(input_image_paddle.shape[-2:])
 
-        input_image_paddle = (
-            input_image_paddle - paddle.to_tensor(self.image_mean).reshape([-1, 1, 1])
-        ) / paddle.to_tensor(self.image_std).reshape([-1, 1, 1])
+        mean = paddle.to_tensor(self.image_mean).reshape([-1, 1, 1])
+        std = paddle.to_tensor(self.image_std).reshape([-1, 1, 1])
+        input_image_paddle = (input_image_paddle.astype(std.dtype) - mean) / std
 
         # Pad
         h, w = input_image_paddle.shape[-2:]

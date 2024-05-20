@@ -105,12 +105,14 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
         norm_eps: float = 1e-5,
         attention_type: str = "default",
         caption_channels: int = None,
+        data_format: str = "NCHW",
     ):
         super().__init__()
         self.use_linear_projection = use_linear_projection
         self.num_attention_heads = num_attention_heads
         self.attention_head_dim = attention_head_dim
         self.inner_dim = inner_dim = num_attention_heads * attention_head_dim
+        self.data_format = data_format
 
         conv_cls = nn.Conv2D if USE_PEFT_BACKEND else LoRACompatibleConv
         linear_cls = nn.Linear if USE_PEFT_BACKEND else LoRACompatibleLinear
@@ -152,11 +154,11 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
         if self.is_input_continuous:
             self.in_channels = in_channels
 
-            self.norm = nn.GroupNorm(num_groups=norm_num_groups, num_channels=in_channels, epsilon=1e-6)
+            self.norm = nn.GroupNorm(num_groups=norm_num_groups, num_channels=in_channels, epsilon=1e-6, data_format=data_format)
             if use_linear_projection:
                 self.proj_in = linear_cls(in_channels, inner_dim)
             else:
-                self.proj_in = conv_cls(in_channels, inner_dim, kernel_size=1, stride=1, padding=0)
+                self.proj_in = conv_cls(in_channels, inner_dim, kernel_size=1, stride=1, padding=0, data_format=data_format)
         elif self.is_input_vectorized:
             assert sample_size is not None, "Transformer2DModel over discrete input must provide sample_size"
             assert num_vector_embeds is not None, "Transformer2DModel over discrete input must provide num_embed"
@@ -185,6 +187,7 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
                 in_channels=in_channels,
                 embed_dim=inner_dim,
                 interpolation_scale=interpolation_scale,
+                data_format=data_format,
             )
 
         # 3. Define transformers blocks
@@ -218,7 +221,7 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
             if use_linear_projection:
                 self.proj_out = linear_cls(inner_dim, in_channels)
             else:
-                self.proj_out = conv_cls(inner_dim, in_channels, kernel_size=1, stride=1, padding=0)
+                self.proj_out = conv_cls(inner_dim, in_channels, kernel_size=1, stride=1, padding=0, data_format=data_format)
         elif self.is_input_vectorized:
             self.norm_out = nn.LayerNorm(inner_dim)
             self.out = nn.Linear(inner_dim, self.num_vector_embeds - 1)
@@ -332,7 +335,10 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
 
         # 1. Input
         if self.is_input_continuous:
-            batch, _, height, width = paddle.shape(hidden_states)  # (NOTE,junnyu) make export happier
+            if self.data_format == "NCHW":
+                batch, _, height, width = paddle.shape(hidden_states)  # (NOTE,junnyu) make export happier
+            else:
+                batch, height, width, _ = paddle.shape(hidden_states)
             residual = hidden_states
 
             hidden_states = self.norm(hidden_states)
@@ -342,9 +348,15 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
                     if not USE_PEFT_BACKEND
                     else self.proj_in(hidden_states)
                 )
-                hidden_states = hidden_states.transpose([0, 2, 3, 1]).flatten(1, 2)
+                if self.data_format == "NCHW":
+                    hidden_states = hidden_states.transpose([0, 2, 3, 1]).flatten(1, 2)
+                else:
+                    hidden_states = hidden_states.flatten(1, 2)
             else:
-                hidden_states = hidden_states.transpose([0, 2, 3, 1]).flatten(1, 2)
+                if self.data_format == "NCHW":
+                    hidden_states = hidden_states.transpose([0, 2, 3, 1]).flatten(1, 2)
+                else:
+                    hidden_states = hidden_states.flatten(1, 2)
                 hidden_states = (
                     self.proj_in(hidden_states, scale=lora_scale)
                     if not USE_PEFT_BACKEND
@@ -411,7 +423,9 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
         # 3. Output
         if self.is_input_continuous:
             if not self.use_linear_projection:
-                hidden_states = hidden_states.reshape([batch, height, width, self.inner_dim]).transpose([0, 3, 1, 2])
+                hidden_states = hidden_states.reshape([batch, height, width, self.inner_dim])
+                if self.data_format == "NCHW":
+                    hidden_states = hidden_states.transpose([0, 3, 1, 2])
                 hidden_states = (
                     self.proj_out(hidden_states, scale=lora_scale)
                     if not USE_PEFT_BACKEND
@@ -423,7 +437,9 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
                     if not USE_PEFT_BACKEND
                     else self.proj_out(hidden_states)
                 )
-                hidden_states = hidden_states.reshape([batch, height, width, self.inner_dim]).transpose([0, 3, 1, 2])
+                hidden_states = hidden_states.reshape([batch, height, width, self.inner_dim])
+                if self.data_format == "NCHW":
+                    hidden_states = hidden_states.transpose([0, 3, 1, 2])
 
             output = hidden_states + residual
         elif self.is_input_vectorized:
