@@ -3,3 +3,4 @@ nltk
 paddlenlp>=2.6.0rc0
 https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/appflow/paddlespeech/paddlespeech-0.0.0-py3-none-any.whl
 opencc==1.1.6
+matplotlib==3.7.5
