@@ -1,5 +1,7 @@
 # PaddleMIX推理部署
 
+[[English](README_en.md)]
+
 PaddleMIX基于Paddle Inference，提供了python的部署方案。部署方式分为两种：
 - 通过 **APPflow** ,设置static_mode = True 变量开启静态图推理，同时可配合trt加速推理；该方式部分模型不支持静态图以及trt，具体模型可参考[跨模态多场景应用](../applications/README.md/#跨模态多场景应用)；
 
