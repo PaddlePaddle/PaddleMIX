@@ -36,7 +36,7 @@ from paddlemix.utils.log import logger
 def main(args):
     paddle.seed(seed=0)
     compute_dtype = "float16" if args.fp16 else "bfloat16"
-    if not paddle.amp.is_bfloat16_supported():
+    if compute_dtype== "bfloat16" and not paddle.amp.is_bfloat16_supported():
         logger.warning("bfloat16 is not supported on your device,change to float32")
         compute_dtype = "float32"
 
@@ -46,7 +46,7 @@ def main(args):
     model = AutoModelMIX.from_pretrained(args.model_path, dtype=compute_dtype)
     model.eval()
 
-    processor, _ = AutoProcessorMIX.from_pretrained(args.model_path, eval="eval")
+    processor, _ = AutoProcessorMIX.from_pretrained(args.model_path, eval="eval", max_length=args.max_new_tokens, image_aspect_ratio=model_config.image_aspect_ratio)
 
     model.resize_token_embeddings(len(tokenizer))
     vision_tower = model.get_vision_tower()

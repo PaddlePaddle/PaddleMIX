@@ -25,7 +25,6 @@ from typing import Any, Dict, Iterable, Iterator, Mapping, Optional, Tuple, Unio
 import numpy as np
 import paddle
 import paddle.nn as nn
-from paddle.distributed import fleet
 
 try:
     from paddle.base.dygraph.base import param_guard
@@ -397,7 +396,9 @@ if is_ppxformers_available():
             if attention_op == "flash" and flash_attn_error is not None:
                 raise OSError(flash_attn_error)
 
-        if str2bool(os.getenv("FLAGS_cudnn_deterministic", "no")):
+        if str2bool(os.getenv("FLAGS_cudnn_deterministic", "no")) or str2bool(
+            os.getenv("FLAGS_sdpa_select_math", "no")
+        ):
             if attention_op == "flash":
                 if paddle.nn.functional.flash_attention._select_sdp(query.shape[3]) == "mem_efficient":
                     attention_op = "math"
