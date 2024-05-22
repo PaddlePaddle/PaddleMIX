@@ -138,6 +138,9 @@ class QwenVLCollator:
             if "images" in raw_data:
 
                 if isinstance(raw_data["images"], list):
+                    if not isinstance(raw_data["images"][0], list):
+                        raw_data["images"] = [raw_data["images"]]
+                    raw_data["images"] = [self.processor.image_processor(path) for path in raw_data["images"]]
                     raw_data["images"] = paddle.stack(x=raw_data["images"], axis=0)
 
                 images.append(raw_data["images"])
