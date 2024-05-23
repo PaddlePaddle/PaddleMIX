@@ -43,6 +43,7 @@ if is_paddle_available():
     _import_structure["uvit_t2i"] = ["UViTT2IModel"]
     _import_structure["dit_llama"] = ["DiTLLaMA2DModel"]
     _import_structure["dit_llama_t2i"] = ["DiTLLaMAT2IModel"]
+    _import_structure["dit_llama_auto"] = ["DiT_Llama_AUTO"]
     # NOTE, new add
     _import_structure["lvdm_vae"] = ["LVDMAutoencoderKL"]
     _import_structure["lvdm_unet_3d"] = ["LVDMUNet3DModel"]
@@ -67,6 +68,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         from .controlnet import ControlNetModel
         from .dit_llama import DiTLLaMA2DModel
         from .dit_llama_t2i import DiTLLaMAT2IModel
+        from .dit_llama_auto import DiT_Llama_AUTO
         from .dual_transformer_2d import DualTransformer2DModel
 
         # NOTE, new add

@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import math
 from functools import partial
 from typing import Optional
 
@@ -19,6 +20,7 @@ import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
 import paddle.nn.initializer as initializer
+import paddle.distributed as dist
 from paddle.distributed import fleet
 from paddle.nn.functional.flash_attention import flash_attention
 from paddle.utils import try_import
@@ -27,13 +29,37 @@ from paddlenlp.transformers.conversion_utils import ConversionMixin
 from ppdiffusers.configuration_utils import ConfigMixin
 from ppdiffusers.models.modeling_utils import ModelMixin
 
-from .dit import (
+from .dit_auto import (
     ParallelLabelEmbedder,
     ParallelTimestepEmbedder,
-    is_model_parrallel,
     modulate,
+    get_mesh,
 )
 
+def get_layer_ipp(layer_index, num_layers):
+    """
+    Retrieve the position of the specified layer in the pipeline parallel network, and return None if it is not an pipeline parallel network.
+    
+    Args:
+        layer_index (int): The layer index that needs to be queried is counted from 0.
+        num_layers (int): The total number of transformer layers in the pipeline parallel network.
+    
+    Returns:
+        Optional[int]: If it is an pipeline parallel network, return the position of the specified layer; Otherwise, return None.
+    """
+    mesh = fleet.auto.get_mesh()
+    if "pp" not in mesh.dim_names:
+        return None
+    else:
+        pp_degree = mesh.get_dim_size("pp")
+        layer_per_stage = math.ceil(num_layers / pp_degree)
+        return layer_index // layer_per_stage
+
+# def get_mesh(pp_idx=0):
+#     mesh = fleet.auto.get_mesh()
+#     if "pp" in mesh.dim_names:
+#         mesh = mesh.get_mesh_with_dim("pp", pp_idx)
+#     return mesh
 
 def rms_norm_fused(x_in, w, eps):
     fused_ln = try_import("fused_ln")
@@ -103,8 +129,8 @@ class Attention(nn.Layer):
 
         Attributes:
             n_kv_heads (int): Number of key and value heads.
-            n_local_heads (int): Number of local query heads.
-            n_local_kv_heads (int): Number of local key and value heads.
+            # n_local_heads (int): Number of local query heads.
+            # n_local_kv_heads (int): Number of local key and value heads.
             n_rep (int): Number of repetitions for local heads.
             head_dim (int): Dimension size of each attention head.
             wq (nn.Linear): Linear transformation for queries.
@@ -117,40 +143,26 @@ class Attention(nn.Layer):
         """
         super().__init__()
         self.n_kv_heads = n_heads if n_kv_heads is None else n_kv_heads
-        if is_model_parrallel():
-            hcg = paddle.distributed.fleet.get_hybrid_communicate_group()
-            model_parallel_size = hcg.get_model_parallel_world_size()
-        else:
-            model_parallel_size = 1
-        self.n_local_heads = n_heads // model_parallel_size  #
-        self.n_local_kv_heads = self.n_kv_heads // model_parallel_size
-        self.n_rep = self.n_local_heads // self.n_local_kv_heads
+        # if is_model_parrallel():
+        #     hcg = paddle.distributed.fleet.get_hybrid_communicate_group()
+        #     model_parallel_size = hcg.get_model_parallel_world_size()
+        # else:
+        #     model_parallel_size = 1
+        # self.n_local_heads = n_heads // model_parallel_size  #
+        # self.n_local_kv_heads = self.n_kv_heads // model_parallel_size
+        self.n_rep = n_heads // self.n_kv_heads
         self.head_dim = dim // n_heads
-        if is_model_parrallel():
-            self.wq = fleet.meta_parallel.ColumnParallelLinear(
-                dim, n_heads * self.head_dim, weight_attr=None, has_bias=False, gather_output=False
-            )
-            self.wk = fleet.meta_parallel.ColumnParallelLinear(
-                dim, self.n_kv_heads * self.head_dim, weight_attr=None, has_bias=False, gather_output=False
-            )
-            self.wv = fleet.meta_parallel.ColumnParallelLinear(
-                dim, self.n_kv_heads * self.head_dim, weight_attr=None, has_bias=False, gather_output=False
-            )
-            self.wo = fleet.meta_parallel.RowParallelLinear(
-                n_heads * self.head_dim, dim, weight_attr=None, has_bias=False, input_is_parallel=True
-            )
-        else:
-            self.wq = nn.Linear(dim, n_heads * self.head_dim, bias_attr=False)
-            self.wk = nn.Linear(dim, self.n_kv_heads * self.head_dim, bias_attr=False)
-            self.wv = nn.Linear(dim, self.n_kv_heads * self.head_dim, bias_attr=False)
-            self.wo = nn.Linear(n_heads * self.head_dim, dim, bias_attr=False)
+        self.wq = nn.Linear(dim, n_heads * self.head_dim, bias_attr=False)
+        self.wk = nn.Linear(dim, self.n_kv_heads * self.head_dim, bias_attr=False)
+        self.wv = nn.Linear(dim, self.n_kv_heads * self.head_dim, bias_attr=False)
+        self.wo = nn.Linear(n_heads * self.head_dim, dim, bias_attr=False)
 
         if qk_norm:
-            self.q_norm = nn.LayerNorm(self.n_local_heads * self.head_dim)  #
-            self.k_norm = nn.LayerNorm(self.n_local_kv_heads * self.head_dim)  #
-            if is_model_parrallel():
-                setattr(self.q_norm.weight, "qk_norm_in_tp", True)
-                setattr(self.k_norm.weight, "qk_norm_in_tp", True)
+            self.q_norm = nn.LayerNorm(n_heads * self.head_dim)
+            self.k_norm = nn.LayerNorm(self.n_kv_heads * self.head_dim)
+            # if is_model_parrallel():
+            #     setattr(self.q_norm.weight, "qk_norm_in_tp", True)
+            #     setattr(self.k_norm.weight, "qk_norm_in_tp", True)
         else:
             self.q_norm = self.k_norm = nn.Identity()
 
@@ -234,9 +246,9 @@ class Attention(nn.Layer):
         xq = self.q_norm(xq)
         xk = self.k_norm(xk)
 
-        xq = xq.reshape([bsz, seqlen, self.n_local_heads, self.head_dim])
-        xk = xk.reshape([bsz, seqlen, self.n_local_kv_heads, self.head_dim])
-        xv = xv.reshape([bsz, seqlen, self.n_local_kv_heads, self.head_dim])
+        xq = xq.reshape([bsz, seqlen, n_heads, self.head_dim])
+        xk = xk.reshape([bsz, seqlen, self.n_kv_heads, self.head_dim])
+        xv = xv.reshape([bsz, seqlen, self.n_kv_heads, self.head_dim])
 
         xq, xk = Attention.apply_rotary_emb(xq, xk, freqs_cis=freqs_cis)
         xq, xk = xq.cast(dtype), xk.cast(dtype)
@@ -251,7 +263,7 @@ class Attention(nn.Layer):
                 return_softmax=False,
             )
         else:
-            n_rep = self.n_local_heads // self.n_local_kv_heads
+            n_rep = n_heads // self.n_kv_heads
             if n_rep > 1:
                 xk = xk.unsqueeze(axis=3).tile([1, 1, 1, n_rep, 1]).flatten(start_axis=2, stop_axis=3)
                 xv = xv.unsqueeze(axis=3).tile([1, 1, 1, n_rep, 1]).flatten(start_axis=2, stop_axis=3)
@@ -287,34 +299,15 @@ class FeedForward(nn.Layer):
                 of this value.
             ffn_dim_multiplier (float, optional): Custom multiplier for hidden
                 dimension. Defaults to None.
-
-        Attributes:
-            w1 (ColumnParallelLinear): Linear transformation for the first
-                layer.
-            w2 (RowParallelLinear): Linear transformation for the second layer.
-            w3 (ColumnParallelLinear): Linear transformation for the third
-                layer.
-
         """
         super().__init__()
         hidden_dim = int(2 * hidden_dim / 3)
         if ffn_dim_multiplier is not None:
             hidden_dim = int(ffn_dim_multiplier * hidden_dim)
         hidden_dim = int(multiple_of * ((hidden_dim + multiple_of - 1) // multiple_of))
-        if is_model_parrallel():
-            self.w1 = fleet.meta_parallel.ColumnParallelLinear(
-                dim, hidden_dim, weight_attr=None, has_bias=False, gather_output=False
-            )
-            self.w2 = fleet.meta_parallel.RowParallelLinear(
-                hidden_dim, dim, weight_attr=None, has_bias=False, input_is_parallel=True
-            )
-            self.w3 = fleet.meta_parallel.ColumnParallelLinear(
-                dim, hidden_dim, weight_attr=None, has_bias=False, gather_output=False
-            )
-        else:
-            self.w1 = nn.Linear(dim, hidden_dim, bias_attr=False)
-            self.w2 = nn.Linear(hidden_dim, dim, bias_attr=False)
-            self.w3 = nn.Linear(dim, hidden_dim, bias_attr=False)
+        self.w1 = nn.Linear(dim, hidden_dim, bias_attr=False)
+        self.w2 = nn.Linear(hidden_dim, dim, bias_attr=False)
+        self.w3 = nn.Linear(dim, hidden_dim, bias_attr=False)
 
     def forward(self, x):
         xw1 = F.silu(self.w1(x))
@@ -336,6 +329,8 @@ class TransformerBlock(nn.Layer):
         norm_eps: float,
         qk_norm: bool,
         fused_attn: bool,
+        pp_stage=None,
+        index=None,
     ) -> None:
         """
         Initialize a TransformerBlock.
@@ -378,19 +373,13 @@ class TransformerBlock(nn.Layer):
         self.layer_id = layer_id
         self.attention_norm = RMSNorm(dim, epsilon=norm_eps)
         self.ffn_norm = RMSNorm(dim, epsilon=norm_eps)
+        self.pp_stage = pp_stage
+        self.index = index
 
-        if is_model_parrallel():
-            self.adaLN_modulation = nn.Sequential(
-                nn.Silu(),
-                fleet.meta_parallel.ColumnParallelLinear(
-                    min(dim, 1024), 6 * dim, weight_attr=None, has_bias=True, gather_output=True
-                ),
-            )
-        else:
-            self.adaLN_modulation = nn.Sequential(
-                nn.Silu(),
-                nn.Linear(min(dim, 1024), 6 * dim),
-            )
+        self.adaLN_modulation = nn.Sequential(
+            nn.Silu(),
+            nn.Linear(min(dim, 1024), 6 * dim),
+        )
 
     def forward(self, x, freqs_cis, adaln_input=None):
         """
@@ -408,7 +397,14 @@ class TransformerBlock(nn.Layer):
 
         """
         if adaln_input is not None:
-            shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.adaLN_modulation(adaln_input).chunk(
+            adaln_input = self.adaLN_modulation(adaln_input)
+            # after adaLN_modulation need to add allgather
+            adaln_input = dist.reshard(
+                adaln_input,
+                get_mesh(self.pp_stage),
+                [dist.Replicate(), dist.Replicate()],
+            )
+            shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = adaln_input.chunk(
                 6, axis=1
             )
             h = x + gate_msa.unsqueeze(1) * self.attention(
@@ -425,32 +421,29 @@ class ParallelFinalLayer(nn.Layer):
     def __init__(self, hidden_size, patch_size, out_channels):
         super().__init__()
         self.norm_final = nn.LayerNorm(hidden_size, weight_attr=False, bias_attr=False, epsilon=1e-06)
-        if is_model_parrallel():
-            self.linear = fleet.meta_parallel.ColumnParallelLinear(
-                hidden_size,
-                patch_size * patch_size * out_channels,
-                weight_attr=None,
-                has_bias=True,
-                gather_output=True,
-            )
-            self.adaLN_modulation = nn.Sequential(
-                nn.Silu(),
-                fleet.meta_parallel.ColumnParallelLinear(
-                    min(hidden_size, 1024), 2 * hidden_size, weight_attr=None, has_bias=True, gather_output=True
-                ),
-            )
-        else:
-            self.linear = nn.Linear(hidden_size, patch_size * patch_size * out_channels)
-            self.adaLN_modulation = nn.Sequential(nn.Silu(), nn.Linear(min(hidden_size, 1024), 2 * hidden_size))
+        self.linear = nn.Linear(hidden_size, patch_size * patch_size * out_channels)
+        self.adaLN_modulation = nn.Sequential(nn.Silu(), nn.Linear(min(hidden_size, 1024), 2 * hidden_size))
 
     def forward(self, x, c):
-        shift, scale = self.adaLN_modulation(c).chunk(2, axis=1)
+        # after final_layer.linear and final_layer.adaLN_modulation need to add allgather
+        c = self.adaLN_modulation(c)
+        c = dist.reshard(
+            c,
+            get_mesh(-1),
+            [dist.Replicate(), dist.Replicate()],
+        )
+        shift, scale = c.chunk(2, axis=1)
         x = modulate(self.norm_final(x), shift, scale)
         x = self.linear(x)
+        x = dist.reshard(
+            x,
+            get_mesh(-1),
+            [dist.Replicate(), dist.Replicate()],
+        )
         return x
 
 
-class DiT_Llama(ModelMixin, ConfigMixin, ConversionMixin):
+class DiT_Llama_AUTO(ModelMixin, ConfigMixin, ConversionMixin):
     """
     Diffusion model with a Transformer backbone.
     """
@@ -499,24 +492,16 @@ class DiT_Llama(ModelMixin, ConfigMixin, ConversionMixin):
         self.fused_attn = True
 
         # 1. Define input layers
-        if is_model_parrallel():
-            self.x_embedder = fleet.meta_parallel.ColumnParallelLinear(
-                in_channels * patch_size**2,
-                dim,
-                weight_attr=None,
-                has_bias=True,
-                gather_output=True,
-            )
-        else:
-            self.x_embedder = nn.Linear(in_channels * patch_size**2, dim)
+        self.x_embedder = nn.Linear(in_channels * patch_size**2, dim)
         self.t_embedder = ParallelTimestepEmbedder(min(dim, 1024))
         self.y_embedder = ParallelLabelEmbedder(num_classes, min(dim, 1024), class_dropout_prob)
 
         # 2. Define transformers blocks
-        self.layers = nn.LayerList(
-            [
+        self.layers = nn.LayerList()
+        for i in range(num_layers):
+            self.layers.append(
                 TransformerBlock(
-                    layer_id=idx,
+                    layer_id=i,
                     dim=dim,
                     n_heads=num_attention_heads,
                     n_kv_heads=n_kv_heads,
@@ -526,10 +511,10 @@ class DiT_Llama(ModelMixin, ConfigMixin, ConversionMixin):
                     norm_eps=norm_eps,
                     qk_norm=qk_norm,
                     fused_attn=self.fused_attn,
+                    pp_stage=get_layer_ipp(i, num_layers),
+                    index=i,
                 )
-                for idx in range(num_layers)
-            ]
-        )
+            )
 
         # 3. Define output layers
         self.final_layer = ParallelFinalLayer(dim, patch_size, self.out_channels)
@@ -538,10 +523,10 @@ class DiT_Llama(ModelMixin, ConfigMixin, ConversionMixin):
         self.initialize_weights()
 
     def initialize_weights(self):
-        # Initialize transformer layers:
+        # Initialize transformer layers: need to review, may be move to train_image_generation_trainer_auto.py
         def _basic_init(module):
             if isinstance(
-                module, (nn.Linear, fleet.meta_parallel.ColumnParallelLinear, fleet.meta_parallel.RowParallelLinear)
+                module, (nn.Linear)
             ):
                 initializer.XavierUniform()(module.weight)
                 if module.bias is not None:
@@ -644,6 +629,10 @@ class DiT_Llama(ModelMixin, ConfigMixin, ConversionMixin):
         """
         hidden_states, timestep, class_labels = x, t, y
         dtype = hidden_states.dtype
+        print("========== in DiT_Llama_AUTO forward ==========")
+        print(hidden_states)
+        print(timestep)
+        print(class_labels)
 
         # 1. Input
         hidden_states = self.patchify(hidden_states)
@@ -653,7 +642,22 @@ class DiT_Llama(ModelMixin, ConfigMixin, ConversionMixin):
         adaln_input = t + y
 
         # 2. Blocks
+        pre_pp_stage = 0
         for i, layer in enumerate(self.layers):
+            if layer.pp_stage is not None and pre_pp_stage != layer.pp_stage:
+                x = dist.reshard(
+                    x,
+                    get_mesh(layer.pp_stage),
+                    # output.placements, dp shard 0 dim, mp replicated
+                    [dist.Shard(0), dist.Replicate()],
+                )
+                adaln_input = dist.reshard(
+                    adaln_input,
+                    get_mesh(layer.pp_stage),
+                    # output.placements, dp shard 0 dim, mp replicated
+                    [dist.Shard(0), dist.Replicate()],
+                )
+            pre_pp_stage = layer.pp_stage
             if self.gradient_checkpointing:
                 x = paddle.distributed.fleet.utils.recompute(
                     layer, x, self.freqs_cis[: x.shape[1]].cast(dtype), adaln_input, use_reentrant=False

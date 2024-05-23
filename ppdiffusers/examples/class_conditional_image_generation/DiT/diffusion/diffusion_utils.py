@@ -19,7 +19,8 @@
 
 import numpy as np
 import paddle
-
+import paddle.distributed as dist
+from paddle.distributed import fleet
 
 def normal_kl(mean1, logvar1, mean2, logvar2):
     """
@@ -95,3 +96,38 @@ def discretized_gaussian_log_likelihood(x, *, means, log_scales):
     )
     assert log_probs.shape == x.shape
     return log_probs
+
+def get_mesh(pp_idx=0):
+    """
+    To obtain ProcessMesh in auto parallel, you can choose to specify pipeline index.
+
+    Args:
+        pp_idx (int, optional, default 0): pipeline index, default to 0.
+
+    Returns:
+        ProcessMesh:  paddle.distributed.ProcessMesh object containing mesh information.
+    """
+    mesh = fleet.auto.get_mesh()
+    if "pp" in mesh.dim_names:
+        mesh = mesh.get_mesh_with_dim("pp")[pp_idx]
+    return mesh
+
+def shard_w(w, pp_stage, placements):
+    """
+    sharding the given weight parameters and return the sharded weight parameters.
+
+    Args:
+        w (Parameter): The weight parameters to be sharded. If the parameter is not initialized, it will be initialized first.
+        pp_stage (int): The current pipeline stage is used to determine which mesh to use for sharding.
+        placements (list[paddle.distributed.Placement]): the placements describe how to place the tensor on ProcessMesh, it can
+            be Shard, Replicate and Partial.
+
+    Returns:
+        Parameter: the weight parameters after sharding. Its name remains unchanged.
+    """
+    assert w._is_initialized()
+    paran_name = w.name
+    # print(f"shard w {paran_name}")
+    w = dist.shard_tensor(w, get_mesh(pp_stage), placements)
+    w.name = paran_name
+    return w
