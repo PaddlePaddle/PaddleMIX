@@ -35,6 +35,8 @@ import paddle.nn.functional as F
 from beartype import beartype
 from beartype.typing import Literal, Optional, Union
 from einops import rearrange, repeat
+from paddle.incubate.nn.attn_bias import BlockDiagonalMask
+from paddle.incubate.nn.memory_efficient_attention import memory_efficient_attention
 
 from ppdiffusers.models.dit_llama import TimestepEmbedder
 
@@ -303,15 +305,11 @@ class MultiHeadCrossAttention(paddle.nn.Layer):
             q = q.astype(paddle.float32)
             k = k.astype(paddle.float32)
             v = v.astype(paddle.float32)
-            attn = F.scaled_dot_product_attention_(
-                q,
-                k,
-                v,
-                attn_mask=attn_bias,
-                scale=self.scale,
-                dropout_p=self.attn_drop.p,
-                attention_op="math",
-            )
+
+            if mask is not None:
+                attn_bias_4mea = BlockDiagonalMask.from_seqlens([N] * B, mask)
+            attn = memory_efficient_attention(q, k, v, p=self.attn_drop.p, attn_bias=attn_bias_4mea)
+
         else:
 
             q = q.transpose((0, 2, 1, 3)).astype(paddle.float32)
