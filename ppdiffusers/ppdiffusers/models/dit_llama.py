@@ -283,44 +283,6 @@ class FeedForward(nn.Layer):
         self.w2 = nn.Linear(hidden_dim, dim, bias_attr=False)
         self.w3 = nn.Linear(dim, hidden_dim, bias_attr=False)
 
-    def forward(self, x):
-        xw1 = F.silu(self.w1(x))
-        xw3 = self.w3(x)
-        output = self.w2(xw1 * xw3)
-        return output
-
-
-class FeedForward_kai(nn.Layer):
-    def __init__(self, dim, hidden_dim, multiple_of=256, ffn_dim_multiplier=None):
-        """
-        Initialize the FeedForward module.
-
-        Args:
-            dim (int): Input dimension.
-            hidden_dim (int): Hidden dimension of the feedforward layer.
-            multiple_of (int): Value to ensure hidden dimension is a multiple
-                of this value.
-            ffn_dim_multiplier (float, optional): Custom multiplier for hidden
-                dimension. Defaults to None.
-
-        Attributes:
-            w1 (nn.Linear): Linear transformation for the first
-                layer.
-            w2 (nn.Linear): Linear transformation for the second layer.
-            w3 (nn.Linear): Linear transformation for the third
-                layer.
-
-        """
-        super().__init__()
-        hidden_dim = int(2 * hidden_dim / 3)
-        if ffn_dim_multiplier is not None:
-            hidden_dim = int(ffn_dim_multiplier * hidden_dim)
-        hidden_dim = int(multiple_of * ((hidden_dim + multiple_of - 1) // multiple_of))
-
-        self.w1 = nn.Linear(dim, hidden_dim, bias_attr=False)
-        self.w2 = nn.Linear(hidden_dim, dim, bias_attr=False)
-        self.w3 = nn.Linear(dim, hidden_dim, bias_attr=False)
-
         self.first_run = True
         self.concat_weight = None
 
@@ -405,7 +367,7 @@ class TransformerBlock(nn.Layer):
         self.head_dim = dim // n_heads
         self.attention = Attention(dim, n_heads, n_kv_heads, qk_norm, fused_attn)
         mlp_hidden_dim = int(dim * mlp_ratio)
-        self.feed_forward = FeedForward_kai(
+        self.feed_forward = FeedForward(
             dim=dim, hidden_dim=mlp_hidden_dim, multiple_of=multiple_of, ffn_dim_multiplier=ffn_dim_multiplier
         )
         self.layer_id = layer_id
