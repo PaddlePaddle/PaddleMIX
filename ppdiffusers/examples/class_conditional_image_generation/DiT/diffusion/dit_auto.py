@@ -28,7 +28,7 @@ from paddle.nn.functional.flash_attention import flash_attention
 
 from ppdiffusers.configuration_utils import ConfigMixin
 from ppdiffusers.models.modeling_utils import ModelMixin
-from . import get_mesh
+from .diffusion_utils import get_mesh
 
 def _ntuple(n):
     def parse(x):

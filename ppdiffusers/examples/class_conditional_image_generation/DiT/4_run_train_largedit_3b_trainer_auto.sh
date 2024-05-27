@@ -11,15 +11,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-export FLAGS_use_cuda_managed_memory=true
+# export FLAGS_use_cuda_managed_memory=true
 
 TRAINING_MODEL_RESUME="None"
 TRAINER_INSTANCES='127.0.0.1'
 MASTER='127.0.0.1:8080'
 TRAINERS_NUM=1 # nnodes, machine num
-TRAINING_GPUS_PER_NODE=4 # nproc_per_node
+TRAINING_GPUS_PER_NODE=8 # nproc_per_node
 DP_DEGREE=1 # dp_parallel_degree
-MP_DEGREE=2 # tensor_parallel_degree
+MP_DEGREE=4 # tensor_parallel_degree
 SHARDING_DEGREE=2 # sharding_parallel_degree
 
 # real dp_parallel_degree = nnodes * nproc_per_node / tensor_parallel_degree / sharding_parallel_degree
@@ -36,7 +36,7 @@ resolution=256
 num_workers=8
 max_steps=7000000
 logging_steps=1
-save_steps=10000
+save_steps=5000
 image_logging_steps=-1
 seed=0
 
@@ -49,7 +49,7 @@ enable_tensorboard=True
 recompute=True
 enable_xformers=True
 
-TRAINING_PYTHON="python -m paddle.distributed.launch --master ${MASTER} --nnodes ${TRAINERS_NUM} --nproc_per_node ${TRAINING_GPUS_PER_NODE} --ips ${TRAINER_INSTANCES} --gpus=1,4,5,6"
+TRAINING_PYTHON="python -m paddle.distributed.launch --master ${MASTER} --nnodes ${TRAINERS_NUM} --nproc_per_node ${TRAINING_GPUS_PER_NODE} --ips ${TRAINER_INSTANCES}"
 ${TRAINING_PYTHON} train_image_generation_trainer_auto.py \
     --do_train \
     --feature_path ${feature_path} \
@@ -79,7 +79,7 @@ ${TRAINING_PYTHON} train_image_generation_trainer_auto.py \
     --seed ${seed} \
     --recompute ${recompute} \
     --enable_xformers_memory_efficient_attention ${enable_xformers} \
-    --fp16 ${USE_AMP} \
+    --bf16 ${USE_AMP} \
     --amp_master_grad 1 \
     --dp_degree ${DP_DEGREE} \
     --tensor_parallel_degree ${MP_DEGREE} \
@@ -90,4 +90,4 @@ ${TRAINING_PYTHON} train_image_generation_trainer_auto.py \
     --pipeline_parallel_degree 1 \
     --sep_parallel_degree 1 \
     --enable_auto_parallel 1 \
-    # --bf16 ${USE_AMP} \
+    # --fp16 ${USE_AMP} \
