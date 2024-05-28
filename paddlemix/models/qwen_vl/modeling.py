@@ -161,16 +161,15 @@ class QWen(PretrainedModel):
 
         if images is not None:
             hidden_states_dtype = hidden_states.dtype
-            if hidden_states_dtype == paddle.bfloat16:
+            if hidden_states_dtype in {paddle.bfloat16, paddle.float16}:
                 hidden_states = paddle.cast(hidden_states, paddle.float32)
                 images = paddle.cast(images, paddle.float32)
 
             for idx, (i, a, b) in enumerate(img_pos):
                 index = paddle.arange(a + 1, b).unsqueeze(-1)
-                hidden_states[i] = paddle.scatter(hidden_states[i], index, images[idx])
+                hidden_states[i] = paddle.scatter(hidden_states[i], index, images[idx].astype(hidden_states.dtype))
 
-            if hidden_states_dtype == paddle.bfloat16:
-                hidden_states = paddle.cast(hidden_states, paddle.bfloat16)
+            hidden_states = paddle.cast(hidden_states, hidden_states_dtype)
 
         output_shape = input_shape + [
             hidden_states.shape[-1],
@@ -376,13 +375,16 @@ class QWenLMHeadModel(QWenPretrainedModel):
         )
 
         hidden_states = llm_outputs[0]
-
-        lm_logits = self.lm_head(hidden_states)
+        if hidden_states.dtype in {paddle.float16, paddle.bfloat16}:
+            lm_logits = self.lm_head(hidden_states.astype(paddle.float32))
+            lm_logits = paddle.cast(lm_logits, hidden_states.dtype)
+        else:
+            lm_logits = self.lm_head(hidden_states)
 
         loss = None
         if labels is not None:
             shift_logits = lm_logits[(...), :-1, :]
-            if shift_logits.dtype == paddle.bfloat16:
+            if shift_logits.dtype in {paddle.float16, paddle.bfloat16}:
                 shift_logits = paddle.cast(shift_logits, paddle.float32)
             shift_labels = labels[(...), 1:]
             loss_fct = paddle.nn.CrossEntropyLoss()
