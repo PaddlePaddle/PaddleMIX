@@ -352,7 +352,7 @@ class UNet2DModel(ModelMixin, ConfigMixin):
 
         if self.config.time_embedding_type == "fourier":
             timesteps = timesteps.reshape([sample.shape[0], *([1] * len(sample.shape[1:]))])
-            sample = sample / timesteps
+            sample = sample / timesteps.astype(sample.dtype)
 
         if not return_dict:
             return (sample,)
