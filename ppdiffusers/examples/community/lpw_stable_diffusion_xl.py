@@ -1627,7 +1627,7 @@ class SDXLLongPromptWeightingPipeline(
                 # if image is in latent space, we can't mask it
                 masked_image = None
             else:
-                masked_image = image * (mask < 0.5)
+                masked_image = image * (mask < 0.5).cast(image.dtype)
         else:
             mask = None
 

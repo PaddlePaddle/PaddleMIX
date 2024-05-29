@@ -613,6 +613,10 @@ class EDMDPMSolverMultistepScheduler(SchedulerMixin, ConfigMixin):
                 "Number of inference steps is 'None', you need to run 'set_timesteps' after creating the scheduler"
             )
 
+        # NOTE(laixinlu) convert sigmas to the dtype of the model output
+        if self.sigmas.dtype != model_output.dtype:
+            self.sigmas = self.sigmas.cast(model_output.dtype)
+            
         if self.step_index is None:
             self._init_step_index(timestep)
 
