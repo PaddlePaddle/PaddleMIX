@@ -150,15 +150,16 @@ class Attention(nn.Layer):
         #     model_parallel_size = 1
         # self.n_local_heads = n_heads // model_parallel_size  #
         # self.n_local_kv_heads = self.n_kv_heads // model_parallel_size
-        self.n_rep = n_heads // self.n_kv_heads
-        self.head_dim = dim // n_heads
-        self.wq = nn.Linear(dim, n_heads * self.head_dim, bias_attr=False)
+        self.n_heads = n_heads
+        self.n_rep = self.n_heads // self.n_kv_heads
+        self.head_dim = dim // self.n_heads
+        self.wq = nn.Linear(dim, self.n_heads * self.head_dim, bias_attr=False)
         self.wk = nn.Linear(dim, self.n_kv_heads * self.head_dim, bias_attr=False)
         self.wv = nn.Linear(dim, self.n_kv_heads * self.head_dim, bias_attr=False)
-        self.wo = nn.Linear(n_heads * self.head_dim, dim, bias_attr=False)
+        self.wo = nn.Linear(self.n_heads * self.head_dim, dim, bias_attr=False)
 
         if qk_norm:
-            self.q_norm = nn.LayerNorm(n_heads * self.head_dim)
+            self.q_norm = nn.LayerNorm(self.n_heads * self.head_dim)
             self.k_norm = nn.LayerNorm(self.n_kv_heads * self.head_dim)
             # if is_model_parrallel():
             #     setattr(self.q_norm.weight, "qk_norm_in_tp", True)
@@ -246,7 +247,7 @@ class Attention(nn.Layer):
         xq = self.q_norm(xq)
         xk = self.k_norm(xk)
 
-        xq = xq.reshape([bsz, seqlen, n_heads, self.head_dim])
+        xq = xq.reshape([bsz, seqlen, self.n_heads, self.head_dim])
         xk = xk.reshape([bsz, seqlen, self.n_kv_heads, self.head_dim])
         xv = xv.reshape([bsz, seqlen, self.n_kv_heads, self.head_dim])
 
@@ -263,7 +264,7 @@ class Attention(nn.Layer):
                 return_softmax=False,
             )
         else:
-            n_rep = n_heads // self.n_kv_heads
+            n_rep = self.n_heads // self.n_kv_heads
             if n_rep > 1:
                 xk = xk.unsqueeze(axis=3).tile([1, 1, 1, n_rep, 1]).flatten(start_axis=2, stop_axis=3)
                 xv = xv.unsqueeze(axis=3).tile([1, 1, 1, n_rep, 1]).flatten(start_axis=2, stop_axis=3)
@@ -629,10 +630,6 @@ class DiT_Llama_AUTO(ModelMixin, ConfigMixin, ConversionMixin):
         """
         hidden_states, timestep, class_labels = x, t, y
         dtype = hidden_states.dtype
-        print("========== in DiT_Llama_AUTO forward ==========")
-        print(hidden_states)
-        print(timestep)
-        print(class_labels)
 
         # 1. Input
         hidden_states = self.patchify(hidden_states)
@@ -640,6 +637,10 @@ class DiT_Llama_AUTO(ModelMixin, ConfigMixin, ConversionMixin):
         t = self.t_embedder(timestep).cast(dtype)
         y = self.y_embedder(class_labels).cast(dtype)
         adaln_input = t + y
+        # print("========== in DiT_Llama_AUTO forward ==========")
+        # print(x)
+        # print(t)
+        # print(y)
 
         # 2. Blocks
         pre_pp_stage = 0

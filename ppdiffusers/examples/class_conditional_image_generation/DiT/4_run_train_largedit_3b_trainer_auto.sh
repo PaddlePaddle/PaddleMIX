@@ -11,7 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# export FLAGS_use_cuda_managed_memory=true
+export FLAGS_use_cuda_managed_memory=true
+# export GLOG_v=10
+# export GLOG_vmodule="flatten=5"
 
 TRAINING_MODEL_RESUME="None"
 TRAINER_INSTANCES='127.0.0.1'
@@ -29,7 +31,7 @@ config_file=config/LargeDiT_3B_patch2.json
 OUTPUT_DIR=./output_trainer/LargeDiT_3B_patch2_trainer
 feature_path=./data/fastdit_imagenet256
 
-per_device_train_batch_size=1
+per_device_train_batch_size=2
 gradient_accumulation_steps=1
 
 resolution=256

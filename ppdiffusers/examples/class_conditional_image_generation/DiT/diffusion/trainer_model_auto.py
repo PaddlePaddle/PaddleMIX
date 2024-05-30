@@ -31,7 +31,7 @@ from ppdiffusers.training_utils import freeze_params
 from .diffusion_utils import discretized_gaussian_log_likelihood, normal_kl, get_mesh
 from .dit_auto import DiT_AUTO
 from .dit_llama_auto import DiT_Llama_AUTO
-from .gaussian_diffusion import _extract_into_tensor, get_named_beta_schedule, mean_flat
+from .gaussian_diffusion import _extract_into_shardtensor, get_named_beta_schedule, mean_flat
 
 
 def read_json(file):
@@ -407,8 +407,8 @@ class DiTDiffusionModelAuto(nn.Layer):
             noise = paddle.randn_like(x_start)
         assert noise.shape == x_start.shape
         return (
-            _extract_into_tensor(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start
-            + _extract_into_tensor(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape) * noise
+            _extract_into_shardtensor(self.sqrt_alphas_cumprod, t, x_start) * x_start
+            + _extract_into_shardtensor(self.sqrt_one_minus_alphas_cumprod, t, noise) * noise
         )
 
     def _vb_terms_bpd(self, model, x_start, x_t, t, clip_denoised=True, model_kwargs=None):
@@ -474,8 +474,8 @@ class DiTDiffusionModelAuto(nn.Layer):
         if self.model_var_type in ["learned_range"]:
             assert model_output.shape == [B, C * 2, *x.shape[2:]]
             model_output, model_var_values = paddle.split(model_output, 2, axis=1)
-            min_log = _extract_into_tensor(self.posterior_log_variance_clipped, t, x.shape)
-            max_log = _extract_into_tensor(np.log(self.betas), t, x.shape)
+            min_log = _extract_into_shardtensor(self.posterior_log_variance_clipped, t, x)
+            max_log = _extract_into_shardtensor(np.log(self.betas), t, x)
             # The model_var_values is [-1, 1] for [min_var, max_var].
             frac = (model_var_values + 1) / 2
             model_log_variance = frac * max_log + (1 - frac) * min_log
@@ -506,8 +506,8 @@ class DiTDiffusionModelAuto(nn.Layer):
     def _predict_xstart_from_eps(self, x_t, t, eps):
         assert x_t.shape == eps.shape
         return (
-            _extract_into_tensor(self.sqrt_recip_alphas_cumprod, t, x_t.shape) * x_t
-            - _extract_into_tensor(self.sqrt_recipm1_alphas_cumprod, t, x_t.shape) * eps
+            _extract_into_shardtensor(self.sqrt_recip_alphas_cumprod, t, x_t) * x_t
+            - _extract_into_shardtensor(self.sqrt_recipm1_alphas_cumprod, t, eps) * eps
         )
 
     def q_posterior_mean_variance(self, x_start, x_t, t):
@@ -517,11 +517,11 @@ class DiTDiffusionModelAuto(nn.Layer):
         """
         assert x_start.shape == x_t.shape
         posterior_mean = (
-            _extract_into_tensor(self.posterior_mean_coef1, t, x_t.shape) * x_start
-            + _extract_into_tensor(self.posterior_mean_coef2, t, x_t.shape) * x_t
+            _extract_into_shardtensor(self.posterior_mean_coef1, t, x_start) * x_start
+            + _extract_into_shardtensor(self.posterior_mean_coef2, t, x_t) * x_t
         )
-        posterior_variance = _extract_into_tensor(self.posterior_variance, t, x_t.shape)
-        posterior_log_variance_clipped = _extract_into_tensor(self.posterior_log_variance_clipped, t, x_t.shape)
+        posterior_variance = _extract_into_shardtensor(self.posterior_variance, t, x_t)
+        posterior_log_variance_clipped = _extract_into_shardtensor(self.posterior_log_variance_clipped, t, x_t)
         assert (
             posterior_mean.shape[0]
             == posterior_variance.shape[0]
