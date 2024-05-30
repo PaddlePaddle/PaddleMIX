@@ -25,7 +25,6 @@ from typing import Any, Dict, Iterable, Iterator, Mapping, Optional, Tuple, Unio
 import numpy as np
 import paddle
 import paddle.nn as nn
-from paddle.distributed import fleet
 
 try:
     from paddle.base.dygraph.base import param_guard
@@ -397,7 +396,9 @@ if is_ppxformers_available():
             if attention_op == "flash" and flash_attn_error is not None:
                 raise OSError(flash_attn_error)
 
-        if str2bool(os.getenv("FLAGS_cudnn_deterministic", "no")):
+        if str2bool(os.getenv("FLAGS_cudnn_deterministic", "no")) or str2bool(
+            os.getenv("FLAGS_sdpa_select_math", "no")
+        ):
             if attention_op == "flash":
                 if paddle.nn.functional.flash_attention._select_sdp(query.shape[3]) == "mem_efficient":
                     attention_op = "math"
@@ -438,11 +439,6 @@ if is_ppxformers_available():
                         scale=scale,
                         training=True,
                     )  # make sure we use training=True
-                if query.shape[3] > 256:
-                    if paddle.distributed.get_world_size() > 1 and hasattr(fleet.fleet, "_hcg"):
-                        hcg = fleet.get_hybrid_communicate_group()
-                        mp_group = hcg.get_model_parallel_group()
-                        paddle.distributed.broadcast(output, src=mp_group.ranks[0], group=mp_group, sync_op=True)
             else:
                 assert (
                     variable_length_memory_efficient_attention is not None
@@ -477,12 +473,6 @@ if is_ppxformers_available():
                     is_causal=bool(is_causal),
                     training=training,
                 )
-            # hidden_dimension excel 256 will use mea
-            if query.shape[3] > 256:
-                if paddle.distributed.get_world_size() > 1 and hasattr(fleet.fleet, "_hcg"):
-                    hcg = fleet.get_hybrid_communicate_group()
-                    mp_group = hcg.get_model_parallel_group()
-                    paddle.distributed.broadcast(output, src=mp_group.ranks[0], group=mp_group, sync_op=True)
         else:
             raise ValueError(
                 "ppxformers's attention_op shoulde be in ['auto', 'math', 'cutlass', `memory_efficient`, 'flash']."

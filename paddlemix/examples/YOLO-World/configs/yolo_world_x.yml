@@ -1,0 +1,60 @@
+_BASE_: [
+  '../third_party/PaddleYOLO/configs/yolov8/yolov8_x_500e_coco.yml'
+]
+
+input_height: &input_height 640
+input_width: &input_width 640
+input_size: &input_size [*input_height, *input_width]
+text_channels: &text_channels 512
+num_classes: &num_classes 80
+
+
+architecture: YOLOWorldDetector
+
+YOLOWorldDetector:
+  backbone: MultiModalYOLOBackbone
+  neck: YOLOWorldPAFPN
+  bbox_head: YOLOWorldHead
+  mm_neck: True
+
+MultiModalYOLOBackbone:
+  image_model:
+    name: YOLOv8CSPDarkNet
+    arch: 'P5'
+    return_idx: [2, 3, 4]
+    last_stage_ch: 512
+    last2_stage_ch: 512
+  text_model:
+    name: HuggingCLIPLanguageBackbone
+    model_name: 'openai/clip-vit-base-patch32'
+    frozen_modules: ['all']
+
+YOLOWorldPAFPN:
+  guide_channels: *text_channels
+  embed_channels: [128, 256, 256]
+  num_heads: [4, 8, 8]
+
+YOLOWorldHead:
+  num_classes: *num_classes
+  reg_max: 16
+  embed_dims: *text_channels
+  fpn_strides: [8, 16, 32]
+  grid_cell_offset: 0.5
+  score_thr: 0.001
+  nms_pre: 30000
+  nms_thr: 0.7
+  multi_label: True
+  use_bn_head: True
+
+
+TestReader:
+  inputs_def:
+    image_shape: [3, 640, 640]
+  sample_transforms:
+    - Decode: {}
+    - Resize: {target_size: *input_size, keep_ratio: True, interp: 1}
+    - LetterResize: {scale: *input_size, pad_val: 114}
+    - NormalizeImage: {mean: [0., 0., 0.], std: [1., 1., 1.], norm_type: none}
+    - Permute: {}
+  batch_size: 1
+  fuse_normalize: False

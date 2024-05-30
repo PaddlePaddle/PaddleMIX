@@ -1,9 +1,9 @@
-## 📦 PaddleMIX工具箱介绍 📦
-PaddleMIX工具箱秉承了飞桨套件一站式体验、性能极致、生态兼容的设计理念，旨在提供业界主流跨模态大模型全流程统一工具，帮助开发者低成本、低门槛、快速实现跨模态大模型定制化。
+## 📦 PaddleMIX Tools Introduction📦
+The PaddleMIX toolkit embodies the design philosophy of one-stop experience, ultimate performance, and ecosystem compatibility upheld by the PaddlePaddle suite. It aims to provide developers with a unified set of tools for the entire process of cross-modal large-model development, aligning with industry standards. This facilitates low-cost, low-threshold, and rapid customization of cross-modal large models.
 
-[[English](README_en.md)]
+[[中文文档](README.md)]
 
-##  🛠️ 支持模型列表 🛠️
+##  🛠️ Supported Model List 🛠️
 | Model | Inference |Pretrain | SFT | LoRA | Deploy |
 | --- | --- | --- | --- | --- | --- |
 | [qwen_vl](../examples/qwen_vl/) | ✅  | ❌  | ✅  | ✅  |  ✅ |
@@ -15,24 +15,21 @@ PaddleMIX工具箱秉承了飞桨套件一站式体验、性能极致、生态�
 * 🚧: In Progress
 * ❌: Not Supported
 
-注意：
-1. 开始前请先按照[环境依赖](../../README.md#安装)安装环境，不同模型请参考 [examples](../examples/README.md) 下对应的模型目录安装依赖；
-2. 当前**tools**统一接口只支持部分模型的精调能力，其他模型及其他能力后续陆续上线。
+Note:
+1. Before starting, please ensure that you have installed the environment according to the [environment dependencies](../../README_EN.md#installation). For different models, please refer to the corresponding model directory under [examples](../examples/README.md) for installation dependencies.
+2. Currently, the **tools** unified interface only supports fine-tuning capabilities for some models. Fine-tuning capabilities for other models and additional features will be gradually added in the future.
 
+##  🚀 Quick Start 🚀
 
-##  🚀 快速开始 🚀
+### 1. Fine-tuning
+PaddleMIX fine-tuning supports various mainstream large multi-modal fine-tuning strategies such as SFT and LoRA, providing a unified and efficient fine-tuning solution:
+- **Unified Training Entry**: The PaddleMIX fine-tuning solution is adaptable to various mainstream large multi-modal models. Users only need to modify the configuration file in [config](../config/) to perform fine-tuning on single or multiple GPUs for different large models.
+- **Multiple and Mixed Datasets**: Supports fine-tuning with multiple datasets and mixed datasets simultaneously, including a mixture of datasets such as VQA, Caption, Chatml, etc.
+- **Powerful Data Flow and Distributed Strategies**: The MIXToken strategy effectively increases data throughput, significantly improving model training efficiency. Adaptive Trainer and customizable Trainer configurations seamlessly integrate with Paddle's distributed parallelism strategies, greatly reducing the hardware threshold for fine-tuning large models.
 
-### 1. 精调
-PaddleMIX 精调支持多个主流跨模态大模型的SFT、LoRA等精调策略，提供统一、高效精调方案：
-- **统一训练入口** PaddleMIX 精调方案可适配业界主流跨模态大模型，用户只需修改[config](../config/) 配置文件，即能在单卡或多卡进行多种大模型精调；
-- **多数据集和混合数据集** 支持多种数据集和混合数据集同时精调，包括：VQA、Caption、Chatml等数据集混合使用；
-- **强大数据流和分布式策略** MIXToken策略有效增加数据吞吐量，大幅度提高模型训练效率。自适应Trainer和定制化Trainer灵活配置，无缝链接飞桨分布式并行策略，大幅降低大模型精调硬件门槛。
+**Data Preparation**：
 
-
-**数据准备**：
-
-我们支持多数据集、混合数据集同时用于精调，通过**MixDataset**统一调度，用户只需在配置文件指定 [dataset](../datasets/) 支持的数据集组成集合，即可使用。如：
-
+We support the use of multiple datasets and mixed datasets simultaneously for fine-tuning. This is achieved through **MixDataset** scheduling. Users only need to specify in the configuration file a collection of datasets supported by [dataset](../datasets/). For example:
 ```
 # config.json
 ...
@@ -51,14 +48,13 @@ PaddleMIX 精调支持多个主流跨模态大模型的SFT、LoRA等精调策略
 
 ```
 
-而对于每个子数据集，如上述的 coco_caption 数据格式，可参考[examples](../examples/) 下对应的模型目录里面的文档介绍。
+For each sub-dataset, such as the coco_caption dataset mentioned above, you can refer to the documentation inside the corresponding model directory under [examples](../examples/).
 
-同时，我们通过 chatml_dataset 数据集支持主流的LLM对话自定义模版。关于自定义对话模板，请参考[自定义对话模版](https://github.com/PaddlePaddle/PaddleNLP/blob/16d3c49d2b8d0c7e56d1be8d7f6f2ca20aac80cb/docs/get_started/chat_template.md#自定义对话模板
-)
+Additionally, we support mainstream LLM dialogue custom templates through the chatml_dataset dataset. For information on customizing dialogue templates, please refer to [Custom Dialogue Templates](https://github.com/PaddlePaddle/PaddleNLP/blob/16d3c49d2b8d0c7e56d1be8d7f6f2ca20aac80cb/docs/get_started/chat_template.md#自定义对话模板).
 
-为了方便测试，我们也提供了 chatml_dataset 格式的数据集和对应的 chat_template.json,用于 qwen-vl 模型精调，可以直接[下载](https://bj.bcebos.com/v1/paddlenlp/datasets/examples/ScienceQA.tar)使用。
+For convenience in testing, we also provide a dataset in the chatml_dataset format and the corresponding chat_template.json file for fine-tuning the qwen-vl model. You can directly [download](https://bj.bcebos.com/v1/paddlenlp/datasets/examples/ScienceQA.tar) and use it.
 
-**config** 配置文件参数说明：
+**config** Configuration File Parameter Explanation：
 ```
 {
     “model_name_or_path”  #设置实际使用的模型名称，如"qwen-vl/qwen-vl-chat-7b"
@@ -152,11 +148,11 @@ PaddleMIX 精调支持多个主流跨模态大模型的SFT、LoRA等精调策略
 
 ```
 
-> 注：若不需要 sharding 策略，则无需指定tensor_parallel_degree、sharding_parallel_degree、sharding、pipeline_parallel_degree参数
+> Note: If you do not need the sharding strategy, you do not need to specify the tensor_parallel_degree, sharding_parallel_degree, sharding, or pipeline_parallel_degree parameters.
 
-> 更多参数，可参考 [argument](../trainer/argument.py)
+> For more parameters, please refer to [argument](../trainer/argument.py).
 
-**全参精调：SFT**
+**Full-parameter Fine-tuning: SFT**
 ```bash
 # 单卡Qwen-vl SFT启动命令参考
 python paddlemix/tools/supervised_finetune.py paddlemix/config/qwen_vl/sft_argument.json
@@ -171,7 +167,7 @@ python -u  -m paddle.distributed.launch --gpus "0,1,2,3" paddlemix/tools/supervi
 python  paddlemix/tools/supervised_finetune.py paddlemix/config/qwen_vl/lora_sft_argument.json
 ```
 
-注：使用lora训练后，需要合并lora参数，我们提供LoRA参数合并脚本，可以将LoRA参数合并到主干模型并保存相应的权重。命令如下：
+Note: After training with LoRA, it's necessary to merge the LoRA parameters. We provide a script for merging LoRA parameters, which combines the LoRA parameters into the main model and saves the corresponding weights. The command is as follows:
 
 ```bash
 python paddlemix/paddlemix/tools/merge_lora_params.py \
