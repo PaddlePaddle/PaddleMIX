@@ -161,16 +161,16 @@ class QWen(PretrainedModel):
 
         if images is not None:
             hidden_states_dtype = hidden_states.dtype
-            if hidden_states_dtype == paddle.bfloat16:
+            if hidden_states_dtype in {paddle.bfloat16, paddle.float16}:
                 hidden_states = paddle.cast(hidden_states, paddle.float32)
                 images = paddle.cast(images, paddle.float32)
 
             for idx, (i, a, b) in enumerate(img_pos):
                 index = paddle.arange(a + 1, b).unsqueeze(-1)
-                hidden_states[i] = paddle.scatter(hidden_states[i], index, images[idx])
+                hidden_states[i] = paddle.scatter(hidden_states[i], index, images[idx].astype(hidden_states.dtype))
 
-            if hidden_states_dtype == paddle.bfloat16:
-                hidden_states = paddle.cast(hidden_states, paddle.bfloat16)
+            if hidden_states_dtype in {paddle.bfloat16, paddle.float16}:
+                hidden_states = paddle.cast(hidden_states, hidden_states_dtype)
 
         output_shape = input_shape + [
             hidden_states.shape[-1],
