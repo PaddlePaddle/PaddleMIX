@@ -328,7 +328,7 @@ class StableDiffusionInpaintPipelineFastTests(
 #        inputs = self.get_dummy_inputs(device)
 #        image = sd_pipe.image_processor.preprocess(inputs["image"])
 #        mask = sd_pipe.mask_processor.preprocess(inputs["mask_image"])
-#        masked_image = image * (mask < 0.5)
+#        masked_image = image * (mask < 0.5).cast(image.dtype)
 #
 #        generator = paddle.Generator(device=device).manual_seed(0)
 #        image_latents = (
@@ -1135,7 +1135,7 @@ class StableDiffusionInpaintingPrepareMaskAndMaskedImageTests(unittest.TestCase)
             im_pil, mask_pil, height, width, return_image=True
         )
 
-        self.assertTrue((t_mask_np == t_mask_pil).all())
+        self.assertTrue((t_mask_np.cast("float32") == t_mask_pil).all())
         self.assertTrue((t_masked_np == t_masked_pil).all())
         self.assertTrue((t_image_np == t_image_pil).all())
 
