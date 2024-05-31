@@ -249,8 +249,7 @@ class DEISMultistepSchedulerTest(SchedulerCommonTest):
             residual = model(sample, t)
             sample = scheduler.step(residual, t, sample).prev_sample
 
-        # TODO, this scheduler output float32
-        assert sample.dtype == paddle.float32
+        assert sample.dtype == paddle.float16
 
     def test_full_loop_with_noise(self):
         scheduler_class = self.scheduler_classes[0]
