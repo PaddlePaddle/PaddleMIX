@@ -166,7 +166,7 @@ def prepare_mask_and_masked_image(image, mask, height, width, return_image: bool
         # checkpoint. TOD(Yiyi) - need to clean this up later
         masked_image = None
     else:
-        masked_image = image * (mask < 0.5)
+        masked_image = image * (mask < 0.5).cast(image.dtype)
 
     # n.b. ensure backwards compatibility as old function does not return image
     if return_image:

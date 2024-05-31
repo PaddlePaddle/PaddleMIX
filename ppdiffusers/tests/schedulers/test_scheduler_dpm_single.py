@@ -262,8 +262,7 @@ class DPMSolverSinglestepSchedulerTest(SchedulerCommonTest):
             residual = model(sample, t)
             sample = scheduler.step(residual, t, sample).prev_sample
 
-        # TODO, this scheduler output float32
-        assert sample.dtype == paddle.float32
+        assert sample.dtype == paddle.float16
 
     def test_step_shape(self):
         kwargs = dict(self.forward_default_kwargs)
