@@ -14,4 +14,4 @@ urllib3<=2.0.0
 einops>=0.6.1
 paddlesde
 ligo-segments
-huggingface_hub==0.22.2
+huggingface_hub
