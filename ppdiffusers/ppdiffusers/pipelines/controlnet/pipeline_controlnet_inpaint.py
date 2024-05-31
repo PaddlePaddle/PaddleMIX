@@ -233,7 +233,7 @@ def prepare_mask_and_masked_image(image, mask, height, width, return_image=False
         mask[mask >= 0.5] = 1
         mask = paddle.to_tensor(mask)
 
-    masked_image = image * (mask < 0.5)
+    masked_image = image * (mask < 0.5).cast(image.dtype)
 
     # n.b. ensure backwards compatibility as old function does not return image
     if return_image:
@@ -1233,7 +1233,7 @@ class StableDiffusionControlNetInpaintPipeline(
 
         mask = self.mask_processor.preprocess(mask_image, height=height, width=width)
 
-        masked_image = init_image * (mask < 0.5)
+        masked_image = init_image * (mask < 0.5).cast(init_image.dtype)
         _, _, height, width = init_image.shape
 
         # 5. Prepare timesteps

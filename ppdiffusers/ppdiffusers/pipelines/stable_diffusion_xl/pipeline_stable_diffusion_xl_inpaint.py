@@ -231,7 +231,7 @@ def prepare_mask_and_masked_image(image, mask, height, width, return_image: bool
         # checkpoint. TOD(Yiyi) - need to clean this up later
         masked_image = None
     else:
-        masked_image = image * (mask < 0.5)
+        masked_image = image * (mask < 0.5).cast(image.dtype)
 
     # n.b. ensure backwards compatibility as old function does not return image
     if return_image:
@@ -1375,7 +1375,7 @@ class StableDiffusionXLInpaintPipeline(
             # if images are in latent space, we can't mask it
             masked_image = None
         else:
-            masked_image = init_image * (mask < 0.5)
+            masked_image = init_image * (mask < 0.5).cast(init_image.dtype)
 
         # 6. Prepare latent variables
         num_channels_latents = self.vae.config.latent_channels
