@@ -270,8 +270,7 @@ class DPMSolverMultistepSchedulerTest(SchedulerCommonTest):
             residual = model(sample, t)
             sample = scheduler.step(residual, t, sample).prev_sample
 
-        # TODO, this scheduler output float32
-        assert sample.dtype == paddle.float32
+        assert sample.dtype == paddle.float16
 
     def test_unique_timesteps(self, **config):
         for scheduler_class in self.scheduler_classes:
