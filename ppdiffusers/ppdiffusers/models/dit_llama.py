@@ -252,6 +252,43 @@ class Attention(nn.Layer):
         return self.wo(output)
 
 
+class FeedForward_kai(nn.Layer):
+    def __init__(self, dim, hidden_dim, multiple_of=256, ffn_dim_multiplier=None):
+        super().__init__()
+        hidden_dim = int(2 * hidden_dim / 3)
+        if ffn_dim_multiplier is not None:
+            hidden_dim = int(ffn_dim_multiplier * hidden_dim)
+        hidden_dim = int(multiple_of * ((hidden_dim + multiple_of - 1) // multiple_of))
+
+        self.w13 = nn.Linear(dim, hidden_dim * 2, bias_attr=False)
+        self.w2 = nn.Linear(hidden_dim, dim, bias_attr=False)
+        
+    def compute_activation(self, ffn1_out):
+        origin_batch_size = ffn1_out.shape[0]
+        origin_seq_len = ffn1_out.shape[1]
+        ffn1_out = ffn1_out.reshape([origin_batch_size*origin_seq_len, ffn1_out.shape[-1]])
+        res = paddle._C_ops.fused_bias_act(
+            ffn1_out,
+            None,
+            None,
+            None,
+            None,
+            "swiglu",
+            "default",
+            -1,
+            0,
+            0,
+            0
+        )
+        return res.reshape([origin_batch_size, origin_seq_len, res.shape[-1]])
+
+    def forward(self, x):
+        ffn1_out = self.w13(x)
+        ffn1_out = self.compute_activation(ffn1_out)
+        ffn2_out = self.w2(ffn1_out)
+        return ffn2_out
+
+
 class FeedForward(nn.Layer):
     def __init__(self, dim, hidden_dim, multiple_of=256, ffn_dim_multiplier=None):
         """
@@ -283,39 +320,11 @@ class FeedForward(nn.Layer):
         self.w2 = nn.Linear(hidden_dim, dim, bias_attr=False)
         self.w3 = nn.Linear(dim, hidden_dim, bias_attr=False)
 
-        self.first_run = True
-        self.concat_weight = None
-
-    def compute_activation(self, ffn1_out):
-        origin_batch_size = ffn1_out.shape[0]
-        origin_seq_len = ffn1_out.shape[1]
-        ffn1_out = ffn1_out.reshape([origin_batch_size*origin_seq_len, ffn1_out.shape[-1]])
-        res = paddle._C_ops.fused_bias_act(
-            ffn1_out,
-            None,
-            None,
-            None,
-            None,
-            "swiglu",
-            "default",
-            -1,
-            0,
-            0,
-            0
-        )
-        return res.reshape([origin_batch_size, origin_seq_len, res.shape[-1]])
-
     def forward(self, x):
-        if self.first_run:
-            self.first_run = False
-            self.concat_weight = paddle.concat([self.w1.weight, self.w3.weight], axis=-1)
-            del self.w1.weight
-            del self.w3.weight
-
-        ffn1_out = paddle.matmul(x, self.concat_weight)
-        ffn1_out = self.compute_activation(ffn1_out)
-        ffn2_out = paddle.matmul(ffn1_out, self.w2.weight)
-        return ffn2_out
+        xw1 = F.silu(self.w1(x))
+        xw3 = self.w3(x)
+        output = self.w2(xw1 * xw3)
+        return output
 
 
 class TransformerBlock(nn.Layer):
@@ -367,7 +376,7 @@ class TransformerBlock(nn.Layer):
         self.head_dim = dim // n_heads
         self.attention = Attention(dim, n_heads, n_kv_heads, qk_norm, fused_attn)
         mlp_hidden_dim = int(dim * mlp_ratio)
-        self.feed_forward = FeedForward(
+        self.feed_forward = FeedForward_kai(
             dim=dim, hidden_dim=mlp_hidden_dim, multiple_of=multiple_of, ffn_dim_multiplier=ffn_dim_multiplier
         )
         self.layer_id = layer_id
@@ -602,3 +611,38 @@ class DiTLLaMA2DModel(ModelMixin, ConfigMixin):
             return (output,)
 
         return Transformer2DModelOutput(sample=output)
+
+    @classmethod
+    def custom_modify_weight(cls, state_dict):
+        # print("kai==================================")
+        # print(state_dict.keys())
+        import re
+        w1_pattern = r"layers\.(\d+)\.feed_forward\.w1.weight$"
+        w3_pattern = r"layers\.(\d+)\.feed_forward\.w3.weight$"
+        keys_to_add = []
+        w1_keys_to_del = []
+        w3_keys_to_del = []
+        for key in state_dict.keys():
+            if re.match(w1_pattern, key):
+                w1_keys_to_del.append(key)
+            w3_match = re.match(w3_pattern, key)
+            if w3_match:
+                w13_key ='layers.' +  w3_match.group(1) + '.feed_forward.w13.weight'
+                keys_to_add.append(w13_key)
+                w3_keys_to_del.append(key)
+        
+        assert len(keys_to_add) == len(w1_keys_to_del) == len(w3_keys_to_del)
+
+        for ii in range(len(keys_to_add)):
+            w13_key = keys_to_add[ii]
+            w1_key = w1_keys_to_del[ii]
+            w3_key = w3_keys_to_del[ii]
+            state_dict[w13_key] = paddle.concat([state_dict[w1_key], state_dict[w3_key]], axis=1)
+            state_dict.pop(w3_key)
+            state_dict.pop(w1_key)
+        
+        # print(state_dict.keys())
+        # exit()
+
+
+
