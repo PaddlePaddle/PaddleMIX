@@ -1641,6 +1641,8 @@ def main(args):
 
                         for i, model in enumerate(models):
                             weights.append(get_state_dict(model))
+                            del model
+                            gc.collect()
                         save_model_hook(models, weights, save_path)
                         del models, weights
                         for _ in range(3):
