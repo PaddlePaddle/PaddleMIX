@@ -37,7 +37,7 @@ pip install -r requirements.txt --user
 
 ### 启动webui
 
-进入`Paddle-Stable-Diffusion`目录后，
+进入`StableDiffusionXLWebUI`目录后，
 *双击运行* `webui_adapter.gradio.py`，32GB GPU可运行。
 
 或者
