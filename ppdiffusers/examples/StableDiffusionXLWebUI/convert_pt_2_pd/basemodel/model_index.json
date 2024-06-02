@@ -1,0 +1,42 @@
+{
+  "_class_name": "StableDiffusionXLPipeline",
+  "_name_or_path": "SG161222/RealVisXL_V3.0",
+  "_ppdiffusers_version": "0.24.0",
+  "feature_extractor": [
+    null,
+    null
+  ],
+  "force_zeros_for_empty_prompt": true,
+  "image_encoder": [
+    null,
+    null
+  ],
+  "scheduler": [
+    "ppdiffusers",
+    "EulerDiscreteScheduler"
+  ],
+  "text_encoder": [
+    "ppdiffusers.transformers",
+    "CLIPTextModel"
+  ],
+  "text_encoder_2": [
+    "ppdiffusers.transformers",
+    "CLIPTextModelWithProjection"
+  ],
+  "tokenizer": [
+    "ppdiffusers.transformers",
+    "CLIPTokenizer"
+  ],
+  "tokenizer_2": [
+    "ppdiffusers.transformers",
+    "CLIPTokenizer"
+  ],
+  "unet": [
+    "ppdiffusers",
+    "UNet2DConditionModel"
+  ],
+  "vae": [
+    "ppdiffusers",
+    "AutoencoderKL"
+  ]
+}
