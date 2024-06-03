@@ -75,7 +75,7 @@ class IDDPM(SpacedDiffusion):
         n = len(prompts)
         z = paddle.concat(x=[z, z], axis=0)
         model_args = text_encoder.encode(prompts)
-        y_null = text_encoder.null(n).astype("float32")
+        y_null = text_encoder.null(n).astype(model_args["y"].dtype)
         model_args["y"] = paddle.concat(x=[model_args["y"], y_null], axis=0)
         if additional_args is not None:
             model_args.update(additional_args)

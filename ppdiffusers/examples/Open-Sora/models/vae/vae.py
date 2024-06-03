@@ -23,7 +23,7 @@ class VideoAutoencoderKL(paddle.nn.Layer):
         super().__init__()
 
         self.module = AutoencoderKL.from_pretrained(
-            from_pretrained, cache_dir=cache_dir, local_files_only=local_files_only
+            from_pretrained, cache_dir=cache_dir, local_files_only=local_files_only, paddle_dtypes=paddle.float16
         )
         self.out_channels = self.module.config.latent_channels
         self.patch_size = (1, 8, 8)

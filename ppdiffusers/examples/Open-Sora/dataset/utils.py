@@ -19,6 +19,7 @@ from collections.abc import Sequence
 import cv2
 import numpy as np
 import paddle
+import pandas as pd
 import requests
 from paddle.vision import transforms
 from paddle.vision.datasets.folder import IMG_EXTENSIONS, pil_loader
@@ -39,8 +40,27 @@ regex = re.compile(
 )
 
 
+def read_file(input_path):
+    if input_path.endswith(".csv"):
+        return pd.read_csv(input_path)
+    elif input_path.endswith(".parquet"):
+        return pd.read_parquet(input_path)
+    else:
+        raise NotImplementedError(f"Unsupported file format: {input_path}")
+
+
 def is_url(url):
     return re.match(regex, url) is not None
+
+
+def temporal_random_crop(vframes, num_frames, frame_interval):
+    temporal_sample = video_transforms.TemporalRandomCrop(num_frames * frame_interval)
+    total_frames = len(vframes)
+    start_frame_ind, end_frame_ind = temporal_sample(total_frames)
+    assert end_frame_ind - start_frame_ind >= num_frames
+    frame_indice = np.linspace(start_frame_ind, end_frame_ind - 1, num_frames, dtype=int)
+    video = vframes[frame_indice]
+    return video
 
 
 def download_url(input_path):
@@ -119,7 +139,6 @@ def get_transforms_image(name="center", image_size=(256, 256)):
         transform = transforms.Compose(
             [
                 Lambda(lambda pil_image: center_crop_arr(pil_image, image_size[0])),
-                # transforms.RandomHorizontalFlip(),
                 transforms.ToTensor(),
                 transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
             ]
@@ -145,7 +164,6 @@ def get_transforms_video(name="center", image_size=(256, 256)):
         transform_video = transforms.Compose(
             [
                 video_transforms.ToTensorVideo(),  # TCHW
-                # video_transforms.RandomHorizontalFlipVideo(),
                 video_transforms.UCFCenterCropVideo(image_size[0]),
                 transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
             ]

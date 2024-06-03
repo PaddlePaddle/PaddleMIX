@@ -52,6 +52,7 @@ class T5Embedder:
         if t5_model_kwargs is None:
             t5_model_kwargs = {
                 "low_cpu_mem_usage": True,
+                "dtype": paddle_dtype,
             }
 
         self.use_text_preprocessing = use_text_preprocessing
@@ -96,7 +97,7 @@ class T5Encoder:
         self,
         from_pretrained=None,
         model_max_length=120,
-        dtype="float32",
+        dtype="float16",
         cache_dir=None,
         local_files_only=False,
     ):

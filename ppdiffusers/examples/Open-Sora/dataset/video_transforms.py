@@ -34,7 +34,7 @@ def _is_tensor_video_clip(clip):
 def crop(clip, i, j, h, w):
     """
     Args:
-        clip (torch.tensor): Video clip to be cropped. Size is (T, C, H, W)
+        clip (paddle.Tensor): Video clip to be cropped. Size is (T, C, H, W)
     """
     if len(clip.shape) != 4:
         raise ValueError("clip should be a 4D tensor")
@@ -59,17 +59,17 @@ def resized_crop(clip, i, j, h, w, size, interpolation_mode="bilinear"):
     """
     Do spatial cropping and resizing to the video clip
     Args:
-        clip (torch.tensor): Video clip to be cropped. Size is (T, C, H, W)
+        clip (paddle.Tensor): Video clip to be cropped. Size is (T, C, H, W)
         i (int): i in (i,j) i.e coordinates of the upper left corner.
         j (int): j in (i,j) i.e coordinates of the upper left corner.
         h (int): Height of the cropped region.
         w (int): Width of the cropped region.
         size (tuple(int, int)): height and width of resized clip
     Returns:
-        clip (torch.tensor): Resized and cropped clip. Size is (T, C, H, W)
+        clip (paddle.Tensor): Resized and cropped clip. Size is (T, C, H, W)
     """
     if not _is_tensor_video_clip(clip):
-        raise ValueError("clip should be a 4D torch.tensor")
+        raise ValueError("clip should be a 4D paddle.Tensor")
     clip = crop(clip, i, j, h, w)
     clip = resize(clip, size, interpolation_mode)
     return clip
@@ -77,7 +77,7 @@ def resized_crop(clip, i, j, h, w, size, interpolation_mode="bilinear"):
 
 def center_crop(clip, crop_size):
     if not _is_tensor_video_clip(clip):
-        raise ValueError("clip should be a 4D torch.tensor")
+        raise ValueError("clip should be a 4D paddle.Tensor")
     h, w = clip.shape[-2], clip.shape[-1]
     th, tw = crop_size
     if h < th or w < tw:
@@ -90,7 +90,7 @@ def center_crop(clip, crop_size):
 
 def center_crop_using_short_edge(clip):
     if not _is_tensor_video_clip(clip):
-        raise ValueError("clip should be a 4D torch.tensor")
+        raise ValueError("clip should be a 4D paddle.Tensor")
     h, w = clip.shape[-2], clip.shape[-1]
     if h < w:
         th, tw = h, h
@@ -105,7 +105,7 @@ def center_crop_using_short_edge(clip):
 
 def resize_crop_to_fill(clip, target_size):
     if not _is_tensor_video_clip(clip):
-        raise ValueError("clip should be a 4D torch.tensor")
+        raise ValueError("clip should be a 4D paddle.Tensor")
     h, w = clip.shape[-2], clip.shape[-1]
     th, tw = target_size[0], target_size[1]
     rh, rw = th / h, tw / w
@@ -130,7 +130,7 @@ def random_shift_crop(clip):
     Slide along the long edge, with the short edge as crop size
     """
     if not _is_tensor_video_clip(clip):
-        raise ValueError("clip should be a 4D torch.tensor")
+        raise ValueError("clip should be a 4D paddle.Tensor")
     h, w = clip.shape[-2], clip.shape[-1]
 
     if h <= w:
@@ -151,9 +151,9 @@ def to_tensor(clip):
     Convert tensor data type from uint8 to float, divide value by 255.0 and
     permute the dimensions of clip tensor
     Args:
-        clip (torch.tensor, dtype=torch.uint8): Size is (T, C, H, W)
+        clip (paddle.Tensor, dtype=paddle.uint8): Size is (T, C, H, W)
     Return:
-        clip (torch.tensor, dtype=torch.float): Size is (T, C, H, W)
+        clip (paddle.Tensor, dtype=paddle.float): Size is (T, C, H, W)
     """
     _is_tensor_video_clip(clip)
     if not clip.dtype == paddle.uint8:
@@ -165,14 +165,14 @@ def to_tensor(clip):
 def normalize(clip, mean, std, inplace=False):
     """
     Args:
-        clip (torch.tensor): Video clip to be normalized. Size is (T, C, H, W)
+        clip (paddle.Tensor): Video clip to be normalized. Size is (T, C, H, W)
         mean (tuple): pixel RGB mean. Size is (3)
         std (tuple): pixel standard deviation. Size is (3)
     Returns:
-        normalized clip (torch.tensor): Size is (T, C, H, W)
+        normalized clip (paddle.Tensor): Size is (T, C, H, W)
     """
     if not _is_tensor_video_clip(clip):
-        raise ValueError("clip should be a 4D torch.tensor")
+        raise ValueError("clip should be a 4D paddle.Tensor")
     if not inplace:
         clip = clip.clone()
     mean = paddle.to_tensor(mean, dtype=clip.dtype)
@@ -185,12 +185,12 @@ def normalize(clip, mean, std, inplace=False):
 def hflip(clip):
     """
     Args:
-        clip (torch.tensor): Video clip to be normalized. Size is (T, C, H, W)
+        clip (paddle.Tensor): Video clip to be normalized. Size is (T, C, H, W)
     Returns:
-        flipped clip (torch.tensor): Size is (T, C, H, W)
+        flipped clip (paddle.Tensor): Size is (T, C, H, W)
     """
     if not _is_tensor_video_clip(clip):
-        raise ValueError("clip should be a 4D torch.tensor")
+        raise ValueError("clip should be a 4D paddle.Tensor")
     return clip.flip(axis=-1)
 
 
@@ -203,7 +203,6 @@ class ResizeCrop:
 
     def __call__(self, clip):
 
-        print("----resize and crop----")
         clip = resize_crop_to_fill(clip, self.size)
         return clip
 
@@ -221,9 +220,9 @@ class RandomCropVideo:
     def __call__(self, clip):
         """
         Args:
-            clip (torch.tensor): Video clip to be cropped. Size is (T, C, H, W)
+            clip (paddle.Tensor): Video clip to be cropped. Size is (T, C, H, W)
         Returns:
-            torch.tensor: randomly cropped video clip.
+            paddle.Tensor: randomly cropped video clip.
                 size is (T, C, OH, OW)
         """
         i, j, h, w = self.get_params(clip)
@@ -271,9 +270,9 @@ class CenterCropResizeVideo:
     def __call__(self, clip):
         """
         Args:
-            clip (torch.tensor): Video clip to be cropped. Size is (T, C, H, W)
+            clip (paddle.Tensor): Video clip to be cropped. Size is (T, C, H, W)
         Returns:
-            torch.tensor: scale resized / center cropped video clip.
+            paddle.Tensor: scale resized / center cropped video clip.
                 size is (T, C, crop_size, crop_size)
         """
         clip_center_crop = center_crop_using_short_edge(clip)
@@ -309,9 +308,9 @@ class UCFCenterCropVideo:
     def __call__(self, clip):
         """
         Args:
-            clip (torch.tensor): Video clip to be cropped. Size is (T, C, H, W)
+            clip (paddle.Tensor): Video clip to be cropped. Size is (T, C, H, W)
         Returns:
-            torch.tensor: scale resized / center cropped video clip.
+            paddle.Tensor: scale resized / center cropped video clip.
                 size is (T, C, crop_size, crop_size)
         """
         clip_resize = resize_scale(clip=clip, target_size=self.size, interpolation_mode=self.interpolation_mode)
@@ -365,9 +364,9 @@ class CenterCropVideo:
     def __call__(self, clip):
         """
         Args:
-            clip (torch.tensor): Video clip to be cropped. Size is (T, C, H, W)
+            clip (paddle.Tensor): Video clip to be cropped. Size is (T, C, H, W)
         Returns:
-            torch.tensor: center cropped video clip.
+            paddle.Tensor: center cropped video clip.
                 size is (T, C, crop_size, crop_size)
         """
         clip_center_crop = center_crop(clip, self.size)
@@ -394,7 +393,7 @@ class NormalizeVideo:
     def __call__(self, clip):
         """
         Args:
-            clip (torch.tensor): video clip must be normalized. Size is (C, T, H, W)
+            clip (paddle.Tensor): video clip must be normalized. Size is (C, T, H, W)
         """
         clip = clip.transpose((1, 0, 2, 3))
         return normalize(clip, self.mean, self.std, self.inplace)
@@ -415,11 +414,10 @@ class ToTensorVideo:
     def __call__(self, clip):
         """
         Args:
-            clip (torch.tensor, dtype=torch.uint8): Size is (T, C, H, W)
+            clip (paddle.Tensor, dtype=paddle.uint8): Size is (T, C, H, W)
         Return:
-            clip (torch.tensor, dtype=torch.float): Size is (T, C, H, W)
+            clip (paddle.Tensor, dtype=paddle.float): Size is (T, C, H, W)
         """
-        print("------to tensor")
         return to_tensor(clip)
 
     def __repr__(self) -> str:
@@ -439,9 +437,9 @@ class RandomHorizontalFlipVideo:
     def __call__(self, clip):
         """
         Args:
-            clip (torch.tensor): Size is (T, C, H, W)
+            clip (paddle.Tensor): Size is (T, C, H, W)
         Return:
-            clip (torch.tensor): Size is (T, C, H, W)
+            clip (paddle.Tensor): Size is (T, C, H, W)
         """
         if random.random() < self.p:
             clip = hflip(clip)

@@ -153,7 +153,7 @@ class PatchEmbed3D(paddle.nn.Layer):
             perm_1 = list(range(x.ndim))
             perm_1[1] = 2
             perm_1[2] = 1
-            x = x.transpose(perm=perm_1).view(-1, self.embed_dim, D, Wh, Ww)
+            x = x.transpose(perm=perm_1).reshape([-1, self.embed_dim, D, Wh, Ww])  # view
         if self.flatten:
             x = x.flatten(start_axis=2)
             perm_2 = list(range(x.ndim))
@@ -203,7 +203,7 @@ class Attention(paddle.nn.Layer):
         qkv = self.qkv(x)
         qkv_shape = (B, N, 3, self.num_heads, self.head_dim)
 
-        qkv = qkv.view(qkv_shape).permute(2, 0, 3, 1, 4)  # (3, B, num_heads, N, head_dim)
+        qkv = qkv.reshape(qkv_shape).permute(2, 0, 3, 1, 4)  # (3, B, num_heads, N, head_dim) # view # permute
         q, k, v = qkv.unbind(0)  # (B, num_heads, N, head_dim)
 
         # noq
@@ -248,9 +248,7 @@ def transform_list(input_list):
 
     for value in input_list:
         tuple_item = (cumulative_value, cumulative_value + value)
-
         output_list.append(tuple_item)
-
         cumulative_value += value
 
     return output_list
@@ -327,7 +325,7 @@ class MultiHeadCrossAttention(paddle.nn.Layer):
         x = attn
 
         x = x.reshape((B, -1, C))
-        x = x.astype(paddle.float16)
+        x = x.astype(paddle.float32)
         x = self.proj(x)
         x = self.proj_drop(x)
         return x

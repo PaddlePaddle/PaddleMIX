@@ -13,15 +13,6 @@
 # limitations under the License.
 
 import argparse
-import json
-import os
-from glob import glob
-
-
-def load_prompts(prompt_path):
-    with open(prompt_path, "r") as f:
-        prompts = [line.strip() for line in f.readlines()]
-    return prompts
 
 
 def parse_args():
@@ -37,8 +28,6 @@ def parse_args():
     # ======================================================
     # Inference
     # ======================================================
-    # if not training:
-    # output
     parser.add_argument("--save-dir", default="./samples/samples/", type=str, help="path to save generated samples")
     parser.add_argument("--sample-name", default=None, type=str, help="sample name, default is sample_idx")
     parser.add_argument("--start-index", default=None, type=int, help="start index for sample name")
@@ -68,7 +57,7 @@ def parse_args():
     parser.add_argument("--frame_interval", default=3, type=int, help="frame_interval")
 
     parser.add_argument("--multi_resolution", default="STDiT2", type=str, help="multi_resolution")
-    parser.add_argument("--dtype", default="fp16", type=str, help="dtype_infernece")
+    parser.add_argument("--dtype", default="fp32", type=str, help="dtype_infernece")
 
     # args for module definition
     parser.add_argument(
@@ -102,30 +91,3 @@ def parse_configs():
     args = parse_args()
 
     return args
-
-
-def create_experiment_workspace(cfg):
-    """
-    This function creates a folder for experiment tracking.
-
-    Args:
-        args: The parsed arguments.
-
-    Returns:
-        exp_dir: The path to the experiment folder.
-    """
-    # Make outputs folder (holds all experiment subfolders)
-    os.makedirs(cfg.outputs, exist_ok=True)
-    experiment_index = len(glob(f"{cfg.outputs}/*"))
-
-    # Create an experiment folder
-    model_name = cfg.model["type"].replace("/", "-")
-    exp_name = f"{experiment_index:03d}-{model_name}"
-    exp_dir = f"{cfg.outputs}/{exp_name}"
-    os.makedirs(exp_dir, exist_ok=True)
-    return exp_name, exp_dir
-
-
-def save_training_config(cfg, experiment_dir):
-    with open(f"{experiment_dir}/config.txt", "w") as f:
-        json.dump(cfg, f, indent=4)

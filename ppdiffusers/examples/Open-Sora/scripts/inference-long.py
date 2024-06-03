@@ -17,6 +17,7 @@ import os
 import re
 
 import paddle
+from dataset.utils import read_from_path, save_sample
 from models.stdit.stdit2 import STDiT2
 from models.text_encoder import T5Encoder
 from models.text_encoder.t5 import text_preprocessing
@@ -24,7 +25,6 @@ from models.vae import VideoAutoencoderKL
 from paddlenlp.trainer import set_seed
 from schedulers.iddpm import IDDPM
 from utils.config_utils import parse_configs
-from utils.utils import read_from_path, save_sample
 
 IMG_FPS = 120
 

@@ -620,7 +620,7 @@ class GaussianDiffusion:
         mean_pred = (
             out["pred_xstart"] * paddle.sqrt(x=alpha_bar_prev) + paddle.sqrt(x=1 - alpha_bar_prev - sigma**2) * eps
         )
-        nonzero_mask = (t != 0).astype(dtype="float32").view(-1, *([1] * (len(tuple(x.shape)) - 1)))
+        nonzero_mask = (t != 0).astype(dtype="float32").reshape([-1, *([1] * (len(tuple(x.shape)) - 1))])
 
         sample = mean_pred + nonzero_mask * sigma * noise
         return {"sample": sample, "pred_xstart": out["pred_xstart"]}
@@ -817,9 +817,9 @@ class GaussianDiffusion:
                 ModelVarType.LEARNED_RANGE,
             ]:
                 B, C = x_t.shape[:2]
-                assert model_output.shape == (B, C * 2, *x_t.shape[2:])
+                assert model_output.shape == [B, C * 2, *x_t.shape[2:]]
 
-                model_output, model_var_values = paddle.split(model_output, model_output.shape[1] / C, dim=1)
+                model_output, model_var_values = paddle.split(model_output, round(model_output.shape[1] / C), axis=1)
                 # Learn the variance using the variational bound, but don't let
                 # it affect our mean prediction.
                 frozen_out = paddle.concat(x=[model_output.detach(), model_var_values], axis=1)
@@ -942,4 +942,5 @@ def _extract_into_tensor(arr: paddle.Tensor, timesteps: paddle.Tensor, broadcast
     res = arr[timesteps].astype(dtype="float32")
     while len(res.shape) < len(broadcast_shape):
         res = res[..., None]
+
     return res + paddle.zeros(shape=broadcast_shape)
