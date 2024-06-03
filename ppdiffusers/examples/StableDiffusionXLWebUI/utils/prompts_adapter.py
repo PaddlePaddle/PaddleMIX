@@ -69,7 +69,7 @@ gr.Examples(
     examples=[
                 ['best quality, masterpiece, 1 beautiful girl, beautiful cherry lips, beautiful eyes, highlight hair, slim, extremely detail skin, skin pores, wearing pink dress), extremely detailed 8K UHD',
                 'nsfw, lowres,text,signature, watermark,username, blurry',
-                os.path.join(STATIC_DIR, 'text_691436129_ddpm_30_4_0_1712919483.194813.png'),
+                os.path.join(STATIC_DIR, 'adpt1.png'),
                 '-1', 5, 30, 0.3, 1024, 8
                 ],
     ],

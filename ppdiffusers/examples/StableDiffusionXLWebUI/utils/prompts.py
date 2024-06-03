@@ -16,12 +16,12 @@ examples = """
 gr.Examples(
     label='文生图',
     examples=[
-                ['GenShin Impact roler NingGuang:0.8, solo, slim, perfect face, standing, bangs, off-shoulders, yellow:1.1, Deep-V nightdress:1.2, masterpiece, best quality, highly detailed',
+                ['GenShin Impact roler NingGuang:0.8, solo, slim, perfect face, standing, bangs, off-shoulders, yellow:1.1, dress:1.2, masterpiece, best quality, highly detailed',
                  '-1',
                  'navel:1.4,' + negative_prompt,
                  5,18,1024,1024,"ddim"
                 ],
-                ['Nilou, GenShin, solo, sleek, curvy, smoldering eyes, bangs, off-shoulder, vibrant yellow Deep-V nightdress, seductive, masterpiece.',
+                ['Nilou, GenShin, solo, sleek, curvy, smoldering eyes, bangs, off-shoulder, vibrant yellow dress, masterpiece.',
                  '-1',
                  'navel:1.4,' + negative_prompt,
                  5,18,1280,904,"ddim"
@@ -31,7 +31,7 @@ gr.Examples(
                  'navel:1.4,' + negative_prompt,
                  5,18,1280,904,"ddim"
                 ],
-                ['Manga Style:0, Realistic Style:1.0, Anime:0, Watercolor Style:0, Abstract Style:0, NingGuang, solo, slim, perfect face, standing, bangs, off-shoulders, yellow:1.1, Deep-V nightdress:1.2, masterpiece, best quality, highly detailed',
+                ['Manga Style:0, Realistic Style:1.0, Anime:0, Watercolor Style:0, Abstract Style:0, NingGuang, solo, slim, perfect face, standing, bangs, off-shoulders, yellow:1.1, dress:1.2, masterpiece, best quality, highly detailed',
                  '-1',
                  'navel:1.4,' + negative_prompt,
                  5,18,1280,904,"ddim"
@@ -46,12 +46,12 @@ gr.Examples(
                  'navel:1.2,' + negative_prompt,
                  5,18,1280,904,"ddim"
                 ],
-                ['Pretty GenShin Impact roler Nilou, Mint-Green Wavy Curly Hair, solo, perfect face, lying, baggy attire Mint-Green Bloom Dress, Deep-V, masterpiece, best quality, highly detailed.',
+                ['Pretty GenShin Impact roler Nilou, Mint-Green Wavy Curly Hair, solo, perfect face, lying, baggy attire Mint-Green Bloom Dress, masterpiece, best quality, highly detailed.',
                  '-1',
                  'navel:1.4,' + negative_prompt,
                  5,18,1280,904,"ddim"
                 ],
-                ['Pretty GenShin Impact roler Nilou, Cherry Blossom Pink Wavy Curly Hair, solo, perfect face, lying, baggy attire Cherry Blossom Pink Bloom Dress, Deep-V, masterpiece, best quality, highly detailed.',
+                ['Pretty GenShin Impact roler Nilou, Cherry Blossom Pink Wavy Curly Hair, solo, perfect face, lying, baggy attire Cherry Blossom Pink Bloom Dress, dress, masterpiece, best quality, highly detailed.',
                  '-1',
                  'navel:1.4,' + negative_prompt,
                  5,18,1280,904,"ddim"
@@ -61,7 +61,7 @@ gr.Examples(
                  'navel:1.4,' + negative_prompt,
                  5,18,1280,904,"ddim"
                 ],
-                ['Attractive GenShin Impact roler Yae Miko, Wavy Curly Hair, sleek, solo, slim, perfect face, standing, Maroon color, in baggy attire Deep-V Lace Cut-out Dress, masterpiece, best quality, highly detailed.',
+                ['Attractive GenShin Impact roler Yae Miko, Wavy Curly Hair, sleek, solo, slim, perfect face, standing, Maroon color, in baggy attire Lace Cut-out Dress, masterpiece, best quality, highly detailed.',
                  '-1',
                  'navel:1.4,' + negative_prompt,
                  5,18,1280,904,"ddim"
@@ -71,12 +71,12 @@ gr.Examples(
                  'navel:1.4,' + negative_prompt,
                  5,18,1280,904,"ddim"
                 ],
-                ['GenShin Impact roler Kamizato Ayaka, solo, woman, perfect face, reclining on the lake surface, bangs, off-shoulders, Deep-V Dress, masterpiece, best quality, highly detailed',
+                ['GenShin Impact roler Kamizato Ayaka, solo, woman, perfect face, reclining on the lake surface, bangs, off-shoulders, Dress, masterpiece, best quality, highly detailed',
                  '-1',
                  negative_prompt,
                  5,18,888,1184,"ddim"
                 ],
-                ['Attractive GenShin Impact roler Yoimiya, solo, slim, perfect face, standing, off-shoulders, 橘红色:1.1, Deep-V QiPao:1.2, masterpiece, best quality, highly detailed.',
+                ['Attractive GenShin Impact roler Yoimiya, solo, slim, perfect face, standing, off-shoulders, 橘红色:1.1, QiPao:1.2, masterpiece, best quality, highly detailed.',
                  '-1',
                  negative_prompt,
                  5,18,1024,1024,"ddim"
@@ -230,7 +230,7 @@ gr.Examples(
     examples=[
                 ['best quality, masterpiece, 1 beautiful girl, beautiful cherry lips, beautiful eyes, highlight hair, slim, extremely detail skin, skin pores, wearing pink dress), extremely detailed 8K UHD',
                 'nsfw, lowres,text,signature, watermark,username, blurry',
-                os.path.join(STATIC_DIR, 'text_691436129_ddpm_30_4_0_1712919483.194813.png'),
+                os.path.join(STATIC_DIR, 'adpt1.png'),
                 '-1', 5, 30, 0.8, 1024, 800
                 ],
     ],
