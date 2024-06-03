@@ -19,9 +19,9 @@ git clone http://git.aistudio.baidu.com/2510368/Paddle-Stable-Diffusion.git
 复制运行所需的模型权重
 ```bash
 
-cp Paddle-Stable-Diffusion/ip-adapter .
-cp Paddle-Stable-Diffusion/Pony_Pencil-Xl-V1.0.2 .
-rm -r Paddle-Stable-Diffusion
+cp -r Paddle-Stable-Diffusion/ip-adapter .
+cp -r Paddle-Stable-Diffusion/Pony_Pencil-Xl-V1.0.2 .
+rm -rf Paddle-Stable-Diffusion
 ```
 
 3.依赖
