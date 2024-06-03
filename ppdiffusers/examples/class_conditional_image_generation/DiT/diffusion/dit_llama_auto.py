@@ -578,7 +578,8 @@ class DiT_Llama_AUTO(ModelMixin, ConfigMixin, ConversionMixin):
         assert h * w == tuple(x.shape)[1]
 
         x = x.reshape(shape=([tuple(x.shape)[0], h, w, p, p, c]))
-        x = paddle.einsum("nhwpqc->nchpwq", x)
+        # x = paddle.einsum("nhwpqc->nchpwq", x)
+        x = x.transpose([0, 2, 4, 3, 5, 1])
         imgs = x.reshape(shape=([tuple(x.shape)[0], c, h * p, h * p]))
         return imgs
 
