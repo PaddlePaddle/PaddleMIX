@@ -199,6 +199,13 @@ class Attention(nn.Layer):
         return freqs_cis.reshape([*shape])
 
     @staticmethod
+    def rotate_half(x):
+        """Rotates half the hidden dims of the input."""
+        x1 = x[..., : x.shape[-1] // 2]
+        x2 = x[..., x.shape[-1] // 2 :]
+        return paddle.concat([-x2, x1], axis=-1)  # shape is the same as x
+
+    @staticmethod
     def apply_rotary_emb(xq, xk, freqs_cis):
         """
         Apply rotary embeddings to input tensors using the given frequency
@@ -221,11 +228,16 @@ class Attention(nn.Layer):
                 and key tensor with rotary embeddings.
         """
         with paddle.amp.auto_cast(enable=False):
-            xq_ = paddle.as_complex(xq.cast("float32").reshape([*tuple(xq.shape)[:-1], -1, 2]))
-            xk_ = paddle.as_complex(xk.cast("float32").reshape([*tuple(xk.shape)[:-1], -1, 2]))
-            freqs_cis = Attention.reshape_for_broadcast(freqs_cis, xq_)
-            xq_out = paddle.as_real(xq_ * freqs_cis).flatten(start_axis=3)
-            xk_out = paddle.as_real(xk_ * freqs_cis).flatten(start_axis=3)
+            # xq_ = paddle.as_complex(xq.cast("float32").reshape([*tuple(xq.shape)[:-1], -1, 2]))
+            # xk_ = paddle.as_complex(xk.cast("float32").reshape([*tuple(xk.shape)[:-1], -1, 2]))
+            # freqs_cis = Attention.reshape_for_broadcast(freqs_cis, xq_)
+            # xq_out = paddle.as_real(xq_ * freqs_cis).flatten(start_axis=3)
+            # xk_out = paddle.as_real(xk_ * freqs_cis).flatten(start_axis=3)
+            cos, sin = freqs_cis.chunk(2, axis=-1)
+            cos = cos.unsqueeze([0, 2])
+            sin = sin.unsqueeze([0, 2])
+            xq_out = (xq * cos) + (Attention.rotate_half(xq) * sin)
+            xk_out = (xk * cos) + (Attention.rotate_half(xk) * sin)
             return xq_out.cast(xq.dtype), xk_out.cast(xk.dtype)
 
     def forward(self, x, freqs_cis):
@@ -389,7 +401,7 @@ class TransformerBlock(nn.Layer):
         Args:
             x (paddle.Tensor): Input tensor.
             freqs_cis (paddle.Tensor): Precomputed cosine and sine frequencies.
-            mask (paddle.Tensor, optional): Masking tensor for attention.
+            adaln_input (paddle.Tensor, optional): Dit with adaptive layer norm, use it to calculate shift, scale, gate.
                 Defaults to None.
 
         Returns:
@@ -403,7 +415,7 @@ class TransformerBlock(nn.Layer):
             adaln_input = dist.reshard(
                 adaln_input,
                 get_mesh(self.pp_stage),
-                [dist.Replicate(), dist.Replicate()],
+                [dist.Shard(0), dist.Replicate()],
             )
             shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = adaln_input.chunk(
                 6, axis=1
@@ -431,7 +443,7 @@ class ParallelFinalLayer(nn.Layer):
         c = dist.reshard(
             c,
             get_mesh(-1),
-            [dist.Replicate(), dist.Replicate()],
+            [dist.Shard(0), dist.Replicate()],
         )
         shift, scale = c.chunk(2, axis=1)
         x = modulate(self.norm_final(x), shift, scale)
@@ -439,7 +451,7 @@ class ParallelFinalLayer(nn.Layer):
         x = dist.reshard(
             x,
             get_mesh(-1),
-            [dist.Replicate(), dist.Replicate()],
+            [dist.Shard(0), dist.Replicate()],
         )
         return x
 
@@ -616,9 +628,13 @@ class DiT_Llama_AUTO(ModelMixin, ConfigMixin, ConversionMixin):
         t = paddle.arange(end=end)
         input_0, vec2_0 = TypePromote(t, freqs)
         freqs = paddle.outer(input_0, vec2_0).cast("float32")
-        freqs_cis = paddle.complex(
-            paddle.ones_like(freqs) * paddle.cos(freqs), paddle.ones_like(freqs) * paddle.sin(freqs)
-        )
+        # freqs_cis = paddle.complex(
+        #     paddle.ones_like(freqs) * paddle.cos(freqs), paddle.ones_like(freqs) * paddle.sin(freqs)
+        # )
+        emb = paddle.concat([freqs, freqs], axis=-1)
+        cos_cached = emb.cos()
+        sin_cached = emb.sin()
+        freqs_cis = paddle.concat([cos_cached, sin_cached], axis=-1)
         return freqs_cis
 
     def forward(self, x, t, y):
@@ -644,9 +660,10 @@ class DiT_Llama_AUTO(ModelMixin, ConfigMixin, ConversionMixin):
         # print(y)
 
         # 2. Blocks
+        freqs_cis = self.freqs_cis[: x.shape[1]]
         pre_pp_stage = 0
         for i, layer in enumerate(self.layers):
-            if layer.pp_stage is not None and pre_pp_stage != layer.pp_stage:
+            if i == 0 or (layer.pp_stage is not None and pre_pp_stage != layer.pp_stage):
                 x = dist.reshard(
                     x,
                     get_mesh(layer.pp_stage),
@@ -662,12 +679,12 @@ class DiT_Llama_AUTO(ModelMixin, ConfigMixin, ConversionMixin):
             pre_pp_stage = layer.pp_stage
             if self.gradient_checkpointing:
                 x = paddle.distributed.fleet.utils.recompute(
-                    layer, x, self.freqs_cis[: x.shape[1]].cast(dtype), adaln_input, use_reentrant=False
+                    layer, x, freqs_cis, adaln_input, use_reentrant=False
                 )
             else:
                 x = layer(
                     x,
-                    self.freqs_cis[: x.shape[1]].cast(dtype),
+                    freqs_cis, # dense tensor
                     adaln_input,
                 )
 

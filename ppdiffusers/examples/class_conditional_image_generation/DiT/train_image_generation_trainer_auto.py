@@ -92,8 +92,9 @@ def shard_model(model):
 
             # To be determined
             if any(n in name for n in ["attention.q_norm", "attention.k_norm"]):
-                layer.weight = shard_w(layer.weight, pp_stage, [dist.Replicate(), dist.Replicate()])
-                layer.bias = shard_w(layer.bias, pp_stage, [dist.Replicate(), dist.Replicate()])
+                if hasattr(layer, "weight"):
+                    layer.weight = shard_w(layer.weight, pp_stage, [dist.Replicate(), dist.Replicate()])
+                    layer.bias = shard_w(layer.bias, pp_stage, [dist.Replicate(), dist.Replicate()])
 
             if any(n in name for n in ["attention_norm", "ffn_norm"]):
                 layer.weight = shard_w(layer.weight, pp_stage, [dist.Replicate(), dist.Replicate()])
