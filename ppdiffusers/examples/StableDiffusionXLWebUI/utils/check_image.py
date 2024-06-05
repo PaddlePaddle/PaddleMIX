@@ -23,7 +23,7 @@ def custom_save_image(image, metadata, root, model_dir, *args):
     os.makedirs(output_dir, exist_ok=True)
 
     extra = ("_".join(args) + "_") if args else ""
-    filename = f"{extra}{time.strftime('%Y%m%d_%H%M%S', time.localtime())}.png"
+    filename = f"{extra}{time.strftime('%Y%m%d_%H%M%S', time.localtime())}{time.time()}.png"
     outpath = os.path.join(output_dir, filename)
 
     # 创建PngInfo对象
