@@ -20,12 +20,14 @@ from einops import rearrange
 from omegaconf import OmegaConf
 from paddlenlp.transformers import CLIPVisionModelWithProjection
 from paddlenlp.utils.log import logger
-from src.models.mutual_self_attention import ReferenceAttentionControl
-from src.models.pose_guider import PoseGuider
-from src.models.unet_2d_condition import UNet2DConditionModel
-from src.models.unet_3d import UNet3DConditionModel
 
 from ppdiffusers import AutoencoderKL, DDIMScheduler
+from ppdiffusers.models.animate_anyone.mutual_self_attention import (
+    ReferenceAttentionControl,
+)
+from ppdiffusers.models.animate_anyone.pose_guider import PoseGuider
+from ppdiffusers.models.animate_anyone.unet_2d_condition import UNet2DConditionModel
+from ppdiffusers.models.animate_anyone.unet_3d import UNet3DConditionModel
 from ppdiffusers.training_utils import freeze_params, unfreeze_params
 
 
