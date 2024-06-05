@@ -32,17 +32,17 @@ def main():
 
     model_dir = os.path.splitext(os.path.basename(model_name))[0].title()
     os.makedirs(model_dir, exist_ok=True)
-    os.system(f"cp -r convert_single_weights_2_pd/basemodel/* {model_dir}")
+    os.system(f"cp -r convert_single_weight_pt_2_pd/basemodel/* {model_dir}")
 
-    with open("convert_single_weights_2_pd/text_pt.txt", "r") as f:
+    with open("convert_single_weight_pt_2_pd/text_pt.txt", "r") as f:
         key_list_text = f.readlines()
-    with open("convert_single_weights_2_pd/text_2_pt.txt", "r") as f:
+    with open("convert_single_weight_pt_2_pd/text_2_pt.txt", "r") as f:
         key_list_text_2 = f.readlines()
-    with open("convert_single_weights_2_pd/vae_pt.txt", "r") as f:
+    with open("convert_single_weight_pt_2_pd/vae_pt.txt", "r") as f:
         key_list_vae = f.readlines()
-    with open("convert_single_weights_2_pd/unet_pt.txt", "r", encoding="utf-8") as f:
+    with open("convert_single_weight_pt_2_pd/unet_pt.txt", "r", encoding="utf-8") as f:
         unet_key_pt = f.readlines()
-    with open("convert_single_weights_2_pd/unet_pd.txt", "r", encoding="utf-8") as f:
+    with open("convert_single_weight_pt_2_pd/unet_pd.txt", "r", encoding="utf-8") as f:
         unet_key_pd = f.readlines()
 
     f2 = safe_open(model_name, framework="np")
