@@ -92,17 +92,13 @@ class Pose2VideoPipeline(DiffusionPipeline):
         )
 
     def load_pretrained(self, config):
-        # loading the denoising unet with motion module
-        state_dict_denoise = smart_load(config.denoising_unet_path)
-        state_dict_motion = smart_load(config.motion_module_path)
-        state_dict_denoise.update(state_dict_motion)
-        faster_set_state_dict(self.denoising_unet, state_dict_denoise)
 
         # loading the reference unet
         state_dict_ref = smart_load(config.reference_unet_path)
         faster_set_state_dict(self.reference_unet, state_dict_ref)
 
         # loading the pose guider
+
         state_dict_pose_guider = smart_load(config.pose_guider_path)
         faster_set_state_dict(self.pose_guider, state_dict_pose_guider)
 

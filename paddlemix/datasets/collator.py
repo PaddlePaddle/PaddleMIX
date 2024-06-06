@@ -117,7 +117,6 @@ class QwenVLCollator:
         self.mode = mode
 
     def __call__(self, data_list):
-
         input_ids = []
         labels = []
         images = []
@@ -139,6 +138,9 @@ class QwenVLCollator:
             if "images" in raw_data:
 
                 if isinstance(raw_data["images"], list):
+                    if not isinstance(raw_data["images"][0], list):
+                        raw_data["images"] = [raw_data["images"]]
+                    raw_data["images"] = [self.processor.image_processor(path) for path in raw_data["images"]]
                     raw_data["images"] = paddle.stack(x=raw_data["images"], axis=0)
 
                 images.append(raw_data["images"])
@@ -270,3 +272,28 @@ class LLaVACollator:
         )
 
         return batch_data
+
+
+class InternLMXComposer2Collator:
+    """Collate examples for InternLMXComposer2Collator"""
+
+    def __init__(self, processor, mode="train"):
+        self.processor = processor
+        self.mode = mode
+
+    def __call__(self, instances):
+
+        instances = [self.processor(query=instance, mode=self.mode) for instance in instances]
+
+        input_tokens, input_text = tuple(
+            [instance[key] for instance in instances] for key in ("input_tokens", "input_text")
+        )
+        batch = dict(
+            input_tokens=input_tokens,
+            input_text=input_text,
+        )
+        if "images" in instances[0].keys():
+            input_images = tuple([instance["images"] for instance in instances])
+            batch["images"] = input_images
+
+        return dict(samples=batch)

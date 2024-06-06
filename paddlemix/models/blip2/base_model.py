@@ -12,6 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 """ Paddle BLIP2 base model."""
 import gc
 import os
@@ -265,7 +266,7 @@ class Blip2PretrainedModel(MixPretrainedModel):
         use_keep_in_fp32_modules = False
 
         # resolve model_weight file
-        resolved_archive_file, sharded_metadata, is_sharded = cls._resolve_model_file_path(
+        resolved_archive_file, *_, sharded_metadata, is_sharded = cls._resolve_model_file_path(
             pretrained_model_name_or_path,
             cache_dir=cache_dir,
             subfolder=subfolder,
@@ -417,8 +418,9 @@ class Blip2PretrainedModel(MixPretrainedModel):
                         model_name_or_path = BRIDGE_WEIGHTS[model_name_or_path]
                     else:
                         model_name_or_path = model_name_or_path
+            
             # resolve model_weight file
-            resolved_archive_file, sharded_metadata, is_sharded = self._resolve_model_file_path(
+            resolved_archive_file, *_ = self._resolve_model_file_path(
                 pretrained_model_name_or_path=model_name_or_path,
                 cache_dir=cache_dir,
                 subfolder=subfolder,

@@ -18,7 +18,7 @@ import paddle
 from src.models.motion_module import zero_module
 from src.models.resnet import InflatedConv3d
 
-from ppdiffusers.models.modeling_utils import ModelMixin
+from ppdiffusers.models.modeling_utils import ContextManagers, ModelMixin
 
 
 class PoseGuider(ModelMixin):
@@ -32,8 +32,8 @@ class PoseGuider(ModelMixin):
         super().__init__()
 
         init_contexts = []
-        init_contexts.append(paddle.dtype_guard(weight_dtype))
-        from ppdiffusers.models.modeling_utils import ContextManagers
+        if weight_dtype is not None:
+            init_contexts.append(paddle.dtype_guard(weight_dtype))
 
         with ContextManagers(init_contexts):
             self.conv_in = InflatedConv3d(conditioning_channels, block_out_channels[0], kernel_size=3, padding=1)

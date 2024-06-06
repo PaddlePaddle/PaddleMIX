@@ -38,10 +38,10 @@ class LlavaMetaModel:
 
             if "unpad" in getattr(config, "mm_patch_merge_type", ""):
                 self.image_newline = paddle.create_parameter(
-                    shape=paddle.empty(shape=[config.hidden_size], dtype=self.dtype).shape,
-                    dtype=self.dtype,
+                    shape=paddle.empty(shape=[config.hidden_size], dtype=self._dtype).shape,
+                    dtype=self._dtype,
                     default_initializer=paddle.nn.initializer.Assign(
-                        paddle.empty(shape=[config.hidden_size], dtype=self.dtype)
+                        paddle.empty(shape=[config.hidden_size], dtype=self._dtype)
                     ),
                 )
                 self.image_newline.stop_gradient = False
@@ -196,7 +196,7 @@ class LlavaMetaForCausalLM:
                                     image_feature,
                                     self.llama.image_newline[:, (None), (None)].expand(
                                         shape=[*image_feature.shape[:-1], 1]
-                                    ),
+                                    ).astype(image_feature.dtype),
                                 ),
                                 axis=-1,
                             )
