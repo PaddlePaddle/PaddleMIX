@@ -17,9 +17,11 @@ from typing import Any, Dict, Optional
 
 import paddle
 from einops import rearrange
-from src.models.attention import TemporalBasicTransformerBlock
 
-from .attention import BasicTransformerBlock
+from ppdiffusers.models.animate_anyone.attention import (
+    BasicTransformerBlock,
+    TemporalBasicTransformerBlock,
+)
 
 
 def paddle_dfs(model: paddle.nn.Layer):

@@ -27,11 +27,13 @@ class EmaCallback(TrainerCallback):
         self.num_updates = 0 if use_num_upates else -1
 
         # Initialize communication for distributed training
-        hcg = fleet.get_hybrid_communicate_group()
-        self._sharding_world_size = max(1, hcg.get_sharding_parallel_world_size())
-        self._sharding_rank = max(0, hcg.get_sharding_parallel_rank())
-
-        assert self._sharding_world_size > 1, "Currently, only support sharding"
+        if paddle.distributed.get_world_size() > 1 and hasattr(fleet.fleet, "_hcg"):
+            hcg = fleet.get_hybrid_communicate_group()
+            self._sharding_world_size = max(1, hcg.get_sharding_parallel_world_size())
+            self._sharding_rank = max(0, hcg.get_sharding_parallel_rank())     
+        else:
+            self._sharding_world_size = 1
+            self._sharding_rank = 0
         # Mapping parameters to their names and preparing for sharding
         param_2_name = {id(p): name for name, p in model.named_parameters() if not p.stop_gradient}
 

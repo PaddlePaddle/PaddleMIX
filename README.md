@@ -118,6 +118,8 @@ pip install -e .
             <li><a href="paddlemix/examples/visualglm">VIsualGLM</a></li>
             <li><a href="paddlemix/examples/qwen_vl">qwen_vl</a></li>
             <li><a href="paddlemix/examples/llava">llava</a></li>
+            <li><a href="paddlemix/examples/cogvlm">CogVLM && CogAgent</a></li>
+            <li><a href="paddlemix/examples/internlm_xcomposer2">InternLM-XComposer2</a></li>
       </ul>
       </ul>
           <li><b>开放世界视觉模型</b></li>
