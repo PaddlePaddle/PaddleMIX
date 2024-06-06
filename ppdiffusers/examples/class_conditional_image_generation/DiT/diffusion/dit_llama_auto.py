@@ -591,7 +591,7 @@ class DiT_Llama_AUTO(ModelMixin, ConfigMixin, ConversionMixin):
 
         x = x.reshape(shape=([tuple(x.shape)[0], h, w, p, p, c]))
         # x = paddle.einsum("nhwpqc->nchpwq", x)
-        x = x.transpose([0, 2, 4, 3, 5, 1])
+        x = x.transpose([0, 5, 1, 3, 2, 4])
         imgs = x.reshape(shape=([tuple(x.shape)[0], c, h * p, h * p]))
         return imgs
 
