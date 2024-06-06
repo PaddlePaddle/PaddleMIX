@@ -657,7 +657,13 @@ with gr.Blocks(css=os.path.join(STATIC_DIR, "style.css")) as demo:
     def sr_x4(image_or_path, method="df2k", size=512):
         paddle.device.cuda.empty_cache()
         return load_image(
-            upscale_x4(image_or_path, method=method, size=(size, size), suffix="jpg", output_dir="out_puts")[0]
+            upscale_x4(
+                image_or_path,
+                method=method,
+                size=(size, size),
+                suffix="jpg",
+                output_dir=os.path.join(HOME_DIR, "out_puts"),
+            )[0]
         )
 
     svr2img_button.click(fn=sr_x4, inputs=[svr_img_path, svr_img_method, svr_img_patch_size], outputs=sr_outputs)
