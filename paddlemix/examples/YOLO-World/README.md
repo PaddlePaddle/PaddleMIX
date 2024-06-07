@@ -26,6 +26,12 @@ cd PaddleMIX/ppdiffusers/examples/YOLO-World/
 # 安装新版本ppdiffusers
 pip install https://paddlenlp.bj.bcebos.com/models/community/junnyu/wheels/ppdiffusers-0.24.0-py3-none-any.whl --user
 
+# 由于YOLO-World实现依赖PaddleYOLO, 先将PaddleYOLO clone至third_party目录下
+git clone https://github.com/PaddlePaddle/PaddleYOLO.git third_party/PaddleYOLO
+
+# 安装paddledet
+pip install -e third_party/PaddleYOLO
+
 # 安装其他所需的依赖
 pip install -e .
 ```
