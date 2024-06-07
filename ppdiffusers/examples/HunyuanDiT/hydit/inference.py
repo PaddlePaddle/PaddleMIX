@@ -214,24 +214,7 @@ class End2End(object):
             self.model.eval()
             logger.info(f"Loading paddle model finished")
         elif self.infer_mode == 'trt':
-            from .modules.trt.hcf_model import TRTModel
-
-            trt_dir = self.root / "model_trt"
-            engine_dir = trt_dir / "engine"
-            plugin_path = trt_dir / "fmha_plugins/9.2_plugin_cuda11/fMHAPlugin.so"
-            model_name = "model_onnx"
-
-            logger.info(f"Loading TensorRT model {engine_dir}/{model_name}...")
-            self.model = TRTModel(model_name=model_name,
-                                  engine_dir=str(engine_dir),
-                                  image_height=TRT_MAX_HEIGHT,
-                                  image_width=TRT_MAX_WIDTH,
-                                  text_maxlen=args.text_len,
-                                  embedding_dim=args.text_states_dim,
-                                  plugin_path=str(plugin_path),
-                                  max_batch_size=TRT_MAX_BATCH_SIZE,
-                                  )
-            logger.info(f"Loading TensorRT model finished")
+            raise NotImplementedError("TensorRT inference is not implemented yet")
         else:
             raise ValueError(f"Unknown infer_mode: {self.infer_mode}")
 
