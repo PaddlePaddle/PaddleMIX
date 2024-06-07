@@ -2,17 +2,6 @@ import paddle
 import paddle.nn as nn
 from typing import Tuple, Union, Optional
 
-try:
-    import flash_attn
-    if hasattr(flash_attn, '__version__') and int(flash_attn.__version__[0]) == 2:
-        from flash_attn.flash_attn_interface import flash_attn_kvpacked_func
-        from flash_attn.modules.mha import FlashSelfAttention, FlashCrossAttention
-    else:
-        from flash_attn.flash_attn_interface import flash_attn_unpadded_kvpacked_func
-        from flash_attn.modules.mha import FlashSelfAttention, FlashCrossAttention
-except Exception as e:
-    print(f'flash_attn import failed: {e}')
-
 
 def reshape_for_broadcast(freqs_cis: Union[paddle.Tensor, Tuple[paddle.Tensor]], x: paddle.Tensor, head_first=False):
     """
@@ -117,7 +106,9 @@ class FlashSelfMHAModified(nn.Layer):
                  dtype=None,
                  norm_layer=nn.LayerNorm,
                  ):
-        factory_kwargs = {'dtype': dtype}
+        factory_kwargs = {
+            # 'dtype': dtype
+        }
         super().__init__()
         self.dim = dim
         self.num_heads = num_heads
@@ -125,21 +116,20 @@ class FlashSelfMHAModified(nn.Layer):
         self.head_dim = self.dim // num_heads
         assert self.head_dim % 8 == 0 and self.head_dim <= 128, "Only support head_dim <= 128 and divisible by 8"
 
-        self.Wqkv = nn.Linear(dim, 3 * dim, bias=qkv_bias, **factory_kwargs)
+        self.Wqkv = nn.Linear(dim, 3 * dim, bias_attr=qkv_bias, **factory_kwargs)
         # TODO: eps should be 1 / 65530 if using fp16
-        self.q_norm = norm_layer(self.head_dim, elementwise_affine=True, eps=1e-6) if qk_norm else paddle.nn.Identity()
-        self.k_norm = norm_layer(self.head_dim, elementwise_affine=True, eps=1e-6) if qk_norm else paddle.nn.Identity()
-        self.inner_attn = FlashSelfAttention(attention_dropout=attn_drop)
-        self.out_proj = nn.Linear(dim, dim, bias=qkv_bias, **factory_kwargs)
+        self.q_norm = norm_layer(self.head_dim, epsilon=1e-6) if qk_norm else paddle.nn.Identity()
+        self.k_norm = norm_layer(self.head_dim, epsilon=1e-6) if qk_norm else paddle.nn.Identity()
+        self.out_proj = nn.Linear(dim, dim, bias_attr=qkv_bias, **factory_kwargs)
         self.proj_drop = nn.Dropout(proj_drop)
 
     def forward(self, x, freqs_cis_img=None):
         """
         Parameters
         ----------
-        x: torch.Tensor
+        x: paddle.Tensor
             (batch, seqlen, hidden_dim) (where hidden_dim = num heads * head dim)
-        freqs_cis_img: torch.Tensor
+        freqs_cis_img: paddle.Tensor
             (batch, hidden_dim // 2), RoPE for image
         """
         b, s, d = x.shape
@@ -156,8 +146,7 @@ class FlashSelfMHAModified(nn.Layer):
             assert qq.shape == q.shape and kk.shape == k.shape, f'qq: {qq.shape}, q: {q.shape}, kk: {kk.shape}, k: {k.shape}'
             q, k = qq, kk
 
-        qkv = paddle.stack(x=[q, k, v], axis=2)     # [b, s, 3, h, d]
-        context = self.inner_attn(qkv)
+        context = nn.functional.scaled_dot_product_attention_(q, k, v)
         out = self.out_proj(context.reshape([b, s, d]))
         out = self.proj_drop(out)
 
@@ -184,7 +173,7 @@ class FlashCrossMHAModified(nn.Layer):
                  ):
         factory_kwargs = {
             # 'device': device, 
-            'dtype': dtype
+            # 'dtype': dtype
         }
         super().__init__()
         self.qdim = qdim
@@ -196,15 +185,14 @@ class FlashCrossMHAModified(nn.Layer):
 
         self.scale = self.head_dim ** -0.5
 
-        self.q_proj = nn.Linear(qdim, qdim, bias=qkv_bias, **factory_kwargs)
-        self.kv_proj = nn.Linear(kdim, 2 * qdim, bias=qkv_bias, **factory_kwargs)
+        self.q_proj = nn.Linear(qdim, qdim, bias_attr=qkv_bias, **factory_kwargs)
+        self.kv_proj = nn.Linear(kdim, 2 * qdim, bias_attr=qkv_bias, **factory_kwargs)
 
         # TODO: eps should be 1 / 65530 if using fp16
-        self.q_norm = norm_layer(self.head_dim, elementwise_affine=True, eps=1e-6) if qk_norm else nn.Identity()
-        self.k_norm = norm_layer(self.head_dim, elementwise_affine=True, eps=1e-6) if qk_norm else nn.Identity()
+        self.q_norm = norm_layer(self.head_dim, epsilon=1e-6) if qk_norm else nn.Identity()
+        self.k_norm = norm_layer(self.head_dim, epsilon=1e-6) if qk_norm else nn.Identity()
 
-        self.inner_attn = FlashCrossAttention(attention_dropout=attn_drop)
-        self.out_proj = nn.Linear(qdim, qdim, bias=qkv_bias, **factory_kwargs)
+        self.out_proj = nn.Linear(qdim, qdim, bias_attr=qkv_bias, **factory_kwargs)
         self.proj_drop = nn.Dropout(proj_drop)
 
     def forward(self, x, y, freqs_cis_img=None):
@@ -223,7 +211,7 @@ class FlashCrossMHAModified(nn.Layer):
 
         q = self.q_proj(x).reshape([b, s1, self.num_heads, self.head_dim])       # [b, s1, h, d]
         kv = self.kv_proj(y).view([b, s2, 2, self.num_heads, self.head_dim])  # [b, s2, 2, h, d]
-        k, v = kv.unbind(dim=2)                 # [b, s2, h, d]
+        k, v = kv.unbind(axis=2)                 # [b, s2, h, d]
         q = self.q_norm(q).astype(dtype='float16')              # [b, s1, h, d]
         k = self.k_norm(k).astype(dtype='float16')               # [b, s2, h, d]
 
@@ -232,9 +220,8 @@ class FlashCrossMHAModified(nn.Layer):
             qq, _ = apply_rotary_emb(q, None, freqs_cis_img)
             assert qq.shape == q.shape, f'qq: {qq.shape}, q: {q.shape}'
             q = qq                              # [b, s1, h, d]
-        kv = paddle.stack([k, v], axis=2)         # [b, s1, 2, h, d]
-        context = self.inner_attn(q, kv)        # [b, s1, h, d]
-        context = context.view([b, s1, -1])       # [b, s1, D]
+        context = nn.functional.scaled_dot_product_attention_(q, k, v)
+        context = context.reshape([b, s1, -1])       # [b, s1, D]
 
         out = self.out_proj(context)
         out = self.proj_drop(out)
