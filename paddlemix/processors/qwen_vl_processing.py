@@ -128,8 +128,7 @@ class QwenVLProcessor(ProcessorMixin):
             labels=target[: self.max_len],
         )
         if len(image_path) > 0:
-            inputs["images"] = self.image_processor(image_path)
-
+            inputs["images"] = image_path
         return inputs
 
     def batch_decode(self, *args, **kwargs):

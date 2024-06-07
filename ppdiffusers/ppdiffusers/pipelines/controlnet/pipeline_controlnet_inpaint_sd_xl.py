@@ -1311,7 +1311,7 @@ class StableDiffusionXLControlNetInpaintPipeline(
         # 5.3 Prepare mask
         mask = self.mask_processor.preprocess(mask_image, height=height, width=width)
 
-        masked_image = init_image * (mask < 0.5)
+        masked_image = init_image * (mask < 0.5).cast(init_image.dtype)
         _, _, height, width = init_image.shape
 
         # 6. Prepare latent variables

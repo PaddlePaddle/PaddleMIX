@@ -154,7 +154,7 @@ def attention_fn(
     perm_3[-1] = -2
     perm_3[-2] = -1
     attention_scores = paddle.matmul(x=query_layer, y=x.transpose(perm=perm_3))
-    attention_scores = attention_scores + attention_mask
+    attention_scores = attention_scores + attention_mask.astype(attention_scores.dtype)
     attention_scores = paddle.nn.functional.softmax(x=attention_scores, axis=-1, dtype="float32").to(query_layer.dtype)
     if attention_dropout is not None:
         attention_scores = attention_dropout(attention_scores)
