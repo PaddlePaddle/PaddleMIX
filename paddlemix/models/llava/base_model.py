@@ -196,7 +196,7 @@ class LlavaMetaForCausalLM:
                                     image_feature,
                                     self.llama.image_newline[:, (None), (None)].expand(
                                         shape=[*image_feature.shape[:-1], 1]
-                                    ),
+                                    ).astype(image_feature.dtype),
                                 ),
                                 axis=-1,
                             )

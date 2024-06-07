@@ -348,6 +348,10 @@ class VaeImageProcessor(ConfigMixin):
         if self.config.do_binarize:
             image = self.binarize(image)
 
+        # laixinlu: add this, for paddle not auto support float32 * bool
+        if isinstance(image, paddle.Tensor) and image.dtype == paddle.bool:
+            image = image.cast(dtype="float32")
+            
         return image
 
     def postprocess(

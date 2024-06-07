@@ -154,7 +154,7 @@ def prepare_mask_and_masked_image(image, mask, height=None, width=None, return_i
         mask[mask >= 0.5] = 1
         mask = paddle.to_tensor(mask)
 
-    masked_image = image * (mask < 0.5)
+    masked_image = image * (mask < 0.5).cast(image.dtype)
 
     # n.b. ensure backwards compatibility as old function does not return image
     if return_image:
