@@ -1,6 +1,3 @@
 [submodule "PaddleNLP"]
 	path = PaddleNLP
 	url = https://github.com/PaddlePaddle/PaddleNLP
-[submodule "paddlemix/examples/YOLO-World/third_party/PaddleYOLO"]
-	path = paddlemix/examples/YOLO-World/third_party/PaddleYOLO
-	url = https://github.com/PaddlePaddle/PaddleYOLO
