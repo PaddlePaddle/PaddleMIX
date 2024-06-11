@@ -19,7 +19,6 @@ dependencies = [
     "opencv-python",
     "supervision==0.18.0",
     "openmim",
-    'paddledet @ git+https://github.com/PaddlePaddle/PaddleYOLO.git',
 ]
 
 [tool.setuptools]
