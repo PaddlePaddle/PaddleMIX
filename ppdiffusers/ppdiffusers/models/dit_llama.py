@@ -107,9 +107,7 @@ class Attention(nn.Layer):
             n_local_kv_heads (int): Number of local key and value heads.
             n_rep (int): Number of repetitions for local heads.
             head_dim (int): Dimension size of each attention head.
-            wq (nn.Linear): Linear transformation for queries.
-            wk (nn.Linear): Linear transformation for keys.
-            wv (nn.Linear): Linear transformation for values.
+            qkv (nn.Linear): Linear transformation for queries, keys and values.
             wo (nn.Linear): Linear transformation for output.
             cache_k (paddle.Tensor): Cached keys for attention.
             cache_v (paddle.Tensor): Cached values for attention.
@@ -255,8 +253,24 @@ class Attention(nn.Layer):
         return self.wo(output)
 
 
-class FeedForward_kai(nn.Layer):
+class FeedForward(nn.Layer):
     def __init__(self, dim, hidden_dim, multiple_of=256, ffn_dim_multiplier=None):
+        """
+        Initialize the FeedForward module.
+
+        Args:
+            dim (int): Input dimension.
+            hidden_dim (int): Hidden dimension of the feedforward layer.
+            multiple_of (int): Value to ensure hidden dimension is a multiple
+                of this value.
+            ffn_dim_multiplier (float, optional): Custom multiplier for hidden
+                dimension. Defaults to None.
+
+        Attributes:
+            w13 (nn.Linear): Linear transformation for the first layer and the third layer.
+            w2  (nn.Linear): Linear transformation for the second layer.
+
+        """
         super().__init__()
         hidden_dim = int(2 * hidden_dim / 3)
         if ffn_dim_multiplier is not None:
@@ -265,7 +279,7 @@ class FeedForward_kai(nn.Layer):
 
         self.w13 = nn.Linear(dim, hidden_dim * 2, bias_attr=False)
         self.w2 = nn.Linear(hidden_dim, dim, bias_attr=False)
-        
+
     def compute_activation(self, 
                            ffn1_out, 
                            bias=None,
@@ -325,44 +339,6 @@ class FeedForward_kai(nn.Layer):
         return ffn2_out
 
 
-class FeedForward(nn.Layer):
-    def __init__(self, dim, hidden_dim, multiple_of=256, ffn_dim_multiplier=None):
-        """
-        Initialize the FeedForward module.
-
-        Args:
-            dim (int): Input dimension.
-            hidden_dim (int): Hidden dimension of the feedforward layer.
-            multiple_of (int): Value to ensure hidden dimension is a multiple
-                of this value.
-            ffn_dim_multiplier (float, optional): Custom multiplier for hidden
-                dimension. Defaults to None.
-
-        Attributes:
-            w1 (nn.Linear): Linear transformation for the first
-                layer.
-            w2 (nn.Linear): Linear transformation for the second layer.
-            w3 (nn.Linear): Linear transformation for the third
-                layer.
-
-        """
-        super().__init__()
-        hidden_dim = int(2 * hidden_dim / 3)
-        if ffn_dim_multiplier is not None:
-            hidden_dim = int(ffn_dim_multiplier * hidden_dim)
-        hidden_dim = int(multiple_of * ((hidden_dim + multiple_of - 1) // multiple_of))
-
-        self.w1 = nn.Linear(dim, hidden_dim, bias_attr=False)
-        self.w2 = nn.Linear(hidden_dim, dim, bias_attr=False)
-        self.w3 = nn.Linear(dim, hidden_dim, bias_attr=False)
-
-    def forward(self, x):
-        xw1 = F.silu(self.w1(x))
-        xw3 = self.w3(x)
-        output = self.w2(xw1 * xw3)
-        return output
-
-
 class TransformerBlock(nn.Layer):
     def __init__(
         self,
@@ -412,7 +388,7 @@ class TransformerBlock(nn.Layer):
         self.head_dim = dim // n_heads
         self.attention = Attention(dim, n_heads, n_kv_heads, qk_norm, fused_attn)
         mlp_hidden_dim = int(dim * mlp_ratio)
-        self.feed_forward = FeedForward_kai(
+        self.feed_forward = FeedForward(
             dim=dim, hidden_dim=mlp_hidden_dim, multiple_of=multiple_of, ffn_dim_multiplier=ffn_dim_multiplier
         )
         self.layer_id = layer_id
@@ -608,20 +584,20 @@ class DiTLLaMA2DModel(ModelMixin, ConfigMixin):
         )
         return freqs_cis
 
-    @paddle.incubate.layers.inference(with_trt=False,
-                                      cache_static_model=True,
-                                      collect_shape=False)
-    def transformer_blocks(self, x, adaln_input):
-        for i, layer in enumerate(self.layers):
-            if self.gradient_checkpointing and False:
-                x = paddle.distributed.fleet.utils.recompute(layer, x, self.freqs_cis[: x.shape[1]], adaln_input)
-            else:
-                x = layer(
-                    x,
-                    self.freqs_cis[: x.shape[1]],
-                    adaln_input,
-                )
-        return x
+    # @paddle.incubate.layers.inference(with_trt=False,
+    #                                   cache_static_model=True,
+    #                                   collect_shape=False)
+    # def transformer_blocks(self, x, adaln_input):
+    #     for i, layer in enumerate(self.layers):
+    #         if self.gradient_checkpointing and False:
+    #             x = paddle.distributed.fleet.utils.recompute(layer, x, self.freqs_cis[: x.shape[1]], adaln_input)
+    #         else:
+    #             x = layer(
+    #                 x,
+    #                 self.freqs_cis[: x.shape[1]],
+    #                 adaln_input,
+    #             )
+    #     return x
 
     def forward(
         self,
@@ -648,16 +624,16 @@ class DiTLLaMA2DModel(ModelMixin, ConfigMixin):
         adaln_input = t + y
 
         # 2. Blocks
-        x = self.transformer_blocks(x, adaln_input)
-        # for i, layer in enumerate(self.layers):
-        #     if self.gradient_checkpointing:
-        #         x = paddle.distributed.fleet.utils.recompute(layer, x, self.freqs_cis[: x.shape[1]], adaln_input)
-        #     else:
-        #         x = layer(
-        #             x,
-        #             self.freqs_cis[: x.shape[1]],
-        #             adaln_input,
-        #         )
+        # x = self.transformer_blocks(x, adaln_input)
+        for i, layer in enumerate(self.layers):
+            if self.gradient_checkpointing:
+                x = paddle.distributed.fleet.utils.recompute(layer, x, self.freqs_cis[: x.shape[1]], adaln_input)
+            else:
+                x = layer(
+                    x,
+                    self.freqs_cis[: x.shape[1]],
+                    adaln_input,
+                )
 
         # 3. Output
         hidden_states = self.final_layer(x, adaln_input)
@@ -670,55 +646,20 @@ class DiTLLaMA2DModel(ModelMixin, ConfigMixin):
 
     @classmethod
     def custom_modify_weight(cls, state_dict):
-        import re
-        w1_pattern = r"layers\.(\d+)\.feed_forward\.w1\.weight$"
-        w3_pattern = r"layers\.(\d+)\.feed_forward\.w3\.weight$"
-        wq_pattern = r"layers\.(\d+)\.attention\.wq\.weight$"
-        wk_pattern = r"layers\.(\d+)\.attention\.wk\.weight$"
-        wv_pattern = r"layers\.(\d+)\.attention\.wv\.weight$"
-
-        w13_keys_to_add = []
-        w1_keys_to_del = []
-        w3_keys_to_del = []
-        qkv_keys_to_add = []
-        wq_keys_to_del = []
-        wk_keys_to_del = []
-        wv_keys_to_del = []
-
-        for key in state_dict.keys():
-            if re.match(w1_pattern, key):
-                w1_keys_to_del.append(key)
-            w3_match = re.match(w3_pattern, key)
-            if w3_match:
-                w13_key ='layers.' +  w3_match.group(1) + '.feed_forward.w13.weight'
-                w13_keys_to_add.append(w13_key)
-                w3_keys_to_del.append(key)
-            if re.match(wq_pattern, key):
-                wq_keys_to_del.append(key)
-            if re.match(wk_pattern, key):
-                wk_keys_to_del.append(key)
-            wv_match = re.match(wv_pattern, key)
-            if(wv_match):
-                qkv_key = 'layers.' +  wv_match.group(1) + '.attention.qkv.weight'
-                qkv_keys_to_add.append(qkv_key)
-                wv_keys_to_del.append(key)
-        
-        assert len(w13_keys_to_add) == len(w1_keys_to_del) == len(w3_keys_to_del) \
-            == len(qkv_keys_to_add) == len(wq_keys_to_del) == len(wk_keys_to_del) == len(wv_keys_to_del)
-
-        for ii in range(len(w13_keys_to_add)):
-            w13_key = w13_keys_to_add[ii]
-            w1_key = w1_keys_to_del[ii]
-            w3_key = w3_keys_to_del[ii]
-            state_dict[w13_key] = paddle.concat([state_dict[w1_key], state_dict[w3_key]], axis=1)
-            state_dict.pop(w3_key)
-            state_dict.pop(w1_key)
-
-            wq_key = wq_keys_to_del[ii]
-            wk_key = wk_keys_to_del[ii]
-            wv_key = wv_keys_to_del[ii]
-            qkv_key = qkv_keys_to_add[ii]
-            state_dict[qkv_key] = paddle.concat([state_dict[wq_key], state_dict[wk_key], state_dict[wv_key]], 1)
-            state_dict.pop(wq_key)
-            state_dict.pop(wk_key)
-            state_dict.pop(wv_key)
+        for key in list(state_dict.keys()):
+            if 'feed_forward.w1.weight' in key:
+                w1 = state_dict.pop(key)
+                w3_key = key.replace('w1', 'w3')
+                w3 = state_dict.pop(w3_key)
+                w13 = paddle.concat([w1, w3], axis=1)
+                state_dict[key.replace('w1', 'w13')] = w13
+            if 'attention.wq.weight' in key or 'attention.wk.weight' in key or 'attention.wv.weight' in key:
+                part = key.split('.')[-2]
+                layer_id = key.split('.')[1]
+                qkv_key = f'layers.{layer_id}.attention.qkv.weight'
+                if part == 'wq' and qkv_key not in state_dict:
+                    state_dict[qkv_key] = state_dict.pop(key)
+                elif part in ('wk', 'wv'):
+                    qkv = state_dict.get(qkv_key)
+                    if qkv is not None:
+                        state_dict[qkv_key] = paddle.concat([qkv, state_dict.pop(key)], axis=1)
