@@ -629,6 +629,7 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
             self.position_net = PositionNet(
                 positive_len=positive_len, out_dim=cross_attention_dim, feature_type=feature_type
             )
+        #del self.down_blocks
 
     @property
     def attn_processors(self) -> Dict[str, AttentionProcessor]:
@@ -904,6 +905,43 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
         if any(s % default_overall_up_factor != 0 for s in sample_shape):
             logger.info("Forward upsample size to force interpolation output size.")
             forward_upsample_size = True
+
+        timestep = timestep.reshape([1])
+
+        self.tmp_down_intrablock_additional_residuals = down_intrablock_additional_residuals
+        self.tmp_cross_attention_kwargs = cross_attention_kwargs
+        self.tmp_forward_upsample_size = forward_upsample_size
+        self.tmp_upsample_size = upsample_size
+        
+        sample = self.run_down_mid_up_blocks(sample, encoder_hidden_states, timestep, timestep_cond,
+                                            attention_mask,
+                                            encoder_attention_mask,
+                                            mid_block_additional_residual, 
+                                            down_block_additional_residuals)
+
+        if USE_PEFT_BACKEND:
+            # remove `lora_scale` from each PEFT layer
+            unscale_lora_layers(self, lora_scale)
+
+        if not return_dict:
+            return (sample,)
+
+        return UNet2DConditionOutput(sample=sample)
+
+    @paddle.incubate.layers.inference(cache_static_model=False, 
+                                      with_trt=True,
+                                      switch_ir_optim=True,
+                                      precision_mode="float16", 
+                                      switch_ir_debug=False)
+    def run_down_mid_up_blocks(self, sample, encoder_hidden_states, timestep, timestep_cond,
+                               attention_mask,
+                               encoder_attention_mask,
+                               mid_block_additional_residual, down_block_additional_residuals):
+        
+        down_intrablock_additional_residuals = self.tmp_down_intrablock_additional_residuals
+        cross_attention_kwargs = self.tmp_cross_attention_kwargs
+        forward_upsample_size = self.tmp_forward_upsample_size 
+        upsample_size = self.tmp_upsample_size
 
         # ensure attention_mask is a bias, and give it a singleton query_tokens dimension
         # expects mask of shape:
@@ -1197,11 +1235,4 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
         if self.data_format == "NHWC":
             sample = sample.transpose([0, 3, 1, 2])
 
-        if USE_PEFT_BACKEND:
-            # remove `lora_scale` from each PEFT layer
-            unscale_lora_layers(self, lora_scale)
-
-        if not return_dict:
-            return (sample,)
-
-        return UNet2DConditionOutput(sample=sample)
+        return sample
