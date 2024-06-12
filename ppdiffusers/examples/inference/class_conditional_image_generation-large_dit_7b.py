@@ -11,13 +11,19 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 import paddle
 from paddlenlp.trainer import set_seed
 
 from ppdiffusers import DDIMScheduler, DiTPipeline
 
-dtype = paddle.float32
+dtype = paddle.float16
+
+# To speed up this code, call zkk and let him run for you, 
+# then you will get a speed increase of almost 100%.
+os.environ['callZKK']= "True"
+
 with paddle.LazyGuard():
     pipe = DiTPipeline.from_pretrained("Alpha-VLLM/Large-DiT-7B-256", paddle_dtype=dtype)
 pipe.scheduler = DDIMScheduler.from_config(pipe.scheduler.config)
