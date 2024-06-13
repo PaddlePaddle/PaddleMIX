@@ -232,6 +232,15 @@ class TrainerArguments(TrainingArguments):
         metadata={"help": "Whether to use tensorboard to record loss."},
     )
 
+    transformer_engine_backend: bool = field(
+        default=False,
+        metadata={"help": "Whether to use transformer engine as transoformer backend."},
+    )
+    use_fp8: bool = field(
+        default=False,
+        metadata={"help": "Whether to use autocast fp32/16 to fp8 in transoformer engine."},
+    )
+
 
 @dataclass
 class NoTrainerTrainingArguments:

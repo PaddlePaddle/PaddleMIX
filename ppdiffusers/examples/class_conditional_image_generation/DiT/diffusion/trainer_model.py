@@ -237,9 +237,13 @@ class DiTDiffusionModel(nn.Layer):
         # init DiT
         if model_args.pretrained_model_name_or_path is None:
             if model_args.config_file.startswith("config/LargeDiT_"):
-                self.transformer = DiT_Llama(**read_json(model_args.config_file))
+                self.transformer = DiT_Llama(**read_json(model_args.config_file),
+                                             transformer_engine_backend=training_args.transformer_engine_backend,
+                                             use_fp8=training_args.use_fp8)
             else:
-                self.transformer = DiT(**read_json(model_args.config_file))
+                self.transformer = DiT(**read_json(model_args.config_file),
+                                       transformer_engine_backend=training_args.transformer_engine_backend,
+                                       use_fp8=training_args.use_fp8)
             # Note: Initialize DiT in diffusion/dit.py
             logger.info("Init DiT model from scratch!")
         else:
@@ -250,6 +254,8 @@ class DiTDiffusionModel(nn.Layer):
                         ignore_mismatched_sizes=True,
                         output_loading_info=True,
                         tensor_parallel_degree=training_args.tensor_parallel_degree,
+                        transformer_engine_backend=training_args.transformer_engine_backend,
+                        use_fp8=training_args.use_fp8,
                     )
                 else:
                     self.transformer, dit_logging_info = DiT.from_pretrained(
@@ -257,17 +263,23 @@ class DiTDiffusionModel(nn.Layer):
                         ignore_mismatched_sizes=True,
                         output_loading_info=True,
                         tensor_parallel_degree=training_args.tensor_parallel_degree,
+                        transformer_engine_backend=training_args.transformer_engine_backend,
+                        use_fp8=training_args.use_fp8,
                     )
                 if len(dit_logging_info["missing_keys"]) > 0:
                     raise Exception(f"missing_keys: {dit_logging_info['missing_keys']}")
             else:
                 if model_args.config_file.startswith("config/LargeDiT_"):
                     self.transformer = DiT_Llama.from_pretrained(
-                        os.path.join(model_args.pretrained_model_name_or_path, "transformer")
+                        os.path.join(model_args.pretrained_model_name_or_path, "transformer"),
+                        transformer_engine_backend=training_args.transformer_engine_backend,
+                        use_fp8=training_args.use_fp8,
                     )
                 else:
                     self.transformer = DiT.from_pretrained(
-                        os.path.join(model_args.pretrained_model_name_or_path, "transformer")
+                        os.path.join(model_args.pretrained_model_name_or_path, "transformer"),
+                        transformer_engine_backend=training_args.transformer_engine_backend,
+                        use_fp8=training_args.use_fp8,
                     )
 
             logger.info(f"Init DiT model from {model_args.pretrained_model_name_or_path}!")
