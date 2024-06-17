@@ -654,10 +654,6 @@ class DiT_Llama_AUTO(ModelMixin, ConfigMixin, ConversionMixin):
         t = self.t_embedder(timestep).cast(dtype)
         y = self.y_embedder(class_labels).cast(dtype)
         adaln_input = t + y
-        # print("========== in DiT_Llama_AUTO forward ==========")
-        # print(x)
-        # print(t)
-        # print(y)
 
         # 2. Blocks
         freqs_cis = self.freqs_cis[: x.shape[1]]
