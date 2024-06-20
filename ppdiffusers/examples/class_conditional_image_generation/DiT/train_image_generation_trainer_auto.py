@@ -80,7 +80,6 @@ def shard_model(model):
     pp_stage = 0
     for name, layer in model.named_sublayers(include_self=False):
         if name.startswith("transformer"):
-            print(f"pp_stage {pp_stage} layer {name}")
             if hasattr(layer, "pp_stage"):
                 pp_stage = layer.pp_stage
 
@@ -121,25 +120,23 @@ def shard_model(model):
                 # last pp stage
                 layer.weight = shard_w(layer.weight, -1, [dist.Replicate(), dist.Shard(1)])
                 layer.bias = shard_w(layer.bias, -1, [dist.Replicate(), dist.Shard(0)])
+            print(f"pp_stage {pp_stage} layer {name}")
 
         elif name.startswith("vae"):
-            print(f"pp_stage {pp_stage} layer {name}")
             if any(n in name for n in ["vae.encoder", "vae.quant_conv"]):
                 if hasattr(layer, "weight"):
                     # first pp stage
                     layer.weight = shard_w(layer.weight, 0, [dist.Replicate(), dist.Replicate()])
                     layer.bias = shard_w(layer.bias, 0, [dist.Replicate(), dist.Replicate()])
+                print(f"pp_stage 0 layer {name}")
 
             if any(n in name for n in ["vae.decoder", "vae.post_quant_conv"]):
                 if hasattr(layer, "weight"):
                     # last pp stage
                     layer.weight = shard_w(layer.weight, -1, [dist.Replicate(), dist.Replicate()])
                     layer.bias = shard_w(layer.bias, -1, [dist.Replicate(), dist.Replicate()])
+                print(f"pp_stage -1 layer {name}")
 
-    # for param in model.parameters():
-    #     if not param._is_initialized() and param._init_func is not None:
-    #         assert param._init_func is not None, f"param name {param.name}"
-    #         param.initialize()
 
 def main():
     parser = PdArgumentParser((ModelArguments, DataArguments, AutoTrainerArguments))
