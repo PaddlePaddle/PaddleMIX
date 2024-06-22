@@ -31,7 +31,7 @@ from aistudio_sdk.hub import download as aistudio_base_download
 from aistudio_sdk.hub import upload as aistudio_upload
 from filelock import FileLock
 from huggingface_hub import hf_hub_download, try_to_load_from_cache
-from huggingface_hub.file_download import _chmod_and_replace, http_get
+from huggingface_hub.file_download import _chmod_and_move, http_get
 from huggingface_hub.utils import (
     EntryNotFoundError,
     RepositoryNotFoundError,
