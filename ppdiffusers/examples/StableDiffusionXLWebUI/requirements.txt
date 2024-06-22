@@ -1,4 +1,7 @@
+--index-url=https://pypi.doubanio.com/simple/
+
 paddlenlp==2.7.2 
+huggingface_hub==0.22
 einops
 insightface 
 onnxruntime 

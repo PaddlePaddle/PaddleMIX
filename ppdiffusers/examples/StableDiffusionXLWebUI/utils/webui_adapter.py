@@ -30,7 +30,7 @@ from .webui_adapter_func import LoadTypesModel
 
 # 项目目录
 PROJECT_DIR = os.path.dirname(os.path.dirname(__file__))
-STATIC_DIR = os.path.join(PROJECT_DIR, "static")
+STATIC_DIR = os.path.join(PROJECT_DIR, "assets")
 HOME_DIR = os.path.expanduser("~")
 
 

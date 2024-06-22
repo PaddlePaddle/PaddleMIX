@@ -28,7 +28,7 @@ from .upscale import upscale_x4
 from .webui_ctr_func import LoadTypesModel
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(__file__))
-STATIC_DIR = os.path.join(PROJECT_DIR, "static")
+STATIC_DIR = os.path.join(PROJECT_DIR, "assets")
 HOME_DIR = os.path.expanduser("~")
 
 

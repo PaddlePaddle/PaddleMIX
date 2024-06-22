@@ -1,6 +1,6 @@
 # PPdiffusers WebUI
 
-![](./static/image_hutao.png)
+![](./assets/image_hutao.png)
 
 1.克隆仓库
 

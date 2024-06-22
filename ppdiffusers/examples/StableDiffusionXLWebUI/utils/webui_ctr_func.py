@@ -37,7 +37,7 @@ from .baidufanyi import multi_tasks_translate
 from .check_image import custom_save_image
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(__file__))
-STATIC_DIR = os.path.join(PROJECT_DIR, "static")
+STATIC_DIR = os.path.join(PROJECT_DIR, "assets")
 HOME_DIR = os.path.expanduser("~")
 
 
