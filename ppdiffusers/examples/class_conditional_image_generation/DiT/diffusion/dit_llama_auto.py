@@ -45,21 +45,16 @@ def get_layer_ipp(layer_index, num_layers):
         num_layers (int): The total number of transformer layers in the pipeline parallel network.
     
     Returns:
-        Optional[int]: If it is an pipeline parallel network, return the position of the specified layer; Otherwise, return None.
+        Optional[int, bool]: If it is an pipeline parallel network, return the position of the specified layer and whether the input needs to be resharded; Otherwise, return None and False.
     """
     mesh = fleet.auto.get_mesh()
     if "pp" not in mesh.dim_names:
-        return None
+        return None, False
     else:
         pp_degree = mesh.get_dim_size("pp")
         layer_per_stage = math.ceil(num_layers / pp_degree)
-        return layer_index // layer_per_stage
-
-# def get_mesh(pp_idx=0):
-#     mesh = fleet.auto.get_mesh()
-#     if "pp" in mesh.dim_names:
-#         mesh = mesh.get_mesh_with_dim("pp", pp_idx)
-#     return mesh
+        input_need_reshard = layer_index % layer_per_stage == 0
+        return layer_index // layer_per_stage, input_need_reshard
 
 def rms_norm_fused(x_in, w, eps):
     fused_ln = try_import("fused_ln")
@@ -512,6 +507,7 @@ class DiT_Llama_AUTO(ModelMixin, ConfigMixin, ConversionMixin):
         # 2. Define transformers blocks
         self.layers = nn.LayerList()
         for i in range(num_layers):
+            pp_stage_id, _ = get_layer_ipp(i, num_layers)
             self.layers.append(
                 TransformerBlock(
                     layer_id=i,
@@ -524,7 +520,7 @@ class DiT_Llama_AUTO(ModelMixin, ConfigMixin, ConversionMixin):
                     norm_eps=norm_eps,
                     qk_norm=qk_norm,
                     fused_attn=self.fused_attn,
-                    pp_stage=get_layer_ipp(i, num_layers),
+                    pp_stage=pp_stage_id,
                     index=i,
                 )
             )
@@ -653,23 +649,33 @@ class DiT_Llama_AUTO(ModelMixin, ConfigMixin, ConversionMixin):
         x = self.x_embedder(hidden_states)
         t = self.t_embedder(timestep).cast(dtype)
         y = self.y_embedder(class_labels).cast(dtype)
+        freqs_cis = self.freqs_cis[: x.shape[1]]
+        freqs_cis = dist.shard_tensor(
+            freqs_cis,
+            get_mesh(0),
+            [dist.Replicate(), dist.Replicate()],
+        )
         adaln_input = t + y
 
         # 2. Blocks
-        freqs_cis = self.freqs_cis[: x.shape[1]]
         pre_pp_stage = 0
-        for i, layer in enumerate(self.layers):
-            if i == 0 or (layer.pp_stage is not None and pre_pp_stage != layer.pp_stage):
+        for idx, layer in enumerate(self.layers):
+            if idx == 0 or (layer.pp_stage is not None and pre_pp_stage != layer.pp_stage):
+                # print("reshard x, freqs_cis and adaln_input in transformer block %s" % idx)
+                # print(get_mesh(layer.pp_stage))
                 x = dist.reshard(
                     x,
                     get_mesh(layer.pp_stage),
-                    # output.placements, dp shard 0 dim, mp replicated
                     [dist.Shard(0), dist.Replicate()],
+                )
+                freqs_cis = dist.reshard(
+                    freqs_cis,
+                    get_mesh(layer.pp_stage),
+                    [dist.Replicate(), dist.Replicate()],
                 )
                 adaln_input = dist.reshard(
                     adaln_input,
                     get_mesh(layer.pp_stage),
-                    # output.placements, dp shard 0 dim, mp replicated
                     [dist.Shard(0), dist.Replicate()],
                 )
             pre_pp_stage = layer.pp_stage
@@ -678,11 +684,7 @@ class DiT_Llama_AUTO(ModelMixin, ConfigMixin, ConversionMixin):
                     layer, x, freqs_cis, adaln_input, use_reentrant=False
                 )
             else:
-                x = layer(
-                    x,
-                    freqs_cis, # dense tensor
-                    adaln_input,
-                )
+                x = layer(x, freqs_cis, adaln_input)
 
         # 3. Output
         hidden_states = self.final_layer(x, adaln_input)

@@ -168,6 +168,9 @@ class DiTDiffusionModelAuto(nn.Layer):
             self.model_ema(self.transformer)
 
     def forward(self, latents=None, label_id=None, **kwargs):
+        if isinstance(latents, list):
+            latents, label_id = latents
+
         x_start = latents
         timesteps = paddle.randint(0, self.num_timesteps, (latents.shape[0],))
         timesteps = dist.shard_tensor(timesteps, label_id.process_mesh, label_id.placements) # as label_id

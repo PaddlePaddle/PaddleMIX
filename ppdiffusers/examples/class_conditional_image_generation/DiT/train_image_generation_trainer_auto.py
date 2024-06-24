@@ -30,6 +30,7 @@ from diffusion import (
 )
 from paddlenlp.trainer import PdArgumentParser, get_last_checkpoint, set_seed
 from paddlenlp.utils.log import logger
+from paddlenlp.data import Stack
 # from transport import SiTDiffusionModel
 
 MODEL_CLASSES = {
@@ -59,6 +60,16 @@ class FeatureDataset(paddle.io.Dataset):
         features = np.load(os.path.join(self.features_dir, feature_file))
         labels = np.load(os.path.join(self.labels_dir, label_file))
         return {"latents": features.squeeze(0), "label_id": labels.squeeze(0)}
+
+def collate_data(data, stack_fn=Stack()):
+    latents = stack_fn([x["latents"] for x in data])
+    label_id = stack_fn([x["label_id"] for x in data])
+    # not_use_labels = np.zeros_like(label_id)
+
+    return {
+        "latents": [latents, label_id],
+        "label_id": label_id, # for dynamic to static, must be 2 fields
+    }
 
 def shard_model(model):
     """
@@ -206,6 +217,7 @@ def main():
         model=model,
         args=training_args,
         train_dataset=train_dataset,
+        data_collator=collate_data,
     )
     # must set recompute after trainer init
     trainer.model.set_recompute(training_args.recompute)

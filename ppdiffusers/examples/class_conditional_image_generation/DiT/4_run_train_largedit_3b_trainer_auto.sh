@@ -12,26 +12,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 export FLAGS_use_cuda_managed_memory=true
-# export GLOG_v=10
-# export GLOG_vmodule="flatten=5"
 
 TRAINING_MODEL_RESUME="None"
 TRAINER_INSTANCES='127.0.0.1'
 MASTER='127.0.0.1:8080'
 TRAINERS_NUM=1 # nnodes, machine num
 TRAINING_GPUS_PER_NODE=8 # nproc_per_node
-DP_DEGREE=1 # dp_parallel_degree
+DP_DEGREE=1 # data_parallel_degree
 MP_DEGREE=4 # tensor_parallel_degree
+PP_DEGREE=1 # pipeline_parallel_degree
 SHARDING_DEGREE=2 # sharding_parallel_degree
 
 # real dp_parallel_degree = nnodes * nproc_per_node / tensor_parallel_degree / sharding_parallel_degree
 # Please make sure: nnodes * nproc_per_node >= tensor_parallel_degree * sharding_parallel_degree
 
 config_file=config/LargeDiT_3B_patch2.json
-OUTPUT_DIR=./output_trainer/LargeDiT_3B_patch2_trainer
+OUTPUT_DIR=./output_trainer/LargeDiT_3B_patch2_auto_trainer
 feature_path=./data/fastdit_imagenet256
 
-per_device_train_batch_size=2
+per_device_train_batch_size=32
 gradient_accumulation_steps=1
 
 resolution=256
@@ -50,6 +49,7 @@ FP16_OPT_LEVEL="O2"
 enable_tensorboard=True
 recompute=True
 enable_xformers=True
+to_static=0  # whether we use dynamic to static training
 
 TRAINING_PYTHON="python -m paddle.distributed.launch --master ${MASTER} --nnodes ${TRAINERS_NUM} --nproc_per_node ${TRAINING_GPUS_PER_NODE} --ips ${TRAINER_INSTANCES}"
 ${TRAINING_PYTHON} train_image_generation_trainer_auto.py \
@@ -85,11 +85,12 @@ ${TRAINING_PYTHON} train_image_generation_trainer_auto.py \
     --amp_master_grad 1 \
     --dp_degree ${DP_DEGREE} \
     --tensor_parallel_degree ${MP_DEGREE} \
+    --pipeline_parallel_degree ${PP_DEGREE} \
     --sharding_parallel_degree ${SHARDING_DEGREE} \
     --sharding "stage1" \
     --sharding_parallel_config "enable_stage1_overlap enable_stage1_tensor_fusion" \
     --hybrid_parallel_topo_order "sharding_first" \
-    --pipeline_parallel_degree 1 \
     --sep_parallel_degree 1 \
     --enable_auto_parallel 1 \
+    --to_static $to_static \
     # --fp16 ${USE_AMP} \
