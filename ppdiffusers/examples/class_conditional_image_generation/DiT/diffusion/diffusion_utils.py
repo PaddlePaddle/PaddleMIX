@@ -30,7 +30,7 @@ def normal_kl(mean1, logvar1, mean2, logvar2):
     """
     tensor = None
     for obj in (mean1, logvar1, mean2, logvar2):
-        if isinstance(obj, paddle.Tensor):
+        if isinstance(obj, (paddle.Tensor, paddle.static.Variable)):
             tensor = obj
             break
     assert tensor is not None, "at least one argument must be a Tensor"
@@ -38,7 +38,7 @@ def normal_kl(mean1, logvar1, mean2, logvar2):
     # Force variances to be Tensors. Broadcasting helps convert scalars to
     # Tensors, but it does not work for paddle.exp().
     logvar1, logvar2 = [
-        x if isinstance(x, paddle.Tensor) else paddle.to_tensor(x).to(tensor) for x in (logvar1, logvar2)
+        x if isinstance(x, (paddle.Tensor, paddle.static.Variable)) else paddle.to_tensor(x, place=tensor.place) for x in (logvar1, logvar2)
     ]
 
     return 0.5 * (

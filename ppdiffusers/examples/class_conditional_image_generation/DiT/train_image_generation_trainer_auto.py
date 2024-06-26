@@ -64,7 +64,6 @@ class FeatureDataset(paddle.io.Dataset):
 def collate_data(data, stack_fn=Stack()):
     latents = stack_fn([x["latents"] for x in data])
     label_id = stack_fn([x["label_id"] for x in data])
-    # not_use_labels = np.zeros_like(label_id)
 
     return {
         "latents": [latents, label_id],
