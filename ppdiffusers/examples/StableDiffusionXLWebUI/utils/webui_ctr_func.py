@@ -157,6 +157,8 @@ class LoadTypesModel:
         model_name_input=None,
         controlnet_model_name="diffusers/controlnet-canny-sdxl-1.0",
         max_size=1900,
+        control_guidance_start=0.1,
+        control_guidance_end=0.99,
         **kwargs
     ):
 
@@ -171,6 +173,8 @@ class LoadTypesModel:
             "type_to_img": type_to_img,
             "strength": strength,
             "controlnet": controlnet,
+            "control_guidance_start": control_guidance_start,
+            "control_guidance_end": control_guidance_end,
         }
 
         # 只要任意一个变量变化都会触发重新加载
@@ -281,6 +285,8 @@ class LoadTypesModel:
             control_image=control_image,
             mask_image=mask_image,
             controlnet_conditioning_scale=ration,
+            control_guidance_start=control_guidance_start,
+            control_guidance_end=control_guidance_end,
         ).images
         paddle.device.cuda.empty_cache()
         for image in imgs:

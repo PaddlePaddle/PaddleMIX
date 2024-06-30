@@ -166,18 +166,21 @@ with gr.Blocks(css=os.path.join(STATIC_DIR, "style.css")) as demo:
                     )
 
             with gr.Row():
-                with gr.Column(scale=5):
-                    controlnet_model_name = gr.Dropdown(
-                        control_model_list,
-                        label="Control Model",
-                        value="diffusers/controlnet-canny-sdxl-1.0",
-                        multiselect=False,
-                        interactive=True,
-                        scale=1,
-                    )
-                    ration = gr.Slider(minimum=0, maximum=0.95, value=0.5, step=0.01, label="Ration", interactive=True)
-                    ctn = gr.Radio(["ON", "OFF"], value="ON", label="ControlNet", scale=0)
-                controlnet_image = gr.Image(label="controlnet参考图", scale=5, type="pil")
+                controlnet_model_name = gr.Dropdown(
+                    control_model_list,
+                    label="Control Model",
+                    value="diffusers/controlnet-canny-sdxl-1.0",
+                    multiselect=False,
+                    interactive=True,
+                    scale=1,
+                )
+            with gr.Row():
+                ration = gr.Slider(minimum=0, maximum=0.95, value=0.5, step=0.01, label="Ration", interactive=True)
+                ctrn_start = gr.Slider(minimum=0, maximum=1.0, value=0.1, step=0.01, label="Start", interactive=True)
+                ctrn_end = gr.Slider(minimum=0, maximum=1.0, value=0.99, step=0.01, label="End", interactive=True)
+            with gr.Row():
+                controlnet_image = gr.Image(label="controlnet参考图", type="pil")
+                ctn = gr.Radio(["ON", "OFF"], value="ON", label="ControlNet")
 
             with gr.Row():
                 scheduler_type = gr.Radio(supported_scheduler, value="ddpm", label="Scheduler")
@@ -389,9 +392,11 @@ with gr.Blocks(css=os.path.join(STATIC_DIR, "style.css")) as demo:
         controlnet_model_name="diffusers/controlnet-canny-sdxl-1.0",
         vae_dir="",
         vae_dir_input="",
+        max_size=1900,
+        ctn_start=0.1,
+        ctn_end=0.99,
         unet_dir="",
         unet_dir_input="",
-        max_size=1900,
         type_to_img="text",
         **kwargs
     ):
@@ -436,6 +441,8 @@ with gr.Blocks(css=os.path.join(STATIC_DIR, "style.css")) as demo:
             controlnet=controlnet,
             model_name_input=model_name_input,
             max_size=max_size,
+            control_guidance_start=ctn_start,
+            control_guidance_end=ctn_end,
         ) + (json.dumps(model_list),)
 
     # 文生图按钮
@@ -466,6 +473,8 @@ with gr.Blocks(css=os.path.join(STATIC_DIR, "style.css")) as demo:
             vae_dir,
             vae_model_name_input,
             max_size_limit,
+            ctrn_start,
+            ctrn_end,
         ],
         outputs=[all_outputs, text2img_metadata, history_models],
     )
@@ -493,9 +502,11 @@ with gr.Blocks(css=os.path.join(STATIC_DIR, "style.css")) as demo:
         controlnet_model_name="diffusers/controlnet-canny-sdxl-1.0",
         vae_dir="",
         vae_dir_input="",
+        max_size=1900,
+        ctn_start=0.1,
+        ctn_end=0.99,
         unet_dir="",
         unet_dir_input="",
-        max_size=1900,
         type_to_img="img",
         **kwargs
     ):
@@ -543,6 +554,8 @@ with gr.Blocks(css=os.path.join(STATIC_DIR, "style.css")) as demo:
             model_name_input=model_name_input,
             controlnet_model_name=controlnet_model_name,
             max_size=max_size,
+            control_guidance_start=ctn_start,
+            control_guidance_end=ctn_end,
         ) + (json.dumps(model_list),)
 
     img2img_button.click(
@@ -570,6 +583,8 @@ with gr.Blocks(css=os.path.join(STATIC_DIR, "style.css")) as demo:
             vae_dir,
             vae_model_name_input,
             max_size_limit,
+            ctrn_start,
+            ctrn_end,
         ],
         outputs=[all_outputs, img2img_metadata, history_models],
     )
@@ -597,9 +612,11 @@ with gr.Blocks(css=os.path.join(STATIC_DIR, "style.css")) as demo:
         controlnet_model_name="diffusers/controlnet-canny-sdxl-1.0",
         vae_dir="",
         vae_dir_input="",
+        max_size=1900,
+        ctn_start=0.1,
+        ctn_end=0.99,
         unet_dir="",
         unet_dir_input="",
-        max_size=1900,
         type_to_img="inp",
         **kwargs
     ):
@@ -651,6 +668,8 @@ with gr.Blocks(css=os.path.join(STATIC_DIR, "style.css")) as demo:
             model_name_input=model_name_input,
             controlnet_model_name=controlnet_model_name,
             max_size=max_size,
+            control_guidance_start=ctn_start,
+            control_guidance_end=ctn_end,
         ) + (json.dumps(model_list),)
 
     inp2img_button.click(fn=lambda x: [x["image"], x["mask"]], inputs=inp2img_img, outputs=inp2img_img_inputs).then(
@@ -678,6 +697,8 @@ with gr.Blocks(css=os.path.join(STATIC_DIR, "style.css")) as demo:
             vae_dir,
             vae_model_name_input,
             max_size_limit,
+            ctrn_start,
+            ctrn_end,
         ],
         outputs=[all_outputs, inp2img_metadata, history_models],
     )
