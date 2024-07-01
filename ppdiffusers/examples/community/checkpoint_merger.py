@@ -238,7 +238,7 @@ class CheckpointMergerPipeline(DiffusionPipeline):
                 if os.path.exists(checkpoint_path_1):
                     files = [
                         *glob.glob(os.path.join(checkpoint_path_1, "*.safetensors")),
-                        *glob.glob(os.path.join(checkpoint_path_1, "*.pdprams")),
+                        *glob.glob(os.path.join(checkpoint_path_1, "*.pdparams")),
                     ]
                     checkpoint_path_1 = files[0] if len(files) > 0 else None
                 if len(cached_folders) < 3:
@@ -248,7 +248,7 @@ class CheckpointMergerPipeline(DiffusionPipeline):
                     if os.path.exists(checkpoint_path_2):
                         files = [
                             *glob.glob(os.path.join(checkpoint_path_2, "*.safetensors")),
-                            *glob.glob(os.path.join(checkpoint_path_2, "*.pdprams")),
+                            *glob.glob(os.path.join(checkpoint_path_2, "*.pdparams")),
                         ]
                         checkpoint_path_2 = files[0] if len(files) > 0 else None
                 # For an attr if both checkpoint_path_1 and 2 are None, ignore.
@@ -263,18 +263,18 @@ class CheckpointMergerPipeline(DiffusionPipeline):
                     theta_0 = getattr(module, "state_dict")
                     theta_0 = theta_0()
 
-                    update_theta_0 = getattr(module, "load_state_dict")
+                    update_theta_0 = getattr(module, "set_state_dict")
                     theta_1 = (
                         safetensors.paddle.load_file(checkpoint_path_1)
                         if (checkpoint_path_1.endswith(".safetensors"))
-                        else paddle.load(checkpoint_path_1, map_location="cpu")
+                        else paddle.load(checkpoint_path_1)
                     )
                     theta_2 = None
                     if checkpoint_path_2:
                         theta_2 = (
                             safetensors.paddle.load_file(checkpoint_path_2)
                             if (checkpoint_path_2.endswith(".safetensors"))
-                            else paddle.load(checkpoint_path_2, map_location="cpu")
+                            else paddle.load(checkpoint_path_2)
                         )
 
                     if not theta_0.keys() == theta_1.keys():
