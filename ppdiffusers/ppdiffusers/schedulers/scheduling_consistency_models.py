@@ -19,7 +19,8 @@ import numpy as np
 import paddle
 
 from ..configuration_utils import ConfigMixin, register_to_config
-from ..utils import BaseOutput, logging, randn_tensor
+from ..utils import BaseOutput, logging
+from ..utils.paddle_utils import randn_tensor
 from .scheduling_utils import SchedulerMixin
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
@@ -28,11 +29,11 @@ logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 @dataclass
 class CMStochasticIterativeSchedulerOutput(BaseOutput):
     """
-    Output class for the scheduler's step function output.
+    Output class for the scheduler's `step` function.
 
     Args:
         prev_sample (`paddle.Tensor` of shape `(batch_size, num_channels, height, width)` for images):
-            Computed sample (x_{t-1}) of previous timestep. `prev_sample` should be used as next model input in the
+            Computed sample `(x_{t-1})` of previous timestep. `prev_sample` should be used as next model input in the
             denoising loop.
     """
 
@@ -41,38 +42,32 @@ class CMStochasticIterativeSchedulerOutput(BaseOutput):
 
 class CMStochasticIterativeScheduler(SchedulerMixin, ConfigMixin):
     """
-    Multistep and onestep sampling for consistency models from Song et al. 2023 [1]. This implements Algorithm 1 in the
-    paper [1].
+    Multistep and onestep sampling for consistency models.
 
-    [1] Song, Yang and Dhariwal, Prafulla and Chen, Mark and Sutskever, Ilya. "Consistency Models"
-    https://arxiv.org/pdf/2303.01469 [2] Karras, Tero, et al. "Elucidating the Design Space of Diffusion-Based
-    Generative Models." https://arxiv.org/abs/2206.00364
-
-    [`~ConfigMixin`] takes care of storing all config attributes that are passed in the scheduler's `__init__`
-    function, such as `num_train_timesteps`. They can be accessed via `scheduler.config.num_train_timesteps`.
-    [`SchedulerMixin`] provides general loading and saving functionality via the [`SchedulerMixin.save_pretrained`] and
-    [`~SchedulerMixin.from_pretrained`] functions.
+    This model inherits from [`SchedulerMixin`] and [`ConfigMixin`]. Check the superclass documentation for the generic
+    methods the library implements for all schedulers such as loading and saving.
 
     Args:
-        num_train_timesteps (`int`): number of diffusion steps used to train the model.
-        sigma_min (`float`):
-            Minimum noise magnitude in the sigma schedule. This was set to 0.002 in the original implementation.
-        sigma_max (`float`):
-            Maximum noise magnitude in the sigma schedule. This was set to 80.0 in the original implementation.
-        sigma_data (`float`):
-            The standard deviation of the data distribution, following the EDM paper [2]. This was set to 0.5 in the
-            original implementation, which is also the original value suggested in the EDM paper.
-        s_noise (`float`):
+        num_train_timesteps (`int`, defaults to 40):
+            The number of diffusion steps to train the model.
+        sigma_min (`float`, defaults to 0.002):
+            Minimum noise magnitude in the sigma schedule. Defaults to 0.002 from the original implementation.
+        sigma_max (`float`, defaults to 80.0):
+            Maximum noise magnitude in the sigma schedule. Defaults to 80.0 from the original implementation.
+        sigma_data (`float`, defaults to 0.5):
+            The standard deviation of the data distribution from the EDM
+            [paper](https://huggingface.co/papers/2206.00364). Defaults to 0.5 from the original implementation.
+        s_noise (`float`, defaults to 1.0):
             The amount of additional noise to counteract loss of detail during sampling. A reasonable range is [1.000,
-            1.011]. This was set to 1.0 in the original implementation.
-        rho (`float`):
-            The rho parameter used for calculating the Karras sigma schedule, introduced in the EDM paper [2]. This was
-            set to 7.0 in the original implementation, which is also the original value suggested in the EDM paper.
-        clip_denoised (`bool`):
-            Whether to clip the denoised outputs to `(-1, 1)`. Defaults to `True`.
+            1.011]. Defaults to 1.0 from the original implementation.
+        rho (`float`, defaults to 7.0):
+            The parameter for calculating the Karras sigma schedule from the EDM
+            [paper](https://huggingface.co/papers/2206.00364). Defaults to 7.0 from the original implementation.
+        clip_denoised (`bool`, defaults to `True`):
+            Whether to clip the denoised outputs to `(-1, 1)`.
         timesteps (`List` or `np.ndarray` or `paddle.Tensor`, *optional*):
-            Optionally, an explicit timestep schedule can be specified. The timesteps are expected to be in increasing
-            order.
+            An explicit timestep schedule that can be optionally specified. The timesteps are expected to be in
+            increasing order.
     """
 
     order = 1
@@ -101,6 +96,7 @@ class CMStochasticIterativeScheduler(SchedulerMixin, ConfigMixin):
         self.timesteps = paddle.to_tensor(timesteps)
         self.custom_timesteps = False
         self.is_scale_input_called = False
+        self._step_index = None
 
     def index_for_timestep(self, timestep, schedule_timesteps=None):
         if schedule_timesteps is None:
@@ -109,19 +105,32 @@ class CMStochasticIterativeScheduler(SchedulerMixin, ConfigMixin):
         indices = (schedule_timesteps == timestep).nonzero()
         return indices.item()
 
+    @property
+    def step_index(self):
+        """
+        The index counter for current timestep. It will increae 1 after each scheduler step.
+        """
+        return self._step_index
+
     def scale_model_input(self, sample: paddle.Tensor, timestep: Union[float, paddle.Tensor]) -> paddle.Tensor:
         """
-        Scales the consistency model input by `(sigma**2 + sigma_data**2) ** 0.5`, following the EDM model.
+        Scales the consistency model input by `(sigma**2 + sigma_data**2) ** 0.5`.
 
         Args:
-            sample (`paddle.Tensor`): input sample
-            timestep (`float` or `paddle.Tensor`): the current timestep in the diffusion chain
+            sample (`paddle.Tensor`):
+                The input sample.
+            timestep (`float` or `paddle.Tensor`):
+                The current timestep in the diffusion chain.
+
         Returns:
-            `paddle.Tensor`: scaled input sample
+            `paddle.Tensor`:
+                A scaled input sample.
         """
         # Get sigma corresponding to timestep
-        step_idx = self.index_for_timestep(timestep)
-        sigma = self.sigmas[step_idx]
+        if self.step_index is None:
+            self._init_step_index(timestep)
+
+        sigma = self.sigmas[self.step_index]
 
         sample = sample / ((sigma**2 + self.config.sigma_data**2) ** 0.5)
 
@@ -130,12 +139,15 @@ class CMStochasticIterativeScheduler(SchedulerMixin, ConfigMixin):
 
     def sigma_to_t(self, sigmas: Union[float, np.ndarray]):
         """
-        Gets scaled timesteps from the Karras sigmas, for input to the consistency model.
+        Gets scaled timesteps from the Karras sigmas for input to the consistency model.
 
         Args:
-            sigmas (`float` or `np.ndarray`): single Karras sigma or array of Karras sigmas
+            sigmas (`float` or `np.ndarray`):
+                A single Karras sigma or an array of Karras sigmas.
+
         Returns:
-            `float` or `np.ndarray`: scaled input timestep or scaled input timestep array
+            `float` or `np.ndarray`:
+                A scaled input timestep or scaled input timestep array.
         """
         if not isinstance(sigmas, np.ndarray):
             sigmas = np.array(sigmas, dtype=np.float64)
@@ -150,15 +162,15 @@ class CMStochasticIterativeScheduler(SchedulerMixin, ConfigMixin):
         timesteps: Optional[List[int]] = None,
     ):
         """
-        Sets the timesteps used for the diffusion chain. Supporting function to be run before inference.
+        Sets the timesteps used for the diffusion chain (to be run before inference).
 
         Args:
             num_inference_steps (`int`):
-                the number of diffusion steps used when generating samples with a pre-trained model.
-            timesteps (`List[int]`, optional):
-                custom timesteps used to support arbitrary spacing between timesteps. If `None`, then the default
-                timestep spacing strategy of equal spacing between timesteps is used. If passed, `num_inference_steps`
-                must be `None`.
+                The number of diffusion steps used when generating samples with a pre-trained model.
+            timesteps (`List[int]`, *optional*):
+                Custom timesteps used to support arbitrary spacing between timesteps. If `None`, then the default
+                timestep spacing strategy of equal spacing between timesteps is used. If `timesteps` is passed,
+                `num_inference_steps` must be `None`.
         """
         if num_inference_steps is None and timesteps is None:
             raise ValueError("Exactly one of `num_inference_steps` or `timesteps` must be supplied.")
@@ -207,6 +219,8 @@ class CMStochasticIterativeScheduler(SchedulerMixin, ConfigMixin):
 
         self.timesteps = paddle.to_tensor(timesteps)
 
+        self._step_index = None
+
     # Modified _convert_to_karras implementation that takes in ramp as argument
     def _convert_to_karras(self, ramp):
         """Constructs the noise schedule of Karras et al. (2022)."""
@@ -229,17 +243,22 @@ class CMStochasticIterativeScheduler(SchedulerMixin, ConfigMixin):
 
     def get_scalings_for_boundary_condition(self, sigma):
         """
-        Gets the scalings used in the consistency model parameterization, following Appendix C of the original paper.
-        This enforces the consistency model boundary condition.
+        Gets the scalings used in the consistency model parameterization (from Appendix C of the
+        [paper](https://huggingface.co/papers/2303.01469)) to enforce boundary condition.
 
-        Note that `epsilon` in the equations for c_skip and c_out is set to sigma_min.
+        <Tip>
+
+        `epsilon` in the equations for `c_skip` and `c_out` is set to `sigma_min`.
+
+        </Tip>
 
         Args:
             sigma (`paddle.Tensor`):
                 The current sigma in the Karras sigma schedule.
+
         Returns:
             `tuple`:
-                A two-element tuple where c_skip (which weights the current sample) is the first element and c_out
+                A two-element tuple where `c_skip` (which weights the current sample) is the first element and `c_out`
                 (which weights the consistency model output) is the second element.
         """
         sigma_min = self.config.sigma_min
@@ -248,6 +267,22 @@ class CMStochasticIterativeScheduler(SchedulerMixin, ConfigMixin):
         c_skip = sigma_data**2 / ((sigma - sigma_min) ** 2 + sigma_data**2)
         c_out = (sigma - sigma_min) * sigma_data / (sigma**2 + sigma_data**2) ** 0.5
         return c_skip, c_out
+
+    # Copied from ppdiffusers.schedulers.scheduling_euler_discrete.EulerDiscreteScheduler._init_step_index
+    def _init_step_index(self, timestep):
+
+        index_candidates = (self.timesteps == timestep).nonzero()
+
+        # The sigma index that is taken for the **very** first `step`
+        # is always the second index (or the last index if there is only 1)
+        # This way we can ensure we don't accidentally skip a sigma in
+        # case we start in the middle of the denoising schedule (e.g. for image-to-image)
+        if len(index_candidates) > 1:
+            step_index = index_candidates[1]
+        else:
+            step_index = index_candidates[0]
+
+        self._step_index = step_index.item()
 
     def step(
         self,
@@ -258,23 +293,30 @@ class CMStochasticIterativeScheduler(SchedulerMixin, ConfigMixin):
         return_dict: bool = True,
     ) -> Union[CMStochasticIterativeSchedulerOutput, Tuple]:
         """
-        Predict the sample at the previous timestep by reversing the SDE. Core function to propagate the diffusion
+        Predict the sample from the previous timestep by reversing the SDE. This function propagates the diffusion
         process from the learned model outputs (most often the predicted noise).
 
         Args:
-            model_output (`paddle.Tensor`): direct output from learned diffusion model.
-            timestep (`float`): current timestep in the diffusion chain.
+            model_output (`paddle.Tensor`):
+                The direct output from the learned diffusion model.
+            timestep (`float`):
+                The current timestep in the diffusion chain.
             sample (`paddle.Tensor`):
-                current instance of sample being created by diffusion process.
-            generator (`paddle.Generator`, *optional*): Random number generator.
-            return_dict (`bool`): option for returning tuple rather than EulerDiscreteSchedulerOutput class
+                A current instance of a sample created by the diffusion process.
+            generator (`paddle.Generator`, *optional*):
+                A random number generator.
+            return_dict (`bool`, *optional*, defaults to `True`):
+                Whether or not to return a
+                [`~schedulers.scheduling_consistency_models.CMStochasticIterativeSchedulerOutput`] or `tuple`.
+
         Returns:
-            [`~schedulers.scheduling_utils.CMStochasticIterativeSchedulerOutput`] or `tuple`:
-            [`~schedulers.scheduling_utils.CMStochasticIterativeSchedulerOutput`] if `return_dict` is True, otherwise a
-            `tuple`. When returning a tuple, the first element is the sample tensor.
+            [`~schedulers.scheduling_consistency_models.CMStochasticIterativeSchedulerOutput`] or `tuple`:
+                If return_dict is `True`,
+                [`~schedulers.scheduling_consistency_models.CMStochasticIterativeSchedulerOutput`] is returned,
+                otherwise a tuple is returned where the first element is the sample tensor.
         """
 
-        if isinstance(timestep, int) or (isinstance(timestep, paddle.Tensor) and "int" in str(timestep.dtype)):
+        if isinstance(timestep, int) or (paddle.is_tensor(timestep) and "int" in str(timestep.dtype)):
             raise ValueError(
                 (
                     "Passing integer indices (e.g. from `enumerate(timesteps)`) as timesteps to"
@@ -292,12 +334,17 @@ class CMStochasticIterativeScheduler(SchedulerMixin, ConfigMixin):
         sigma_min = self.config.sigma_min
         sigma_max = self.config.sigma_max
 
-        step_index = self.index_for_timestep(timestep)
+        # NOTE(laixinlu) convert sigmas to the dtype of the model output
+        if self.sigmas.dtype != model_output.dtype:
+            self.sigmas = self.sigmas.cast(model_output.dtype)
+
+        if self.step_index is None:
+            self._init_step_index(timestep)
 
         # sigma_next corresponds to next_t in original implementation
-        sigma = self.sigmas[step_index]
-        if step_index + 1 < self.config.num_train_timesteps:
-            sigma_next = self.sigmas[step_index + 1]
+        sigma = self.sigmas[self.step_index]
+        if self.step_index + 1 < self.config.num_train_timesteps:
+            sigma_next = self.sigmas[self.step_index + 1]
         else:
             # Set sigma_next to sigma_min
             sigma_next = self.sigmas[-1]
@@ -324,6 +371,9 @@ class CMStochasticIterativeScheduler(SchedulerMixin, ConfigMixin):
         # tau = sigma_hat, eps = sigma_min
         prev_sample = denoised + z * (sigma_hat**2 - sigma_min**2) ** 0.5
 
+        # upon completion increase step index by one
+        self._step_index += 1
+
         if not return_dict:
             return (prev_sample,)
 
@@ -336,8 +386,12 @@ class CMStochasticIterativeScheduler(SchedulerMixin, ConfigMixin):
         noise: paddle.Tensor,
         timesteps: paddle.Tensor,
     ) -> paddle.Tensor:
-        # Make sure sigmas and timesteps have the same device and dtype as original_samples
-        sigmas = self.sigmas.cast(original_samples.dtype)
+        # Fix 0D tensor
+        if paddle.is_tensor(timesteps) and timesteps.ndim == 0:
+            timesteps = timesteps.unsqueeze(0)
+        # Make sure sigmas and timesteps have the same dtype as original_samples
+        sigmas = self.sigmas.cast(dtype=original_samples.dtype)
+
         schedule_timesteps = self.timesteps
 
         step_indices = [(schedule_timesteps == t).nonzero().item() for t in timesteps]

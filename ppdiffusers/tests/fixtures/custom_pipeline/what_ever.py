@@ -17,7 +17,7 @@ from typing import Optional, Tuple, Union
 
 import paddle
 
-from ppdiffusers.pipeline_utils import DiffusionPipeline, ImagePipelineOutput
+from ppdiffusers import DiffusionPipeline, ImagePipelineOutput
 
 
 class CustomLocalPipeline(DiffusionPipeline):

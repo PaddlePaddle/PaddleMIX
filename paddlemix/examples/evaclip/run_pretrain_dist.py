@@ -18,6 +18,7 @@ import os
 import sys
 
 import numpy as np
+import psutil
 
 parent_path = os.path.abspath(os.path.join(__file__, *([".."] * 4)))
 sys.path.insert(0, parent_path)
@@ -54,7 +55,11 @@ class DataArguments:
 
     task_name: str = field(
         default="coco_clip",
-        metadata={"help": "The name of the task to use (via the datasets library)."},
+        metadata={
+            "help": "The name of the task to use (via the datasets library), coco or laion-aes"
+            " is support, if set to laion-aes, this should be the path to filelist file. "
+            "option: [coco_clip/[path to laion-aes.filelist]], default: coco_clip"
+        },
     )
 
     classification_eval: str = field(
@@ -113,6 +118,18 @@ class PreTrainingArguments(TrainingArguments):
     tensorboard: bool = field(
         default=False,
         metadata={"help": "Whether to use tensorboard to record loss."},
+    )
+    tensor_fusion: bool = field(
+        default=False,
+        metadata={"help": "Whether to use tensor fusion."},
+    )
+    cpu_core_bind: bool = field(
+        default=False,
+        metadata={"help": "Whether to use cpu core bind."},
+    )
+    fuse_ln: bool = field(
+        default=True,
+        metadata={"help": "Whether to use fused layer norm."},
     )
     pretrained_text_model: str = field(default="openclip", metadata={"help": "the model to pre-extract text feats"})
 
@@ -189,6 +206,8 @@ def main_worker(training_args, model_args, data_args):
         paddle.set_default_dtype("bfloat16")
 
     config = EVACLIPConfig.from_pretrained(model_args.model)
+    config["text_config"]["fusedLN"] = training_args.fuse_ln
+    config["vision_config"]["fusedLN"] = training_args.fuse_ln
     model = EVACLIP(
         config,
         disable_text=False,
@@ -203,7 +222,13 @@ def main_worker(training_args, model_args, data_args):
     if training_args.bf16 and training_args.fp16_opt_level == "O2":
         paddle.set_default_dtype("float32")
 
-    train_dataset = load_dataset(data_args.task_name, splits="train")
+    if "laion" in data_args.task_name:
+        from paddlemix.datasets.laiondata import LaionDataset
+
+        train_dataset = LaionDataset(data_args.task_name)
+    else:
+        train_dataset = load_dataset(data_args.task_name, splits="train")
+
     image_processor = CLIPImageProcessor.from_pretrained(os.path.join(model_args.model, "processor", "train"))
     text_processor = CLIPTextProcessor.from_pretrained(os.path.join(model_args.model, "processor", "train"))
     tokenizer = SimpleTokenizer()
@@ -226,6 +251,11 @@ def main_worker(training_args, model_args, data_args):
     checkpoint = None
     if training_args.resume_from_checkpoint is not None:
         checkpoint = training_args.resume_from_checkpoint
+
+    if training_args.cpu_core_bind:
+        p = psutil.Process()
+        start_rank = paddle.distributed.get_rank() * 3
+        p.cpu_affinity([start_rank, start_rank + 1, start_rank + 2])
 
     if training_args.do_train:
         trainer.train(resume_from_checkpoint=checkpoint)

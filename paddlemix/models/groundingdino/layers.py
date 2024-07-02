@@ -146,8 +146,12 @@ class MultiHeadAttention(nn.Layer):
         if self._qkv_same_embed_dim:
             tensor = F.linear(
                 x=tensor,
-                weight=self.in_proj_weight[:, index * self.embed_dim : (index + 1) * self.embed_dim],
-                bias=self.in_proj_bias[index * self.embed_dim : (index + 1) * self.embed_dim]
+                weight=paddle.cast(
+                    self.in_proj_weight[:, index * self.embed_dim : (index + 1) * self.embed_dim], tensor.dtype
+                ),
+                bias=paddle.cast(
+                    self.in_proj_bias[index * self.embed_dim : (index + 1) * self.embed_dim], tensor.dtype
+                )
                 if self.in_proj_bias is not None
                 else None,
             )

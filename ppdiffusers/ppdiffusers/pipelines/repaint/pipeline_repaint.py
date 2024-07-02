@@ -1,5 +1,4 @@
-# Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
-# Copyright 2022 ETH Zurich Computer Vision Lab and The HuggingFace Team. All rights reserved.
+# Copyright 2023 ETH Zurich Computer Vision Lab and The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,16 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import warnings
+
 from typing import List, Optional, Tuple, Union
 
 import numpy as np
 import paddle
-import PIL
+import PIL.Image
 
 from ...models import UNet2DModel
 from ...schedulers import RePaintScheduler
-from ...utils import PIL_INTERPOLATION, logging, randn_tensor
+from ...utils import PIL_INTERPOLATION, deprecate, logging
+from ...utils.paddle_utils import randn_tensor
 from ..pipeline_utils import DiffusionPipeline, ImagePipelineOutput
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
@@ -30,11 +30,8 @@ logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
 # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion_img2img.preprocess
 def _preprocess_image(image: Union[List, PIL.Image.Image, paddle.Tensor]):
-    warnings.warn(
-        "The preprocess method is deprecated and will be removed in a future version. Please"
-        " use VaeImageProcessor.preprocess instead",
-        FutureWarning,
-    )
+    deprecation_message = "The preprocess method is deprecated and will be removed in diffusers 1.0.0. Please use VaeImageProcessor.preprocess(...) instead"
+    deprecate("preprocess", "1.0.0", deprecation_message, standard_warn=False)
     if isinstance(image, paddle.Tensor):
         return image
     elif isinstance(image, PIL.Image.Image):
@@ -91,6 +88,7 @@ class RePaintPipeline(DiffusionPipeline):
 
     unet: UNet2DModel
     scheduler: RePaintScheduler
+    model_cpu_offload_seq = "unet"
 
     def __init__(self, unet, scheduler):
         super().__init__()
@@ -130,8 +128,7 @@ class RePaintPipeline(DiffusionPipeline):
                 The number of times to make a forward time jump for a given chosen time sample. Take a look at Figure 9
                 and 10 in the [paper](https://arxiv.org/pdf/2201.09865.pdf).
             generator (`paddle.Generator`, *optional*):
-                A [`paddle.Generator`](https://pytorch.org/docs/stable/generated/paddle.Generator.html) to make
-                generation deterministic.
+                A [`paddle.Generator`] to make generation deterministic.
             output_type (`str`, `optional`, defaults to `"pil"`):
                 The output format of the generated image. Choose between `PIL.Image` or `np.array`.
             return_dict (`bool`, *optional*, defaults to `True`):
@@ -185,9 +182,9 @@ class RePaintPipeline(DiffusionPipeline):
         original_image = image
 
         original_image = _preprocess_image(original_image)
-        original_image = original_image.cast(self.unet.dtype)
+        original_image = original_image.cast(dtype=self.unet.dtype)
         mask_image = _preprocess_mask(mask_image)
-        mask_image = mask_image.cast(self.unet.dtype)
+        mask_image = mask_image.cast(dtype=self.unet.dtype)
 
         batch_size = original_image.shape[0]
 
@@ -220,7 +217,7 @@ class RePaintPipeline(DiffusionPipeline):
             t_last = t
 
         image = (image / 2 + 0.5).clip(0, 1)
-        image = image.transpose([0, 2, 3, 1]).cast("float32").numpy()
+        image = image.transpose([0, 2, 3, 1]).cast("float32").cpu().numpy()
         if output_type == "pil":
             image = self.numpy_to_pil(image)
 

@@ -17,10 +17,15 @@ from typing import Optional
 import numpy as np
 import paddle
 import paddle.nn as nn
-from paddlenlp.transformers import GPTConfig, GPTLMHeadModel
 
-from ...configuration_utils import ConfigMixin, ModuleUtilsMixin, register_to_config
+from ppdiffusers.transformers import GPT2Config, GPT2LMHeadModel
+from ppdiffusers.transformers.model_utils import ModuleUtilsMixin
+
+from ...configuration_utils import ConfigMixin, register_to_config
 from ...models import ModelMixin
+from ...utils import logging
+
+logger = logging.get_logger(__name__)
 
 
 # Modified from ClipCaptionModel in https://github.com/thu-ml/unidiffuser/blob/main/libs/caption_decoder.py
@@ -33,7 +38,7 @@ class UniDiffuserTextDecoder(ModelMixin, ConfigMixin, ModuleUtilsMixin):
         prefix_length (`int`):
             Max number of prefix tokens that will be supplied to the model.
         prefix_inner_dim (`int`):
-            The hidden size of the the incoming prefix embeddings. For UniDiffuser, this would be the hidden dim of the
+            The hidden size of the incoming prefix embeddings. For UniDiffuser, this would be the hidden dim of the
             CLIP text encoder.
         prefix_hidden_dim (`int`, *optional*):
             Hidden dim of the MLP if we encode the prefix.
@@ -74,8 +79,56 @@ class UniDiffuserTextDecoder(ModelMixin, ConfigMixin, ModuleUtilsMixin):
             dot-product/softmax to float() when training with mixed precision.
     """
 
-    # _keys_to_ignore_on_load_unexpected = [r"h\.\d+\.attn\.bias", r"h\.\d+\.attn\.masked_bias"]
-    _keys_to_ignore_on_load_unexpected = ["h\\.\\d+\\.attn\\.bias", "h\\.\\d+\\.attn\\.masked_bias"]
+    _keys_to_ignore_on_load_unexpected = [r"h\.\d+\.attn\.bias", r"h\.\d+\.attn\.masked_bias"]
+
+    # TODO, use ppdiffusers.transformers.GPT2LMHeadModel
+    _deprecated_dict = {
+        "key": ".self_attn.q_proj.",
+        "action": [{".attn.c_attn.": "concat"}],
+        "name_mapping": {
+            # common
+            "gpt.": "transformer.",
+            "decoder.layers.": "h.",
+            "decoder.norm.": "ln_f.",
+            # embeddings
+            "embeddings.word_embeddings.": "wte.",
+            "embeddings.position_embeddings.": "wpe.",
+            # transformer
+            ".self_attn.q_proj.": ".attn.c_attn.",  # need concat
+            ".self_attn.k_proj.": ".attn.c_attn.",  # need concat
+            ".self_attn.v_proj.": ".attn.c_attn.",  # need concat
+            ".self_attn.out_proj.": ".attn.c_proj.",
+            # other
+            ".norm1.": ".ln_1.",
+            ".linear1.": ".mlp.c_fc.",
+            ".linear2.": ".mlp.c_proj.",
+            ".norm2.": ".ln_2.",
+        },
+    }
+
+    @classmethod
+    def _update_deprecated_state_dict(cls, state_dict=None, loaded_keys=None, model=None):
+        if state_dict is None:
+            return loaded_keys
+        _deprecated_dict = getattr(cls, "_deprecated_dict", None)
+        from_deprecated_state_dict = _deprecated_dict is not None and any(
+            cls._deprecated_dict.get("key", "NONE") in all_key for all_key in state_dict.keys()
+        )
+        if from_deprecated_state_dict:
+            logger.warning(
+                "Loading from deprecated state_dict, please load new state_dict via setting `use_safetensors=True`."
+            )
+            for name in list(state_dict.keys()):
+                deprecated_name = name
+                for old_name, new_name in cls._deprecated_dict.get("name_mapping", {}).items():
+                    name = name.replace(old_name, new_name)
+
+                if ".attn.c_attn." in name and name in state_dict:
+                    state_dict[name] = paddle.concat([state_dict[name], state_dict.pop(deprecated_name)], axis=-1)
+                else:
+                    state_dict[name] = state_dict.pop(deprecated_name)
+            loaded_keys = list(state_dict.keys())
+        return loaded_keys
 
     @register_to_config
     def __init__(
@@ -121,7 +174,7 @@ class UniDiffuserTextDecoder(ModelMixin, ConfigMixin, ModuleUtilsMixin):
         self.decode_prefix = (
             nn.Linear(self.prefix_hidden_dim, n_embd) if self.prefix_hidden_dim is not None else nn.Identity()
         )
-        gpt_config = GPTConfig(
+        gpt_config = GPT2Config(
             vocab_size=vocab_size,
             n_positions=n_positions,
             n_embd=n_embd,
@@ -139,8 +192,7 @@ class UniDiffuserTextDecoder(ModelMixin, ConfigMixin, ModuleUtilsMixin):
             scale_attn_by_inverse_layer_idx=scale_attn_by_inverse_layer_idx,
             reorder_and_upcast_attn=reorder_and_upcast_attn,
         )
-        gpt_config.max_position_embeddings = 1024  # Note： hard code
-        self.transformer = GPTLMHeadModel(gpt_config)
+        self.transformer = GPT2LMHeadModel(gpt_config)
 
     def forward(
         self,
@@ -262,10 +314,11 @@ class UniDiffuserTextDecoder(ModelMixin, ConfigMixin, ModuleUtilsMixin):
         if input_embeds is not None:
             generated = input_embeds
         else:
-            generated = self.transformer.get_input_embeddings()(input_ids)
+            generated = self.transformer.transformer.wte(input_ids)
 
         for i in range(entry_length):
-            logits = self.transformer(inputs_embeds=generated)
+            outputs = self.transformer(inputs_embeds=generated)
+            logits = outputs.logits
             logits = logits[:, -1, :] / (temperature if temperature > 0 else 1.0)
             logits = paddle.nn.functional.softmax(logits, axis=-1).log()
             if scores is None:

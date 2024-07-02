@@ -25,7 +25,6 @@ import paddle
 import paddle.nn as nn
 import PIL
 import PIL.Image
-from paddlenlp.transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
 
 from ppdiffusers.models import AutoencoderKL, ControlNetModel, UNet2DConditionModel
 from ppdiffusers.models.controlnet import ControlNetOutput
@@ -36,6 +35,7 @@ from ppdiffusers.pipelines.stable_diffusion.safety_checker import (
     StableDiffusionSafetyChecker,
 )
 from ppdiffusers.schedulers import KarrasDiffusionSchedulers
+from ppdiffusers.transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
 from ppdiffusers.utils import (
     PIL_INTERPOLATION,
     PPDIFFUSERS_CACHE,
@@ -56,6 +56,14 @@ import os.path
 from huggingface_hub.file_download import _request_wrapper, hf_raise_for_status
 
 # lark omegaconf
+try:
+    from ppdiffusers.loaders import FromSingleFileMixin
+except:
+
+    class FromSingleFileMixin:
+        @classmethod
+        def from_single_file(cls, pretrained_model_link_or_path, **kwargs):
+            raise NotImplementedError("Please upgrade ppdiffusers to >= 0.24.0")
 
 
 def resize_image(resize_mode, im, width, height, upscaler_name=None):
@@ -189,17 +197,7 @@ def load_lora(
             continue
 
         if "text" in key:
-            tmp_layer_infos = key.split(".")[0].split(LORA_PREFIX_TEXT_ENCODER + "_")[-1].split("_")
-            hf_to_ppnlp = {
-                "encoder": "transformer",
-                "fc1": "linear1",
-                "fc2": "linear2",
-            }
-            layer_infos = []
-            for layer_info in tmp_layer_infos:
-                if layer_info == "mlp":
-                    continue
-                layer_infos.append(hf_to_ppnlp.get(layer_info, layer_info))
+            layer_infos = key.split(".")[0].split(LORA_PREFIX_TEXT_ENCODER + "_")[-1].split("_")
             curr_layer: paddle.nn.Linear = pipeline.text_encoder
         else:
             layer_infos = key.split(".")[0].split(LORA_PREFIX_UNET + "_")[-1].split("_")
@@ -331,7 +329,7 @@ class MultiControlNetModel(ModelMixin):
         return down_block_res_samples, mid_block_res_sample
 
 
-class WebUIStableDiffusionPipeline(DiffusionPipeline):
+class WebUIStableDiffusionPipeline(DiffusionPipeline, FromSingleFileMixin):
     r"""
     Pipeline for text-to-image generation using Stable Diffusion.
 
@@ -423,7 +421,7 @@ class WebUIStableDiffusionPipeline(DiffusionPipeline):
         # custom data
         clip_model = FrozenCLIPEmbedder(text_encoder, tokenizer)
         self.sj = StableDiffusionModelHijack(clip_model)
-        self.orginal_scheduler_config = self.scheduler.config
+        self.original_scheduler_config = self.scheduler.config
         self.supported_scheduler = [
             "pndm",
             "lms",
@@ -443,13 +441,15 @@ class WebUIStableDiffusionPipeline(DiffusionPipeline):
 
         # register_state_dict_hook to fix text_encoder, when we save_pretrained text model.
         def map_to(state_dict, *args, **kwargs):
-            if "text_model.token_embedding.wrapped.weight" in state_dict:
-                state_dict["text_model.token_embedding.weight"] = state_dict.pop(
-                    "text_model.token_embedding.wrapped.weight"
+            if "text_model.embeddings.token_embedding.wrapped.weight" in state_dict:
+                state_dict["text_model.embeddings.token_embedding.weight"] = state_dict.pop(
+                    "text_model.embeddings.token_embedding.wrapped.weight"
                 )
             return state_dict
 
         self.text_encoder.register_state_dict_hook(map_to)
+        os.makedirs(self.LORA_DIR, exist_ok=True)
+        os.makedirs(self.TI_DIR, exist_ok=True)
 
     def add_ti_embedding_dir(self, embeddings_dir=None):
         self.sj.embedding_db.add_embedding_dir(embeddings_dir)
@@ -509,39 +509,39 @@ class WebUIStableDiffusionPipeline(DiffusionPipeline):
         )
 
         if scheduler_type == "pndm":
-            scheduler = PNDMScheduler.from_config(self.orginal_scheduler_config, skip_prk_steps=True)
+            scheduler = PNDMScheduler.from_config(self.original_scheduler_config, skip_prk_steps=True)
         elif scheduler_type == "lms":
-            scheduler = LMSDiscreteScheduler.from_config(self.orginal_scheduler_config)
+            scheduler = LMSDiscreteScheduler.from_config(self.original_scheduler_config)
         elif scheduler_type == "heun":
-            scheduler = HeunDiscreteScheduler.from_config(self.orginal_scheduler_config)
+            scheduler = HeunDiscreteScheduler.from_config(self.original_scheduler_config)
         elif scheduler_type == "euler":
-            scheduler = EulerDiscreteScheduler.from_config(self.orginal_scheduler_config)
+            scheduler = EulerDiscreteScheduler.from_config(self.original_scheduler_config)
         elif scheduler_type == "euler-ancestral":
-            scheduler = EulerAncestralDiscreteScheduler.from_config(self.orginal_scheduler_config)
+            scheduler = EulerAncestralDiscreteScheduler.from_config(self.original_scheduler_config)
         elif scheduler_type == "dpm-multi":
-            scheduler = DPMSolverMultistepScheduler.from_config(self.orginal_scheduler_config)
+            scheduler = DPMSolverMultistepScheduler.from_config(self.original_scheduler_config)
         elif scheduler_type == "dpm-single":
-            scheduler = DPMSolverSinglestepScheduler.from_config(self.orginal_scheduler_config)
+            scheduler = DPMSolverSinglestepScheduler.from_config(self.original_scheduler_config)
         elif scheduler_type == "kdpm2-ancestral":
-            scheduler = KDPM2AncestralDiscreteScheduler.from_config(self.orginal_scheduler_config)
+            scheduler = KDPM2AncestralDiscreteScheduler.from_config(self.original_scheduler_config)
         elif scheduler_type == "kdpm2":
-            scheduler = KDPM2DiscreteScheduler.from_config(self.orginal_scheduler_config)
+            scheduler = KDPM2DiscreteScheduler.from_config(self.original_scheduler_config)
         elif scheduler_type == "unipc-multi":
-            scheduler = UniPCMultistepScheduler.from_config(self.orginal_scheduler_config)
+            scheduler = UniPCMultistepScheduler.from_config(self.original_scheduler_config)
         elif scheduler_type == "ddim":
             scheduler = DDIMScheduler.from_config(
-                self.orginal_scheduler_config,
+                self.original_scheduler_config,
                 steps_offset=1,
                 clip_sample=False,
                 set_alpha_to_one=False,
             )
         elif scheduler_type == "ddpm":
             scheduler = DDPMScheduler.from_config(
-                self.orginal_scheduler_config,
+                self.original_scheduler_config,
             )
         elif scheduler_type == "deis-multi":
             scheduler = DEISMultistepScheduler.from_config(
-                self.orginal_scheduler_config,
+                self.original_scheduler_config,
             )
         else:
             raise ValueError(
@@ -977,7 +977,7 @@ class WebUIStableDiffusionPipeline(DiffusionPipeline):
             timesteps = self.scheduler.timesteps
 
             # 5. Prepare latent variables
-            num_channels_latents = self.unet.in_channels
+            num_channels_latents = self.unet.config.in_channels
             latents = self.prepare_latents(
                 batch_size,
                 num_channels_latents,
@@ -999,12 +999,13 @@ class WebUIStableDiffusionPipeline(DiffusionPipeline):
                     step = i // self.scheduler.order
                     do_batch = False
                     conds_list, cond_tensor = reconstruct_multicond_batch(prompt_embeds, step)
+                    cond_tensor = cond_tensor.cast(self.unet.dtype)
                     try:
                         weight = conds_list[0][0][1]
                     except Exception:
                         weight = 1.0
                     if do_classifier_free_guidance:
-                        uncond_tensor = reconstruct_cond_batch(negative_prompt_embeds, step)
+                        uncond_tensor = reconstruct_cond_batch(negative_prompt_embeds, step).cast(self.unet.dtype)
                         do_batch = cond_tensor.shape[1] == uncond_tensor.shape[1] and not isinstance(
                             self.controlnet, MultiControlNetModel
                         )
@@ -1493,7 +1494,7 @@ class FrozenCLIPEmbedderWithCustomWords(FrozenCLIPEmbedderWithCustomWordsBase):
 
         if output_hidden_states:
             z = outputs.hidden_states[-self.CLIP_stop_at_last_layers]
-            z = self.wrapped.text_encoder.text_model.ln_final(z)
+            z = self.wrapped.text_encoder.text_model.final_layer_norm(z)
         else:
             z = outputs.last_hidden_state
 
@@ -1504,7 +1505,7 @@ class FrozenCLIPEmbedderWithCustomWords(FrozenCLIPEmbedderWithCustomWordsBase):
         ids = self.wrapped.tokenizer(init_text, max_length=nvpt, return_tensors="pd", add_special_tokens=False)[
             "input_ids"
         ]
-        embedded = embedding_layer.token_embedding.wrapped(ids).squeeze(0)
+        embedded = embedding_layer.embeddings.token_embedding.wrapped(ids).squeeze(0)
 
         return embedded
 
@@ -2028,7 +2029,7 @@ class StableDiffusionModelHijack:
     circular_enabled = False
 
     def __init__(self, clip_model, embeddings_dir=None, CLIP_stop_at_last_layers=-1):
-        model_embeddings = clip_model.text_encoder.text_model
+        model_embeddings = clip_model.text_encoder.text_model.embeddings
         model_embeddings.token_embedding = EmbeddingsWithFixes(model_embeddings.token_embedding, self)
         clip_model = FrozenCLIPEmbedderWithCustomWords(
             clip_model, self, CLIP_stop_at_last_layers=CLIP_stop_at_last_layers

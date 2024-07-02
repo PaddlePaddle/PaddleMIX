@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .trainer import *
+from .argument import *
+
 # from .eva02_pretrain_trainer import *
 from .eva02_finetune_trainer import *
-
+from .freeze_utils import *
+from .trainer import *

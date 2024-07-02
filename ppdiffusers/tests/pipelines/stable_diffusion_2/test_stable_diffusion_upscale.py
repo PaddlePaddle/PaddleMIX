@@ -19,7 +19,6 @@ import unittest
 
 import numpy as np
 import paddle
-from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
 from PIL import Image
 
 from ppdiffusers import (
@@ -29,6 +28,7 @@ from ppdiffusers import (
     StableDiffusionUpscalePipeline,
     UNet2DConditionModel,
 )
+from ppdiffusers.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
 from ppdiffusers.utils import floats_tensor, load_image, slow
 from ppdiffusers.utils.testing_utils import enable_full_determinism, require_paddle_gpu
 

@@ -80,7 +80,12 @@ class VQADataset(DatasetBuilder):
         return image_fullname, anno_fullname, mode
 
     def _read(self, filename, *args):
-        image_root, anno_path, mode = filename
+        if isinstance(filename, (list, tuple)):
+            image_root, anno_path, mode = filename
+        else:
+            anno_path = [filename]
+            image_root = ""
+            mode = "train"
         annotations = []
         if mode == "val" or mode == "test":
             annotations = json.load(open(anno_path[0]))
@@ -106,7 +111,7 @@ class VQADataset(DatasetBuilder):
                     "question_id": ann["question_id"],
                     "image_id": ann["image"].split("/")[-1].strip(".jpg").split("_")[-1],
                 }
-                yield_data["image_ids"]: ann["image_ids"]
+                yield_data["image_ids"] = ann["image_ids"]
             yield yield_data
 
     def _gen_image_id(self, anno):

@@ -17,12 +17,6 @@ import unittest
 
 import numpy as np
 import paddle
-from paddlenlp.transformers import (
-    CLIPTextConfig,
-    CLIPTextModel,
-    CLIPTextModelWithProjection,
-    CLIPTokenizer,
-)
 
 from ppdiffusers import (
     AutoencoderKL,
@@ -30,35 +24,49 @@ from ppdiffusers import (
     DPMSolverMultistepScheduler,
     EulerDiscreteScheduler,
     HeunDiscreteScheduler,
+    LCMScheduler,
     StableDiffusionXLImg2ImgPipeline,
     StableDiffusionXLPipeline,
     UNet2DConditionModel,
     UniPCMultistepScheduler,
 )
-from ppdiffusers.utils.testing_utils import enable_full_determinism
+from ppdiffusers.transformers import (
+    CLIPTextConfig,
+    CLIPTextModel,
+    CLIPTextModelWithProjection,
+    CLIPTokenizer,
+)
+from ppdiffusers.utils.testing_utils import enable_full_determinism, slow
 
 from ..pipeline_params import (
     TEXT_TO_IMAGE_BATCH_PARAMS,
     TEXT_TO_IMAGE_IMAGE_PARAMS,
     TEXT_TO_IMAGE_PARAMS,
 )
-from ..test_pipelines_common import PipelineLatentTesterMixin, PipelineTesterMixin
+from ..test_pipelines_common import (
+    PipelineLatentTesterMixin,
+    PipelineTesterMixin,
+    SDXLOptionalComponentsTesterMixin,
+)
 
 enable_full_determinism()
 
 
-class StableDiffusionXLPipelineFastTests(PipelineLatentTesterMixin, PipelineTesterMixin, unittest.TestCase):
+class StableDiffusionXLPipelineFastTests(
+    PipelineLatentTesterMixin, PipelineTesterMixin, SDXLOptionalComponentsTesterMixin, unittest.TestCase
+):
     pipeline_class = StableDiffusionXLPipeline
     params = TEXT_TO_IMAGE_PARAMS
     batch_params = TEXT_TO_IMAGE_BATCH_PARAMS
     image_params = TEXT_TO_IMAGE_IMAGE_PARAMS
     image_latents_params = TEXT_TO_IMAGE_IMAGE_PARAMS
 
-    def get_dummy_components(self):
+    def get_dummy_components(self, time_cond_proj_dim=None):
         paddle.seed(seed=0)
         unet = UNet2DConditionModel(
-            block_out_channels=(32, 64),
+            block_out_channels=(2, 4),
             layers_per_block=2,
+            time_cond_proj_dim=time_cond_proj_dim,
             sample_size=32,
             in_channels=4,
             out_channels=4,
@@ -71,6 +79,7 @@ class StableDiffusionXLPipelineFastTests(PipelineLatentTesterMixin, PipelineTest
             transformer_layers_per_block=(1, 2),
             projection_class_embeddings_input_dim=80,
             cross_attention_dim=64,
+            norm_num_groups=1,
         )
         scheduler = EulerDiscreteScheduler(
             beta_start=0.00085,
@@ -115,6 +124,8 @@ class StableDiffusionXLPipelineFastTests(PipelineLatentTesterMixin, PipelineTest
             "tokenizer": tokenizer,
             "text_encoder_2": text_encoder_2,
             "tokenizer_2": tokenizer_2,
+            "image_encoder": None,
+            "feature_extractor": None,
         }
         return components
 
@@ -137,8 +148,26 @@ class StableDiffusionXLPipelineFastTests(PipelineLatentTesterMixin, PipelineTest
         image = sd_pipe(**inputs).images
         image_slice = image[(0), -3:, -3:, (-1)]
         assert image.shape == (1, 64, 64, 3)
-        expected_slice = np.array([0.0, 0.0, 0.3135, 0.1048, 0.1784, 0.4079, 0.0893, 0.0314, 0.3707])
+        expected_slice = np.array([0.16128531, 0.0, 0.0498, 0.0, 0.0, 0.08472335, 0.26672202, 0.0, 0.29921377])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
+
+    def test_stable_diffusion_xl_euler_lcm(self):
+        components = self.get_dummy_components(time_cond_proj_dim=256)
+        sd_pipe = StableDiffusionXLPipeline(**components)
+        sd_pipe.scheduler = LCMScheduler.from_config(sd_pipe.scheduler.config)
+        sd_pipe.set_progress_bar_config(disable=None)
+
+        inputs = self.get_dummy_inputs()
+        image = sd_pipe(**inputs).images
+        image_slice = image[0, -3:, -3:, -1]
+
+        assert image.shape == (1, 64, 64, 3)
+        expected_slice = np.array(
+            [0.30508393, 0.2898788, 0.31740466, 0.1581057, 0.2680794, 0.40293586, 0.22712025, 0.19681138, 0.31075126]
+        )
+
+        print(str(image_slice.flatten()))
+        assert np.abs(image_slice.flatten() - expected_slice).max() < 1e-2
 
     def test_stable_diffusion_xl_prompt_embeds(self):
         components = self.get_dummy_components()
@@ -203,6 +232,9 @@ class StableDiffusionXLPipelineFastTests(PipelineLatentTesterMixin, PipelineTest
     def test_inference_batch_single_identical(self):
         super().test_inference_batch_single_identical()
 
+    def test_save_load_optional_components(self):
+        self._test_save_load_optional_components()
+
     # @require_paddle_gpu
     # def test_stable_diffusion_xl_offloads(self):
     #     pipes = []
@@ -226,6 +258,7 @@ class StableDiffusionXLPipelineFastTests(PipelineLatentTesterMixin, PipelineTest
     #     assert np.abs(image_slices[0] - image_slices[1]).max() < 0.001
     #     assert np.abs(image_slices[0] - image_slices[2]).max() < 0.001
 
+    @slow
     def test_stable_diffusion_two_xl_mixture_of_denoiser(self):
         components = self.get_dummy_components()
         pipe_1 = StableDiffusionXLPipeline(**components)
@@ -250,8 +283,13 @@ class StableDiffusionXLPipelineFastTests(PipelineLatentTesterMixin, PipelineTest
             pipe_2.scheduler = scheduler_cls.from_config(pipe_2.scheduler.config)
             pipe_1.scheduler.set_timesteps(num_steps)
             expected_steps = pipe_1.scheduler.timesteps.tolist()
-            expected_steps_1 = list(filter(lambda ts: ts >= split, expected_tss))
-            expected_steps_2 = list(filter(lambda ts: ts < split, expected_tss))
+            if pipe_1.scheduler.order == 2:
+                expected_steps_1 = list(filter(lambda ts: ts >= split, expected_tss))
+                expected_steps_2 = expected_steps_1[-1:] + list(filter(lambda ts: ts < split, expected_tss))
+                expected_steps = expected_steps_1 + expected_steps_2
+            else:
+                expected_steps_1 = list(filter(lambda ts: ts >= split, expected_tss))
+                expected_steps_2 = list(filter(lambda ts: ts < split, expected_tss))
             done_steps = []
             old_step = copy.copy(scheduler_cls.step)
 
@@ -481,6 +519,7 @@ class StableDiffusionXLPipelineFastTests(PipelineLatentTesterMixin, PipelineTest
             ]:
                 assert_run_mixture(steps, split, scheduler_cls_timesteps[0], scheduler_cls_timesteps[1])
 
+    @slow
     def test_stable_diffusion_three_xl_mixture_of_denoiser(self):
         components = self.get_dummy_components()
         pipe_1 = StableDiffusionXLPipeline(**components)
@@ -510,12 +549,19 @@ class StableDiffusionXLPipelineFastTests(PipelineLatentTesterMixin, PipelineTest
             expected_steps = pipe_1.scheduler.timesteps.tolist()
             split_1_ts = num_train_timesteps - int(round(num_train_timesteps * split_1))
             split_2_ts = num_train_timesteps - int(round(num_train_timesteps * split_2))
-            expected_steps_1 = expected_steps[:split_1_ts]
-            expected_steps_2 = expected_steps[split_1_ts:split_2_ts]
-            expected_steps_3 = expected_steps[split_2_ts:]
-            expected_steps_1 = list(filter(lambda ts: ts >= split_1_ts, expected_steps))
-            expected_steps_2 = list(filter(lambda ts: ts >= split_2_ts and ts < split_1_ts, expected_steps))
-            expected_steps_3 = list(filter(lambda ts: ts < split_2_ts, expected_steps))
+
+            if pipe_1.scheduler.order == 2:
+                expected_steps_1 = list(filter(lambda ts: ts >= split_1_ts, expected_steps))
+                expected_steps_2 = expected_steps_1[-1:] + list(
+                    filter(lambda ts: ts >= split_2_ts and ts < split_1_ts, expected_steps)
+                )
+                expected_steps_3 = expected_steps_2[-1:] + list(filter(lambda ts: ts < split_2_ts, expected_steps))
+                expected_steps = expected_steps_1 + expected_steps_2 + expected_steps_3
+            else:
+                expected_steps_1 = list(filter(lambda ts: ts >= split_1_ts, expected_steps))
+                expected_steps_2 = list(filter(lambda ts: ts >= split_2_ts and ts < split_1_ts, expected_steps))
+                expected_steps_3 = list(filter(lambda ts: ts < split_2_ts, expected_steps))
+
             done_steps = []
             old_step = copy.copy(scheduler_cls.step)
 

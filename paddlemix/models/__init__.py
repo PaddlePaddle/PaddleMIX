@@ -13,10 +13,17 @@
 # see the license for the specific language governing permissions and
 # limitations under the license.
 
+from .audioldm2.configuration import *
+from .audioldm2.modeling import *
 from .blip2.modeling import *
-from .minigpt4.configuration import *
-from .minigpt4.modeling import *
-from .visualglm.configuration import *
-from .visualglm.modeling import *
+from .cogvlm.configuration import *
+from .cogvlm.modeling import *
 from .imagebind.modeling import *
 from .imagebind.multimodal_preprocessors import *
+from .internlm_xcomposer2 import *
+from .llava import *
+from .minigpt4.configuration import *
+from .minigpt4.modeling import *
+from .qwen_vl import *
+from .visualglm.configuration import *
+from .visualglm.modeling import *

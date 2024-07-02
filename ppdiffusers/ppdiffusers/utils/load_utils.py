@@ -46,6 +46,7 @@ if is_safetensors_available():
     np.bfloat16 = np.uint16
     np.bool = bool
     safetensors.numpy._TYPES.update({"BF16": np.uint16})
+    from safetensors import safe_open
 
 if is_torch_available():
     import torch
@@ -253,26 +254,7 @@ def convert_to_paddle(state_dict, return_numpy=False, return_global_step=False):
     while "state_dict" in state_dict:
         state_dict = state_dict["state_dict"]
 
-    for k, v in state_dict.items():
-        # maybe position id is bfloat32
-        # if "position_id" in k and "int" not in str(v.dtype):
-        #     v = v.numpy().astype("int64") if hasattr(v, "numpy") else v.astype("int64")
-        if v.ndim == 0:
-            v = v.reshape((1,))
-        if not return_numpy:
-            # support bfloat16
-            if "torch.bfloat16" in str(v.dtype):
-                v = v.float()
-                pd_state_dict[k] = (
-                    paddle.to_tensor(v.numpy()).cast(paddle.bfloat16)
-                    if hasattr(v, "numpy")
-                    else paddle.to_tensor(v).cast(paddle.bfloat16)
-                )
-            else:
-                pd_state_dict[k] = paddle.to_tensor(v.numpy()) if hasattr(v, "numpy") else paddle.to_tensor(v)
-        else:
-            pd_state_dict[k] = v.numpy() if hasattr(v, "numpy") else v
-
+    pd_state_dict.update(cast_to_paddle(state_dict, return_numpy))
     return pd_state_dict
 
 
@@ -309,6 +291,41 @@ def safetensors_load(path: str):
     return data
 
 
+from ppdiffusers.accelerate.utils import honor_type
+
+
+def cast_to_paddle(tensor, return_numpy=False):
+    if isinstance(tensor, (list, tuple)):
+        return honor_type(tensor, (cast_to_paddle(t, return_numpy) for t in tensor))
+    elif isinstance(tensor, dict):
+        return type(tensor)({k: cast_to_paddle(v, return_numpy) for k, v in tensor.items()})
+    elif isinstance(tensor, np.ndarray):
+        if tensor.ndim == 0:
+            tensor = tensor.reshape((1,))
+        if return_numpy:
+            return tensor
+        return paddle.to_tensor(tensor)
+    elif is_torch_available() and isinstance(tensor, torch.Tensor):
+        is_bfloat16 = False
+        if tensor.ndim == 0:
+            tensor = tensor.reshape((1,))
+        if "torch.bfloat16" in str(tensor.dtype):
+            is_bfloat16 = True
+            tensor = tensor.float().contiguous().cpu().numpy()
+        else:
+            tensor = tensor.contiguous().cpu().numpy()
+        if return_numpy:
+            return tensor
+        if is_bfloat16:
+            return paddle.to_tensor(tensor).cast(paddle.bfloat16)
+        return paddle.to_tensor(tensor)
+    elif isinstance(tensor, paddle.Tensor):
+        if return_numpy:
+            tensor = tensor.cpu().numpy()
+        return tensor
+    return tensor
+
+
 def smart_load(
     path: str,
     map_location: str = None,
@@ -336,14 +353,32 @@ def smart_load(
         if suffix in safetensors_suffix:
             state_dict = convert_to_paddle(safetensors_load(path), return_numpy, return_global_step)
             if return_is_torch_weight:
-                state_dict["is_torch_weight"] = True
+                with safe_open(path, framework="np") as f:
+                    metadata = f.metadata()
+                    if metadata is None:
+                        metadata = {}
+                    data_format = metadata.get("format", "pt")
+                    if data_format == "pt":
+                        is_torch_weight = True
+                    else:
+                        is_torch_weight = False
+                state_dict["is_torch_weight"] = is_torch_weight
             return state_dict
 
         # must use safetensors_load first
         try:
             state_dict = convert_to_paddle(safetensors_load(path), return_numpy, return_global_step)
             if return_is_torch_weight:
-                state_dict["is_torch_weight"] = True
+                with safe_open(path, framework="np") as f:
+                    metadata = f.metadata()
+                    if metadata is None:
+                        metadata = {}
+                    data_format = metadata.get("format", "pt")
+                    if data_format == "pt":
+                        is_torch_weight = True
+                    else:
+                        is_torch_weight = False
+                state_dict["is_torch_weight"] = is_torch_weight
             return state_dict
         except Exception:
             logger.info(f"Cant load file {name} with safetensors!")

@@ -175,7 +175,7 @@ class ConfigTester(unittest.TestCase):
                 beta_end=8,
             )
         with CaptureLogger(logger) as cap_logger_2:
-            ddpm_2 = DDPMScheduler.from_pretrained("google/ddpm-celebahq-256", subfolder="scheduler", beta_start=88)
+            ddpm_2 = DDPMScheduler.from_pretrained("google/ddpm-celebahq-256", subfolder="scheduler", beta_start=88, from_hf_hub=False)
         assert ddpm.__class__ == DDPMScheduler
         assert ddpm.config.prediction_type == "sample"
         assert ddpm.config.beta_end == 8

@@ -52,6 +52,7 @@ def predict(args):
     query = "写诗描述一下这个场景"
     history = []
     inputs = processor(image, query)
+
     generate_ids, _ = model.generate(**inputs, **generate_kwargs)
     responses = processor.get_responses(generate_ids)
     history.append([query, responses[0]])

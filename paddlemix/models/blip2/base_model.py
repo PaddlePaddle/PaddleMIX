@@ -12,6 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 """ Paddle BLIP2 base model."""
 import gc
 import os
@@ -214,14 +215,14 @@ class Blip2PretrainedModel(MixPretrainedModel):
 
         model_kwargs = kwargs
 
-        # from_hf_hub defalut enable convert_from_torch
+        # from_hf_hub default enable convert_from_torch
         if from_hf_hub and convert_from_torch is None:
             logger.warning(
                 "If you are attempting to load weights from Hugging Face Hub and want to disable the default behavior of considering torch weights,"
                 " you can set ·convert_from_torch=False·. By default, `convert_from_torch` is set to `True`. "
             )
             convert_from_torch = True
-        # convert_from_torch defalut is False
+        # convert_from_torch default is False
         if convert_from_torch is None:
             convert_from_torch = False
 
@@ -265,7 +266,7 @@ class Blip2PretrainedModel(MixPretrainedModel):
         use_keep_in_fp32_modules = False
 
         # resolve model_weight file
-        resolved_archive_file, sharded_metadata, is_sharded = cls._resolve_model_file_path(
+        resolved_archive_file, *_, sharded_metadata, is_sharded = cls._resolve_model_file_path(
             pretrained_model_name_or_path,
             cache_dir=cache_dir,
             subfolder=subfolder,
@@ -417,8 +418,9 @@ class Blip2PretrainedModel(MixPretrainedModel):
                         model_name_or_path = BRIDGE_WEIGHTS[model_name_or_path]
                     else:
                         model_name_or_path = model_name_or_path
+            
             # resolve model_weight file
-            resolved_archive_file, sharded_metadata, is_sharded = self._resolve_model_file_path(
+            resolved_archive_file, *_ = self._resolve_model_file_path(
                 pretrained_model_name_or_path=model_name_or_path,
                 cache_dir=cache_dir,
                 subfolder=subfolder,

@@ -12,11 +12,10 @@
 # # See the License for the specific language governing permissions and
 # # limitations under the License.
 
-# from ppdiffusers import VersatileDiffusionTextToImagePipeline
+from ppdiffusers import VersatileDiffusionTextToImagePipeline
 
-# pipe = VersatileDiffusionTextToImagePipeline.from_pretrained("shi-labs/versatile-diffusion")
-# pipe.remove_unused_weights()
+pipe = VersatileDiffusionTextToImagePipeline.from_pretrained("shi-labs/versatile-diffusion")
+pipe.remove_unused_weights()
 
-# image = pipe("an astronaut riding on a horse on mars").images[0]
-# image.save("text_to_image_generation-versatile_diffusion-result.png")
-# todo
+image = pipe("an astronaut riding on a horse on mars").images[0]
+image.save("text_to_image_generation-versatile_diffusion-result.png")

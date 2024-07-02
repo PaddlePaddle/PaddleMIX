@@ -459,7 +459,7 @@ class EVA02ForPretrainModel(MixPretrainedModel):
         pretrained_teacher_name_or_path=None,
         pretrained_student_name_or_path=None,
         from_hf_hub: bool = False,
-        subfolder: str = None,
+        subfolder: str = "",
         *args,
         **kwargs,
     ):

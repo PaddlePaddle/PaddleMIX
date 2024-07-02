@@ -12,12 +12,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import os
 
+os.environ["USE_PEFT_BACKEND"] = "False"
 import argparse
 import contextlib
 import gc
 import math
-import os
 import random
 import sys
 from pathlib import Path
@@ -29,14 +30,14 @@ import paddle.nn as nn
 import paddle.nn.functional as F
 from datasets import DatasetDict, load_dataset
 from huggingface_hub import HfFolder, Repository, create_repo, whoami
-from paddle.distributed.fleet.utils.hybrid_parallel_util import (
-    fused_allreduce_gradients,
-)
+
+# from paddle.distributed.fleet.utils.hybrid_parallel_util import (
+#     fused_allreduce_gradients,
+# )
 from paddle.io import BatchSampler, DataLoader, DistributedBatchSampler
 from paddle.optimizer import AdamW
 from paddle.vision import BaseTransform, transforms
 from paddlenlp.trainer import set_seed
-from paddlenlp.transformers import AutoTokenizer, PretrainedConfig
 from paddlenlp.utils.downloader import get_path_from_url_with_filelock
 from paddlenlp.utils.log import logger
 from tqdm.auto import tqdm
@@ -58,11 +59,10 @@ from ppdiffusers.models.attention_processor import (
 )
 from ppdiffusers.optimization import get_scheduler
 from ppdiffusers.training_utils import freeze_params, main_process_first, unwrap_model
-from ppdiffusers.utils import (
-    PPDIFFUSERS_CACHE,
-    TEXT_ENCODER_ATTN_MODULE,
-    check_min_version,
-)
+from ppdiffusers.transformers import AutoTokenizer, PretrainedConfig
+from ppdiffusers.utils import PPDIFFUSERS_CACHE, check_min_version
+
+TEXT_ENCODER_ATTN_MODULE = ".self_attn"
 
 check_min_version("0.16.1")
 
@@ -110,7 +110,7 @@ def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: st
     except Exception:
         model_class = "LDMBertModel"
     if model_class == "CLIPTextModel":
-        from paddlenlp.transformers import CLIPTextModel
+        from ppdiffusers.transformers import CLIPTextModel
 
         return CLIPTextModel
     elif model_class == "RobertaSeriesModelWithTransformation":
@@ -120,7 +120,7 @@ def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: st
 
         return RobertaSeriesModelWithTransformation
     elif model_class == "BertModel":
-        from paddlenlp.transformers import BertModel
+        from ppdiffusers.transformers import BertModel
 
         return BertModel
     elif model_class == "LDMBertModel":
@@ -859,8 +859,8 @@ def main():
                 loss.backward()
 
             if (step + 1) % args.gradient_accumulation_steps == 0:
-                if num_processes > 1 and args.gradient_checkpointing:
-                    fused_allreduce_gradients(params_to_optimize, None)
+                # if num_processes > 1 and args.gradient_checkpointing:
+                #     fused_allreduce_gradients(params_to_optimize, None)
                 optimizer.step()
                 lr_scheduler.step()
                 optimizer.clear_grad()
@@ -895,7 +895,7 @@ def main():
                     break
 
         if is_main_process:
-            if args.validation_prompt is not None and epoch % args.validation_epochs == 0:
+            if args.validation_prompt is not None and epoch % args.validation_epochs == 0 and epoch > 0:
                 logger.info(
                     f"Running validation... \n Generating {args.num_validation_images} images with prompt:"
                     f" {args.validation_prompt}."

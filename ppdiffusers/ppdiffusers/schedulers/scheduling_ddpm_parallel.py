@@ -22,25 +22,23 @@ import numpy as np
 import paddle
 
 from ..configuration_utils import ConfigMixin, register_to_config
-from ..utils import BaseOutput, randn_tensor
+from ..utils import BaseOutput
+from ..utils.paddle_utils import randn_tensor
 from .scheduling_utils import KarrasDiffusionSchedulers, SchedulerMixin
-
-# from ..pipelines.semantic_stable_diffusion.custom_quantile import quantile
-quantile = paddle.quantile
 
 
 @dataclass
 # Copied from ppdiffusers.schedulers.scheduling_ddpm.DDPMSchedulerOutput
 class DDPMParallelSchedulerOutput(BaseOutput):
     """
-    Output class for the scheduler's step function output.
+    Output class for the scheduler's `step` function output.
 
     Args:
         prev_sample (`paddle.Tensor` of shape `(batch_size, num_channels, height, width)` for images):
-            Computed sample (x_{t-1}) of previous timestep. `prev_sample` should be used as next model input in the
+            Computed sample `(x_{t-1})` of previous timestep. `prev_sample` should be used as next model input in the
             denoising loop.
         pred_original_sample (`paddle.Tensor` of shape `(batch_size, num_channels, height, width)` for images):
-            The predicted denoised sample (x_{0}) based on the model output from the current timestep.
+            The predicted denoised sample `(x_{0})` based on the model output from the current timestep.
             `pred_original_sample` can be used to preview progress or for guidance.
     """
 
@@ -181,7 +179,7 @@ class DDPMParallelScheduler(SchedulerMixin, ConfigMixin):
         elif beta_schedule == "sigmoid":
             # GeoDiff sigmoid schedule
             betas = paddle.linspace(-6, 6, num_train_timesteps)
-            self.betas = paddle.sigmoid(betas) * (beta_end - beta_start) + beta_start
+            self.betas = paddle.nn.functional.sigmoid(betas) * (beta_end - beta_start) + beta_start
         else:
             raise NotImplementedError(f"{beta_schedule} does is not implemented for {self.__class__}")
 
@@ -206,11 +204,14 @@ class DDPMParallelScheduler(SchedulerMixin, ConfigMixin):
         current timestep.
 
         Args:
-            sample (`paddle.Tensor`): input sample
-            timestep (`int`, optional): current timestep
+            sample (`paddle.Tensor`):
+                The input sample.
+            timestep (`int`, *optional*):
+                The current timestep in the diffusion chain.
 
         Returns:
-            `paddle.Tensor`: scaled input sample
+            `paddle.Tensor`:
+                A scaled input sample.
         """
         return sample
 
@@ -221,16 +222,18 @@ class DDPMParallelScheduler(SchedulerMixin, ConfigMixin):
         timesteps: Optional[List[int]] = None,
     ):
         """
-        Sets the discrete timesteps used for the diffusion chain. Supporting function to be run before inference.
+        Sets the discrete timesteps used for the diffusion chain (to be run before inference).
 
         Args:
-            num_inference_steps (`Optional[int]`):
-                the number of diffusion steps used when generating samples with a pre-trained model. If passed, then
+            num_inference_steps (`int`):
+                The number of diffusion steps used when generating samples with a pre-trained model. If used,
                 `timesteps` must be `None`.
-            custom_timesteps (`List[int]`, optional):
-                custom timesteps used to support arbitrary spacing between timesteps. If `None`, then the default
-                timestep spacing strategy of equal spacing between timesteps is used. If passed, `num_inference_steps`
-                must be `None`.
+            device (`str` or `torch.device`, *optional*):
+                The device to which the timesteps should be moved to. If `None`, the timesteps are not moved.
+            timesteps (`List[int]`, *optional*):
+                Custom timesteps used to support arbitrary spacing between timesteps. If `None`, then the default
+                timestep spacing strategy of equal spacing between timesteps is used. If `timesteps` is passed,
+                `num_inference_steps` must be `None`.
 
         """
         if num_inference_steps is not None and timesteps is not None:
@@ -340,29 +343,28 @@ class DDPMParallelScheduler(SchedulerMixin, ConfigMixin):
         https://arxiv.org/abs/2205.11487
         """
         dtype = sample.dtype
-        batch_size, channels, height, width = sample.shape
+        batch_size, channels, *remaining_dims = sample.shape
 
         if dtype not in (paddle.float32, paddle.float64):
             sample = sample.cast("float32")  # upcast for quantile calculation, and clamp not implemented for cpu half
 
         # Flatten sample for doing quantile calculation along each image
-        sample = sample.reshape([batch_size, channels * height * width])
+        sample = sample.reshape([batch_size, channels * np.prod(remaining_dims)])
 
         abs_sample = sample.abs()  # "a certain percentile absolute pixel value"
 
-        s = quantile(abs_sample, self.config.dynamic_thresholding_ratio, axis=1)
-        # paddle.clip donot support min > max
+        s = paddle.quantile(abs_sample, self.config.dynamic_thresholding_ratio, axis=1)
+        # NOTE paddle.clip donot support min > max
         if self.config.sample_max_value < 1:
             s = paddle.ones_like(s) * self.config.sample_max_value
         else:
             s = paddle.clip(
                 s, min=1, max=self.config.sample_max_value
             )  # When clip to min=1, equivalent to standard clipping to [-1, 1]
-
-        s = s.unsqueeze(1)  # (batch_size, 1) because clamp will broadcast along dim=0
+        s = s.unsqueeze(1)  # (batch_size, 1) because clip will broadcast along axis=0
         sample = paddle.clip(sample, -s, s) / s  # "we threshold xt0 to the range [-s, s] and then divide by s"
 
-        sample = sample.reshape([batch_size, channels, height, width])
+        sample = sample.reshape([batch_size, channels, *remaining_dims])
         sample = sample.cast(dtype)
 
         return sample
@@ -501,6 +503,7 @@ class DDPMParallelScheduler(SchedulerMixin, ConfigMixin):
             pass
 
         # 1. compute alphas, betas
+
         alpha_prod_t = self.alphas_cumprod[t]
         alpha_prod_t_prev = self.alphas_cumprod[paddle.clip(prev_t, min=0)]
         alpha_prod_t_prev[prev_t < 0] = paddle.to_tensor(1.0)
@@ -550,8 +553,11 @@ class DDPMParallelScheduler(SchedulerMixin, ConfigMixin):
         noise: paddle.Tensor,
         timesteps: paddle.Tensor,
     ) -> paddle.Tensor:
-        # Make sure alphas_cumprod and timestep have same device and dtype as original_samples
-        alphas_cumprod = self.alphas_cumprod.cast(original_samples.dtype)
+        # Fix 0D tensor
+        if paddle.is_tensor(timesteps) and timesteps.ndim == 0:
+            timesteps = timesteps.unsqueeze(0)
+        # Make sure alphas_cumprod and timestep have same dtype as original_samples
+        alphas_cumprod = self.alphas_cumprod.cast(dtype=original_samples.dtype)
 
         sqrt_alpha_prod = alphas_cumprod[timesteps] ** 0.5
         sqrt_alpha_prod = sqrt_alpha_prod.flatten()
@@ -568,8 +574,8 @@ class DDPMParallelScheduler(SchedulerMixin, ConfigMixin):
 
     # Copied from ppdiffusers.schedulers.scheduling_ddpm.DDPMScheduler.get_velocity
     def get_velocity(self, sample: paddle.Tensor, noise: paddle.Tensor, timesteps: paddle.Tensor) -> paddle.Tensor:
-        # Make sure alphas_cumprod and timestep have same device and dtype as sample
-        alphas_cumprod = self.alphas_cumprod.cast(sample.dtype)
+        # Make sure alphas_cumprod and timestep have same dtype as sample
+        alphas_cumprod = self.alphas_cumprod.cast(dtype=sample.dtype)
 
         sqrt_alpha_prod = alphas_cumprod[timesteps] ** 0.5
         sqrt_alpha_prod = sqrt_alpha_prod.flatten()

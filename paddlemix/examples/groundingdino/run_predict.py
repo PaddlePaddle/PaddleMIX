@@ -23,7 +23,7 @@ from paddlenlp.trainer import PdArgumentParser
 from PIL import Image, ImageDraw, ImageFont
 
 from paddlemix.models.groundingdino.modeling import GroundingDinoModel
-from paddlemix.processors.groundingdino_processing import GroudingDinoProcessor
+from paddlemix.processors.groundingdino_processing import GroundingDinoProcessor
 from paddlemix.utils.log import logger
 
 
@@ -113,9 +113,9 @@ def main():
     parser = PdArgumentParser((ModelArguments, DataArguments))
     model_args, data_args = parser.parse_args_into_dataclasses()
 
-    # bulid processor
-    processor = GroudingDinoProcessor.from_pretrained(model_args.model_name_or_path)
-    # bulid model
+    # build processor
+    processor = GroundingDinoProcessor.from_pretrained(model_args.model_name_or_path)
+    # build model
     logger.info("dino_model: {}".format(model_args.model_name_or_path))
     dino_model = GroundingDinoModel.from_pretrained(model_args.model_name_or_path)
     dino_model.eval()

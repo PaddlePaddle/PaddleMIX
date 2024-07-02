@@ -87,7 +87,7 @@ PAST_KEY_VALUES_FILE_NAME = "pre_caches.npy"
 ENABLE_TORCH_CHECKPOINT = _get_bool_env("ENABLE_TORCH_CHECKPOINT", "true")
 
 
-def set_hyrbid_parallel_seed(basic_seed, data_world_rank, mp_rank, pp_rank=0):
+def set_hybrid_parallel_seed(basic_seed, data_world_rank, mp_rank, pp_rank=0):
     device_id = paddle.device.get_device()
     assert "gpu" in device_id
 
@@ -140,4 +140,4 @@ def setdistenv(args):
         args.rank = 0
 
     # seed control in hybrid parallel
-    set_hyrbid_parallel_seed(args.seed, args.data_world_rank, args.mp_rank)
+    set_hybrid_parallel_seed(args.seed, args.data_world_rank, args.mp_rank)

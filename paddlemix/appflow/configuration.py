@@ -12,19 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from .audio_asr import AudioASRTask
 from .image2image_text_guided_generation import (
     StableDiffusionImg2ImgTask,
     StableDiffusionUpscaleTask,
+    StableDiffusionXLImg2ImgTask,
 )
-from .image2text_generation import Blip2CaptionTask, MiniGPT4Task
+from .image2text_generation import Blip2CaptionTask, MiniGPT4Task, QwenVLChatTask
 from .openset_det_sam import OpenSetDetTask, OpenSetSegTask
+from .text2audio_generation import AudioLDMPipelineTask
 from .text2image_generation import StableDiffusionTask, VersatileDiffusionDualGuidedTask
 from .text2image_inpaiting import StableDiffusionInpaintTask
+from .text2speech_synthesize import AudioTTSTask
 from .text2text_generation import ChatGlmTask
 from .text2video_generation import TextToVideoSDTask
-from .audio_asr import AudioASRTask
-from .text2audio_generation import AudioLDMPipelineTask
-from .text2speech_synthesize import AudioTTSTask
 
 APPLICATIONS = {
     "openset_det_sam": {
@@ -91,6 +92,10 @@ APPLICATIONS = {
                 "task_class": StableDiffusionTask,
                 "task_flag": "text2image_generation-stable-diffusion-v1-5",
             },
+            "stabilityai/stable-diffusion-xl-base-1.0": {
+                "task_class": StableDiffusionTask,
+                "task_flag": "text2image_generation-stable-diffusion-xl-base-1.0",
+            },
         },
         "default": {
             "model": "stabilityai/stable-diffusion-2",
@@ -101,7 +106,11 @@ APPLICATIONS = {
             "Linaqruf/anything-v3.0": {
                 "task_class": StableDiffusionImg2ImgTask,
                 "task_flag": "image2image_text_guided_generation-Linaqruf/anything-v3.0",
-            }
+            },
+            "stabilityai/stable-diffusion-xl-refiner-1.0": {
+                "task_class": StableDiffusionXLImg2ImgTask,
+                "task_flag": "image2image_text_guided_generation-stabilityai/stable-diffusion-xl-refiner-1.0",
+            },
         },
         "default": {
             "model": "Linaqruf/anything-v3.0",
@@ -150,6 +159,10 @@ APPLICATIONS = {
                 "task_class": MiniGPT4Task,
                 "task_flag": "image2text_generation-MiniGPT4-7B",
             },
+            "qwen-vl/qwen-vl-chat-7b": {
+                "task_class": QwenVLChatTask,
+                "task_flag": "image2text_generation-QwenVLChat-7B",
+            },
         },
         "default": {
             "model": "paddlemix/blip2-caption-opt2.7b",
@@ -157,31 +170,25 @@ APPLICATIONS = {
     },
     "audio2caption": {
         "models": {
-            "whisper": {
+            "conformer_u2pp_online_wenetspeech": {
                 "task_class": AudioASRTask,
-                "task_flag": "audio2caption-whisper-asr"
+                "task_flag": "audio2caption-asr-conformer_u2pp_online_wenetspeech",
             },
             "THUDM/chatglm-6b": {
                 "task_class": ChatGlmTask,
                 "task_flag": "audio2caption-chatglm-6b",
             },
-        
         }
     },
-
     "music_generation": {
         "models": {
             "miniGPT4/MiniGPT4-7B": {
                 "task_class": MiniGPT4Task,
                 "task_flag": "music_generation-MiniGPT4-7B",
             },
-             "THUDM/chatglm-6b": {
+            "THUDM/chatglm-6b": {
                 "task_class": ChatGlmTask,
                 "task_flag": "music_generation-chatglm-6b",
-            },
-            "whisper": { 
-                "task_class": AudioASRTask, 
-                "task_flag": "music_generation-whisper-asr"
             },
             "cvssp/audioldm": {
                 "task_class": AudioLDMPipelineTask,
@@ -189,12 +196,11 @@ APPLICATIONS = {
             },
         }
     },
-
     "audio_chat": {
         "models": {
-            "whisper": {
+            "conformer_u2pp_online_wenetspeech": {
                 "task_class": AudioASRTask,
-                "task_flag": "audio_chat-whisper-asr"
+                "task_flag": "audio_chat-asr-conformer_u2pp_online_wenetspeech",
             },
             "speech": {
                 "task_class": AudioTTSTask,
@@ -204,8 +210,6 @@ APPLICATIONS = {
                 "task_class": ChatGlmTask,
                 "task_flag": "audio_chat-chatglm-6b",
             },
-        
         }
     },
-
 }

@@ -1,0 +1,14 @@
+av==11.0.0
+einops==0.7.0
+imageio==2.33.0
+imageio-ffmpeg==0.4.9
+numpy==1.23.5
+omegaconf==2.2.3
+opencv-contrib-python==4.8.1.78
+opencv-python==4.8.1.78
+Pillow==9.5.0
+scikit-image==0.21.0
+scikit-learn==1.3.2
+scipy==1.11.4
+tqdm==4.66.1
+decord==0.6.0

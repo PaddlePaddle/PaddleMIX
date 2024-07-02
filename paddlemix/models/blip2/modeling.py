@@ -12,7 +12,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 """ Paddle BLIP2 model."""
+
+from contextlib import contextmanager
 from typing import Optional, Tuple, Union
 
 import paddle
@@ -31,7 +34,6 @@ from paddlemix.models.blip2.base_model import (
 from paddlemix.models.blip2.modeling_utils import (
     all_gather_with_grad,
     concat_all_gather,
-    disabled_train,
     masked_fill,
 )
 from paddlemix.models.blip2.Qformer import BertLMHeadModel
@@ -47,6 +49,16 @@ BLIP_2_PRETRAINED_MODEL_ARCHIVE_LIST = [
     "Salesforce/blip2-flan-t5-xl",
     "Salesforce/blip2-opt-2.7b",
 ]
+
+
+@contextmanager
+def dtype_guard(dtype="float32"):
+    origin_dtype = paddle.get_default_dtype()
+    paddle.set_default_dtype(dtype)
+    try:
+        yield
+    finally:
+        paddle.set_default_dtype(origin_dtype)
 
 
 def Parameter(tensor):
@@ -87,11 +99,11 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
             for name, param in self.visual_encoder.named_parameters():
                 param.stop_gradient = True
             self.visual_encoder.eval()
-            self.visual_encoder.train = disabled_train
             logger.info("freeze vision encoder")
         if config.get("train_mode", None) == "stage1":
             self.train_stage1 = True
-            self.tokenizer = self.init_tokenizer()
+            tokenizer_name = config.qformer_config.tokenizer_name or "bert-base-uncased"
+            self.tokenizer = self.init_tokenizer(tokenizer_name)
             self.Qformer = BertLMHeadModel(
                 config=config.qformer_config,
                 encoder_width=self.visual_encoder.num_features,
@@ -111,13 +123,18 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
             self.max_txt_len = config.get("max_txt_len")
         else:
             if config.use_decoder_only_language_model:
-                if "opt" in config.text_config:
+                name_or_path = (
+                    config.text_config["_name_or_path"] if isinstance(config.text_config, dict) else config.text_config
+                )
+                if "opt" in name_or_path:
                     language_model = OPTForCausalLM.from_pretrained(
-                        config.text_config,
+                        name_or_path,
                         load_state_as_np=True,
                         ignore_mismatched_sizes=True,
                     )
-                elif "llama" in config.text_config:
+
+                elif "llama" in name_or_path:
+
                     from paddlenlp.transformers.llama.configuration import LlamaConfig
 
                     if config.mp_degree > 1:
@@ -125,19 +142,21 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
 
                         hcg = fleet.get_hybrid_communicate_group()
                         language_model = LlamaForCausalLM.from_pretrained(
-                            config.text_config,
+                            name_or_path,
                             tensor_parallel_degree=config.mp_degree,
                             tensor_parallel_rank=hcg.get_model_parallel_rank(),
                             tensor_parallel_output=False,
                         )
                     else:
                         language_model = LlamaForCausalLM.from_pretrained(
-                            config.text_config,
+                            name_or_path,
                             tensor_parallel_output=False,
                         )
                     language_model.hidden_size = LlamaConfig.from_pretrained(config.text_config).hidden_size
                     language_model.pad_token_id = LlamaConfig.from_pretrained(config.text_config).pad_token_id
-                elif "bloom" in config.text_config:
+
+                elif "bloom" in name_or_path:
+
                     import paddle.distributed.fleet as fleet
                     from paddlenlp.transformers.bloom.configuration import BloomConfig
 
@@ -148,15 +167,43 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
                     language_model = BloomForCausalLM(llm_config)
                     language_model.pad_token_id = llm_config.pad_token_id
                     language_model.hidden_size = llm_config.hidden_size
-                else:
-                    raise NotImplementedError
+
+                elif "glm2" in name_or_path:
+                    import paddle.distributed.fleet as fleet
+                    from paddlenlp.transformers.chatglm_v2.configuration import (
+                        ChatGLMv2Config,
+                    )
+                    from paddlenlp.transformers.chatglm_v2.modeling import (
+                        ChatGLMv2ForCausalLM,
+                    )
+
+                    llm_config = ChatGLMv2Config.from_pretrained(config.text_config)
+
+                    if config.mp_degree > 1:
+                        hcg = fleet.get_hybrid_communicate_group()
+                        language_model = ChatGLMv2ForCausalLM.from_pretrained(
+                            config.text_config,
+                            tensor_parallel_degree=config.mp_degree,
+                            tensor_parallel_rank=hcg.get_model_parallel_rank(),
+                            tensor_parallel_output=False,
+                        )
+                    else:
+                        language_model = ChatGLMv2ForCausalLM.from_pretrained(
+                            config.text_config,
+                            tensor_parallel_output=False,
+                        )
+
+                    language_model.pad_token_id = llm_config.pad_token_id
+                    language_model.hidden_size = llm_config.hidden_size
+
             else:
                 from paddlenlp.transformers import T5Config
 
                 t5_config = T5Config(config.text_config)
                 for key, value in config.text_config.items():
                     t5_config[key] = config.text_config[key]
-                language_model = T5ForConditionalGeneration.from_pretrained(config.text_config, load_state_as_np=True)
+
+                language_model = T5ForConditionalGeneration(t5_config)
                 language_model.hidden_size = t5_config["d_model"]
 
             self.language_model = language_model
@@ -169,6 +216,7 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
                 encoder_width=self.visual_encoder.num_features,
                 train_in_satge1=False,
                 text_hidden_size=self.language_model.hidden_size,
+                model_config=config,  # in order to pass some parameters that are not available in config.qformer_config
             )
             self.Qformer.cls = None
             self.Qformer.bert.embeddings.word_embeddings = None
@@ -507,21 +555,22 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         inputs_embeds = self.language_model.get_input_embeddings()(input_ids)
         inputs_embeds = paddle.concat([language_model_inputs.cast(inputs_embeds.dtype), inputs_embeds], axis=1)
 
-        outputs = self.language_model.generate(
-            inputs_embeds=inputs_embeds,
-            attention_mask=attention_mask,
-            do_sample=False,
-            top_p=0.9,
-            decode_strategy="greedy_search",
-            temperature=1,
-            num_beams=5,
-            max_length=30,
-            min_length=8,
-            eos_token_id=50118,
-            repetition_penalty=1,
-            length_penalty=1,
-            num_return_sequences=1,
-        )
+        with dtype_guard(self.language_model._dtype):
+            outputs = self.language_model.generate(
+                inputs_embeds=inputs_embeds,
+                attention_mask=attention_mask,
+                do_sample=False,
+                top_p=0.9,
+                decode_strategy="greedy_search",
+                temperature=1,
+                num_beams=5,
+                max_length=30,
+                min_length=8,
+                eos_token_id=50118,
+                repetition_penalty=1,
+                length_penalty=1,
+                num_return_sequences=1,
+            )
 
         return outputs
 
@@ -591,18 +640,19 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         inputs_embeds = self.language_model.get_input_embeddings()(input_ids)
         inputs_embeds = paddle.concat([language_model_inputs, inputs_embeds], axis=1)
 
-        outputs = self.language_model.generate(
-            inputs_embeds=inputs_embeds,
-            attention_mask=attention_mask,
-            do_sample=False,
-            decode_strategy="greedy_search",
-            temperature=1,
-            num_beams=5,
-            max_length=max_len,
-            min_length=min_len,
-            eos_token_id=50118,
-            repetition_penalty=1,
-            length_penalty=0,
-        )
+        with dtype_guard(self.language_model._dtype):
+            outputs = self.language_model.generate(
+                inputs_embeds=inputs_embeds,
+                attention_mask=attention_mask,
+                do_sample=False,
+                decode_strategy="greedy_search",
+                temperature=1,
+                num_beams=5,
+                max_length=max_len,
+                min_length=min_len,
+                eos_token_id=50118,
+                repetition_penalty=1,
+                length_penalty=0,
+            )
 
         return outputs

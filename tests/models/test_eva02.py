@@ -170,7 +170,7 @@ class EVA02ForFinetuneModelTester:
 
 class EVA02ForFinetuneModelTest(ModelTesterMixin, unittest.TestCase):
 
-    all_model_classes = EVA02VisionTransformer
+    all_model_classes = (EVA02VisionTransformer,)
     fx_compatible = False
     test_pruning = False
     test_resize_embeddings = False
@@ -313,7 +313,7 @@ class EVA02ForPretrainModelTester:
 
 class EVA02ForPretrainModelTest(ModelTesterMixin, unittest.TestCase):
 
-    all_model_classes = EVA02ForPretrain
+    all_model_classes = (EVA02ForPretrain,)
     fx_compatible = False
     test_pruning = False
     test_resize_embeddings = False
@@ -358,7 +358,7 @@ class EVA02ForPretrainModelTest(ModelTesterMixin, unittest.TestCase):
                 first = model(**self._prepare_for_class(inputs_dict, model_class))
 
             with tempfile.TemporaryDirectory() as tmpdirname:
-                model.save_pretrained(tmpdirname)
+                model.save_pretrained(tmpdirname, save_function=paddle.save)
                 model = model_class.from_pretrained(tmpdirname)
                 model.eval()
                 with paddle.no_grad():

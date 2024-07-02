@@ -28,7 +28,7 @@ image = output.images[0]
 
 # 保存音频到本地
 for i, audio in enumerate(audio):
-    write(f"audio_diffusion_test{i}.wav", pipe.mel.sample_rate, audio.transpose())
+    write(f"audio_diffusion_test{i}.wav", pipe.mel.config.sample_rate, audio.transpose())
 
 # 保存图片
 image.save("unconditional_audio_generation-audio_diffusion-result.png")

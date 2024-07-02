@@ -13,6 +13,9 @@
 # limitations under the License.
 import argparse
 import os
+
+# set USE_PPXFORMERS=False to avoid using ppxformers
+os.environ["USE_PPXFORMERS"] = "False"
 from pathlib import Path
 from types import MethodType
 
@@ -20,8 +23,8 @@ import paddle
 
 from ppdiffusers import (
     ControlNetModel,
-    FastDeployRuntimeModel,
-    FastDeployStableDiffusionControlNetPipeline,
+    PaddleInferRuntimeModel,
+    PaddleInferStableDiffusionControlNetPipeline,
     StableDiffusionControlNetPipeline,
     UNet2DConditionModel,
 )
@@ -66,7 +69,7 @@ class ControlNetWithUnetModel(paddle.nn.Layer):
         return noise_pred
 
 
-def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
+def convert_ppdiffusers_pipeline_to_paddleinfer_pipeline(
     model_path: str,
     controlnet_model_path: str,
     output_path: str,
@@ -74,8 +77,8 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
     height: int = None,
     width: int = None,
 ):
-    unet_tmp = UNet2DConditionModel.from_pretrained(model_path, resnet_pre_temb_non_linearity=True, subfolder="unet")
-    controlnet_tmp = ControlNetModel.from_pretrained(controlnet_model_path, resnet_pre_temb_non_linearity=True)
+    unet_tmp = UNet2DConditionModel.from_pretrained(model_path, resnet_pre_temb_non_linearity=False, subfolder="unet")
+    controlnet_tmp = ControlNetModel.from_pretrained(controlnet_model_path, resnet_pre_temb_non_linearity=False)
 
     pipeline = StableDiffusionControlNetPipeline.from_pretrained(
         model_path,
@@ -85,8 +88,6 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
         feature_extractor=None,
         requires_safety_checker=False,
     )
-    # make sure we disable xformers
-    pipeline.disable_xformers_memory_efficient_attention()
     output_path = Path(output_path)
     # calculate latent's H and W
     latent_height = height // 8 if height is not None else None
@@ -200,19 +201,20 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
     print(f"Save vae_decoder model in {save_path} successfully.")
     del pipeline.vae
 
-    fastdeploy_pipeline = FastDeployStableDiffusionControlNetPipeline(
-        vae_encoder=FastDeployRuntimeModel.from_pretrained(output_path / "vae_encoder"),
-        vae_decoder=FastDeployRuntimeModel.from_pretrained(output_path / "vae_decoder"),
-        text_encoder=FastDeployRuntimeModel.from_pretrained(output_path / "text_encoder"),
-        unet=FastDeployRuntimeModel.from_pretrained(output_path / "unet"),
+    paddleinfer_pipeline = PaddleInferStableDiffusionControlNetPipeline(
+        vae_encoder=PaddleInferRuntimeModel.from_pretrained(output_path / "vae_encoder"),
+        vae_decoder=PaddleInferRuntimeModel.from_pretrained(output_path / "vae_decoder"),
+        text_encoder=PaddleInferRuntimeModel.from_pretrained(output_path / "text_encoder"),
+        unet=PaddleInferRuntimeModel.from_pretrained(output_path / "unet"),
         tokenizer=pipeline.tokenizer,
         scheduler=pipeline.scheduler,
         safety_checker=None,
         feature_extractor=None,
+        image_encoder=None,
         requires_safety_checker=False,
     )
-    fastdeploy_pipeline.save_pretrained(output_path)
-    print("FastDeploy pipeline saved to", output_path)
+    paddleinfer_pipeline.save_pretrained(str(output_path))
+    print("PaddleInfer pipeline saved to", output_path)
 
 
 if __name__ == "__main__":
@@ -251,7 +253,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
+    convert_ppdiffusers_pipeline_to_paddleinfer_pipeline(
         args.pretrained_model_name_or_path,
         args.controlnet_pretrained_model_name_or_path,
         args.output_path,

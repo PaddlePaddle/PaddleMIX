@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,14 +16,16 @@
 from argparse import ArgumentParser
 
 from .env import EnvironmentCommand
+from .fp16_safetensors import FP16SafetensorsCommand
 
 
 def main():
-    parser = ArgumentParser("PPDiffusers CLI tool", usage="ppdiffusers-cli <command> [<args>]")
-    commands_parser = parser.add_subparsers(help="ppdiffusers-cli command helpers")
+    parser = ArgumentParser("Diffusers CLI tool", usage="diffusers-cli <command> [<args>]")
+    commands_parser = parser.add_subparsers(help="diffusers-cli command helpers")
 
     # Register commands
     EnvironmentCommand.register_subcommand(commands_parser)
+    FP16SafetensorsCommand.register_subcommand(commands_parser)
 
     # Let's go
     args = parser.parse_args()

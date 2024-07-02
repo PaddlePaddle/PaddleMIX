@@ -71,11 +71,22 @@ export $PATH=$PATH:$INSTALL_DIR
 
 1) coco数据
 
-数据部分，默认使用`coco_karpathy`数据，使用该数据不需另外配置，会自动下载。解析部分参考`coco_clip.py`文件。
+数据部分，默认使用`coco_karpathy`数据，使用该数据不需另外配置，会自动下载。解析部分参考`paddlemix/datasets/coco_clip.py`文件。
 
-如果想手动下载，请点击[DownLoadCoCo](https://bj.bcebos.com/v1/paddlenlp/datasets/paddlemix/coco.tar)
+如果想手动下载，请点击[DownLoadCOCO 20G](https://bj.bcebos.com/v1/paddlenlp/datasets/paddlemix/coco.tar)下载数据，可解压后放在`/root/.paddlemix/datasets/`目录下，此目录也为自动下载并解压的目录。
 
-2) 自定义数据
+2) laion数据
+该数据集较大，对于训练速度和内存占用有限制的情况，建议使用`coco_karpathy`数据。使用该数据集时，参数`--task_name`需要是指向laion.filelist文件的路径。
+laion.filelist文件格式示例如下：
+```
+laiondata-pathdir/part-00000
+laiondata-pathdir/part-00001
+...
+```
+具体解析代码参考`paddlemix/datasets/laiondata.py`文件。
+该数据集暂不提供，请自行下载。
+
+3) 自定义数据
 
 如果需要自定义数据，推荐沿用`coco_karpathy`数据格式处理自己的数据。其中每条数据标注格式示例为:
 ```
@@ -89,13 +100,13 @@ export $PATH=$PATH:$INSTALL_DIR
 
 ### 4.1 训练
 
-训练时使用`paddlemix/examples/evaclip/run_pretrain_dist.py`程序进行训练。
+训练时使用`paddlemix/examples/evaclip/run_pretrain_dist.py`程序进行训练，**训练前请先检查数据集路径**，如COCO数据集一般会被默认解压存放在`/root/.paddlemix/datasets/coco`目录。
 
 训练命令及参数配置示例：
 
 这里示例采用单机8卡程序，sharding_degree=8.
 
-注意如果采用分布式策略，分布式并行关系有：`nnodes * nproc_per_node == tensor_parallel_degree * sharding_parallel_degree * dp_parallel_degree`，其中`dp_parallel_degree`参数根据其他几个值计算出来，因此需要保证`nnodes * nproc_per_node >= tensor_parallel_degree * sharding_parallel_degree`.
+注意如果采用分布式策略，分布式并行关系有：`nnodes * nproc_per_node == tensor_parallel_degree * sharding_parallel_degree * dp_parallel_degree`，其中`dp_parallel_degree`参数根据其他几个值计算出来，因此需要保证`nnodes * nproc_per_node >= tensor_parallel_degree * sharding_parallel_degree`。
 
 ```
 MODEL_NAME="paddlemix/EVA/EVA02-CLIP-L-14"

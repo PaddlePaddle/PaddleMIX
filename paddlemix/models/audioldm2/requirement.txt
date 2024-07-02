@@ -1,0 +1,4 @@
+librosa
+unidecode
+phonemizer
+espeak

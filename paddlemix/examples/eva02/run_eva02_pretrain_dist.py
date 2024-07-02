@@ -157,7 +157,7 @@ class PretrainArguments(TrainingArguments):
     do_train: bool = field(default=True, metadata={"help": "Whether to run training."})
     do_eval: bool = field(default=False, metadata={"help": "Whether to run eval on the dev set."})
     do_predict: bool = field(default=False, metadata={"help": "Whether to run predictions on the test set."})
-    do_export: bool = field(default=False, metadata={"help": "Whether to export infernece model."})
+    do_export: bool = field(default=False, metadata={"help": "Whether to export inference model."})
     per_device_train_batch_size: int = field(default=8, metadata={"help": "Batch size per GPU core/CPU for training."})
     per_device_eval_batch_size: int = field(
         default=8, metadata={"help": "Batch size per GPU core/CPU for evaluation."}

@@ -17,8 +17,11 @@ from typing import Callable, Dict, List, Optional, Union
 
 import paddle
 import PIL
-from paddlenlp.transformers import CLIPImageProcessor, CLIPTokenizer
 
+from ppdiffusers.transformers import CLIPImageProcessor, CLIPTokenizer
+
+from ...image_processor import PipelineImageInput
+from ...loaders import IPAdapterMixin
 from ...schedulers import KarrasDiffusionSchedulers
 from ...utils import logging
 from ..fastdeploy_utils import FastDeployDiffusionPipelineMixin, FastDeployRuntimeModel
@@ -28,7 +31,7 @@ from . import StableDiffusionPipelineOutput
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
 
-class FastDeployStableDiffusionImg2ImgPipeline(DiffusionPipeline, FastDeployDiffusionPipelineMixin):
+class FastDeployStableDiffusionImg2ImgPipeline(DiffusionPipeline, FastDeployDiffusionPipelineMixin, IPAdapterMixin):
     r"""
     Pipeline for text-guided image-to-image generation using Stable Diffusion.
 
@@ -58,7 +61,7 @@ class FastDeployStableDiffusionImg2ImgPipeline(DiffusionPipeline, FastDeployDiff
         feature_extractor ([`CLIPImageProcessor`]):
             Model that extracts features from generated images to be used as inputs for the `safety_checker`.
     """
-    _optional_components = ["safety_checker", "feature_extractor"]
+    _optional_components = ["image_encoder", "safety_checker", "feature_extractor"]
 
     def __init__(
         self,
@@ -70,6 +73,7 @@ class FastDeployStableDiffusionImg2ImgPipeline(DiffusionPipeline, FastDeployDiff
         scheduler: KarrasDiffusionSchedulers,
         safety_checker: FastDeployRuntimeModel,
         feature_extractor: CLIPImageProcessor,
+        image_encoder: FastDeployRuntimeModel,
         requires_safety_checker: bool = False,
     ):
         super().__init__()
@@ -97,6 +101,7 @@ class FastDeployStableDiffusionImg2ImgPipeline(DiffusionPipeline, FastDeployDiff
             scheduler=scheduler,
             safety_checker=safety_checker,
             feature_extractor=feature_extractor,
+            image_encoder=image_encoder,
         )
         self.register_to_config(requires_safety_checker=requires_safety_checker)
         self.post_init()
@@ -112,6 +117,7 @@ class FastDeployStableDiffusionImg2ImgPipeline(DiffusionPipeline, FastDeployDiff
         guidance_scale: float = 7.5,
         negative_prompt: Optional[Union[str, List[str]]] = None,
         num_images_per_prompt: Optional[int] = 1,
+        timesteps: List[int] = None,
         eta: float = 0.0,
         generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
         latents: Optional[paddle.Tensor] = None,
@@ -119,6 +125,8 @@ class FastDeployStableDiffusionImg2ImgPipeline(DiffusionPipeline, FastDeployDiff
         max_embeddings_multiples: Optional[int] = 3,
         prompt_embeds: Optional[paddle.Tensor] = None,
         negative_prompt_embeds: Optional[paddle.Tensor] = None,
+        guidance_rescale: float = 0.0,
+        ip_adapter_image: Optional[PipelineImageInput] = None,
         output_type: Optional[str] = "pil",
         return_dict: bool = True,
         callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
@@ -178,6 +186,7 @@ class FastDeployStableDiffusionImg2ImgPipeline(DiffusionPipeline, FastDeployDiff
                 Pre-generated negative text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt
                 weighting. If not provided, negative_prompt_embeds will be generated from `negative_prompt` input
                 argument.
+            ip_adapter_image: (`PipelineImageInput`, *optional*): Optional image input to work with IP Adapters.
             output_type (`str`, *optional*, defaults to `"pil"`):
                 The output format of the generate image. Choose between
                 [PIL](https://pillow.readthedocs.io/en/stable/): `PIL.Image.Image` or `np.array`.
@@ -254,8 +263,15 @@ class FastDeployStableDiffusionImg2ImgPipeline(DiffusionPipeline, FastDeployDiff
             infer_op=infer_op_dict.get("text_encoder", None),
         )
 
+        if ip_adapter_image is not None:
+            image_embeds, negative_image_embeds = self.encode_image(
+                ip_adapter_image, num_images_per_prompt, infer_op=infer_op_dict.get("image_encoder", None)
+            )
+            if do_classifier_free_guidance:
+                image_embeds = paddle.concat([negative_image_embeds, image_embeds])
+
         # 4. Prepare timesteps
-        self.scheduler.set_timesteps(num_inference_steps)
+        timesteps, num_inference_steps = self.retrieve_timesteps(self.scheduler, num_inference_steps, timesteps)
         timesteps, num_inference_steps = self.get_timesteps(num_inference_steps, strength)
 
         # 5. Prepare latent variables
@@ -301,6 +317,11 @@ class FastDeployStableDiffusionImg2ImgPipeline(DiffusionPipeline, FastDeployDiff
                 if do_controlnet:
                     unet_inputs["controlnet_cond"] = control_image
                     unet_inputs["controlnet_conditioning_scale"] = control_conditioning_scale
+                # Add image embeds for IP-Adapter
+                # added_cond_kwargs = {"image_embeds": image_embeds} if ip_adapter_image is not None else None
+                if ip_adapter_image:
+                    unet_inputs["image_embeds"] = image_embeds
+
                 # predict the noise residual
                 noise_pred_unet = self.unet(**unet_inputs)[0]
 
@@ -308,6 +329,12 @@ class FastDeployStableDiffusionImg2ImgPipeline(DiffusionPipeline, FastDeployDiff
                 if do_classifier_free_guidance:
                     noise_pred_uncond, noise_pred_text = noise_pred_unet.chunk(2)
                     noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
+
+                    if guidance_rescale > 0.0:
+                        # Based on 3.4. in https://arxiv.org/pdf/2305.08891.pdf
+                        noise_pred = self.rescale_noise_cfg(
+                            noise_pred, noise_pred_text, guidance_rescale=guidance_rescale
+                        )
                 else:
                     noise_pred = noise_pred_unet
 
@@ -327,7 +354,7 @@ class FastDeployStableDiffusionImg2ImgPipeline(DiffusionPipeline, FastDeployDiff
                         callback(i, t, latents)
                     if i == len(timesteps) - 1:
                         # sync for accuracy it/s measure
-                        paddle.device.cuda.synchronize()
+                        paddle.device.synchronize()
 
         if not output_type == "latent":
             image = self._decode_vae_latents(

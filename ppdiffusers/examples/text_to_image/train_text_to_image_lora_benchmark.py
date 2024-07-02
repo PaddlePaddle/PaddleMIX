@@ -17,6 +17,9 @@ import contextlib
 import gc
 import math
 import os
+
+os.environ["USE_PEFT_BACKEND"] = "False"
+os.environ["FLAG_USE_OLD_RECOMPUTE"] = "True"
 import random
 import sys
 import time
@@ -36,7 +39,6 @@ from paddle.io import BatchSampler, DataLoader, DistributedBatchSampler
 from paddle.optimizer import AdamW
 from paddle.vision import BaseTransform, transforms
 from paddlenlp.trainer import set_seed
-from paddlenlp.transformers import AutoTokenizer, PretrainedConfig
 from paddlenlp.utils.log import logger
 from tqdm.auto import tqdm
 
@@ -57,8 +59,10 @@ from ppdiffusers.models.attention_processor import (
 )
 from ppdiffusers.optimization import get_scheduler
 from ppdiffusers.training_utils import freeze_params, main_process_first, unwrap_model
-from ppdiffusers.utils import TEXT_ENCODER_ATTN_MODULE, str2bool
+from ppdiffusers.transformers import AutoTokenizer, PretrainedConfig
+from ppdiffusers.utils import str2bool
 
+TEXT_ENCODER_ATTN_MODULE = ".self_attn"
 if str2bool(os.getenv("FLAG_FUSED_LINEAR", "False")):
     paddle.nn.Linear = paddle.incubate.nn.FusedLinear
 
@@ -137,7 +141,7 @@ def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: st
     except Exception:
         model_class = "LDMBertModel"
     if model_class == "CLIPTextModel":
-        from paddlenlp.transformers import CLIPTextModel
+        from ppdiffusers.transformers import CLIPTextModel
 
         return CLIPTextModel
     elif model_class == "RobertaSeriesModelWithTransformation":
@@ -147,7 +151,7 @@ def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: st
 
         return RobertaSeriesModelWithTransformation
     elif model_class == "BertModel":
-        from paddlenlp.transformers import BertModel
+        from ppdiffusers.transformers import BertModel
 
         return BertModel
     elif model_class == "LDMBertModel":
@@ -896,14 +900,8 @@ def main():
     if args.gradient_checkpointing:
         unet.enable_gradient_checkpointing()
         if args.train_text_encoder:
-
-            def fn(layer):
-                if hasattr(layer, "enable_recompute") and (
-                    layer.enable_recompute is False or layer.enable_recompute == 0
-                ):
-                    layer.enable_recompute = True
-
-            text_encoder.apply(fn)
+            if hasattr(text_encoder, "gradient_checkpointing_enable"):
+                text_encoder.gradient_checkpointing_enable()
 
     if num_processes > 1:
         unet = paddle.DataParallel(unet)
@@ -1113,9 +1111,18 @@ def main():
                     reader_cost_avg.record(train_reader_cost)
                     batch_cost_avg.record(train_batch_cost)
                     batch_ips_avg.record(train_batch_cost, sample_per_cards)
+                    max_mem_reserved_msg = ""
+                    max_mem_allocated_msg = ""
+                    if paddle.device.is_compiled_with_cuda():
+                        max_mem_reserved_msg = (
+                            f"max_mem_reserved: {paddle.device.cuda.max_memory_reserved() // (1024 ** 2)} MB,"
+                        )
+                        max_mem_allocated_msg = (
+                            f"max_mem_allocated: {paddle.device.cuda.max_memory_allocated() // (1024 ** 2)} MB"
+                        )
 
                     logger.info(
-                        "global step %d / %d, loss: %f, avg_reader_cost: %.5f sec, avg_batch_cost: %.5f sec, avg_samples: %.5f, ips: %.5f sample/sec"
+                        "global step %d / %d, loss: %f, avg_reader_cost: %.5f sec, avg_batch_cost: %.5f sec, avg_samples: %.5f, ips: %.5f sample/sec, %s %s"
                         % (
                             global_step,
                             args.max_train_steps,
@@ -1124,6 +1131,8 @@ def main():
                             batch_cost_avg.get_average(),
                             sample_per_cards,
                             batch_ips_avg.get_average_per_sec(),
+                            max_mem_reserved_msg,
+                            max_mem_allocated_msg,
                         ),
                     )
                     reader_cost_avg.reset()
@@ -1157,7 +1166,7 @@ def main():
             "train epoch: %d, epoch_cost: %.5f s" % (epoch, train_epoch_cost),
         )
         if is_main_process:
-            if args.validation_prompt is not None and epoch % args.validation_epochs == 0:
+            if args.validation_prompt is not None and epoch % args.validation_epochs == 0 and epoch > 0:
                 logger.info(
                     f"Running validation... \n Generating {args.num_validation_images} images with prompt:"
                     f" {args.validation_prompt}."

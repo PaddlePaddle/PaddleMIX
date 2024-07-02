@@ -1,4 +1,3 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,33 +11,35 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 import inspect
-import warnings
 from typing import Callable, List, Optional, Union
 
 import paddle
-import PIL
+import PIL.Image
 from packaging import version
-from paddlenlp.transformers import CLIPImageProcessor, CLIPVisionModelWithProjection
+
+from ppdiffusers.transformers import CLIPImageProcessor, CLIPVisionModelWithProjection
 
 from ...configuration_utils import FrozenDict
 from ...image_processor import VaeImageProcessor
 from ...models import AutoencoderKL, UNet2DConditionModel
 from ...schedulers import KarrasDiffusionSchedulers
-from ...utils import deprecate, logging, randn_tensor
+from ...utils import deprecate, logging
+from ...utils.paddle_utils import randn_tensor
 from ..pipeline_utils import DiffusionPipeline
 from . import StableDiffusionPipelineOutput
 from .safety_checker import StableDiffusionSafetyChecker
 
-logger = logging.get_logger(__name__)
+logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
 
 class StableDiffusionImageVariationPipeline(DiffusionPipeline):
-    """
+    r"""
     Pipeline to generate image variations from an input image using Stable Diffusion.
 
     This model inherits from [`DiffusionPipeline`]. Check the superclass documentation for the generic methods
-    implemented for all pipelines (downloading, saving, running on a particular device, etc.).
+    implemented for all pipelines (downloading, saving, running on a particular  etc.).
 
     Args:
         vae ([`AutoencoderKL`]):
@@ -65,6 +66,8 @@ class StableDiffusionImageVariationPipeline(DiffusionPipeline):
     # TODO: feature_extractor is required to encode images (if they are in PIL format),
     # we should give a descriptive message if the pipeline doesn't have one.
     _optional_components = ["safety_checker"]
+    model_cpu_offload_seq = "image_encoder->unet->vae"
+    _exclude_from_cpu_offload = ["safety_checker"]
 
     def __init__(
         self,
@@ -77,31 +80,44 @@ class StableDiffusionImageVariationPipeline(DiffusionPipeline):
         requires_safety_checker: bool = True,
     ):
         super().__init__()
+
         if safety_checker is None and requires_safety_checker:
             logger.warn(
-                f"You have disabled the safety checker for {self.__class__} by passing `safety_checker=None`. Ensure that you abide to the conditions of the Stable Diffusion license and do not expose unfiltered results in services or applications open to the public. Both the diffusers team and Hugging Face strongly recommend to keep the safety filter enabled in all public facing circumstances, disabling it only for use-cases that involve analyzing network behavior or auditing its results. For more information, please have a look at https://github.com/huggingface/diffusers/pull/254 ."
+                f"You have disabled the safety checker for {self.__class__} by passing `safety_checker=None`. Ensure"
+                " that you abide to the conditions of the Stable Diffusion license and do not expose unfiltered"
+                " results in services or applications open to the public. Both the diffusers team and Hugging Face"
+                " strongly recommend to keep the safety filter enabled in all public facing circumstances, disabling"
+                " it only for use-cases that involve analyzing network behavior or auditing its results. For more"
+                " information, please have a look at https://github.com/huggingface/diffusers/pull/254 ."
             )
+
         if safety_checker is not None and feature_extractor is None:
             raise ValueError(
-                "Make sure to define a feature extractor when loading {self.__class__} if you want to use the safety checker. If you do not want to use the safety checker, you can pass `'safety_checker=None'` instead."
+                "Make sure to define a feature extractor when loading {self.__class__} if you want to use the safety"
+                " checker. If you do not want to use the safety checker, you can pass `'safety_checker=None'` instead."
             )
-        is_unet_version_less_0_9_0 = hasattr(unet.config, "_diffusers_version") and version.parse(
-            version.parse(unet.config._diffusers_version).base_version
+
+        is_unet_version_less_0_9_0 = hasattr(unet.config, "_ppdiffusers_version") and version.parse(
+            version.parse(unet.config._ppdiffusers_version).base_version
         ) < version.parse("0.9.0.dev0")
         is_unet_sample_size_less_64 = hasattr(unet.config, "sample_size") and unet.config.sample_size < 64
         if is_unet_version_less_0_9_0 and is_unet_sample_size_less_64:
-            deprecation_message = """The configuration file of the unet has set the default `sample_size` to smaller than 64 which seems highly unlikely .If you're checkpoint is a fine-tuned version of any of the following:
-                            - CompVis/stable-diffusion-v1-4
-                            - CompVis/stable-diffusion-v1-3
-                            - CompVis/stable-diffusion-v1-2
-                            - CompVis/stable-diffusion-v1-1
-                            - runwayml/stable-diffusion-v1-5
-                            - runwayml/stable-diffusion-inpainting
-                            you should change 'sample_size' to 64 in the configuration file. Please make sure to update the config accordingly as leaving `sample_size=32` in the config might lead to incorrect results in future versions. If you have downloaded this checkpoint from the Hugging Face Hub, it would be very nice if you could open a Pull request for the `unet/config.json` file"""
+            deprecation_message = (
+                "The configuration file of the unet has set the default `sample_size` to smaller than"
+                " 64 which seems highly unlikely .If you're checkpoint is a fine-tuned version of any of the"
+                " following: \n- CompVis/stable-diffusion-v1-4 \n- CompVis/stable-diffusion-v1-3 \n-"
+                " CompVis/stable-diffusion-v1-2 \n- CompVis/stable-diffusion-v1-1 \n- runwayml/stable-diffusion-v1-5"
+                " \n- runwayml/stable-diffusion-inpainting \n you should change 'sample_size' to 64 in the"
+                " configuration file. Please make sure to update the config accordingly as leaving `sample_size=32`"
+                " in the config might lead to incorrect results in future versions. If you have downloaded this"
+                " checkpoint from the Hugging Face Hub, it would be very nice if you could open a Pull request for"
+                " the `unet/config.json` file"
+            )
             deprecate("sample_size<64", "1.0.0", deprecation_message, standard_warn=False)
             new_config = dict(unet.config)
             new_config["sample_size"] = 64
             unet._internal_dict = FrozenDict(new_config)
+
         self.register_modules(
             vae=vae,
             image_encoder=image_encoder,
@@ -115,24 +131,28 @@ class StableDiffusionImageVariationPipeline(DiffusionPipeline):
         self.register_to_config(requires_safety_checker=requires_safety_checker)
 
     def _encode_image(self, image, num_images_per_prompt, do_classifier_free_guidance):
-        dtype = self.image_encoder.dtype
+        dtype = next(self.image_encoder.named_parameters())[1].dtype
+
         if not isinstance(image, paddle.Tensor):
             image = self.feature_extractor(images=image, return_tensors="pd").pixel_values
+
         image = image.cast(dtype=dtype)
         image_embeddings = self.image_encoder(image).image_embeds
-        image_embeddings = image_embeddings.unsqueeze(axis=1)
+        image_embeddings = image_embeddings.unsqueeze(1)
 
         # duplicate image embeddings for each generation per prompt, using mps friendly method
         bs_embed, seq_len, _ = image_embeddings.shape
-        image_embeddings = image_embeddings.tile(repeat_times=[1, num_images_per_prompt, 1])
+        image_embeddings = image_embeddings.tile([1, num_images_per_prompt, 1])
         image_embeddings = image_embeddings.reshape([bs_embed * num_images_per_prompt, seq_len, -1])
+
         if do_classifier_free_guidance:
-            negative_prompt_embeds = paddle.zeros_like(x=image_embeddings)
+            negative_prompt_embeds = paddle.zeros_like(image_embeddings)
 
             # For classifier free guidance, we need to do two forward passes.
             # Here we concatenate the unconditional and text embeddings into a single batch
             # to avoid doing two forward passes
-            image_embeddings = paddle.concat(x=[negative_prompt_embeds, image_embeddings])
+            image_embeddings = paddle.concat([negative_prompt_embeds, image_embeddings])
+
         return image_embeddings
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.run_safety_checker
@@ -140,7 +160,7 @@ class StableDiffusionImageVariationPipeline(DiffusionPipeline):
         if self.safety_checker is None:
             has_nsfw_concept = None
         else:
-            if paddle.is_tensor(x=image):
+            if paddle.is_tensor(image):
                 feature_extractor_input = self.image_processor.postprocess(image, output_type="pil")
             else:
                 feature_extractor_input = self.image_processor.numpy_to_pil(image)
@@ -152,15 +172,14 @@ class StableDiffusionImageVariationPipeline(DiffusionPipeline):
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.decode_latents
     def decode_latents(self, latents):
-        warnings.warn(
-            "The decode_latents method is deprecated and will be removed in a future version. Please use VaeImageProcessor instead",
-            FutureWarning,
-        )
+        deprecation_message = "The decode_latents method is deprecated and will be removed in 1.0.0. Please use VaeImageProcessor.postprocess(...) instead"
+        deprecate("decode_latents", "1.0.0", deprecation_message, standard_warn=False)
+
         latents = 1 / self.vae.config.scaling_factor * latents
         image = self.vae.decode(latents, return_dict=False)[0]
-        image = (image / 2 + 0.5).clip(min=0, max=1)
+        image = (image / 2 + 0.5).clip(0, 1)
         # we always cast to float32 as this does not cause significant overhead and is compatible with bfloat16
-        image = image.cpu().transpose(perm=[0, 2, 3, 1]).astype(dtype="float32").numpy()
+        image = image.cast("float32").transpose([0, 2, 3, 1]).cpu().numpy()
         return image
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_extra_step_kwargs
@@ -188,17 +207,19 @@ class StableDiffusionImageVariationPipeline(DiffusionPipeline):
             and not isinstance(image, list)
         ):
             raise ValueError(
-                f"`image` has to be of type `paddle.Tensor` or `PIL.Image.Image` or `List[PIL.Image.Image]` but is {type(image)}"
+                "`image` has to be of type `paddle.Tensor` or `PIL.Image.Image` or `List[PIL.Image.Image]` but is"
+                f" {type(image)}"
             )
+
         if height % 8 != 0 or width % 8 != 0:
             raise ValueError(f"`height` and `width` have to be divisible by 8 but are {height} and {width}.")
-        if (
-            callback_steps is None
-            or callback_steps is not None
-            and (not isinstance(callback_steps, int) or callback_steps <= 0)
+
+        if (callback_steps is None) or (
+            callback_steps is not None and (not isinstance(callback_steps, int) or callback_steps <= 0)
         ):
             raise ValueError(
-                f"`callback_steps` has to be a positive integer but is {callback_steps} of type {type(callback_steps)}."
+                f"`callback_steps` has to be a positive integer but is {callback_steps} of type"
+                f" {type(callback_steps)}."
             )
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_latents
@@ -206,12 +227,14 @@ class StableDiffusionImageVariationPipeline(DiffusionPipeline):
         shape = (batch_size, num_channels_latents, height // self.vae_scale_factor, width // self.vae_scale_factor)
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
-                f"You have passed a list of generators of length {len(generator)}, but requested an effective batch size of {batch_size}. Make sure the batch size matches the length of the generators."
+                f"You have passed a list of generators of length {len(generator)}, but requested an effective batch"
+                f" size of {batch_size}. Make sure the batch size matches the length of the generators."
             )
+
         if latents is None:
             latents = randn_tensor(shape, generator=generator, dtype=dtype)
         else:
-            latents = latents
+            latents = latents.cast(dtype)
 
         # scale the initial noise by the standard deviation required by the scheduler
         latents = latents * self.scheduler.init_noise_sigma
@@ -234,7 +257,7 @@ class StableDiffusionImageVariationPipeline(DiffusionPipeline):
         callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
         callback_steps: int = 1,
     ):
-        """
+        r"""
         The call function to the pipeline for generation.
 
         Args:
@@ -257,8 +280,7 @@ class StableDiffusionImageVariationPipeline(DiffusionPipeline):
                 Corresponds to parameter eta (η) from the [DDIM](https://arxiv.org/abs/2010.02502) paper. Only applies
                 to the [`~schedulers.DDIMScheduler`], and is ignored in other schedulers.
             generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
-                A [`paddle.Generator`](https://pytorch.org/docs/stable/generated/paddle.Generator.html) to make
-                generation deterministic.
+                A [`paddle.Generator`] to make generation deterministic.
             latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents sampled from a Gaussian distribution, to be used as inputs for image
                 generation. Can be used to tweak the same generation with different prompts. If not provided, a latents
@@ -317,6 +339,7 @@ class StableDiffusionImageVariationPipeline(DiffusionPipeline):
             batch_size = len(image)
         else:
             batch_size = image.shape[0]
+
         # here `guidance_scale` is defined analog to the guidance weight `w` of equation (2)
         # of the Imagen paper: https://arxiv.org/pdf/2205.11487.pdf . `guidance_scale = 1`
         # corresponds to doing no classifier free guidance.
@@ -349,7 +372,7 @@ class StableDiffusionImageVariationPipeline(DiffusionPipeline):
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(x=[latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = paddle.concat([latents] * 2) if do_classifier_free_guidance else latents
                 latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
                 # predict the noise residual
@@ -357,28 +380,34 @@ class StableDiffusionImageVariationPipeline(DiffusionPipeline):
 
                 # perform guidance
                 if do_classifier_free_guidance:
-                    noise_pred_uncond, noise_pred_text = noise_pred.chunk(chunks=2)
+                    noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
                     noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
 
                 # compute the previous noisy sample x_t -> x_t-1
                 latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs).prev_sample
 
                 # call the callback, if provided
-                if i == len(timesteps) - 1 or i + 1 > num_warmup_steps and (i + 1) % self.scheduler.order == 0:
+                if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
                     progress_bar.update()
                     if callback is not None and i % callback_steps == 0:
-                        callback(i, t, latents)
+                        step_idx = i // getattr(self.scheduler, "order", 1)
+                        callback(step_idx, t, latents)
+
         if not output_type == "latent":
             image = self.vae.decode(latents / self.vae.config.scaling_factor, return_dict=False)[0]
             image, has_nsfw_concept = self.run_safety_checker(image, image_embeddings.dtype)
         else:
             image = latents
             has_nsfw_concept = None
+
         if has_nsfw_concept is None:
             do_denormalize = [True] * image.shape[0]
         else:
-            do_denormalize = [(not has_nsfw) for has_nsfw in has_nsfw_concept]
+            do_denormalize = [not has_nsfw for has_nsfw in has_nsfw_concept]
+
         image = self.image_processor.postprocess(image, output_type=output_type, do_denormalize=do_denormalize)
+
         if not return_dict:
-            return image, has_nsfw_concept
+            return (image, has_nsfw_concept)
+
         return StableDiffusionPipelineOutput(images=image, nsfw_content_detected=has_nsfw_concept)

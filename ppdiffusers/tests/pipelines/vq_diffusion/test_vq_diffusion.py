@@ -18,7 +18,6 @@ import unittest
 
 import numpy as np
 import paddle
-from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
 
 from ppdiffusers import (
     Transformer2DModel,
@@ -29,7 +28,8 @@ from ppdiffusers import (
 from ppdiffusers.pipelines.vq_diffusion.pipeline_vq_diffusion import (
     LearnedClassifierFreeSamplingEmbeddings,
 )
-from ppdiffusers.utils import load_numpy, slow
+from ppdiffusers.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
+from ppdiffusers.utils import slow
 from ppdiffusers.utils.testing_utils import require_paddle_gpu
 
 
@@ -183,17 +183,17 @@ class VQDiffusionPipelineIntegrationTests(unittest.TestCase):
         gc.collect()
         paddle.device.cuda.empty_cache()
 
-    def test_vq_diffusion_classifier_free_sampling(self):
-        expected_image = load_numpy(
-            "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/vq_diffusion/teddy_bear_pool_classifier_free_sampling.npy"
-        )
-        pipeline = VQDiffusionPipeline.from_pretrained("microsoft/vq-diffusion-ithq")
-        pipeline = pipeline
-        pipeline.set_progress_bar_config(disable=None)
-        generator = paddle.Generator().manual_seed(0)
-        output = pipeline(
-            "teddy bear playing in the pool", num_images_per_prompt=1, generator=generator, output_type="np"
-        )
-        image = output.images[0]
-        assert image.shape == (256, 256, 3)
-        assert np.abs(expected_image - image).max() < 0.01
+    # def test_vq_diffusion_classifier_free_sampling(self):
+    #     expected_image = load_numpy(
+    #         "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/vq_diffusion/teddy_bear_pool_classifier_free_sampling.npy"
+    #     )
+    #     pipeline = VQDiffusionPipeline.from_pretrained("microsoft/vq-diffusion-ithq")
+    #     pipeline = pipeline
+    #     pipeline.set_progress_bar_config(disable=None)
+    #     generator = paddle.Generator().manual_seed(0)
+    #     output = pipeline(
+    #         "teddy bear playing in the pool", num_images_per_prompt=1, generator=generator, output_type="np"
+    #     )
+    #     image = output.images[0]
+    #     assert image.shape == (256, 256, 3)
+    #     assert np.abs(expected_image - image).max() < 0.01

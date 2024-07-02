@@ -1,6 +1,7 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
-# Copyright 2023 The HuggingFace Team. All rights reserved.
-# Copyright 2022 The HuggingFace Inc. team. All rights reserved.
+#!/usr/bin/env python
+# coding=utf-8
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2023 The HuggingFace Inc. team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,205 +13,188 @@
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
-# limitations under the License.
-
-import argparse
-import contextlib
-import gc
-import hashlib
-import math
 import os
 
-# import shutil
-import sys
-import time
+os.environ["USE_PEFT_BACKEND"] = "False"
+import argparse
+import contextlib
+import copy
+import gc
+import itertools
+import logging
+import math
+import shutil
 import warnings
 from pathlib import Path
-from typing import Dict, Optional, Type
 
 import numpy as np
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
-import requests
-from huggingface_hub import HfFolder, create_repo, upload_folder, whoami
-from paddle.distributed.fleet.utils.hybrid_parallel_util import (
-    fused_allreduce_gradients,
-)
-from paddle.io import BatchSampler, DataLoader, Dataset, DistributedBatchSampler
-from paddle.optimizer import AdamW
-from paddle.vision import BaseTransform, transforms
-from paddlenlp.trainer import set_seed
-from paddlenlp.transformers import AutoTokenizer, PretrainedConfig
-from paddlenlp.utils.log import logger
+
+# from huggingface_hub import create_repo, upload_folder
+from huggingface_hub.utils import insecure_hashlib
+
+# from packaging import version
+from paddle.io import Dataset
+from paddle.vision import transforms
 from PIL import Image
 from PIL.ImageOps import exif_transpose
 from tqdm.auto import tqdm
 
+import ppdiffusers
+
+# import paddle.distributed.fleet.utils.recompute
+import ppdiffusers.transformers
 from ppdiffusers import (
     AutoencoderKL,
     DDPMScheduler,
     DPMSolverMultistepScheduler,
     StableDiffusionXLPipeline,
     UNet2DConditionModel,
-    is_ppxformers_available,
 )
-from ppdiffusers.loaders import LoraLoaderMixin, text_encoder_lora_state_dict
-from ppdiffusers.models.attention_processor import (
-    LoRAAttnProcessor,
-    LoRAAttnProcessor2_5,
+from ppdiffusers.accelerate import Accelerator
+from ppdiffusers.accelerate.logging import get_logger
+from ppdiffusers.accelerate.utils import (
+    DistributedDataParallelKwargs,
+    ProjectConfiguration,
+    set_seed,
 )
+from ppdiffusers.loaders import LoraLoaderMixin
+from ppdiffusers.models.lora import LoRALinearLayer
 from ppdiffusers.optimization import get_scheduler
-from ppdiffusers.training_utils import freeze_params, unwrap_model
+from ppdiffusers.training_utils import compute_snr, unet_lora_state_dict
+from ppdiffusers.transformers import AutoTokenizer, PretrainedConfig
+from ppdiffusers.utils import check_min_version, is_wandb_available
+from ppdiffusers.utils.import_utils import is_ppxformers_available
 
-# from ppdiffusers.utils import check_min_version
-# from ppdiffusers.utils import TEXT_ENCODER_ATTN_MODULE
-from ppdiffusers.utils import check_min_version
+# Will error if the minimal version of diffusers is not installed. Remove at your own risks.
+check_min_version("0.24.0")
 
-# Will error if the minimal version of ppdiffusers is not installed. Remove at your own risks.
-check_min_version("0.19.3")
-paddle_dtype = paddle.float16
-
-# Since HF sometimes timeout, we need to retry uploads
-# Credit: https://github.com/huggingface/datasets/blob/06ae3f678651bfbb3ca7dd3274ee2f38e0e0237e/src/datasets/utils/file_utils.py#L265
+logger = get_logger(__name__)
 
 
-def _retry(
-    func,
-    func_args: Optional[tuple] = None,
-    func_kwargs: Optional[dict] = None,
-    exceptions: Type[requests.exceptions.RequestException] = requests.exceptions.RequestException,
-    max_retries: int = 0,
-    base_wait_time: float = 0.5,
-    max_wait_time: float = 2,
+# TODO: This function should be removed once training scripts are rewritten in PEFT
+def text_encoder_lora_state_dict(text_encoder):
+    state_dict = {}
+
+    def text_encoder_attn_modules(text_encoder):
+        from ppdiffusers.transformers import CLIPTextModel, CLIPTextModelWithProjection
+
+        attn_modules = []
+
+        if isinstance(text_encoder, (CLIPTextModel, CLIPTextModelWithProjection)):
+            for i, layer in enumerate(text_encoder.text_model.encoder.layers):
+                name = f"text_model.encoder.layers.{i}.self_attn"
+                mod = layer.self_attn
+                attn_modules.append((name, mod))
+
+        return attn_modules
+
+    for name, module in text_encoder_attn_modules(text_encoder):
+        for k, v in module.q_proj.lora_linear_layer.state_dict().items():
+            state_dict[f"{name}.q_proj.lora_linear_layer.{k}"] = v
+
+        for k, v in module.k_proj.lora_linear_layer.state_dict().items():
+            state_dict[f"{name}.k_proj.lora_linear_layer.{k}"] = v
+
+        for k, v in module.v_proj.lora_linear_layer.state_dict().items():
+            state_dict[f"{name}.v_proj.lora_linear_layer.{k}"] = v
+
+        for k, v in module.out_proj.lora_linear_layer.state_dict().items():
+            state_dict[f"{name}.out_proj.lora_linear_layer.{k}"] = v
+
+    return state_dict
+
+
+# def save_model_card(
+#     repo_id: str,
+#     images=None,
+#     base_model=str,
+#     train_text_encoder=False,
+#     instance_prompt=str,
+#     validation_prompt=str,
+#     repo_folder=None,
+#     vae_path=None,
+# ):
+#     img_str = "widget:\n" if images else ""
+#     for i, image in enumerate(images):
+#         image.save(os.path.join(repo_folder, f"image_{i}.png"))
+#         img_str += f"""
+#         - text: '{validation_prompt if validation_prompt else ' ' }'
+#           output:
+#             url:
+#                 "image_{i}.png"
+#         """
+
+#     yaml = f"""
+# ---
+# tags:
+# - stable-diffusion-xl
+# - stable-diffusion-xl-diffusers
+# - text-to-image
+# - diffusers
+# - lora
+# - template:sd-lora
+# {img_str}
+# base_model: {base_model}
+# instance_prompt: {instance_prompt}
+# license: openrail++
+# ---
+#     """
+
+#     model_card = f"""
+# # SDXL LoRA DreamBooth - {repo_id}
+
+# <Gallery />
+
+# ## Model description
+
+# These are {repo_id} LoRA adaption weights for {base_model}.
+
+# The weights were trained  using [DreamBooth](https://dreambooth.github.io/).
+
+# LoRA for the text encoder was enabled: {train_text_encoder}.
+
+# Special VAE used for training: {vae_path}.
+
+# ## Trigger words
+
+# You should use {instance_prompt} to trigger the image generation.
+
+# ## Download model
+
+# Weights for this model are available in Safetensors format.
+
+# [Download]({repo_id}/tree/main) them in the Files & versions tab.
+
+# """
+#     with open(os.path.join(repo_folder, "README.md"), "w") as f:
+#         f.write(yaml + model_card)
+
+
+def import_model_class_from_model_name_or_path(
+    pretrained_model_name_or_path: str, revision: str, subfolder: str = "text_encoder"
 ):
-    func_args = func_args or ()
-    func_kwargs = func_kwargs or {}
-    retry = 0
-    while True:
-        try:
-            return func(*func_args, **func_kwargs)
-        except exceptions as err:
-            if retry >= max_retries:
-                raise err
-            else:
-                sleep_time = min(max_wait_time, base_wait_time * 2**retry)  # Exponential backoff
-                logger.info(f"{func} timed out, retrying in {sleep_time}s... [{retry/max_retries}]")
-                time.sleep(sleep_time)
-                retry += 1
-
-
-def url_or_path_join(*path_list):
-    return os.path.join(*path_list) if os.path.isdir(os.path.join(*path_list)) else "/".join(path_list)
-
-
-def save_model_card(
-    repo_id: str, images=None, base_model=str, train_text_encoder=False, prompt=str, repo_folder=None, vae_path=None
-):
-    img_str = ""
-    for i, image in enumerate(images):
-        image.save(os.path.join(repo_folder, f"image_{i}.png"))
-        img_str += f"![img_{i}](./image_{i}.png)\n"
-
-    yaml = f"""
----
-license: creativeml-openrail-m
-base_model: {base_model}
-instance_prompt: {prompt}
-tags:
-- stable-diffusion-xl
-- stable-diffusion-xl-diffusers
-- text-to-image
-- ppdiffusers
-- lora
-inference: false
----
-    """
-
-    model_card = f"""
-# LoRA DreamBooth - {repo_id}
-These are LoRA adaption weights for {base_model}. The weights were trained on {prompt} using [DreamBooth](https://dreambooth.github.io/). You can find some example images in the following. \n
-{img_str}
-
-LoRA for the text encoder was enabled: {train_text_encoder}.
-
-Special VAE used for training: {vae_path}.
-
-## License
-
-[SDXL 1.0 License](https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/blob/main/LICENSE.md)
-"""
-
-    with open(os.path.join(repo_folder, "README.md"), "w") as f:
-        f.write(yaml + model_card)
-
-
-def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: str, subfolder: str = "text_encoder"):
-    # try:
-    #     text_encoder_config = PretrainedConfig.from_pretrained(
-    #         url_or_path_join(pretrained_model_name_or_path, subfolder)
-    #     )
-    #     model_class = text_encoder_config.architectures[0]
-    # except Exception:
-    #     model_class = "LDMBertModel"
-    print(url_or_path_join(pretrained_model_name_or_path, subfolder))
-    text_encoder_config = PretrainedConfig.from_pretrained(url_or_path_join(pretrained_model_name_or_path, subfolder))
-    model_class = text_encoder_config.architectures[0]
-
-    text_encoder_config = PretrainedConfig.from_pretrained(url_or_path_join(pretrained_model_name_or_path, subfolder))
+    text_encoder_config = PretrainedConfig.from_pretrained(
+        pretrained_model_name_or_path, subfolder=subfolder, revision=revision
+    )
     model_class = text_encoder_config.architectures[0]
 
     if model_class == "CLIPTextModel":
-        from paddlenlp.transformers import CLIPTextModel
+        from ppdiffusers.transformers import CLIPTextModel
 
         return CLIPTextModel
     elif model_class == "CLIPTextModelWithProjection":
-        from paddlenlp.transformers import CLIPTextModelWithProjection
+        from ppdiffusers.transformers import CLIPTextModelWithProjection
 
         return CLIPTextModelWithProjection
-    elif model_class == "T5EncoderModel":
-        from paddlenlp.transformers import T5EncoderModel
-
-        return T5EncoderModel
-    elif model_class == "BertModel":
-        from paddlenlp.transformers import BertModel
-
-        return BertModel
-    elif model_class == "LDMBertModel":
-        from ppdiffusers.pipelines.latent_diffusion.pipeline_latent_diffusion import (
-            LDMBertModel,
-        )
-
-        return LDMBertModel
     else:
         raise ValueError(f"{model_class} is not supported.")
 
 
-class Lambda(BaseTransform):
-    def __init__(self, fn, keys=None):
-        super().__init__(keys)
-        self.fn = fn
-
-    def _apply_image(self, img):
-        return self.fn(img)
-
-
-def get_report_to(args):
-    if args.report_to == "visualdl":
-        from visualdl import LogWriter
-
-        writer = LogWriter(logdir=args.logging_dir)
-    elif args.report_to == "tensorboard":
-        from tensorboardX import SummaryWriter
-
-        writer = SummaryWriter(logdir=args.logging_dir)
-    else:
-        raise ValueError("report_to must be in ['visualdl', 'tensorboard']")
-    return writer
-
-
 def parse_args(input_args=None):
-    parser = argparse.ArgumentParser(description="Simple example of a training dreambooth lora script.")
+    parser = argparse.ArgumentParser(description="Simple example of a training script.")
     parser.add_argument(
         "--pretrained_model_name_or_path",
         type=str,
@@ -225,12 +209,65 @@ def parse_args(input_args=None):
         help="Path to pretrained VAE model with better numerical stability. More details: https://github.com/huggingface/diffusers/pull/4038.",
     )
     parser.add_argument(
+        "--revision",
+        type=str,
+        default=None,
+        required=False,
+        help="Revision of pretrained model identifier from huggingface.co/models.",
+    )
+    parser.add_argument(
+        "--variant",
+        type=str,
+        default=None,
+        help="Variant of the model files of the pretrained model identifier from huggingface.co/models, 'e.g.' fp16",
+    )
+    parser.add_argument(
+        "--dataset_name",
+        type=str,
+        default=None,
+        help=(
+            "The name of the Dataset (from the HuggingFace hub) containing the training data of instance images (could be your own, possibly private,"
+            " dataset). It can also be a path pointing to a local copy of a dataset in your filesystem,"
+            " or to a folder containing files that 🤗 Datasets can understand."
+        ),
+    )
+    parser.add_argument(
+        "--dataset_config_name",
+        type=str,
+        default=None,
+        help="The config of the Dataset, leave as None if there's only one config.",
+    )
+    parser.add_argument(
         "--instance_data_dir",
         type=str,
         default=None,
-        required=True,
-        help="A folder containing the training data of instance images.",
+        help=("A folder containing the training data. "),
     )
+
+    parser.add_argument(
+        "--cache_dir",
+        type=str,
+        default=None,
+        help="The directory where the downloaded models and datasets will be stored.",
+    )
+
+    parser.add_argument(
+        "--image_column",
+        type=str,
+        default="image",
+        help="The column of the dataset containing the target image. By "
+        "default, the standard Image Dataset maps out 'file_name' "
+        "to 'image'.",
+    )
+    parser.add_argument(
+        "--caption_column",
+        type=str,
+        default=None,
+        help="The column of the dataset containing the instance prompt for each image",
+    )
+
+    parser.add_argument("--repeats", type=int, default=1, help="How many times to repeat the training data.")
+
     parser.add_argument(
         "--class_data_dir",
         type=str,
@@ -243,7 +280,7 @@ def parse_args(input_args=None):
         type=str,
         default=None,
         required=True,
-        help="The prompt with identifier specifying the instance",
+        help="The prompt with identifier specifying the instance, e.g. 'photo of a TOK dog', 'in the style of TOK'",
     )
     parser.add_argument(
         "--class_prompt",
@@ -252,7 +289,10 @@ def parse_args(input_args=None):
         help="The prompt to specify images in the same class as provided instance images.",
     )
     parser.add_argument(
-        "--validation_prompt", type=str, default=None, help="A prompt that is sampled during training for inference."
+        "--validation_prompt",
+        type=str,
+        default=None,
+        help="A prompt that is used during validation to verify that the model is learning.",
     )
     parser.add_argument(
         "--num_validation_images",
@@ -293,27 +333,9 @@ def parse_args(input_args=None):
     )
     parser.add_argument("--seed", type=int, default=None, help="A seed for reproducible training.")
     parser.add_argument(
-        "--height",
-        type=int,
-        default=None,
-        help=(
-            "The height for input images, all the images in the train/validation dataset will be resized to this"
-            " height"
-        ),
-    )
-    parser.add_argument(
-        "--width",
-        type=int,
-        default=None,
-        help=(
-            "The width for input images, all the images in the train/validation dataset will be resized to this"
-            " width"
-        ),
-    )
-    parser.add_argument(
         "--resolution",
         type=int,
-        default=512,
+        default=1024,
         help=(
             "The resolution for input images, all the images in the train/validation dataset will be resized to this"
             " resolution"
@@ -332,12 +354,6 @@ def parse_args(input_args=None):
         help=("Coordinate for (the height) to be included in the crop coordinate embeddings needed by SDXL UNet."),
     )
     parser.add_argument(
-        "--lora_rank",
-        type=int,
-        default=4,
-        help="The rank of lora linear.",
-    )
-    parser.add_argument(
         "--center_crop",
         default=False,
         action="store_true",
@@ -347,17 +363,12 @@ def parse_args(input_args=None):
         ),
     )
     parser.add_argument(
-        "--random_flip",
-        action="store_true",
-        help="whether to randomly flip images horizontally",
-    )
-    parser.add_argument(
-        "--train_batch_size", type=int, default=4, help="Batch size (per device) for the training dataloader."
-    )
-    parser.add_argument(
         "--train_text_encoder",
         action="store_true",
         help="Whether to train the text encoder. If set, the text encoder should be float32 precision.",
+    )
+    parser.add_argument(
+        "--train_batch_size", type=int, default=4, help="Batch size (per device) for the training dataloader."
     )
     parser.add_argument(
         "--sample_batch_size", type=int, default=4, help="Batch size (per device) for sampling images."
@@ -373,7 +384,26 @@ def parse_args(input_args=None):
         "--checkpointing_steps",
         type=int,
         default=500,
-        help=("Save a checkpoint of the training state every X updates."),
+        help=(
+            "Save a checkpoint of the training state every X updates. These checkpoints can be used both as final"
+            " checkpoints in case they are better than the last checkpoint, and are also suitable for resuming"
+            " training using `--resume_from_checkpoint`."
+        ),
+    )
+    parser.add_argument(
+        "--checkpoints_total_limit",
+        type=int,
+        default=None,
+        help=("Max number of checkpoints to store."),
+    )
+    parser.add_argument(
+        "--resume_from_checkpoint",
+        type=str,
+        default=None,
+        help=(
+            "Whether training should be resumed from a previous checkpoint. Use a path saved by"
+            ' `--checkpointing_steps`, or `"latest"` to automatically select the last available checkpoint.'
+        ),
     )
     parser.add_argument(
         "--gradient_accumulation_steps",
@@ -389,8 +419,15 @@ def parse_args(input_args=None):
     parser.add_argument(
         "--learning_rate",
         type=float,
-        default=5e-4,
+        default=1e-4,
         help="Initial learning rate (after the potential warmup period) to use.",
+    )
+
+    parser.add_argument(
+        "--text_encoder_lr",
+        type=float,
+        default=5e-6,
+        help="Text encoder learning rate to use.",
     )
     parser.add_argument(
         "--scale_lr",
@@ -406,6 +443,14 @@ def parse_args(input_args=None):
             'The scheduler type to use. Choose between ["linear", "cosine", "cosine_with_restarts", "polynomial",'
             ' "constant", "constant_with_warmup"]'
         ),
+    )
+
+    parser.add_argument(
+        "--snr_gamma",
+        type=float,
+        default=None,
+        help="SNR weighting gamma to be used if rebalancing the loss. Recommended value is 5.0. "
+        "More details here: https://arxiv.org/abs/2303.09556.",
     )
     parser.add_argument(
         "--lr_warmup_steps", type=int, default=500, help="Number of steps for the warmup in the lr scheduler."
@@ -425,12 +470,61 @@ def parse_args(input_args=None):
             "Number of subprocesses to use for data loading. 0 means that the data will be loaded in the main process."
         ),
     )
-    parser.add_argument("--adam_beta1", type=float, default=0.9, help="The beta1 parameter for the Adam optimizer.")
-    parser.add_argument("--adam_beta2", type=float, default=0.999, help="The beta2 parameter for the Adam optimizer.")
-    parser.add_argument("--adam_weight_decay", type=float, default=1e-2, help="Weight decay to use.")
-    parser.add_argument("--adam_epsilon", type=float, default=1e-08, help="Epsilon value for the Adam optimizer")
+
+    parser.add_argument(
+        "--optimizer",
+        type=str,
+        default="AdamW",
+        help=('The optimizer type to use. Choose between ["AdamW", "prodigy"]'),
+    )
+
+    parser.add_argument(
+        "--use_8bit_adam",
+        action="store_true",
+        help="Whether or not to use 8-bit Adam from bitsandbytes. Ignored if optimizer is not set to AdamW",
+    )
+
+    parser.add_argument(
+        "--adam_beta1", type=float, default=0.9, help="The beta1 parameter for the Adam and Prodigy optimizers."
+    )
+    parser.add_argument(
+        "--adam_beta2", type=float, default=0.999, help="The beta2 parameter for the Adam and Prodigy optimizers."
+    )
+    parser.add_argument(
+        "--prodigy_beta3",
+        type=float,
+        default=None,
+        help="coefficients for computing the Prodidy stepsize using running averages. If set to None, "
+        "uses the value of square root of beta2. Ignored if optimizer is adamW",
+    )
+    parser.add_argument("--prodigy_decouple", type=bool, default=True, help="Use AdamW style decoupled weight decay")
+    parser.add_argument("--adam_weight_decay", type=float, default=1e-04, help="Weight decay to use for unet params")
+    parser.add_argument(
+        "--adam_weight_decay_text_encoder", type=float, default=1e-03, help="Weight decay to use for text_encoder"
+    )
+
+    parser.add_argument(
+        "--adam_epsilon",
+        type=float,
+        default=1e-08,
+        help="Epsilon value for the Adam optimizer and Prodigy optimizers.",
+    )
+
+    parser.add_argument(
+        "--prodigy_use_bias_correction",
+        type=bool,
+        default=True,
+        help="Turn on Adam's bias correction. True by default. Ignored if optimizer is adamW",
+    )
+    parser.add_argument(
+        "--prodigy_safeguard_warmup",
+        type=bool,
+        default=True,
+        help="Remove lr from the denominator of D estimate to avoid issues during warm-up stage. True by default. "
+        "Ignored if optimizer is adamW",
+    )
     parser.add_argument("--max_grad_norm", default=1.0, type=float, help="Max gradient norm.")
-    parser.add_argument("--push_to_hub", action="store_true", help="Whether or not to push the model to the Hub.")
+    # parser.add_argument("--push_to_hub", action="store_true", help="Whether or not to push the model to the Hub.")
     parser.add_argument("--hub_token", type=str, default=None, help="The token to use to push to the Model Hub.")
     parser.add_argument(
         "--hub_model_id",
@@ -443,29 +537,73 @@ def parse_args(input_args=None):
         type=str,
         default="logs",
         help=(
-            "[TensorBoard](https://www.tensorflow.org/tensorboard) or [VisualDL](https://www.paddlepaddle.org.cn/paddle/visualdl) log directory. Will default to"
-            "*output_dir/logs"
+            "[TensorBoard](https://www.tensorflow.org/tensorboard) log directory. Will default to"
+            " *output_dir/runs/**CURRENT_DATETIME_HOSTNAME***."
         ),
     )
+    # parser.add_argument(
+    #     "--allow_tf32",
+    #     action="store_true",
+    #     help=(
+    #         "Whether or not to allow TF32 on Ampere GPUs. Can be used to speed up training. For more information, see"
+    #         " https://pytorch.org/docs/stable/notes/cuda.html#tensorfloat-32-tf32-on-ampere-devices"
+    #     ),
+    # )
     parser.add_argument(
         "--report_to",
         type=str,
-        default="visualdl",
-        choices=["tensorboard", "visualdl"],
-        help="Log writer type.",
+        default="tensorboard",
+        help=(
+            'The integration to report the results and logs to. Supported platforms are `"tensorboard"`'
+            ' (default), `"wandb"` and `"comet_ml"`. Use `"all"` to report to all integrations.'
+        ),
     )
+    parser.add_argument(
+        "--mixed_precision",
+        type=str,
+        default=None,
+        choices=["no", "fp16", "bf16"],
+        help=(
+            "Whether to use mixed precision. Choose between fp16 and bf16 (bfloat16). Bf16 requires PyTorch >="
+            " 1.10.and an Nvidia Ampere GPU.  Default to the value of accelerate config of the current system or the"
+            " flag passed with the `accelerate.launch` command. Use this argument to override the accelerate config."
+        ),
+    )
+    parser.add_argument(
+        "--prior_generation_precision",
+        type=str,
+        default=None,
+        choices=["no", "fp32", "fp16", "bf16"],
+        help=(
+            "Choose prior generation precision between fp32, fp16 and bf16 (bfloat16). Bf16 requires PyTorch >="
+            " 1.10.and an Nvidia Ampere GPU.  Default to  fp16 if a GPU is available else fp32."
+        ),
+    )
+    parser.add_argument("--local_rank", type=int, default=-1, help="For distributed training: local_rank")
     parser.add_argument(
         "--enable_xformers_memory_efficient_attention", action="store_true", help="Whether or not to use xformers."
     )
-    parser.add_argument("--noise_offset", type=float, default=0, help="The scale of noise offset.")
+    parser.add_argument(
+        "--rank",
+        type=int,
+        default=4,
+        help=("The dimension of the LoRA update matrices."),
+    )
 
     if input_args is not None:
         args = parser.parse_args(input_args)
     else:
         args = parser.parse_args()
 
-    if args.instance_data_dir is None:
-        raise ValueError("You must specify a train data directory.")
+    if args.dataset_name is None and args.instance_data_dir is None:
+        raise ValueError("Specify either `--dataset_name` or `--instance_data_dir`")
+
+    if args.dataset_name is not None and args.instance_data_dir is not None:
+        raise ValueError("Specify only one of `--dataset_name` or `--instance_data_dir`")
+
+    env_local_rank = int(os.environ.get("LOCAL_RANK", -1))
+    if env_local_rank != -1 and env_local_rank != args.local_rank:
+        args.local_rank = env_local_rank
 
     if args.with_prior_preservation:
         if args.class_data_dir is None:
@@ -479,10 +617,6 @@ def parse_args(input_args=None):
         if args.class_prompt is not None:
             warnings.warn("You need not use --class_prompt without --with_prior_preservation.")
 
-    args.logging_dir = os.path.join(args.output_dir, args.logging_dir)
-    if args.height is None or args.width is None and args.resolution is not None:
-        args.height = args.width = args.resolution
-
     return args
 
 
@@ -495,36 +629,91 @@ class DreamBoothDataset(Dataset):
     def __init__(
         self,
         instance_data_root,
+        instance_prompt,
+        class_prompt,
         class_data_root=None,
         class_num=None,
-        height=1024,
-        width=1024,
+        size=1024,
+        repeats=1,
         center_crop=False,
-        interpolation="bilinear",
-        random_flip=False,
     ):
-        self.height = height
-        self.width = width
+        self.size = size
         self.center_crop = center_crop
 
-        self.instance_data_root = Path(instance_data_root)
-        if not self.instance_data_root.exists():
-            raise ValueError("Instance images root doesn't exists.")
-        ext = ["png", "jpg", "jpeg", "bmp", "PNG", "JPG", "JPEG", "BMP"]
-        self.instance_images_path = []
-        for p in Path(instance_data_root).iterdir():
-            if any(suffix in p.name for suffix in ext):
-                self.instance_images_path.append(p)
-        self.num_instance_images = len(self.instance_images_path)
+        self.instance_prompt = instance_prompt
+        self.custom_instance_prompts = None
+        self.class_prompt = class_prompt
+
+        # if --dataset_name is provided or a metadata jsonl file is provided in the local --instance_data directory,
+        # we load the training data using load_dataset
+        if args.dataset_name is not None:
+            try:
+                from datasets import load_dataset
+            except ImportError:
+                raise ImportError(
+                    "You are trying to load your data using the datasets library. If you wish to train using custom "
+                    "captions please install the datasets library: `pip install datasets`. If you wish to load a "
+                    "local folder containing images only, specify --instance_data_dir instead."
+                )
+            # Downloading and loading a dataset from the hub.
+            # See more about loading custom images at
+            # https://huggingface.co/docs/datasets/v2.0.0/en/dataset_script
+            dataset = load_dataset(
+                args.dataset_name,
+                args.dataset_config_name,
+                cache_dir=args.cache_dir,
+            )
+            # Preprocessing the datasets.
+            column_names = dataset["train"].column_names
+
+            # 6. Get the column names for input/target.
+            if args.image_column is None:
+                image_column = column_names[0]
+                logger.info(f"image column defaulting to {image_column}")
+            else:
+                image_column = args.image_column
+                if image_column not in column_names:
+                    raise ValueError(
+                        f"`--image_column` value '{args.image_column}' not found in dataset columns. Dataset columns are: {', '.join(column_names)}"
+                    )
+            instance_images = dataset["train"][image_column]
+
+            if args.caption_column is None:
+                logger.info(
+                    "No caption column provided, defaulting to instance_prompt for all images. If your dataset "
+                    "contains captions/prompts for the images, make sure to specify the "
+                    "column as --caption_column"
+                )
+                self.custom_instance_prompts = None
+            else:
+                if args.caption_column not in column_names:
+                    raise ValueError(
+                        f"`--caption_column` value '{args.caption_column}' not found in dataset columns. Dataset columns are: {', '.join(column_names)}"
+                    )
+                custom_instance_prompts = dataset["train"][args.caption_column]
+                # create final list of captions according to --repeats
+                self.custom_instance_prompts = []
+                for caption in custom_instance_prompts:
+                    self.custom_instance_prompts.extend(itertools.repeat(caption, repeats))
+        else:
+            self.instance_data_root = Path(instance_data_root)
+            if not self.instance_data_root.exists():
+                print(self.instance_data_root)
+                raise ValueError("Instance images root doesn't exists.")
+
+            instance_images = [Image.open(path) for path in list(Path(instance_data_root).iterdir())]
+            self.custom_instance_prompts = None
+
+        self.instance_images = []
+        for img in instance_images:
+            self.instance_images.extend(itertools.repeat(img, repeats))
+        self.num_instance_images = len(self.instance_images)
         self._length = self.num_instance_images
 
         if class_data_root is not None:
             self.class_data_root = Path(class_data_root)
             self.class_data_root.mkdir(parents=True, exist_ok=True)
-            self.class_images_path = []
-            for p in Path(class_data_root).iterdir():
-                if any(suffix in p.name for suffix in ext):
-                    self.class_images_path.append(p)
+            self.class_images_path = list(self.class_data_root.iterdir())
             if class_num is not None:
                 self.num_class_images = min(len(self.class_images_path), class_num)
             else:
@@ -535,9 +724,8 @@ class DreamBoothDataset(Dataset):
 
         self.image_transforms = transforms.Compose(
             [
-                transforms.Resize((height, width), interpolation=interpolation),
-                transforms.CenterCrop((height, width)) if center_crop else transforms.RandomCrop((height, width)),
-                transforms.RandomHorizontalFlip() if random_flip else Lambda(lambda x: x),
+                transforms.Resize(size, interpolation="bilinear"),
+                transforms.CenterCrop(size) if center_crop else transforms.RandomCrop(size),
                 transforms.ToTensor(),
                 transforms.Normalize([0.5], [0.5]),
             ]
@@ -548,11 +736,22 @@ class DreamBoothDataset(Dataset):
 
     def __getitem__(self, index):
         example = {}
-        instance_image = Image.open(self.instance_images_path[index % self.num_instance_images])
+        instance_image = self.instance_images[index % self.num_instance_images]
         instance_image = exif_transpose(instance_image)
+
         if not instance_image.mode == "RGB":
             instance_image = instance_image.convert("RGB")
         example["instance_images"] = self.image_transforms(instance_image)
+
+        if self.custom_instance_prompts:
+            caption = self.custom_instance_prompts[index % self.num_instance_images]
+            if caption:
+                example["instance_prompt"] = caption
+            else:
+                example["instance_prompt"] = self.instance_prompt
+
+        else:  # costum prompts were provided, but length does not match size of image dataset
+            example["instance_prompt"] = self.instance_prompt
 
         if self.class_data_root:
             class_image = Image.open(self.class_images_path[index % self.num_class_images])
@@ -561,75 +760,26 @@ class DreamBoothDataset(Dataset):
             if not class_image.mode == "RGB":
                 class_image = class_image.convert("RGB")
             example["class_images"] = self.image_transforms(class_image)
+            example["class_prompt"] = self.class_prompt
 
         return example
 
 
-# def tokenize_prompt(tokenizer, prompt,):
+def collate_fn(examples, with_prior_preservation=False):
+    pixel_values = [example["instance_images"] for example in examples]
+    prompts = [example["instance_prompt"] for example in examples]
 
-#     text_inputs = tokenizer(
-#         prompt,
-#         truncation=True,
-#         padding="do_not_pad",
-#         max_length=tokenizer.model_max_length,
-#         return_attention_mask=True,
-#         return_tensors="pd",
-#     )
-#     text_input_ids = text_inputs.input_ids
-#     return text_inputs
+    # Concat class and instance examples for prior preservation.
+    # We do this to avoid doing two forward passes.
+    if with_prior_preservation:
+        pixel_values += [example["class_images"] for example in examples]
+        prompts += [example["class_prompt"] for example in examples]
 
+    pixel_values = paddle.stack(pixel_values)
+    pixel_values = pixel_values.astype("float32")
 
-def tokenize_prompt(
-    tokenizer,
-    prompt,
-):
-
-    text_inputs = tokenizer(
-        prompt,
-        padding="max_length",
-        max_length=tokenizer.model_max_length,
-        truncation=True,
-        return_tensors="pd",
-    )
-    text_input_ids = text_inputs.input_ids
-    return text_input_ids
-
-
-# Adapted from pipelines.StableDiffusionXLPipeline.encode_prompt
-def encode_prompt(text_encoders, tokenizers, prompt, text_input_ids_list=None):
-    prompt_embeds_list = []
-    for i, text_encoder in enumerate(text_encoders):
-        if tokenizers is not None:
-            tokenizer = tokenizers[i]
-            text_input_ids = tokenize_prompt(tokenizer, prompt)
-        else:
-            assert text_input_ids_list is not None
-            text_input_ids = text_input_ids_list[i]
-        prompt_embeds = text_encoder(text_input_ids, output_hidden_states=True)
-        pooled_prompt_embeds = prompt_embeds[0]
-        prompt_embeds = prompt_embeds.hidden_states[-2]
-        bs_embed, seq_len, _ = prompt_embeds.shape
-        prompt_embeds = prompt_embeds.reshape([bs_embed, seq_len, -1])
-        prompt_embeds_list.append(prompt_embeds)
-    prompt_embeds = paddle.concat(x=prompt_embeds_list, axis=-1)
-    pooled_prompt_embeds = pooled_prompt_embeds.reshape([bs_embed, -1])
-    return prompt_embeds, pooled_prompt_embeds
-
-
-def unet_attn_processors_state_dict(unet) -> Dict[str, paddle.Tensor]:
-    """
-    Returns:
-        a state dict containing just the attention processor parameters.
-    """
-    attn_processors = unet.attn_processors
-
-    attn_processors_state_dict = {}
-
-    for attn_processor_key, attn_processor in attn_processors.items():
-        for parameter_key, parameter in attn_processor.state_dict().items():
-            attn_processors_state_dict[f"{attn_processor_key}.{parameter_key}"] = parameter
-
-    return attn_processors_state_dict
+    batch = {"pixel_values": pixel_values, "prompts": prompts}
+    return batch
 
 
 class PromptDataset(Dataset):
@@ -649,23 +799,76 @@ class PromptDataset(Dataset):
         return example
 
 
-def get_full_repo_name(model_id: str, organization: Optional[str] = None, token: Optional[str] = None):
-    if token is None:
-        token = HfFolder.get_token()
-    if organization is None:
-        username = whoami(token)["name"]
-        return f"{username}/{model_id}"
+def tokenize_prompt(tokenizer, prompt):
+    text_inputs = tokenizer(
+        prompt,
+        padding="max_length",
+        max_length=tokenizer.model_max_length,
+        truncation=True,
+        return_tensors="pd",
+    )
+    text_input_ids = text_inputs.input_ids
+    return text_input_ids
+
+
+# Adapted from pipelines.StableDiffusionXLPipeline.encode_prompt
+def encode_prompt(text_encoders, tokenizers, prompt, text_input_ids_list=None):
+    prompt_embeds_list = []
+
+    for i, text_encoder in enumerate(text_encoders):
+        if tokenizers is not None:
+            tokenizer = tokenizers[i]
+            text_input_ids = tokenize_prompt(tokenizer, prompt)
+        else:
+            assert text_input_ids_list is not None
+            text_input_ids = text_input_ids_list[i]
+
+        prompt_embeds = text_encoder(
+            text_input_ids,
+            output_hidden_states=True,
+        )
+
+        # We are only ALWAYS interested in the pooled output of the final text encoder
+        pooled_prompt_embeds = prompt_embeds[0]
+        prompt_embeds = prompt_embeds.hidden_states[-2]
+        bs_embed, seq_len, _ = prompt_embeds.shape
+        prompt_embeds = prompt_embeds.reshape([bs_embed, seq_len, -1])
+        prompt_embeds_list.append(prompt_embeds)
+
+    prompt_embeds = paddle.concat(prompt_embeds_list, axis=-1)
+    pooled_prompt_embeds = pooled_prompt_embeds.reshape([bs_embed, -1])
+    return prompt_embeds, pooled_prompt_embeds
+
+
+def main(args):
+    logging_dir = Path(args.output_dir, args.logging_dir)
+
+    accelerator_project_config = ProjectConfiguration(project_dir=args.output_dir, logging_dir=logging_dir)
+    kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
+    accelerator = Accelerator(
+        gradient_accumulation_steps=args.gradient_accumulation_steps,
+        mixed_precision=args.mixed_precision,
+        log_with=args.report_to,
+        project_config=accelerator_project_config,
+        kwargs_handlers=[kwargs],
+    )
+
+    if args.report_to == "wandb":
+        if not is_wandb_available():
+            raise ImportError("Make sure to install wandb if you want to use it for logging during training.")
+        import wandb
+
+    # Make one log on every process with the configuration for debugging.
+    logging.basicConfig(
+        format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+        datefmt="%m/%d/%Y %H:%M:%S",
+        level=logging.INFO,
+    )
+    logger.info(accelerator.state, main_process_only=False)
+    if accelerator.is_local_main_process:
+        ppdiffusers.utils.logging.set_verbosity_info()
     else:
-        return f"{organization}/{model_id}"
-
-
-def main():
-    args = parse_args()
-    rank = paddle.distributed.get_rank()
-    is_main_process = rank == 0
-    num_processes = paddle.distributed.get_world_size()
-    if num_processes > 1:
-        paddle.distributed.init_parallel_env()
+        ppdiffusers.utils.logging.set_verbosity_error()
 
     # If passed along, set the training seed now.
     if args.seed is not None:
@@ -679,67 +882,83 @@ def main():
         cur_class_images = len(list(class_images_dir.iterdir()))
 
         if cur_class_images < args.num_class_images:
+            paddle_dtype = paddle.float16
+            if args.prior_generation_precision == "fp32":
+                paddle_dtype = paddle.float32
+            elif args.prior_generation_precision == "fp16":
+                paddle_dtype = paddle.float16
+            elif args.prior_generation_precision == "bf16":
+                paddle_dtype = paddle.bfloat16
             pipeline = StableDiffusionXLPipeline.from_pretrained(
                 args.pretrained_model_name_or_path,
-                safety_checker=None,
-                requires_safety_checker=False,
                 paddle_dtype=paddle_dtype,
+                revision=args.revision,
+                variant=args.variant,
             )
-            if args.enable_xformers_memory_efficient_attention and is_ppxformers_available():
-                try:
-                    pipeline.unet.enable_xformers_memory_efficient_attention()
-                except Exception as e:
-                    logger.warning(
-                        "Could not enable memory efficient attention. Make sure develop paddlepaddle is installed"
-                        f" correctly and a GPU is available: {e}"
-                    )
             pipeline.set_progress_bar_config(disable=True)
 
             num_new_images = args.num_class_images - cur_class_images
             logger.info(f"Number of class images to sample: {num_new_images}.")
 
             sample_dataset = PromptDataset(args.class_prompt, num_new_images)
-            batch_sampler = (
-                DistributedBatchSampler(sample_dataset, batch_size=args.sample_batch_size, shuffle=False)
-                if num_processes > 1
-                else BatchSampler(sample_dataset, batch_size=args.sample_batch_size, shuffle=False)
-            )
-            sample_dataloader = DataLoader(
-                sample_dataset, batch_sampler=batch_sampler, num_workers=args.dataloader_num_workers
-            )
+            sample_dataloader = paddle.io.DataLoader(sample_dataset, batch_size=args.sample_batch_size)
 
-            for example in tqdm(sample_dataloader, desc="Generating class images", disable=not is_main_process):
+            sample_dataloader = accelerator.prepare(sample_dataloader)
+
+            for example in tqdm(
+                sample_dataloader, desc="Generating class images", disable=not accelerator.is_local_main_process
+            ):
                 images = pipeline(example["prompt"]).images
 
                 for i, image in enumerate(images):
-                    hash_image = hashlib.sha1(image.tobytes()).hexdigest()
+                    hash_image = insecure_hashlib.sha1(image.tobytes()).hexdigest()
                     image_filename = class_images_dir / f"{example['index'][i] + cur_class_images}-{hash_image}.jpg"
                     image.save(image_filename)
-            pipeline.to("cpu")
+
             del pipeline
             gc.collect()
+            if paddle.device.cuda.device_count() >= 1:
+                paddle.device.cuda.empty_cache()
 
-    if is_main_process:
+    # Handle the repository creation
+    if accelerator.is_main_process:
         if args.output_dir is not None:
             os.makedirs(args.output_dir, exist_ok=True)
 
-    # Load the tokenizer
-    tokenizer_one = AutoTokenizer.from_pretrained(url_or_path_join(args.pretrained_model_name_or_path, "tokenizer"))
-    tokenizer_two = AutoTokenizer.from_pretrained(url_or_path_join(args.pretrained_model_name_or_path, "tokenizer_2"))
+        # if args.push_to_hub:
+        #     repo_id = create_repo(
+        #         repo_id=args.hub_model_id or Path(args.output_dir).name, exist_ok=True, token=args.hub_token
+        #     ).repo_id
+
+    # Load the tokenizers
+    tokenizer_one = AutoTokenizer.from_pretrained(
+        args.pretrained_model_name_or_path,
+        subfolder="tokenizer",
+        revision=args.revision,
+        use_fast=False,
+    )
+    tokenizer_two = AutoTokenizer.from_pretrained(
+        args.pretrained_model_name_or_path,
+        subfolder="tokenizer_2",
+        revision=args.revision,
+        use_fast=False,
+    )
 
     # import correct text encoder classes
-    text_encoder_cls_one = import_model_class_from_model_name_or_path(args.pretrained_model_name_or_path)
+    text_encoder_cls_one = import_model_class_from_model_name_or_path(
+        args.pretrained_model_name_or_path, args.revision
+    )
     text_encoder_cls_two = import_model_class_from_model_name_or_path(
-        args.pretrained_model_name_or_path, subfolder="text_encoder_2"
+        args.pretrained_model_name_or_path, args.revision, subfolder="text_encoder_2"
     )
 
     # Load scheduler and models
     noise_scheduler = DDPMScheduler.from_pretrained(args.pretrained_model_name_or_path, subfolder="scheduler")
     text_encoder_one = text_encoder_cls_one.from_pretrained(
-        url_or_path_join(args.pretrained_model_name_or_path, "text_encoder")
+        args.pretrained_model_name_or_path, subfolder="text_encoder", revision=args.revision, variant=args.variant
     )
     text_encoder_two = text_encoder_cls_two.from_pretrained(
-        url_or_path_join(args.pretrained_model_name_or_path, "text_encoder_2")
+        args.pretrained_model_name_or_path, subfolder="text_encoder_2", revision=args.revision, variant=args.variant
     )
     vae_path = (
         args.pretrained_model_name_or_path
@@ -747,132 +966,305 @@ def main():
         else args.pretrained_vae_model_name_or_path
     )
     vae = AutoencoderKL.from_pretrained(
-        url_or_path_join(vae_path, "vae") if args.pretrained_vae_model_name_or_path is None else vae_path
+        vae_path,
+        subfolder="vae" if args.pretrained_vae_model_name_or_path is None else None,
+        revision=args.revision,
+        variant=args.variant,
     )
     unet = UNet2DConditionModel.from_pretrained(
-        args.pretrained_model_name_or_path,
-        subfolder="unet",
+        args.pretrained_model_name_or_path, subfolder="unet", revision=args.revision, variant=args.variant
     )
 
     # We only train the additional adapter LoRA layers
-    freeze_params(vae.parameters())
-    freeze_params(text_encoder_one.parameters())
-    freeze_params(text_encoder_two.parameters())
-    freeze_params(unet.parameters())
+    def set_requires_grad(model, is_enabled):
+        for param in model.parameters():
+            param.stop_gradient = not is_enabled
 
-    # Move unet, vae and text_encoder to device and cast to paddle_dtype
-    # The VAE is in float32 to avoid NaN losses.
-    unet.to(dtype=paddle_dtype)
-    if args.pretrained_vae_model_name_or_path is None:
-        vae.to(dtype=paddle.float32)
-    else:
-        vae.to(dtype=paddle_dtype)
-    text_encoder_one.to(dtype=paddle_dtype)
-    text_encoder_two.to(dtype=paddle_dtype)
+    set_requires_grad(vae, False)
+    set_requires_grad(text_encoder_one, False)
+    set_requires_grad(text_encoder_two, False)
+    set_requires_grad(unet, False)
 
-    if args.enable_xformers_memory_efficient_attention and is_ppxformers_available():
-        try:
+    # For mixed precision training we cast all non-trainable weights (vae, non-lora text_encoder and non-lora unet) to half-precision
+    # as these weights are only used for inference, keeping weights in full precision is not required.
+    weight_dtype = paddle.float32
+    if accelerator.mixed_precision == "fp16":
+        weight_dtype = paddle.float16
+    elif accelerator.mixed_precision == "bf16":
+        weight_dtype = paddle.bfloat16
+
+    # Move unet, vae and text_encoder to device and cast to weight_dtype
+    unet.to(dtype=weight_dtype)
+
+    # The VAE is always in float32 to avoid NaN losses.
+    vae.to(dtype=paddle.float32)
+
+    text_encoder_one.to(dtype=weight_dtype)
+    text_encoder_two.to(dtype=weight_dtype)
+
+    if args.enable_xformers_memory_efficient_attention:
+        if is_ppxformers_available():
             unet.enable_xformers_memory_efficient_attention()
-        except Exception as e:
-            logger.warning(
-                "Could not enable memory efficient attention. Make sure develop paddlepaddle is installed"
-                f" correctly and a GPU is available: {e}"
-            )
+        else:
+            raise ValueError("xformers is not available. Make sure it is installed correctly")
+
+    if args.gradient_checkpointing:
+        unet.enable_gradient_checkpointing()
+        if args.train_text_encoder:
+            text_encoder_one.gradient_checkpointing_enable()
+            text_encoder_two.gradient_checkpointing_enable()
+
     # now we will add new LoRA weights to the attention layers
-    # It's important to realize here how many attention weights will be added and of which sizes
-    # The sizes of the attention layers consist only of two different variables:
-    # 1) - the "hidden_size", which is increased according to `unet.config.block_out_channels`.
-    # 2) - the "cross attention size", which is set to `unet.config.cross_attention_dim`.
-
-    # Let's first see how many attention processors we will have to set.
-    # For Stable Diffusion, it should be equal to:
-    # - down blocks (2x attention layers) * (2x transformer layers) * (3x down blocks) = 12
-    # - mid blocks (2x attention layers) * (1x transformer layers) * (1x mid blocks) = 2
-    # - up blocks (2x attention layers) * (3x transformer layers) * (3x down blocks) = 18
-    # => 32 layers
-
     # Set correct lora layers
-    unet_lora_attn_procs = {}
     unet_lora_parameters = []
-    for name, attn_processor in unet.attn_processors.items():
-        cross_attention_dim = None if name.endswith("attn1.processor") else unet.config.cross_attention_dim
-        if name.startswith("mid_block"):
-            hidden_size = unet.config.block_out_channels[-1]
-        elif name.startswith("up_blocks"):
-            block_id = int(name[len("up_blocks.")])
-            hidden_size = list(reversed(unet.config.block_out_channels))[block_id]
-        elif name.startswith("down_blocks"):
-            block_id = int(name[len("down_blocks.")])
-            hidden_size = unet.config.block_out_channels[block_id]
+    for attn_processor_name, attn_processor in unet.attn_processors.items():
+        # Parse the attention module.
+        attn_module = unet
+        for n in attn_processor_name.split(".")[:-1]:
+            attn_module = getattr(attn_module, n)
 
-        lora_attn_processor_class = (
-            LoRAAttnProcessor2_5 if hasattr(F, "scaled_dot_product_attention_") else LoRAAttnProcessor
+        # Set the `lora_layer` attribute of the attention-related matrices.
+        attn_module.to_q.set_lora_layer(
+            LoRALinearLayer(
+                in_features=attn_module.to_q.in_features, out_features=attn_module.to_q.out_features, rank=args.rank
+            )
+        )
+        attn_module.to_k.set_lora_layer(
+            LoRALinearLayer(
+                in_features=attn_module.to_k.in_features, out_features=attn_module.to_k.out_features, rank=args.rank
+            )
+        )
+        attn_module.to_v.set_lora_layer(
+            LoRALinearLayer(
+                in_features=attn_module.to_v.in_features, out_features=attn_module.to_v.out_features, rank=args.rank
+            )
+        )
+        attn_module.to_out[0].set_lora_layer(
+            LoRALinearLayer(
+                in_features=attn_module.to_out[0].in_features,
+                out_features=attn_module.to_out[0].out_features,
+                rank=args.rank,
+            )
         )
 
-        module = lora_attn_processor_class(hidden_size=hidden_size, cross_attention_dim=cross_attention_dim)
-        unet_lora_attn_procs[name] = module
-        unet_lora_parameters.extend(module.parameters())
-
-    unet.set_attn_processor(unet_lora_attn_procs)
+        # Accumulate the LoRA params to optimize.
+        unet_lora_parameters.extend(attn_module.to_q.lora_layer.parameters())
+        unet_lora_parameters.extend(attn_module.to_k.lora_layer.parameters())
+        unet_lora_parameters.extend(attn_module.to_v.lora_layer.parameters())
+        unet_lora_parameters.extend(attn_module.to_out[0].lora_layer.parameters())
 
     # The text encoder comes from 🤗 transformers, so we cannot directly modify it.
     # So, instead, we monkey-patch the forward calls of its attention-blocks.
     if args.train_text_encoder:
         # ensure that dtype is float32, even if rest of the model that isn't trained is loaded in fp16
-        text_lora_parameters_one = LoraLoaderMixin._modify_text_encoder(text_encoder_one, dtype=paddle.float32)
-        text_lora_parameters_two = LoraLoaderMixin._modify_text_encoder(text_encoder_two, dtype=paddle.float32)
+        text_lora_parameters_one = LoraLoaderMixin._modify_text_encoder(
+            text_encoder_one, dtype=paddle.float32, rank=args.rank
+        )
+        text_lora_parameters_two = LoraLoaderMixin._modify_text_encoder(
+            text_encoder_two, dtype=paddle.float32, rank=args.rank
+        )
 
-    # # create custom saving & loading functions for Lora
-    # def save_model_func(models, weights, output_dir):
-    #     # there are only two options here. Either are just the unet attn processor layers
-    #     # or there are the unet and text encoder atten layers
-    #     unet_lora_layers_to_save = None
-    #     text_encoder_lora_layers_to_save = None
+    # create custom saving & loading hooks so that `accelerator.save_state(...)` serializes in a nice format
+    def save_model_hook(models, weights, output_dir):
+        if accelerator.is_main_process:
+            # there are only two options here. Either are just the unet attn processor layers
+            # or there are the unet and text encoder atten layers
+            unet_lora_layers_to_save = None
+            text_encoder_one_lora_layers_to_save = None
+            text_encoder_two_lora_layers_to_save = None
 
-    #     for model in models:
-    #         if isinstance(model, type(unwrap_model(unet))):
-    #             unet_lora_layers_to_save = unet_attn_processors_state_dict(model)
-    #         elif isinstance(model, type(unwrap_model(text_encoder))):
-    #             text_encoder_lora_layers_to_save = text_encoder_lora_state_dict(model)
-    #         else:
-    #             raise ValueError(f"unexpected save model: {model.__class__}")
+            for model in models:
+                if isinstance(model, type(accelerator.unwrap_model(unet))):
+                    unet_lora_layers_to_save = unet_lora_state_dict(model)
+                elif isinstance(model, type(accelerator.unwrap_model(text_encoder_one))):
+                    text_encoder_one_lora_layers_to_save = text_encoder_lora_state_dict(model)
+                elif isinstance(model, type(accelerator.unwrap_model(text_encoder_two))):
+                    text_encoder_two_lora_layers_to_save = text_encoder_lora_state_dict(model)
+                else:
+                    raise ValueError(f"unexpected save model: {model.__class__}")
 
-    #         # make sure to pop weight so that corresponding model is not saved again
-    #         weights.pop()
+                # make sure to pop weight so that corresponding model is not saved again
+                weights.pop()
 
-    #     LoraLoaderMixin.save_lora_weights(
-    #         output_dir,
-    #         unet_lora_layers=unet_lora_layers_to_save,
-    #         text_encoder_lora_layers=text_encoder_lora_layers_to_save,
+            StableDiffusionXLPipeline.save_lora_weights(
+                output_dir,
+                unet_lora_layers=unet_lora_layers_to_save,
+                text_encoder_lora_layers=text_encoder_one_lora_layers_to_save,
+                text_encoder_2_lora_layers=text_encoder_two_lora_layers_to_save,
+            )
+            del unet_lora_layers_to_save, text_encoder_one_lora_layers_to_save, text_encoder_two_lora_layers_to_save
+            gc.collect()
+            paddle.device.cuda.empty_cache()
+
+    def load_model_hook(models, input_dir):
+        unet_ = None
+        text_encoder_one_ = None
+        text_encoder_two_ = None
+
+        while len(models) > 0:
+            model = models.pop()
+
+            if isinstance(model, type(accelerator.unwrap_model(unet))):
+                unet_ = model
+            elif isinstance(model, type(accelerator.unwrap_model(text_encoder_one))):
+                text_encoder_one_ = model
+            elif isinstance(model, type(accelerator.unwrap_model(text_encoder_two))):
+                text_encoder_two_ = model
+            else:
+                raise ValueError(f"unexpected save model: {model.__class__}")
+
+        lora_state_dict, network_alphas = LoraLoaderMixin.lora_state_dict(input_dir)
+        LoraLoaderMixin.load_lora_into_unet(lora_state_dict, network_alphas=network_alphas, unet=unet_)
+
+        text_encoder_state_dict = {k: v for k, v in lora_state_dict.items() if "text_encoder." in k}
+        LoraLoaderMixin.load_lora_into_text_encoder(
+            text_encoder_state_dict, network_alphas=network_alphas, text_encoder=text_encoder_one_
+        )
+
+        text_encoder_2_state_dict = {k: v for k, v in lora_state_dict.items() if "text_encoder_2." in k}
+        LoraLoaderMixin.load_lora_into_text_encoder(
+            text_encoder_2_state_dict, network_alphas=network_alphas, text_encoder=text_encoder_two_
+        )
+
+    # accelerator.register_save_state_pre_hook(save_model_hook)
+    # accelerator.register_load_state_pre_hook(load_model_hook)
+
+    # Enable TF32 for faster training on Ampere GPUs,
+    # cf https://pytorch.org/docs/stable/notes/cuda.html#tensorfloat-32-tf32-on-ampere-devices
+    # if args.allow_tf32:
+    #     torch.backends.cuda.matmul.allow_tf32 = True
+
+    if args.scale_lr:
+        args.learning_rate = (
+            args.learning_rate * args.gradient_accumulation_steps * args.train_batch_size * accelerator.num_processes
+        )
+
+    # Optimization parameters
+    unet_lora_parameters_with_lr = {"params": unet_lora_parameters, "lr": args.learning_rate}
+    if args.train_text_encoder:
+        # different learning rate for text encoder and unet
+        text_lora_parameters_one_with_lr = {
+            "params": text_lora_parameters_one,
+            "weight_decay": args.adam_weight_decay_text_encoder,
+            "lr": args.text_encoder_lr if args.text_encoder_lr else args.learning_rate,
+        }
+        text_lora_parameters_two_with_lr = {
+            "params": text_lora_parameters_two,
+            "weight_decay": args.adam_weight_decay_text_encoder,
+            "lr": args.text_encoder_lr if args.text_encoder_lr else args.learning_rate,
+        }
+        params_to_optimize = [
+            unet_lora_parameters_with_lr,
+            text_lora_parameters_one_with_lr,
+            text_lora_parameters_two_with_lr,
+        ]
+    else:
+        params_to_optimize = [unet_lora_parameters_with_lr]
+
+    # Optimizer creation
+    if not (args.optimizer.lower() == "prodigy" or args.optimizer.lower() == "adamw"):
+        logger.warn(
+            f"Unsupported choice of optimizer: {args.optimizer}.Supported optimizers include [adamW, prodigy]."
+            "Defaulting to adamW"
+        )
+        args.optimizer = "adamw"
+
+    if args.use_8bit_adam and not args.optimizer.lower() == "adamw":
+        logger.warn(
+            f"use_8bit_adam is ignored when optimizer is not set to 'AdamW'. Optimizer was "
+            f"set to {args.optimizer.lower()}"
+        )
+
+    if args.optimizer.lower() == "adamw":
+        if args.use_8bit_adam:
+            raise Exception("8-bit Adam not supported yet. Please use the default AdamW optimizer instead.")
+
+        else:
+            optimizer_class = paddle.optimizer.AdamW
+
+        # optimizer = optimizer_class(
+        #     params_to_optimize,
+        #     betas=(args.adam_beta1, args.adam_beta2),
+        #     weight_decay=args.adam_weight_decay,
+        #     eps=args.adam_epsilon,
+        # )
+        optimizer = optimizer_class(
+            parameters=params_to_optimize,
+            beta1=args.adam_beta1,
+            beta2=args.adam_beta2,
+            weight_decay=args.adam_weight_decay,
+            epsilon=args.adam_epsilon,
+            grad_clip=nn.ClipGradByGlobalNorm(args.max_grad_norm) if args.max_grad_norm > 0 else None,
+        )
+
+    # if args.optimizer.lower() == "prodigy":
+    #     try:
+    #         import prodigyopt
+    #     except ImportError:
+    #         raise ImportError("To use Prodigy, please install the prodigyopt library: `pip install prodigyopt`")
+
+    #     optimizer_class = prodigyopt.Prodigy
+
+    #     if args.learning_rate <= 0.1:
+    #         logger.warn(
+    #             "Learning rate is too low. When using prodigy, it's generally better to set learning rate around 1.0"
+    #         )
+    #     if args.train_text_encoder and args.text_encoder_lr:
+    #         logger.warn(
+    #             f"Learning rates were provided both for the unet and the text encoder- e.g. text_encoder_lr:"
+    #             f" {args.text_encoder_lr} and learning_rate: {args.learning_rate}. "
+    #             f"When using prodigy only learning_rate is used as the initial learning rate."
+    #         )
+    #         # changes the learning rate of text_encoder_parameters_one and text_encoder_parameters_two to be
+    #         # --learning_rate
+    #         params_to_optimize[1]["lr"] = args.learning_rate
+    #         params_to_optimize[2]["lr"] = args.learning_rate
+
+    #     optimizer = optimizer_class(
+    #         params_to_optimize,
+    #         lr=args.learning_rate,
+    #         betas=(args.adam_beta1, args.adam_beta2),
+    #         beta3=args.prodigy_beta3,
+    #         weight_decay=args.adam_weight_decay,
+    #         eps=args.adam_epsilon,
+    #         decouple=args.prodigy_decouple,
+    #         use_bias_correction=args.prodigy_use_bias_correction,
+    #         safeguard_warmup=args.prodigy_safeguard_warmup,
     #     )
 
-    # def load_model_func(models, input_dir):
-    #     unet_ = None
-    #     text_encoder_ = None
+    # Dataset and DataLoaders creation:
+    train_dataset = DreamBoothDataset(
+        instance_data_root=args.instance_data_dir,
+        instance_prompt=args.instance_prompt,
+        class_prompt=args.class_prompt,
+        class_data_root=args.class_data_dir if args.with_prior_preservation else None,
+        class_num=args.num_class_images,
+        size=args.resolution,
+        repeats=args.repeats,
+        center_crop=args.center_crop,
+    )
 
-    #     while len(models) > 0:
-    #         model = models.pop()
+    train_dataloader = paddle.io.DataLoader(
+        train_dataset,
+        batch_size=args.train_batch_size,
+        shuffle=True,
+        collate_fn=lambda examples: collate_fn(examples, args.with_prior_preservation),
+        num_workers=args.dataloader_num_workers,
+    )
 
-    #         if isinstance(model, type(unwrap_model(unet))):
-    #             unet_ = model
-    #         elif isinstance(model, type(unwrap_model(text_encoder))):
-    #             text_encoder_ = model
-    #         else:
-    #             raise ValueError(f"unexpected save model: {model.__class__}")
-
-    #     lora_state_dict, network_alphas = LoraLoaderMixin.lora_state_dict(input_dir)
-    #     LoraLoaderMixin.load_lora_into_unet(lora_state_dict, network_alphas=network_alphas, unet=unet_)
-    #     LoraLoaderMixin.load_lora_into_text_encoder(
-    #         lora_state_dict, network_alphas=network_alphas, text_encoder=text_encoder_
-    #     )
+    # Computes additional embeddings/ids required by the SDXL UNet.
+    # regular text embeddings (when `train_text_encoder` is not True)
+    # pooled text embeddings
+    # time ids
 
     def compute_time_ids():
-        original_size = args.resolution, args.resolution
-        target_size = args.resolution, args.resolution
+        # Adapted from pipeline.StableDiffusionXLPipeline._get_add_time_ids
+        original_size = (args.resolution, args.resolution)
+        target_size = (args.resolution, args.resolution)
         crops_coords_top_left = (args.crops_coords_top_left_h, args.crops_coords_top_left_w)
         add_time_ids = list(original_size + crops_coords_top_left + target_size)
         add_time_ids = paddle.to_tensor(data=[add_time_ids])
-        add_time_ids = add_time_ids.cast(dtype=paddle_dtype)
+        add_time_ids = add_time_ids.to(dtype=weight_dtype)
         return add_time_ids
 
     if not args.train_text_encoder:
@@ -882,14 +1274,22 @@ def main():
         def compute_text_embeddings(prompt, text_encoders, tokenizers):
             with paddle.no_grad():
                 prompt_embeds, pooled_prompt_embeds = encode_prompt(text_encoders, tokenizers, prompt)
+                prompt_embeds = prompt_embeds
+                pooled_prompt_embeds = pooled_prompt_embeds
             return prompt_embeds, pooled_prompt_embeds
 
+    # Handle instance prompt.
     instance_time_ids = compute_time_ids()
-    if not args.train_text_encoder:
+
+    # If no type of tuning is done on the text_encoder and custom instance prompts are NOT
+    # provided (i.e. the --instance_prompt is used for all images), we encode the instance prompt once to avoid
+    # the redundant encoding.
+    if not args.train_text_encoder and not train_dataset.custom_instance_prompts:
         instance_prompt_hidden_states, instance_pooled_prompt_embeds = compute_text_embeddings(
             args.instance_prompt, text_encoders, tokenizers
         )
 
+    # Handle class prompt for prior-preservation.
     if args.with_prior_preservation:
         class_time_ids = compute_time_ids()
         if not args.train_text_encoder:
@@ -897,77 +1297,52 @@ def main():
                 args.class_prompt, text_encoders, tokenizers
             )
 
-    if not args.train_text_encoder:
+    # Clear the memory here
+    if not args.train_text_encoder and not train_dataset.custom_instance_prompts:
         del tokenizers, text_encoders
         gc.collect()
         paddle.device.cuda.empty_cache()
 
+    # If custom instance prompts are NOT provided (i.e. the instance prompt is used for all images),
+    # pack the statically computed variables appropriately here. This is so that we don't
+    # have to pass them to the dataloader.
     add_time_ids = instance_time_ids
-
     if args.with_prior_preservation:
         add_time_ids = paddle.concat(x=[add_time_ids, class_time_ids], axis=0)
-    if not args.train_text_encoder:
-        prompt_embeds = instance_prompt_hidden_states
-        unet_add_text_embeds = instance_pooled_prompt_embeds
-        if args.with_prior_preservation:
-            prompt_embeds = paddle.concat(x=[prompt_embeds, class_prompt_hidden_states], axis=0)
-            unet_add_text_embeds = paddle.concat(x=[unet_add_text_embeds, class_pooled_prompt_embeds], axis=0)
-    else:
-        tokens_one = tokenize_prompt(tokenizer_one, args.instance_prompt)
-        tokens_two = tokenize_prompt(tokenizer_two, args.instance_prompt)
-        if args.with_prior_preservation:
-            class_tokens_one = tokenize_prompt(tokenizer_one, args.class_prompt)
-            class_tokens_two = tokenize_prompt(tokenizer_two, args.class_prompt)
-            tokens_one = paddle.concat(x=[tokens_one, class_tokens_one], axis=0)
-            tokens_two = paddle.concat(x=[tokens_two, class_tokens_two], axis=0)
 
-    # Dataset and DataLoaders creation:
-    train_dataset = DreamBoothDataset(
-        instance_data_root=args.instance_data_dir,
-        class_data_root=args.class_data_dir if args.with_prior_preservation else None,
-        class_num=args.num_class_images,
-        height=args.height,
-        width=args.width,
-        center_crop=args.center_crop,
-        interpolation="bilinear",
-        random_flip=args.random_flip,
-    )
-
-    def collate_fn(examples, with_prior_preservation=False):
-        pixel_values = [example["instance_images"] for example in examples]
-
-        # Concat class and instance examples for prior preservation.
-        # We do this to avoid doing two forward passes.
-        if args.with_prior_preservation:
-            pixel_values += [example["class_images"] for example in examples]
-
-        pixel_values = paddle.stack(pixel_values).astype("float32")
-
-        batch = {"pixel_values": pixel_values}
-
-        return batch
-
-    train_sampler = (
-        DistributedBatchSampler(train_dataset, batch_size=args.train_batch_size, shuffle=True)
-        if num_processes > 1
-        else BatchSampler(train_dataset, batch_size=args.train_batch_size, shuffle=True)
-    )
-    train_dataloader = DataLoader(
-        train_dataset, batch_sampler=train_sampler, collate_fn=collate_fn, num_workers=args.dataloader_num_workers
-    )
+    if not train_dataset.custom_instance_prompts:
+        if not args.train_text_encoder:
+            prompt_embeds = instance_prompt_hidden_states
+            unet_add_text_embeds = instance_pooled_prompt_embeds
+            if args.with_prior_preservation:
+                prompt_embeds = paddle.concat([prompt_embeds, class_prompt_hidden_states], axis=0)
+                unet_add_text_embeds = paddle.concat([unet_add_text_embeds, class_pooled_prompt_embeds], axis=0)
+        # if we're optmizing the text encoder (both if instance prompt is used for all images or custom prompts) we need to tokenize and encode the
+        # batch prompts on all training steps
+        else:
+            tokens_one = tokenize_prompt(tokenizer_one, args.instance_prompt)
+            tokens_two = tokenize_prompt(tokenizer_two, args.instance_prompt)
+            if args.with_prior_preservation:
+                class_tokens_one = tokenize_prompt(tokenizer_one, args.class_prompt)
+                class_tokens_two = tokenize_prompt(tokenizer_two, args.class_prompt)
+                tokens_one = paddle.concat(x=[tokens_one, class_tokens_one], axis=0)
+                tokens_two = paddle.concat(x=[tokens_two, class_tokens_two], axis=0)
 
     # Scheduler and math around the number of training steps.
+    overrode_max_train_steps = False
     num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
     if args.max_train_steps is None:
         args.max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
-    # Afterwards we recalculate our number of training epochs
-    args.num_train_epochs = math.ceil(args.max_train_steps / num_update_steps_per_epoch)
+        overrode_max_train_steps = True
 
-    if args.scale_lr:
-        args.learning_rate = (
-            args.learning_rate * args.gradient_accumulation_steps * args.train_batch_size * num_processes
-        )
-
+    # lr_scheduler = get_scheduler(
+    #     args.lr_scheduler,
+    #     optimizer=optimizer,
+    #     num_warmup_steps=args.lr_warmup_steps * accelerator.num_processes,
+    #     num_training_steps=args.max_train_steps * accelerator.num_processes,
+    #     num_cycles=args.lr_num_cycles,
+    #     power=args.lr_power,
+    # )
     lr_scheduler = get_scheduler(
         args.lr_scheduler,
         learning_rate=args.learning_rate,
@@ -976,38 +1351,33 @@ def main():
         num_cycles=args.lr_num_cycles,
         power=args.lr_power,
     )
+    optimizer.set_lr_scheduler(lr_scheduler)
 
-    params_to_optimize = (
-        unet_lora_parameters + text_lora_parameters_one + text_lora_parameters_two
-        if args.train_text_encoder
-        else unet_lora_parameters
-    )
-    # Optimizer creation
-    optimizer = AdamW(
-        learning_rate=lr_scheduler,
-        parameters=params_to_optimize,
-        beta1=args.adam_beta1,
-        beta2=args.adam_beta2,
-        weight_decay=args.adam_weight_decay,
-        epsilon=args.adam_epsilon,
-        grad_clip=nn.ClipGradByGlobalNorm(args.max_grad_norm) if args.max_grad_norm > 0 else None,
-    )
+    # westfish: dont prepare
+    # # Prepare everything with our `accelerator`.
+    # if args.train_text_encoder:
+    #     unet, text_encoder_one, text_encoder_two, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
+    #         unet, text_encoder_one, text_encoder_two, optimizer, train_dataloader, lr_scheduler
+    #     )
+    # else:
+    #     unet, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
+    #         unet, optimizer, train_dataloader, lr_scheduler
+    #     )
 
-    if num_processes > 1:
-        unet = paddle.DataParallel(unet)
-        if args.train_text_encoder:
-            text_encoder_one = paddle.DataParallel(text_encoder_one)
-            text_encoder_two = paddle.DataParallel(text_encoder_two)
+    # We need to recalculate our total training steps as the size of the training dataloader may have changed.
+    num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
+    if overrode_max_train_steps:
+        args.max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
+    # Afterwards we recalculate our number of training epochs
+    args.num_train_epochs = math.ceil(args.max_train_steps / num_update_steps_per_epoch)
 
-    if is_main_process:
-        logger.info("-----------  Configuration Arguments -----------")
-        for arg, value in sorted(vars(args).items()):
-            logger.info("%s: %s" % (arg, value))
-        logger.info("------------------------------------------------")
-        writer = get_report_to(args)
+    # We need to initialize the trackers we use, and also store our configuration.
+    # The trackers initializes automatically on the main process.
+    if accelerator.is_main_process:
+        accelerator.init_trackers("dreambooth-lora-sd-xl", config=vars(args))
 
     # Train!
-    total_batch_size = args.train_batch_size * num_processes * args.gradient_accumulation_steps
+    total_batch_size = args.train_batch_size * accelerator.num_processes * args.gradient_accumulation_steps
 
     logger.info("***** Running training *****")
     logger.info(f"  Num examples = {len(train_dataset)}")
@@ -1017,120 +1387,140 @@ def main():
     logger.info(f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}")
     logger.info(f"  Gradient Accumulation steps = {args.gradient_accumulation_steps}")
     logger.info(f"  Total optimization steps = {args.max_train_steps}")
-
-    # Only show the progress bar once on each machine.
-    progress_bar = tqdm(range(args.max_train_steps), disable=not is_main_process)
-    progress_bar.set_description("Train Steps")
     global_step = 0
-    vae.eval()
-    if args.train_text_encoder:
-        text_encoder_one.train()
-        text_encoder_two.train()
-    else:
-        text_encoder_one.eval()
-        text_encoder_two.eval()
+    first_epoch = 0
 
-    for epoch in range(args.num_train_epochs):
+    # Potentially load in the weights and states from a previous save
+    if args.resume_from_checkpoint:
+        if args.resume_from_checkpoint != "latest":
+            path = os.path.basename(args.resume_from_checkpoint)
+        else:
+            # Get the mos recent checkpoint
+            dirs = os.listdir(args.output_dir)
+            dirs = [d for d in dirs if d.startswith("checkpoint")]
+            dirs = sorted(dirs, key=lambda x: int(x.split("-")[1]))
+            path = dirs[-1] if len(dirs) > 0 else None
+
+        if path is None:
+            accelerator.print(
+                f"Checkpoint '{args.resume_from_checkpoint}' does not exist. Starting a new training run."
+            )
+            args.resume_from_checkpoint = None
+            initial_global_step = 0
+        else:
+            accelerator.print(f"Resuming from checkpoint {path}")
+            accelerator.load_state(os.path.join(args.output_dir, path))
+            global_step = int(path.split("-")[1])
+
+            initial_global_step = global_step
+            first_epoch = global_step // num_update_steps_per_epoch
+
+    else:
+        initial_global_step = 0
+
+    progress_bar = tqdm(
+        range(0, args.max_train_steps),
+        initial=initial_global_step,
+        desc="Steps",
+        # Only show the progress bar once on each machine.
+        disable=not accelerator.is_local_main_process,
+    )
+
+    # westfish: add amp
+    scaler = paddle.amp.GradScaler(init_loss_scaling=1024)
+    unet = paddle.amp.decorate(models=unet.to(dtype=paddle.float32), level="O2")
+    # text_encoder_one = paddle.amp.decorate(models=text_encoder_one.to(dtype=paddle.float32), level="O2")
+    # text_encoder_two = paddle.amp.decorate(models=text_encoder_two.to(dtype=paddle.float32), level="O2")
+    for epoch in range(first_epoch, args.num_train_epochs):
         unet.train()
         if args.train_text_encoder:
             text_encoder_one.train()
             text_encoder_two.train()
+
+            # set top parameter requires_grad = True for gradient checkpointing works
+            def set_requires_grad(model, is_enabled):
+                for param in model.parameters():
+                    param.stop_gradient = not is_enabled
+
+            set_requires_grad(text_encoder_one.text_model.embeddings, True)
+            set_requires_grad(text_encoder_two.text_model.embeddings, True)
+
         for step, batch in enumerate(train_dataloader):
-            # # Convert images to latent space
-            # latents = vae.encode(batch["pixel_values"]).latent_dist.sample()
-            # latents = latents * vae.config.scaling_factor
-            if args.pretrained_vae_model_name_or_path is None:
-                pixel_values = batch["pixel_values"]
-            else:
-                pixel_values = batch["pixel_values"].cast(dtype=paddle_dtype)
+            # westfish: ppdiffusers.accelerate dont support accumulate yet. AttributeError: 'UNet2DConditionModel' object has no attribute 'do_gradient_checkpointing'
+            # with accelerator.accumulate(unet):
+            @contextlib.contextmanager
+            def null_context():
+                yield
 
-            # Convert images to latent space
-            model_input = vae.encode(pixel_values).latent_dist.sample()
-            model_input = model_input * vae.config.scaling_factor
-            if args.pretrained_vae_model_name_or_path is None:
-                model_input = model_input.cast(paddle_dtype)
+            with null_context():
+                pixel_values = batch["pixel_values"].to(dtype=vae.dtype)
+                prompts = batch["prompts"]
 
-            # Sample noise that we'll add to the latents
-            noise = paddle.randn(model_input.shape, dtype=model_input.dtype)
-            if args.noise_offset:
-                # https://www.crosslabs.org//blog/diffusion-with-offset-noise
-                noise += args.noise_offset * paddle.randn(
-                    (model_input.shape[0], model_input.shape[1], 1, 1), dtype=model_input.dtype
-                )
-            bsz = model_input.shape[0]
-            # Sample a random timestep for each image
-            # timesteps = paddle.randint(0, noise_scheduler.config.num_train_timesteps, (batch_size,)).cast("int64")
-            timesteps = paddle.randint(0, noise_scheduler.config.num_train_timesteps, (bsz,)).cast("int64")
+                # encode batch prompts when custom prompts are provided for each image -
+                if train_dataset.custom_instance_prompts:
+                    if not args.train_text_encoder:
+                        prompt_embeds, unet_add_text_embeds = compute_text_embeddings(
+                            prompts, text_encoders, tokenizers
+                        )
+                    else:
+                        tokens_one = tokenize_prompt(tokenizer_one, prompts)
+                        tokens_two = tokenize_prompt(tokenizer_two, prompts)
 
-            # Add noise to the model input according to the noise magnitude at each timestep
-            # (this is the forward diffusion process)
-            noisy_model_input = noise_scheduler.add_noise(model_input, noise, timesteps)
+                # Convert images to latent space
+                model_input = vae.encode(pixel_values).latent_dist.sample()
+                model_input = model_input * vae.config.scaling_factor
+                if args.pretrained_vae_model_name_or_path is None:
+                    model_input = model_input.astype(weight_dtype)
 
-            if num_processes > 1 and (
-                args.gradient_checkpointing or ((step + 1) % args.gradient_accumulation_steps != 0)
-            ):
-                # grad acc, no_sync when (step + 1) % args.gradient_accumulation_steps != 0:
-                # gradient_checkpointing, no_sync every where
-                # gradient_checkpointing + grad_acc, no_sync every where
-                unet_ctx_manager = unet.no_sync()
-            else:
-                unet_ctx_manager = contextlib.nullcontext() if sys.version_info >= (3, 7) else contextlib.suppress()
+                # Sample noise that we'll add to the latents
+                noise = paddle.randn(shape=model_input.shape, dtype=model_input.dtype)
+                bsz = model_input.shape[0]
+                # Sample a random timestep for each image
+                timesteps = paddle.randint(0, noise_scheduler.config.num_train_timesteps, (bsz,))
+                timesteps = timesteps.astype(dtype="int64")
 
-            # if use_attention_mask:
-            #     attention_mask = (batch["input_ids"] != tokenizer.pad_token_id).cast("int64")
-            # else:
-            #     attention_mask = None
+                # Add noise to the model input according to the noise magnitude at each timestep
+                # (this is the forward diffusion process)
+                noisy_model_input = noise_scheduler.add_noise(model_input, noise, timesteps)
 
-            # # Get the text embedding for conditioning
-            # # encoder_hidden_states = text_encoder(batch["input_ids"], attention_mask=attention_mask)[0]
-            # if args.pre_compute_text_embeddings:
-            #     encoder_hidden_states = batch["input_ids"]
-            # else:
-            #     encoder_hidden_states = encode_prompt(
-            #         text_encoder,
-            #         batch["input_ids"],
-            #         batch["attention_mask"],
-            #         text_encoder_use_attention_mask=args.text_encoder_use_attention_mask,
-            #     )
-            # if args.class_labels_conditioning == "timesteps":
-            #     class_labels = timesteps
-            # else:
-            #     class_labels = None
-
-            with unet_ctx_manager:
-                # Calculate the elements to repeat depending on the use of prior-preservation.
-                elems_to_repeat = bsz // 2 if args.with_prior_preservation else bsz
+                # Calculate the elements to repeat depending on the use of prior-preservation and custom captions.
+                if not train_dataset.custom_instance_prompts:
+                    elems_to_repeat_text_embeds = bsz // 2 if args.with_prior_preservation else bsz
+                    elems_to_repeat_time_ids = bsz // 2 if args.with_prior_preservation else bsz
+                else:
+                    elems_to_repeat_text_embeds = 1
+                    elems_to_repeat_time_ids = bsz // 2 if args.with_prior_preservation else bsz
 
                 # Predict the noise residual
-                if not args.train_text_encoder:
-                    unet_added_conditions = {
-                        "time_ids": add_time_ids.tile(repeat_times=[elems_to_repeat, 1]),
-                        "text_embeds": unet_add_text_embeds.tile(repeat_times=[elems_to_repeat, 1]),
-                    }
-                    prompt_embeds = prompt_embeds.tile(repeat_times=[elems_to_repeat, 1, 1])
-                    model_pred = unet(
-                        noisy_model_input, timesteps, prompt_embeds, added_cond_kwargs=unet_added_conditions
-                    ).sample
-                else:
-                    unet_added_conditions = {"time_ids": add_time_ids.tile(repeat_times=[elems_to_repeat, 1])}
-                    prompt_embeds, pooled_prompt_embeds = encode_prompt(
-                        text_encoders=[text_encoder_one, text_encoder_two],
-                        tokenizers=None,
-                        prompt=None,
-                        text_input_ids_list=[tokens_one, tokens_two],
-                    )
-                    unet_added_conditions.update(
-                        {"text_embeds": pooled_prompt_embeds.tile(repeat_times=[elems_to_repeat, 1])}
-                    )
-                    prompt_embeds = prompt_embeds.tile(repeat_times=[elems_to_repeat, 1, 1])
-                    model_pred = unet(
-                        noisy_model_input, timesteps, prompt_embeds, added_cond_kwargs=unet_added_conditions
-                    ).sample
-
-                # Predict the noise residual / sample
-                model_pred = unet(
-                    noisy_model_input, timesteps, prompt_embeds, added_cond_kwargs=unet_added_conditions
-                ).sample
+                # westfish: add amp
+                with paddle.amp.auto_cast(enable=True, custom_white_list=None, custom_black_list=None, level="O2"):
+                    if not args.train_text_encoder:
+                        unet_added_conditions = {
+                            "time_ids": add_time_ids.tile([elems_to_repeat_time_ids, 1]),
+                            "text_embeds": unet_add_text_embeds.tile([elems_to_repeat_text_embeds, 1]),
+                        }
+                        prompt_embeds_input = prompt_embeds.tile([elems_to_repeat_text_embeds, 1, 1])
+                        model_pred = unet(
+                            noisy_model_input,
+                            timesteps,
+                            prompt_embeds_input,
+                            added_cond_kwargs=unet_added_conditions,
+                        ).sample
+                    else:
+                        unet_added_conditions = {"time_ids": add_time_ids.tile([elems_to_repeat_time_ids, 1])}
+                        prompt_embeds, pooled_prompt_embeds = encode_prompt(
+                            text_encoders=[text_encoder_one, text_encoder_two],
+                            tokenizers=None,
+                            prompt=None,
+                            text_input_ids_list=[tokens_one, tokens_two],
+                        )
+                        unet_added_conditions.update(
+                            {"text_embeds": pooled_prompt_embeds.tile([elems_to_repeat_text_embeds, 1])}
+                        )
+                        prompt_embeds_input = prompt_embeds.tile([elems_to_repeat_text_embeds, 1, 1])
+                        model_pred = unet(
+                            noisy_model_input, timesteps, prompt_embeds_input, added_cond_kwargs=unet_added_conditions
+                        ).sample
 
                 # Get the target for loss depending on the prediction type
                 if noise_scheduler.config.prediction_type == "epsilon":
@@ -1142,108 +1532,159 @@ def main():
 
                 if args.with_prior_preservation:
                     # Chunk the noise and model_pred into two parts and compute the loss on each part separately.
-                    model_pred, model_pred_prior = model_pred.chunk(2, axis=0)
-                    target, target_prior = target.chunk(2, axis=0)
-
-                    # Compute instance loss
-                    loss = F.mse_loss(model_pred, target, reduction="mean")
+                    model_pred, model_pred_prior = paddle.chunk(model_pred, 2, axis=0)
+                    target, target_prior = paddle.chunk(target, 2, axis=0)
 
                     # Compute prior loss
-                    prior_loss = F.mse_loss(model_pred_prior, target_prior, reduction="mean")
+                    prior_loss = F.mse_loss(
+                        model_pred_prior.astype(dtype="float32"),
+                        target_prior.astype(dtype="float32"),
+                        reduction="mean",
+                    )
 
+                if args.snr_gamma is None:
+                    loss = F.mse_loss(
+                        model_pred.astype(dtype="float32"), target.astype(dtype="float32"), reduction="mean"
+                    )
+                else:
+                    # Compute loss-weights as per Section 3.4 of https://arxiv.org/abs/2303.09556.
+                    # Since we predict the noise instead of x_0, the original formulation is slightly changed.
+                    # This is discussed in Section 4.2 of the same paper.
+                    snr = compute_snr(noise_scheduler, timesteps)
+                    base_weight = (
+                        paddle.stack([snr, args.snr_gamma * paddle.ones_like(timesteps)], axis=1).min(axis=1)[0] / snr
+                    )
+
+                    if noise_scheduler.config.prediction_type == "v_prediction":
+                        # Velocity objective needs to be floored to an SNR weight of one.
+                        mse_loss_weights = base_weight + 1
+                    else:
+                        # Epsilon and sample both use the same loss weights.
+                        mse_loss_weights = base_weight
+
+                    loss = F.mse_loss(
+                        model_pred.astype(dtype="float32"), target.astype(dtype="float32"), reduction="none"
+                    )
+                    loss = loss.mean(axis=list(range(1, len(loss.shape)))) * mse_loss_weights
+                    loss = loss.mean()
+
+                if args.with_prior_preservation:
                     # Add the prior loss to the instance loss.
                     loss = loss + args.prior_loss_weight * prior_loss
-                else:
-                    loss = F.mse_loss(model_pred, target, reduction="mean")
 
-                if args.gradient_accumulation_steps > 1:
-                    loss = loss / args.gradient_accumulation_steps
-                loss.backward()
+                # westfish: add amp
+                # accelerator.backward(loss)
+                scaled = scaler.scale(loss)
+                scaled.backward()
+                scaler.step(optimizer)
+                scaler.update()
 
-            if (step + 1) % args.gradient_accumulation_steps == 0:
-                if num_processes > 1 and args.gradient_checkpointing:
-                    fused_allreduce_gradients(params_to_optimize, None)
+                # if accelerator.sync_gradients:
+                #     params_to_clip = (
+                #         itertools.chain(unet_lora_parameters, text_lora_parameters_one, text_lora_parameters_two)
+                #         if args.train_text_encoder
+                #         else unet_lora_parameters
+                #     )
+                #     accelerator.clip_grad_norm_(params_to_clip, args.max_grad_norm)
+
                 optimizer.step()
                 lr_scheduler.step()
                 optimizer.clear_grad()
+
+            # Checks if the accelerator has performed an optimization step behind the scenes
+            if accelerator.sync_gradients:
                 progress_bar.update(1)
                 global_step += 1
-                step_loss = loss.item() * args.gradient_accumulation_steps
-                logs = {
-                    "epoch": str(epoch).zfill(4),
-                    "step_loss": round(step_loss, 10),
-                    "lr": lr_scheduler.get_lr(),
-                }
-                progress_bar.set_postfix(**logs)
 
-                if is_main_process:
-                    for name, val in logs.items():
-                        if name == "epoch":
-                            continue
-                        writer.add_scalar(f"train/{name}", val, global_step)
-
+                if accelerator.is_main_process:
                     if global_step % args.checkpointing_steps == 0:
+                        # _before_ saving state, check if this save would set us over the `checkpoints_total_limit`
+                        if args.checkpoints_total_limit is not None:
+                            checkpoints = os.listdir(args.output_dir)
+                            checkpoints = [d for d in checkpoints if d.startswith("checkpoint")]
+                            checkpoints = sorted(checkpoints, key=lambda x: int(x.split("-")[1]))
+
+                            # before we save the new checkpoint, we need to have at _most_ `checkpoints_total_limit - 1` checkpoints
+                            if len(checkpoints) >= args.checkpoints_total_limit:
+                                num_to_remove = len(checkpoints) - args.checkpoints_total_limit + 1
+                                removing_checkpoints = checkpoints[0:num_to_remove]
+
+                                logger.info(
+                                    f"{len(checkpoints)} checkpoints already exist, removing {len(removing_checkpoints)} checkpoints"
+                                )
+                                logger.info(f"removing checkpoints: {', '.join(removing_checkpoints)}")
+
+                                for removing_checkpoint in removing_checkpoints:
+                                    removing_checkpoint = os.path.join(args.output_dir, removing_checkpoint)
+                                    shutil.rmtree(removing_checkpoint)
+
                         save_path = os.path.join(args.output_dir, f"checkpoint-{global_step}")
-                        # We combine the text encoder and UNet LoRA parameters with a simple
-                        # custom logic. So, use `LoraLoaderMixin.save_lora_weights()`.
-
-                        # save_model_func(models=[unet_lora_parameters, text_lora_parameters], weights=[unet_lora_parameters + text_lora_parameters if args.train_text_encoder else unet_lora_parameters], output_dir=save_path)
-                        # LoraLoaderMixin.save_lora_weights(
-                        #     save_directory=save_path,
-                        #     unet_lora_layers=unet_attn_processors_state_dict(unet),
-                        #     text_encoder_lora_layers=unet_attn_processors_state_dict(text_encoder) if args.train_text_encoder else None,
-                        # )
-
+                        # westfish: save_state substitute
+                        # accelerator.save_state(save_path)
+                        models = []
                         if args.train_text_encoder:
-                            text_encoder_one = unwrap_model(text_encoder_one)
-                            text_encoder_lora_layers = text_encoder_lora_state_dict(
-                                text_encoder_one.to(dtype=paddle.float32)
-                            )
-                            text_encoder_two = unwrap_model(text_encoder_two)
-                            text_encoder_2_lora_layers = text_encoder_lora_state_dict(
-                                text_encoder_two.to(dtype=paddle.float32)
-                            )
+                            models.append(copy.deepcopy(unet))
+                            models.append(copy.deepcopy(text_encoder_one))
+                            models.append(copy.deepcopy(text_encoder_two))
                         else:
-                            text_encoder_lora_layers = None
-                            text_encoder_2_lora_layers = None
+                            models.append(copy.deepcopy(unet))
+                        weights = []
 
-                        StableDiffusionXLPipeline.save_lora_weights(
-                            save_directory=save_path,
-                            # unet_lora_layers=unet_lora_layers,
-                            unet_lora_layers=unet_attn_processors_state_dict(unet),
-                            text_encoder_lora_layers=text_encoder_lora_layers,
-                            text_encoder_2_lora_layers=text_encoder_2_lora_layers,
-                        )
+                        def get_state_dict(model):
+                            state_dict = model.state_dict()
+                            if state_dict is not None:
+                                for k in state_dict:
+                                    if getattr(state_dict[k], "dtype", None) == paddle.float16:
+                                        state_dict[k] = state_dict[k]._to(dtype="float32")
 
-                        logger.info(f"Saved lora weights to {save_path}")
+                            return state_dict
 
-                if global_step >= args.max_train_steps:
-                    break
+                        for i, model in enumerate(models):
+                            weights.append(get_state_dict(model))
+                        save_model_hook(models, weights, save_path)
+                        del models, weights
+                        for _ in range(3):
+                            gc.collect()
+                        paddle.device.cuda.empty_cache()
+                        logger.info(f"Saved state to {save_path}")
+            logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_lr()}
+            progress_bar.set_postfix(**logs)
+            accelerator.log(logs, step=global_step)
 
-        if is_main_process:
+            if global_step >= args.max_train_steps:
+                break
+
+        if accelerator.is_main_process:
             if args.validation_prompt is not None and epoch % args.validation_epochs == 0:
                 logger.info(
                     f"Running validation... \n Generating {args.num_validation_images} images with prompt:"
                     f" {args.validation_prompt}."
                 )
-                # # create pipeline
+                # create pipeline
                 if not args.train_text_encoder:
                     text_encoder_one = text_encoder_cls_one.from_pretrained(
-                        url_or_path_join(args.pretrained_model_name_or_path, "text_encoder")
+                        args.pretrained_model_name_or_path,
+                        subfolder="text_encoder",
+                        revision=args.revision,
+                        variant=args.variant,
                     )
                     text_encoder_two = text_encoder_cls_two.from_pretrained(
-                        url_or_path_join(args.pretrained_model_name_or_path, "text_encoder_2")
+                        args.pretrained_model_name_or_path,
+                        subfolder="text_encoder_2",
+                        revision=args.revision,
+                        variant=args.variant,
                     )
                 pipeline = StableDiffusionXLPipeline.from_pretrained(
                     args.pretrained_model_name_or_path,
                     vae=vae,
-                    text_encoder=unwrap_model(text_encoder_one),
-                    text_encoder_2=unwrap_model(text_encoder_two),
-                    unet=unwrap_model(unet),
-                    paddle_dtype=paddle_dtype,
+                    text_encoder=accelerator.unwrap_model(text_encoder_one),
+                    text_encoder_2=accelerator.unwrap_model(text_encoder_two),
+                    unet=accelerator.unwrap_model(unet),
+                    revision=args.revision,
+                    variant=args.variant,
+                    # paddle_dtype=weight_dtype,
                 )
 
-                # pipeline.scheduler = DPMSolverMultistepScheduler.from_config(pipeline.scheduler.config)
                 # We train on the simplified learning objective. If we were previously predicting a variance, we need the scheduler to ignore it
                 scheduler_args = {}
 
@@ -1262,52 +1703,49 @@ def main():
                 pipeline.set_progress_bar_config(disable=True)
 
                 # run inference
-                # generator = paddle.Generator().manual_seed(args.seed) if args.seed else None
-                # images = [
-                #     pipeline(args.validation_prompt, num_inference_steps=25, generator=generator).images[0]
-                #     for _ in range(args.num_validation_images)
-                # ]
                 generator = paddle.Generator().manual_seed(args.seed) if args.seed else None
                 pipeline_args = {"prompt": args.validation_prompt}
 
-                # if args.validation_images is None:
-                #     images = []
-                #     for _ in range(args.num_validation_images):
-                #         with paddle.amp.auto_cast():
-                #             image = pipeline(**pipeline_args, generator=generator).images[0]
-                #             images.append(image)
-                # else:
-                #     images = []
-                #     for image in args.validation_images:
-                #         image = Image.open(image)
-                #         with paddle.amp.auto_cast():
-                #             image = pipeline(**pipeline_args, image=image, generator=generator).images[0]
-                #         images.append(image)
-
                 # with paddle.amp.auto_cast():
+                # westfish: add auto_cast; or got different data type, run type protmotion automatically, this may cause data type been changed.
+                # with paddle.amp.auto_cast(enable=True, custom_white_list=None, custom_black_list=None, level="O2"):
                 images = [
                     pipeline(**pipeline_args, generator=generator).images[0] for _ in range(args.num_validation_images)
                 ]
 
-                np_images = np.stack([np.asarray(img) for img in images])
-                if args.report_to == "tensorboard":
-                    writer.add_images("test", np_images, epoch, dataformats="NHWC")
-                else:
-                    writer.add_image("test", np_images, epoch, dataformats="NHWC")
+                for tracker in accelerator.trackers:
+                    if tracker.name == "tensorboard":
+                        np_images = np.stack([np.asarray(img) for img in images])
+                        tracker.writer.add_images("validation", np_images, epoch, dataformats="NHWC")
+                    if tracker.name == "wandb":
+                        tracker.log(
+                            {
+                                "validation": [
+                                    wandb.Image(image, caption=f"{i}: {args.validation_prompt}")
+                                    for i, image in enumerate(images)
+                                ]
+                            }
+                        )
 
                 del pipeline
                 gc.collect()
+                paddle.device.cuda.empty_cache()
 
     # Save the lora layers
-    if is_main_process:
-        unet = unwrap_model(unet)
+    accelerator.wait_for_everyone()
+    if accelerator.is_main_process:
+        # del models, weights
+        # for _ in range(3):
+        #     gc.collect()
+        # paddle.device.cuda.empty_cache()
+        unet = accelerator.unwrap_model(unet)
         unet = unet.to(dtype=paddle.float32)
-        unet_lora_layers = unet_attn_processors_state_dict(unet)
+        unet_lora_layers = unet_lora_state_dict(unet)
 
         if args.train_text_encoder:
-            text_encoder_one = unwrap_model(text_encoder_one)
+            text_encoder_one = accelerator.unwrap_model(text_encoder_one)
             text_encoder_lora_layers = text_encoder_lora_state_dict(text_encoder_one.to(dtype=paddle.float32))
-            text_encoder_two = unwrap_model(text_encoder_two)
+            text_encoder_two = accelerator.unwrap_model(text_encoder_two)
             text_encoder_2_lora_layers = text_encoder_lora_state_dict(text_encoder_two.to(dtype=paddle.float32))
         else:
             text_encoder_lora_layers = None
@@ -1323,14 +1761,20 @@ def main():
         # Final inference
         # Load previous pipeline
         vae = AutoencoderKL.from_pretrained(
-            url_or_path_join(vae_path, "vae") if args.pretrained_vae_model_name_or_path is None else None,
-            paddle_dtype=paddle_dtype,
+            vae_path,
+            subfolder="vae" if args.pretrained_vae_model_name_or_path is None else None,
+            revision=args.revision,
+            variant=args.variant,
+            paddle_dtype=weight_dtype,
         )
         pipeline = StableDiffusionXLPipeline.from_pretrained(
-            args.pretrained_model_name_or_path, vae=vae, paddle_dtype=paddle_dtype
+            args.pretrained_model_name_or_path,
+            vae=vae,
+            revision=args.revision,
+            variant=args.variant,
+            paddle_dtype=weight_dtype,
         )
 
-        # pipeline.scheduler = DPMSolverMultistepScheduler.from_config(pipeline.scheduler.config)
         # We train on the simplified learning objective. If we were previously predicting a variance, we need the scheduler to ignore it
         scheduler_args = {}
 
@@ -1355,55 +1799,42 @@ def main():
                 pipeline(args.validation_prompt, num_inference_steps=25, generator=generator).images[0]
                 for _ in range(args.num_validation_images)
             ]
-            np_images = np.stack([np.asarray(img) for img in images])
 
-            if args.report_to == "tensorboard":
-                writer.add_images("test", np_images, epoch, dataformats="NHWC")
-            else:
-                writer.add_image("test", np_images, epoch, dataformats="NHWC")
+            for tracker in accelerator.trackers:
+                if tracker.name == "tensorboard":
+                    np_images = np.stack([np.asarray(img) for img in images])
+                    tracker.writer.add_images("test", np_images, epoch, dataformats="NHWC")
+                if tracker.name == "wandb":
+                    tracker.log(
+                        {
+                            "test": [
+                                wandb.Image(image, caption=f"{i}: {args.validation_prompt}")
+                                for i, image in enumerate(images)
+                            ]
+                        }
+                    )
 
-        writer.close()
+        # if args.push_to_hub:
+        #     save_model_card(
+        #         repo_id,
+        #         images=images,
+        #         base_model=args.pretrained_model_name_or_path,
+        #         train_text_encoder=args.train_text_encoder,
+        #         instance_prompt=args.instance_prompt,
+        #         validation_prompt=args.validation_prompt,
+        #         repo_folder=args.output_dir,
+        #         vae_path=args.pretrained_vae_model_name_or_path,
+        #     )
+        #     upload_folder(
+        #         repo_id=repo_id,
+        #         folder_path=args.output_dir,
+        #         commit_message="End of training",
+        #         ignore_patterns=["step_*", "epoch_*"],
+        #     )
 
-        # logic to push to HF Hub
-        if args.push_to_hub:
-            if args.hub_model_id is None:
-                repo_id = get_full_repo_name(Path(args.output_dir).name, token=args.hub_token)
-            else:
-                repo_id = args.hub_model_id
-
-            _retry(
-                create_repo,
-                func_kwargs={"repo_id": repo_id, "exist_ok": True, "token": args.hub_token},
-                base_wait_time=1.0,
-                max_retries=5,
-                max_wait_time=10.0,
-            )
-
-            save_model_card(
-                repo_id,
-                images=images,
-                base_model=args.pretrained_model_name_or_path,
-                prompt=args.instance_prompt,
-                repo_folder=args.output_dir,
-                vae_path=args.pretrained_vae_model_name_or_path,
-            )
-            # Upload model
-            logger.info(f"Pushing to {repo_id}")
-            _retry(
-                upload_folder,
-                func_kwargs={
-                    "repo_id": repo_id,
-                    "repo_type": "model",
-                    "folder_path": args.output_dir,
-                    "commit_message": "End of training",
-                    "token": args.hub_token,
-                    "ignore_patterns": ["checkpoint-*/*", "logs/*"],
-                },
-                base_wait_time=1.0,
-                max_retries=5,
-                max_wait_time=20.0,
-            )
+    accelerator.end_training()
 
 
 if __name__ == "__main__":
-    main()
+    args = parse_args()
+    main(args)

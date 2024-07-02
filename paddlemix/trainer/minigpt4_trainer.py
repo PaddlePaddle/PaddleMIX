@@ -13,33 +13,21 @@
 # limitations under the License.
 import contextlib
 import inspect
-import json
-import os
 import sys
-import time
-from typing import Any, Dict, List, Optional, Tuple, Union
 
 import paddle
 import paddle.amp.auto_cast as autocast
-import paddle.nn as nn
 from paddle.distributed import fleet
-from paddle.io import DataLoader, Dataset
 from paddlenlp.trainer.trainer import Trainer
 from paddlenlp.trainer.trainer_callback import DefaultFlowCallback, ProgressCallback
-from paddlenlp.trainer.trainer_utils import (  # set_hyrbid_parallel_seed,
-    EvalLoopOutput,
-    IterableDatasetShard,
-    ShardingOption,
-    has_length,
-    speed_metrics,
-)
+from paddlenlp.trainer.trainer_utils import ShardingOption
 from paddlenlp.transformers.model_utils import unwrap_model
 from paddlenlp.utils import device_guard
-from paddlenlp.utils.import_utils import is_datasets_available
 from paddlenlp.utils.log import logger
 
 import paddlemix
-from paddlemix.examples.blip2.utils import VQA, VQAEval, coco_caption_eval, save_result
+
+# from paddlemix.examples.blip2.utils import VQA, VQAEval, coco_caption_eval, save_result
 from paddlemix.optimization import FilterParamsName
 
 DEFAULT_CALLBACKS = [DefaultFlowCallback]
@@ -53,8 +41,8 @@ OPTIMIZER_NAME = "optimizer.pdopt"
 SCHEDULER_NAME = "scheduler.pdparams"
 SCALER_NAME = "scaler.pdparams"
 
-if is_datasets_available():
-    import datasets
+# if is_datasets_available():
+#     import datasets
 
 try:
     from paddle.distributed.fleet.utils import mix_precision_utils
@@ -74,16 +62,16 @@ def is_dp_group_support_in_group_sharded_parallel():
     return "dp_group" in set(inspect.signature(paddle.distributed.sharding.group_sharded_parallel).parameters.keys())
 
 
-__all__ = ["BLIP2Trainer"]
+__all__ = ["MiniGPT4Trainer"]
 
 
 class MiniGPT4Trainer(Trainer):
     """
-    BLIP2Trainer is a feature-complete training and eval loop for BLIP2.
+    MiniGPT4Trainer is a feature-complete training and eval loop for BLIP2.
 
     Args:
     processor: (`Blip2Processor`) low level data processors to convert input text to PaddleNLP Datasets.
-    eval_processor: (`Blip2Processor`) Unlike rocessor, eval_processor is used for model evaluation.
+    eval_processor: (`Blip2Processor`) Unlike processor, eval_processor is used for model evaluation.
     eval_collator: (`BlipCollator`) dynamically pad the inputs to the longest sequence in the batch.
 
     """
@@ -140,9 +128,7 @@ class MiniGPT4Trainer(Trainer):
         if training and self.do_grad_scaling:  # self.args.fp16_opt_level=="O2":
             # model, self.optimizer
             if hasattr(model, "language_model"):
-                model, optimizer = paddle.amp.decorate(
-                    models=model, optimizers=self.optimizer, level="O1"
-            )
+                model, optimizer = paddle.amp.decorate(models=model, optimizers=self.optimizer, level="O1")
                 # model.visual_encoder, model.language_model = decorated[0]
             # else:
             #     decorated = paddle.amp.decorate(models=[model.visual_encoder], optimizers=self.optimizer, level="O2")
@@ -152,7 +138,7 @@ class MiniGPT4Trainer(Trainer):
         # Multi-gpu training
         if self.args.world_size > 1 and not self.args.use_hybrid_parallel:
             model = paddle.DataParallel(model)
-            assert self.args.tensor_parallel_degree < 2, "tensor_parallel_degree = {}, pelease init optimizer.".format(
+            assert self.args.tensor_parallel_degree < 2, "tensor_parallel_degree = {}, please init optimizer.".format(
                 self.args.tensor_parallel_degree
             )
 
@@ -201,7 +187,7 @@ class MiniGPT4Trainer(Trainer):
                 )
                 model._prepare_pipeline_inputs_func = _prepare_pipeline_inputs_func
 
-            assert self.optimizer is not None, "Pipeline mode need decorate optimizer, pelease init optimizer."
+            assert self.optimizer is not None, "Pipeline mode need decorate optimizer, please init optimizer."
             if self.args.amp_master_grad:
                 self.optimizer = mix_precision_utils.MixPrecisionOptimizer(self.optimizer)
             self.optimizer = fleet.distributed_optimizer(self.optimizer)
@@ -267,7 +253,7 @@ class MiniGPT4Trainer(Trainer):
                 mix_precision_utils.MixPrecisionLayer(model, dtype=self.amp_dtype)  # return value has no use
             # breakpoint()
             model = fleet.distributed_model(model)
-            assert self.optimizer is not None, "Tensor parallel mode need decorate optimizer, pelease init optimizer."
+            assert self.optimizer is not None, "Tensor parallel mode need decorate optimizer, please init optimizer."
             if self.args.amp_master_grad:
                 self.optimizer = mix_precision_utils.MixPrecisionOptimizer(self.optimizer)
             self.optimizer = fleet.distributed_optimizer(self.optimizer)

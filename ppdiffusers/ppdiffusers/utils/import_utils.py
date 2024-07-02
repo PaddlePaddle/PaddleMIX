@@ -1,4 +1,3 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,8 +19,11 @@ import operator as op
 import os
 import sys
 from collections import OrderedDict
-from typing import Union
+from itertools import chain
+from types import ModuleType
+from typing import Any, Union
 
+from huggingface_hub.utils import is_jinja_available  # noqa: F401
 from packaging.version import Version, parse
 
 from . import logging
@@ -46,6 +48,7 @@ if sys.version_info < (3, 8):
 else:
     import importlib.metadata as importlib_metadata
 
+
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
 ENV_VARS_TRUE_VALUES = {"1", "ON", "YES", "TRUE"}
@@ -53,6 +56,8 @@ ENV_VARS_TRUE_AND_AUTO_VALUES = ENV_VARS_TRUE_VALUES.union({"AUTO"})
 
 USE_PADDLE = os.environ.get("USE_PADDLE", "AUTO").upper()
 USE_SAFETENSORS = os.environ.get("USE_SAFETENSORS", "AUTO").upper()
+PPDIFFUSERS_SLOW_IMPORT = os.environ.get("PPDIFFUSERS_SLOW_IMPORT", "FALSE").upper()
+PPDIFFUSERS_SLOW_IMPORT = PPDIFFUSERS_SLOW_IMPORT in ENV_VARS_TRUE_VALUES
 
 STR_OPERATION_TO_FUNC = {">": op.gt, ">=": op.ge, "==": op.eq, "!=": op.ne, "<=": op.le, "<": op.lt}
 
@@ -75,8 +80,13 @@ if USE_PADDLE in ENV_VARS_TRUE_AND_AUTO_VALUES:
                     memory_efficient_attention,
                 )
 
+                _ = memory_efficient_attention(
+                    paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
+                    paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
+                    paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
+                )
                 _ppxformers_available = True
-            except ImportError:
+            except Exception:
                 _ppxformers_available = False
 
 else:
@@ -126,6 +136,32 @@ try:
 except importlib_metadata.PackageNotFoundError:
     _unidecode_available = False
 
+
+_onnxruntime_version = "N/A"
+_onnx_available = importlib.util.find_spec("onnxruntime") is not None
+if _onnx_available:
+    candidates = (
+        "onnxruntime",
+        "onnxruntime-gpu",
+        "ort_nightly_gpu",
+        "onnxruntime-directml",
+        "onnxruntime-openvino",
+        "ort_nightly_directml",
+        "onnxruntime-rocm",
+        "onnxruntime-training",
+    )
+    _onnxruntime_version = None
+    # For the metadata, we have to look for both onnxruntime and onnxruntime-gpu
+    for pkg in candidates:
+        try:
+            _onnxruntime_version = importlib_metadata.version(pkg)
+            break
+        except importlib_metadata.PackageNotFoundError:
+            pass
+    _onnx_available = _onnxruntime_version is not None
+    if _onnx_available:
+        logger.debug(f"Successfully imported onnxruntime version {_onnxruntime_version}")
+
 _fastdeploy_version = "N/A"
 _fastdeploy_available = importlib.util.find_spec("fastdeploy") is not None
 if _fastdeploy_available:
@@ -146,7 +182,8 @@ try:
     _paddlenlp_version = importlib_metadata.version("paddlenlp")
     logger.debug(f"Successfully imported paddlenlp version {_paddlenlp_version}")
 except importlib_metadata.PackageNotFoundError:
-    _paddlenlp_available = False
+    if _paddlenlp_available:
+        _paddlenlp_version = "0.0.0"
 
 # (sayakpaul): importlib.util.find_spec("opencv-python") returns None even when it's installed.
 # _opencv_available = importlib.util.find_spec("opencv-python") is not None
@@ -184,6 +221,8 @@ try:
 except importlib_metadata.PackageNotFoundError:
     _librosa_available = False
 
+_accelerate_available = True
+
 _k_diffusion_available = importlib.util.find_spec("k_diffusion") is not None
 try:
     _k_diffusion_version = importlib_metadata.version("k_diffusion")
@@ -212,21 +251,21 @@ try:
 except importlib_metadata.PackageNotFoundError:
     _omegaconf_available = False
 
-_tensorboard_available = importlib.util.find_spec("tensorboard")
+_tensorboard_available = importlib.util.find_spec("tensorboard") is not None
 try:
     _tensorboard_version = importlib_metadata.version("tensorboard")
     logger.debug(f"Successfully imported tensorboard version {_tensorboard_version}")
 except importlib_metadata.PackageNotFoundError:
     _tensorboard_available = False
 
-_visualdl_available = importlib.util.find_spec("visualdl")
+_visualdl_available = importlib.util.find_spec("visualdl") is not None
 try:
     _visualdl_version = importlib_metadata.version("visualdl")
     logger.debug(f"Successfully imported visualdl version {_visualdl_version}")
 except importlib_metadata.PackageNotFoundError:
     _visualdl_available = False
 
-_einops_available = importlib.util.find_spec("einops")
+_einops_available = importlib.util.find_spec("einops") is not None
 try:
     try:
         import einops
@@ -239,12 +278,13 @@ try:
 except importlib_metadata.PackageNotFoundError:
     _einops_available = False
 
-_compel_available = importlib.util.find_spec("compel")
+_compel_available = importlib.util.find_spec("compel") is not None
 try:
     _compel_version = importlib_metadata.version("compel")
     logger.debug(f"Successfully imported compel version {_compel_version}")
 except importlib_metadata.PackageNotFoundError:
     _compel_available = False
+
 
 _ftfy_available = importlib.util.find_spec("ftfy") is not None
 try:
@@ -252,6 +292,7 @@ try:
     logger.debug(f"Successfully imported ftfy version {_ftfy_version}")
 except importlib_metadata.PackageNotFoundError:
     _ftfy_available = False
+
 
 _bs4_available = importlib.util.find_spec("bs4") is not None
 try:
@@ -268,12 +309,15 @@ try:
 except importlib_metadata.PackageNotFoundError:
     _paddlesde_available = False
 
-_invisible_watermark_available = importlib.util.find_spec("imwatermark") is not None
+_pp_invisible_watermark_available = importlib.util.find_spec("pp-invisible-watermark") is not None
 try:
-    _invisible_watermark_version = importlib_metadata.version("invisible-watermark")
-    logger.debug(f"Successfully imported invisible-watermark version {_invisible_watermark_version}")
+    _invisible_watermark_version = importlib_metadata.version("pp-invisible-watermark")
+    logger.debug(f"Successfully imported pp-invisible-watermark version {_invisible_watermark_version}")
 except importlib_metadata.PackageNotFoundError:
-    _invisible_watermark_available = False
+    _pp_invisible_watermark_available = False
+
+
+_peft_available = str2bool(os.getenv("USE_PEFT_BACKEND", False))
 
 
 def is_paddle_available():
@@ -292,16 +336,12 @@ def is_fastdeploy_available():
     return _fastdeploy_available
 
 
-def is_ppxformers_available():
-    USE_PPXFORMERS = str2bool(os.getenv("USE_PPXFORMERS", True))
-    if USE_PPXFORMERS:
-        return _ppxformers_available
-    else:
-        False
-
-
 def is_torch_available():
-    return _torch_available
+    USE_TORCH = str2bool(os.getenv("USE_TORCH", True))
+    if USE_TORCH:
+        return _torch_available
+    else:
+        return False
 
 
 def is_safetensors_available():
@@ -320,6 +360,10 @@ def is_unidecode_available():
     return _unidecode_available
 
 
+def is_onnx_available():
+    return _onnx_available
+
+
 def is_opencv_available():
     return _opencv_available
 
@@ -332,8 +376,29 @@ def is_librosa_available():
     return _librosa_available
 
 
+def is_ppxformers_available():
+    USE_PPXFORMERS = str2bool(os.getenv("USE_PPXFORMERS", True))
+    if USE_PPXFORMERS:
+        return _ppxformers_available
+    else:
+        return False
+
+
+# NOTE this is paddle accelerate
+def is_accelerate_available():
+    return _accelerate_available
+
+
+def is_einops_available():
+    return _einops_available
+
+
 def is_k_diffusion_available():
     return False  # _k_diffusion_available
+
+
+def is_note_seq_available():
+    return _note_seq_available
 
 
 def is_wandb_available():
@@ -346,14 +411,6 @@ def is_omegaconf_available():
 
 def is_tensorboard_available():
     return _tensorboard_available
-
-
-def is_einops_available():
-    return _einops_available
-
-
-def is_note_seq_available():
-    return _note_seq_available
 
 
 def is_compel_available():
@@ -372,8 +429,13 @@ def is_paddlesde_available():
     return _paddlesde_available
 
 
-def is_invisible_watermark_available():
-    return _invisible_watermark_available
+# This is paddle packge
+def is_pp_invisible_watermark_available():
+    return _pp_invisible_watermark_available
+
+
+def is_peft_available():
+    return _peft_available
 
 
 # docstyle-ignore
@@ -425,9 +487,9 @@ installation page: https://pytorch.org/get-started/locally/ and follow the ones 
 """
 
 # docstyle-ignore
-OPENCV_IMPORT_ERROR = """
-{0} requires the OpenCV library but it was not found in your environment. You can install it with pip: `pip
-install opencv-python`
+ONNX_IMPORT_ERROR = """
+{0} requires the onnxruntime library but it was not found in your environment. You can install it with pip: `pip
+install onnxruntime`
 """
 
 # docstyle-ignore
@@ -446,6 +508,12 @@ scipy`
 LIBROSA_IMPORT_ERROR = """
 {0} requires the librosa library but it was not found in your environment.  Checkout the instructions on the
 installation page: https://librosa.org/doc/latest/install.html and follow the ones that match your environment.
+"""
+
+# docstyle-ignore
+TRANSFORMERS_IMPORT_ERROR = """
+{0} requires the transformers library but it was not found in your environment. You can install it with pip: `pip
+install transformers`
 """
 
 # docstyle-ignore
@@ -514,9 +582,10 @@ PADDLESDE_IMPORT_ERROR = """
 """
 
 # docstyle-ignore
-INVISIBLE_WATERMARK_IMPORT_ERROR = """
-{0} requires the invisible-watermark library but it was not found in your environment. You can install it with pip: `pip install invisible-watermark>=0.2.0`
+PP_INVISIBLE_WATERMARK_IMPORT_ERROR = """
+{0} requires the pp-invisible-watermark library but it was not found in your environment. You can install it with pip: `pip install pp-invisible-watermark>=0.2.0`
 """
+
 
 BACKENDS_MAPPING = OrderedDict(
     [
@@ -526,12 +595,15 @@ BACKENDS_MAPPING = OrderedDict(
         ("paddlenlp", (is_paddlenlp_available, PADDLENLP_IMPORT_ERROR)),
         ("visualdl", (is_visualdl_available, VISUALDL_IMPORT_ERROR)),
         ("inflect", (is_inflect_available, INFLECT_IMPORT_ERROR)),
+        ("onnx", (is_onnx_available, ONNX_IMPORT_ERROR)),
         ("opencv", (is_opencv_available, OPENCV_IMPORT_ERROR)),
         ("scipy", (is_scipy_available, SCIPY_IMPORT_ERROR)),
-        ("torch", (is_torch_available, PYTORCH_IMPORT_ERROR)),
+        ("torch", (is_paddle_available, PYTORCH_IMPORT_ERROR)),
+        ("transformers", (is_paddlenlp_available, TRANSFORMERS_IMPORT_ERROR)),
         ("unidecode", (is_unidecode_available, UNIDECODE_IMPORT_ERROR)),
         ("librosa", (is_librosa_available, LIBROSA_IMPORT_ERROR)),
         ("k_diffusion", (is_k_diffusion_available, K_DIFFUSION_IMPORT_ERROR)),
+        ("note_seq", (is_note_seq_available, NOTE_SEQ_IMPORT_ERROR)),
         ("wandb", (is_wandb_available, WANDB_IMPORT_ERROR)),
         ("omegaconf", (is_omegaconf_available, OMEGACONF_IMPORT_ERROR)),
         ("tensorboard", (is_tensorboard_available, TENSORBOARD_IMPORT_ERROR)),
@@ -540,7 +612,7 @@ BACKENDS_MAPPING = OrderedDict(
         ("compel", (is_compel_available, COMPEL_IMPORT_ERROR)),
         ("ftfy", (is_ftfy_available, FTFY_IMPORT_ERROR)),
         ("paddlesde", (is_paddlesde_available, PADDLESDE_IMPORT_ERROR)),
-        ("invisible_watermark", (is_invisible_watermark_available, INVISIBLE_WATERMARK_IMPORT_ERROR)),
+        ("pp_invisible_watermark", (is_pp_invisible_watermark_available, PP_INVISIBLE_WATERMARK_IMPORT_ERROR)),
     ]
 )
 
@@ -561,17 +633,17 @@ def requires_backends(obj, backends):
         "VersatileDiffusionDualGuidedPipeline",
         "StableDiffusionImageVariationPipeline",
         "UnCLIPPipeline",
-    ] and is_paddlenlp_version("<", "2.5.0"):
+    ] and is_paddlenlp_version("<", "2.6.0"):
         raise ImportError(
-            f"You need to install `paddlenlp>=2.5.0` in order to use {name}: \n```\n pip install"
+            f"You need to install `paddlenlp>=2.6.0` in order to use {name}: \n```\n pip install"
             " --upgrade paddlenlp \n```"
         )
 
     if name in ["StableDiffusionDepth2ImgPipeline", "StableDiffusionPix2PixZeroPipeline"] and is_paddlenlp_version(
-        "<", "2.5.1"  # TODO version
+        "<", "2.6.1"  # TODO version
     ):
         raise ImportError(
-            f"You need to install `paddlenlp>=2.5.1` in order to use {name}: \n```\n pip install"
+            f"You need to install `paddlenlp>=2.6.0` in order to use {name}: \n```\n pip install"
             " --upgrade paddlenlp \n```"
         )
 
@@ -583,7 +655,7 @@ class DummyObject(type):
     """
 
     def __getattr__(cls, key):
-        if key.startswith("_") and key != "_load_connected_pipes":
+        if key.startswith("_") and key not in ["_load_connected_pipes", "_is_onnx", "_is_fastdeploy"]:
             return super().__getattr__(cls, key)
         requires_backends(cls, cls._backends)
 
@@ -630,6 +702,10 @@ def is_paddle_version(operation: str, version: str):
         version (`str`):
             A string version of Paddle
     """
+    if not _paddle_available:
+        return False
+    if _paddle_version == "0.0.0":
+        return True
     return compare_versions(parse(_paddle_version), operation, version)
 
 
@@ -644,7 +720,39 @@ def is_paddlenlp_version(operation: str, version: str):
     """
     if not _paddlenlp_available:
         return False
+    if _paddlenlp_version == "0.0.0" or "post" in _paddlenlp_version:
+        return True
     return compare_versions(parse(_paddlenlp_version), operation, version)
+
+
+def is_transformers_version(operation: str, version: str):
+    """
+    Args:
+    Compares the current Transformers version to a given reference with an operation.
+        operation (`str`):
+            A string representation of an operator, such as `">"` or `"<="`
+        version (`str`):
+            A version string
+    """
+    if not _paddlenlp_available:
+        return False
+    return compare_versions(parse(_transformers_version), operation, version)
+
+
+def is_accelerate_version(operation: str, version: str):
+    """
+    Args:
+    Compares the current Accelerate version to a given reference with an operation.
+        operation (`str`):
+            A string representation of an operator, such as `">"` or `"<="`
+        version (`str`):
+            A version string
+    """
+    if not _accelerate_available:
+        return False
+    from ppdiffusers.accelerate import __version__
+
+    return compare_versions(parse(__version__), operation, version)
 
 
 def is_k_diffusion_version(operation: str, version: str):
@@ -661,5 +769,98 @@ def is_k_diffusion_version(operation: str, version: str):
     return compare_versions(parse(_k_diffusion_version), operation, version)
 
 
+def use_old_recompute():
+    return str2bool(os.getenv("FLAG_USE_OLD_RECOMPUTE", "False"))
+
+
+def recompute_use_reentrant():
+    if use_old_recompute():
+        return True
+    # if paddle 2.5.0 or higher, recompute_use_reentrant is False by default
+    if is_paddle_version(">=", "2.5.0") or is_paddle_version("==", "0.0.0"):
+        return str2bool(os.getenv("FLAG_RECOMPUTE_USE_REENTRANT", "False"))
+    return True
+
+
+def get_objects_from_module(module):
+    """
+    Args:
+    Returns a dict of object names and values in a module, while skipping private/internal objects
+        module (ModuleType):
+            Module to extract the objects from.
+
+    Returns:
+        dict: Dictionary of object names and corresponding values
+    """
+
+    objects = {}
+    for name in dir(module):
+        if name.startswith("_"):
+            continue
+        objects[name] = getattr(module, name)
+
+    return objects
+
+
 class OptionalDependencyNotAvailable(BaseException):
     """An error indicating that an optional dependency of Diffusers was not found in the environment."""
+
+
+class _LazyModule(ModuleType):
+    """
+    Module class that surfaces all objects but only performs associated imports when the objects are requested.
+    """
+
+    # Very heavily inspired by optuna.integration._IntegrationModule
+    # https://github.com/optuna/optuna/blob/master/optuna/integration/__init__.py
+    def __init__(self, name, module_file, import_structure, module_spec=None, extra_objects=None):
+        super().__init__(name)
+        self._modules = set(import_structure.keys())
+        self._class_to_module = {}
+        for key, values in import_structure.items():
+            for value in values:
+                self._class_to_module[value] = key
+        # Needed for autocompletion in an IDE
+        self.__all__ = list(import_structure.keys()) + list(chain(*import_structure.values()))
+        self.__file__ = module_file
+        self.__spec__ = module_spec
+        self.__path__ = [os.path.dirname(module_file)]
+        self._objects = {} if extra_objects is None else extra_objects
+        self._name = name
+        self._import_structure = import_structure
+
+    # Needed for autocompletion in an IDE
+    def __dir__(self):
+        result = super().__dir__()
+        # The elements of self.__all__ that are submodules may or may not be in the dir already, depending on whether
+        # they have been accessed or not. So we only add the elements of self.__all__ that are not already in the dir.
+        for attr in self.__all__:
+            if attr not in result:
+                result.append(attr)
+        return result
+
+    def __getattr__(self, name: str) -> Any:
+        if name in self._objects:
+            return self._objects[name]
+        if name in self._modules:
+            value = self._get_module(name)
+        elif name in self._class_to_module.keys():
+            module = self._get_module(self._class_to_module[name])
+            value = getattr(module, name)
+        else:
+            raise AttributeError(f"module {self.__name__} has no attribute {name}")
+
+        setattr(self, name, value)
+        return value
+
+    def _get_module(self, module_name: str):
+        try:
+            return importlib.import_module("." + module_name, self.__name__)
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to import {self.__name__}.{module_name} because of the following error (look up to see its"
+                f" traceback):\n{e}"
+            ) from e
+
+    def __reduce__(self):
+        return (self.__class__, (self._name, self.__file__, self._import_structure))

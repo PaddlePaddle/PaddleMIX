@@ -1,4 +1,4 @@
-# Copyright (c) 2023 torchtorch Authors. All Rights Reserved.
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -310,7 +310,7 @@ def main(args):
 
         width = args.width
         height = args.height
-        pipe.set_progress_bar_config(disable=True)
+        pipe.set_progress_bar_config(disable=False)
 
         folder = f"torch_attn_{attention_type}_fp16" if args.use_fp16 else f"torch_attn_{attention_type}_fp32"
         os.makedirs(folder, exist_ok=True)
@@ -354,7 +354,7 @@ def main(args):
 
         if args.task_name in ["img2img_control", "all"]:
             pipe_img2img = StableDiffusionControlNetImg2ImgPipeline(**pipe.components)
-            pipe_img2img.set_progress_bar_config(disable=True)
+            pipe_img2img.set_progress_bar_config(disable=False)
             img_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/sketch-mountains-input.png"
             init_image = load_image(img_url).resize((width, height))
             controlnet_cond = get_canny_image(init_image, args).resize((width, height))
@@ -394,7 +394,7 @@ def main(args):
 
         if args.task_name in ["inpaint_legacy_control", "all"]:
             pipe_inpaint = StableDiffusionControlNetInpaintPipeline(**pipe.components)
-            pipe_inpaint.set_progress_bar_config(disable=True)
+            pipe_inpaint.set_progress_bar_config(disable=False)
             img_url = (
                 "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations.png"
             )

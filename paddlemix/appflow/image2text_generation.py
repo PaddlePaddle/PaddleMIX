@@ -15,8 +15,10 @@
 import os
 
 import nltk
+import paddle
 from paddlenlp.transformers import AutoTokenizer
 
+from paddlemix import QWenLMHeadModel, QwenVLProcessor, QWenVLTokenizer
 from paddlemix.models import MiniGPT4ForConditionalGeneration
 from paddlemix.models.blip2.modeling import Blip2ForConditionalGeneration
 from paddlemix.processors import MiniGPT4Processor
@@ -45,7 +47,7 @@ class Blip2CaptionTask(AppTask):
         """
         Construct the tokenizer for the predictor.
         """
-        # bulid processor
+        # build processor
         tokenizer_class = AutoTokenizer.from_pretrained(self._text_model, use_fast=False)
         image_processor = BlipImageProcessor.from_pretrained(os.path.join(model, "processor", "eval"))
         text_processor_class = BlipTextProcessor.from_pretrained(os.path.join(model, "processor", "eval"))
@@ -56,7 +58,7 @@ class Blip2CaptionTask(AppTask):
         """
         Construct the inference model for the predictor.
         """
-        # bulid model
+        # build model
         model_instance = Blip2ForConditionalGeneration.from_pretrained(model, cache_dir=self._model_dir)
 
         self._model = model_instance
@@ -103,7 +105,7 @@ class Blip2CaptionTask(AppTask):
 
         inputs["result"] = generated_text
         inputs["prompt"] = self._generate_tags(generated_text)
-        
+
         return inputs
 
     def _generate_tags(self, caption):
@@ -150,7 +152,7 @@ class MiniGPT4Task(AppTask):
         """
         Construct the inference model for the predictor.
         """
-        # bulid model
+        # build model
         model_instance = MiniGPT4ForConditionalGeneration.from_pretrained(self._task_path)
 
         self._model = model_instance
@@ -193,5 +195,87 @@ class MiniGPT4Task(AppTask):
         logger.info("Generate text: {}".format(generated_text))
 
         inputs["result"] = generated_text
+
+        return inputs
+
+
+class QwenVLChatTask(AppTask):
+    def __init__(self, task, model, **kwargs):
+        super().__init__(task=task, model=model, **kwargs)
+
+        self.dtype = kwargs.get("dtype", "bfloat16")
+        if not paddle.amp.is_bfloat16_supported() and self.dtype == "bfloat16":
+            logger.warning("bfloat16 is not supported on your device,change to float32")
+            self.dtype = "float32"
+        # Default to static mode
+        self._static_mode = False
+
+        self._construct_processor(model)
+        self._construct_model(model)
+
+        self.history = None
+
+    def _construct_processor(self, model):
+        """
+        Construct the tokenizer for the predictor.
+        """
+        self.tokenizer = QWenVLTokenizer.from_pretrained(model, dtype=self.dtype)
+        self._processor = QwenVLProcessor(tokenizer=self.tokenizer)
+
+    def _construct_model(self, model):
+        """
+        Construct the inference model for the predictor.
+        """
+        # build model
+        model_instance = QWenLMHeadModel.from_pretrained(model, dtype=self.dtype)
+
+        self._model = model_instance
+        self._model.eval()
+
+    def _preprocess(self, inputs):
+        """ """
+        image = inputs.pop("image", None)
+        prompt = inputs.pop("prompt", None)
+        query = []
+        if image is None and prompt is None:
+            raise ValueError("The image and prompt are None")
+
+        if image is not None and not isinstance(image, list):
+            image = [image]
+            for img in image:
+                query.append({"image": img})
+        if prompt is not None and not isinstance(prompt, list):
+            prompt = [prompt]
+            for text in prompt:
+                query.append({"text": text})
+
+        if len(prompt) == 0 and len(image) > 0:
+            query.append({"text": "描述所有图片"})
+
+        process_output = self._processor(query=query, return_tensors="pd")
+        query = self.tokenizer.from_list_format(query)
+
+        inputs["query"] = query
+        inputs["images"] = process_output["images"]
+        return inputs
+
+    def _run_model(self, inputs):
+        """
+        Run the task model from the outputs of the `_preprocess` function.
+        """
+        query = inputs.pop("query")
+        images = inputs.get("images", None)
+
+        response, history = self._model.chat(self.tokenizer, query=query, history=self.history, images=images)
+
+        self.history = history
+        inputs["result"] = response
+
+        return inputs
+
+    def _postprocess(self, inputs):
+        """
+        The model output is tag ids, this function will convert the model output to raw text.
+        """
 
         return inputs

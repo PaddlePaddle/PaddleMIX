@@ -1,4 +1,4 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -117,6 +117,8 @@ class IPNDMSchedulerTest(SchedulerCommonTest):
         for i, t in enumerate(scheduler.timesteps):
             residual = model(sample, t)
             sample = scheduler.step(residual, t, sample).prev_sample
+
+        scheduler._step_index = None
 
         for i, t in enumerate(scheduler.timesteps):
             residual = model(sample, t)

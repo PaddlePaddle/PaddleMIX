@@ -19,7 +19,6 @@ from typing import Callable, Dict, List, Optional, Union
 import paddle
 import paddle.nn.functional as F
 import PIL
-from paddlenlp.transformers import CLIPImageProcessor, CLIPTokenizer
 
 from ppdiffusers import DiffusionPipeline
 from ppdiffusers.pipelines.fastdeploy_utils import (
@@ -28,6 +27,7 @@ from ppdiffusers.pipelines.fastdeploy_utils import (
 )
 from ppdiffusers.pipelines.stable_diffusion import StableDiffusionPipelineOutput
 from ppdiffusers.schedulers import KarrasDiffusionSchedulers
+from ppdiffusers.transformers import CLIPImageProcessor, CLIPTokenizer
 from ppdiffusers.utils import logging, randn_tensor
 
 logger = logging.get_logger(__name__)
@@ -157,7 +157,7 @@ class FastStableDiffusionHiresFixPipeline(DiffusionPipeline, FastDeployDiffusion
             raise ValueError(f"`prompt` has to be of type `str` or `list` but is {type(prompt)}")
 
         if hr_scale < 0:
-            raise ValueError("hr_scale shoule be greater that 0, but acceived {hr_scale}")
+            raise ValueError("hr_scale shoule be greater that 0, but received {hr_scale}")
 
         if hr_resize_height % 8 != 0 or hr_resize_width % 8 != 0:
             raise ValueError(
@@ -165,7 +165,7 @@ class FastStableDiffusionHiresFixPipeline(DiffusionPipeline, FastDeployDiffusion
             )
 
         if denoising_strength > 1 or denoising_strength < 0:
-            raise ValueError(f"denoising_strength should be set between 0 and 1., but acceived {denoising_strength}")
+            raise ValueError(f"denoising_strength should be set between 0 and 1., but received {denoising_strength}")
 
         if negative_prompt is not None and negative_prompt_embeds is not None:
             raise ValueError(
@@ -175,7 +175,7 @@ class FastStableDiffusionHiresFixPipeline(DiffusionPipeline, FastDeployDiffusion
 
         if latent_scale_mode not in ["nearest", "bilinear", "bicubic", "area"]:
             raise ValueError(
-                f"Only such interpolate method supported for latent_scale_mode in [nearest, bilinear, bicubic, area]. but acceived {latent_scale_mode}."
+                f"Only such interpolate method supported for latent_scale_mode in [nearest, bilinear, bicubic, area]. but received {latent_scale_mode}."
             )
 
         if prompt_embeds is not None and negative_prompt_embeds is not None:
@@ -462,7 +462,7 @@ class FastStableDiffusionHiresFixPipeline(DiffusionPipeline, FastDeployDiffusion
                         callback(i, t, latents)
                     if i == len(timesteps) - 1:
                         # sync for accuracy it/s measure
-                        paddle.device.cuda.synchronize()
+                        paddle.device.synchronize()
 
         # start to apply hires.fix on initial latents
         if enable_hr:
@@ -574,7 +574,7 @@ class FastStableDiffusionHiresFixPipeline(DiffusionPipeline, FastDeployDiffusion
                             callback(i, t, latents)
                     if i == len(timesteps) - 1:
                         # sync for accuracy it/s measure
-                        paddle.device.cuda.synchronize()
+                        paddle.device.synchronize()
 
         if not output_type == "latent":
             image = self._decode_vae_latents(

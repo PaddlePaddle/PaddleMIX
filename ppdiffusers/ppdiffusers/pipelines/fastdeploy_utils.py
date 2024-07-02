@@ -46,6 +46,7 @@ from ..utils import (
     DIFFUSERS_CACHE,
     FASTDEPLOY_MODEL_NAME,
     FASTDEPLOY_WEIGHTS_NAME,
+    FROM_AISTUDIO,
     FROM_HF_HUB,
     HF_HUB_OFFLINE,
     ONNX_EXTERNAL_WEIGHTS_NAME,
@@ -473,7 +474,7 @@ class FastDeployDiffusionPipelineMixin:
         self.control_image_processor = VaeImageProcessor(
             vae_scale_factor=self.vae_scale_factor, do_convert_rgb=True, do_normalize=False
         )
-        self.dtype = dtype
+        # self.dtype = dtype
         self.supported_scheduler = [
             "pndm",
             "lms",
@@ -491,7 +492,7 @@ class FastDeployDiffusionPipelineMixin:
             "kdpm2-ancestral",
             "kdpm2",
         ]
-        self.orginal_scheduler_config = self.scheduler.config
+        self.original_scheduler_config = self.scheduler.config
 
     @property
     def vae_encoder_num_channels(self):
@@ -522,43 +523,43 @@ class FastDeployDiffusionPipelineMixin:
     def change_scheduler(self, scheduler_type="ddim"):
         scheduler_type = scheduler_type.lower()
         if scheduler_type == "pndm":
-            scheduler = PNDMScheduler.from_config(self.orginal_scheduler_config, skip_prk_steps=True)
+            scheduler = PNDMScheduler.from_config(self.original_scheduler_config, skip_prk_steps=True)
         elif scheduler_type == "lms":
-            scheduler = LMSDiscreteScheduler.from_config(self.orginal_scheduler_config)
+            scheduler = LMSDiscreteScheduler.from_config(self.original_scheduler_config)
         elif scheduler_type == "preconfig-lms":
-            scheduler = PreconfigLMSDiscreteScheduler.from_config(self.orginal_scheduler_config)
+            scheduler = PreconfigLMSDiscreteScheduler.from_config(self.original_scheduler_config)
         elif scheduler_type == "heun":
-            scheduler = HeunDiscreteScheduler.from_config(self.orginal_scheduler_config)
+            scheduler = HeunDiscreteScheduler.from_config(self.original_scheduler_config)
         elif scheduler_type == "euler":
-            scheduler = EulerDiscreteScheduler.from_config(self.orginal_scheduler_config)
+            scheduler = EulerDiscreteScheduler.from_config(self.original_scheduler_config)
         elif scheduler_type == "euler-ancestral":
-            scheduler = EulerAncestralDiscreteScheduler.from_config(self.orginal_scheduler_config)
+            scheduler = EulerAncestralDiscreteScheduler.from_config(self.original_scheduler_config)
         elif scheduler_type == "preconfig-euler-ancestral":
-            scheduler = PreconfigEulerAncestralDiscreteScheduler.from_config(self.orginal_scheduler_config)
+            scheduler = PreconfigEulerAncestralDiscreteScheduler.from_config(self.original_scheduler_config)
         elif scheduler_type == "dpm-multi":
-            scheduler = DPMSolverMultistepScheduler.from_config(self.orginal_scheduler_config)
+            scheduler = DPMSolverMultistepScheduler.from_config(self.original_scheduler_config)
         elif scheduler_type == "dpm-single":
-            scheduler = DPMSolverSinglestepScheduler.from_config(self.orginal_scheduler_config)
+            scheduler = DPMSolverSinglestepScheduler.from_config(self.original_scheduler_config)
         elif scheduler_type == "kdpm2-ancestral":
-            scheduler = KDPM2AncestralDiscreteScheduler.from_config(self.orginal_scheduler_config)
+            scheduler = KDPM2AncestralDiscreteScheduler.from_config(self.original_scheduler_config)
         elif scheduler_type == "kdpm2":
-            scheduler = KDPM2DiscreteScheduler.from_config(self.orginal_scheduler_config)
+            scheduler = KDPM2DiscreteScheduler.from_config(self.original_scheduler_config)
         elif scheduler_type == "unipc-multi":
-            scheduler = UniPCMultistepScheduler.from_config(self.orginal_scheduler_config)
+            scheduler = UniPCMultistepScheduler.from_config(self.original_scheduler_config)
         elif scheduler_type == "ddim":
             scheduler = DDIMScheduler.from_config(
-                self.orginal_scheduler_config,
+                self.original_scheduler_config,
                 steps_offset=1,
                 clip_sample=False,
                 set_alpha_to_one=False,
             )
         elif scheduler_type == "ddpm":
             scheduler = DDPMScheduler.from_config(
-                self.orginal_scheduler_config,
+                self.original_scheduler_config,
             )
         elif scheduler_type == "deis-multi":
             scheduler = DEISMultistepScheduler.from_config(
-                self.orginal_scheduler_config,
+                self.original_scheduler_config,
             )
         else:
             raise ValueError(
@@ -568,13 +569,13 @@ class FastDeployDiffusionPipelineMixin:
 
     def get_timesteps(self, num_inference_steps, strength=1.0):
         if strength >= 1:
-            return self.scheduler.timesteps.cast(self.dtype), num_inference_steps
+            return self.scheduler.timesteps, num_inference_steps
 
         # get the original timestep using init_timestep
         init_timestep = min(int(num_inference_steps * strength), num_inference_steps)
 
         t_start = max(num_inference_steps - init_timestep, 0)
-        timesteps = self.scheduler.timesteps[t_start * self.scheduler.order :].cast(self.dtype)
+        timesteps = self.scheduler.timesteps[t_start * self.scheduler.order :]
 
         if hasattr(self.scheduler, "step_index_offset"):
             self.scheduler.step_index_offset = t_start * self.scheduler.order
@@ -675,6 +676,79 @@ class FastDeployDiffusionPipelineMixin:
                 )
         if strength < 0 or strength > 1:
             raise ValueError(f"The value of strength should in [0.0, 1.0] but is {strength}")
+
+    def rescale_noise_cfg(noise_cfg, noise_pred_text, guidance_rescale=0.0):
+        """
+        Rescale `noise_cfg` according to `guidance_rescale`. Based on findings of [Common Diffusion Noise Schedules and
+        Sample Steps are Flawed](https://arxiv.org/pdf/2305.08891.pdf). See Section 3.4
+        """
+        std_text = noise_pred_text.std(axis=list(range(1, noise_pred_text.ndim)), keepdim=True)
+        std_cfg = noise_cfg.std(axis=list(range(1, noise_cfg.ndim)), keepdim=True)
+        # rescale the results from guidance (fixes overexposure)
+        noise_pred_rescaled = noise_cfg * (std_text / std_cfg)
+        # mix with the original results from guidance by factor guidance_rescale to avoid "plain looking" images
+        noise_cfg = guidance_rescale * noise_pred_rescaled + (1 - guidance_rescale) * noise_cfg
+        return noise_cfg
+
+    def retrieve_timesteps(
+        self,
+        scheduler,
+        num_inference_steps: Optional[int] = None,
+        timesteps: Optional[List[int]] = None,
+        **kwargs,
+    ):
+        """
+        Calls the scheduler's `set_timesteps` method and retrieves timesteps from the scheduler after the call. Handles
+        custom timesteps. Any kwargs will be supplied to `scheduler.set_timesteps`.
+
+        Args:
+            scheduler (`SchedulerMixin`):
+                The scheduler to get timesteps from.
+            num_inference_steps (`int`):
+                The number of diffusion steps used when generating samples with a pre-trained model. If used,
+                `timesteps` must be `None`.
+            timesteps (`List[int]`, *optional*):
+                    Custom timesteps used to support arbitrary spacing between timesteps. If `None`, then the default
+                    timestep spacing strategy of the scheduler is used. If `timesteps` is passed, `num_inference_steps`
+                    must be `None`.
+
+        Returns:
+            `Tuple[paddle.Tensor, int]`: A tuple where the first element is the timestep schedule from the scheduler and the
+            second element is the number of inference steps.
+        """
+        if timesteps is not None:
+            accepts_timesteps = "timesteps" in set(inspect.signature(scheduler.set_timesteps).parameters.keys())
+            if not accepts_timesteps:
+                raise ValueError(
+                    f"The current scheduler class {scheduler.__class__}'s `set_timesteps` does not support custom"
+                    f" timestep schedules. Please check whether you are using the correct scheduler."
+                )
+            scheduler.set_timesteps(timesteps=timesteps, **kwargs)
+            timesteps = scheduler.timesteps
+            num_inference_steps = len(timesteps)
+        else:
+            scheduler.set_timesteps(num_inference_steps, **kwargs)
+            timesteps = scheduler.timesteps
+        return timesteps, num_inference_steps
+
+    def encode_image(self, image, num_images_per_prompt, infer_op=None):
+        dtype = self.dtype
+
+        if not isinstance(image, paddle.Tensor):
+            image = self.feature_extractor(image, return_tensors="pd").pixel_values
+
+        image = image.cast(dtype=dtype)
+        image_embeds = self.image_encoder(
+            image=image,
+            infer_op=infer_op,
+            output_shape=[
+                num_images_per_prompt,
+                1024,
+            ],
+        )[0]
+        image_embeds = image_embeds.repeat_interleave(num_images_per_prompt, axis=0)
+        uncond_image_embeds = paddle.zeros_like(image_embeds)
+        return image_embeds, uncond_image_embeds
 
     def prepare_latents(
         self,
@@ -1165,26 +1239,33 @@ class FastDeployRuntimeModel:
         # for zero_copy_infer
         share_with_raw_ptr = kwargs.pop("share_with_raw_ptr", True)
         output_shape = kwargs.pop("output_shape", None)
+        if isinstance(output_shape, list) and not isinstance(output_shape[0], list):
+            output_shape = [output_shape]
 
         inputs = {}
         for k, v in kwargs.items():
             if k == "timestep":
+                if v.ndim == 0:
+                    # fix 0D tensor error
+                    v = v.reshape((1,))
+                # fix dtype error
                 v = v.astype("float32")
             inputs[k] = v
 
         if infer_op == "zero_copy_infer":
-            output = paddle.zeros(output_shape, dtype="float32")
+            outputs = [paddle.zeros(shape, dtype="float32") for shape in output_shape]
+            prebined_inputs = {}
+            for index, output in enumerate(outputs):
+                prebined_inputs[self.model.get_output_info(index).name] = output
+
             self.zero_copy_infer(
                 prebinded_inputs=inputs,
-                prebinded_outputs={self.model.get_output_info(0).name: output},
+                prebinded_outputs=prebined_inputs,
                 share_with_raw_ptr=share_with_raw_ptr,
             )
-            return [
-                output,
-            ]
+            return outputs
         elif infer_op == "raw":
-            inputs = {}
-            for k, v in kwargs.items():
+            for k, v in inputs.items():
                 if paddle.is_tensor(v):
                     v = v.numpy()
                 inputs[k] = np.array(v)
@@ -1322,6 +1403,7 @@ class FastDeployRuntimeModel:
         cache_dir: Optional[str] = None,
         runtime_options: Optional["fd.RuntimeOption"] = None,
         from_hf_hub: Optional[bool] = False,
+        from_aistudio: Optional[bool] = False,
         proxies: Optional[Dict] = None,
         resume_download: bool = False,
         local_files_only: bool = False,
@@ -1390,6 +1472,7 @@ class FastDeployRuntimeModel:
                 force_download=force_download,
                 revision=revision,
                 from_hf_hub=from_hf_hub,
+                from_aistudio=from_aistudio,
                 proxies=proxies,
                 resume_download=resume_download,
                 local_files_only=local_files_only,
@@ -1408,6 +1491,7 @@ class FastDeployRuntimeModel:
                     force_download=force_download,
                     revision=revision,
                     from_hf_hub=from_hf_hub,
+                    from_aistudio=from_aistudio,
                     proxies=proxies,
                     resume_download=resume_download,
                     local_files_only=local_files_only,
@@ -1436,16 +1520,24 @@ class FastDeployRuntimeModel:
         **kwargs,
     ):
         from_hf_hub = kwargs.pop("from_hf_hub", FROM_HF_HUB)
-        cache_dir = (
-            kwargs.pop("cache_dir", DIFFUSERS_CACHE) if from_hf_hub else kwargs.pop("cache_dir", PPDIFFUSERS_CACHE)
-        )
+        from_aistudio = kwargs.pop("from_aistudio", FROM_AISTUDIO)
+        cache_dir = kwargs.pop("cache_dir", None)
+        if cache_dir is None:
+            if from_aistudio:
+                cache_dir = None  # TODO, check aistudio cache
+            elif from_hf_hub:
+                cache_dir = DIFFUSERS_CACHE
+            else:
+                cache_dir = PPDIFFUSERS_CACHE
         force_download = kwargs.pop("force_download", False)
         resume_download = kwargs.pop("resume_download", False)
         proxies = kwargs.pop("proxies", None)
         local_files_only = kwargs.pop("local_files_only", HF_HUB_OFFLINE)
         use_auth_token = kwargs.pop("use_auth_token", None)
         revision = kwargs.pop("revision", None)
-        subfolder = kwargs.pop("subfolder", None)
+        subfolder = kwargs.pop("subfolder", "")
+        if subfolder is None:
+            subfolder = ""
         variant = kwargs.pop("variant", None)
 
         user_agent = {
@@ -1465,6 +1557,7 @@ class FastDeployRuntimeModel:
             cache_dir=cache_dir,
             runtime_options=runtime_options,
             from_hf_hub=from_hf_hub,
+            from_aistudio=from_aistudio,
             proxies=proxies,
             resume_download=resume_download,
             local_files_only=local_files_only,

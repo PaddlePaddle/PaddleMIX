@@ -7,6 +7,9 @@
     <a href=""><img src="https://img.shields.io/badge/python-3.7+-aff.svg"></a>
     <a href=""><img src="https://img.shields.io/badge/os-linux%2C%20win%2C%20mac-pink.svg"></a>
     <a href="https://github.com/PaddlePaddle/PaddleMIX/stargazers"><img src="https://img.shields.io/github/stars/PaddlePaddle/PaddleMIX?color=ccf"></a>
+  <br>
+    <br>
+    <a href="./README_EN.md">English Document</a>
 </p>
 </div>
 
@@ -15,6 +18,8 @@
 PaddleMIX是基于飞桨的跨模态大模型开发套件，聚合图像、文本、视频等多种模态，覆盖视觉语言预训练，文生图，文生视频等丰富的跨模态任务。提供开箱即用的开发体验，同时满足开发者灵活定制需求，探索通用人工智能。
 
 ## 最新进展
+**2024.04.17 发布 PPDiffusers v0.24.0**
+* [PPDiffusers](./ppdiffusers/README.md)发布 v0.24.0 版本，支持DiT等Sora相关技术，支持SVD等多款视频生成模型
 
 **2023.10.7 发布 PaddleMIX v1.0**
 * 新增图文预训练模型分布式训练能力，BLIP-2支持千亿规模训练
@@ -49,17 +54,25 @@ pip install -r requirements.txt
 
 关于PaddlePaddle安装的详细教程请查看[Installation](https://www.paddlepaddle.org.cn/install/quick?docurl=/documentation/docs/zh/develop/install/pip/linux-pip.html)。
 
+> 注：ppdiffusers部分模型需要依赖 CUDA 11.2 及以上版本，如果本地机器不符合要求，建议前往 [AI Studio](https://aistudio.baidu.com/index) 进行模型训练、推理任务。
+
+> 如果希望使用**bf16**训练推理，请使用支持**bf16**的GPU，如A100。
+
 2. 手动安装
 ```
 git clone https://github.com/PaddlePaddle/PaddleMIX
 cd PaddleMIX
 pip install -e .
+
+#ppdiffusers 安装
+cd ppdiffusers
+pip install -e .
 ```
 
 ## 教程
 
-- [快速开始](applications/README.md)
-- [训练微调](docs/train_tutorial.md)
+- [快速开始](applications/README.md/#快速开始)
+- [训练微调](paddlemix/tools/README.md)
 - [推理部署](deploy/README.md)
 
 ## 特色应用
@@ -103,12 +116,16 @@ pip install -e .
             <li><a href="paddlemix/examples/blip2">BLIP-2</a></li>
             <li><a href="paddlemix/examples/minigpt4">miniGPT-4</a></li>
             <li><a href="paddlemix/examples/visualglm">VIsualGLM</a></li>
+            <li><a href="paddlemix/examples/qwen_vl">qwen_vl</a></li>
+            <li><a href="paddlemix/examples/llava">llava</a></li>
+            <li><a href="paddlemix/examples/cogvlm">CogVLM && CogAgent</a></li>
+            <li><a href="paddlemix/examples/internlm_xcomposer2">InternLM-XComposer2</a></li>
       </ul>
       </ul>
           <li><b>开放世界视觉模型</b></li>
         <ul>
             <li><a href="paddlemix/examples/groundingdino">Grounding DINO</a></li>
-            <li><a href="paddlemix/examples/Sam">SAM</a></li>
+            <li><a href="paddlemix/examples/sam">SAM</a></li>
       </ul>
       </ul>
           <li><b>更多模态预训练模型</b></li>
@@ -141,6 +158,7 @@ pip install -e .
   </tbody>
 </table>
 
+更多模型能力，可参考[模型能力矩阵](./paddlemix/examples/README.md)
 ## 许可证书
 
 本项目的发布受Apache 2.0 license许可认证。

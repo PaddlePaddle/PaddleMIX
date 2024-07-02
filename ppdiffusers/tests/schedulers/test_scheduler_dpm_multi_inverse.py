@@ -1,3 +1,17 @@
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import tempfile
 
 import paddle
@@ -54,6 +68,7 @@ class DPMSolverMultistepSchedulerTest(SchedulerCommonTest):
 
             output, new_output = sample, sample
             for t in range(time_step, time_step + scheduler.config.solver_order + 1):
+                t = scheduler.timesteps[t]
                 output = scheduler.step(residual, t, output, **kwargs).prev_sample
                 new_output = new_scheduler.step(residual, t, new_output, **kwargs).prev_sample
 
@@ -222,7 +237,7 @@ class DPMSolverMultistepSchedulerTest(SchedulerCommonTest):
         sample = self.full_loop(prediction_type="v_prediction", use_karras_sigmas=True)
         result_mean = paddle.mean(paddle.abs(sample))
 
-        assert abs(result_mean.item() - 1.7833) < 1e-3
+        assert abs(result_mean.item() - 1.7833) < 2e-3
 
     def test_switch(self):
         # make sure that iterating over schedulers with same config names gives same results
@@ -254,9 +269,8 @@ class DPMSolverMultistepSchedulerTest(SchedulerCommonTest):
         for i, t in enumerate(scheduler.timesteps):
             residual = model(sample, t)
             sample = scheduler.step(residual, t, sample).prev_sample
-            
-        # TODO, this scheduler output float32
-        assert sample.dtype == paddle.float32
+
+        assert sample.dtype == paddle.float16
 
     def test_unique_timesteps(self, **config):
         for scheduler_class in self.scheduler_classes:

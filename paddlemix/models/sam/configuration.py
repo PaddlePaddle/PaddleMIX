@@ -37,6 +37,7 @@ class SamConfig(PretrainedConfig):
         encoder_num_heads=12,
         encoder_global_attn_indexes=[2, 5, 8, 11],
         input_type=None,
+        **kwargs,
     ):
         super().__init__()
         self.modelname = modelname

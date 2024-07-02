@@ -16,10 +16,10 @@
 import paddle
 from clip_guided_stable_diffusion import CLIPGuidedStableDiffusion
 from IPython.display import display
-from paddlenlp.transformers import CLIPFeatureExtractor, CLIPModel
 from PIL import Image
 
 from ppdiffusers import LMSDiscreteScheduler, StableDiffusionPipeline
+from ppdiffusers.transformers import CLIPFeatureExtractor, CLIPModel
 
 
 def image_grid(imgs, rows, cols):

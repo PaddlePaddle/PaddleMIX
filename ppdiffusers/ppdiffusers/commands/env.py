@@ -1,4 +1,3 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,7 +15,7 @@
 import platform
 from argparse import ArgumentParser
 
-from ..utils import is_paddle_available, is_paddlenlp_available
+from ..utils import is_paddle_available, is_paddlenlp_available, is_ppxformers_available
 from ..version import VERSION as version
 from . import BasePPDiffusersCLICommand
 
@@ -32,6 +31,9 @@ class EnvironmentCommand(BasePPDiffusersCLICommand):
         download_parser.set_defaults(func=info_command_factory)
 
     def run(self):
+        import huggingface_hub
+
+        hub_version = huggingface_hub.__version__
 
         pd_version = "not installed"
         pd_cuda_available = "NA"
@@ -47,12 +49,25 @@ class EnvironmentCommand(BasePPDiffusersCLICommand):
 
             paddlenlp_version = paddlenlp.__version__
 
+        from ppdiffusers.accelerate import __version__ as accelerate_version
+        from ppdiffusers.peft import __version__ as peft_version
+
+        xformers_commit_id = "not installed"
+        if is_ppxformers_available():
+            import paddle
+
+            xformers_commit_id = paddle.__git_commit__
+
         info = {
             "`ppdiffusers` version": version,
             "Platform": platform.platform(),
             "Python version": platform.python_version(),
             "Paddle version (GPU?)": f"{pd_version} ({pd_cuda_available})",
+            "Huggingface_hub version": hub_version,
             "PaddleNLP version": paddlenlp_version,
+            "PP-Accelerate version": accelerate_version,
+            "PP-Peft version": peft_version,
+            "PP-xFormers commit id": xformers_commit_id,
             "Using GPU in script?": "<fill in>",
             "Using distributed or parallel set-up in script?": "<fill in>",
         }

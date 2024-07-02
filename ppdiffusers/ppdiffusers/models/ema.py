@@ -34,18 +34,21 @@ class LitEma(nn.Layer):
             raise ValueError("Decay must be between 0 and 1")
 
         self.m_name2s_name = {}
-        self.register_buffer("decay", paddle.to_tensor(decay, dtype=paddle.float32))
-        self.register_buffer(
-            "num_updates",
-            paddle.to_tensor(0, dtype=paddle.int64) if use_num_upates else paddle.to_tensor(-1, dtype=paddle.int64),
-        )
+        #  0-d tensor broadcasting is not supported during the Sharding initialization phase
+        # self.register_buffer("decay", paddle.to_tensor(decay, dtype=paddle.float32))
+        # self.register_buffer(
+        #     "num_updates",
+        #     paddle.to_tensor(0, dtype=paddle.int64) if use_num_upates else paddle.to_tensor(-1, dtype=paddle.int64),
+        # )
+        self.decay = decay
+        self.num_updates = 0 if use_num_upates else -1
 
         for name, p in model.named_parameters():
             if not p.stop_gradient:
                 # remove as '.'-character is not allowed in buffers
                 s_name = name.replace(".", "")
                 self.m_name2s_name.update({name: s_name})
-                self.register_buffer(s_name, p.clone().detach())
+                self.register_buffer(s_name, p.clone().detach().astype('float32'))
 
         self.collected_params = []
 
@@ -66,7 +69,7 @@ class LitEma(nn.Layer):
                 if not m_param[key].stop_gradient:
                     sname = self.m_name2s_name[key]
                     shadow_params[sname].scale_(decay)
-                    shadow_params[sname].add_(m_param[key] * one_minus_decay)
+                    shadow_params[sname].add_(m_param[key].astype('float32') * one_minus_decay)
                 else:
                     assert key not in self.m_name2s_name
 
@@ -75,7 +78,8 @@ class LitEma(nn.Layer):
         shadow_params = dict(self.named_buffers())
         for key in m_param:
             if not m_param[key].stop_gradient:
-                m_param[key].copy_(shadow_params[self.m_name2s_name[key]], False)
+                # allow dtype cast
+                m_param[key].copy_(shadow_params[self.m_name2s_name[key]].cast(m_param[key].dtype), False)
             else:
                 assert key not in self.m_name2s_name
 
@@ -100,5 +104,6 @@ class LitEma(nn.Layer):
             updated with the stored parameters.
         """
         for c_param, param in zip(self.collected_params, parameters):
-            param.copy_(c_param, False)
+            # allow dtype cast
+            param.copy_(c_param.cast(param.dtype), False)
         self.collected_params = None

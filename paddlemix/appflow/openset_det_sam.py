@@ -17,7 +17,7 @@ import paddle.nn.functional as F
 
 from paddlemix.models.groundingdino.modeling import GroundingDinoModel
 from paddlemix.models.sam.modeling import SamModel
-from paddlemix.processors.groundingdino_processing import GroudingDinoProcessor
+from paddlemix.processors.groundingdino_processing import GroundingDinoProcessor
 from paddlemix.processors.sam_processing import SamProcessor
 
 from .apptask import AppTask
@@ -85,15 +85,15 @@ class OpenSetDetTask(AppTask):
         """
         Construct the tokenizer for the predictor.
         """
-        # bulid processor
-        self._processor = GroudingDinoProcessor.from_pretrained(model, cache_dir=self._model_dir)
+        # build processor
+        self._processor = GroundingDinoProcessor.from_pretrained(model, cache_dir=self._model_dir)
 
     def _construct_model(self, model):
         """
         Construct the inference model for the predictor.
         """
 
-        # bulid model
+        # build model
         model_instance = GroundingDinoModel.from_pretrained(model, cache_dir=self._model_dir)
 
         # Load the model parameter for the predict
@@ -170,9 +170,10 @@ class OpenSetDetTask(AppTask):
             pred_phrases.append(pred_phrase + f"({str(logit.max().item())[:4]})")
 
         H, W = self._size[1], self._size[0]
+        sizes = paddle.to_tensor([W, H, W, H]).astype(boxes.dtype)
         boxes = []
         for box in zip(boxes_filt):
-            box = box[0] * paddle.to_tensor([W, H, W, H])
+            box = box[0] * sizes
             box[:2] -= box[2:] / 2
             box[2:] += box[:2]
             x0, y0, x1, y1 = box.numpy()
@@ -248,7 +249,7 @@ class OpenSetSegTask(AppTask):
         """
         Construct the tokenizer for the predictor.
         """
-        # bulid processor
+        # build processor
         self._processor = SamProcessor.from_pretrained(model, cache_dir=self._model_dir)
 
     def _construct_model(self, model):
@@ -256,7 +257,7 @@ class OpenSetSegTask(AppTask):
         Construct the inference model for the predictor.
         """
 
-        # bulid model
+        # build model
         model_instance = SamModel.from_pretrained(model, input_type=self._input_type, cache_dir=self._model_dir)
 
         # Load the model parameter for the predict

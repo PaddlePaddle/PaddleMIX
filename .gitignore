@@ -63,6 +63,9 @@ coverage.xml
 
 *.tar
 *.pyc
+*.pdiparams
+*.safetensors
+*.bin
 
 .idea/
 
@@ -72,3 +75,5 @@ kernel_meta/
 # MAC
 *.DS_Store
 
+# VSCODE
+.vscode/
