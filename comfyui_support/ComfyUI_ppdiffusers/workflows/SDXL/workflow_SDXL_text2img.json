@@ -1,0 +1,416 @@
+{
+  "last_node_id": 28,
+  "last_link_id": 51,
+  "nodes": [
+    {
+      "id": 19,
+      "type": "Note",
+      "pos": [
+        1406,
+        968
+      ],
+      "size": {
+        "0": 210,
+        "1": 58
+      },
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "properties": {
+        "text": ""
+      },
+      "widgets_values": [
+        "这里填负向画面提示 (不想要的内容)"
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
+    },
+    {
+      "id": 18,
+      "type": "Note",
+      "pos": [
+        254,
+        1013
+      ],
+      "size": {
+        "0": 210,
+        "1": 58
+      },
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "properties": {
+        "text": ""
+      },
+      "widgets_values": [
+        "这里填正向画面提示 （想要的内容）"
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
+    },
+    {
+      "id": 21,
+      "type": "Note",
+      "pos": [
+        990,
+        543
+      ],
+      "size": {
+        "0": 217.51138305664062,
+        "1": 164.82931518554688
+      },
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "properties": {
+        "text": ""
+      },
+      "widgets_values": [
+        "- denoise是重绘幅度，越高程度越大\n- steps是画笔绘制的步数\n- number是每次同时绘制的张数\n- cfg可以调整画面细节参数\n- scheduler是不同的去噪声方式"
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
+    },
+    {
+      "id": 22,
+      "type": "Note",
+      "pos": [
+        1835,
+        498
+      ],
+      "size": {
+        "0": 210,
+        "1": 58
+      },
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "properties": {
+        "text": ""
+      },
+      "widgets_values": [
+        "这里是最终结果"
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
+    },
+    {
+      "id": 23,
+      "type": "Note",
+      "pos": [
+        324,
+        227
+      ],
+      "size": {
+        "0": 210,
+        "1": 58
+      },
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "properties": {
+        "text": ""
+      },
+      "widgets_values": [
+        "这里选择喜欢的AIGC大模型"
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
+    },
+    {
+      "id": 5,
+      "type": "PaddleSaveImage",
+      "pos": [
+        1478,
+        470
+      ],
+      "size": {
+        "0": 315,
+        "1": 270
+      },
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 51,
+          "label": "images"
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PaddleSaveImage"
+      },
+      "widgets_values": [
+        "ComfyUI"
+      ]
+    },
+    {
+      "id": 12,
+      "type": "PromptInput",
+      "pos": [
+        965,
+        964
+      ],
+      "size": {
+        "0": 400,
+        "1": 200
+      },
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "outputs": [
+        {
+          "name": "prompt",
+          "type": "PROMPT",
+          "links": [
+            48
+          ],
+          "shape": 3,
+          "label": "prompt",
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PromptInput"
+      },
+      "widgets_values": [
+        "low, error, ugly, (extra hand), wrong hand, nsfw, nude, extra head"
+      ]
+    },
+    {
+      "id": 28,
+      "type": "PaddleSDXLVaeDecoder",
+      "pos": [
+        1115.8165436384072,
+        359.29368984194616
+      ],
+      "size": {
+        "0": 210,
+        "1": 46
+      },
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "latent",
+          "type": "LATENT",
+          "link": 50,
+          "label": "latent"
+        },
+        {
+          "name": "sd_pipe",
+          "type": "PIPELINE",
+          "link": 49,
+          "label": "sd_pipe"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "links": [
+            51
+          ],
+          "shape": 3,
+          "label": "image",
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PaddleSDXLVaeDecoder"
+      }
+    },
+    {
+      "id": 27,
+      "type": "PaddleSDXLCheckpointLoader",
+      "pos": [
+        53,
+        413
+      ],
+      "size": {
+        "0": 315,
+        "1": 58
+      },
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "outputs": [
+        {
+          "name": "sd_pipe",
+          "type": "PIPELINE",
+          "links": [
+            45,
+            49
+          ],
+          "shape": 3,
+          "label": "sd_pipe",
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PaddleSDXLCheckpointLoader"
+      },
+      "widgets_values": [
+        "sdxl/MJ5风格_SDXL_Dream.safetensors"
+      ]
+    },
+    {
+      "id": 15,
+      "type": "PromptInput",
+      "pos": [
+        479,
+        1004
+      ],
+      "size": {
+        "0": 400,
+        "1": 200
+      },
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "outputs": [
+        {
+          "name": "prompt",
+          "type": "PROMPT",
+          "links": [
+            44
+          ],
+          "shape": 3,
+          "label": "prompt",
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PromptInput"
+      },
+      "widgets_values": [
+        "1girl, cool, blue hair, cute, sunset, niji anime style"
+      ]
+    },
+    {
+      "id": 26,
+      "type": "PaddleSDXLText2ImagePipe",
+      "pos": [
+        503,
+        573
+      ],
+      "size": {
+        "0": 315,
+        "1": 266
+      },
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "sd_pipe",
+          "type": "PIPELINE",
+          "link": 45,
+          "label": "sd_pipe"
+        },
+        {
+          "name": "prompt",
+          "type": "PROMPT",
+          "link": 44,
+          "label": "prompt"
+        },
+        {
+          "name": "negative_prompt",
+          "type": "PROMPT",
+          "link": 48,
+          "label": "negative_prompt"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "latent",
+          "type": "LATENT",
+          "links": [
+            50
+          ],
+          "shape": 3,
+          "label": "latent",
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PaddleSDXLText2ImagePipe"
+      },
+      "widgets_values": [
+        20,
+        512,
+        768,
+        1,
+        351732349249869,
+        "randomize",
+        5,
+        "euler"
+      ]
+    }
+  ],
+  "links": [
+    [
+      44,
+      15,
+      0,
+      26,
+      1,
+      "PROMPT"
+    ],
+    [
+      45,
+      27,
+      0,
+      26,
+      0,
+      "PIPELINE"
+    ],
+    [
+      48,
+      12,
+      0,
+      26,
+      2,
+      "PROMPT"
+    ],
+    [
+      49,
+      27,
+      0,
+      28,
+      1,
+      "PIPELINE"
+    ],
+    [
+      50,
+      26,
+      0,
+      28,
+      0,
+      "LATENT"
+    ],
+    [
+      51,
+      28,
+      0,
+      5,
+      0,
+      "IMAGE"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.5730855330116872,
+      "offset": [
+        113.53226463291708,
+        -145.5843663012114
+      ]
+    }
+  },
+  "version": 0.4
+}
