@@ -143,6 +143,7 @@ class Upsample2D(nn.Layer):
         use_conv_transpose: bool = False,
         out_channels: Optional[int] = None,
         name: str = "conv",
+        data_format: str = "NCHW",
     ):
         super().__init__()
         self.channels = channels
@@ -150,13 +151,14 @@ class Upsample2D(nn.Layer):
         self.use_conv = use_conv
         self.use_conv_transpose = use_conv_transpose
         self.name = name
+        self.data_format = data_format
         conv_cls = nn.Conv2D if USE_PEFT_BACKEND else LoRACompatibleConv
 
         conv = None
         if use_conv_transpose:
-            conv = nn.Conv2DTranspose(channels, self.out_channels, 4, 2, 1)
+            conv = nn.Conv2DTranspose(channels, self.out_channels, 4, 2, 1, data_format=data_format)
         elif use_conv:
-            conv = conv_cls(self.channels, self.out_channels, 3, padding=1)
+            conv = conv_cls(self.channels, self.out_channels, 3, padding=1, data_format=data_format)
 
         # TODO(Suraj, Patrick) - clean up after weight dicts are correctly renamed
         if name == "conv":
@@ -170,7 +172,10 @@ class Upsample2D(nn.Layer):
         output_size: Optional[int] = None,
         scale: float = 1.0,
     ) -> paddle.Tensor:
-        assert hidden_states.shape[1] == self.channels
+        if self.data_format == "NCHW":
+            assert hidden_states.shape[1] == self.channels
+        else:
+            assert hidden_states.shape[3] == self.channels
 
         if self.use_conv_transpose:
             return self.conv(hidden_states)
@@ -189,9 +194,9 @@ class Upsample2D(nn.Layer):
         # if `output_size` is passed we force the interpolation output
         # size and do not make use of `scale_factor=2`
         if output_size is None:
-            hidden_states = F.interpolate(hidden_states, scale_factor=2.0, mode="nearest")
+            hidden_states = F.interpolate(hidden_states, scale_factor=2.0, mode="nearest", data_format=self.data_format)
         else:
-            hidden_states = F.interpolate(hidden_states, size=output_size, mode="nearest")
+            hidden_states = F.interpolate(hidden_states, size=output_size, mode="nearest", data_format=self.data_format)
 
         # If the input is bfloat16, we cast back to bfloat16
         if dtype == paddle.bfloat16:
@@ -236,6 +241,7 @@ class Downsample2D(nn.Layer):
         out_channels: Optional[int] = None,
         padding: int = 1,
         name: str = "conv",
+        data_format: str = "NCHW",
     ):
         super().__init__()
         self.channels = channels
@@ -244,13 +250,14 @@ class Downsample2D(nn.Layer):
         self.padding = padding
         stride = 2
         self.name = name
+        self.data_format = data_format
         conv_cls = nn.Conv2D if USE_PEFT_BACKEND else LoRACompatibleConv
 
         if use_conv:
-            conv = conv_cls(self.channels, self.out_channels, 3, stride=stride, padding=padding)
+            conv = conv_cls(self.channels, self.out_channels, 3, stride=stride, padding=padding, data_format=data_format)
         else:
             assert self.channels == self.out_channels
-            conv = nn.AvgPool2D(kernel_size=stride, stride=stride)
+            conv = nn.AvgPool2D(kernel_size=stride, stride=stride, data_format=data_format)
 
         # TODO(Suraj, Patrick) - clean up after weight dicts are correctly renamed
         if name == "conv":
@@ -262,13 +269,19 @@ class Downsample2D(nn.Layer):
             self.conv = conv
 
     def forward(self, hidden_states: paddle.Tensor, scale: float = 1.0) -> paddle.Tensor:
-        assert hidden_states.shape[1] == self.channels
+        if self.data_format == "NCHW":
+            assert hidden_states.shape[1] == self.channels
+        else:
+            assert hidden_states.shape[3] == self.channels
 
         if self.use_conv and self.padding == 0:
             pad = (0, 1, 0, 1)
-            hidden_states = F.pad(hidden_states, pad, mode="constant", value=0)
+            hidden_states = F.pad(hidden_states, pad, mode="constant", value=0, data_format=self.data_format)
 
-        assert hidden_states.shape[1] == self.channels
+        if self.data_format == "NCHW":
+            assert hidden_states.shape[1] == self.channels
+        else:
+            assert hidden_states.shape[3] == self.channels
 
         if not USE_PEFT_BACKEND:
             if isinstance(self.conv, LoRACompatibleConv):
@@ -624,6 +637,7 @@ class ResnetBlock2D(nn.Layer):
         down: bool = False,
         conv_shortcut_bias: bool = True,
         conv_2d_out_channels: Optional[int] = None,
+        data_format: str = "NCHW",
     ):
         super().__init__()
         self.pre_norm = pre_norm
@@ -637,6 +651,7 @@ class ResnetBlock2D(nn.Layer):
         self.output_scale_factor = output_scale_factor
         self.time_embedding_norm = time_embedding_norm
         self.skip_time_act = skip_time_act
+        self.data_format = data_format
 
         linear_cls = nn.Linear if USE_PEFT_BACKEND else LoRACompatibleLinear
         conv_cls = nn.Conv2D if USE_PEFT_BACKEND else LoRACompatibleConv
@@ -649,9 +664,9 @@ class ResnetBlock2D(nn.Layer):
         elif self.time_embedding_norm == "spatial":
             self.norm1 = SpatialNorm(in_channels, temb_channels)
         else:
-            self.norm1 = nn.GroupNorm(num_groups=groups, num_channels=in_channels, epsilon=eps)
+            self.norm1 = nn.GroupNorm(num_groups=groups, num_channels=in_channels, epsilon=eps, data_format=data_format)
 
-        self.conv1 = conv_cls(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
+        self.conv1 = conv_cls(in_channels, out_channels, kernel_size=3, stride=1, padding=1, data_format=data_format)
 
         if temb_channels is not None:
             if self.time_embedding_norm == "default":
@@ -670,11 +685,11 @@ class ResnetBlock2D(nn.Layer):
         elif self.time_embedding_norm == "spatial":
             self.norm2 = SpatialNorm(out_channels, temb_channels)
         else:
-            self.norm2 = nn.GroupNorm(num_groups=groups_out, num_channels=out_channels, epsilon=eps)
+            self.norm2 = nn.GroupNorm(num_groups=groups_out, num_channels=out_channels, epsilon=eps, data_format=data_format)
 
         self.dropout = nn.Dropout(dropout)
         conv_2d_out_channels = conv_2d_out_channels or out_channels
-        self.conv2 = conv_cls(out_channels, conv_2d_out_channels, kernel_size=3, stride=1, padding=1)
+        self.conv2 = conv_cls(out_channels, conv_2d_out_channels, kernel_size=3, stride=1, padding=1, data_format=data_format)
 
         self.nonlinearity = get_activation(non_linearity)
 
@@ -686,7 +701,7 @@ class ResnetBlock2D(nn.Layer):
             elif kernel == "sde_vp":
                 self.upsample = partial(F.interpolate, scale_factor=2.0, mode="nearest")
             else:
-                self.upsample = Upsample2D(in_channels, use_conv=False)
+                self.upsample = Upsample2D(in_channels, use_conv=False, data_format=data_format)
         elif self.down:
             if kernel == "fir":
                 fir_kernel = (1, 3, 3, 1)
@@ -694,7 +709,7 @@ class ResnetBlock2D(nn.Layer):
             elif kernel == "sde_vp":
                 self.downsample = partial(F.avg_pool2d, kernel_size=2, stride=2)
             else:
-                self.downsample = Downsample2D(in_channels, use_conv=False, padding=1, name="op")
+                self.downsample = Downsample2D(in_channels, use_conv=False, padding=1, name="op", data_format=data_format)
 
         self.use_in_shortcut = self.in_channels != conv_2d_out_channels if use_in_shortcut is None else use_in_shortcut
 
@@ -707,6 +722,7 @@ class ResnetBlock2D(nn.Layer):
                 stride=1,
                 padding=0,
                 bias_attr=conv_shortcut_bias,
+                data_format=data_format,
             )
 
     def forward(
@@ -763,6 +779,8 @@ class ResnetBlock2D(nn.Layer):
             )
 
         if temb is not None and self.time_embedding_norm == "default":
+            if self.data_format == "NHWC":
+                temb = temb.transpose([0, 2, 3, 1])
             hidden_states = hidden_states + temb
 
         if self.time_embedding_norm == "ada_group" or self.time_embedding_norm == "spatial":

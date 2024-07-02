@@ -196,7 +196,7 @@ class LlavaMetaForCausalLM:
                                     image_feature,
                                     self.llama.image_newline[:, (None), (None)].expand(
                                         shape=[*image_feature.shape[:-1], 1]
-                                    ),
+                                    ).astype(image_feature.dtype),
                                 ),
                                 axis=-1,
                             )
@@ -266,10 +266,11 @@ class LlavaMetaForCausalLM:
             for i in range(len(image_token_indices) - 1):
                 cur_input_ids_noim.append(cur_input_ids[image_token_indices[i] + 1 : image_token_indices[i + 1]])
                 cur_labels_noim.append(cur_labels[image_token_indices[i] + 1 : image_token_indices[i + 1]])
+
             split_sizes = [x.shape[0] for x in cur_labels_noim]
+
             cur_input_embeds = self.get_model().embed_tokens(paddle.concat(x=cur_input_ids_noim))
             cur_input_embeds_no_im = paddle.split(x=cur_input_embeds, num_or_sections=split_sizes, axis=0)
-
             cur_new_input_embeds = []
             cur_new_labels = []
 

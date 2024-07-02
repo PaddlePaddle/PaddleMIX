@@ -1,6 +1,7 @@
 ## 📦 PaddleMIX工具箱介绍 📦
 PaddleMIX工具箱秉承了飞桨套件一站式体验、性能极致、生态兼容的设计理念，旨在提供业界主流跨模态大模型全流程统一工具，帮助开发者低成本、低门槛、快速实现跨模态大模型定制化。
 
+[[English](README_en.md)]
 
 ##  🛠️ 支持模型列表 🛠️
 | Model | Inference |Pretrain | SFT | LoRA | Deploy |
@@ -15,7 +16,7 @@ PaddleMIX工具箱秉承了飞桨套件一站式体验、性能极致、生态�
 * ❌: Not Supported
 
 注意：
-1. 开始前请先按照[环境依赖](../../README.md#环境依赖)安装环境，不同模型请参考 [examples](../examples/README.md) 下对应的模型目录安装依赖；
+1. 开始前请先按照[环境依赖](../../README.md#安装)安装环境，不同模型请参考 [examples](../examples/README.md) 下对应的模型目录安装依赖；
 2. 当前**tools**统一接口只支持部分模型的精调能力，其他模型及其他能力后续陆续上线。
 
 

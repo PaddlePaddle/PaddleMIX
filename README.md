@@ -7,6 +7,9 @@
     <a href=""><img src="https://img.shields.io/badge/python-3.7+-aff.svg"></a>
     <a href=""><img src="https://img.shields.io/badge/os-linux%2C%20win%2C%20mac-pink.svg"></a>
     <a href="https://github.com/PaddlePaddle/PaddleMIX/stargazers"><img src="https://img.shields.io/github/stars/PaddlePaddle/PaddleMIX?color=ccf"></a>
+  <br>
+    <br>
+    <a href="./README_EN.md">English Document</a>
 </p>
 </div>
 
@@ -115,6 +118,8 @@ pip install -e .
             <li><a href="paddlemix/examples/visualglm">VIsualGLM</a></li>
             <li><a href="paddlemix/examples/qwen_vl">qwen_vl</a></li>
             <li><a href="paddlemix/examples/llava">llava</a></li>
+            <li><a href="paddlemix/examples/cogvlm">CogVLM && CogAgent</a></li>
+            <li><a href="paddlemix/examples/internlm_xcomposer2">InternLM-XComposer2</a></li>
       </ul>
       </ul>
           <li><b>开放世界视觉模型</b></li>

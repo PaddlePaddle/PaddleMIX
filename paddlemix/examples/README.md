@@ -18,6 +18,9 @@ paddlemix `examples` 目录下提供模型的一站式体验，包括模型推�
 | [sam](./sam/) | ✅ | ❌ | ❌ | ❌ | ✅  |
 | [visualglm](./visualglm/) | ✅ | ❌ | ✅ | ✅ | ❌ |
 | [llava](./llava/) | ✅  | ✅  | ✅  | ✅  | 🚧  |
+| [YOLO-World](./YOLO-World/) | ✅  | ❌  | ❌  | ❌  | ❌ |
+| [CogVLM && CogAgent](./cogvlm/) | ✅ | ❌ | ❌ | ❌ | ❌ |
+| [InternLM-XComposer2](./internlm_xcomposer2/) | ✅ | ❌ | ✅ | ❌ | ❌ |
 
 
 * ✅: Supported

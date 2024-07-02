@@ -383,7 +383,7 @@ class DEISMultistepScheduler(SchedulerMixin, ConfigMixin):
                 "1.0.0",
                 "Passing `timesteps` is deprecated and has no effect as model output conversion is now handled via an internal counter `self.step_index`",
             )
-
+            
         sigma = self.sigmas[self.step_index]
         alpha_t, sigma_t = self._sigma_to_alpha_sigma_t(sigma)
         if self.config.prediction_type == "epsilon":
@@ -669,6 +669,10 @@ class DEISMultistepScheduler(SchedulerMixin, ConfigMixin):
                 "Number of inference steps is 'None', you need to run 'set_timesteps' after creating the scheduler"
             )
 
+        # NOTE(laixinlu) convert sigmas to the dtype of the model output
+        if self.sigmas.dtype != model_output.dtype:
+            self.sigmas = self.sigmas.cast(model_output.dtype)
+            
         if self.step_index is None:
             self._init_step_index(timestep)
 
@@ -679,6 +683,7 @@ class DEISMultistepScheduler(SchedulerMixin, ConfigMixin):
             (self.step_index == len(self.timesteps) - 2) and self.config.lower_order_final and len(self.timesteps) < 15
         )
 
+            
         model_output = self.convert_model_output(model_output, sample=sample)
         for i in range(self.config.solver_order - 1):
             self.model_outputs[i] = self.model_outputs[i + 1]

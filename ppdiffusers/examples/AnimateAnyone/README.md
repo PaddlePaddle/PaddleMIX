@@ -122,10 +122,11 @@ python -u -m paddle.distributed.launch --gpus "0" scripts/trainer_stage2.py \
 
 ### 4.4 第二阶段微调前后对比
 在第二阶段训练中，利用 [animatediff初始化权重](https://huggingface.co/guoyww/animatediff)对模型组网中的motion_modules进行微调，微调前后生成效果对比如下：
+
 | Static Image | Pose Video | Before Fine-tuning | After Fine-tuning |
-|--------------|------------|---------------------|-------------------|
-| <img src="https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/f6c5d27b-0183-4ae5-ad6b-3e36125cb515" width="512" height="668"> | <img src="https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/abe4931d-81ca-453b-b061-510a48b62b02" width="512" height="668"> | <img src="https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/33ddb6ac-d07c-40a2-9d97-7cba9ebea88d" width="512" height="668"> | <img src="https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/8b4ba74c-5a3f-45c3-be0f-645e0ece6bcd" width="552" height="668"> |
-| <img src="https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/fa0df880-d891-4a99-8272-86405f38a03f" width="512" height="668"> | <img src="https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/015640bf-9309-4a88-b1ff-7e63ab04f0b8" width="512" height="668"> | <img src="https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/86f34d9f-73a8-4a4c-9945-04d1f322d5d3" width="512" height="668"> | <img src="https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/104eb7d1-b9eb-453a-bb0b-27f2fe02f6c6" width="552" height="668"> |
+|--------------|------------|--------------------|-------------------|
+| ![demo](https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/07a5f6cd-db53-4c69-a469-fda9edbff3f3) | ![demo](https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/5442ff20-9aab-4f28-adca-711c7cd46ff9) | ![demo](https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/d1f6942f-2075-4e24-b7e1-645c7a9f2c86) | ![demo](https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/a2470660-3757-474b-b414-117416f1314c) |
+| ![demo](https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/5958967d-57ce-4501-8a15-860879e08541) | ![demo](https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/6e4ca44d-5d62-49a6-ae2f-bf87e0ca29b2) | ![demo](https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/b3644e24-ec5e-43e4-b44d-7d5b4e6ca2c3) | ![demo](https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/dd4aa5d5-6217-49ba-984f-1ceb05ca4495) |
 
 ## 5. 模型推理
 
@@ -136,10 +137,11 @@ python -m scripts.pose2vid --config ./configs/inference/animation.yaml -W 600 -H
 ```
 
 生成效果如下所示：
-| Static Image | Pose Video | Animation Video |
-|--------------|------------|---------------------|
-| <img src="https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/c55a0449-b0f2-4137-9ed0-354bd3c57936" width="512" height="668"> | <img src="https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/f856e8c4-824c-4403-8fb2-6cdf12eacea2" width="512" height="668"> | <img src="https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/23e2e55e-f505-425f-920f-cde7e04bebbe" width="552" height="668"> |
-| <img src="https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/bf3ceacc-ad32-41ea-9f2c-1fb91abb2afe" width="512" height="668"> | <img src="https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/5eec36a8-7ce8-4299-b524-0c45f115bc0c" width="512" height="668"> | <img src="https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/0c7e7088-58f5-476f-8d37-bf5bb768f56c" width="552" height="668"> |
+
+| Static Image | Pose Video | Before Fine-tuning |
+|--------------|------------|--------------------|
+| ![demo](https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/a81e2c42-09c6-4a0b-8f0b-b7df1d77779a) | ![demo](https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/973a6629-f24a-4420-b4af-7653e8ff8e92) | ![demo](https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/ce2e2cd2-8ba2-46dd-bb6b-99726cd80e97) |
+| ![demo](https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/abb8da73-951b-41a1-b922-8095ca84b988) | ![demo](https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/b1d5efa8-76e0-4d4b-a878-4c3625b65b3d) | ![demo](https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/68c1a0ef-6958-4a66-92b6-6d52717354f0)|
 
 ## 5. 参考资料
 

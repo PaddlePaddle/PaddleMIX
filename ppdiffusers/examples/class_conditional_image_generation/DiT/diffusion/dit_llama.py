@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from functools import partial
 from typing import Optional
 
 import paddle
@@ -21,6 +22,7 @@ import paddle.nn.initializer as initializer
 from paddle.distributed import fleet
 from paddle.nn.functional.flash_attention import flash_attention
 from paddle.utils import try_import
+from paddlenlp.transformers.conversion_utils import ConversionMixin
 
 from ppdiffusers.configuration_utils import ConfigMixin
 from ppdiffusers.models.modeling_utils import ModelMixin
@@ -120,7 +122,7 @@ class Attention(nn.Layer):
             model_parallel_size = hcg.get_model_parallel_world_size()
         else:
             model_parallel_size = 1
-        self.n_local_heads = n_heads // model_parallel_size
+        self.n_local_heads = n_heads // model_parallel_size  #
         self.n_local_kv_heads = self.n_kv_heads // model_parallel_size
         self.n_rep = self.n_local_heads // self.n_local_kv_heads
         self.head_dim = dim // n_heads
@@ -144,8 +146,11 @@ class Attention(nn.Layer):
             self.wo = nn.Linear(n_heads * self.head_dim, dim, bias_attr=False)
 
         if qk_norm:
-            self.q_norm = nn.LayerNorm(self.n_local_heads * self.head_dim)
-            self.k_norm = nn.LayerNorm(self.n_local_kv_heads * self.head_dim)
+            self.q_norm = nn.LayerNorm(self.n_local_heads * self.head_dim)  #
+            self.k_norm = nn.LayerNorm(self.n_local_kv_heads * self.head_dim)  #
+            if is_model_parrallel():
+                setattr(self.q_norm.weight, "qk_norm_in_tp", True)
+                setattr(self.k_norm.weight, "qk_norm_in_tp", True)
         else:
             self.q_norm = self.k_norm = nn.Identity()
 
@@ -445,7 +450,7 @@ class ParallelFinalLayer(nn.Layer):
         return x
 
 
-class DiT_Llama(ModelMixin, ConfigMixin):
+class DiT_Llama(ModelMixin, ConfigMixin, ConversionMixin):
     """
     Diffusion model with a Transformer backbone.
     """
@@ -664,3 +669,72 @@ class DiT_Llama(ModelMixin, ConfigMixin):
         hidden_states = self.final_layer(x, adaln_input)
         output = self.unpatchify(hidden_states)
         return output
+
+    @classmethod
+    def _get_tensor_parallel_mappings(
+        cls, config, is_split=True, tensor_parallel_degree=None, tensor_parallel_rank=None
+    ):
+        from paddlenlp.transformers.conversion_utils import split_or_merge_func
+
+        fn = split_or_merge_func(
+            is_split=is_split,
+            tensor_parallel_degree=tensor_parallel_degree
+            if tensor_parallel_degree
+            else max(fleet.get_hybrid_communicate_group().get_model_parallel_world_size(), 1),
+            tensor_parallel_rank=tensor_parallel_rank
+            if tensor_parallel_rank
+            else fleet.get_hybrid_communicate_group().get_model_parallel_rank(),
+            num_attention_heads=config["num_attention_heads"],
+        )
+
+        def get_tensor_parallel_split_mappings(num_layers):
+            final_actions = {}
+
+            base_actions = {}
+            # Column Linear
+            base_actions.update(
+                {
+                    "x_embedder.weight": partial(fn, is_column=True),
+                    "x_embedder.bias": partial(fn, is_column=True),
+                    # 'y_embedder.embedding_table.weight': partial(fn, is_column=True),
+                    "t_embedder.mlp.0.weight": partial(fn, is_column=True),
+                    "t_embedder.mlp.0.bias": partial(fn, is_column=True),
+                    "layers.0.feed_forward.w1.weight": partial(fn, is_column=True),
+                    "layers.0.feed_forward.w3.weight": partial(fn, is_column=True),
+                    "layers.0.attention.wq.weight": partial(fn, is_column=True),
+                    "layers.0.attention.wk.weight": partial(fn, is_column=True),
+                    "layers.0.attention.wv.weight": partial(fn, is_column=True),
+                    "layers.0.adaLN_modulation.1.weight": partial(fn, is_column=True),  #
+                    "layers.0.adaLN_modulation.1.bias": partial(fn, is_column=True),
+                    "final_layer.linear.weight": partial(fn, is_column=True),
+                    "final_layer.linear.bias": partial(fn, is_column=True),
+                    "final_layer.adaLN_modulation.1.weight": partial(fn, is_column=True),  #
+                    "final_layer.adaLN_modulation.1.bias": partial(fn, is_column=True),
+                    "layers.0.attention.q_norm.weight": partial(fn, is_column=True),
+                    "layers.0.attention.q_norm.bias": partial(fn, is_column=True),
+                    "layers.0.attention.k_norm.weight": partial(fn, is_column=True),
+                    "layers.0.attention.k_norm.bias": partial(fn, is_column=True),
+                }
+            )
+
+            # Row Linear
+            base_actions.update(
+                {
+                    "layers.0.feed_forward.w2.weight": partial(fn, is_column=False),
+                    "t_embedder.mlp.2.weight": partial(fn, is_column=False),
+                    # 't_embedder.mlp.2.bias': partial(fn, is_column=True),
+                    "layers.0.attention.wo.weight": partial(fn, is_column=False),
+                }
+            )
+
+            for key, action in base_actions.items():
+                if "layers.0." in key:
+                    for i in range(num_layers):
+                        final_actions[key.replace("layers.0.", f"layers.{i}.")] = action
+                else:
+                    final_actions[key] = action
+
+            return final_actions
+
+        mappings = get_tensor_parallel_split_mappings(config["num_layers"])  # depth
+        return mappings
