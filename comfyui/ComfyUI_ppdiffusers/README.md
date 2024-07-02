@@ -3,7 +3,7 @@
 ## 安装
 ```bash
 git clone https://github.com/PaddlePaddle/PaddleMIX --depth 1
-cd PaddleMIX/comfyui_support/
+cd PaddleMIX/comfyui/
 mv ComfyUI_ppdiffusers/ /path/to/your_comfyui/custom_nodes/
 ```
 
