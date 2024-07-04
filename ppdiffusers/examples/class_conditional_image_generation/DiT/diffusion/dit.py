@@ -29,6 +29,7 @@ from paddle.nn.functional.flash_attention import flash_attention
 from ppdiffusers.configuration_utils import ConfigMixin
 from ppdiffusers.models.modeling_utils import ModelMixin
 
+from .transformer_engine_utils import TransformerEngineHelper
 
 def is_model_parrallel():
     """
@@ -218,6 +219,48 @@ class Attention(nn.Layer):
             x = self.proj_drop(x)
         return x
 
+class MlpWithNVTEBackend(nn.Layer):
+    """MLP as used in Vision Transformer, MLP-Mixer and related networks"""
+
+    def __init__(
+        self,
+        in_features,
+        hidden_features=None,
+        out_features=None,
+        act_layer=nn.GELU,
+        norm_layer=None,
+        bias=True,
+        drop=0.0,
+    ):
+        super().__init__()
+        out_features = out_features or in_features
+        hidden_features = hidden_features or in_features
+
+        te = TransformerEngineHelper.get_te()
+        if is_model_parrallel():
+            self.fc1 = te.Linear(in_features, hidden_features, bias_attr=bias, parallel_mode='column', gather_output=True)
+            self.fc2 = te.Linear(hidden_features, out_features, bias_attr=bias, parallel_mode='column', gather_output=True)
+        else:
+            self.fc1 = te.Linear(in_features, hidden_features, bias_attr=bias)
+            self.fc2 = te.Linear(hidden_features, out_features, bias_attr=bias)
+
+        self.act = act_layer()
+        self.drop1 = nn.Dropout(drop)
+        self.norm = norm_layer(hidden_features) if norm_layer is not None else nn.Identity()
+        self.drop2 = nn.Dropout(drop)
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = self.act(x)
+        with get_rng_state_tracker().rng_state("global_seed"):
+            x = self.drop1(x)
+        x = self.norm(x)
+        x = self.fc2(x)
+        with get_rng_state_tracker().rng_state("global_seed"):
+            x = self.drop2(x)
+        return x
+
+
 
 class ParallelTimestepEmbedder(nn.Layer):
     """
@@ -317,6 +360,45 @@ class ParallelLabelEmbedder(nn.Layer):
         embeddings = self.embedding_table(labels)
         return embeddings
 
+class DiTBlockWithNVTEBackend(nn.Layer):
+    """
+    A DiT block with adaptive layer norm zero (adaLN-Zero) conditioning.
+    """
+
+    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, fused_attn=False, use_fp8=False, **block_kwargs):
+        super().__init__()
+        te = TransformerEngineHelper.get_te()
+        self.use_fp8 = use_fp8
+        self.norm1 = te.LayerNorm(hidden_size, 1e-6, weight_attr=None, bias_attr=None)
+        self.attn = te.MultiHeadAttention(hidden_size, num_heads, attention_dropout=0.0, bias_attr=True, attn_mask_type='padding')
+        self.norm2 = te.LayerNorm(hidden_size, 1e-6, weight_attr=None, bias_attr=None)
+        mlp_hidden_dim = int(hidden_size * mlp_ratio)
+        approx_gelu = lambda: nn.GELU(approximate=True)  # 'tanh'
+        self.mlp = MlpWithNVTEBackend(
+            in_features=hidden_size,
+            hidden_features=mlp_hidden_dim,
+            act_layer=approx_gelu,
+            drop=0,
+        )
+        if is_model_parrallel():
+            self.adaLN_modulation = nn.Sequential(
+                nn.Silu(),
+                te.Linear(hidden_size, 6 * hidden_size, bias_attr=True, parallel_mode='column', gather_output=True)
+            )
+        else:
+            self.adaLN_modulation = nn.Sequential(
+                nn.Silu(),
+                te.Linear(hidden_size, 6 * hidden_size, bias_attr=True),
+            )
+
+    def forward(self, x, c):
+        with TransformerEngineHelper.fp8_autocast(
+            self.use_fp8, TransformerEngineHelper.get_fp8_group()
+        ):
+            shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.adaLN_modulation(c).chunk(6, axis=1)
+            x = x + gate_msa.unsqueeze(1) * self.attn(modulate(self.norm1(x), shift_msa, scale_msa))
+            x = x + gate_mlp.unsqueeze(1) * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp))
+        return x
 
 class DiTBlock(nn.Layer):
     """
@@ -407,6 +489,8 @@ class DiT(ModelMixin, ConfigMixin):
         class_dropout_prob: float = 0.1,
         num_classes: int = 1000,
         learn_sigma: bool = True,
+        transformer_engine_backend: bool = False,
+        use_fp8: bool = False,
     ):
         super().__init__()
         self.sample_size = sample_size
@@ -422,6 +506,8 @@ class DiT(ModelMixin, ConfigMixin):
         self.num_classes = num_classes
         self.learn_sigma = learn_sigma
 
+        self.transformer_engine_backend = transformer_engine_backend
+        self.use_fp8 = use_fp8
         self.gradient_checkpointing = False
         self.fused_attn = True
 
@@ -438,12 +524,21 @@ class DiT(ModelMixin, ConfigMixin):
         # self.add_parameter("pos_embed", self.pos_embed)
 
         # 2. Define transformers blocks
-        self.blocks = nn.LayerList(
-            [
-                DiTBlock(hidden_size, num_attention_heads, mlp_ratio=mlp_ratio, fused_attn=self.fused_attn)
-                for _ in range(num_layers)
-            ]
-        )
+        if (transformer_engine_backend):
+            self.blocks = nn.LayerList(
+                [
+                    DiTBlockWithNVTEBackend(hidden_size, num_attention_heads, mlp_ratio=mlp_ratio,
+                                            fused_attn=self.fused_attn, use_fp8=use_fp8)
+                    for _ in range(num_layers)
+                ]
+            )
+        else:
+            self.blocks = nn.LayerList(
+                [
+                    DiTBlock(hidden_size, num_attention_heads, mlp_ratio=mlp_ratio, fused_attn=self.fused_attn)
+                    for _ in range(num_layers)
+                ]
+            )
 
         # 3. Define output layers
         self.final_layer = ParallelFinalLayer(hidden_size, patch_size, self.out_channels)
@@ -453,10 +548,19 @@ class DiT(ModelMixin, ConfigMixin):
     def initialize_weights(self):
         # Initialize transformer layers:
         def _basic_init(module):
+            if TransformerEngineHelper.is_installed():
+                TE_LINEAR = TransformerEngineHelper.get_te().Linear
+            else:
+                TE_LINEAR = type(None)
             if isinstance(
-                module, (nn.Linear, fleet.meta_parallel.ColumnParallelLinear, fleet.meta_parallel.RowParallelLinear)
+                module, (nn.Linear, fleet.meta_parallel.ColumnParallelLinear, fleet.meta_parallel.RowParallelLinear, TE_LINEAR)
             ):
-                initializer.XavierUniform()(module.weight)
+                if isinstance(module, (TE_LINEAR)):
+                    transpose_weight = paddle.transpose(module.weight, perm=[1,0])
+                    initializer.XavierUniform()(transpose_weight)
+                    module.weight.set_value(paddle.transpose(transpose_weight, perm=[1,0]))
+                else:
+                    initializer.XavierUniform()(module.weight)
                 if module.bias is not None:
                     initializer.Constant(value=0)(module.bias)
 
@@ -523,9 +627,13 @@ class DiT(ModelMixin, ConfigMixin):
         y = self.y_embedder(y)  # (N, D)
         c = t + y  # (N, D)
 
+        recompute = (
+            TransformerEngineHelper.get_te_recompute_func() if self.transformer_engine_backend
+            else paddle.distributed.fleet.utils.recompute)
+
         for i, block in enumerate(self.blocks):
             if self.gradient_checkpointing:
-                x = paddle.distributed.fleet.utils.recompute(block, x, c, use_reentrant=False)
+                x = recompute(block, x, c, use_reentrant=False)
             else:
                 x = block(x, c)  # (N, T, D)
 
