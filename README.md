@@ -91,6 +91,12 @@ pip install -e .
 <p>体验专区: https://aistudio.baidu.com/community/app/1340</p>
 </div>
 
+3. ComfyUI创作工作流
+
+<div align="center">
+<img src="https://github.com/PaddlePaddle/PaddleMIX/assets/35400185/36ba7261-1744-41a4-b1cb-c9e99f6931f2" height = "300",caption='' />
+<p>体验专区: https://aistudio.baidu.com/community/app/106043</p>
+</div>
 
 ## 模型库
 
