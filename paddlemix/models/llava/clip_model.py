@@ -21,7 +21,11 @@ from typing import Any, List, Optional, Tuple, Union
 import paddle
 import paddle.nn.functional as F
 from paddle import nn
-from paddlenlp.transformers.clip.configuration import CLIPConfig, CLIPTextConfig, CLIPVisionConfig
+from paddlenlp.transformers.clip.configuration import (
+    CLIPConfig,
+    CLIPTextConfig,
+    CLIPVisionConfig,
+)
 from paddlenlp.transformers.model_outputs import BaseModelOutputWithPooling, ModelOutput
 from paddlenlp.transformers.model_utils import PretrainedModel
 from paddlenlp.utils.converter import StateDictNameMapping
@@ -1013,7 +1017,12 @@ class CLIPVisionTransformer(nn.Layer):
         target_dtype = self.conv1.weight.dtype
         pixel_values = self.conv1(pixel_values.cast(target_dtype))
 
-        pixel_values = pixel_values.reshape((pixel_values.shape[0], pixel_values.shape[1], -1))
+        # for to_static
+        pixel_values_shape = paddle.to_tensor(pixel_values.shape, dtype="int32")
+
+        pixel_values = pixel_values.reshape(
+            (pixel_values_shape[0], pixel_values_shape[1], pixel_values_shape[2] * pixel_values_shape[3])
+        )
         pixel_values = pixel_values.transpose((0, 2, 1))
         embedding_output = paddle.concat(
             [self.class_embedding.unsqueeze([0, 1]).expand([pixel_values.shape[0], -1, -1]), pixel_values], axis=1
