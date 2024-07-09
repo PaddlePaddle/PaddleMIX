@@ -39,7 +39,7 @@ tar -xzvf OpenSoraData.tar.gz
 ```
 
 ### 3.2 单机多卡训练
-训练脚本基于 paddlenlp.trainer 实现，可通过 `--gpus` 指定训练使用的GPU卡号，在多卡环境上支持开启分组切片技术`--sharding`以降低显存占用。
+训练脚本基于 paddlenlp.trainer 实现，可通过 `--gpus` 指定训练使用的GPU卡号，在多卡环境上支持开启分组切片技术`--sharding`以降低显存占用。在NVIDIA 32G V100的算力条件下，需通过减小模型规模(如将模型层数[self.depth](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/examples/Open-Sora/models/stdit/stdit2.py#L253)减小为1)，以降低显存占用，从而实现训练流程的跑通。
 ```bash
 ppdiffusers_path=PaddleMIX/ppdiffusers
 export PYTHONPATH=$ppdiffusers_path:$PYTHONPATH
@@ -111,7 +111,7 @@ export PYTHONPATH=$ppdiffusers_path:$PYTHONPATH
 python scripts/inference-long.py --num-frames 12 --image-size 240 240 --sample-name video_extend  --prompt 'A car driving on the ocean.{"reference_path": "./assets/videos/d0_proc.mp4","mask_strategy": "0,0,0,-6,6"}'
 
 # video editting
-python scripts/inference-long.py --num-frames 16 --image-size 256 256 --sample-name edit --prompt 'A cyberpunk-style car at New York city.{"reference_path": "./assets/videos/d0_proc.mp4","mask_strategy": "0,0,0,0,16,0.4"}'
+python scripts/inference-long.py --num-frames 7 --image-size 256 256 --sample-name edit --prompt 'A cyberpunk-style car at New York city.{"reference_path": "./assets/videos/d0_proc.mp4","mask_strategy": "0,0,0,0,7,0.4"}'
 ```
 
 
