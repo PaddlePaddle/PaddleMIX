@@ -1,0 +1,3 @@
+paddle
+ppdiffusers
+requests
