@@ -19,7 +19,6 @@ import time
 # isort: split
 import paddle
 import paddle.inference as paddle_infer
-from paddle.base.framework import in_cinn_mode, in_pir_executor_mode
 
 # isort: split
 import numpy as np
@@ -152,9 +151,9 @@ def create_paddle_inference_runtime(
         config.switch_ir_optim(False)
     else:
         config.enable_new_executor()
-        if in_pir_executor_mode():
+        if str(os.environ.get("FLAGS_enable_pir_in_executor")).lower() in ("true", "1"):
             config.enable_new_ir()
-            if in_cinn_mode():
+            if flag = str(os.environ.get("FLAGS_use_cinn")).lower() in ("true", "1"):
                 config.enable_cinn()
 
     if device_id != -1:
