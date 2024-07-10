@@ -106,8 +106,8 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
         self.attention_head_dim = attention_head_dim
         inner_dim = num_attention_heads * attention_head_dim
 
-        conv_cls = paddle.nn.Conv2D if USE_PEFT_BACKEND else LoRACompatibleConv
-        linear_cls = paddle.nn.Linear if USE_PEFT_BACKEND else LoRACompatibleLinear
+        conv_cls = LoRACompatibleConv if USE_PEFT_BACKEND else paddle.nn.Conv2D
+        linear_cls = LoRACompatibleLinear if USE_PEFT_BACKEND else paddle.nn.Linear
 
         # 1. Transformer2DModel can process both standard continuous images of shape `(batch_size, num_channels, width, height)` as well as quantized image embeddings of shape `(batch_size, num_image_vectors)`
         # Define whether input is continuous or discrete depending on configuration
