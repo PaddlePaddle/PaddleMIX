@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 from typing import Callable, Dict, List, Optional, Union
 
 import paddle
@@ -304,7 +305,7 @@ class PaddleInferStableDiffusionPipeline(DiffusionPipeline, PaddleInferDiffusion
 
                 # predict the noise residual
                 noise_pred_unet = self.unet(**unet_inputs)[0]
-                if paddle.core._model_return_data():
+                if str(os.environ.get("FLAGS_model_return_data")).lower() in ("true", "1"):
                     print(f"StableDiffusion infer: step {i+1} , origin output {noise_pred_unet.abs().numpy().mean()} ", flush=True)
 
                 # perform guidance
