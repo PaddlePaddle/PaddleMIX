@@ -137,7 +137,7 @@ cd -
 # test text_to_image
 cd ../../examples/text_to_image
 export MODEL_NAME="runwayml/stable-diffusion-v1-5"
-export DATASET_NAME="lambdalabs/pokemon-blip-captions"
+export DATASET_NAME="lambdalabs/naruto-blip-captions"
 export OUTPUT_DIR="sd-pokemon-model"
 
 python -u train_text_to_image.py \
@@ -226,7 +226,7 @@ python -u -m paddle.distributed.launch --gpus "0,1" train_text_to_image_lora.py 
 # sdxl
 export MODEL_NAME="stabilityai/stable-diffusion-xl-base-1.0"
 export VAE_NAME="madebyollin/sdxl-vae-fp16-fix"
-export DATASET_NAME="lambdalabs/pokemon-blip-captions"
+export DATASET_NAME="lambdalabs/naruto-blip-captions"
 RESOLUTION=768
 # export OUTPUT_DIR="sd-pokemon-model-sdxl"
 
@@ -841,7 +841,7 @@ cd -
 # test kandinsky2_2/text_to_image
 # cd ../../examples/kandinsky2_2/text_to_image
 
-# DATASET_NAME="lambdalabs/pokemon-blip-captions"
+# DATASET_NAME="lambdalabs/naruto-blip-captions"
 # RESOLUTION=512
 
 # OOM
