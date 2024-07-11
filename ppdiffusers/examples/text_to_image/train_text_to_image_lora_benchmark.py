@@ -539,7 +539,7 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
 
 
 DATASET_NAME_MAPPING = {
-    "lambdalabs/pokemon-blip-captions": ("image", "text"),
+    "lambdalabs/naruto-blip-captions": ("image", "text"),
     "pokemon-blip-captions": ("image", "text"),
 }
 
@@ -743,7 +743,7 @@ def main():
     #         PPDIFFUSERS_CACHE,
     #     )
     #     dataset = DatasetDict.load_from_disk(file_path)
-    #     args.dataset_name = "lambdalabs/pokemon-blip-captions"
+    #     args.dataset_name = "lambdalabs/naruto-blip-captions"
     # else:
     #     if args.dataset_name is not None:
     #         # Downloading and loading a dataset from the hub.
