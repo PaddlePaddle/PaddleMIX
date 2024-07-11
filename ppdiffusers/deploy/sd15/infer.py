@@ -153,7 +153,7 @@ def create_paddle_inference_runtime(
         config.enable_new_executor()
         if str(os.environ.get("FLAGS_enable_pir_in_executor")).lower() in ("true", "1"):
             config.enable_new_ir()
-            if flag = str(os.environ.get("FLAGS_use_cinn")).lower() in ("true", "1"):
+            if str(os.environ.get("FLAGS_use_cinn")).lower() in ("true", "1"):
                 config.enable_cinn()
 
     if device_id != -1:
