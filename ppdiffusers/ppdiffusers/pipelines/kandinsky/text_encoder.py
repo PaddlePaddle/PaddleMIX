@@ -94,5 +94,6 @@ class MultilingualCLIP(PretrainedModel):
 
     def forward(self, input_ids, attention_mask):
         embs = self.transformer(input_ids=input_ids, attention_mask=attention_mask)[0]
+        attention_mask = attention_mask.cast(embs.dtype)
         embs2 = (embs * attention_mask.unsqueeze(2)).sum(axis=1) / attention_mask.sum(axis=1)[:, None]
         return self.LinearTransformation(embs2), embs

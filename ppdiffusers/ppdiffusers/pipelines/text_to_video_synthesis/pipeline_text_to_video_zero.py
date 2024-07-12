@@ -237,7 +237,9 @@ def warp_single_latent(latent, reference_flow):
     coords_t0 = F.interpolate(coords_t0, size=(h, w), mode="bilinear")
     coords_t0 = paddle.transpose(coords_t0, (0, 2, 3, 1))
 
-    warped = grid_sample(latent, coords_t0, mode="nearest", padding_mode="reflection")
+    warped = grid_sample(
+        latent.cast("float32").cpu(), coords_t0.cast("float32").cpu(), mode="nearest", padding_mode="reflection"
+    )
     return warped
 
 
