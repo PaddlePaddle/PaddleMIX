@@ -244,7 +244,7 @@ def ppdiffusers_url_download(
             )
 
         logger.info("storing %s in cache at %s", url_to_download, file_path)
-        _chmod_and_move(temp_file.name, file_path)
+        _chmod_and_move(temp_file.name, Path(file_path))
     try:
         os.remove(lock_path)
     except OSError:
@@ -380,7 +380,7 @@ def bos_download(
             )
 
         logger.info("storing %s in cache at %s", url_to_download, blob_path)
-        _chmod_and_move(temp_file.name, blob_path)
+        _chmod_and_move(temp_file.name, Path(blob_path))
     try:
         os.remove(lock_path)
     except OSError:
