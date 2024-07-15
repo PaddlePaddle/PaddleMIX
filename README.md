@@ -160,7 +160,7 @@ pip install -e .
            <li><a href="ppdiffusers/examples/lvdm">LVDM</a></li>
            <li><a href="ppdiffusers/examples/stable_video_diffusion">SVD</a></li>
            <li><a href="ppdiffusers/examples/AnimateAnyone">AnimateAnyone</a></li>
-           <li><a href="ppdiffusers/ppdiffusers/examples/Open-Sora">OpenSora</a></li>
+           <li><a href="ppdiffusers/examples/Open-Sora">OpenSora</a></li>
         </ul>
         </ul>
           <li><b>音频生成</b></li>
