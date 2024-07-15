@@ -157,9 +157,9 @@ pip install -e .
         </ul>
           <li><b>文生视频</b></li>
         <ul>
-           <li><a href="ppdiffusers/ppdiffusers/examples/lvdm">LVDM</a></li>
-           <li><a href="ppdiffusers/ppdiffusers/examples/stable_video_diffusion">SVD</a></li>
-           <li><a href="ppdiffusers/ppdiffusers/examples/AnimateAnyone">AnimateAnyone</a></li>
+           <li><a href="ppdiffusers/examples/lvdm">LVDM</a></li>
+           <li><a href="ppdiffusers/examples/stable_video_diffusion">SVD</a></li>
+           <li><a href="ppdiffusers/examples/AnimateAnyone">AnimateAnyone</a></li>
            <li><a href="ppdiffusers/ppdiffusers/examples/Open-Sora">OpenSora</a></li>
         </ul>
         </ul>
