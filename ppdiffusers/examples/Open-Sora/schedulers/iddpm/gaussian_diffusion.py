@@ -45,6 +45,8 @@ def mean_flat(tensor: paddle.Tensor, mask=None):
         assert tuple(tensor.shape)[2] == tuple(mask.shape)[1]
         tensor = rearrange(tensor, "b c t h w -> b t (c h w)")
         denom = mask.sum(axis=1) * tuple(tensor.shape)[-1]
+        mask = mask.cast(tensor.dtype)
+        denom = denom.cast(tensor.dtype)
         loss = (tensor * mask.unsqueeze(axis=2)).sum(axis=1).sum(axis=1) / denom
         return loss
 
