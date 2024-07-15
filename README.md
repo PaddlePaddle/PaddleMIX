@@ -152,14 +152,15 @@ pip install -e .
             <li><a href="ppdiffusers/examples/t2i-adapter">T2I-Adapter</a></li>
             <li><a href="ppdiffusers/examples/text_to_image_laion400m">LDM</a></li>
             <li><a href="ppdiffusers/ppdiffusers/pipelines/unidiffuser">Unidiffuser</a></li>
+            <li><a href="ppdiffusers/examples/class_conditional_image_generation/DiT">DiT</a></li>
         </ul>
         </ul>
           <li><b>文生视频</b></li>
         <ul>
-           <li><a href="ppdiffusers/ppdiffusers/pipelines/lvdm">LVDM</a></li>
-           <li><a href="ppdiffusers/ppdiffusers/pipelines/stable_video_diffusion">SVD</a></li>
-           <li><a href="ppdiffusers/ppdiffusers/pipelines/AnimateAnyone">AnimateAnyone</a></li>
-           <li><a href="ppdiffusers/ppdiffusers/pipelines/Open-Sora">OpenSora</a></li>
+           <li><a href="ppdiffusers/ppdiffusers/examples/lvdm">LVDM</a></li>
+           <li><a href="ppdiffusers/ppdiffusers/examples/stable_video_diffusion">SVD</a></li>
+           <li><a href="ppdiffusers/ppdiffusers/examples/AnimateAnyone">AnimateAnyone</a></li>
+           <li><a href="ppdiffusers/ppdiffusers/examples/Open-Sora">OpenSora</a></li>
         </ul>
         </ul>
           <li><b>音频生成</b></li>
