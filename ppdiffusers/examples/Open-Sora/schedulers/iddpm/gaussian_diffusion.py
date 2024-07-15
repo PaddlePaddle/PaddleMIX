@@ -449,10 +449,12 @@ class GaussianDiffusion:
             ) + paddle_random * _extract_into_tensor(self.sqrt_one_minus_alphas_cumprod, t, x.shape)
 
             # active noise addition
+            t = t.cast(mask_t.dtype)
             mask_t_equall = (mask_t == t.unsqueeze(1))[:, None, :, None, None]
             x = paddle.where(condition=mask_t_equall, x=x_noise, y=x0)
 
             # create x_mask
+            t = t.cast(mask_t.dtype)
             mask_t_upper = (mask_t > t.unsqueeze(1))[:, None, :, None, None]
             batch_size = x.shape[0]
 
