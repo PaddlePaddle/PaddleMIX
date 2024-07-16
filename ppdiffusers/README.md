@@ -20,6 +20,8 @@
 **PPDiffusers**是一款支持多种模态（如文本图像跨模态、图像、语音）扩散模型（Diffusion Model）训练和推理的国产化工具箱，依托于[**PaddlePaddle**](https://www.paddlepaddle.org.cn/)框架和[**PaddleNLP**](https://github.com/PaddlePaddle/PaddleNLP)自然语言处理开发库。
 
 ## News 📢
+* 🔥 **2024.07.15 发布 0.24.1 版本，新增[Open-Sora](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/Open-Sora)，支持模型训练和推理；全面支持Paddle 3.0。**
+
 * 🔥 **2024.04.17 发布 0.24.0 版本，支持[Sora相关技术](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/sora)，支持[DiT](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/class_conditional_image_generation/DiT)、[SiT](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/class_conditional_image_generation/DiT#exploring-flow-and-diffusion-based-generative-models-with-scalable-interpolant-transformers-sit)、[UViT](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/text_to_image_mscoco_uvit)训练推理，新增[NaViT](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/navit)、[MAGVIT-v2](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/video_tokenizer/magvit2)模型；
 视频生成能力全面升级；
 新增视频生成模型[SVD](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/stable_video_diffusion)，支持模型微调和推理；
