@@ -163,6 +163,9 @@ python paddlemix/tools/supervised_finetune.py paddlemix/config/qwen_vl/sft_argum
 
 # 多卡Qwen-vl SFT启动命令参考
 python -u  -m paddle.distributed.launch --gpus "0,1,2,3" paddlemix/tools/supervised_finetune.py paddlemix/config/qwen_vl/sft_argument.json
+
+# 或者
+sh paddlemix/tools/train.sh paddlemix/config/qwen_vl/sft_argument.json
 ```
 
 **LoRA**
