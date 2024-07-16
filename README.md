@@ -18,6 +18,9 @@
 PaddleMIX是基于飞桨的跨模态大模型开发套件，聚合图像、文本、视频等多种模态，覆盖视觉语言预训练，文生图，文生视频等丰富的跨模态任务。提供开箱即用的开发体验，同时满足开发者灵活定制需求，探索通用人工智能。
 
 ## 最新进展
+**2024.07.15 发布 PPDiffusers v0.24.1**
+* [PPDiffusers](./ppdiffusers/README.md)发布 v0.24.1 版本，支持Open-Sora模型
+
 **2024.04.17 发布 PPDiffusers v0.24.0**
 * [PPDiffusers](./ppdiffusers/README.md)发布 v0.24.0 版本，支持DiT等Sora相关技术，支持SVD等多款视频生成模型
 
@@ -146,13 +149,18 @@ pip install -e .
         <ul>
            <li><a href="ppdiffusers/examples/stable_diffusion">Stable Diffusion</a></li>
             <li><a href="ppdiffusers/examples/controlnet">ControlNet</a></li>
+            <li><a href="ppdiffusers/examples/t2i-adapter">T2I-Adapter</a></li>
             <li><a href="ppdiffusers/examples/text_to_image_laion400m">LDM</a></li>
             <li><a href="ppdiffusers/ppdiffusers/pipelines/unidiffuser">Unidiffuser</a></li>
+            <li><a href="ppdiffusers/examples/class_conditional_image_generation/DiT">DiT</a></li>
         </ul>
         </ul>
           <li><b>文生视频</b></li>
         <ul>
-           <li><a href="ppdiffusers/ppdiffusers/pipelines/lvdm">LVDM</a></li>
+           <li><a href="ppdiffusers/examples/lvdm">LVDM</a></li>
+           <li><a href="ppdiffusers/examples/stable_video_diffusion">SVD</a></li>
+           <li><a href="ppdiffusers/examples/AnimateAnyone">AnimateAnyone</a></li>
+           <li><a href="ppdiffusers/examples/Open-Sora">OpenSora</a></li>
         </ul>
         </ul>
           <li><b>音频生成</b></li>
