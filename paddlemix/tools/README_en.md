@@ -154,16 +154,18 @@ For convenience in testing, we also provide a dataset in the chatml_dataset form
 
 **Full-parameter Fine-tuning: SFT**
 ```bash
-# 单卡Qwen-vl SFT启动命令参考
+# single card 
 python paddlemix/tools/supervised_finetune.py paddlemix/config/qwen_vl/sft_argument.json
 
-# 多卡Qwen-vl SFT启动命令参考
+# multi-card 
 python -u  -m paddle.distributed.launch --gpus "0,1,2,3" paddlemix/tools/supervised_finetune.py paddlemix/config/qwen_vl/sft_argument.json
+
+# or
+sh paddlemix/tools/train.sh paddlemix/config/qwen_vl/sft_argument.json
 ```
 
 **LoRA**
 ```bash
-# 单卡Qwen-vl LoRA启动命令参考
 python  paddlemix/tools/supervised_finetune.py paddlemix/config/qwen_vl/lora_sft_argument.json
 ```
 

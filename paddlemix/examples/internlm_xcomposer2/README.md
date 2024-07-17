@@ -26,8 +26,8 @@
 ## a. 单轮预测
 ```bash
 python paddlemix/examples/internlm_xcomposer2/chat_demo.py \
---model_name_or_path "internlm/internlm-xcomposer2-7b"
---image_path "path/to/image.jpg"
+--model_name_or_path "internlm/internlm-xcomposer2-7b" \
+--image_path "path/to/image.jpg" \
 --text "Please describe this image in detail."
 ```
 可配置参数说明：
