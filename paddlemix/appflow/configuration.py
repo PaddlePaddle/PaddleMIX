@@ -107,6 +107,10 @@ APPLICATIONS = {
                 "task_class": StableDiffusionImg2ImgTask,
                 "task_flag": "image2image_text_guided_generation-Linaqruf/anything-v3.0",
             },
+            "admruul/anything-v3.0": {
+                "task_class": StableDiffusionImg2ImgTask,
+                "task_flag": "image2image_text_guided_generation-admruul/anything-v3.0",
+            },
             "stabilityai/stable-diffusion-xl-refiner-1.0": {
                 "task_class": StableDiffusionXLImg2ImgTask,
                 "task_flag": "image2image_text_guided_generation-stabilityai/stable-diffusion-xl-refiner-1.0",
