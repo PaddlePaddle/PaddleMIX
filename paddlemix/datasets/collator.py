@@ -275,9 +275,39 @@ class LLaVACollator:
 
 
 class InternLMXComposer2Collator:
-    """Collate examples for InternLMXComposer2Collator"""
+    """    
+    Data collator that will dynamically pad the inputs to the longest sequence in the batch.
+    Args:
+        processor (`paddlemix.processors.ProcessorMixin`):
+            The processor used for pre-process the data.
+    """
 
-    def __init__(self, processor, mode="train"):
+    def __init__(self, processor, mode="test"):
+        self.processor = processor
+        self.mode = mode
+
+    def __call__(self, instances):
+
+        instances = [self.processor(query=instance, mode=self.mode) for instance in instances]
+
+        input_tokens, input_text = tuple(
+            [instance[key] for instance in instances] for key in ("input_tokens", "input_text")
+        )
+        batch = dict(
+            input_tokens=input_tokens,
+            input_text=input_text,
+        )
+        if "images" in instances[0].keys():
+            input_images = tuple([instance["images"] for instance in instances])
+            batch["images"] = input_images
+
+        return dict(samples=batch)
+
+
+class InternVL2Collator:
+    """Collate examples for InternVL2Collator"""
+
+    def __init__(self, processor, mode="test"):
         self.processor = processor
         self.mode = mode
 
