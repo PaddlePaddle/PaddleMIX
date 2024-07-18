@@ -82,7 +82,7 @@ python paddlemix/examples/internlm_xcomposer2/chat_demo.py \
 
 训练命令：
 ```bash
-paddlemix/tools/supervised_finetune.py paddlemix/config/internlm_xcomposer2/sft_argument.json
+python paddlemix/tools/supervised_finetune.py paddlemix/config/internlm_xcomposer2/sft_argument.json
 ```
 
 参数配置示例：
