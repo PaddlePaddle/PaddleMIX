@@ -16,7 +16,10 @@ from typing import TYPE_CHECKING
 
 from ...utils import PPDIFFUSERS_SLOW_IMPORT, _LazyModule
 
-_import_structure = {"pipeline_dit": ["DiTPipeline"]}
+_import_structure = {
+    "pipeline_dit": ["DiTPipeline"],
+    "pipeline_dit_inference": ["DiTInferencePipeline"]
+}
 
 if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
     from .pipeline_dit import DiTPipeline

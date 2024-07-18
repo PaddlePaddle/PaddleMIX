@@ -54,6 +54,7 @@ else:
     _import_structure["ddim"] = ["DDIMPipeline"]
     _import_structure["ddpm"] = ["DDPMPipeline"]
     _import_structure["dit"] = ["DiTPipeline"]
+    _import_structure["dit"].extend(["DiTInferencePipeline"])
     _import_structure["latent_diffusion"].extend(["LDMSuperResolutionPipeline"])
     _import_structure["latent_diffusion"].extend(["LDMTextToImageUViTPipeline"])
     _import_structure["latent_diffusion"].extend(["LDMTextToImageLargeDiTPipeline"])

@@ -22,13 +22,14 @@ from typing import Dict, List, Optional, Tuple, Union
 
 import paddle
 
-from ...models import AutoencoderKL, Transformer2DModel
+
+from ...models.paddleinfer_runtime import PaddleInferRuntimeModel
 from ...schedulers import KarrasDiffusionSchedulers
 from ...utils.paddle_utils import randn_tensor
 from ..pipeline_utils import DiffusionPipeline, ImagePipelineOutput
 
 
-class DiTPipeline(DiffusionPipeline):
+class DiTInferencePipeline(DiffusionPipeline):
     r"""
     Pipeline for image generation based on a Transformer backbone instead of a UNet.
 
@@ -48,21 +49,33 @@ class DiTPipeline(DiffusionPipeline):
 
     def __init__(
         self,
-        transformer: Transformer2DModel,
-        vae: AutoencoderKL,
+        transformer: PaddleInferRuntimeModel,
+        vae_decoder: PaddleInferRuntimeModel,
         scheduler: KarrasDiffusionSchedulers,
         id2label: Optional[Dict[int, str]] = None,
+        transformer_config: Optional[Dict] = None,
+        vae_config: Optional[Dict] = None,
+        infer_dtype="float16",
     ):
         super().__init__()
-        self.register_modules(transformer=transformer, vae=vae, scheduler=scheduler)
-        self.id2label = id2label
+        self.register_modules(transformer=transformer, vae=vae_decoder, scheduler=scheduler)
         # create a imagenet -> id dictionary for easier use
         self.labels = {}
+        self.infer_dtype = infer_dtype
         if id2label is not None:
             for key, value in id2label.items():
                 for label in value.split(","):
                     self.labels[label.lstrip().rstrip()] = int(key)
             self.labels = dict(sorted(self.labels.items()))
+
+
+
+    def set_labels(self, id2label: Dict[int, str]):
+        self.labels = {}
+        for key, value in id2label.items():
+            for label in value.split(","):
+                self.labels[label.lstrip().rstrip()] = int(key)
+        self.labels = dict(sorted(self.labels.items()))
 
     def get_label_ids(self, label: Union[str, List[str]]) -> List[int]:
         r"""
@@ -147,17 +160,17 @@ class DiTPipeline(DiffusionPipeline):
                 returned where the first element is a list with the generated images
         """
 
+
         batch_size = len(class_labels)
-        latent_size = self.transformer.config.sample_size
-        latent_channels = self.transformer.config.in_channels
+        latent_size = self.transformer_config["sample_size"]
+        latent_channels = self.transformer_config["in_channels"]
 
         latents = randn_tensor(
             shape=(batch_size, latent_channels, latent_size, latent_size),
             generator=generator,
-            dtype=self.transformer.dtype,
+            dtype=self.infer_dtype,
         )
         latent_model_input = paddle.concat([latents] * 2) if guidance_scale > 1 else latents
-
         class_labels = paddle.to_tensor(class_labels).reshape(
             [
                 -1,
@@ -168,61 +181,62 @@ class DiTPipeline(DiffusionPipeline):
 
         # set step values
         self.scheduler.set_timesteps(num_inference_steps)
-        for t in self.progress_bar(self.scheduler.timesteps):
-            if guidance_scale > 1:
-                half = latent_model_input[: len(latent_model_input) // 2]
-                latent_model_input = paddle.concat([half, half], axis=0)
-            latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
+        with self.progress_bar(total=num_inference_steps) as progress_bar:
+            for i, t in enumerate(self.scheduler.timesteps):
+            # for t in self.progress_bar(self.scheduler.timesteps):
+                if guidance_scale > 1:
+                    half = latent_model_input[: len(latent_model_input) // 2]
+                    latent_model_input = paddle.concat([half, half], axis=0)
+                latent_model_input = self.scheduler.scale_model_input(latent_model_input, t-1)
 
-            timesteps = t
+                timesteps = t
 
-            if not paddle.is_tensor(timesteps):
-                if isinstance(timesteps, float):
-                    dtype = paddle.float32
-                else:
-                    dtype = paddle.int64
-                timesteps = paddle.to_tensor([timesteps], dtype=dtype)
-            elif len(timesteps.shape) == 0:
-                timesteps = timesteps[None]
-            # broadcast to batch dimension in a way that's compatible with ONNX/Core ML
-            timesteps = timesteps.expand(
-                [
-                    latent_model_input.shape[0],
-                ]
-            )
-            # predict noise model_output
-            noise_pred = self.transformer(
-                latent_model_input, timestep=timesteps, class_labels=class_labels_input
-            ).sample
-
-            # perform guidance
-            if guidance_scale > 1:
-                eps, rest = noise_pred[:, :latent_channels], noise_pred[:, latent_channels:]
-                cond_eps, uncond_eps = paddle.chunk(eps, 2, axis=0)
-
-                half_eps = uncond_eps + guidance_scale * (cond_eps - uncond_eps)
-                eps = paddle.concat([half_eps, half_eps], axis=0)
-
-                noise_pred = paddle.concat([eps, rest], axis=1)
-
-            # learned sigma
-            if self.transformer.config.out_channels // 2 == latent_channels:
-                model_output, _ = paddle.split(
-                    noise_pred, [latent_channels, noise_pred.shape[1] - latent_channels], axis=1
+                if not paddle.is_tensor(timesteps):
+                    if isinstance(timesteps, float):
+                        dtype = paddle.float32
+                    else:
+                        dtype = paddle.int64
+                    timesteps = paddle.to_tensor([timesteps], dtype=dtype)
+                elif len(timesteps.shape) == 0:
+                    timesteps = timesteps[None]
+                # broadcast to batch dimension in a way that's compatible with ONNX/Core ML
+                timesteps = timesteps.expand(
+                    [
+                        latent_model_input.shape[0],
+                    ]
                 )
-            else:
-                model_output = noise_pred
+                # predict noise model_output
 
-            # compute previous image: x_t -> x_t-1
-            latent_model_input = self.scheduler.step(model_output, t, latent_model_input).prev_sample
+                noise_pred = self.transformer(hidden_states=latent_model_input, time_step=timesteps, class_labels=class_labels_input)[0]
+                # perform guidance
+                if guidance_scale > 1:
+                    eps, rest = noise_pred[:, :latent_channels], noise_pred[:, latent_channels:]
+                    cond_eps, uncond_eps = paddle.chunk(eps, 2, axis=0)
+
+                    half_eps = uncond_eps + guidance_scale * (cond_eps - uncond_eps)
+                    eps = paddle.concat([half_eps, half_eps], axis=0)
+
+                    noise_pred = paddle.concat([eps, rest], axis=1)
+
+                # learned sigma
+                if self.transformer_config["out_channels"] // 2 == latent_channels:
+                    model_output, _ = paddle.split(
+                        noise_pred, [latent_channels, noise_pred.shape[1] - latent_channels], axis=1
+                    )
+                else:
+                    model_output = noise_pred
+
+                # compute previous image: x_t -> x_t-1
+                # latent_model_input = self.scheduler.step(model_output, t, latent_model_input).prev_sample
+                latent_model_input = self.scheduler.step(model_output, i, t, latent_model_input).prev_sample
+                progress_bar.update()
 
         if guidance_scale > 1:
             latents, _ = latent_model_input.chunk(2, axis=0)
         else:
             latents = latent_model_input
-
-        latents = 1 / self.vae.config.scaling_factor * latents
-        samples = self.vae.decode(latents).sample
+        latents = 1 / self.vae_config["scaling_factor"] * latents
+        samples = self.vae(latent_sample=latents)[0]
 
         samples = (samples / 2 + 0.5).clip(0, 1)
 

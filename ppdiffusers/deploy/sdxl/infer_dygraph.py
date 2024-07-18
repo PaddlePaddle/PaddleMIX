@@ -438,6 +438,7 @@ def instruct_pix2pix(args):
 
 
 if __name__ == "__main__":
+    # paddle.set_device("gpu:7")
     args = parse_arguments()
     if args.task == "text2img":
         text2img(args)
