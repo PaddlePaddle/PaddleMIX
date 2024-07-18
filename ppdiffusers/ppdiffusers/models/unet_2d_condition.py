@@ -629,7 +629,21 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
             self.position_net = PositionNet(
                 positive_len=positive_len, out_dim=cross_attention_dim, feature_type=feature_type
             )
-        #del self.down_blocks
+        
+        # del self.down_blocks
+        # del self.mid_block
+        # del self.up_blocks
+
+
+        # self.run_down_mid_up_blocks = paddle.jit.to_static(self.run_down_mid_up_blocks, 
+        #                               backend='paddle_inference', 
+        #                               cache_static_model=True, 
+        #                               precision_mode="float32", 
+        #                               switch_ir_optim=True,
+        #                               with_trt=True,
+        #                               trt_precision_mode = "float16",
+        #                               trt_use_static = True,
+        #                               switch_ir_debug = False)
 
     @property
     def attn_processors(self) -> Dict[str, AttentionProcessor]:
@@ -928,11 +942,15 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
 
         return UNet2DConditionOutput(sample=sample)
 
-    @paddle.incubate.layers.inference(cache_static_model=False, 
-                                      with_trt=True,
+    @paddle.jit.paddle_inference_decorator(save_model_dir="/root/.cache/haha",
+                                      cache_static_model=False, 
+                                      precision_mode="float32", 
                                       switch_ir_optim=True,
-                                      precision_mode="float16", 
-                                      switch_ir_debug=False)
+                                      with_trt=True,
+                                      trt_precision_mode = "float16",
+                                      trt_use_static = True,
+                                      collect_shape = False,
+                                      switch_ir_debug = False)
     def run_down_mid_up_blocks(self, sample, encoder_hidden_states, timestep, timestep_cond,
                                attention_mask,
                                encoder_attention_mask,
