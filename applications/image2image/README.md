@@ -1,4 +1,4 @@
-### 文本引导的图像放大（Text-Guided Image Upscaling)
+### 文本引导的图像放大（Text-Guided Image Upscaling
 
 ```python
 from paddlemix.appflow import Appflow
@@ -75,7 +75,7 @@ prompt = "Kurisu Makise, looking at viewer, long hair, standing, 1girl, hair orn
 negative_prompt = "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry"
 
 
-app = Appflow(app='image2image_text_guided_generation',models=['Linaqruf/anything-v3.0'])
+app = Appflow(app='image2image_text_guided_generation',models=['admruul/anything-v3.0'])
 image = app(prompt=prompt,negative_prompt=negative_prompt,image=image)['result']
 
 image.save("image_Kurisu_img2img.png")

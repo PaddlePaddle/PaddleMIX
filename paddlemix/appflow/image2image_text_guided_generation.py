@@ -40,7 +40,7 @@ class StableDiffusionImg2ImgTask(AppTask):
         """
 
         # build model
-        model_instance = StableDiffusionImg2ImgPipeline.from_pretrained(model, safety_checker=None)
+        model_instance = StableDiffusionImg2ImgPipeline.from_pretrained(model, safety_checker=None,from_hf_hub=True, from_diffusers=True)
 
         self._model = model_instance
 
