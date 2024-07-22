@@ -28,11 +28,11 @@ class SCHEME(Enum):
 
 核心类MMDeteset，为存储，查看，转换，生成等操作的基本对象。支持基本的运算（切片，加法，遍历等操作）。支持json数据源。内置map，filter函数，用于高效处理数据，支持多进程和多线程并发功能。支持链式调用，方便组合多种原子操作以实现复杂的功能。通过以map函数为接口实现对数据集每个元素的处理，通过register注册机制可灵活新增作用于整个数据集的通用操作功能。
 ```
-'items',
-'schema',
 'from_auto',
 'from_json',
 'export_json',
+'items',
+'schema',
 'map',
 'filter',
 'shuffle'
@@ -75,14 +75,6 @@ import paddlemix.datacopilot.ops as ops
 dataset = MMDataset.from_json('./path/to/your/json/file')
 print(len(dataset))
 
-def add_path(url: str) -> str:
-    # logic
-    return newurl
-
-dataset = dataset.map(
-    functools.partial(ops.update_image_url, func=add_path, schema=SCHEMA.MM),
-    max_workers=64)
-
 dataset.export_json('/path/to/your/output/file.json')
 ```
 
@@ -103,8 +95,7 @@ dataset = dataset.map(augment_prompt, max_workers=8, progress=True)
 dataset = dataset.map(update_url).map(augment_prompt)
 
 # filter
-dataset = dataset.filter(is_wanted).
-# dataset = dataset.map(another_is_wanted).nonempty()
+dataset = dataset.filter(is_wanted).nonempty()
 ```
 
 3. LLaVa-SFT训练  

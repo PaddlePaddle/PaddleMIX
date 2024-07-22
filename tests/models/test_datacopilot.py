@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import pytest
 
 from paddlemix.datacopilot.core import MMDataset, SCHEMA, is_valid_schema
@@ -133,6 +134,20 @@ def test_h5(dataset: MMDataset):
 
         for i in range(len(dataset)):
             assert dataset[i] == newdataset[i], ''
+
+
+def test_op(dataset: MMDataset):
+
+    def update_image_path(item):
+        if item:
+            item['image'] = os.path.join('/root', item['image'])
+            return item
+        else:
+            return None
+            
+    newdataset = dataset.map(update_image_path, ).nonempty()
+    assert len(newdataset) == len(dataset), ''
+
 
 
 if __name__ == '__main__':
