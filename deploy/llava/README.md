@@ -35,10 +35,21 @@ python setup_cuda.py install
 
 ```bash
 #!/bin/bash
-
 python deploy/llava/export_model.py \
     --model_name_or_path "paddlemix/llava/llava-v1.5-7b" \
     --save_path "./llava_static" \
+    --encode_image \
+    --fp16
+```
+
+* 在`PaddleMIX`目录下，执行转换脚本，得到语言模型部分静态图
+
+```bash
+#!/bin/bash
+python deploy/llava/export_model.py \
+    --model_name_or_path "paddlemix/llava/llava-v1.5-7b" \
+    --save_path "./llava_static" \
+    --encode_text \
     --fp16
 ```
 
