@@ -91,14 +91,14 @@ def is_wanted(item: T) -> bool: ...
 dataset = dataset.map(update_url, max_workers=8, progress=True)
 dataset = dataset.map(augment_prompt, max_workers=8, progress=True)
 
-# chain
+# op chain
 dataset = dataset.map(update_url).map(augment_prompt)
 
 # filter
 dataset = dataset.filter(is_wanted).nonempty()
 ```
 
-3. LLaVa-SFT训练  
+3. LLaVA-SFT训练  
 数据准备和训练流程参考项目[pp_cap_instruct](https://aistudio.baidu.com/projectdetail/7917712)
 
 
