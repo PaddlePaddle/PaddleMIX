@@ -428,11 +428,14 @@ class TransformerBlock(nn.Layer):
         self.attention_norm = nn.LayerNorm(dim, epsilon=norm_eps, bias_attr=False)
         self.ffn_norm = nn.LayerNorm(dim, epsilon=norm_eps, bias_attr=False)
 
-        self.adaLN_modulation = nn.Linear(min(dim, 1024), 6 * dim)
+        self.adaLN_modulation = nn.Sequential(
+            nn.Silu(),
+            nn.Linear(min(dim, 1024), 6 * dim),
+        )
         self.norm_eps = norm_eps
         self.callZKK = callZKK
 
-    def forward(self, x, freqs_cis, adaln_silu_input=None):
+    def forward(self, x, freqs_cis, adaln_input=None):
         """
         Perform a forward pass through the TransformerBlock.
 
@@ -447,8 +450,8 @@ class TransformerBlock(nn.Layer):
                 feedforward layers.
 
         """
-        if adaln_silu_input is not None:
-            shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.adaLN_modulation(adaln_silu_input).chunk(
+        if adaln_input is not None:
+            shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.adaLN_modulation(adaln_input).chunk(
                 6, axis=1
             )
             if not self.callZKK:
@@ -530,7 +533,6 @@ class DiTLLaMA2DModel(ModelMixin, ConfigMixin):
         self.t_embedder = TimestepEmbedder(min(dim, 1024))
         self.y_embedder = LabelEmbedding(num_classes, min(dim, 1024), class_dropout_prob)
 
-        self.adaln_silu = nn.Silu()
         self.callZKK = True if os.getenv('callZKK') else False
         # 2. Define transformers blocks
         self.layers = nn.LayerList(
@@ -552,7 +554,7 @@ class DiTLLaMA2DModel(ModelMixin, ConfigMixin):
             ]
         )
         
-        del self.layers
+        # del self.layers
 
         # 3. Define output layers
         self.final_layer = FinalLayer(dim, patch_size, self.out_channels)
@@ -624,17 +626,17 @@ class DiTLLaMA2DModel(ModelMixin, ConfigMixin):
         return freqs_cis
 
     @paddle.jit.to_static(backend="inference", with_trt=False,
-                                      cache_static_model=True,
+                                      cache_static_model=False,
                                       collect_shape=False)
-    def transformer_blocks(self, x, adaln_silu_out):
+    def transformer_blocks(self, x, adaln_input):
         for i, layer in enumerate(self.layers):
             if self.gradient_checkpointing and False:
-                x = paddle.distributed.fleet.utils.recompute(layer, x, self.freqs_cis[: x.shape[1]], adaln_silu_out)
+                x = paddle.distributed.fleet.utils.recompute(layer, x, self.freqs_cis[: x.shape[1]], adaln_input)
             else:
                 x = layer(
                     x,
                     self.freqs_cis[: x.shape[1]],
-                    adaln_silu_out,
+                    adaln_input,
                 )
         return x
 
@@ -661,20 +663,20 @@ class DiTLLaMA2DModel(ModelMixin, ConfigMixin):
         t = self.t_embedder(timestep)
         y = self.y_embedder(class_labels)
         adaln_input = t + y
-        adaln_silu_out = self.adaln_silu(adaln_input)
+
         # 2. Blocks
         if not self.callZKK:
             for i, layer in enumerate(self.layers):
                 if self.gradient_checkpointing:
-                    x = paddle.distributed.fleet.utils.recompute(layer, x, self.freqs_cis[: x.shape[1]], adaln_silu_out)
+                    x = paddle.distributed.fleet.utils.recompute(layer, x, self.freqs_cis[: x.shape[1]], adaln_input)
                 else:
                     x = layer(
                         x,
                         self.freqs_cis[: x.shape[1]],
-                        adaln_silu_out,
+                        adaln_input,
                     )
         else:
-            x = self.transformer_blocks(x, adaln_silu_out)
+            x = self.transformer_blocks(x, adaln_input)
         
         # 3. Output
         hidden_states = self.final_layer(x, adaln_input)
