@@ -981,7 +981,7 @@ class XFormersAttnAddedKVProcessor:
 
         return hidden_states
 
-# kai: this
+
 class XFormersAttnProcessor:
     r"""
     Processor for implementing memory efficient attention using xFormers.

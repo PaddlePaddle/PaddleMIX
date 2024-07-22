@@ -168,7 +168,6 @@ def main(args):
         ),
     )
     pipe.set_progress_bar_config(disable=False)
-    breakpoint()
     pipe.change_scheduler(args.scheduler)
     parse_prompt_type = args.parse_prompt_type
 
