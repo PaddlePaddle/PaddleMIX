@@ -45,7 +45,7 @@ class AdaLayerNorm(nn.Layer):
         x = self.norm(x) * (1 + scale) + shift
         return x
 
-
+# this
 class AdaLayerNormZero(nn.Layer):
     r"""
     Norm layer adaptive layer norm zero (adaLN-Zero).

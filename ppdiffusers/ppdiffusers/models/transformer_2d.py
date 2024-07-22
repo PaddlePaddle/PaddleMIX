@@ -239,7 +239,7 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
         # 5. PixArt-Alpha blocks.
         self.adaln_single = None
         self.use_additional_conditions = False
-        if norm_type == "ada_norm_single":
+        if norm_type == "ada_norm_single":                  # kai: ada_norm_zero
             self.use_additional_conditions = self.config.sample_size == 128
             # TODO(Sayak, PVP) clean this, for now we use sample size to determine whether to use
             # additional conditions until we find better name
@@ -251,9 +251,34 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
 
         self.gradient_checkpointing = False
 
+        # del self.transformer_blocks
+
     def _set_gradient_checkpointing(self, module, value=False):
         if hasattr(module, "gradient_checkpointing"):
             module.gradient_checkpointing = value
+
+    @paddle.jit.to_static(backend="inference", with_trt=False,
+                                      cache_static_model=False,
+                                      collect_shape=False)
+    def deco_transformer_blocks(self, hidden_states,
+                    attention_mask,
+                    encoder_hidden_states,
+                    encoder_attention_mask,
+                    timestep,
+                    cross_attention_kwargs,
+                    class_labels):
+        for block in self.transformer_blocks:
+            hidden_states = block(
+                hidden_states,
+                attention_mask=attention_mask,
+                encoder_hidden_states=encoder_hidden_states,
+                encoder_attention_mask=encoder_attention_mask,
+                timestep=timestep,
+                cross_attention_kwargs=cross_attention_kwargs,
+                class_labels=class_labels,
+            )
+        return hidden_states
+
 
     def forward(
         self,
@@ -385,40 +410,48 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
             encoder_hidden_states = self.caption_projection(encoder_hidden_states)
             encoder_hidden_states = encoder_hidden_states.reshape([batch_size, -1, hidden_states.shape[-1]])
 
-        for block in self.transformer_blocks:
-            if self.gradient_checkpointing and not hidden_states.stop_gradient and not use_old_recompute():
-
-                def create_custom_forward(module, return_dict=None):
-                    def custom_forward(*inputs):
-                        if return_dict is not None:
-                            return module(*inputs, return_dict=return_dict)
-                        else:
-                            return module(*inputs)
-
-                    return custom_forward
-
-                ckpt_kwargs = {} if recompute_use_reentrant() else {"use_reentrant": False}
-                hidden_states = recompute(
-                    create_custom_forward(block),
-                    hidden_states,
-                    attention_mask,
-                    encoder_hidden_states,
-                    encoder_attention_mask,
-                    timestep,
-                    cross_attention_kwargs,
-                    class_labels,
-                    **ckpt_kwargs,
-                )
-            else:
-                hidden_states = block(
-                    hidden_states,
+        hidden_states = self.deco_transformer_blocks(hidden_states,
                     attention_mask=attention_mask,
                     encoder_hidden_states=encoder_hidden_states,
                     encoder_attention_mask=encoder_attention_mask,
                     timestep=timestep,
                     cross_attention_kwargs=cross_attention_kwargs,
-                    class_labels=class_labels,
-                )
+                    class_labels=class_labels)
+        r"""
+        # for block in self.transformer_blocks:
+        #     if self.gradient_checkpointing and not hidden_states.stop_gradient and not use_old_recompute():
+        #         def create_custom_forward(module, return_dict=None):
+        #             def custom_forward(*inputs):
+        #                 if return_dict is not None:
+        #                     return module(*inputs, return_dict=return_dict)
+        #                 else:
+        #                     return module(*inputs)
+
+        #             return custom_forward
+
+        #         ckpt_kwargs = {} if recompute_use_reentrant() else {"use_reentrant": False}
+        #         hidden_states = recompute(
+        #             create_custom_forward(block),
+        #             hidden_states,
+        #             attention_mask,
+        #             encoder_hidden_states,
+        #             encoder_attention_mask,
+        #             timestep,
+        #             cross_attention_kwargs,
+        #             class_labels,
+        #             **ckpt_kwargs,
+        #         )
+        #     else:
+        #         hidden_states = block(
+        #             hidden_states,
+        #             attention_mask=attention_mask,
+        #             encoder_hidden_states=encoder_hidden_states,
+        #             encoder_attention_mask=encoder_attention_mask,
+        #             timestep=timestep,
+        #             cross_attention_kwargs=cross_attention_kwargs,
+        #             class_labels=class_labels,
+        #         )
+        """
 
         # 3. Output
         if self.is_input_continuous:
@@ -482,3 +515,9 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
             return (output,)
 
         return Transformer2DModelOutput(sample=output)
+
+
+    @classmethod
+    def custom_modify_weight(cls, state_dict):
+        print("state_dict", state_dict.keys())
+        exit()

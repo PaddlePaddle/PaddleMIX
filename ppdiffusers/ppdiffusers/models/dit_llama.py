@@ -321,9 +321,6 @@ class FeedForward(nn.Layer):
                            quant_round_type=0,
                            quant_max_bound=0,
                            quant_min_bound=0):
-        origin_batch_size = ffn1_out.shape[0]
-        origin_seq_len = ffn1_out.shape[1]
-        ffn1_out = ffn1_out.reshape([origin_batch_size*origin_seq_len, ffn1_out.shape[-1]])
         if in_dynamic_mode():
             out = paddle._C_ops.fused_bias_act(
                 ffn1_out,
@@ -338,7 +335,7 @@ class FeedForward(nn.Layer):
                 quant_max_bound,
                 quant_min_bound
             )
-            return out.reshape([origin_batch_size, origin_seq_len, out.shape[-1]])
+            return out
         
         helper = LayerHelper("fused_bias_act")
         out = helper.create_variable_for_type_inference(dtype=ffn1_out.dtype)
@@ -358,7 +355,7 @@ class FeedForward(nn.Layer):
             outputs={"out": out},
             attrs=attrs,
         )
-        return out.reshape([origin_batch_size, origin_seq_len, out.shape[-1]])
+        return out
 
     def forward(self, x):
         if not self.callZKK:
@@ -557,7 +554,7 @@ class DiTLLaMA2DModel(ModelMixin, ConfigMixin):
             ]
         )
         
-        del self.layers
+        # del self.layers
 
         # 3. Define output layers
         self.final_layer = FinalLayer(dim, patch_size, self.out_channels)
@@ -628,8 +625,8 @@ class DiTLLaMA2DModel(ModelMixin, ConfigMixin):
         )
         return freqs_cis
 
-    @paddle.incubate.layers.inference(with_trt=False,
-                                      cache_static_model=True,
+    @paddle.jit.to_static(backend="inference", with_trt=False,
+                                      cache_static_model=False,
                                       collect_shape=False)
     def transformer_blocks(self, x, adaln_input):
         for i, layer in enumerate(self.layers):

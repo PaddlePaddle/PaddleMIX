@@ -11,20 +11,20 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "6"
 import paddle
 from paddlenlp.trainer import set_seed
 
 from ppdiffusers import DDIMScheduler, DiTPipeline
 
-dtype = paddle.float32
+dtype = paddle.float16
 pipe = DiTPipeline.from_pretrained("facebook/DiT-XL-2-256", paddle_dtype=dtype)
 pipe.scheduler = DDIMScheduler.from_config(pipe.scheduler.config)
 set_seed(42)
 
 words = ["golden retriever"]  # class_ids [207]
 class_ids = pipe.get_label_ids(words)
-
 
 image = pipe(class_labels=class_ids, num_inference_steps=25).images[0]
 image.save("class_conditional_image_generation-dit-result.png")

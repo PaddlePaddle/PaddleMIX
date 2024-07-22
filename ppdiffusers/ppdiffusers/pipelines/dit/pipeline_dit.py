@@ -27,6 +27,7 @@ from ...schedulers import KarrasDiffusionSchedulers
 from ...utils.paddle_utils import randn_tensor
 from ..pipeline_utils import DiffusionPipeline, ImagePipelineOutput
 
+import datetime
 
 class DiTPipeline(DiffusionPipeline):
     r"""
@@ -88,6 +89,18 @@ class DiTPipeline(DiffusionPipeline):
                 )
 
         return [self.labels[l] for l in label]
+
+    def warm_up_transformer(self, latent_model_input, class_labels_input):
+        timesteps = 0
+        half = latent_model_input[: len(latent_model_input) // 2]
+        latent_model_input = paddle.concat([half, half], axis=0)
+        latent_model_input = self.scheduler.scale_model_input(latent_model_input, timesteps)
+
+        timesteps = paddle.to_tensor([timesteps], dtype=paddle.int64)
+        timesteps = timesteps.expand([latent_model_input.shape[0],])
+        self.transformer(
+            latent_model_input, timestep=timesteps, class_labels=class_labels_input
+        )
 
     @paddle.no_grad()
     def __call__(
@@ -168,6 +181,12 @@ class DiTPipeline(DiffusionPipeline):
 
         # set step values
         self.scheduler.set_timesteps(num_inference_steps)
+
+        # self.warm_up_transformer(latent_model_input, class_labels_input)
+        # print("\n--------------------- warm up end\n")
+        # paddle.device.cuda.synchronize(0)
+        # starttime = datetime.datetime.now()
+
         for t in self.progress_bar(self.scheduler.timesteps):
             if guidance_scale > 1:
                 half = latent_model_input[: len(latent_model_input) // 2]
@@ -215,6 +234,15 @@ class DiTPipeline(DiffusionPipeline):
 
             # compute previous image: x_t -> x_t-1
             latent_model_input = self.scheduler.step(model_output, t, latent_model_input).prev_sample
+
+        # paddle.device.cuda.synchronize(0)
+        # endtime = datetime.datetime.now()
+        # duringtime = endtime-starttime
+        # time_ms = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
+        # msg = "total_time_cost: " + str(time_ms) + "ms\n\n"
+        # print(msg)
+        # with open("/tyk/PaddleMIX/ppdiffusers/examples/inference/kai/res/time_719.txt", "a") as time_file:
+        #     time_file.write(msg)
 
         if guidance_scale > 1:
             latents, _ = latent_model_input.chunk(2, axis=0)

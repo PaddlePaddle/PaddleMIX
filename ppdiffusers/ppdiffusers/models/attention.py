@@ -24,6 +24,7 @@ from .embeddings import SinusoidalPositionalEmbedding
 from .lora import LoRACompatibleLinear
 from .normalization import AdaLayerNorm, AdaLayerNormZero
 
+from paddle.incubate.tt import adaptive_layer_norm, rms_norm
 
 def _chunked_feed_forward(
     ff: nn.Layer, hidden_states: paddle.Tensor, chunk_dim: int, chunk_size: int, lora_scale: Optional[float] = None
@@ -151,6 +152,8 @@ class BasicTransformerBlock(nn.Layer):
     ):
         super().__init__()
         self.only_cross_attention = only_cross_attention
+
+        self.norm_eps = norm_eps
 
         self.use_ada_layer_norm_zero = (num_embeds_ada_norm is not None) and norm_type == "ada_norm_zero"
         self.use_ada_layer_norm = (num_embeds_ada_norm is not None) and norm_type == "ada_norm"
@@ -337,12 +340,17 @@ class BasicTransformerBlock(nn.Layer):
             )
             hidden_states = attn_output + hidden_states
 
-        # 4. Feed-forward
-        if not self.use_ada_layer_norm_single:
-            norm_hidden_states = self.norm3(hidden_states)
+        # 4. Feed-forwards
+        # hidden_states_kai = paddle.clone(hidden_states)
 
-        if self.use_ada_layer_norm_zero:
-            norm_hidden_states = norm_hidden_states * (1 + scale_mlp[:, None]) + shift_mlp[:, None]
+        # if not self.use_ada_layer_norm_single:
+        #     norm_hidden_states = self.norm3(hidden_states)
+
+        # if self.use_ada_layer_norm_zero:
+        #     norm_hidden_states = norm_hidden_states * (1 + scale_mlp[:, None]) + shift_mlp[:, None]
+
+        norm_hidden_states = adaptive_layer_norm(hidden_states, scale_mlp, shift_mlp, epsilon=self.norm_eps)
+
 
         if self.use_ada_layer_norm_single:
             norm_hidden_states = self.norm2(hidden_states)
