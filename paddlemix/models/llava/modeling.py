@@ -16,10 +16,11 @@ import warnings
 from typing import List, Optional, Tuple, Union
 
 import paddle
+from paddle.autograd import PyLayer
 import paddle.distributed.fleet.meta_parallel as mpu
 from paddle.distributed import fleet
 from paddlenlp.transformers import LlamaConfig, LlamaForCausalLM, LlamaModel
-from paddlenlp.transformers.llama.modeling import ConcatSePMaskedLoss, LlamaLMHead
+from paddlenlp.transformers.llama.modeling import LlamaLMHead
 from paddlenlp.transformers.model_outputs import CausalLMOutputWithPast
 from paddlenlp.transformers.utils import get_scale_by_dtype
 
@@ -159,6 +160,25 @@ class LlavaLlamaForCausalLM(LlamaForCausalLM, LlavaMetaForCausalLM):
             attention_mask = paddle.ones_like(input_ids, dtype=paddle.get_default_dtype())
         return attention_mask
 
+class ConcatSePMaskedLoss(PyLayer):
+    @staticmethod
+    def forward(ctx, inp, axis, group):
+        inputs = []
+        paddle.distributed.all_gather(inputs, inp, group=group)
+        with paddle.no_grad():
+            cat = paddle.concat(inputs, axis=axis)
+        ctx.args_axis = axis
+        ctx.args_group = group
+        return cat
+
+    @staticmethod
+    def backward(ctx, grad):
+        axis = ctx.args_axis
+        group = ctx.args_group
+        with paddle.no_grad():
+            grads = paddle.split(grad, paddle.distributed.get_world_size(group), axis=axis)
+        grad = grads[paddle.distributed.get_rank(group)]
+        return grad
 
 class LlavaCriterion(paddle.nn.Layer):
     """
