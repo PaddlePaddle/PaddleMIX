@@ -123,7 +123,7 @@ def plot_boxes_to_image(image_pil, tgt):
     # draw boxes and masks
     for box, label in zip(boxes, labels):
         # from 0..1 to 0..W, 0..H
-        box = box * paddle.to_tensor([W, H, W, H])
+        box = box * paddle.to_tensor([W, H, W, H]).astype(paddle.float32)
         # from xywh to xyxy
         box[:2] -= box[2:] / 2
         box[2:] += box[:2]
