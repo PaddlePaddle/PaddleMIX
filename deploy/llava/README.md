@@ -12,20 +12,23 @@
 
 注：图片引用自[LLaVA](https://github.com/haotian-liu/LLaVA).
 
+本目录提供paddle版本的llava静态图推理部署示例，推荐使用A100进行推理部署。
+
 
 ## 2. 安装依赖
 
 * `paddlenlp_ops`依赖安装
 
 ```bash
-git clone https://github.com/PaddlePaddle/PaddleNLP.git
+wget https://github.com/PaddlePaddle/PaddleNLP/archive/refs/tags/v2.7.2.tar.gz
+tar xf v2.7.2
 cd PaddleNLP
 pip install -e .
 cd csrc
 python setup_cuda.py install
 ```
 
-* `fused_ln`需要安装[此目录](https://github.com/PaddlePaddle/PaddleNLP/tree/develop/model_zoo/gpt-3/external_ops)下的自定义OP, `python setup.py install`
+* `fused_ln`需要安装 /PaddleNLP/model_zoo/gpt-3/external_ops 下的自定义OP, `python setup.py install`
 
 ## 3. 示例
 
