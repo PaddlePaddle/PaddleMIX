@@ -164,7 +164,7 @@ def window_reverse(windows, window_size, H, W):
     Returns:
         x: (B, H, W, C)
     """
-    B = int(windows.shape[0] / (H * W / paddle.to_tensor(window_size / window_size)))
+    B = int(windows.shape[0] / (H * W / paddle.to_tensor(window_size * window_size)))
     x = windows.reshape([B, H // window_size, W // window_size, window_size, window_size, -1])
     x = x.transpose([0, 1, 3, 2, 4, 5]).reshape([B, H, W, -1])
     return x
