@@ -1,10 +1,11 @@
 {
-    "model_name_or_path": "OpenGVLab/InternVL2-8B",
-    "freeze_exclude": ["*vit*"],
+    "model_name_or_path": "/root/model/InternVL2-8B",
+    "freeze_exclude": ["*vit*", "*transformer"],
     "dataset": {
-        "train":[{"name": "chatml_dataset", "data_files": "path/to/train.json"}],
-        "eval": [{"name": "chatml_dataset", "data_files": "path/to/eval.json"}]
+        "train":[{"name": "chatml_dataset", "data_files": "/root/datasets/train.json", "chat_template":"/root/datasets/chat_template.json"}],
+        "eval": [{"name": "chatml_dataset", "data_files": "/root/datasets/val.json", "chat_template":"/root/datasets/chat_template.json"}]
     },
+    "use_flash_attention": true,
     "mixtoken": false,
     "output_dir": "./checkpoints/internvl_sft_ckpts",
     "overwrite_output_dir": true,

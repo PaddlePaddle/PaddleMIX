@@ -12,36 +12,41 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
+from typing import Optional, Tuple, Union
+
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
-from typing import Callable, Dict, Optional, Union, Tuple
-from models.model_utils import MixPretrainedModel
-from utils import pad_input, unpad_input
-from paddlenlp.transformers.activations import ACT2FN
-from paddlenlp.transformers.model_outputs import (BaseModelOutput,
-                                                  BaseModelOutputWithPooling)
-from .configuration import InternVisionConfig
-from functools import partial
-from ppdiffusers.utils import logging
 from einops import rearrange
+from paddlenlp.transformers.activations import ACT2FN
+from paddlenlp.transformers.model_outputs import (
+    BaseModelOutput,
+    BaseModelOutputWithPooling,
+)
+
+from paddlemix.models.model_utils import MixPretrainedModel
+from ppdiffusers.utils import logging
+
+from .configuration import InternVisionConfig
+from .utils import pad_input, unpad_input
 
 try:
     from paddle.nn.functional.flash_attention import flash_attn_varlen_qkvpacked
+
     has_flash_attn = True
 except:
-    print('FlashAttention is not installed.')
+    print("FlashAttention is not installed.")
     has_flash_attn = False
 
 logger = logging.get_logger(__name__)
+
 
 def _freeze_params(module):
     for param in module.parameters():
         param.stop_gradient = True
 
 
-##util
+# util
 def drop_path(x, drop_prob: float = 0.0, training: bool = False, scale_by_keep: bool = True):
     """Drop paths (Stochastic Depth) per sample (when applied in main path of residual blocks).
 
@@ -75,6 +80,8 @@ class DropPath(nn.Layer):
 
     def extra_repr(self):
         return f"drop_prob={round(self.drop_prob,3):0.3f}"
+
+
 ##
 
 
@@ -94,8 +101,7 @@ class FlashAttention(nn.Layer):
         self.softmax_scale = softmax_scale
         self.dropout_p = attention_dropout
 
-    def forward(self, qkv, key_padding_mask=None, causal=False, cu_seqlens=None,
-                max_s=None, need_weights=False):
+    def forward(self, qkv, key_padding_mask=None, causal=False, cu_seqlens=None, max_s=None, need_weights=False):
         """Implements the multihead softmax attention.
         Arguments
         ---------
@@ -111,39 +117,56 @@ class FlashAttention(nn.Layer):
             batch_size = qkv.shape[0]
             seqlen = qkv.shape[1]
             if key_padding_mask is None:
-                qkv = rearrange(qkv, 'b s ... -> (b s) ...')
+                qkv = rearrange(qkv, "b s ... -> (b s) ...")
                 max_s = seqlen
-                cu_seqlens = paddle.arange(0, (batch_size + 1) * seqlen, step=seqlen, dtype=paddle.int32,
-                                          device=qkv.device).place(qkv.place)
+                cu_seqlens = paddle.arange(
+                    0, (batch_size + 1) * seqlen, step=seqlen, dtype=paddle.int32, device=qkv.device
+                ).place(qkv.place)
                 output = flash_attn_varlen_qkvpacked(
-                    qkv, cu_seqlens, cu_seqlens, max_s, max_s, self.softmax_scale, 
-                    self.dropout_p if self.training else 0.0, causal=causal
+                    qkv,
+                    cu_seqlens,
+                    cu_seqlens,
+                    max_s,
+                    max_s,
+                    self.softmax_scale,
+                    self.dropout_p if self.training else 0.0,
+                    causal=causal,
                 )
-                output = rearrange(output, '(b s) ... -> b s ...', b=batch_size)
+                output = rearrange(output, "(b s) ... -> b s ...", b=batch_size)
             else:
                 nheads = qkv.shape[-2]
-                x = rearrange(qkv, 'b s three h d -> b s (three h d)')
+                x = rearrange(qkv, "b s three h d -> b s (three h d)")
                 x_unpad, indices, cu_seqlens, max_s = unpad_input(x, key_padding_mask)
-                x_unpad = rearrange(x_unpad, 'nnz (three h d) -> nnz three h d', three=3, h=nheads)
+                x_unpad = rearrange(x_unpad, "nnz (three h d) -> nnz three h d", three=3, h=nheads)
                 output_unpad = flash_attn_varlen_qkvpacked(
-                    x_unpad, cu_seqlens, max_s, self.dropout_p if self.training else 0.0,
-                    softmax_scale=self.softmax_scale, causal=causal
+                    x_unpad,
+                    cu_seqlens,
+                    max_s,
+                    self.dropout_p if self.training else 0.0,
+                    softmax_scale=self.softmax_scale,
+                    causal=causal,
                 )
-                output = rearrange(pad_input(rearrange(output_unpad, 'nnz h d -> nnz (h d)'),
-                                             indices, batch_size, seqlen),
-                                   'b s (h d) -> b s h d', h=nheads)
+                output = rearrange(
+                    pad_input(rearrange(output_unpad, "nnz h d -> nnz (h d)"), indices, batch_size, seqlen),
+                    "b s (h d) -> b s h d",
+                    h=nheads,
+                )
         else:
             assert max_s is not None
             output = flash_attn_varlen_qkvpacked(
-                qkv, cu_seqlens, max_s, self.dropout_p if self.training else 0.0,
-                softmax_scale=self.softmax_scale, causal=causal
+                qkv,
+                cu_seqlens,
+                max_s,
+                self.dropout_p if self.training else 0.0,
+                softmax_scale=self.softmax_scale,
+                causal=causal,
             )
 
         return output, None
 
 
 class InternRMSNorm(nn.Layer):
-    def __init__(self, hidden_size, eps=1e-6):
+    def __init__(self, hidden_size, epsilon=1e-6):
         super().__init__()
         out_2 = paddle.create_parameter(
             shape=paddle.ones(shape=hidden_size).shape,
@@ -152,7 +175,7 @@ class InternRMSNorm(nn.Layer):
         )
         out_2.stop_gradient = not True
         self.weight = out_2
-        self.variance_epsilon = eps
+        self.variance_epsilon = epsilon
 
     def forward(self, hidden_states):
         input_dtype = hidden_states.dtype
@@ -160,6 +183,13 @@ class InternRMSNorm(nn.Layer):
         variance = hidden_states.pow(2).mean(-1, keepdim=True)
         hidden_states = hidden_states * paddle.rsqrt(variance + self.variance_epsilon)
         return self.weight * hidden_states.to(input_dtype)
+
+
+NORM2FN = {
+    "rms_norm": InternRMSNorm,
+    "layer_norm": nn.LayerNorm,
+}
+
 
 class InternVisionEmbeddings(nn.Layer):
     def __init__(self, config: InternVisionConfig):
@@ -169,10 +199,8 @@ class InternVisionEmbeddings(nn.Layer):
         self.image_size = config.image_size
         self.patch_size = config.patch_size
 
-        self.class_embedding = paddle.create_parameter(  
-            shape=[1, 1, self.embed_dim],  
-            default_initializer=paddle.nn.initializer.Normal(0.0, 1.0),  
-            dtype='float32'  
+        self.class_embedding = paddle.create_parameter(
+            shape=[1, 1, self.embed_dim], default_initializer=paddle.nn.initializer.Normal(0.0, 1.0), dtype="float32"
         )
 
         self.patch_embedding = nn.Conv2D(
@@ -182,18 +210,23 @@ class InternVisionEmbeddings(nn.Layer):
         self.num_patches = (self.image_size // self.patch_size) ** 2
         self.num_positions = self.num_patches + 1
 
-        self.position_embedding = paddle.create_parameter(  
-            shape=[1, self.num_positions, self.embed_dim],  
-            default_initializer=paddle.nn.initializer.Normal(0.0, 1.0),  
-            dtype='float32'  
+        self.position_embedding = paddle.create_parameter(
+            shape=[1, self.num_positions, self.embed_dim],
+            default_initializer=paddle.nn.initializer.Normal(0.0, 1.0),
+            dtype="float32",
         )
 
-    def _get_pos_embed(self, pos_embed, H, W):  
-        target_dtype = pos_embed.dtype  
-        pos_embed = pos_embed.reshape(  
-            [1, self.image_size // self.patch_size, self.image_size // self.patch_size, -1]).transpose([0, 3, 1, 2])  
-        pos_embed = F.interpolate(pos_embed, size=(H, W), mode='BICUBIC', 
-                        align_corners=False).reshape([1, -1, H * W]).transpose([0, 2, 1]).astype(target_dtype)  
+    def _get_pos_embed(self, pos_embed, H, W):
+        target_dtype = pos_embed.dtype
+        pos_embed = pos_embed.reshape(
+            [1, self.image_size // self.patch_size, self.image_size // self.patch_size, -1]
+        ).transpose([0, 3, 1, 2])
+        pos_embed = (
+            F.interpolate(pos_embed, size=(H, W), mode="BICUBIC", align_corners=False)
+            .reshape([1, -1, H * W])
+            .transpose([0, 2, 1])
+            .astype(target_dtype)
+        )
         return pos_embed
 
     def forward(self, pixel_values) -> paddle.Tensor:
@@ -203,12 +236,13 @@ class InternVisionEmbeddings(nn.Layer):
         patch_embeds = patch_embeds.reshape([batch_size, self.embed_dim, -1]).transpose([0, 2, 1])
         class_embeds = self.class_embedding.expand(batch_size, 1, -1).astype(target_dtype)
         embeddings = paddle.concat([class_embeds, patch_embeds], axis=1)
-        position_embedding = paddle.concat([  
-            self.position_embedding[:, :1, :],  
-            self._get_pos_embed(self.position_embedding[:, 1:, :], height, width)  
-        ], axis=1) 
+        position_embedding = paddle.concat(
+            [self.position_embedding[:, :1, :], self._get_pos_embed(self.position_embedding[:, 1:, :], height, width)],
+            axis=1,
+        )
         embeddings = embeddings + position_embedding.astype(target_dtype)
         return embeddings
+
 
 class InternAttention(nn.Layer):
     """Multi-headed attention from 'Attention Is All You Need' paper"""
@@ -220,15 +254,15 @@ class InternAttention(nn.Layer):
         self.num_heads = config.num_attention_heads
         self.use_flash_attn = config.use_flash_attn and has_flash_attn
         if config.use_flash_attn and not has_flash_attn:
-            print('Warning: Flash Attention is not available, use_flash_attn is set to False.')
+            print("Warning: Flash Attention is not available, use_flash_attn is set to False.")
         self.head_dim = self.embed_dim // self.num_heads
         if self.head_dim * self.num_heads != self.embed_dim:
             raise ValueError(
-                f'embed_dim must be divisible by num_heads (got `embed_dim`: {self.embed_dim} and `num_heads`:'
-                f' {self.num_heads}).'
+                f"embed_dim must be divisible by num_heads (got `embed_dim`: {self.embed_dim} and `num_heads`:"
+                f" {self.num_heads})."
             )
 
-        self.scale = self.head_dim ** -0.5
+        self.scale = self.head_dim**-0.5
         self.qkv = nn.Linear(self.embed_dim, 3 * self.embed_dim, bias_attr=config.qkv_bias)
         self.attn_drop = nn.Dropout(config.attention_dropout)
         self.proj_drop = nn.Dropout(config.dropout)
@@ -250,10 +284,18 @@ class InternAttention(nn.Layer):
 
         if self.qk_normalization:
             B_, H_, N_, D_ = q.shape
-            q = self.q_norm(q.transpose([0, 2, 1, 3]).reshape([B_, N_, -1])).reshape([B_, N_, H_, D_]).transpose([0, 2, 1, 3])
-            k = self.k_norm(k.transpose([0, 2, 1, 3]).reshape([B_, N_, -1])).reshape([B_, N_, H_, D_]).transpose([0, 2, 1, 3])
+            q = (
+                self.q_norm(q.transpose([0, 2, 1, 3]).reshape([B_, N_, -1]))
+                .reshape([B_, N_, H_, D_])
+                .transpose([0, 2, 1, 3])
+            )
+            k = (
+                self.k_norm(k.transpose([0, 2, 1, 3]).reshape([B_, N_, -1]))
+                .reshape([B_, N_, H_, D_])
+                .transpose([0, 2, 1, 3])
+            )
 
-        attn = ((q * self.scale) @ k.transpose([0, 1, 3, 2]))
+        attn = (q * self.scale) @ k.transpose([0, 1, 3, 2])
         attn = F.softmax(attn, dim=-1)
         attn = self.attn_drop(attn)
 
@@ -264,7 +306,7 @@ class InternAttention(nn.Layer):
 
     def _flash_attn(self, x, key_padding_mask=None, need_weights=False):
         qkv = self.qkv(x)
-        qkv = rearrange(qkv, 'b s (three h d) -> b s three h d', three=3, h=self.num_heads)
+        qkv = rearrange(qkv, "b s (three h d) -> b s three h d", three=3, h=self.num_heads)
 
         if self.qk_normalization:
             q, k, v = paddle.split(qkv, num_or_sections=3, axis=2)
@@ -276,16 +318,15 @@ class InternAttention(nn.Layer):
             k = self.k_norm(k.reshape([k.shape[0], k.shape[1], -1])).reshape(k.shape)
             qkv = paddle.stack([q, k, v], axis=2)
 
-        context, _ = self.inner_attn(
-            qkv, key_padding_mask=key_padding_mask, need_weights=need_weights, causal=False
-        )
-        outs = self.proj(rearrange(context, 'b s h d -> b s (h d)'))
+        context, _ = self.inner_attn(qkv, key_padding_mask=key_padding_mask, need_weights=need_weights, causal=False)
+        outs = self.proj(rearrange(context, "b s h d -> b s (h d)"))
         outs = self.proj_drop(outs)
         return outs
 
     def forward(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
         x = self._naive_attn(hidden_states) if not self.use_flash_attn else self._flash_attn(hidden_states)
         return x
+
 
 class InternMLP(nn.Layer):
     def __init__(self, config: InternVisionConfig):
@@ -311,32 +352,37 @@ class InternVisionEncoderLayer(nn.Layer):
 
         self.attn = InternAttention(config)
         self.mlp = InternMLP(config)
-        self.norm1 = InternRMSNorm(self.embed_dim, eps=config.layer_norm_eps)
-        self.norm2 = InternRMSNorm(self.embed_dim, eps=config.layer_norm_eps)
+        self.norm1 = NORM2FN[self.norm_type](self.embed_dim, epsilon=config.layer_norm_eps)
+        self.norm2 = NORM2FN[self.norm_type](self.embed_dim, epsilon=config.layer_norm_eps)
 
         self.ls1 = paddle.create_parameter(
             shape=[self.embed_dim],
-            dtype='float32',
-            default_initializer=paddle.nn.initializer.Assign(config.initializer_factor * paddle.ones([self.embed_dim]))
+            dtype="float32",
+            default_initializer=paddle.nn.initializer.Assign(
+                config.initializer_factor * paddle.ones([self.embed_dim])
+            ),
         )
-        
+
         self.ls2 = paddle.create_parameter(
             shape=[self.embed_dim],
-            dtype='float32',
-            default_initializer=paddle.nn.initializer.Assign(config.initializer_factor * paddle.ones([self.embed_dim]))
+            dtype="float32",
+            default_initializer=paddle.nn.initializer.Assign(
+                config.initializer_factor * paddle.ones([self.embed_dim])
+            ),
         )
-        self.drop_path1 = DropPath(drop_path_rate) if drop_path_rate > 0. else nn.Identity()
-        self.drop_path2 = DropPath(drop_path_rate) if drop_path_rate > 0. else nn.Identity()
+        self.drop_path1 = DropPath(drop_path_rate) if drop_path_rate > 0.0 else nn.Identity()
+        self.drop_path2 = DropPath(drop_path_rate) if drop_path_rate > 0.0 else nn.Identity()
 
     def forward(
-            self,
-            hidden_states: paddle.Tensor,
+        self,
+        hidden_states: paddle.Tensor,
     ):
         hidden_states = hidden_states + self.drop_path1(self.attn(self.norm1(hidden_states)) * self.ls1)
 
         hidden_states = hidden_states + self.drop_path2(self.mlp(self.norm2(hidden_states)) * self.ls2)
 
         return hidden_states
+
 
 class InternVisionEncoder(nn.Layer):
     """
@@ -353,15 +399,16 @@ class InternVisionEncoder(nn.Layer):
         self.config = config
         # stochastic depth decay rule
         dpr = [x.item() for x in paddle.linspace(0, config.drop_path_rate, config.num_hidden_layers)]
-        self.layers = nn.LayerList([
-            InternVisionEncoderLayer(config, dpr[idx]) for idx in range(config.num_hidden_layers)])
+        self.layers = nn.LayerList(
+            [InternVisionEncoderLayer(config, dpr[idx]) for idx in range(config.num_hidden_layers)]
+        )
         self.gradient_checkpointing = True
 
     def forward(
-            self,
-            inputs_embeds,
-            output_hidden_states: Optional[bool] = None,
-            return_dict: Optional[bool] = None,
+        self,
+        inputs_embeds,
+        output_hidden_states: Optional[bool] = None,
+        return_dict: Optional[bool] = None,
     ):
         output_hidden_states = (
             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
@@ -374,7 +421,7 @@ class InternVisionEncoder(nn.Layer):
         for idx, encoder_layer in enumerate(self.layers):
             if output_hidden_states:
                 encoder_states = encoder_states + (hidden_states,)
-            
+
             layer_outputs = encoder_layer(
                 hidden_states,
             )
@@ -385,16 +432,13 @@ class InternVisionEncoder(nn.Layer):
 
         if not return_dict:
             return tuple(v for v in [hidden_states, encoder_states] if v is not None)
-        return BaseModelOutput(
-            last_hidden_state=hidden_states, hidden_states=encoder_states
-        )
-
+        return BaseModelOutput(last_hidden_state=hidden_states, hidden_states=encoder_states)
 
 
 class InternVisionModel(MixPretrainedModel):
-    main_input_name = 'pixel_values'
+    main_input_name = "pixel_values"
     config_class = InternVisionConfig
-    _no_split_modules = ['InternVisionEncoderLayer']
+    _no_split_modules = ["InternVisionEncoderLayer"]
 
     def __init__(self, config: InternVisionConfig):
         super().__init__(config)
@@ -407,25 +451,26 @@ class InternVisionModel(MixPretrainedModel):
         pos_emb = self.embeddings.position_embedding
         _, num_positions, embed_dim = pos_emb.shape
         cls_emb = pos_emb[:, :1, :]
-        pos_emb = pos_emb[:, 1:, :].reshape(1, old_size // patch_size, old_size // patch_size, -1).transpose(0, 3, 1, 2)
-        pos_emb = F.interpolate(pos_emb.float(), size=new_size // patch_size, mode='bicubic', align_corners=False)
+        pos_emb = (
+            pos_emb[:, 1:, :].reshape(1, old_size // patch_size, old_size // patch_size, -1).transpose(0, 3, 1, 2)
+        )
+        pos_emb = F.interpolate(pos_emb.float(), size=new_size // patch_size, mode="bicubic", align_corners=False)
         pos_emb = pos_emb.astype(cls_emb.dtype).reshape(1, embed_dim, -1).transpose(0, 2, 1)
         pos_emb = paddle.concat([cls_emb, pos_emb], axis=1)
         self.embeddings.position_embedding = self.create_parameter(
-            shape=pos_emb.shape,
-            attr=paddle.ParamAttr(initializer=paddle.nn.initializer.Assign(pos_emb))
+            shape=pos_emb.shape, attr=paddle.ParamAttr(initializer=paddle.nn.initializer.Assign(pos_emb))
         )
-        logger.info('Resized position embeddings from {} to {}'.format(old_size, new_size))
+        logger.info("Resized position embeddings from {} to {}".format(old_size, new_size))
 
     def get_input_embeddings(self):
         return self.embeddings
 
     def forward(
-            self,
-            pixel_values = None,
-            output_hidden_states = None,
-            return_dict = None,
-            pixel_embeds = None,
+        self,
+        pixel_values=None,
+        output_hidden_states=None,
+        return_dict=None,
+        pixel_embeds=None,
     ) -> Union[Tuple, BaseModelOutputWithPooling]:
         output_hidden_states = (
             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
@@ -433,7 +478,7 @@ class InternVisionModel(MixPretrainedModel):
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         if pixel_values is None and pixel_embeds is None:
-            raise ValueError('You have to specify pixel_values or pixel_embeds')
+            raise ValueError("You have to specify pixel_values or pixel_embeds")
 
         if pixel_embeds is not None:
             hidden_states = pixel_embeds
@@ -441,7 +486,7 @@ class InternVisionModel(MixPretrainedModel):
             if len(pixel_values.shape) == 4:
                 hidden_states = self.embeddings(pixel_values)
             else:
-                raise ValueError(f'wrong pixel_values size: {pixel_values.shape}')
+                raise ValueError(f"wrong pixel_values size: {pixel_values.shape}")
         encoder_outputs = self.encoder(
             inputs_embeds=hidden_states,
             output_hidden_states=output_hidden_states,

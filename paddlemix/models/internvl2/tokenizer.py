@@ -14,24 +14,27 @@
 
 """Tokenization classes for IntermLM."""
 import os
+import re
 from shutil import copyfile
 from typing import Any, Dict, List, Optional, Tuple
 
 import sentencepiece as spm
 from paddlenlp.transformers.tokenizer_utils import PretrainedTokenizer
 from paddlenlp.transformers.tokenizer_utils_base import AddedToken
+
 from ppdiffusers.utils import logging
 
 logger = logging.get_logger(__name__)
 
 
-class InternVL2Tokenizer(PretrainedTokenizer):
+class InternLM2Tokenizer(PretrainedTokenizer):
     """Construct a InternVL2 tokenizer. Based on byte-level Byte-Pair-Encoding.
 
     Args:
         vocab_file (`str`):
             Path to the vocabulary file.
     """
+
     resource_files_names = {"vocab_file": "sentencepiece.bpe.model"}
     pretrained_resource_files_map = {}
     model_input_names = ["input_ids", "attention_mask"]

@@ -62,6 +62,8 @@ class InternVL2Processor(ProcessorMixin):
                     images.append(ele["image"])
 
             inputs = self.tokenizer(query, return_tensors=return_tensors)
+            inputs["images"] = None
+
             if len(images) > 0:
                 inputs["images"] = self.image_processor(images)
 
@@ -191,11 +193,11 @@ class InternVL2ImageProcessor(BaseImageProcessor):
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
-        
+
         self.image_size = image_size, image_size
         self.image_mean = image_mean
         self.image_std = image_std
-        
+
         self.normalize = transforms.Normalize(image_mean, image_std)
         self.image_transform = transforms.Compose(
             [
