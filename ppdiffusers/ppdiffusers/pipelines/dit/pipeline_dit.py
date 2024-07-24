@@ -88,7 +88,7 @@ class DiTPipeline(DiffusionPipeline):
                 )
 
         return [self.labels[l] for l in label]
-
+  
     @paddle.no_grad()
     def __call__(
         self,

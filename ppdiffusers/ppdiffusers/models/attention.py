@@ -15,6 +15,7 @@ from typing import Any, Dict, Optional
 
 import paddle
 from paddle import nn
+import nvtx
 
 from ..utils import USE_PEFT_BACKEND
 from ..utils.paddle_utils import maybe_allow_in_graph
@@ -227,6 +228,7 @@ class BasicTransformerBlock(nn.Layer):
                 {} if norm_elementwise_affine else dict(weight_attr=False, bias_attr=False)
             )
             self.norm3 = nn.LayerNorm(dim, epsilon=norm_eps, **norm_elementwise_affine_kwargs)
+            self.epsilon = norm_eps
 
         self.ff = FeedForward(
             dim,
@@ -338,12 +340,14 @@ class BasicTransformerBlock(nn.Layer):
             hidden_states = attn_output + hidden_states
 
         # 4. Feed-forward
-        if not self.use_ada_layer_norm_single:
-            norm_hidden_states = self.norm3(hidden_states)
+        # if not self.use_ada_layer_norm_single:
+        #     norm_hidden_states = self.norm3(hidden_states)
 
-        if self.use_ada_layer_norm_zero:
-            norm_hidden_states = norm_hidden_states * (1 + scale_mlp[:, None]) + shift_mlp[:, None]
-
+        # if self.use_ada_layer_norm_zero:
+        #     norm_hidden_states = norm_hidden_states * (1 + scale_mlp[:, None]) + shift_mlp[:, None]
+        #add triton adaptive_layer_norm pass;        
+        norm_hidden_states = paddle.incubate.tt.adaptive_layer_norm(hidden_states, scale_mlp, shift_mlp, epsilon=self.epsilon)
+    
         if self.use_ada_layer_norm_single:
             norm_hidden_states = self.norm2(hidden_states)
             norm_hidden_states = norm_hidden_states * (1 + scale_mlp) + shift_mlp
