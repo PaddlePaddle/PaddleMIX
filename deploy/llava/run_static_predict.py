@@ -233,31 +233,60 @@ class Predictor(object):
     def post_processing(self, generate_ids):
         msg = self.tokenizer.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)
         return msg
-
-    def predict(self):
-        roles = "user", "assistant"
+    
+    def run_benchmark(self):
         first_message = True
-        while True:
-            try:
-                inp = input(f"{roles[0]}: ")
-            except EOFError:
-                inp = ""
-            if not inp:
-                print("exit...")
-                break
-            print(f"{roles[1]}: ", end="")
+        import time
+        start = 0.0
+        total = 0.0
+        for i in range(20):
+            if i>10:
+                start = time.time()
+            inp = "user: Generate the caption in English with grounding"
             data_dict = self.pre_processing(inp, first_message)
             image = paddle.cast(data_dict["images"], self.compute_dtype)
-
+            
             image_features = self.encode_images(image)[0]
 
             generate_ids, _ = self.generate_with_image_features(
                 image_features,
                 data_dict["input_ids"],
             )
-
+            
             msg = self.post_processing(generate_ids)
-            print("Outputs: ", msg)
+            if i > 10:
+                total += time.time()-start
+            
+        print("Time: ", total/10)
+
+    def predict(self):
+        roles = "user", "assistant"
+        first_message = True
+        
+        if self.args.benchmark:
+            self.run_benchmark()
+        else:
+            while True:
+                try:
+                    inp = input(f"{roles[0]}: ")
+                except EOFError:
+                    inp = ""
+                if not inp:
+                    print("exit...")
+                    break
+                print(f"{roles[1]}: ", end="")
+                data_dict = self.pre_processing(inp, first_message)
+                image = paddle.cast(data_dict["images"], self.compute_dtype)
+
+                image_features = self.encode_images(image)[0]
+
+                generate_ids, _ = self.generate_with_image_features(
+                    image_features,
+                    data_dict["input_ids"],
+                )
+
+                msg = self.post_processing(generate_ids)
+                print("Outputs: ", msg)
 
 
 if __name__ == "__main__":
@@ -287,6 +316,7 @@ if __name__ == "__main__":
     parser.add_argument("--fp16", action="store_true")
     parser.add_argument("--image_file", type=str, required=True)
     parser.add_argument("--conv_mode", type=str, default=None)
+    parser.add_argument("--benchmark", action="store_true")
 
     args = parser.parse_args()
 
