@@ -40,7 +40,7 @@ TOKENIZER_PATH = MODEL_PATH
 
 tokenizer = AutoTokenizerMIX.from_pretrained(TOKENIZER_PATH)
 
-data_type = "float32"
+data_type = "float16"
 
 model = AutoModelMIX.from_pretrained(
     MODEL_PATH,
@@ -51,7 +51,8 @@ model.eval()
 
 text_only_template = "A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. USER: {} ASSISTANT:"
 while True:
-    image_path = input("image path >>>>> ")
+    # image_path = input("image path >>>>> ")
+    image_path = '/home/myw/wuchangli/yk/pd/PaddleMIX/image1.jpg'
     if image_path == "":
         print("You did not enter image path, the following will be a plain text conversation.")
         image = None
@@ -60,7 +61,8 @@ while True:
         image = Image.open(image_path).convert("RGB")
     history = []
     while True:
-        query = input("Human:")
+        # query = input("Human:")
+        query = "what's in the picture?"
         if query == "clear":
             break
         if image is None:
@@ -91,8 +93,9 @@ while True:
         gen_kwargs = {"max_new_tokens": 2048, "do_sample": False}
         with paddle.no_grad():
             outputs, _ = model.generate(**inputs, **gen_kwargs)
-            outputs = outputs[:, inputs["input_ids"].shape[1] :]
             response = tokenizer.decode(outputs[0])
             response = response.split("</s>")[0]
             print("\nCog:", response)
+            import pdb
+            pdb.set_trace()
         history.append((query, response))

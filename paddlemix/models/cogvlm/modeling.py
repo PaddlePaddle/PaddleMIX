@@ -195,10 +195,13 @@ def rotate_half(x):
 
 
 def apply_rotary_pos_emb_index_bhs(q, k, cos, sin, position_id):
+    input_dtype = q.dtype
     cos, sin = paddle.nn.functional.embedding(x=position_id, weight=cos.squeeze(axis=1)).unsqueeze(
         axis=1
     ), paddle.nn.functional.embedding(x=position_id, weight=sin.squeeze(axis=1)).unsqueeze(axis=1)
     q, k = q * cos + rotate_half(q) * sin, k * cos + rotate_half(k) * sin
+    q = q.astype(input_dtype)
+    k = k.astype(input_dtype)
     return q, k
 
 
@@ -400,6 +403,8 @@ class CogModelDecoderLayer(paddle.nn.Layer):
             output_attentions=output_attentions,
             use_cache=use_cache,
         )
+        data_type = hidden_states.dtype
+        residual = residual.astype(data_type)
         hidden_states = residual + hidden_states
         if self.model_type == "cogagent":
             cross_input = self.post_cross_attention_layernorm(hidden_states)
@@ -419,6 +424,8 @@ class CogModelDecoderLayer(paddle.nn.Layer):
             residual = hidden_states
             hidden_states = self.post_attention_layernorm(hidden_states)
             hidden_states = self.mlp(hidden_states, token_type_ids=token_type_ids)
+            data_type = hidden_states.dtype
+            residual = residual.astype(data_type)
             hidden_states = residual + hidden_states
         else:
             raise ValueError("model_type in config must be cogagent or cogvlm, but got {}".format(self.model_type))
