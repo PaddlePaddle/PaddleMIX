@@ -15,6 +15,7 @@ from typing import Any, Dict, Optional
 
 import paddle
 from paddle import nn
+import nvtx
 
 from ..utils import USE_PEFT_BACKEND
 from ..utils.paddle_utils import maybe_allow_in_graph
