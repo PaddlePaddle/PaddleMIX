@@ -73,7 +73,7 @@ def parse_arguments():
     parser.add_argument(
         "--task_name",
         type=str,
-        default="text2img",
+        default="img2video",
         choices=[
             "img2video",
             "all",

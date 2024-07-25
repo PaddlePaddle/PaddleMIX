@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+print("###############################################################")
 import argparse
 import os
 import time
@@ -37,7 +38,7 @@ def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--model_dir",
-        default="runwayml/stable-diffusion-v1-5@paddleinfer",
+        default="stabilityai/stable-diffusion-xl-base-1.0@paddleinfer",
         help="The model directory of diffusion_model.",
     )
     parser.add_argument(
