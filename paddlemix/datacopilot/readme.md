@@ -1,26 +1,26 @@
 
-# Datacopilot
+# DataCopilot
 
 <details>
 <summary>Fig</summary>
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/f985c656-e4ac-47da-a0e5-4336a2e743d4" width=500>
+  <img src="https://github.com/user-attachments/assets/c1acd673-8e2d-421d-8703-cc55ef259c48" width=500>
 </div>
 
 </details>
 
 ## 定位
-Datacopilot是PaddleMIX 2.0版本新推出的多模态数据处理工具箱，理念是把数据作为多模态算法的一部分参与迭代的全流程，让开发者根据特定任务以低代码量实现数据的基本操作。
+DataCopilot是PaddleMIX 2.0版本新推出的多模态数据处理工具箱，理念是把数据作为多模态算法的一部分参与迭代的全流程，让开发者根据特定任务以低代码量实现数据的基本操作。
 
 ## 核心概念 
 工具核心概念包括Schema和Dataset。Schema用于定义多模态数据组织结构和字段名字。MMDataset作为数据操作的核心类，为存储，查看，转换，生成等操作的基本对象。
 
-### SCHEME
-scheme用于定义多模态数据格式（比如json文件里组织结构和字段名字），用于不同格式的转换，简化ops操作的逻辑，内置MM类型。
-添加scheme步奏，1. 在SCHEME枚举类型增量添加标识字段（注意：不可与之前的名字重复）2. convert_scheme添加和MM相互转换的逻辑。
+### SCHEMA
+schema用于定义多模态数据格式（比如json文件里组织结构和字段名字），用于不同格式的转换，简化ops操作的逻辑，内置MM类型。
+添加schema步奏，1. 在SCHEMA枚举类型增量添加标识字段（注意：不可与之前的名字重复）2. convert_schema添加和MM相互转换的逻辑。
 ```
-class SCHEME(Enum):
+class SCHEMA(Enum):
     MM = 1
 ```
 
@@ -101,7 +101,4 @@ dataset = dataset.filter(is_wanted).nonempty()
 
 3. LLaVA-SFT训练  
 数据准备和训练流程参考项目[pp_cap_instruct](https://aistudio.baidu.com/projectdetail/7917712)
-
-
-
 
