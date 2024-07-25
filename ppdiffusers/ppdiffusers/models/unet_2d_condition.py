@@ -942,14 +942,14 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
 
         return UNet2DConditionOutput(sample=sample)
 
-    @paddle.jit.paddle_inference_decorator(save_model_dir="/root/.cache/haha",
+    @paddle.incubate.jit.inference(save_model_dir="/root/.cache/haha",
                                       cache_static_model=False, 
                                       precision_mode="float32", 
                                       switch_ir_optim=True,
                                       with_trt=True,
+                                      enable_new_ir=False,
                                       trt_precision_mode = "float16",
                                       trt_use_static = True,
-                                      collect_shape = False,
                                       switch_ir_debug = False)
     def run_down_mid_up_blocks(self, sample, encoder_hidden_states, timestep, timestep_cond,
                                attention_mask,
