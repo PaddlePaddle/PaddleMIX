@@ -26,7 +26,7 @@ from .modeling_utils import ModelMixin
 from .transformer_2d import Transformer2DModelOutput
 
 from paddle.framework import LayerHelper, in_dynamic_mode
-from paddle.incubate.tt import adaptive_layer_norm, fused_adaLN_scale_residual
+from paddle.incubate.tt import adaptive_layer_norm, fused_adaLN_scale_residual, fused_rotary_emb
 import os
 
 def TypePromote(x, y):
@@ -193,15 +193,7 @@ class Attention(nn.Layer):
             Tuple[paddle.Tensor, paddle.Tensor]: Tuple of modified query tensor
                 and key tensor with rotary embeddings.
         """
-        if not os.getenv('callZKK'):
-            with paddle.amp.auto_cast(enable=False):
-                xq_ = paddle.as_complex(xq.cast("float32").reshape([*tuple(xq.shape)[:-1], -1, 2]))
-                xk_ = paddle.as_complex(xk.cast("float32").reshape([*tuple(xk.shape)[:-1], -1, 2]))
-                freqs_cis = Attention.reshape_for_broadcast(freqs_cis, xq_)
-                xq_out = paddle.as_real(xq_ * freqs_cis).flatten(start_axis=3)
-                xk_out = paddle.as_real(xk_ * freqs_cis).flatten(start_axis=3)
-                return xq_out.cast(xq.dtype), xk_out.cast(xk.dtype)
-        else:
+        with paddle.amp.auto_cast(enable=False):
             xq_ = paddle.as_complex(xq.cast("float32").reshape([*tuple(xq.shape)[:-1], -1, 2]))
             xk_ = paddle.as_complex(xk.cast("float32").reshape([*tuple(xk.shape)[:-1], -1, 2]))
             freqs_cis = Attention.reshape_for_broadcast(freqs_cis, xq_)
@@ -225,21 +217,22 @@ class Attention(nn.Layer):
 
         if not self.callZKK:
             xq, xk, xv = self.wq(x), self.wk(x), self.wv(x)
+            
+            dtype = xq.dtype
+            
+            xq = self.q_norm(xq)
+            xk = self.k_norm(xk)
+
+            xq = xq.reshape([bsz, seqlen, self.n_local_heads, self.head_dim])
+            xk = xk.reshape([bsz, seqlen, self.n_local_kv_heads, self.head_dim])
+            xv = xv.reshape([bsz, seqlen, self.n_local_kv_heads, self.head_dim])
+
+            xq, xk = Attention.apply_rotary_emb(xq, xk, freqs_cis=freqs_cis)
+            xq, xk = xq.cast(dtype), xk.cast(dtype)
         else:
             qkv_out = self.qkv(x)
-            xq, xk, xv = paddle.split(qkv_out, 3, axis=-1)
-
-        dtype = xq.dtype
-
-        xq = self.q_norm(xq)
-        xk = self.k_norm(xk)
-
-        xq = xq.reshape([bsz, seqlen, self.n_local_heads, self.head_dim])
-        xk = xk.reshape([bsz, seqlen, self.n_local_kv_heads, self.head_dim])
-        xv = xv.reshape([bsz, seqlen, self.n_local_kv_heads, self.head_dim])
-
-        xq, xk = Attention.apply_rotary_emb(xq, xk, freqs_cis=freqs_cis)
-        xq, xk = xq.cast(dtype), xk.cast(dtype)
+            xq, xk, xv = fused_rotary_emb(qkv_out, self.q_norm.weight, self.q_norm.bias, 
+                                          self.k_norm.weight, self.k_norm.bias, freqs_cis)
 
         if dtype in [paddle.float16, paddle.bfloat16]:
             output, _ = flash_attention(
@@ -341,6 +334,14 @@ class FeedForward(nn.Layer):
         out = helper.create_variable_for_type_inference(dtype=ffn1_out.dtype)
         inputs = {}
         inputs["x"] = ffn1_out
+        if bias is not None:
+            inputs["bias"] = bias
+        if dequant_scales is not None:
+            inputs["dequant_scales"] = dequant_scales
+        if shift is not None:
+            inputs["shift"] = shift
+        if smooth is not None:
+            inputs["smooth"] = smooth
         attrs = {
             "act_method": act_method,
             "compute_dtype": compute_dtype,
@@ -619,15 +620,32 @@ class DiTLLaMA2DModel(ModelMixin, ConfigMixin):
         freqs = 1.0 / theta ** (paddle.arange(start=0, end=dim, step=2)[: dim // 2].cast("float32") / dim)
         t = paddle.arange(end=end)
         input_0, vec2_0 = TypePromote(t, freqs)
+        # [end, dim // 2]
         freqs = paddle.outer(input_0, vec2_0).cast("float32")
-        freqs_cis = paddle.complex(
-            paddle.ones_like(freqs) * paddle.cos(freqs), paddle.ones_like(freqs) * paddle.sin(freqs)
-        )
+        
+        if os.getenv('callZKK'):
+            # [end, dim // 2, 4]
+            freqs_cis = paddle.stack([  
+                paddle.cos(freqs),  
+                -paddle.sin(freqs),  
+                paddle.sin(freqs),  
+                paddle.cos(freqs)], axis=-1) 
+            # [end, dim, 2]
+            freqs_cis = freqs_cis.reshape([freqs_cis.shape[0], -1, 2]).unsqueeze(1)
+        else:
+            freqs_cis = paddle.complex(
+                paddle.ones_like(freqs) * paddle.cos(freqs), paddle.ones_like(freqs) * paddle.sin(freqs)
+            )
         return freqs_cis
 
-    @paddle.jit.to_static(backend="inference", with_trt=False,
-                                      cache_static_model=False,
-                                      collect_shape=False)
+    @paddle.jit.to_static(backend='inference', with_trt=False,
+                                    cache_static_model=False,
+                                    exp_enable_use_cutlass=True,
+                                    enable_new_ir=True,
+                                    delete_pass_lists = ["trt_prompt_tuning_embedding_eltwise_layernorm_fuse_pass",
+                                    "add_support_int8_pass", 
+                                    "fc_fuse_pass", 
+                                    "add_norm_fuse_pass",])
     def transformer_blocks(self, x, adaln_input):
         for i, layer in enumerate(self.layers):
             if self.gradient_checkpointing and False:
@@ -667,7 +685,7 @@ class DiTLLaMA2DModel(ModelMixin, ConfigMixin):
         # 2. Blocks
         if not self.callZKK:
             for i, layer in enumerate(self.layers):
-                if self.gradient_checkpointing:
+                if self.gradient_checkpointing:  
                     x = paddle.distributed.fleet.utils.recompute(layer, x, self.freqs_cis[: x.shape[1]], adaln_input)
                 else:
                     x = layer(
@@ -676,6 +694,7 @@ class DiTLLaMA2DModel(ModelMixin, ConfigMixin):
                         adaln_input,
                     )
         else:
+            self.freqs_cis = paddle.expand(self.freqs_cis, [-1, self.num_attention_heads, -1, -1])
             x = self.transformer_blocks(x, adaln_input)
         
         # 3. Output
