@@ -183,7 +183,7 @@ python -u  -m paddle.distributed.launch --gpus "0,1,2,3" paddlemix/tools/supervi
 注：使用lora训练后，需要合并lora参数，我们提供LoRA参数合并脚本，可以将LoRA参数合并到主干模型并保存相应的权重。命令如下：
 
 ```bash
-python paddlemix/paddlemix/tools/merge_lora_params.py \
+python paddlemix/tools/merge_lora_params.py \
 --model_name_or_path qwen-vl/qwen-vl-chat-7b \
 --lora_path output_qwen_vl\
 --merge_model_path qwen_vl_merge

@@ -15,11 +15,20 @@
 * `paddlenlp_ops`依赖安装
 
 ```bash
-git clone https://github.com/PaddlePaddle/PaddleNLP.git
+git submodule update --init --recursive
 cd PaddleNLP
+git reset --hard 498f70988431be278dac618411fbfb0287853cd9
 pip install -e .
 cd csrc
 python setup_cuda.py install
+```
+* 如果在V100上安装报错，可屏蔽 /PaddleNLP/csrc/generation/quant_int8.cu 以下语句:
+
+```bash
+# template<>
+# __forceinline__ __device__ __nv_bfloat16 add_mul<__nv_bfloat16>(__nv_bfloat16 a, __nv_bfloat16 b, __nv_bfloat16 c) {
+#     return __hmul(__hadd(a, b), c);
+# }
 ```
 
 * `fused_ln`需要安装 /PaddleNLP/model_zoo/gpt-3/external_ops 下的自定义OP, `python setup.py install`
@@ -51,9 +60,9 @@ python deploy/qwen_vl/export_image_encoder.py \
 #!/bin/bash
 
 export CUDA_VISIBLE_DEVICES=0
-export PYTHONPATH=/path/to/PaddleNLP/:/path/to/PaddleMIX:/path/to/PaddleNLP/llm
+export PYTHONPATH=../../PaddleNLP/:../../PaddleNLP/llm
 
-python ppredict/export_model.py \
+python predict/export_model.py \
     --model_name_or_path "qwen-vl/qwen-vl-7b-static" \
     --output_path ./checkpoints/encode_text/ \
     --dtype float16 \
