@@ -8,7 +8,7 @@
 - **多图多轮交错对话**：支持多图输入和比较，指定图片问答等；
 - **细粒度识别和理解**：细粒度的文字识别、文档问答和检测框标注。
 
-本目录提供paddle版本的Qwen-VL-7b静态图推理部署示例。
+本目录提供paddle版本的Qwen-VL-7b静态图推理部署示例，推荐使用A100进行推理部署。
 
 ## 2. 安装依赖
 
@@ -22,7 +22,7 @@ cd csrc
 python setup_cuda.py install
 ```
 
-* `fused_ln`需要安装[此目录](https://github.com/PaddlePaddle/PaddleNLP/tree/develop/model_zoo/gpt-3/external_ops)下的自定义OP, `python setup.py install`
+* `fused_ln`需要安装 /PaddleNLP/model_zoo/gpt-3/external_ops 下的自定义OP, `python setup.py install`
 
 ## 3. 示例
 
@@ -51,9 +51,9 @@ python deploy/qwen_vl/export_image_encoder.py \
 #!/bin/bash
 
 export CUDA_VISIBLE_DEVICES=0
-export PYTHONPATH=/path/to/PaddleNLP/:/path/to/PaddleMIX
+export PYTHONPATH=/path/to/PaddleNLP/:/path/to/PaddleMIX:/path/to/PaddleNLP/llm
 
-python export_model.py \
+python ppredict/export_model.py \
     --model_name_or_path "qwen-vl/qwen-vl-7b-static" \
     --output_path ./checkpoints/encode_text/ \
     --dtype float16 \

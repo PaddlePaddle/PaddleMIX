@@ -74,3 +74,7 @@ kernel_meta/
 
 # MAC
 *.DS_Store
+
+.vscode/
+.benchmarks/
+.mypy_cache/

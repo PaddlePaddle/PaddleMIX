@@ -1,0 +1,496 @@
+{
+  "last_node_id": 24,
+  "last_link_id": 38,
+  "nodes": [
+    {
+      "id": 4,
+      "type": "PaddleSDVaeDecoder",
+      "pos": [
+        1011,
+        398
+      ],
+      "size": {
+        "0": 210,
+        "1": 46
+      },
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "latent",
+          "type": "LATENT",
+          "link": 38,
+          "label": "latent"
+        },
+        {
+          "name": "sd_pipe",
+          "type": "PIPELINE",
+          "link": 4,
+          "label": "sd_pipe"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "links": [
+            3
+          ],
+          "shape": 3,
+          "label": "image",
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PaddleSDVaeDecoder"
+      }
+    },
+    {
+      "id": 5,
+      "type": "PaddleSaveImage",
+      "pos": [
+        1478,
+        470
+      ],
+      "size": {
+        "0": 315,
+        "1": 270
+      },
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 3,
+          "label": "images"
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PaddleSaveImage"
+      },
+      "widgets_values": [
+        "ComfyUI"
+      ]
+    },
+    {
+      "id": 19,
+      "type": "Note",
+      "pos": [
+        1406,
+        968
+      ],
+      "size": {
+        "0": 210,
+        "1": 58
+      },
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "properties": {
+        "text": ""
+      },
+      "widgets_values": [
+        "这里填负向画面提示 (不想要的内容)"
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
+    },
+    {
+      "id": 18,
+      "type": "Note",
+      "pos": [
+        254,
+        1013
+      ],
+      "size": {
+        "0": 210,
+        "1": 58
+      },
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "properties": {
+        "text": ""
+      },
+      "widgets_values": [
+        "这里填正向画面提示 （想要的内容）"
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
+    },
+    {
+      "id": 21,
+      "type": "Note",
+      "pos": [
+        990,
+        543
+      ],
+      "size": {
+        "0": 217.51138305664062,
+        "1": 164.82931518554688
+      },
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "properties": {
+        "text": ""
+      },
+      "widgets_values": [
+        "- denoise是重绘幅度，越高程度越大\n- steps是画笔绘制的步数\n- number是每次同时绘制的张数\n- cfg可以调整画面细节参数\n- scheduler是不同的去噪声方式"
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
+    },
+    {
+      "id": 22,
+      "type": "Note",
+      "pos": [
+        1835,
+        498
+      ],
+      "size": {
+        "0": 210,
+        "1": 58
+      },
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "properties": {
+        "text": ""
+      },
+      "widgets_values": [
+        "这里是最终结果"
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
+    },
+    {
+      "id": 23,
+      "type": "Note",
+      "pos": [
+        324,
+        227
+      ],
+      "size": {
+        "0": 210,
+        "1": 58
+      },
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "properties": {
+        "text": ""
+      },
+      "widgets_values": [
+        "这里选择喜欢的AIGC大模型"
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
+    },
+    {
+      "id": 20,
+      "type": "Note",
+      "pos": [
+        -204,
+        673
+      ],
+      "size": {
+        "0": 210,
+        "1": 58
+      },
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "properties": {
+        "text": ""
+      },
+      "widgets_values": [
+        "这里上传原图像，右键可以打开MaskEditor进行mask绘制。"
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
+    },
+    {
+      "id": 1,
+      "type": "PaddleSDCheckpointLoader",
+      "pos": [
+        -36,
+        291
+      ],
+      "size": {
+        "0": 315,
+        "1": 58
+      },
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "outputs": [
+        {
+          "name": "sd_pipe",
+          "type": "PIPELINE",
+          "links": [
+            4,
+            36
+          ],
+          "shape": 3,
+          "label": "sd_pipe",
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PaddleSDCheckpointLoader"
+      },
+      "widgets_values": [
+        "sd15/25D风_revAnimated_v122.safetensors"
+      ]
+    },
+    {
+      "id": 24,
+      "type": "PaddleSDImage2ImagePipe",
+      "pos": [
+        642,
+        557
+      ],
+      "size": {
+        "0": 315,
+        "1": 262
+      },
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "sd_pipe",
+          "type": "PIPELINE",
+          "link": 36,
+          "label": "sd_pipe"
+        },
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 37,
+          "label": "image"
+        },
+        {
+          "name": "prompt",
+          "type": "PROMPT",
+          "link": 34,
+          "label": "prompt"
+        },
+        {
+          "name": "negative_prompt",
+          "type": "PROMPT",
+          "link": 35,
+          "label": "negative_prompt"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "latent",
+          "type": "LATENT",
+          "links": [
+            38
+          ],
+          "shape": 3,
+          "label": "latent",
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PaddleSDImage2ImagePipe"
+      },
+      "widgets_values": [
+        0.6,
+        20,
+        1,
+        945364487426971,
+        "randomize",
+        7.5,
+        "euler"
+      ]
+    },
+    {
+      "id": 15,
+      "type": "PromptInput",
+      "pos": [
+        479,
+        1004
+      ],
+      "size": {
+        "0": 400,
+        "1": 200
+      },
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "outputs": [
+        {
+          "name": "prompt",
+          "type": "PROMPT",
+          "links": [
+            34
+          ],
+          "shape": 3,
+          "label": "prompt",
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PromptInput"
+      },
+      "widgets_values": [
+        "1boy, blue hair, cute, anime style"
+      ]
+    },
+    {
+      "id": 7,
+      "type": "LoadImage",
+      "pos": [
+        50,
+        588
+      ],
+      "size": {
+        "0": 315,
+        "1": 314
+      },
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            37
+          ],
+          "shape": 3,
+          "label": "IMAGE",
+          "slot_index": 0
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": [],
+          "shape": 3,
+          "label": "MASK",
+          "slot_index": 1
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "IMG_0202.JPG",
+        "image"
+      ],
+      "color": "#322",
+      "bgcolor": "#533"
+    },
+    {
+      "id": 12,
+      "type": "PromptInput",
+      "pos": [
+        965,
+        964
+      ],
+      "size": {
+        "0": 400,
+        "1": 200
+      },
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "outputs": [
+        {
+          "name": "prompt",
+          "type": "PROMPT",
+          "links": [
+            35
+          ],
+          "shape": 3,
+          "label": "prompt",
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PromptInput"
+      },
+      "widgets_values": [
+        "low, error, ugly, (extra hand), wrong hand, nsfw, nude, extra head"
+      ]
+    }
+  ],
+  "links": [
+    [
+      3,
+      4,
+      0,
+      5,
+      0,
+      "IMAGE"
+    ],
+    [
+      4,
+      1,
+      0,
+      4,
+      1,
+      "PIPELINE"
+    ],
+    [
+      34,
+      15,
+      0,
+      24,
+      2,
+      "PROMPT"
+    ],
+    [
+      35,
+      12,
+      0,
+      24,
+      3,
+      "PROMPT"
+    ],
+    [
+      36,
+      1,
+      0,
+      24,
+      0,
+      "PIPELINE"
+    ],
+    [
+      37,
+      7,
+      0,
+      24,
+      1,
+      "IMAGE"
+    ],
+    [
+      38,
+      24,
+      0,
+      4,
+      0,
+      "LATENT"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.7627768444385535,
+      "offset": [
+        375.4873403430241,
+        -129.86933085945807
+      ]
+    }
+  },
+  "version": 0.4
+}

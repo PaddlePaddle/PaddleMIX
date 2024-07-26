@@ -19,7 +19,7 @@
 - paddlepaddle-gpu >= 2.5.1
 - paddlenlp >= 2.6.1
 
-> 注：请确保安装了以上依赖，否则无法运行。同时，需要安装[此目录](https://github.com/PaddlePaddle/PaddleNLP/tree/develop/model_zoo/gpt-3/external_ops)下的自定义OP, `python setup.py install`。如果安装后仍然找不到算子，需要额外设置PYTHONPATH
+> 注：请确保安装了以上依赖，否则无法运行。同时，需要安装 paddlemix/external_ops 下的自定义OP, `python setup.py install`。如果安装后仍然找不到算子，需要额外设置PYTHONPATH
 
 ## 3 快速开始
 完成环境准备后，我们提供三种使用方式：

@@ -311,9 +311,9 @@ def cast_to_paddle(tensor, return_numpy=False):
             tensor = tensor.reshape((1,))
         if "torch.bfloat16" in str(tensor.dtype):
             is_bfloat16 = True
-            tensor = tensor.float().cpu().numpy()
+            tensor = tensor.float().contiguous().cpu().numpy()
         else:
-            tensor = tensor.cpu().numpy()
+            tensor = tensor.contiguous().cpu().numpy()
         if return_numpy:
             return tensor
         if is_bfloat16:

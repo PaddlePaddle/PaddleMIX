@@ -1,0 +1,8 @@
+ftfy
+gdown
+pandas
+pyarrow
+pyav
+tqdm
+beartype
+pandarallel

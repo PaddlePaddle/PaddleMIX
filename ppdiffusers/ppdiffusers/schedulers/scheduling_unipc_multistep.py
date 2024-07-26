@@ -680,7 +680,7 @@ class UniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
             rhos_c = paddle.to_tensor([0.5], dtype=x.dtype)
         else:
             rhos_c = paddle.linalg.solve(R, b)
-
+        rhos_c = rhos_c.cast(x.dtype)
         if self.predict_x0:
             x_t_ = sigma_t / sigma_s0 * x - alpha_t * h_phi_1 * m0
             if D1s is not None:
@@ -749,6 +749,10 @@ class UniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
                 "Number of inference steps is 'None', you need to run 'set_timesteps' after creating the scheduler"
             )
 
+        # NOTE(laixinlu) convert sigmas to the dtype of the model output
+        if self.sigmas.dtype != model_output.dtype:
+            self.sigmas = self.sigmas.cast(model_output.dtype)
+            
         if self.step_index is None:
             self._init_step_index(timestep)
 

@@ -48,6 +48,9 @@ enable_tensorboard=True
 recompute=True
 enable_xformers=True
 
+transformer_engine_backend=False
+use_fp8=False # This option takes effect only when transformer_engine_backend=True
+
 TRAINING_PYTHON="python -m paddle.distributed.launch --master ${MASTER} --nnodes ${TRAINERS_NUM} --nproc_per_node ${TRAINING_GPUS_PER_NODE} --ips ${TRAINER_INSTANCES}"
 ${TRAINING_PYTHON} train_image_generation_trainer.py \
     --do_train \
@@ -88,3 +91,5 @@ ${TRAINING_PYTHON} train_image_generation_trainer.py \
     --hybrid_parallel_topo_order "sharding_first" \
     --pipeline_parallel_degree 1 \
     --sep_parallel_degree 1 \
+    --transformer_engine_backend ${transformer_engine_backend} \
+    --use_fp8 ${use_fp8}
