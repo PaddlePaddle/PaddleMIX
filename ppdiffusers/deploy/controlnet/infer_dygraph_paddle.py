@@ -15,37 +15,20 @@
 import argparse
 import os
 import time
-
-import torch
-
-torch.nn.functional.scaled_dot_product_attention_ = torch.nn.functional.scaled_dot_product_attention
-delattr(torch.nn.functional, "scaled_dot_product_attention")
+import warnings
 
 import cv2
 import numpy as np
-from diffusers import (
-    ControlNetModel,
-    DDIMScheduler,
-    DDPMScheduler,
-    DEISMultistepScheduler,
-    DPMSolverMultistepScheduler,
-    DPMSolverSinglestepScheduler,
-    EulerAncestralDiscreteScheduler,
-    EulerDiscreteScheduler,
-    HeunDiscreteScheduler,
-    KDPM2AncestralDiscreteScheduler,
-    KDPM2DiscreteScheduler,
-    LMSDiscreteScheduler,
-    PNDMScheduler,
-    StableDiffusionControlNetImg2ImgPipeline,
-    StableDiffusionControlNetInpaintPipeline,
-    StableDiffusionControlNetPipeline,
-    UniPCMultistepScheduler,
-)
-from diffusers.models.attention_processor import AttnProcessor, AttnProcessor2_0
-from diffusers.utils import load_image
+import paddle
+from paddlenlp.trainer.argparser import strtobool
+from paddlenlp.utils.log import logger
 from PIL import Image
 from tqdm.auto import trange
+
+from ppdiffusers import ControlNetModel, DiffusionPipeline
+from ppdiffusers.utils import load_image
+
+logger.set_level("WARNING")
 
 
 def get_canny_image(image, args):
@@ -58,62 +41,6 @@ def get_canny_image(image, args):
     return canny_image
 
 
-def strtobool(v):
-    if isinstance(v, bool):
-        return v
-    if v.lower() in ("yes", "true", "t", "y", "1"):
-        return True
-    elif v.lower() in ("no", "false", "f", "n", "0"):
-        return False
-    else:
-        raise ValueError(
-            f"Truthy value expected: got {v} but expected one of yes/no, true/false, t/f, y/n, 1/0 (case insensitive)."
-        )
-
-
-def change_scheduler(self, scheduler_type="ddim"):
-    self.orginal_scheduler_config = self.scheduler.config
-    scheduler_type = scheduler_type.lower()
-    if scheduler_type == "pndm":
-        scheduler = PNDMScheduler.from_config(self.orginal_scheduler_config, skip_prk_steps=True)
-    elif scheduler_type == "lms":
-        scheduler = LMSDiscreteScheduler.from_config(self.orginal_scheduler_config)
-    elif scheduler_type == "heun":
-        scheduler = HeunDiscreteScheduler.from_config(self.orginal_scheduler_config)
-    elif scheduler_type == "euler":
-        scheduler = EulerDiscreteScheduler.from_config(self.orginal_scheduler_config)
-    elif scheduler_type == "euler-ancestral":
-        scheduler = EulerAncestralDiscreteScheduler.from_config(self.orginal_scheduler_config)
-    elif scheduler_type == "dpm-multi":
-        scheduler = DPMSolverMultistepScheduler.from_config(self.orginal_scheduler_config)
-    elif scheduler_type == "dpm-single":
-        scheduler = DPMSolverSinglestepScheduler.from_config(self.orginal_scheduler_config)
-    elif scheduler_type == "kdpm2-ancestral":
-        scheduler = KDPM2AncestralDiscreteScheduler.from_config(self.orginal_scheduler_config)
-    elif scheduler_type == "kdpm2":
-        scheduler = KDPM2DiscreteScheduler.from_config(self.orginal_scheduler_config)
-    elif scheduler_type == "unipc-multi":
-        scheduler = UniPCMultistepScheduler.from_config(self.orginal_scheduler_config)
-    elif scheduler_type == "ddim":
-        scheduler = DDIMScheduler.from_config(
-            self.orginal_scheduler_config,
-            steps_offset=1,
-            clip_sample=False,
-            set_alpha_to_one=False,
-        )
-    elif scheduler_type == "ddpm":
-        scheduler = DDPMScheduler.from_config(
-            self.orginal_scheduler_config,
-        )
-    elif scheduler_type == "deis-multi":
-        scheduler = DEISMultistepScheduler.from_config(
-            self.orginal_scheduler_config,
-        )
-    else:
-        raise ValueError(f"Scheduler of type {scheduler_type} doesn't exist!")
-    return scheduler
-
-
 def parse_arguments():
 
     parser = argparse.ArgumentParser()
@@ -121,13 +48,13 @@ def parse_arguments():
         "--pretrained_model_name_or_path",
         type=str,
         default="runwayml/stable-diffusion-v1-5",
-        help="Path to the `diffusers` checkpoint to convert (either a local directory or on the bos).",
+        help="Path to the `ppdiffusers` checkpoint to convert (either a local directory or on the bos).",
     )
     parser.add_argument(
         "--controlnet_pretrained_model_name_or_path",
         type=str,
         default="lllyasviel/sd-controlnet-canny",
-        help="Path to the `diffusers` controlnet_pretrained_model_name_or_path  checkpoint to convert (either a local directory or on the bos).",
+        help="Path to the `ppdiffusers` controlnet_pretrained_model_name_or_path  checkpoint to convert (either a local directory or on the bos).",
     )
     parser.add_argument(
         "--inference_steps",
@@ -144,42 +71,38 @@ def parse_arguments():
     parser.add_argument(
         "--task_name",
         type=str,
-        default="all",
+        default="text2img_control",
         choices=[
             "text2img_control",
             "img2img_control",
             "inpaint_legacy_control",
+            "hiresfix_control",
             "all",
         ],
-        help="The task can be one of [text2img_control, img2img_control, inpaint_legacy_control, all]. ",
+        help="The task can be one of [text2img_control, img2img_control, inpaint_legacy_control, hiresfix_control, all]. ",
     )
     parser.add_argument(
         "--parse_prompt_type",
         type=str,
-        default="raw",
+        default="lpw",
         choices=[
             "raw",
             "lpw",
         ],
         help="The parse_prompt_type can be one of [raw, lpw]. ",
     )
+    parser.add_argument("--use_fp16", type=strtobool, default=True, help="Wheter to use FP16 mode")
     parser.add_argument(
-        "--channels_last",
+        "--guess_mode",
         type=strtobool,
         default=False,
-        help="Wheter to use channels_last",
+        help="In this mode, the ControlNet encoder will try best to recognize the content of the input image even if you remove all prompts. The `guidance_scale` between 3.0 and 5.0 is recommended.",
     )
-    parser.add_argument("--use_fp16", type=strtobool, default=True, help="Wheter to use FP16 mode")
-    parser.add_argument("--tf32", type=strtobool, default=True, help="tf32")
-    parser.add_argument("--compile", type=strtobool, default=False, help="compile")
     parser.add_argument(
         "--attention_type",
         type=str,
-        default="sdp",
-        choices=[
-            "raw",
-            "sdp",
-        ],
+        default="raw",
+        choices=["raw", "cutlass", "flash", "all"],
         help="attention_type.",
     )
     parser.add_argument("--device_id", type=int, default=0, help="The selected gpu id. -1 means use cpu")
@@ -206,6 +129,8 @@ def parse_arguments():
     )
     parser.add_argument("--height", type=int, default=512, help="Height of input image")
     parser.add_argument("--width", type=int, default=512, help="Width of input image")
+    parser.add_argument("--hr_resize_height", type=int, default=768, help="HR Height of input image")
+    parser.add_argument("--hr_resize_width", type=int, default=768, help="HR Width of input image")
     parser.add_argument(
         "--low_threshold",
         type=int,
@@ -221,127 +146,93 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def attn_processors(self):
-    processors = {}
-
-    def fn_recursive_add_processors(name: str, module, processors):
-        if hasattr(module, "set_processor"):
-            processors[f"{name}.processor"] = module.processor
-
-        for sub_name, child in module.named_children():
-            fn_recursive_add_processors(f"{name}.{sub_name}", child, processors)
-
-        return processors
-
-    for name, module in self.named_children():
-        fn_recursive_add_processors(name, module, processors)
-
-    return processors
-
-
-def set_attn_processor(self, processor):
-    count = len(attn_processors(self).keys())
-
-    if isinstance(processor, dict) and len(processor) != count:
-        raise ValueError(
-            f"A dict of processors was passed, but the number of processors {len(processor)} does not match the"
-            f" number of attention layers: {count}. Please make sure to pass {count} processor classes."
-        )
-
-    def fn_recursive_attn_processor(name: str, module, processor):
-        if hasattr(module, "set_processor"):
-            if not isinstance(processor, dict):
-                module.set_processor(processor)
-            else:
-                module.set_processor(processor.pop(f"{name}.processor"))
-
-        for sub_name, child in module.named_children():
-            fn_recursive_attn_processor(f"{name}.{sub_name}", child, processor)
-
-    for name, module in self.named_children():
-        fn_recursive_attn_processor(name, module, processor)
-
-
 def main(args):
-    if args.tf32:
-        torch.backends.cuda.matmul.allow_tf32 = True
+    if args.device_id == -1:
+        paddle.set_device("cpu")
     else:
-        torch.backends.cuda.matmul.allow_tf32 = False
-
+        paddle.set_device(f"gpu:{args.device_id}")
     seed = 1024
-    torch_dtype = torch.float16 if args.use_fp16 else torch.float32
+    paddle_dtype = paddle.float16 if args.use_fp16 else paddle.float32
     controlnet = ControlNetModel.from_pretrained(
-        args.controlnet_pretrained_model_name_or_path, torch_dtype=torch_dtype
+        args.controlnet_pretrained_model_name_or_path, paddle_dtype=paddle_dtype
     )
-    pipe = StableDiffusionControlNetPipeline.from_pretrained(
+    pipe = DiffusionPipeline.from_pretrained(
         args.pretrained_model_name_or_path,
         controlnet=controlnet,
         safety_checker=None,
         feature_extractor=None,
         requires_safety_checker=False,
-        torch_dtype=torch_dtype,
+        paddle_dtype=paddle_dtype,
+        custom_pipeline=os.path.join(
+            os.path.abspath(os.path.join(os.getcwd(), "../..")), "examples/community/stable_diffusion_mega.py"
+        ),
     )
-    scheduler = change_scheduler(pipe, args.scheduler)
-    pipe.scheduler = scheduler
-    if args.device_id >= 0:
-        pipe.to(f"cuda:{args.device_id}")
+    pipe.set_progress_bar_config(disable=False)
+    pipe.change_scheduler(args.scheduler)
+    parse_prompt_type = args.parse_prompt_type
 
     if args.attention_type == "all":
-        args.attention_type = ["raw", "sdp"]
+        args.attention_type = ["raw", "cutlass", "flash"]
     else:
         args.attention_type = [args.attention_type]
 
     for attention_type in args.attention_type:
-        attn_prrocessor_cls = AttnProcessor if attention_type == "raw" else AttnProcessor2_0
-        if attention_type == "sdp":
-            torch.nn.functional.scaled_dot_product_attention = torch.nn.functional.scaled_dot_product_attention_
-        set_attn_processor(pipe.unet, attn_prrocessor_cls())
-        set_attn_processor(pipe.vae, attn_prrocessor_cls())
-        set_attn_processor(pipe.controlnet, attn_prrocessor_cls())
+        if attention_type == "raw":
+            pipe.disable_xformers_memory_efficient_attention()
+        else:
+            try:
+                pipe.enable_xformers_memory_efficient_attention(attention_type)
+            except Exception as e:
+                if attention_type == "flash":
+                    warnings.warn(
+                        "Attention type flash is not supported on your GPU! We need to use 3060、3070、3080、3090、4060、4070、4080、4090、A30、A100 etc."
+                    )
+                    continue
+                else:
+                    raise ValueError(e)
 
-        if args.channels_last:
-            pipe.unet.to(memory_format=torch.channels_last)
-            pipe.controlnet.to(memory_format=torch.channels_last)
-
-        if args.compile:
-            print("Run torch compile")
-            pipe.unet = torch.compile(pipe.unet, mode="reduce-overhead", fullgraph=True)
-            pipe.controlnet = torch.compile(pipe.controlnet, mode="reduce-overhead", fullgraph=True)
-
+        if not args.use_fp16 and attention_type == "flash":
+            print("Flash attention is not supported dtype=float32! Please use float16 or bfloat16. We will skip this!")
+            continue
+        guess_mode = args.guess_mode
         width = args.width
         height = args.height
-        pipe.set_progress_bar_config(disable=False)
-
-        folder = f"torch_attn_{attention_type}_fp16" if args.use_fp16 else f"torch_attn_{attention_type}_fp32"
+        hr_resize_width = args.hr_resize_width
+        hr_resize_height = args.hr_resize_height
+        folder = f"attn_{attention_type}_fp16" if args.use_fp16 else f"attn_{attention_type}_fp32"
         os.makedirs(folder, exist_ok=True)
         if args.task_name in ["text2img_control", "all"]:
             init_image = load_image(
                 "https://paddlenlp.bj.bcebos.com/models/community/junnyu/develop/control_bird_canny_demo.png"
             )
-            controlnet_cond = get_canny_image(init_image, args).resize((width, height))
+            controlnet_cond = get_canny_image(init_image, args)
             # text2img
             prompt = "bird"
             time_costs = []
             # warmup
-            pipe(
+            pipe.text2img(
                 prompt,
                 num_inference_steps=10,
                 height=height,
                 width=width,
-                image=controlnet_cond,
+                controlnet_cond=controlnet_cond,
                 controlnet_conditioning_scale=1.0,
+                guess_mode=guess_mode,
+                parse_prompt_type=parse_prompt_type,
             )
             print("==> Test text2img_control performance.")
             for step in trange(args.benchmark_steps):
                 start = time.time()
-                torch.cuda.manual_seed(seed)
-                images = pipe(
+                paddle.seed(seed)
+                images = pipe.text2img(
                     prompt,
                     num_inference_steps=args.inference_steps,
                     height=height,
                     width=width,
-                    image=controlnet_cond,
+                    controlnet_cond=controlnet_cond,
                     controlnet_conditioning_scale=1.0,
+                    guess_mode=guess_mode,
+                    parse_prompt_type=parse_prompt_type,
                 ).images
                 latency = time.time() - start
                 time_costs += [latency]
@@ -356,35 +247,37 @@ def main(args):
             images[0].save(f"{folder}/text2img_control.png")
 
         if args.task_name in ["img2img_control", "all"]:
-            pipe_img2img = StableDiffusionControlNetImg2ImgPipeline(**pipe.components)
-            pipe_img2img.set_progress_bar_config(disable=False)
             img_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/sketch-mountains-input.png"
-            init_image = load_image(img_url).resize((width, height))
-            controlnet_cond = get_canny_image(init_image, args).resize((width, height))
+            init_image = load_image(img_url)
+            controlnet_cond = get_canny_image(init_image, args)
             prompt = "A fantasy landscape, trending on artstation"
             time_costs = []
             # warmup
-            pipe_img2img(
+            pipe.img2img(
                 prompt,
                 image=init_image,
                 num_inference_steps=20,
                 height=height,
                 width=width,
-                control_image=controlnet_cond,
+                controlnet_cond=controlnet_cond,
                 controlnet_conditioning_scale=1.0,
+                guess_mode=guess_mode,
+                parse_prompt_type=parse_prompt_type,
             )
             print("==> Test img2img_control performance.")
             for step in trange(args.benchmark_steps):
                 start = time.time()
-                torch.cuda.manual_seed(seed)
-                images = pipe_img2img(
+                paddle.seed(seed)
+                images = pipe.img2img(
                     prompt,
                     image=init_image,
                     num_inference_steps=args.inference_steps,
                     height=height,
                     width=width,
-                    control_image=controlnet_cond,
+                    controlnet_cond=controlnet_cond,
                     controlnet_conditioning_scale=1.0,
+                    guess_mode=guess_mode,
+                    parse_prompt_type=parse_prompt_type,
                 ).images
                 latency = time.time() - start
                 time_costs += [latency]
@@ -399,41 +292,43 @@ def main(args):
             images[0].save(f"{folder}/img2img_control.png")
 
         if args.task_name in ["inpaint_legacy_control", "all"]:
-            pipe_inpaint = StableDiffusionControlNetInpaintPipeline(**pipe.components)
-            pipe_inpaint.set_progress_bar_config(disable=False)
             img_url = (
                 "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations.png"
             )
             mask_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations-mask.png"
-            init_image = load_image(img_url).resize((width, height))
-            mask_image = load_image(mask_url).resize((width, height))
-            controlnet_cond = get_canny_image(init_image, args).resize((width, height))
+            init_image = load_image(img_url)
+            mask_image = load_image(mask_url)
+            controlnet_cond = get_canny_image(init_image, args)
             prompt = "Face of a yellow cat, high resolution, sitting on a park bench"
             time_costs = []
             task_name = "inpaint_legacy_control"
-            pipe_inpaint(
+            pipe.inpaint_legacy(
                 prompt,
                 image=init_image,
                 mask_image=mask_image,
                 num_inference_steps=20,
                 height=height,
                 width=width,
-                control_image=controlnet_cond,
+                controlnet_cond=controlnet_cond,
                 controlnet_conditioning_scale=1.0,
+                guess_mode=guess_mode,
+                parse_prompt_type=parse_prompt_type,
             )
             print(f"==> Test {task_name} performance.")
             for step in trange(args.benchmark_steps):
                 start = time.time()
-                torch.cuda.manual_seed(seed)
-                images = pipe_inpaint(
+                paddle.seed(seed)
+                images = pipe.inpaint_legacy(
                     prompt,
                     image=init_image,
                     mask_image=mask_image,
                     num_inference_steps=args.inference_steps,
                     height=height,
                     width=width,
-                    control_image=controlnet_cond,
+                    controlnet_cond=controlnet_cond,
                     controlnet_conditioning_scale=1.0,
+                    guess_mode=guess_mode,
+                    parse_prompt_type=parse_prompt_type,
                 ).images
                 latency = time.time() - start
                 time_costs += [latency]
@@ -446,6 +341,60 @@ def main(args):
                 f"p90 latency: {np.percentile(time_costs, 90):2f} s, p95 latency: {np.percentile(time_costs, 95):2f} s."
             )
             images[0].save(f"{folder}/{task_name}.png")
+
+        if args.task_name in ["hiresfix_control", "all"]:
+            # hiresfix_control
+            init_image = load_image(
+                "https://paddlenlp.bj.bcebos.com/models/community/junnyu/develop/control_bird_canny_demo.png"
+            )
+            controlnet_cond = get_canny_image(init_image, args)
+            # hiresfix_control
+            prompt = "a red bird"
+            time_costs = []
+            # warmup
+            pipe.hires_fix(
+                prompt,
+                height=height,
+                width=width,
+                num_inference_steps=20,
+                hires_ratio=0.5,
+                hr_resize_width=hr_resize_width,
+                hr_resize_height=hr_resize_height,
+                enable_hr=True,
+                controlnet_cond=controlnet_cond,
+                controlnet_conditioning_scale=1.0,
+                guess_mode=guess_mode,
+                parse_prompt_type=parse_prompt_type,
+            )
+            print("==> Test hiresfix_control performance.")
+            for step in trange(args.benchmark_steps):
+                start = time.time()
+                paddle.seed(seed)
+                images = pipe.hires_fix(
+                    prompt,
+                    height=height,
+                    width=width,
+                    num_inference_steps=args.inference_steps,
+                    hires_ratio=0.5,
+                    hr_resize_width=hr_resize_width,
+                    hr_resize_height=hr_resize_height,
+                    enable_hr=True,
+                    controlnet_cond=controlnet_cond,
+                    controlnet_conditioning_scale=1.0,
+                    guess_mode=guess_mode,
+                    parse_prompt_type=parse_prompt_type,
+                ).images
+                latency = time.time() - start
+                time_costs += [latency]
+                # print(f"No {step:3d} time cost: {latency:2f} s")
+            print(
+                f"Attention type: {attention_type}, "
+                f"Use fp16: {'true' if args.use_fp16 else 'false'}, "
+                f"Mean iter/sec: {1 / (np.mean(time_costs) / args.inference_steps):2f} it/s, "
+                f"Mean latency: {np.mean(time_costs):2f} s, p50 latency: {np.percentile(time_costs, 50):2f} s, "
+                f"p90 latency: {np.percentile(time_costs, 90):2f} s, p95 latency: {np.percentile(time_costs, 95):2f} s."
+            )
+            images[0].save(f"{folder}/hiresfix_control.png")
 
 
 if __name__ == "__main__":
