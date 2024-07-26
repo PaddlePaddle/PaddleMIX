@@ -40,7 +40,7 @@ class Predictor(object):
         self.args = args
         self.config = AutoConfigMIX.from_pretrained(args.model_name_or_path)
 
-        self.tokenizer = AutoTokenizerMIX.from_pretrained(args.model_name_or_path, use_fast=False)
+        self.tokenizer = AutoTokenizerMIX.from_pretrained(args.model_name_or_path)
         self.processor, _ = AutoProcessorMIX.from_pretrained(args.model_name_or_path, eval="eval")
 
         self.first_predictor = self.create_predictor(args.first_model_path)
