@@ -450,5 +450,5 @@ def _extract_into_shardtensor(arr, timesteps, x):
     broadcast_shape = x.shape
     while len(res.shape) < len(broadcast_shape):
         res = res[..., None]
-    res = dist.reshard(res, x.process_mesh, x.placements)
+    # res = dist.reshard(res, x.process_mesh, x.placements)  # may not be needed? outside multiply will reshard?
     return res
