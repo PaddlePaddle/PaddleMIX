@@ -347,6 +347,9 @@ def main(args):
                 time_costs += [latency]
                 # print(f"No {step:3d} time cost: {latency:2f} s")
             print(
+                f"Attention type: {attention_type}, "
+                f"Use fp16: {'true' if args.use_fp16 else 'false'}, "
+                f"Mean iter/sec: {1 / (np.mean(time_costs) / args.inference_steps):2f} it/s, "
                 f"Mean latency: {np.mean(time_costs):2f} s, p50 latency: {np.percentile(time_costs, 50):2f} s, "
                 f"p90 latency: {np.percentile(time_costs, 90):2f} s, p95 latency: {np.percentile(time_costs, 95):2f} s."
             )
@@ -387,6 +390,9 @@ def main(args):
                 time_costs += [latency]
                 # print(f"No {step:3d} time cost: {latency:2f} s")
             print(
+                f"Attention type: {attention_type}, "
+                f"Use fp16: {'true' if args.use_fp16 else 'false'}, "
+                f"Mean iter/sec: {1 / (np.mean(time_costs) / args.inference_steps):2f} it/s, "
                 f"Mean latency: {np.mean(time_costs):2f} s, p50 latency: {np.percentile(time_costs, 50):2f} s, "
                 f"p90 latency: {np.percentile(time_costs, 90):2f} s, p95 latency: {np.percentile(time_costs, 95):2f} s."
             )
@@ -433,6 +439,9 @@ def main(args):
                 time_costs += [latency]
                 # print(f"No {step:3d} time cost: {latency:2f} s")
             print(
+                f"Attention type: {attention_type}, "
+                f"Use fp16: {'true' if args.use_fp16 else 'false'}, "
+                f"Mean iter/sec: {1 / (np.mean(time_costs) / args.inference_steps):2f} it/s, "
                 f"Mean latency: {np.mean(time_costs):2f} s, p50 latency: {np.percentile(time_costs, 50):2f} s, "
                 f"p90 latency: {np.percentile(time_costs, 90):2f} s, p95 latency: {np.percentile(time_costs, 95):2f} s."
             )

@@ -15,11 +15,14 @@
 import argparse
 import os
 import time
-
-import paddle
+import warnings
 
 import cv2
 import numpy as np
+import paddle
+from PIL import Image
+from tqdm.auto import trange
+
 from ppdiffusers import (
     DDIMScheduler,
     DDPMScheduler,
@@ -39,8 +42,6 @@ from ppdiffusers import (
     UniPCMultistepScheduler,
 )
 from ppdiffusers.utils import load_image
-from PIL import Image
-from tqdm.auto import trange
 
 
 def get_canny_image(image, args):
@@ -153,12 +154,8 @@ def parse_arguments():
         help="The parse_prompt_type can be one of [raw, lpw]. ",
     )
     parser.add_argument("--use_fp16", type=strtobool, default=True, help="Wheter to use FP16 mode")
-    # parser.add_argument(
-    #     "--attention_type", type=str, default="raw", choices=["raw", "cutlass", "flash", "all"], help="attention_type."
-    # )
-    # currently, paddle3 not support flash attention
     parser.add_argument(
-        "--attention_type", type=str, default="raw", choices=["raw", "cutlass", "all"], help="attention_type."
+        "--attention_type", type=str, default="raw", choices=["raw", "cutlass", "flash", "all"], help="attention_type."
     )
     parser.add_argument("--device_id", type=int, default=0, help="The selected gpu id. -1 means use cpu")
     parser.add_argument(
@@ -224,7 +221,7 @@ def main(args):
         if not args.use_fp16 and attention_type == "flash":
             print("Flash attention is not supported dtype=float32! Please use float16 or bfloat16. We will skip this!")
             continue
-        
+
         width = args.width
         height = args.height
         pipe.set_progress_bar_config(disable=False)
@@ -259,7 +256,9 @@ def main(args):
                 time_costs += [latency]
                 # print(f"No {step:3d} time cost: {latency:2f} s")
             print(
-                f"attention_type: {attention_type}, "
+                f"Attention type: {attention_type}, "
+                f"Use fp16: {'true' if args.use_fp16 else 'false'}, "
+                f"Mean iter/sec: {1 / (np.mean(time_costs) / args.inference_steps):2f} it/s, "
                 f"Mean latency: {np.mean(time_costs):2f} s, p50 latency: {np.percentile(time_costs, 50):2f} s, "
                 f"p90 latency: {np.percentile(time_costs, 90):2f} s, p95 latency: {np.percentile(time_costs, 95):2f} s."
             )
@@ -295,7 +294,9 @@ def main(args):
                 time_costs += [latency]
                 # print(f"No {step:3d} time cost: {latency:2f} s")
             print(
-                f"attention_type: {attention_type}, "
+                f"Attention type: {attention_type}, "
+                f"Use fp16: {'true' if args.use_fp16 else 'false'}, "
+                f"Mean iter/sec: {1 / (np.mean(time_costs) / args.inference_steps):2f} it/s, "
                 f"Mean latency: {np.mean(time_costs):2f} s, p50 latency: {np.percentile(time_costs, 50):2f} s, "
                 f"p90 latency: {np.percentile(time_costs, 90):2f} s, p95 latency: {np.percentile(time_costs, 95):2f} s."
             )
@@ -337,7 +338,9 @@ def main(args):
                 time_costs += [latency]
                 # print(f"No {step:3d} time cost: {latency:2f} s")
             print(
-                f"attention_type: {attention_type}, "
+                f"Attention type: {attention_type}, "
+                f"Use fp16: {'true' if args.use_fp16 else 'false'}, "
+                f"Mean iter/sec: {1 / (np.mean(time_costs) / args.inference_steps):2f} it/s, "
                 f"Mean latency: {np.mean(time_costs):2f} s, p50 latency: {np.percentile(time_costs, 50):2f} s, "
                 f"p90 latency: {np.percentile(time_costs, 90):2f} s, p95 latency: {np.percentile(time_costs, 95):2f} s."
             )

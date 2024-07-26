@@ -17,13 +17,9 @@ import os
 import time
 import warnings
 
-import cv2
 import numpy as np
-import paddle
-from PIL import Image
-from tqdm.auto import trange
-
-from ppdiffusers import (
+import torch
+from diffusers import (
     DDIMScheduler,
     DDPMScheduler,
     DEISMultistepScheduler,
@@ -36,22 +32,11 @@ from ppdiffusers import (
     KDPM2DiscreteScheduler,
     LMSDiscreteScheduler,
     PNDMScheduler,
-    StableDiffusionXLImg2ImgPipeline,
-    StableDiffusionXLInpaintPipeline,
-    StableDiffusionXLPipeline,
+    StableVideoDiffusionPipeline,
     UniPCMultistepScheduler,
 )
-from ppdiffusers.utils import load_image
-
-
-def get_canny_image(image, args):
-    if isinstance(image, Image.Image):
-        image = np.array(image)
-    image = cv2.Canny(image, args.low_threshold, args.high_threshold)
-    image = image[:, :, None]
-    image = np.concatenate([image, image, image], axis=2)
-    canny_image = Image.fromarray(image)
-    return canny_image
+from diffusers.utils import load_image
+from tqdm.auto import trange
 
 
 def strtobool(v):
@@ -116,7 +101,7 @@ def parse_arguments():
     parser.add_argument(
         "--pretrained_model_name_or_path",
         type=str,
-        default="stabilityai/stable-diffusion-xl-base-1.0",
+        default="stabilityai/stable-video-diffusion-img2vid-xt",
         help="Path to the `diffusers` checkpoint to convert (either a local directory or on the bos).",
     )
     parser.add_argument(
@@ -136,9 +121,7 @@ def parse_arguments():
         type=str,
         default="all",
         choices=[
-            "text2img",
-            "img2img",
-            "inpaint_legacy",
+            "img2video",
             "all",
         ],
         help="The task can be one of [text2img, img2img, inpaint_legacy, all]. ",
@@ -154,8 +137,12 @@ def parse_arguments():
         help="The parse_prompt_type can be one of [raw, lpw]. ",
     )
     parser.add_argument("--use_fp16", type=strtobool, default=True, help="Wheter to use FP16 mode")
+    # parser.add_argument(
+    #     "--attention_type", type=str, default="raw", choices=["raw", "cutlass", "flash", "all"], help="attention_type."
+    # )
+    # currently, torch3 not support flash attention
     parser.add_argument(
-        "--attention_type", type=str, default="raw", choices=["raw", "cutlass", "flash", "all"], help="attention_type."
+        "--attention_type", type=str, default="raw", choices=["raw", "cutlass", "all"], help="attention_type."
     )
     parser.add_argument("--device_id", type=int, default=0, help="The selected gpu id. -1 means use cpu")
     parser.add_argument(
@@ -179,21 +166,25 @@ def parse_arguments():
         ],
         help="The scheduler type of stable diffusion.",
     )
-    parser.add_argument("--height", type=int, default=512, help="Height of input image")
-    parser.add_argument("--width", type=int, default=512, help="Width of input image")
+    parser.add_argument("--height", type=int, default=576, help="The height of output images. Default: None")
+    parser.add_argument("--width", type=int, default=1024, help="The width of output images. Default: None")
+    parser.add_argument(
+        "--num_frames",
+        type=int,
+        default=25,
+        help="The number of video frames to generate. Defaults: None, \
+        resulting to 14 for `stable-video-diffusion-img2vid` and to 25 for `stable-video-diffusion-img2vid-xt`",
+    )
     return parser.parse_args()
 
 
 def main(args):
 
     seed = 1024
-    paddle_dtype = paddle.float16 if args.use_fp16 else paddle.float32
-    pipe = StableDiffusionXLPipeline.from_pretrained(
+    torch_dtype = torch.float16 if args.use_fp16 else torch.float32
+    pipe = StableVideoDiffusionPipeline.from_pretrained(
         args.pretrained_model_name_or_path,
-        safety_checker=None,
-        feature_extractor=None,
-        requires_safety_checker=False,
-        paddle_dtype=paddle_dtype,
+        torch_dtype=torch_dtype,
     )
     scheduler = change_scheduler(pipe, args.scheduler)
     pipe.scheduler = scheduler
@@ -226,114 +217,37 @@ def main(args):
         height = args.height
         pipe.set_progress_bar_config(disable=False)
 
-        folder = f"paddle_attn_{attention_type}_fp16" if args.use_fp16 else f"paddle_attn_{attention_type}_fp32"
+        folder = f"torch_attn_{attention_type}_fp16" if args.use_fp16 else f"torch_attn_{attention_type}_fp32"
         os.makedirs(folder, exist_ok=True)
-        if args.task_name in ["text2img", "all"]:
-            init_image = load_image(
-                "https://paddlenlp.bj.bcebos.com/models/community/junnyu/develop/control_bird_canny_demo.png"
-            )
-            # text2img
-            prompt = "a photo of an astronaut riding a horse on mars"
-            time_costs = []
-            # warmup
-            pipe(
-                prompt,
-                num_inference_steps=10,
-                height=height,
-                width=width,
-            )
-            print("==> Test text2img performance.")
-            for step in trange(args.benchmark_steps):
-                start = time.time()
-                paddle.seed(seed)
-                images = pipe(
-                    prompt,
-                    num_inference_steps=args.inference_steps,
-                    height=height,
-                    width=width,
-                ).images
-                latency = time.time() - start
-                time_costs += [latency]
-                # print(f"No {step:3d} time cost: {latency:2f} s")
-            print(
-                f"Attention type: {attention_type}, "
-                f"Use fp16: {'true' if args.use_fp16 else 'false'}, "
-                f"Mean iter/sec: {1 / (np.mean(time_costs) / args.inference_steps):2f} it/s, "
-                f"Mean latency: {np.mean(time_costs):2f} s, p50 latency: {np.percentile(time_costs, 50):2f} s, "
-                f"p90 latency: {np.percentile(time_costs, 90):2f} s, p95 latency: {np.percentile(time_costs, 95):2f} s."
-            )
-            images[0].save(f"{folder}/text2img.png")
-
-        if args.task_name in ["img2img", "all"]:
-            pipe_img2img = StableDiffusionXLImg2ImgPipeline(**pipe.components)
-            pipe_img2img.set_progress_bar_config(disable=False)
-            img_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/sketch-mountains-input.png"
-            init_image = load_image(img_url).resize((width, height))
-            prompt = "A fantasy landscape, trending on artstation"
-            time_costs = []
-            # warmup
-            pipe_img2img(
-                prompt,
-                image=init_image,
-                num_inference_steps=20,
-                height=height,
-                width=width,
-            )
-            print("==> Test img2img performance.")
-            for step in trange(args.benchmark_steps):
-                start = time.time()
-                paddle.seed(seed)
-                images = pipe_img2img(
-                    prompt,
-                    image=init_image,
-                    num_inference_steps=args.inference_steps,
-                    height=height,
-                    width=width,
-                ).images
-                latency = time.time() - start
-                time_costs += [latency]
-                # print(f"No {step:3d} time cost: {latency:2f} s")
-            print(
-                f"Attention type: {attention_type}, "
-                f"Use fp16: {'true' if args.use_fp16 else 'false'}, "
-                f"Mean iter/sec: {1 / (np.mean(time_costs) / args.inference_steps):2f} it/s, "
-                f"Mean latency: {np.mean(time_costs):2f} s, p50 latency: {np.percentile(time_costs, 50):2f} s, "
-                f"p90 latency: {np.percentile(time_costs, 90):2f} s, p95 latency: {np.percentile(time_costs, 95):2f} s."
-            )
-            images[0].save(f"{folder}/img2img.png")
-
-        if args.task_name in ["inpaint_legacy", "all"]:
-            pipe_inpaint = StableDiffusionXLInpaintPipeline(**pipe.components)
-            pipe_inpaint.set_progress_bar_config(disable=False)
+        if args.task_name in ["img2video", "all"]:
+            # img2video
             img_url = (
-                "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations.png"
+                "https://paddlenlp.bj.bcebos.com/models/community/hf-internal-testing/diffusers-images/rocket.png"
             )
-            mask_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations-mask.png"
-            init_image = load_image(img_url).resize((width, height))
-            mask_image = load_image(mask_url).resize((width, height))
-            prompt = "Face of a yellow cat, high resolution, sitting on a park bench"
+            init_image = load_image(img_url)
             time_costs = []
-            task_name = "inpaint_legacy"
-            pipe_inpaint(
-                prompt,
+            # warmup
+            print("==> Warmup.")
+            pipe(
                 image=init_image,
-                mask_image=mask_image,
-                num_inference_steps=20,
+                num_inference_steps=3,
                 height=height,
                 width=width,
+                fps=7,
+                decode_chunk_size=2,
             )
-            print(f"==> Test {task_name} performance.")
+            print("==> Test img2video performance.")
             for step in trange(args.benchmark_steps):
                 start = time.time()
-                paddle.seed(seed)
-                images = pipe_inpaint(
-                    prompt,
+                torch.cuda.manual_seed(seed)
+                frames = pipe(
                     image=init_image,
-                    mask_image=mask_image,
                     num_inference_steps=args.inference_steps,
                     height=height,
                     width=width,
-                ).images
+                    fps=7,
+                    decode_chunk_size=2,
+                ).frames
                 latency = time.time() - start
                 time_costs += [latency]
                 # print(f"No {step:3d} time cost: {latency:2f} s")
@@ -344,7 +258,7 @@ def main(args):
                 f"Mean latency: {np.mean(time_costs):2f} s, p50 latency: {np.percentile(time_costs, 50):2f} s, "
                 f"p90 latency: {np.percentile(time_costs, 90):2f} s, p95 latency: {np.percentile(time_costs, 95):2f} s."
             )
-            images[0].save(f"{folder}/{task_name}.png")
+            frames[0][0].save(f"{folder}/test_svd.gif", save_all=True, append_images=frames[0][1:], loop=0)
 
 
 if __name__ == "__main__":
