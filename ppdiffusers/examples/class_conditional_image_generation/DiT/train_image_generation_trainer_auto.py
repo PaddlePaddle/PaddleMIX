@@ -83,10 +83,6 @@ def shard_model(model):
     Raises:
         None
     """
-    for param in model.parameters():
-        pass
-        # assert not param._is_initialized()
-
     pp_stage = 0
     for name, layer in model.named_sublayers(include_self=False):
         if name.startswith("transformer"):
