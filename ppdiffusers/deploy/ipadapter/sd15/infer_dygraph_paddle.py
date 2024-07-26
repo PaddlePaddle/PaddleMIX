@@ -15,15 +15,15 @@
 import argparse
 import os
 import time
-
-import torch
-
-torch.nn.functional.scaled_dot_product_attention_ = torch.nn.functional.scaled_dot_product_attention
-delattr(torch.nn.functional, "scaled_dot_product_attention")
+import warnings
 
 import cv2
 import numpy as np
-from diffusers import (
+import paddle
+from PIL import Image
+from tqdm.auto import trange
+
+from ppdiffusers import (
     DDIMScheduler,
     DDPMScheduler,
     DEISMultistepScheduler,
@@ -36,15 +36,12 @@ from diffusers import (
     KDPM2DiscreteScheduler,
     LMSDiscreteScheduler,
     PNDMScheduler,
-    StableDiffusionXLImg2ImgPipeline,
-    StableDiffusionXLInpaintPipeline,
-    StableDiffusionXLPipeline,
+    StableDiffusionImg2ImgPipeline,
+    StableDiffusionInpaintPipeline,
+    StableDiffusionPipeline,
     UniPCMultistepScheduler,
 )
-from diffusers.models.attention_processor import AttnProcessor, AttnProcessor2_0
-from diffusers.utils import load_image
-from PIL import Image
-from tqdm.auto import trange
+from ppdiffusers.utils import load_image
 
 
 def get_canny_image(image, args):
@@ -119,8 +116,26 @@ def parse_arguments():
     parser.add_argument(
         "--pretrained_model_name_or_path",
         type=str,
-        default="stabilityai/stable-diffusion-xl-base-1.0",
+        default="runwayml/stable-diffusion-v1-5",
         help="Path to the `diffusers` checkpoint to convert (either a local directory or on the bos).",
+    )
+    parser.add_argument(
+        "--ipadapter_pretrained_model_name_or_path",
+        type=str,
+        default="h94/IP-Adapter",
+        help="Path to the `ppdiffusers`'s ip-adapter checkpoint to convert (either a local directory or on the bos).Example: h94/IP-Adapter",
+    )
+    parser.add_argument(
+        "--ipadapter_model_subfolder",
+        type=str,
+        default="models",
+        help="Path to the `ppdiffusers`'s ip-adapter checkpoint to convert (either a local directory or on the bos).Example: models",
+    )
+    parser.add_argument(
+        "--ipadapter_weight_name",
+        type=str,
+        default="ip-adapter_sd15.safetensors",
+        help="Name of the weight to convert.Example: ip-adapter_sd15.safetensors",
     )
     parser.add_argument(
         "--inference_steps",
@@ -156,24 +171,9 @@ def parse_arguments():
         ],
         help="The parse_prompt_type can be one of [raw, lpw]. ",
     )
-    parser.add_argument(
-        "--channels_last",
-        type=strtobool,
-        default=False,
-        help="Wheter to use channels_last",
-    )
     parser.add_argument("--use_fp16", type=strtobool, default=True, help="Wheter to use FP16 mode")
-    parser.add_argument("--tf32", type=strtobool, default=True, help="tf32")
-    parser.add_argument("--compile", type=strtobool, default=False, help="compile")
     parser.add_argument(
-        "--attention_type",
-        type=str,
-        default="sdp",
-        choices=[
-            "raw",
-            "sdp",
-        ],
-        help="attention_type.",
+        "--attention_type", type=str, default="raw", choices=["raw", "cutlass", "flash", "all"], help="attention_type."
     )
     parser.add_argument("--device_id", type=int, default=0, help="The selected gpu id. -1 means use cpu")
     parser.add_argument(
@@ -202,98 +202,64 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def attn_processors(self):
-    processors = {}
-
-    def fn_recursive_add_processors(name: str, module, processors):
-        if hasattr(module, "set_processor"):
-            processors[f"{name}.processor"] = module.processor
-
-        for sub_name, child in module.named_children():
-            fn_recursive_add_processors(f"{name}.{sub_name}", child, processors)
-
-        return processors
-
-    for name, module in self.named_children():
-        fn_recursive_add_processors(name, module, processors)
-
-    return processors
-
-
-def set_attn_processor(self, processor):
-    count = len(attn_processors(self).keys())
-
-    if isinstance(processor, dict) and len(processor) != count:
-        raise ValueError(
-            f"A dict of processors was passed, but the number of processors {len(processor)} does not match the"
-            f" number of attention layers: {count}. Please make sure to pass {count} processor classes."
-        )
-
-    def fn_recursive_attn_processor(name: str, module, processor):
-        if hasattr(module, "set_processor"):
-            if not isinstance(processor, dict):
-                module.set_processor(processor)
-            else:
-                module.set_processor(processor.pop(f"{name}.processor"))
-
-        for sub_name, child in module.named_children():
-            fn_recursive_attn_processor(f"{name}.{sub_name}", child, processor)
-
-    for name, module in self.named_children():
-        fn_recursive_attn_processor(name, module, processor)
-
-
 def main(args):
-    if args.tf32:
-        torch.backends.cuda.matmul.allow_tf32 = True
-    else:
-        torch.backends.cuda.matmul.allow_tf32 = False
 
     seed = 1024
-    torch_dtype = torch.float16 if args.use_fp16 else torch.float32
-    pipe = StableDiffusionXLPipeline.from_pretrained(
+    paddle_dtype = paddle.float16 if args.use_fp16 else paddle.float32
+    pipe = StableDiffusionPipeline.from_pretrained(
         args.pretrained_model_name_or_path,
         safety_checker=None,
         feature_extractor=None,
         requires_safety_checker=False,
-        torch_dtype=torch_dtype,
+        paddle_dtype=paddle_dtype,
+    )
+    pipe.load_ip_adapter(
+        args.ipadapter_pretrained_model_name_or_path,
+        subfolder=args.ipadapter_model_subfolder,
+        weight_name=args.ipadapter_weight_name,
     )
     scheduler = change_scheduler(pipe, args.scheduler)
     pipe.scheduler = scheduler
-    if args.device_id >= 0:
-        pipe.to(f"cuda:{args.device_id}")
 
     if args.attention_type == "all":
-        args.attention_type = ["raw", "sdp"]
+        args.attention_type = ["raw", "cutlass", "flash"]
     else:
         args.attention_type = [args.attention_type]
 
     for attention_type in args.attention_type:
-        attn_prrocessor_cls = AttnProcessor if attention_type == "raw" else AttnProcessor2_0
-        if attention_type == "sdp":
-            torch.nn.functional.scaled_dot_product_attention = torch.nn.functional.scaled_dot_product_attention_
-        set_attn_processor(pipe.unet, attn_prrocessor_cls())
-        set_attn_processor(pipe.vae, attn_prrocessor_cls())
+        if attention_type == "raw":
+            pipe.disable_xformers_memory_efficient_attention()
+        else:
+            try:
+                pipe.enable_xformers_memory_efficient_attention(attention_type)
+            except Exception as e:
+                if attention_type == "flash":
+                    warnings.warn(
+                        "Attention type flash is not supported on your GPU! We need to use 3060、3070、3080、3090、4060、4070、4080、4090、A30、A100 etc."
+                    )
+                    continue
+                else:
+                    raise ValueError(e)
 
-        if args.channels_last:
-            pipe.unet.to(memory_format=torch.channels_last)
-
-        if args.compile:
-            print("Run torch compile")
-            pipe.unet = torch.compile(pipe.unet, mode="reduce-overhead", fullgraph=True)
+        if not args.use_fp16 and attention_type == "flash":
+            print("Flash attention is not supported dtype=float32! Please use float16 or bfloat16. We will skip this!")
+            continue
 
         width = args.width
         height = args.height
         pipe.set_progress_bar_config(disable=False)
 
-        folder = f"torch_attn_{attention_type}_fp16" if args.use_fp16 else f"torch_attn_{attention_type}_fp32"
+        img_url = "https://paddlenlp.bj.bcebos.com/models/community/examples/images/load_neg_embed.png"
+        ip_image = load_image(img_url)
+
+        folder = f"paddle_attn_{attention_type}_fp16" if args.use_fp16 else f"paddle_attn_{attention_type}_fp32"
         os.makedirs(folder, exist_ok=True)
         if args.task_name in ["text2img", "all"]:
             init_image = load_image(
                 "https://paddlenlp.bj.bcebos.com/models/community/junnyu/develop/control_bird_canny_demo.png"
             )
             # text2img
-            prompt = "bird"
+            prompt = "a photo of an astronaut riding a horse on mars"
             time_costs = []
             # warmup
             pipe(
@@ -301,16 +267,18 @@ def main(args):
                 num_inference_steps=10,
                 height=height,
                 width=width,
+                ip_adapter_image=ip_image,
             )
             print("==> Test text2img performance.")
             for step in trange(args.benchmark_steps):
                 start = time.time()
-                torch.cuda.manual_seed(seed)
+                paddle.seed(seed)
                 images = pipe(
                     prompt,
                     num_inference_steps=args.inference_steps,
                     height=height,
                     width=width,
+                    ip_adapter_image=ip_image,
                 ).images
                 latency = time.time() - start
                 time_costs += [latency]
@@ -325,7 +293,7 @@ def main(args):
             images[0].save(f"{folder}/text2img.png")
 
         if args.task_name in ["img2img", "all"]:
-            pipe_img2img = StableDiffusionXLImg2ImgPipeline(**pipe.components)
+            pipe_img2img = StableDiffusionImg2ImgPipeline(**pipe.components)
             pipe_img2img.set_progress_bar_config(disable=False)
             img_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/sketch-mountains-input.png"
             init_image = load_image(img_url).resize((width, height))
@@ -338,17 +306,19 @@ def main(args):
                 num_inference_steps=20,
                 height=height,
                 width=width,
+                ip_adapter_image=ip_image,
             )
             print("==> Test img2img performance.")
             for step in trange(args.benchmark_steps):
                 start = time.time()
-                torch.cuda.manual_seed(seed)
+                paddle.seed(seed)
                 images = pipe_img2img(
                     prompt,
                     image=init_image,
                     num_inference_steps=args.inference_steps,
                     height=height,
                     width=width,
+                    ip_adapter_image=ip_image,
                 ).images
                 latency = time.time() - start
                 time_costs += [latency]
@@ -363,7 +333,7 @@ def main(args):
             images[0].save(f"{folder}/img2img.png")
 
         if args.task_name in ["inpaint_legacy", "all"]:
-            pipe_inpaint = StableDiffusionXLInpaintPipeline(**pipe.components)
+            pipe_inpaint = StableDiffusionInpaintPipeline(**pipe.components)
             pipe_inpaint.set_progress_bar_config(disable=False)
             img_url = (
                 "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations.png"
@@ -381,11 +351,12 @@ def main(args):
                 num_inference_steps=20,
                 height=height,
                 width=width,
+                ip_adapter_image=ip_image,
             )
             print(f"==> Test {task_name} performance.")
             for step in trange(args.benchmark_steps):
                 start = time.time()
-                torch.cuda.manual_seed(seed)
+                paddle.seed(seed)
                 images = pipe_inpaint(
                     prompt,
                     image=init_image,
@@ -393,6 +364,7 @@ def main(args):
                     num_inference_steps=args.inference_steps,
                     height=height,
                     width=width,
+                    ip_adapter_image=ip_image,
                 ).images
                 latency = time.time() - start
                 time_costs += [latency]

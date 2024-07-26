@@ -36,9 +36,9 @@ from diffusers import (
     KDPM2DiscreteScheduler,
     LMSDiscreteScheduler,
     PNDMScheduler,
-    StableDiffusionXLImg2ImgPipeline,
-    StableDiffusionXLInpaintPipeline,
-    StableDiffusionXLPipeline,
+    StableDiffusionImg2ImgPipeline,
+    StableDiffusionInpaintPipeline,
+    StableDiffusionPipeline,
     UniPCMultistepScheduler,
 )
 from diffusers.models.attention_processor import AttnProcessor, AttnProcessor2_0
@@ -119,8 +119,26 @@ def parse_arguments():
     parser.add_argument(
         "--pretrained_model_name_or_path",
         type=str,
-        default="stabilityai/stable-diffusion-xl-base-1.0",
+        default="runwayml/stable-diffusion-v1-5",
         help="Path to the `diffusers` checkpoint to convert (either a local directory or on the bos).",
+    )
+    parser.add_argument(
+        "--ipadapter_pretrained_model_name_or_path",
+        type=str,
+        default="h94/IP-Adapter",
+        help="Path to the `ppdiffusers`'s ip-adapter checkpoint to convert (either a local directory or on the bos).Example: h94/IP-Adapter",
+    )
+    parser.add_argument(
+        "--ipadapter_model_subfolder",
+        type=str,
+        default="models",
+        help="Path to the `ppdiffusers`'s ip-adapter checkpoint to convert (either a local directory or on the bos).Example: sdxl_models",
+    )
+    parser.add_argument(
+        "--ipadapter_weight_name",
+        type=str,
+        default="ip-adapter_sd15.safetensors",
+        help="Name of the weight to convert.Example: ip-adapter_sdxl.safetensors",
     )
     parser.add_argument(
         "--inference_steps",
@@ -251,12 +269,17 @@ def main(args):
 
     seed = 1024
     torch_dtype = torch.float16 if args.use_fp16 else torch.float32
-    pipe = StableDiffusionXLPipeline.from_pretrained(
+    pipe = StableDiffusionPipeline.from_pretrained(
         args.pretrained_model_name_or_path,
         safety_checker=None,
         feature_extractor=None,
         requires_safety_checker=False,
         torch_dtype=torch_dtype,
+    )
+    pipe.load_ip_adapter(
+        args.ipadapter_pretrained_model_name_or_path,
+        subfolder=args.ipadapter_model_subfolder,
+        weight_name=args.ipadapter_weight_name,
     )
     scheduler = change_scheduler(pipe, args.scheduler)
     pipe.scheduler = scheduler
@@ -287,13 +310,15 @@ def main(args):
         pipe.set_progress_bar_config(disable=False)
 
         folder = f"torch_attn_{attention_type}_fp16" if args.use_fp16 else f"torch_attn_{attention_type}_fp32"
+        img_url = "https://paddlenlp.bj.bcebos.com/models/community/examples/images/load_neg_embed.png"
+        ip_image = load_image(img_url)
         os.makedirs(folder, exist_ok=True)
         if args.task_name in ["text2img", "all"]:
             init_image = load_image(
                 "https://paddlenlp.bj.bcebos.com/models/community/junnyu/develop/control_bird_canny_demo.png"
             )
             # text2img
-            prompt = "bird"
+            prompt = "a photo of an astronaut riding a horse on mars"
             time_costs = []
             # warmup
             pipe(
@@ -301,6 +326,7 @@ def main(args):
                 num_inference_steps=10,
                 height=height,
                 width=width,
+                ip_adapter_image=ip_image,
             )
             print("==> Test text2img performance.")
             for step in trange(args.benchmark_steps):
@@ -311,6 +337,7 @@ def main(args):
                     num_inference_steps=args.inference_steps,
                     height=height,
                     width=width,
+                    ip_adapter_image=ip_image,
                 ).images
                 latency = time.time() - start
                 time_costs += [latency]
@@ -325,7 +352,7 @@ def main(args):
             images[0].save(f"{folder}/text2img.png")
 
         if args.task_name in ["img2img", "all"]:
-            pipe_img2img = StableDiffusionXLImg2ImgPipeline(**pipe.components)
+            pipe_img2img = StableDiffusionImg2ImgPipeline(**pipe.components)
             pipe_img2img.set_progress_bar_config(disable=False)
             img_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/sketch-mountains-input.png"
             init_image = load_image(img_url).resize((width, height))
@@ -338,6 +365,7 @@ def main(args):
                 num_inference_steps=20,
                 height=height,
                 width=width,
+                ip_adapter_image=ip_image,
             )
             print("==> Test img2img performance.")
             for step in trange(args.benchmark_steps):
@@ -349,6 +377,7 @@ def main(args):
                     num_inference_steps=args.inference_steps,
                     height=height,
                     width=width,
+                    ip_adapter_image=ip_image,
                 ).images
                 latency = time.time() - start
                 time_costs += [latency]
@@ -363,7 +392,7 @@ def main(args):
             images[0].save(f"{folder}/img2img.png")
 
         if args.task_name in ["inpaint_legacy", "all"]:
-            pipe_inpaint = StableDiffusionXLInpaintPipeline(**pipe.components)
+            pipe_inpaint = StableDiffusionInpaintPipeline(**pipe.components)
             pipe_inpaint.set_progress_bar_config(disable=False)
             img_url = (
                 "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations.png"
@@ -381,6 +410,7 @@ def main(args):
                 num_inference_steps=20,
                 height=height,
                 width=width,
+                ip_adapter_image=ip_image,
             )
             print(f"==> Test {task_name} performance.")
             for step in trange(args.benchmark_steps):
@@ -393,6 +423,7 @@ def main(args):
                     num_inference_steps=args.inference_steps,
                     height=height,
                     width=width,
+                    ip_adapter_image=ip_image,
                 ).images
                 latency = time.time() - start
                 time_costs += [latency]
