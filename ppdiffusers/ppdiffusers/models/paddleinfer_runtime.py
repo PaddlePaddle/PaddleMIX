@@ -115,16 +115,8 @@ class PaddleInferRuntimeModel:
                 raise ValueError(f"Input {name} is not in the model.")
             input_list.append(inputs[name])
         # do the inference (zero copy)
-        self.model.run(input_list)
-        results = []
-        # get out data from output tensor
-        output_names = self.model.get_output_names()
-        for i, name in enumerate(output_names):
-            output_tensor = self.model.get_output_handle(name)
-            output_data = output_tensor.copy_to_cpu()
-            results.append(paddle.to_tensor(output_data))
-        return results
-
+        res = self.model.run(input_list)
+        return res
     @staticmethod
     def load_model(
         model_path: Union[str, Path],
