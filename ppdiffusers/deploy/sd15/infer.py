@@ -119,6 +119,7 @@ def parse_arguments():
     )
     parser.add_argument("--height", type=int, default=512, help="Height of input image")
     parser.add_argument("--width", type=int, default=512, help="Width of input image")
+    parser.add_argument("--strength", type=float, default=1.0, help="Strength for img2img / inpaint")
     parser.add_argument("--hr_resize_height", type=int, default=768, help="HR Height of input image")
     parser.add_argument("--hr_resize_width", type=int, default=768, help="HR Width of input image")
     parser.add_argument("--is_sd2_0", type=strtobool, default=False, help="Is sd2_0 model?")
@@ -323,6 +324,7 @@ def main(args):
             num_inference_steps=20,
             height=height,
             width=width,
+            strength=args.strength,
             # parse_prompt_type=parse_prompt_type,
         )
         print("==> Test img2img performance.")
@@ -335,6 +337,7 @@ def main(args):
                 num_inference_steps=args.inference_steps,
                 height=height,
                 width=width,
+                strength=args.strength,
                 # parse_prompt_type=parse_prompt_type,
             ).images
             latency = time.time() - start
@@ -371,6 +374,7 @@ def main(args):
             num_inference_steps=20,
             height=height,
             width=width,
+            strength=args.strength,
             parse_prompt_type=parse_prompt_type,
         )
         print(f"==> Test {task_name} performance.")
@@ -384,6 +388,7 @@ def main(args):
                 num_inference_steps=args.inference_steps,
                 height=height,
                 width=width,
+                strength=args.strength,
                 parse_prompt_type=parse_prompt_type,
             ).images
             latency = time.time() - start

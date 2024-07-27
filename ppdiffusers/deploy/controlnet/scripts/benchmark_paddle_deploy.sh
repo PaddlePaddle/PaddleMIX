@@ -42,8 +42,8 @@ fi
 
 # Inference with FP16
 echo "Running inference with FP16..."
-python infer.py --model_dir $model_dir --scheduler "euler" --backend paddle --device gpu --task_name all --width 512 --height 512 --inference_steps 30 --tune False --use_fp16 True --benchmark_steps 10
+python infer.py --model_dir $model_dir --scheduler "ddim" --backend paddle --device gpu --task_name all --width 512 --height 512 --inference_steps 50 --tune False --use_fp16 True --benchmark_steps 10
 
 # Inference with FP32
 echo "Running inference with FP32..."
-python infer.py --model_dir $model_dir --scheduler "euler" --backend paddle --device gpu --task_name all --width 512 --height 512 --inference_steps 30 --tune False --use_fp16 False --benchmark_steps 10
+python infer.py --model_dir $model_dir --scheduler "ddim" --backend paddle --device gpu --task_name all --width 512 --height 512 --inference_steps 50 --tune False --use_fp16 False --benchmark_steps 10
