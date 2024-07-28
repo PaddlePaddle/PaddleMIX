@@ -25,9 +25,9 @@ from paddlenlp.transformers.model_utils import PretrainedModel
 from ppdiffusers.utils import logging
 
 from .configuration import InternVLChatConfig
-from .llm import InternLM2ForCausalLM
-from .utils import get_conv_template
-from .visual import InternVisionModel
+from .modeling_internlm2 import InternLM2ForCausalLM
+from .conversation import get_conv_template
+from .modeling_intern_vit import InternVisionModel
 
 logger = logging.get_logger(__name__)
 
