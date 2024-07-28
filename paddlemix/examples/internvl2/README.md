@@ -1,4 +1,4 @@
-# InternLM-XComposer2
+# InternVL2 模型
 
 ## 1. 模型介绍
 
