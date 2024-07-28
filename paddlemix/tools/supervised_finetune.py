@@ -77,11 +77,7 @@ def main():
     model_config.use_flash_attention = model_args.use_flash_attention
 
     # Load model
-    model = AutoModelMIX.from_pretrained(
-        model_args.model_name_or_path,
-        config=model_config,
-        dtype=dtype,
-    )
+    model = AutoModelMIX.from_pretrained(model_args.model_name_or_path, config=model_config, dtype=dtype)
 
     # Freeze module
     if model_args.freeze_include or model_args.freeze_exclude:
@@ -93,6 +89,7 @@ def main():
         text_model_name_or_path=model_args.text_model_name_or_path,
         train="train",
         max_length=data_args.max_length,
+        model_name_or_path=model_args.model_name_or_path,
     )
     if training_args.do_eval:
         eval_processor, _ = AutoProcessorMIX.from_pretrained(
@@ -100,6 +97,7 @@ def main():
             text_model_name_or_path=model_args.text_model_name_or_path,
             eval="eval",
             max_length=data_args.max_length,
+            model_name_or_path=model_args.model_name_or_path,
         )
 
     if isinstance(tokenizer, QWenVLTokenizer):
