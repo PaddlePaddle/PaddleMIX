@@ -12,5 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from .configuration import *
-from .modeling import *
-from .tokenizer import *
+from .modeling_internvl_chat import *
+from .tokenizer_internlm2 import *
