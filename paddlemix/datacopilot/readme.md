@@ -1,25 +1,26 @@
 
-# Datacopilot
+# DataCopilot
 
 <details>
 <summary>Fig</summary>
 
 <div align="center">
-  <img src="https://github.com/PaddlePaddle/PaddleMIX/assets/17582080/2a04529e-ed94-43a8-87a5-904c108517f0" width=500>
+  <img src="https://github.com/user-attachments/assets/c1acd673-8e2d-421d-8703-cc55ef259c48" width=500>
 </div>
 
 </details>
 
 ## 定位
-多模态数据处理工具箱，作为算法的一部分参与模型迭代的全流程。让开发者根据特定任务以低代码量实现数据的查看，分析，过滤和生成。构造和维护一个通用的（off-the-shelf）跨模态训练数据集。
+DataCopilot是PaddleMIX 2.0版本新推出的多模态数据处理工具箱，理念是把数据作为多模态算法的一部分参与迭代的全流程，让开发者根据特定任务以低代码量实现数据的基本操作。
 
 ## 核心概念 
+工具核心概念包括Schema和Dataset。Schema用于定义多模态数据组织结构和字段名字。MMDataset作为数据操作的核心类，为存储，查看，转换，生成等操作的基本对象。
 
-### SCHEME
-scheme用于定义多模态数据格式（比如json文件里组织结构和字段名字），用于不同格式的转换，简化ops操作的逻辑，内置MM类型。
-添加scheme步奏，1. 在SCHEME枚举类型增量添加标识字段（注意：不可与之前的名字重复）2. convert_scheme添加和MM相互转换的逻辑。
+### SCHEMA
+schema用于定义多模态数据格式（比如json文件里组织结构和字段名字），用于不同格式的转换，简化ops操作的逻辑，内置MM类型。
+添加schema步奏，1. 在SCHEMA枚举类型增量添加标识字段（注意：不可与之前的名字重复）2. convert_schema添加和MM相互转换的逻辑。
 ```
-class SCHEME(Enum):
+class SCHEMA(Enum):
     MM = 1
 ```
 
@@ -28,11 +29,11 @@ class SCHEME(Enum):
 
 核心类MMDeteset，为存储，查看，转换，生成等操作的基本对象。支持基本的运算（切片，加法，遍历等操作）。支持json数据源。内置map，filter函数，用于高效处理数据，支持多进程和多线程并发功能。支持链式调用，方便组合多种原子操作以实现复杂的功能。通过以map函数为接口实现对数据集每个元素的处理，通过register注册机制可灵活新增作用于整个数据集的通用操作功能。
 ```
-'items',
-'schema',
 'from_auto',
 'from_json',
 'export_json',
+'items',
+'schema',
 'map',
 'filter',
 'shuffle'
@@ -75,14 +76,6 @@ import paddlemix.datacopilot.ops as ops
 dataset = MMDataset.from_json('./path/to/your/json/file')
 print(len(dataset))
 
-def add_path(url: str) -> str:
-    # logic
-    return newurl
-
-dataset = dataset.map(
-    functools.partial(ops.update_image_url, func=add_path, schema=SCHEMA.MM),
-    max_workers=64)
-
 dataset.export_json('/path/to/your/output/file.json')
 ```
 
@@ -99,17 +92,13 @@ def is_wanted(item: T) -> bool: ...
 dataset = dataset.map(update_url, max_workers=8, progress=True)
 dataset = dataset.map(augment_prompt, max_workers=8, progress=True)
 
-# chain
+# op chain
 dataset = dataset.map(update_url).map(augment_prompt)
 
 # filter
-dataset = dataset.filter(is_wanted).
-# dataset = dataset.map(another_is_wanted).nonempty()
+dataset = dataset.filter(is_wanted).nonempty()
 ```
 
-3. LLaVa-SFT训练  
+3. LLaVA-SFT训练  
 数据准备和训练流程参考项目[pp_cap_instruct](https://aistudio.baidu.com/projectdetail/7917712)
-
-
-
 

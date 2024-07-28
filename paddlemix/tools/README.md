@@ -159,12 +159,14 @@ PaddleMIX 精调支持多个主流跨模态大模型的SFT、LoRA等精调策略
 **全参精调：SFT**
 ```bash
 # 单卡Qwen-vl SFT启动命令参考
+export FLAGS_use_cuda_managed_memory=true #若显存不够，可设置环境变量
 python paddlemix/tools/supervised_finetune.py paddlemix/config/qwen_vl/sft_argument.json
 
 # 多卡Qwen-vl SFT启动命令参考
+export FLAGS_use_cuda_managed_memory=true #若显存不够，可设置环境变量
 python -u  -m paddle.distributed.launch --gpus "0,1,2,3" paddlemix/tools/supervised_finetune.py paddlemix/config/qwen_vl/sft_argument.json
 
-# 或者
+# 或者使用统一启动脚本
 sh paddlemix/tools/train.sh paddlemix/config/qwen_vl/sft_argument.json
 ```
 
@@ -172,12 +174,16 @@ sh paddlemix/tools/train.sh paddlemix/config/qwen_vl/sft_argument.json
 ```bash
 # 单卡Qwen-vl LoRA启动命令参考
 python  paddlemix/tools/supervised_finetune.py paddlemix/config/qwen_vl/lora_sft_argument.json
+
+# 多卡Qwen-vl LoRA启动命令参考
+python -u  -m paddle.distributed.launch --gpus "0,1,2,3" paddlemix/tools/supervised_finetune.py paddlemix/config/qwen_vl/lora_sft_argument.json
+
 ```
 
 注：使用lora训练后，需要合并lora参数，我们提供LoRA参数合并脚本，可以将LoRA参数合并到主干模型并保存相应的权重。命令如下：
 
 ```bash
-python paddlemix/paddlemix/tools/merge_lora_params.py \
+python paddlemix/tools/merge_lora_params.py \
 --model_name_or_path qwen-vl/qwen-vl-chat-7b \
 --lora_path output_qwen_vl\
 --merge_model_path qwen_vl_merge

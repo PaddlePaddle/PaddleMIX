@@ -16,20 +16,3 @@ import paddle
 from paddlemix.models.imagebind.utils.kaldi import *
 from paddlemix.models.imagebind.utils.paddle_aux import *
 from paddlemix.models.imagebind.utils.resample import *
-
-
-class finfo:
-    bits: int
-    min: float
-    max: float
-    eps: float
-    tiny: float
-    smallest_normal: float
-    resolution: float
-    dtype: str
-
-    def __init__(self, dtype=None) -> None:
-        ...
-
-
-setattr(paddle, "finfo", finfo)
