@@ -188,7 +188,7 @@ class InternVLChatForCausalLM(PretrainedModel):
                 "which results in a transposed image."
             )
         else:
-            x = x.transpose(0, 2, 1, 3)
+            x = x.transpose([0, 2, 1, 3])
         return x
 
     def extract_feature(self, pixel_values):

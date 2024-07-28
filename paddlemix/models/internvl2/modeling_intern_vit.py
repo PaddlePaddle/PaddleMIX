@@ -17,18 +17,17 @@ from typing import Optional, Tuple, Union
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
+from configuration import InternVisionConfig
 from einops import rearrange
 from paddlenlp.transformers.activations import ACT2FN
 from paddlenlp.transformers.model_outputs import (
     BaseModelOutput,
     BaseModelOutputWithPooling,
 )
+from utils import pad_input, unpad_input
 
 from paddlemix.models.model_utils import MixPretrainedModel
 from ppdiffusers.utils import logging
-
-from .configuration import InternVisionConfig
-from .utils import pad_input, unpad_input
 
 try:
     from paddle.nn.functional.flash_attention import flash_attn_varlen_qkvpacked
@@ -270,8 +269,8 @@ class InternAttention(nn.Layer):
         self.qk_normalization = config.qk_normalization
 
         if self.qk_normalization:
-            self.q_norm = InternRMSNorm(self.embed_dim, eps=config.layer_norm_eps)
-            self.k_norm = InternRMSNorm(self.embed_dim, eps=config.layer_norm_eps)
+            self.q_norm = InternRMSNorm(self.embed_dim, epsilon=config.layer_norm_eps)
+            self.k_norm = InternRMSNorm(self.embed_dim, epsilon=config.layer_norm_eps)
 
         if self.use_flash_attn:
             self.inner_attn = FlashAttention(attention_dropout=config.attention_dropout)
@@ -279,11 +278,14 @@ class InternAttention(nn.Layer):
 
     def _naive_attn(self, x):
         B, N, C = x.shape
-        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).transpose([2, 0, 3, 1, 4])
+        qkv = self.qkv(x).reshape([B, N, 3, self.num_heads, C // self.num_heads]).transpose([2, 0, 3, 1, 4])
         q, k, v = paddle.split(qkv, num_or_sections=3, axis=0)
-
+        q = q.squeeze(0)
+        k = k.squeeze(0)
+        v = v.squeeze(0)
         if self.qk_normalization:
             B_, H_, N_, D_ = q.shape
+
             q = (
                 self.q_norm(q.transpose([0, 2, 1, 3]).reshape([B_, N_, -1]))
                 .reshape([B_, N_, H_, D_])
@@ -296,10 +298,10 @@ class InternAttention(nn.Layer):
             )
 
         attn = (q * self.scale) @ k.transpose([0, 1, 3, 2])
-        attn = F.softmax(attn, dim=-1)
+        attn = F.softmax(attn, axis=-1)
         attn = self.attn_drop(attn)
 
-        x = (attn @ v).transpose([0, 2, 1, 3]).reshape(B, N, C)
+        x = (attn @ v).transpose([0, 2, 1, 3]).reshape([B, N, C])
         x = self.proj(x)
         x = self.proj_drop(x)
         return x
@@ -504,3 +506,9 @@ class InternVisionModel(MixPretrainedModel):
             hidden_states=encoder_outputs.hidden_states,
             attentions=encoder_outputs.attentions,
         )
+
+
+if __name__ == "__main__":
+    model = InternVisionEncoder(InternVisionConfig())
+    input = paddle.randn([1, 196, 3200])
+    o = model(input)

@@ -36,9 +36,9 @@ try:
 except:  # noqa # pylint: disable=bare-except
     BaseStreamer = None
 
-from ppdiffusers.utils import logging
+from configuration import InternLM2Config
 
-from .configuration import InternLM2Config
+from ppdiffusers.utils import logging
 
 _CONFIG_FOR_DOC = "InternLM2Config"
 logger = logging.get_logger(__name__)
@@ -187,8 +187,8 @@ class InternLM2LinearScalingRotaryEmbedding(InternLM2RotaryEmbedding):
         t = t / self.scaling_factor
         freqs = paddle.einsum("i,j->ij", t, self.inv_freq)
         emb = paddle.concat(x=(freqs, freqs), axis=-1)
-        self.register_buffer(name="cos_cached", tensor=emb.cos().to(dtype), persistable=False)
-        self.register_buffer(name="sin_cached", tensor=emb.sin().to(dtype), persistable=False)
+        self.register_buffer(name="cos_cached", tensor=paddle.cos(emb).astype(dtype), persistable=False)
+        self.register_buffer(name="sin_cached", tensor=paddle.sin(emb).astype(dtype), persistable=False)
 
 
 class InternLM2DynamicNTKScalingRotaryEmbedding(InternLM2RotaryEmbedding):
@@ -243,8 +243,9 @@ class InternLM2MLP(paddle.nn.Layer):
         self.w2 = nn.Linear(self.intermediate_size, self.hidden_size, bias_attr=False)
         self.act_fn = ACT2FN[config.hidden_act]
 
-    def forward(self, x, im_mask):
-        down_proj = self.w2(self.act_fn(self.w1(x, im_mask)) * self.w3(x, im_mask), im_mask)
+    def forward(self, x):
+        down_proj = self.w2(self.act_fn(self.w1(x)) * self.w3(x))
+
         return down_proj
 
 
@@ -331,7 +332,7 @@ class InternLM2Attention(paddle.nn.Layer):
             )
 
         bsz, q_len, _ = hidden_states.shape
-        qkv_states = self.wqkv(hidden_states, im_mask)
+        qkv_states = self.wqkv(hidden_states)
         qkv_states = rearrange(
             qkv_states, "b q (h gs d) -> b q h gs d", gs=2 + self.num_key_value_groups, d=self.head_dim
         )
@@ -432,7 +433,7 @@ class InternLM2FlashAttention2(InternLM2Attention):
         qkv_states = rearrange(
             qkv_states,
             "b q (h gs d) -> b q h gs d",
-            gs=2 * self.num_key_value_heads,
+            gs=2 + self.num_key_value_groups,
             d=self.head_dim,
         )
         query_states = qkv_states[..., : self.num_key_value_groups, :]
@@ -458,7 +459,8 @@ class InternLM2FlashAttention2(InternLM2Attention):
         key_states = key_states.transpose(perm=[0, 2, 1, 3])
         value_states = value_states.transpose(perm=[0, 2, 1, 3])
 
-        attn_output = self._flash_attention_forward(query_states, key_states, value_states, attention_mask, q_len)
+        # return tuple 0 is output, 1 is softmax return
+        attn_output = self._flash_attention_forward(query_states, key_states, value_states, attention_mask, q_len)[0]
         attn_output = attn_output.reshape([bsz, q_len, self.hidden_size])
         attn_output = self.wo(attn_output)
 
@@ -587,7 +589,9 @@ class InternLM2DecoderLayer(paddle.nn.Layer):
                 "Passing `padding_mask` is deprecated and will be removed in v4.37. Please make sure use `attention_mask` instead.`"
             )
 
-        residual = hidden_states
+        # if not write like that, the residual will be change to fp32.
+        original_dtype = hidden_states.dtype
+        residual = hidden_states.astype(original_dtype)
 
         hidden_states = self.attention_norm(hidden_states)
 
@@ -600,10 +604,14 @@ class InternLM2DecoderLayer(paddle.nn.Layer):
             use_cache=use_cache,
             **kwargs,
         )
+
         hidden_states = residual + hidden_states
 
-        residual = hidden_states
+        original_dtype = hidden_states.dtype
+        residual = hidden_states.astype(original_dtype)
+
         hidden_states = self.ffn_norm(hidden_states)
+
         hidden_states = self.feed_forward(hidden_states)
         hidden_states = residual + hidden_states
 
@@ -1090,3 +1098,11 @@ class InternLM2ForCausalLM(InternLM2PretrainedModel):
                 yield res
 
         return consumer()
+
+
+if __name__ == "__main__":
+    model = InternLM2DecoderLayer(InternLM2Config())
+    model = model.astype("float16")
+    dummy_tensor = paddle.randn([1, 1024, 4096]).cuda()
+    dummy_tensor = dummy_tensor.astype("float16")
+    out = model(dummy_tensor)
