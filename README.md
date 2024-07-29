@@ -20,8 +20,8 @@ PaddleMIX是基于飞桨的多模态大模型开发套件，聚合图像、文�
 ## 最新进展
 
 **2024.07.25 发布PaddleMIX v2.0**
-* 多模态理解：新增QwenVL-vl，LLaVA等；新增Auto模块统一SFT训练流程；新增mixtoken训练策略，SFT吞吐量提升5.6倍。
-* 多模态生成：发布[PPDiffusers 0.24.1](./ppdiffusers/README.md)版本，支持视频生成能力，文生图模型新增LCM。新增peft，accelerate后端。提供基于飞桨开发的ComfyUI插件。
+* 多模态理解：新增LLaVA系列,Qwen-VL等；新增Auto模块统一SFT训练流程；新增mixtoken训练策略，SFT吞吐量提升5.6倍。
+* 多模态生成：发布[PPDiffusers 0.24.1](./ppdiffusers/README.md)版本，支持视频生成能力，文生图模型新增LCM。新增飞桨版peft，accelerate后端。提供基于飞桨开发的ComfyUI插件。
 * 多模态数据处理工具箱[DataCopilot](./paddlemix/datacopilot/)：支持自定义数据结构，数据转换，离线格式检查；支持基本的统计信息，数据可视化功能。
 
 **2023.10.7 发布 PaddleMIX v1.0**
