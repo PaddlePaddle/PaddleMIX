@@ -101,7 +101,7 @@ example: GroundingDino benchmark：
 
 |Model|image size|dtype |Paddle Deploy |
 |-|-|-|-|
-|qwen-vl-7b|448*448|fp16|669.8 ms|
+|qwen-vl-7b|448*448|fp16|498.4 ms|
 |llava-1.5-7b|336*336|fp16|981.2 ms|
 |llava-1.6-7b|336*336|fp16|778.7 ms|
 |groundingDino/groundingdino-swint-ogc|800*1193|fp32|100 ms|

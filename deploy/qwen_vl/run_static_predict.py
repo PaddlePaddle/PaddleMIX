@@ -135,10 +135,26 @@ class Predictor(object):
         msg = self.processor.batch_decode(generate_ids)
         return msg
 
-    def predict(self, url, prompt):
+    def predict(self, url, prompt,benchmark):
         inputs = self.pre_processing(url, prompt)
         images = inputs["images"]
         second_input_ids = inputs["input_ids"]
+        if benchmark:
+            import time
+            start = 0.0
+            total = 0.0
+            for i in range(20):
+                if i>10:
+                    start = time.time()
+                image_features = self.encode_images(images)
+                generate_ids, _ = self.generate_with_image_features(
+                    image_features,
+                    second_input_ids,
+                )
+                if i > 10:
+                    total += time.time()-start
+
+            print("Time :",total/10)
 
         image_features = self.encode_images(images)
         generate_ids, _ = self.generate_with_image_features(
@@ -185,19 +201,7 @@ if __name__ == "__main__":
     url = "https://bj.bcebos.com/v1/paddlenlp/models/community/GroundingDino/000000004505.jpg"
     prompt = "Generate the caption in English with grounding:"
     
-    if not args.benchmark:
-        msg = predictor.predict(url, prompt)
-        print("Outputs: ", msg)
-    else:
-        import time
-        start = 0.0
-        total = 0.0
-        for i in range(20):
-            if i>10:
-                start = time.time()
-            msg = predictor.predict(url, prompt)
-
-            if i > 10:
-                total += time.time()-start
-
-        print("Time :",total/10)
+ 
+    msg = predictor.predict(url, prompt,args.benchmark)
+    print("Outputs: ", msg)
+    
