@@ -99,7 +99,7 @@ example: GroundingDino benchmark：
  --benchmark True
 ```
 
-|Model|image size ｜dtype |Paddle Deploy |
+|Model|image size|dtype |Paddle Deploy |
 |-|-|-|-|
 |qwen-vl-7b|448*448|fp16|669.8 ms|
 |llava-1.5-7b|336*336|fp16|981.2 ms|
