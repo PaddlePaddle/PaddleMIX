@@ -291,6 +291,24 @@ class AutoencoderKL(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
 
         return DecoderOutput(sample=dec)
 
+    @paddle.incubate.jit.inference(
+                                   cache_static_model=True,
+                                #    with_trt=False,
+                                #    exp_disable_tensorrt_ops=["memory_efficient_attention"],
+                                #    collect_shape=False,
+                                #    trt_precision_mode="float16",
+                                   )
+    def haha(self, z):
+        # TODO junnyu, add this to support pure fp16
+        z = z.cast(self.post_quant_conv.weight.dtype)
+        if self.use_slicing and z.shape[0] > 1:
+            # split、chunk paddle vs pytorch may have some difference
+            decoded_slices = [self._decode(z_slice).sample for z_slice in z.chunk(z.shape[0])]
+            decoded = paddle.concat(decoded_slices)
+        else:
+            decoded = self._decode(z).sample
+        return decoded
+
     @apply_forward_hook
     def decode(
         self, z: paddle.Tensor, return_dict: bool = True, generator=None
@@ -309,15 +327,16 @@ class AutoencoderKL(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
                 returned.
 
         """
-        # TODO junnyu, add this to support pure fp16
-        z = z.cast(self.post_quant_conv.weight.dtype)
-        if self.use_slicing and z.shape[0] > 1:
-            # split、chunk paddle vs pytorch may have some difference
-            decoded_slices = [self._decode(z_slice).sample for z_slice in z.chunk(z.shape[0])]
-            decoded = paddle.concat(decoded_slices)
-        else:
-            decoded = self._decode(z).sample
+        # # TODO junnyu, add this to support pure fp16
+        # z = z.cast(self.post_quant_conv.weight.dtype)
+        # if self.use_slicing and z.shape[0] > 1:
+        #     # split、chunk paddle vs pytorch may have some difference
+        #     decoded_slices = [self._decode(z_slice).sample for z_slice in z.chunk(z.shape[0])]
+        #     decoded = paddle.concat(decoded_slices)
+        # else:
+        #     decoded = self._decode(z).sample
 
+        decoded = self.haha(z)
         if not return_dict:
             return (decoded,)
 

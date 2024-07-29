@@ -255,9 +255,10 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
         if hasattr(module, "gradient_checkpointing"):
             module.gradient_checkpointing = value
 
-    @paddle.jit.to_static(backend='inference',
+    @paddle.incubate.jit.inference(
                           enable_new_ir=True, 
                           cache_static_model=True,
+                          exp_enable_use_cutlass=True,
                           delete_pass_lists=["add_norm_fuse_pass"],
                         )
     def transformer_2d_blocks(
@@ -447,7 +448,7 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
         #         )
                 
     
-        # 装饰器
+        # to_static
         hidden_states = self.transformer_2d_blocks(
             hidden_states,
             attention_mask=attention_mask,
