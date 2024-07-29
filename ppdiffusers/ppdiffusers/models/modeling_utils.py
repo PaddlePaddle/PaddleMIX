@@ -1051,6 +1051,10 @@ class ModelMixin(nn.Layer):
         return model
 
     @classmethod
+    def custom_modify_weight(cls, state_dict):
+        pass
+
+    @classmethod
     def _load_pretrained_model(
         cls,
         model: "ModelMixin",
@@ -1130,6 +1134,7 @@ class ModelMixin(nn.Layer):
                     error_msgs.append(
                         f"Error size mismatch, {key_name} receives a shape {loaded_shape}, but the expected shape is {model_shape}."
                     )
+                cls.custom_modify_weight(state_dict)
                 faster_set_state_dict(model_to_load, state_dict)
 
         missing_keys = sorted(list(set(expected_keys) - set(loaded_keys)))

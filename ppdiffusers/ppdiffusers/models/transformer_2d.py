@@ -28,6 +28,8 @@ from ..utils import (
     recompute_use_reentrant,
     use_old_recompute,
 )
+from .zkk_facebook_dit import ZKKFacebookDIT
+
 from .attention import BasicTransformerBlock
 from .embeddings import CaptionProjection, PatchEmbed
 from .lora import LoRACompatibleConv, LoRACompatibleLinear
@@ -213,6 +215,8 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
                 for d in range(num_layers)
             ]
         )
+        
+        self.tmp_ZKKFacebookDIT = ZKKFacebookDIT(num_layers, inner_dim, num_attention_heads, attention_head_dim)
 
         # 4. Define output layers
         self.out_channels = in_channels if out_channels is None else out_channels
@@ -385,41 +389,44 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
             encoder_hidden_states = self.caption_projection(encoder_hidden_states)
             encoder_hidden_states = encoder_hidden_states.reshape([batch_size, -1, hidden_states.shape[-1]])
 
-        for block in self.transformer_blocks:
-            if self.gradient_checkpointing and not hidden_states.stop_gradient and not use_old_recompute():
+        # for block in self.transformer_blocks:
+        #     if self.gradient_checkpointing and not hidden_states.stop_gradient and not use_old_recompute():
 
-                def create_custom_forward(module, return_dict=None):
-                    def custom_forward(*inputs):
-                        if return_dict is not None:
-                            return module(*inputs, return_dict=return_dict)
-                        else:
-                            return module(*inputs)
+        #         def create_custom_forward(module, return_dict=None):
+        #             def custom_forward(*inputs):
+        #                 if return_dict is not None:
+        #                     return module(*inputs, return_dict=return_dict)
+        #                 else:
+        #                     return module(*inputs)
 
-                    return custom_forward
+        #             return custom_forward
 
-                ckpt_kwargs = {} if recompute_use_reentrant() else {"use_reentrant": False}
-                hidden_states = recompute(
-                    create_custom_forward(block),
-                    hidden_states,
-                    attention_mask,
-                    encoder_hidden_states,
-                    encoder_attention_mask,
-                    timestep,
-                    cross_attention_kwargs,
-                    class_labels,
-                    **ckpt_kwargs,
-                )
-            else:
-                hidden_states = block(
-                    hidden_states,
-                    attention_mask=attention_mask,
-                    encoder_hidden_states=encoder_hidden_states,
-                    encoder_attention_mask=encoder_attention_mask,
-                    timestep=timestep,
-                    cross_attention_kwargs=cross_attention_kwargs,
-                    class_labels=class_labels,
-                )
+        #         ckpt_kwargs = {} if recompute_use_reentrant() else {"use_reentrant": False}
+        #         hidden_states = recompute(
+        #             create_custom_forward(block),
+        #             hidden_states,
+        #             attention_mask,
+        #             encoder_hidden_states,
+        #             encoder_attention_mask,
+        #             timestep,
+        #             cross_attention_kwargs,
+        #             class_labels,
+        #             **ckpt_kwargs,
+        #         )
+        #     else:
+        #         hidden_states = block(
+        #             hidden_states,
+        #             attention_mask=attention_mask,
+        #             encoder_hidden_states=encoder_hidden_states,
+        #             encoder_attention_mask=encoder_attention_mask,
+        #             timestep=timestep,
+        #             cross_attention_kwargs=cross_attention_kwargs,
+        #             class_labels=class_labels,
+        #         )
 
+
+        hidden_states = self.tmp_ZKKFacebookDIT(hidden_states, timestep, class_labels)
+        
         # 3. Output
         if self.is_input_continuous:
             if not self.use_linear_projection:
@@ -473,7 +480,8 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
             hidden_states = hidden_states.reshape(
                 shape=(-1, height, width, self.patch_size, self.patch_size, self.out_channels)
             )
-            hidden_states = paddle.einsum("nhwpqc->nchpwq", hidden_states)
+            #hidden_states = paddle.einsum("nhwpqc->nchpwq", hidden_states)
+            hidden_states = hidden_states.transpose([0,5,1,3,2,4])
             output = hidden_states.reshape(
                 shape=(-1, self.out_channels, height * self.patch_size, width * self.patch_size)
             )
@@ -482,3 +490,87 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
             return (output,)
 
         return Transformer2DModelOutput(sample=output)
+
+    @classmethod
+    def custom_modify_weight(cls, state_dict):
+        for key in list(state_dict.keys()):
+            if 'attn1.to_q.weight' in key or 'attn1.to_k.weight' in key or 'attn1.to_v.weight' in key:
+                part = key.split('.')[-2]
+                layer_id = key.split('.')[1]
+                qkv_key_w = f'transformer_blocks.{layer_id}.attn1.to_qkv.weight'
+                if part == 'to_q' and qkv_key_w not in state_dict:
+                    state_dict[qkv_key_w] = state_dict.pop(key)
+                elif part in ('to_k', 'to_v'):
+                    qkv = state_dict.get(qkv_key_w)
+                    if qkv is not None:
+                        state_dict[qkv_key_w] = paddle.concat([qkv, state_dict.pop(key)], axis=-1)
+            if 'attn1.to_q.bias' in key or 'attn1.to_k.bias' in key or 'attn1.to_v.bias' in key:
+                part = key.split('.')[-2]
+                layer_id = key.split('.')[1]
+                qkv_key_b = f'transformer_blocks.{layer_id}.attn1.to_qkv.bias'
+                if part == 'to_q' and qkv_key_b not in state_dict:
+                    state_dict[qkv_key_b] = state_dict.pop(key)
+                elif part in ('to_k', 'to_v'):
+                    qkv = state_dict.get(qkv_key_b)
+                    if qkv is not None:
+                        state_dict[qkv_key_b] = paddle.concat([qkv, state_dict.pop(key)], axis=-1)
+        
+        for key in list(state_dict.keys()):
+            name = ""
+            if 'attn1.to_qkv.weight' in key:
+                layer_id = (int)(key.split(".")[1])
+                name = f'tmp_ZKKFacebookDIT.qkv.{layer_id}.weight'.format(layer_id)
+            if 'attn1.to_qkv.bias' in key:
+                layer_id = (int)(key.split(".")[1])
+                name = f'tmp_ZKKFacebookDIT.qkv.{layer_id}.bias'.format(layer_id)
+            
+            if 'attn1.to_out.0.weight' in key:
+                layer_id = (int)(key.split(".")[1])
+                name = f'tmp_ZKKFacebookDIT.out_proj.{layer_id}.weight'.format(layer_id)
+            if 'attn1.to_out.0.bias' in key:
+                layer_id = (int)(key.split(".")[1])
+                name = f'tmp_ZKKFacebookDIT.out_proj.{layer_id}.bias'.format(layer_id)
+            
+            if 'ff.net.0.proj.weight' in key:
+                layer_id = (int)(key.split(".")[1])
+                name = f'tmp_ZKKFacebookDIT.ffn1.{layer_id}.weight'.format(layer_id)
+            if 'ff.net.0.proj.bias' in key:
+                layer_id = (int)(key.split(".")[1])
+                name = f'tmp_ZKKFacebookDIT.ffn1.{layer_id}.bias'.format(layer_id)
+
+            if 'ff.net.2.weight' in key:
+                layer_id = (int)(key.split(".")[1])
+                name = f'tmp_ZKKFacebookDIT.ffn2.{layer_id}.weight'.format(layer_id)
+            if 'ff.net.2.bias' in key:
+                layer_id = (int)(key.split(".")[1])
+                name = f'tmp_ZKKFacebookDIT.ffn2.{layer_id}.bias'.format(layer_id)
+            
+
+            if 'norm1.emb.timestep_embedder.linear_1.weight' in key:
+                layer_id = (int)(key.split(".")[1])
+                name = f'tmp_ZKKFacebookDIT.fcs0.{layer_id}.weight'.format(layer_id)
+            if 'norm1.emb.timestep_embedder.linear_1.bias' in key:
+                layer_id = (int)(key.split(".")[1])
+                name = f'tmp_ZKKFacebookDIT.fcs0.{layer_id}.bias'.format(layer_id)
+
+
+            if 'norm1.emb.timestep_embedder.linear_2.weight' in key:
+                layer_id = (int)(key.split(".")[1])
+                name = f'tmp_ZKKFacebookDIT.fcs1.{layer_id}.weight'.format(layer_id)
+            if 'norm1.emb.timestep_embedder.linear_2.bias' in key:
+                layer_id = (int)(key.split(".")[1])
+                name = f'tmp_ZKKFacebookDIT.fcs1.{layer_id}.bias'.format(layer_id)
+
+
+            if 'norm1.linear.weight' in key:
+                layer_id = (int)(key.split(".")[1])
+                name = f'tmp_ZKKFacebookDIT.fcs2.{layer_id}.weight'.format(layer_id)
+            if 'norm1.linear.bias' in key:
+                layer_id = (int)(key.split(".")[1])
+                name = f'tmp_ZKKFacebookDIT.fcs2.{layer_id}.bias'.format(layer_id)
+
+            if 'class_embedder.embedding_table.weight' in key:
+                layer_id = (int)(key.split(".")[1])
+                name = f'tmp_ZKKFacebookDIT.embs.{layer_id}.weight'.format(layer_id)
+
+            state_dict[name] = paddle.assign(state_dict[key])
