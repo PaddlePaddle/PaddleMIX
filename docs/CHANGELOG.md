@@ -6,9 +6,9 @@
 
 #### 多模态理解
 
-1. 新增模型：Qwen-vl，LLaVA: v1.5-7b, v1.5-13b, v1,6-7b，CogAgent, CogVLM
+1. 新增模型：LLaVA: v1.5-7b, v1.5-13b, v1,6-7b，CogAgent, CogVLM, Qwen-VL, InternLM-XComposer2
 2. 数据集增强：新增chatml_dataset图文对话数据读取方案，可自定义chat_template文件适配，支持混合数据集
-3. 工具链升级：新增Auto模块，统一SFT训练流程，兼容全参数、lora训练。新增mixtoken训练策略，SFT吞吐量提升5.6倍。支持QwenVL，LLaVA推理部署，较torch推理性能提升2.38倍
+3. 工具链升级：新增Auto模块，统一SFT训练流程，兼容全参数、lora训练。新增mixtoken训练策略，SFT吞吐量提升5.6倍。支持Qwen-VL，LLaVA推理部署，较torch推理性能提升2.38倍
 
 #### 多模态生成
 
