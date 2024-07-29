@@ -287,7 +287,11 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
         # input
         conv_in_padding = (conv_in_kernel - 1) // 2
         self.conv_in = nn.Conv2D(
-            in_channels, block_out_channels[0], kernel_size=conv_in_kernel, padding=conv_in_padding, data_format=data_format
+            in_channels,
+            block_out_channels[0],
+            kernel_size=conv_in_kernel,
+            padding=conv_in_padding,
+            data_format=data_format,
         )
 
         # time
@@ -602,7 +606,9 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
         # out
         if norm_num_groups is not None:
             self.conv_norm_out = nn.GroupNorm(
-                num_channels=block_out_channels[0], num_groups=norm_num_groups, epsilon=norm_eps, 
+                num_channels=block_out_channels[0],
+                num_groups=norm_num_groups,
+                epsilon=norm_eps,
                 data_format=data_format,
             )
 
@@ -614,7 +620,10 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
 
         conv_out_padding = (conv_out_kernel - 1) // 2
         self.conv_out = nn.Conv2D(
-            block_out_channels[0], out_channels, kernel_size=conv_out_kernel, padding=conv_out_padding, 
+            block_out_channels[0],
+            out_channels,
+            kernel_size=conv_out_kernel,
+            padding=conv_out_padding,
             data_format=data_format,
         )
 
@@ -629,21 +638,6 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
             self.position_net = PositionNet(
                 positive_len=positive_len, out_dim=cross_attention_dim, feature_type=feature_type
             )
-        
-        # del self.down_blocks
-        # del self.mid_block
-        # del self.up_blocks
-
-
-        # self.run_down_mid_up_blocks = paddle.jit.to_static(self.run_down_mid_up_blocks, 
-        #                               backend='paddle_inference', 
-        #                               cache_static_model=True, 
-        #                               precision_mode="float32", 
-        #                               switch_ir_optim=True,
-        #                               with_trt=True,
-        #                               trt_precision_mode = "float16",
-        #                               trt_use_static = True,
-        #                               switch_ir_debug = False)
 
     @property
     def attn_processors(self) -> Dict[str, AttentionProcessor]:
@@ -926,12 +920,17 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
         self.tmp_cross_attention_kwargs = cross_attention_kwargs
         self.tmp_forward_upsample_size = forward_upsample_size
         self.tmp_upsample_size = upsample_size
-        
-        sample = self.run_down_mid_up_blocks(sample, encoder_hidden_states, timestep, timestep_cond,
-                                            attention_mask,
-                                            encoder_attention_mask,
-                                            mid_block_additional_residual, 
-                                            down_block_additional_residuals)
+
+        sample = self.run_down_mid_up_blocks(
+            sample,
+            encoder_hidden_states,
+            timestep,
+            timestep_cond,
+            attention_mask,
+            encoder_attention_mask,
+            mid_block_additional_residual,
+            down_block_additional_residuals,
+        )
 
         if USE_PEFT_BACKEND:
             # remove `lora_scale` from each PEFT layer
@@ -942,23 +941,21 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
 
         return UNet2DConditionOutput(sample=sample)
 
-    @paddle.incubate.jit.inference(save_model_dir="/root/.cache/haha",
-                                      cache_static_model=False, 
-                                      precision_mode="float32", 
-                                      switch_ir_optim=True,
-                                      with_trt=True,
-                                      enable_new_ir=False,
-                                      trt_precision_mode = "float16",
-                                      trt_use_static = True,
-                                      switch_ir_debug = False)
-    def run_down_mid_up_blocks(self, sample, encoder_hidden_states, timestep, timestep_cond,
-                               attention_mask,
-                               encoder_attention_mask,
-                               mid_block_additional_residual, down_block_additional_residuals):
-        
+    def run_down_mid_up_blocks(
+        self,
+        sample,
+        encoder_hidden_states,
+        timestep,
+        timestep_cond,
+        attention_mask,
+        encoder_attention_mask,
+        mid_block_additional_residual,
+        down_block_additional_residuals,
+    ):
+
         down_intrablock_additional_residuals = self.tmp_down_intrablock_additional_residuals
         cross_attention_kwargs = self.tmp_cross_attention_kwargs
-        forward_upsample_size = self.tmp_forward_upsample_size 
+        forward_upsample_size = self.tmp_forward_upsample_size
         upsample_size = self.tmp_upsample_size
 
         # ensure attention_mask is a bias, and give it a singleton query_tokens dimension
