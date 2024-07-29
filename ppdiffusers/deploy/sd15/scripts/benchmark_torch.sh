@@ -13,14 +13,14 @@
 # limitations under the License.
 
 # attention raw
-python infer_dygraph_torch.py --scheduler "ddim" --task_name all --attention_type raw --use_fp16 True --inference_steps 30 --height 512 --width 512 --benchmark_steps 10
+python infer_dygraph_torch.py --scheduler "ddim" --task_name all --attention_type raw --use_fp16 True --inference_steps 50 --height 512 --width 512 --benchmark_steps 10
 
 # attention sdp
-python infer_dygraph_torch.py --scheduler "ddim" --task_name all --attention_type sdp --use_fp16 True --inference_steps 30 --height 512 --width 512 --benchmark_steps 10
+python infer_dygraph_torch.py --scheduler "ddim" --task_name all --attention_type sdp --use_fp16 True --inference_steps 50 --height 512 --width 512 --benchmark_steps 10
 
 
 # attention raw fp32
-python infer_dygraph_torch.py --scheduler "ddim" --task_name all --attention_type raw --use_fp16 False --inference_steps 30 --height 512 --width 512 --benchmark_steps 10
+python infer_dygraph_torch.py --scheduler "ddim" --task_name all --attention_type raw --use_fp16 False --inference_steps 50 --height 512 --width 512 --benchmark_steps 10
 
 # attention sdp fp32
-python infer_dygraph_torch.py --scheduler "ddim" --task_name all --attention_type sdp --use_fp16 False --inference_steps 30 --height 512 --width 512 --benchmark_steps 10
+python infer_dygraph_torch.py --scheduler "ddim" --task_name all --attention_type sdp --use_fp16 False --inference_steps 50 --height 512 --width 512 --benchmark_steps 10
