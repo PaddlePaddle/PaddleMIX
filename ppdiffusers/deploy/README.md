@@ -33,7 +33,7 @@ PPDiffusers基于Paddle Inference，提供了以下重点扩散模型的部署�
 推理参数为Image Width = 512， Image Height = 512， Num Inference Steps = 50。
 
 # A100性能数据
-|模型|Paddle Deploy TensorRT|Paddle Dynamic|
+|模型|Paddle Deploy TensorRT / ips|Torch Dynamic / ips|
 |-|-|-|
 |IP-Adapter-SD15 text2img|38.52||
 |IP-Adapter-SD15 img2img|37.91||
@@ -44,9 +44,9 @@ PPDiffusers基于Paddle Inference，提供了以下重点扩散模型的部署�
 |SD15 text2img|47.22||
 |SD15 img2img|46.59||
 |SD15 inpaint|46.05||
-|SDXL text2img|31.98||
-|SDXL img2img|31.80||
-|SDXL inpaint|30.58||
+|SDXL text2img|31.98|12.91|
+|SDXL img2img|31.80|9.43|
+|SDXL inpaint|30.58|11.29|
 
 <!-- |SD15 text2img|26.37|10.49||
 |SD15 img2img|30.81|12.70||
