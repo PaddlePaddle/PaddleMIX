@@ -74,3 +74,16 @@ Will be exported to the following directory, including `model_state.pdiparams`, 
 
 ```
 
+## 3. BenchMark
+
+> Note: 
+> Paddle 3.0，A100 80G。
+
+
+|Model|Paddle Deploy |
+|-|-|
+|qwen-vl-7b|669.8 ms|
+|llava-1.5-7b|981.2 ms|
+|llava-1.6-7b|778.7 ms|
+|groundingDino/groundingdino-swint-ogc|100 ms|
+|Sam/SamVitH-1024|121 ms|
