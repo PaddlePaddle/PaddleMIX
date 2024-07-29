@@ -206,6 +206,7 @@ def parse_arguments():
     )
     parser.add_argument("--height", type=int, default=512, help="Height of input image")
     parser.add_argument("--width", type=int, default=512, help="Width of input image")
+    parser.add_argument("--strength", type=float, default=1.0, help="Strength for img2img / inpaint")
     parser.add_argument(
         "--low_threshold",
         type=int,
@@ -347,6 +348,9 @@ def main(args):
                 time_costs += [latency]
                 # print(f"No {step:3d} time cost: {latency:2f} s")
             print(
+                f"Attention type: {attention_type}, "
+                f"Use fp16: {'true' if args.use_fp16 else 'false'}, "
+                f"Mean iter/sec: {1 / (np.mean(time_costs) / args.inference_steps):2f} it/s, "
                 f"Mean latency: {np.mean(time_costs):2f} s, p50 latency: {np.percentile(time_costs, 50):2f} s, "
                 f"p90 latency: {np.percentile(time_costs, 90):2f} s, p95 latency: {np.percentile(time_costs, 95):2f} s."
             )
@@ -367,6 +371,7 @@ def main(args):
                 num_inference_steps=20,
                 height=height,
                 width=width,
+                strength=args.strength,
                 control_image=controlnet_cond,
                 controlnet_conditioning_scale=1.0,
             )
@@ -380,6 +385,7 @@ def main(args):
                     num_inference_steps=args.inference_steps,
                     height=height,
                     width=width,
+                    strength=args.strength,
                     control_image=controlnet_cond,
                     controlnet_conditioning_scale=1.0,
                 ).images
@@ -387,6 +393,9 @@ def main(args):
                 time_costs += [latency]
                 # print(f"No {step:3d} time cost: {latency:2f} s")
             print(
+                f"Attention type: {attention_type}, "
+                f"Use fp16: {'true' if args.use_fp16 else 'false'}, "
+                f"Mean iter/sec: {1 / (np.mean(time_costs) / args.inference_steps):2f} it/s, "
                 f"Mean latency: {np.mean(time_costs):2f} s, p50 latency: {np.percentile(time_costs, 50):2f} s, "
                 f"p90 latency: {np.percentile(time_costs, 90):2f} s, p95 latency: {np.percentile(time_costs, 95):2f} s."
             )
@@ -412,6 +421,7 @@ def main(args):
                 num_inference_steps=20,
                 height=height,
                 width=width,
+                strength=args.strength,
                 control_image=controlnet_cond,
                 controlnet_conditioning_scale=1.0,
             )
@@ -426,6 +436,7 @@ def main(args):
                     num_inference_steps=args.inference_steps,
                     height=height,
                     width=width,
+                    strength=args.strength,
                     control_image=controlnet_cond,
                     controlnet_conditioning_scale=1.0,
                 ).images
@@ -433,6 +444,9 @@ def main(args):
                 time_costs += [latency]
                 # print(f"No {step:3d} time cost: {latency:2f} s")
             print(
+                f"Attention type: {attention_type}, "
+                f"Use fp16: {'true' if args.use_fp16 else 'false'}, "
+                f"Mean iter/sec: {1 / (np.mean(time_costs) / args.inference_steps):2f} it/s, "
                 f"Mean latency: {np.mean(time_costs):2f} s, p50 latency: {np.percentile(time_costs, 50):2f} s, "
                 f"p90 latency: {np.percentile(time_costs, 90):2f} s, p95 latency: {np.percentile(time_costs, 95):2f} s."
             )

@@ -9,3 +9,6 @@ regex
 einops>=0.6.1
 soundfile
 librosa
+h5py
+jsonschema>=4.19.0
+referencing>=0.32.1
