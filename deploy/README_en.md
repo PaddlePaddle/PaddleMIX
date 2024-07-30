@@ -77,13 +77,32 @@ Will be exported to the following directory, including `model_state.pdiparams`, 
 ## 3. BenchMark
 
 > Note: 
-> Paddle 3.0，A100 80G。
+> environment
+Paddle 3.0
+PaddleMIX release/2.0 
+PaddleNLP 2.7.2
+A100 80G。
 
+### 3.1 benchmark cmd
 
-|Model|Paddle Deploy |
-|-|-|
-|qwen-vl-7b|669.8 ms|
-|llava-1.5-7b|981.2 ms|
-|llava-1.6-7b|778.7 ms|
-|groundingDino/groundingdino-swint-ogc|100 ms|
-|Sam/SamVitH-1024|121 ms|
+Add -- benchmark after running in the 'deploy' corresponding model directory to obtain the running time of the model.
+example: GroundingDino benchmark：
+
+```bash
+ cd deploy/groundingdino
+ python predict.py  \
+ --text_encoder_type GroundingDino/groundingdino-swint-ogc \
+ --model_path output_groundingdino/GroundingDino/groundingdino-swint-ogc \
+ --input_image https://bj.bcebos.com/v1/paddlenlp/models/community/GroundingDino/000000004505.jpg \
+ --output_dir ./groundingdino_predict_output \
+ --prompt "bus" \
+ --benchmark True
+```
+
+|Model|image size|dtype |Paddle Deploy |
+|-|-|-|-|
+|qwen-vl-7b|448*448|fp16|669.8 ms|
+|llava-1.5-7b|336*336|fp16|981.2 ms|
+|llava-1.6-7b|336*336|fp16|778.7 ms|
+|groundingDino/groundingdino-swint-ogc|800*1193|fp32|100 ms|
+|Sam/SamVitH-1024|1024*1024|fp32|121 ms|
