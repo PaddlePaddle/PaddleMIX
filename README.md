@@ -171,6 +171,14 @@ pip install -e .
 </table>
 
 更多模型能力，可参考[模型能力矩阵](./paddlemix/examples/README.md)
+
+## 社区交流
+
+- 微信扫描二维码并填写问卷，即可加入交流群与众多社区开发者以及官方团队深度交流。
+<div align="center">
+    <img src="https://github.com/user-attachments/assets/ecf292da-9ac6-41cb-84b6-df726ef4522d" width="300" height="300" />
+</div>
+
 ## 许可证书
 
 本项目的发布受Apache 2.0 license许可认证。
