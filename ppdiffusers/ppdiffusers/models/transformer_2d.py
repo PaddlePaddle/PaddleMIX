@@ -515,62 +515,26 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
                     if qkv is not None:
                         state_dict[qkv_key_b] = paddle.concat([qkv, state_dict.pop(key)], axis=-1)
         
-        for key in list(state_dict.keys()):
-            name = ""
-            if 'attn1.to_qkv.weight' in key:
-                layer_id = (int)(key.split(".")[1])
-                name = f'tmp_ZKKFacebookDIT.qkv.{layer_id}.weight'.format(layer_id)
-            if 'attn1.to_qkv.bias' in key:
-                layer_id = (int)(key.split(".")[1])
-                name = f'tmp_ZKKFacebookDIT.qkv.{layer_id}.bias'.format(layer_id)
+        map_from_my_dit = {}
+        for i in range(28):
+            map_from_my_dit[f'tmp_ZKKFacebookDIT.qkv.{i}.weight'] = f'transformer_blocks.{i}.attn1.to_qkv.weight'
+            map_from_my_dit[f'tmp_ZKKFacebookDIT.qkv.{i}.bias'] = f'transformer_blocks.{i}.attn1.to_qkv.bias'
+            map_from_my_dit[f'tmp_ZKKFacebookDIT.out_proj.{i}.weight'] = f'transformer_blocks.{i}.attn1.to_out.0.weight'
+            map_from_my_dit[f'tmp_ZKKFacebookDIT.out_proj.{i}.bias'] = f'transformer_blocks.{i}.attn1.to_out.0.bias'
+            map_from_my_dit[f'tmp_ZKKFacebookDIT.ffn1.{i}.weight'] = f'transformer_blocks.{i}.ff.net.0.proj.weight'
+            map_from_my_dit[f'tmp_ZKKFacebookDIT.ffn1.{i}.bias'] = f'transformer_blocks.{i}.ff.net.0.proj.bias'
+            map_from_my_dit[f'tmp_ZKKFacebookDIT.ffn2.{i}.weight'] = f'transformer_blocks.{i}.ff.net.2.weight'
+            map_from_my_dit[f'tmp_ZKKFacebookDIT.ffn2.{i}.bias'] = f'transformer_blocks.{i}.ff.net.2.bias'
+
+            map_from_my_dit[f'tmp_ZKKFacebookDIT.fcs0.{i}.weight'] = f'transformer_blocks.{i}.norm1.emb.timestep_embedder.linear_1.weight'
+            map_from_my_dit[f'tmp_ZKKFacebookDIT.fcs0.{i}.bias'] = f'transformer_blocks.{i}.norm1.emb.timestep_embedder.linear_1.bias'
+            map_from_my_dit[f'tmp_ZKKFacebookDIT.fcs1.{i}.weight'] = f'transformer_blocks.{i}.norm1.emb.timestep_embedder.linear_2.weight'
+            map_from_my_dit[f'tmp_ZKKFacebookDIT.fcs1.{i}.bias'] = f'transformer_blocks.{i}.norm1.emb.timestep_embedder.linear_2.bias'
+            map_from_my_dit[f'tmp_ZKKFacebookDIT.fcs2.{i}.weight'] = f'transformer_blocks.{i}.norm1.linear.weight'
+            map_from_my_dit[f'tmp_ZKKFacebookDIT.fcs2.{i}.bias'] = f'transformer_blocks.{i}.norm1.linear.bias'
+
+            map_from_my_dit[f'tmp_ZKKFacebookDIT.embs.{i}.weight'] = f'transformer_blocks.{i}.norm1.emb.class_embedder.embedding_table.weight'
+
+        for key in map_from_my_dit.keys():
+            state_dict[key] = paddle.assign(state_dict[map_from_my_dit[key]])
             
-            if 'attn1.to_out.0.weight' in key:
-                layer_id = (int)(key.split(".")[1])
-                name = f'tmp_ZKKFacebookDIT.out_proj.{layer_id}.weight'.format(layer_id)
-            if 'attn1.to_out.0.bias' in key:
-                layer_id = (int)(key.split(".")[1])
-                name = f'tmp_ZKKFacebookDIT.out_proj.{layer_id}.bias'.format(layer_id)
-            
-            if 'ff.net.0.proj.weight' in key:
-                layer_id = (int)(key.split(".")[1])
-                name = f'tmp_ZKKFacebookDIT.ffn1.{layer_id}.weight'.format(layer_id)
-            if 'ff.net.0.proj.bias' in key:
-                layer_id = (int)(key.split(".")[1])
-                name = f'tmp_ZKKFacebookDIT.ffn1.{layer_id}.bias'.format(layer_id)
-
-            if 'ff.net.2.weight' in key:
-                layer_id = (int)(key.split(".")[1])
-                name = f'tmp_ZKKFacebookDIT.ffn2.{layer_id}.weight'.format(layer_id)
-            if 'ff.net.2.bias' in key:
-                layer_id = (int)(key.split(".")[1])
-                name = f'tmp_ZKKFacebookDIT.ffn2.{layer_id}.bias'.format(layer_id)
-            
-
-            if 'norm1.emb.timestep_embedder.linear_1.weight' in key:
-                layer_id = (int)(key.split(".")[1])
-                name = f'tmp_ZKKFacebookDIT.fcs0.{layer_id}.weight'.format(layer_id)
-            if 'norm1.emb.timestep_embedder.linear_1.bias' in key:
-                layer_id = (int)(key.split(".")[1])
-                name = f'tmp_ZKKFacebookDIT.fcs0.{layer_id}.bias'.format(layer_id)
-
-
-            if 'norm1.emb.timestep_embedder.linear_2.weight' in key:
-                layer_id = (int)(key.split(".")[1])
-                name = f'tmp_ZKKFacebookDIT.fcs1.{layer_id}.weight'.format(layer_id)
-            if 'norm1.emb.timestep_embedder.linear_2.bias' in key:
-                layer_id = (int)(key.split(".")[1])
-                name = f'tmp_ZKKFacebookDIT.fcs1.{layer_id}.bias'.format(layer_id)
-
-
-            if 'norm1.linear.weight' in key:
-                layer_id = (int)(key.split(".")[1])
-                name = f'tmp_ZKKFacebookDIT.fcs2.{layer_id}.weight'.format(layer_id)
-            if 'norm1.linear.bias' in key:
-                layer_id = (int)(key.split(".")[1])
-                name = f'tmp_ZKKFacebookDIT.fcs2.{layer_id}.bias'.format(layer_id)
-
-            if 'class_embedder.embedding_table.weight' in key:
-                layer_id = (int)(key.split(".")[1])
-                name = f'tmp_ZKKFacebookDIT.embs.{layer_id}.weight'.format(layer_id)
-
-            state_dict[name] = paddle.assign(state_dict[key])
