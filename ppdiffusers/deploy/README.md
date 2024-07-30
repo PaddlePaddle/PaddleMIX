@@ -35,18 +35,18 @@ PPDiffusers基于Paddle Inference，提供了以下重点扩散模型的部署�
 # A100性能数据
 |模型|Paddle Deploy TensorRT / ips|Torch Dynamic / ips|
 |-|-|-|
-|IP-Adapter-SD15 text2img|38.52||
-|IP-Adapter-SD15 img2img|37.91||
-|IP-Adapter-SD15 inpaint|37.80||
-|IP-Adapter-SDXL text2img|22.88||
-|IP-Adapter-SDXL img2img|22.79||
-|IP-Adapter-SDXL inpaint|22.30||
-|SD15 text2img|47.22||
-|SD15 img2img|46.59||
-|SD15 inpaint|46.05||
-|SDXL text2img|31.98|12.91|
-|SDXL img2img|31.80|9.43|
-|SDXL inpaint|30.58|11.29|
+|IP-Adapter-SD15 text2img|38.52|32.75|
+|IP-Adapter-SD15 img2img|37.91|32.50|
+|IP-Adapter-SD15 inpaint|37.80|31.78|
+|IP-Adapter-SDXL text2img|22.88|17.26|
+|IP-Adapter-SDXL img2img|22.79|17.24|
+|IP-Adapter-SDXL inpaint|22.30|17.06|
+|SD15 text2img|47.22|33.74|
+|SD15 img2img|46.59|32.96|
+|SD15 inpaint|46.05|32.14|
+|SDXL text2img|31.98|17.73|
+|SDXL img2img|31.80|17.40|
+|SDXL inpaint|30.58|16.98|
 
 <!-- |SD15 text2img|26.37|10.49||
 |SD15 img2img|30.81|12.70||
