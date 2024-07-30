@@ -2,7 +2,3 @@ QWenVLTokenizer: qwen_vl
 SimpleTokenizer: processors
 LLavaTokenizer: llava
 InternLMXComposer2Tokenizer: internlm_xcomposer2
-LLavaQwenTokenizer: llava_qwen
-
-
-

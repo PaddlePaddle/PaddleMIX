@@ -57,7 +57,6 @@ ASSIGN_MAPPING = {
     "qwen_vl": "QWenLMHeadModel",
     "sam": "SamModel",
     "visualglm": "VisualGLMForConditionalGeneration",
-    "llava_qwen": "LlavaQwenForCausalLM"
 }
 
 

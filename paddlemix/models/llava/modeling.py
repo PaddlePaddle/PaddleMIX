@@ -51,13 +51,11 @@ class LlavaLlamaForCausalLM(LlamaForCausalLM, LlavaMetaForCausalLM):
         self.vocab_size = config.vocab_size
         self.lm_head = LlamaLMHead(config)
         self.criterion = LlavaCriterion(config)
-        import pdb
-        pdb.set_trace()
+
         if self.training:
             self.init_train()
 
     def init_train(self):
-        
         self.get_model().initialize_vision_modules(self.config)
         self.config.use_cache = False
 
