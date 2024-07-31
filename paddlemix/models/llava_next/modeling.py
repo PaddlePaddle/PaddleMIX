@@ -16,53 +16,48 @@ import warnings
 from typing import List, Optional, Tuple, Union
 
 import paddle
+import paddle.nn as nn
+
 from paddle.autograd import PyLayer
 import paddle.distributed.fleet.meta_parallel as mpu
 from paddle.distributed import fleet
-from paddlenlp.transformers import LlamaConfig, LlamaForCausalLM, LlamaModel
-from paddlenlp.transformers.llama.modeling import LlamaLMHead
 from paddlenlp.transformers.model_outputs import CausalLMOutputWithPast
 from paddlenlp.transformers.utils import get_scale_by_dtype
-
+# import pdb
+# pdb.set_trace()
 from .base_model import LlavaMetaForCausalLM, LlavaMetaModel
-from .configuration import LlavaConfig
+from .configuration import LlavaQwenConfig
+from paddlenlp.transformers import Qwen2Config, Qwen2Model, Qwen2ForCausalLM
+
 
 __all__ = [
-    "LlavaLlamaModel",
-    "LlavaLlamaForCausalLM",
+    "LlavaQwenModel",
+    "LlavaQwenForCausalLM",
 ]
 
+class LlavaQwenConfig(Qwen2Config):
+    model_type = "llava_qwen"
 
-class LlavaLlamaModel(LlavaMetaModel, LlamaModel):
-    config_class = LlavaConfig
+class LlavaQwenModel(LlavaMetaModel, Qwen2Model):
+    config_class = LlavaQwenConfig
 
-    def __init__(self, config: LlamaConfig):
-        super(LlavaLlamaModel, self).__init__(config)
+    def __init__(self, config: Qwen2Config):
+        super(LlavaQwenModel, self).__init__(config)
 
 
-class LlavaLlamaForCausalLM(LlamaForCausalLM, LlavaMetaForCausalLM):
-    config_class = LlavaConfig
-    base_model_prefix = "llava"
+class LlavaQwenForCausalLM(Qwen2ForCausalLM, LlavaMetaForCausalLM):
+    config_class = LlavaQwenConfig
+    base_model_prefix = "llava_qwen"
 
     def __init__(self, config):
-        super(LlamaForCausalLM, self).__init__(config)
-        self.llama = LlavaLlamaModel(config)
-        self.pretraining_tp = config.pretraining_tp
-        self.vocab_size = config.vocab_size
-        self.lm_head = LlamaLMHead(config)
-        self.criterion = LlavaCriterion(config)
-        import pdb
-        pdb.set_trace()
-        if self.training:
-            self.init_train()
-
-    def init_train(self):
+        super(Qwen2ForCausalLM, self).__init__(config)
+        config.model_type = "llava_qwen"
+        config.rope_scaling = None
+        self.qwen2 = LlavaQwenModel(config)
+        self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias_attr=False)
         
-        self.get_model().initialize_vision_modules(self.config)
-        self.config.use_cache = False
-
     def get_model(self):
-        return self.llama
+        return self.qwen2
 
     def forward(
         self,
@@ -149,76 +144,3 @@ class LlavaLlamaForCausalLM(LlamaForCausalLM, LlavaMetaForCausalLM):
             inputs["image_sizes"] = image_sizes
         return inputs
 
-    def prepare_attention_mask_for_generation(self, input_ids, pad_token_id, eos_token_id):
-        is_pad_token_in_inputs_ids = (pad_token_id is not None) and paddle.any(input_ids == pad_token_id).item()
-        is_pad_token_not_equal_to_eos_token_id = (eos_token_id is None) or (
-            (eos_token_id is not None) and (pad_token_id != eos_token_id)
-        )
-        if is_pad_token_in_inputs_ids and is_pad_token_not_equal_to_eos_token_id:
-            attention_mask = (input_ids == pad_token_id).astype(paddle.get_default_dtype()) * get_scale_by_dtype(
-                return_positive=False
-            )
-        else:
-            attention_mask = paddle.ones_like(input_ids, dtype=paddle.get_default_dtype())
-        return attention_mask
-
-class ConcatSePMaskedLoss(PyLayer):
-    @staticmethod
-    def forward(ctx, inp, axis, group):
-        inputs = []
-        paddle.distributed.all_gather(inputs, inp, group=group)
-        with paddle.no_grad():
-            cat = paddle.concat(inputs, axis=axis)
-        ctx.args_axis = axis
-        ctx.args_group = group
-        return cat
-
-    @staticmethod
-    def backward(ctx, grad):
-        axis = ctx.args_axis
-        group = ctx.args_group
-        with paddle.no_grad():
-            grads = paddle.split(grad, paddle.distributed.get_world_size(group), axis=axis)
-        grad = grads[paddle.distributed.get_rank(group)]
-        return grad
-
-class LlavaCriterion(paddle.nn.Layer):
-    """
-    Criterion for Llama.
-    It calculates the final loss.
-    """
-
-    def __init__(self, config):
-
-        super(LlavaCriterion, self).__init__()
-        self.ignore_index = getattr(config, "ignore_index", -100)
-        self.config = config
-        self.enable_parallel_cross_entropy = config.tensor_parallel_degree > 1 and config.tensor_parallel_output
-
-        if self.enable_parallel_cross_entropy:  # and False: # and lm_head is distributed
-            self.loss_func = mpu.ParallelCrossEntropy(ignore_index=self.ignore_index)
-        else:
-            self.loss_func = paddle.nn.CrossEntropyLoss(reduction="none", ignore_index=self.ignore_index)
-
-    def forward(self, prediction_scores, masked_lm_labels):
-        if self.enable_parallel_cross_entropy:
-            if prediction_scores.shape[-1] == self.config.vocab_size:
-                warnings.warn(
-                    f"enable_parallel_cross_entropy, the vocab_size should be splited: {prediction_scores.shape[-1]}, {self.config.vocab_size}"
-                )
-                self.loss_func = paddle.nn.CrossEntropyLoss(reduction="none", ignore_index=self.ignore_index)
-
-        with paddle.amp.auto_cast(False):
-
-            masked_lm_loss = self.loss_func(
-                prediction_scores[..., :-1, :].astype("float32"), masked_lm_labels.unsqueeze(2)[..., 1:, :]
-            )
-
-            if self.config.sep_parallel_degree > 1:
-                _hcg = fleet.get_hybrid_communicate_group()
-                masked_lm_loss = ConcatSePMaskedLoss.apply(masked_lm_loss, axis=1, group=_hcg.get_sep_parallel_group())
-            # skip ignore_index which loss == 0
-            masked_lm_loss = masked_lm_loss[masked_lm_loss > 0].astype("float32")
-            loss = paddle.mean(masked_lm_loss)
-
-        return loss
