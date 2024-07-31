@@ -28,13 +28,15 @@ from ..utils import (
     recompute_use_reentrant,
     use_old_recompute,
 )
-from .zkk_facebook_dit import ZKKFacebookDIT
+from .sim_facebook_dit import SIM_FacebookDIT
 
 from .attention import BasicTransformerBlock
 from .embeddings import CaptionProjection, PatchEmbed
 from .lora import LoRACompatibleConv, LoRACompatibleLinear
 from .modeling_utils import ModelMixin
 from .normalization import AdaLayerNormSingle
+import os
+
 
 
 @dataclass
@@ -116,6 +118,8 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
         self.inner_dim = inner_dim = num_attention_heads * attention_head_dim
         self.data_format = data_format
 
+        self.Inference_Optimize = bool(os.getenv('Inference_Optimize'))
+        
         conv_cls = nn.Conv2D if USE_PEFT_BACKEND else LoRACompatibleConv
         linear_cls = nn.Linear if USE_PEFT_BACKEND else LoRACompatibleLinear
 
@@ -216,7 +220,7 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
             ]
         )
         
-        self.tmp_ZKKFacebookDIT = ZKKFacebookDIT(num_layers, inner_dim, num_attention_heads, attention_head_dim)
+        self.FacebookDIT = SIM_FacebookDIT(num_layers, inner_dim, num_attention_heads, attention_head_dim)
 
         # 4. Define output layers
         self.out_channels = in_channels if out_channels is None else out_channels
@@ -254,6 +258,7 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
             self.caption_projection = CaptionProjection(in_features=caption_channels, hidden_size=inner_dim)
 
         self.gradient_checkpointing = False
+      
 
     def _set_gradient_checkpointing(self, module, value=False):
         if hasattr(module, "gradient_checkpointing"):
@@ -388,45 +393,46 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
             batch_size = hidden_states.shape[0]
             encoder_hidden_states = self.caption_projection(encoder_hidden_states)
             encoder_hidden_states = encoder_hidden_states.reshape([batch_size, -1, hidden_states.shape[-1]])
-
-        # for block in self.transformer_blocks:
-        #     if self.gradient_checkpointing and not hidden_states.stop_gradient and not use_old_recompute():
-
-        #         def create_custom_forward(module, return_dict=None):
-        #             def custom_forward(*inputs):
-        #                 if return_dict is not None:
-        #                     return module(*inputs, return_dict=return_dict)
-        #                 else:
-        #                     return module(*inputs)
-
-        #             return custom_forward
-
-        #         ckpt_kwargs = {} if recompute_use_reentrant() else {"use_reentrant": False}
-        #         hidden_states = recompute(
-        #             create_custom_forward(block),
-        #             hidden_states,
-        #             attention_mask,
-        #             encoder_hidden_states,
-        #             encoder_attention_mask,
-        #             timestep,
-        #             cross_attention_kwargs,
-        #             class_labels,
-        #             **ckpt_kwargs,
-        #         )
-        #     else:
-        #         hidden_states = block(
-        #             hidden_states,
-        #             attention_mask=attention_mask,
-        #             encoder_hidden_states=encoder_hidden_states,
-        #             encoder_attention_mask=encoder_attention_mask,
-        #             timestep=timestep,
-        #             cross_attention_kwargs=cross_attention_kwargs,
-        #             class_labels=class_labels,
-        #         )
-
-
-        hidden_states = self.tmp_ZKKFacebookDIT(hidden_states, timestep, class_labels)
         
+
+        if self.Inference_Optimize is True:
+            hidden_states = self.FacebookDIT(hidden_states, timestep, class_labels)
+        else:
+            for block in self.transformer_blocks:
+                if self.gradient_checkpointing and not hidden_states.stop_gradient and not use_old_recompute():
+
+                    def create_custom_forward(module, return_dict=None):
+                        def custom_forward(*inputs):
+                            if return_dict is not None:
+                                return module(*inputs, return_dict=return_dict)
+                            else:
+                                return module(*inputs)
+
+                        return custom_forward
+
+                    ckpt_kwargs = {} if recompute_use_reentrant() else {"use_reentrant": False}
+                    hidden_states = recompute(
+                        create_custom_forward(block),
+                        hidden_states,
+                        attention_mask,
+                        encoder_hidden_states,
+                        encoder_attention_mask,
+                        timestep,
+                        cross_attention_kwargs,
+                        class_labels,
+                        **ckpt_kwargs,
+                    )
+                else:
+                    hidden_states = block(
+                        hidden_states,
+                        attention_mask=attention_mask,
+                        encoder_hidden_states=encoder_hidden_states,
+                        encoder_attention_mask=encoder_attention_mask,
+                        timestep=timestep,
+                        cross_attention_kwargs=cross_attention_kwargs,
+                        class_labels=class_labels,
+                    )
+
         # 3. Output
         if self.is_input_continuous:
             if not self.use_linear_projection:
@@ -517,23 +523,23 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
         
         map_from_my_dit = {}
         for i in range(28):
-            map_from_my_dit[f'tmp_ZKKFacebookDIT.qkv.{i}.weight'] = f'transformer_blocks.{i}.attn1.to_qkv.weight'
-            map_from_my_dit[f'tmp_ZKKFacebookDIT.qkv.{i}.bias'] = f'transformer_blocks.{i}.attn1.to_qkv.bias'
-            map_from_my_dit[f'tmp_ZKKFacebookDIT.out_proj.{i}.weight'] = f'transformer_blocks.{i}.attn1.to_out.0.weight'
-            map_from_my_dit[f'tmp_ZKKFacebookDIT.out_proj.{i}.bias'] = f'transformer_blocks.{i}.attn1.to_out.0.bias'
-            map_from_my_dit[f'tmp_ZKKFacebookDIT.ffn1.{i}.weight'] = f'transformer_blocks.{i}.ff.net.0.proj.weight'
-            map_from_my_dit[f'tmp_ZKKFacebookDIT.ffn1.{i}.bias'] = f'transformer_blocks.{i}.ff.net.0.proj.bias'
-            map_from_my_dit[f'tmp_ZKKFacebookDIT.ffn2.{i}.weight'] = f'transformer_blocks.{i}.ff.net.2.weight'
-            map_from_my_dit[f'tmp_ZKKFacebookDIT.ffn2.{i}.bias'] = f'transformer_blocks.{i}.ff.net.2.bias'
+            map_from_my_dit[f'FacebookDIT.qkv.{i}.weight'] = f'transformer_blocks.{i}.attn1.to_qkv.weight'
+            map_from_my_dit[f'FacebookDIT.qkv.{i}.bias'] = f'transformer_blocks.{i}.attn1.to_qkv.bias'
+            map_from_my_dit[f'FacebookDIT.out_proj.{i}.weight'] = f'transformer_blocks.{i}.attn1.to_out.0.weight'
+            map_from_my_dit[f'FacebookDIT.out_proj.{i}.bias'] = f'transformer_blocks.{i}.attn1.to_out.0.bias'
+            map_from_my_dit[f'FacebookDIT.ffn1.{i}.weight'] = f'transformer_blocks.{i}.ff.net.0.proj.weight'
+            map_from_my_dit[f'FacebookDIT.ffn1.{i}.bias'] = f'transformer_blocks.{i}.ff.net.0.proj.bias'
+            map_from_my_dit[f'FacebookDIT.ffn2.{i}.weight'] = f'transformer_blocks.{i}.ff.net.2.weight'
+            map_from_my_dit[f'FacebookDIT.ffn2.{i}.bias'] = f'transformer_blocks.{i}.ff.net.2.bias'
 
-            map_from_my_dit[f'tmp_ZKKFacebookDIT.fcs0.{i}.weight'] = f'transformer_blocks.{i}.norm1.emb.timestep_embedder.linear_1.weight'
-            map_from_my_dit[f'tmp_ZKKFacebookDIT.fcs0.{i}.bias'] = f'transformer_blocks.{i}.norm1.emb.timestep_embedder.linear_1.bias'
-            map_from_my_dit[f'tmp_ZKKFacebookDIT.fcs1.{i}.weight'] = f'transformer_blocks.{i}.norm1.emb.timestep_embedder.linear_2.weight'
-            map_from_my_dit[f'tmp_ZKKFacebookDIT.fcs1.{i}.bias'] = f'transformer_blocks.{i}.norm1.emb.timestep_embedder.linear_2.bias'
-            map_from_my_dit[f'tmp_ZKKFacebookDIT.fcs2.{i}.weight'] = f'transformer_blocks.{i}.norm1.linear.weight'
-            map_from_my_dit[f'tmp_ZKKFacebookDIT.fcs2.{i}.bias'] = f'transformer_blocks.{i}.norm1.linear.bias'
+            map_from_my_dit[f'FacebookDIT.fcs0.{i}.weight'] = f'transformer_blocks.{i}.norm1.emb.timestep_embedder.linear_1.weight'
+            map_from_my_dit[f'FacebookDIT.fcs0.{i}.bias'] = f'transformer_blocks.{i}.norm1.emb.timestep_embedder.linear_1.bias'
+            map_from_my_dit[f'FacebookDIT.fcs1.{i}.weight'] = f'transformer_blocks.{i}.norm1.emb.timestep_embedder.linear_2.weight'
+            map_from_my_dit[f'FacebookDIT.fcs1.{i}.bias'] = f'transformer_blocks.{i}.norm1.emb.timestep_embedder.linear_2.bias'
+            map_from_my_dit[f'FacebookDIT.fcs2.{i}.weight'] = f'transformer_blocks.{i}.norm1.linear.weight'
+            map_from_my_dit[f'FacebookDIT.fcs2.{i}.bias'] = f'transformer_blocks.{i}.norm1.linear.bias'
 
-            map_from_my_dit[f'tmp_ZKKFacebookDIT.embs.{i}.weight'] = f'transformer_blocks.{i}.norm1.emb.class_embedder.embedding_table.weight'
+            map_from_my_dit[f'FacebookDIT.embs.{i}.weight'] = f'transformer_blocks.{i}.norm1.emb.class_embedder.embedding_table.weight'
 
         for key in map_from_my_dit.keys():
             state_dict[key] = paddle.assign(state_dict[map_from_my_dit[key]])
