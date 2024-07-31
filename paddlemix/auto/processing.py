@@ -51,9 +51,10 @@ def get_processor_mapping():
             model_name = "qwen_vl"
         elif "internlm_xcomposer2" in file_name:
             model_name = "internlm_xcomposer2"
+        elif "llava_next" in file_name:
+            model_name = "llava_next"
         else:
             model_name = file_name.split("_")[0]
-
         model_module = import_module(f"paddlemix.processors.{file_name[:-3]}")
         for key in dir(model_module):
             if key == "ProcessorMixin" or key == "BaseImageProcessor" or key == "BaseTextProcessor":
