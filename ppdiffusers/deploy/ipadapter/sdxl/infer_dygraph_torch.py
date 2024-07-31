@@ -217,6 +217,7 @@ def parse_arguments():
     )
     parser.add_argument("--height", type=int, default=512, help="Height of input image")
     parser.add_argument("--width", type=int, default=512, help="Width of input image")
+    parser.add_argument("--strength", type=float, default=1.0, help="Strength for img2img / inpaint")
     return parser.parse_args()
 
 
@@ -365,6 +366,7 @@ def main(args):
                 num_inference_steps=20,
                 height=height,
                 width=width,
+                strength=args.strength,
                 ip_adapter_image=ip_image,
             )
             print("==> Test img2img performance.")
@@ -377,6 +379,7 @@ def main(args):
                     num_inference_steps=args.inference_steps,
                     height=height,
                     width=width,
+                    strength=args.strength,
                     ip_adapter_image=ip_image,
                 ).images
                 latency = time.time() - start
@@ -410,6 +413,7 @@ def main(args):
                 num_inference_steps=20,
                 height=height,
                 width=width,
+                strength=args.strength,
                 ip_adapter_image=ip_image,
             )
             print(f"==> Test {task_name} performance.")
@@ -423,6 +427,7 @@ def main(args):
                     num_inference_steps=args.inference_steps,
                     height=height,
                     width=width,
+                    strength=args.strength,
                     ip_adapter_image=ip_image,
                 ).images
                 latency = time.time() - start

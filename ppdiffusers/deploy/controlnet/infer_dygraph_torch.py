@@ -206,6 +206,7 @@ def parse_arguments():
     )
     parser.add_argument("--height", type=int, default=512, help="Height of input image")
     parser.add_argument("--width", type=int, default=512, help="Width of input image")
+    parser.add_argument("--strength", type=float, default=1.0, help="Strength for img2img / inpaint")
     parser.add_argument(
         "--low_threshold",
         type=int,
@@ -370,6 +371,7 @@ def main(args):
                 num_inference_steps=20,
                 height=height,
                 width=width,
+                strength=args.strength,
                 control_image=controlnet_cond,
                 controlnet_conditioning_scale=1.0,
             )
@@ -383,6 +385,7 @@ def main(args):
                     num_inference_steps=args.inference_steps,
                     height=height,
                     width=width,
+                    strength=args.strength,
                     control_image=controlnet_cond,
                     controlnet_conditioning_scale=1.0,
                 ).images
@@ -418,6 +421,7 @@ def main(args):
                 num_inference_steps=20,
                 height=height,
                 width=width,
+                strength=args.strength,
                 control_image=controlnet_cond,
                 controlnet_conditioning_scale=1.0,
             )
@@ -432,6 +436,7 @@ def main(args):
                     num_inference_steps=args.inference_steps,
                     height=height,
                     width=width,
+                    strength=args.strength,
                     control_image=controlnet_cond,
                     controlnet_conditioning_scale=1.0,
                 ).images
