@@ -219,8 +219,8 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
                 for d in range(num_layers)
             ]
         )
-        
-        self.FacebookDIT = SIM_FacebookDIT(num_layers, inner_dim, num_attention_heads, attention_head_dim)
+        if self.Inference_Optimize:
+            self.FacebookDIT = SIM_FacebookDIT(num_layers, inner_dim, num_attention_heads, attention_head_dim)
 
         # 4. Define output layers
         self.out_channels = in_channels if out_channels is None else out_channels
@@ -395,7 +395,7 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
             encoder_hidden_states = encoder_hidden_states.reshape([batch_size, -1, hidden_states.shape[-1]])
         
 
-        if self.Inference_Optimize is True:
+        if self.Inference_Optimize:
             hidden_states = self.FacebookDIT(hidden_states, timestep, class_labels)
         else:
             for block in self.transformer_blocks:
@@ -486,8 +486,7 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
             hidden_states = hidden_states.reshape(
                 shape=(-1, height, width, self.patch_size, self.patch_size, self.out_channels)
             )
-            #hidden_states = paddle.einsum("nhwpqc->nchpwq", hidden_states)
-            hidden_states = hidden_states.transpose([0,5,1,3,2,4])
+            hidden_states = paddle.einsum("nhwpqc->nchpwq", hidden_states)
             output = hidden_states.reshape(
                 shape=(-1, self.out_channels, height * self.patch_size, width * self.patch_size)
             )
