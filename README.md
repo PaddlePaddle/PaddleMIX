@@ -19,9 +19,11 @@ PaddleMIX是基于飞桨的多模态大模型开发套件，聚合图像、文�
 
 ## 最新进展
 
+📚《飞桨多模态大模型开发套件PaddleMIX 2.0 震撼发布》，图文音视频场景全覆盖，多模态高效助力产业创新。超大规模训练支持，覆盖图文预训练、文生图、跨模态视觉任务，覆盖金融、教育、电商、医疗等产业场景。8月8日（周四）20：00 带你直播了解多模态大模型最新架构，深度解析PaddleMIX高性能模型库，手把手演示LLaVA模型训推全流程。[报名链接](https://www.wjx.top/vm/wKqysjx.aspx?udsid=449688)
+
 **2024.07.25 发布PaddleMIX v2.0**
-* 多模态理解：新增QwenVL-vl，LLaVA等；新增Auto模块统一SFT训练流程；新增mixtoken训练策略，SFT吞吐量提升5.6倍。
-* 多模态生成：发布[PPDiffusers 0.24.1](./ppdiffusers/README.md)版本，支持视频生成能力，文生图模型新增LCM。新增peft，accelerate后端。提供基于飞桨开发的ComfyUI插件。
+* 多模态理解：新增LLaVA系列,Qwen-VL等；新增Auto模块统一SFT训练流程；新增mixtoken训练策略，SFT吞吐量提升5.6倍。
+* 多模态生成：发布[PPDiffusers 0.24.1](./ppdiffusers/README.md)版本，支持视频生成能力，文生图模型新增LCM。新增飞桨版peft，accelerate后端。提供基于飞桨开发的ComfyUI插件。
 * 多模态数据处理工具箱[DataCopilot](./paddlemix/datacopilot/)：支持自定义数据结构，数据转换，离线格式检查；支持基本的统计信息，数据可视化功能。
 
 **2023.10.7 发布 PaddleMIX v1.0**
@@ -171,6 +173,14 @@ pip install -e .
 </table>
 
 更多模型能力，可参考[模型能力矩阵](./paddlemix/examples/README.md)
+
+## 社区交流
+
+- 微信扫描二维码并填写问卷，即可加入交流群与众多社区开发者以及官方团队深度交流。
+<div align="center">
+    <img src="https://github.com/user-attachments/assets/ecf292da-9ac6-41cb-84b6-df726ef4522d" width="300" height="300" />
+</div>
+
 ## 许可证书
 
 本项目的发布受Apache 2.0 license许可认证。
