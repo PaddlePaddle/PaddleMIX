@@ -41,4 +41,4 @@ try:
         "fused_rotary_emb",
     ]
 except:
-    print("import triton_ops failed")
+    pass
