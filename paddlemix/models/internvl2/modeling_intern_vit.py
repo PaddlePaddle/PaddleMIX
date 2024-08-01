@@ -17,17 +17,18 @@ from typing import Optional, Tuple, Union
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
-from configuration import InternVisionConfig
 from einops import rearrange
 from paddlenlp.transformers.activations import ACT2FN
 from paddlenlp.transformers.model_outputs import (
     BaseModelOutput,
     BaseModelOutputWithPooling,
 )
-from utils import pad_input, unpad_input
 
 from paddlemix.models.model_utils import MixPretrainedModel
 from ppdiffusers.utils import logging
+
+from .configuration import InternVisionConfig
+from .conversation import pad_input, unpad_input
 
 try:
     from paddle.nn.functional.flash_attention import flash_attn_varlen_qkvpacked
@@ -233,7 +234,7 @@ class InternVisionEmbeddings(nn.Layer):
         patch_embeds = self.patch_embedding(pixel_values)  # shape = [*, width, grid, grid]
         batch_size, _, height, width = patch_embeds.shape
         patch_embeds = patch_embeds.reshape([batch_size, self.embed_dim, -1]).transpose([0, 2, 1])
-        class_embeds = self.class_embedding.expand(batch_size, 1, -1).astype(target_dtype)
+        class_embeds = self.class_embedding.expand([batch_size, 1, -1]).astype(target_dtype)
         embeddings = paddle.concat([class_embeds, patch_embeds], axis=1)
         position_embedding = paddle.concat(
             [self.position_embedding[:, :1, :], self._get_pos_embed(self.position_embedding[:, 1:, :], height, width)],
@@ -379,10 +380,11 @@ class InternVisionEncoderLayer(nn.Layer):
         self,
         hidden_states: paddle.Tensor,
     ):
+        input_dtype = hidden_states.dtype
         hidden_states = hidden_states + self.drop_path1(self.attn(self.norm1(hidden_states)) * self.ls1)
-
+        hidden_states = hidden_states.astype(input_dtype)
         hidden_states = hidden_states + self.drop_path2(self.mlp(self.norm2(hidden_states)) * self.ls2)
-
+        hidden_states = hidden_states.astype(input_dtype)
         return hidden_states
 
 

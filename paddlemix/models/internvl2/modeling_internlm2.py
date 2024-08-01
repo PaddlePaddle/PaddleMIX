@@ -36,9 +36,9 @@ try:
 except:  # noqa # pylint: disable=bare-except
     BaseStreamer = None
 
-from configuration import InternLM2Config
-
 from ppdiffusers.utils import logging
+
+from .configuration import InternLM2Config
 
 _CONFIG_FOR_DOC = "InternLM2Config"
 logger = logging.get_logger(__name__)
@@ -614,7 +614,7 @@ class InternLM2DecoderLayer(paddle.nn.Layer):
 
         hidden_states = self.feed_forward(hidden_states)
         hidden_states = residual + hidden_states
-
+        print(hidden_states.dtype)
         outputs = (hidden_states,)
 
         if output_attentions:
@@ -633,18 +633,6 @@ class InternLM2PretrainedModel(PretrainedModel):
     _no_split_modules = ["InternLM2DecoderLayer"]
     _skip_keys_device_placement = "past_key_values"
     _supports_flash_attn_2 = True
-
-    def _init_weights(self, layer):
-        std = self.config.initializer_range
-        if isinstance(layer, nn.Linear):
-            paddle.nn.initializer.Normal(mean=0.0, std=std)(layer.weight)
-            if layer.bias is not None:
-                paddle.nn.initializer.Constant(0.0)(layer.bias)
-        elif isinstance(layer, nn.Embedding):
-            paddle.nn.initializer.Normal(mean=0.0, std=std)(layer.weight)
-            if layer._padding_idx is not None:
-                with paddle.no_grad():
-                    layer.weight[layer._padding_idx] = 0.0
 
 
 class InternLM2Model(InternLM2PretrainedModel):

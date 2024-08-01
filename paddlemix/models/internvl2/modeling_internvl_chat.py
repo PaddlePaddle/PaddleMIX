@@ -25,9 +25,9 @@ from paddlenlp.transformers.model_utils import PretrainedModel
 from ppdiffusers.utils import logging
 
 from .configuration import InternVLChatConfig
-from .llm import InternLM2ForCausalLM
-from .utils import get_conv_template
-from .visual import InternVisionModel
+from .conversation import get_conv_template
+from .modeling_intern_vit import InternVisionModel
+from .modeling_internlm2 import InternLM2ForCausalLM
 
 logger = logging.get_logger(__name__)
 
@@ -116,19 +116,19 @@ class InternVLChatForCausalLM(PretrainedModel):
         vit_batch_size = pixel_values.shape[0]
 
         B, N, C = input_embeds.shape
-        input_embeds = input_embeds.reshape(B * N, C)
+        input_embeds = input_embeds.reshape([B * N, C])
 
         if paddle.distributed.get_rank() == 0:
             print(
                 f"dynamic ViT batch size: {vit_batch_size}, images per sample: {vit_batch_size / B}, dynamic token length: {N}"
             )
 
-        input_ids = input_ids.reshape(B * N)
+        input_ids = input_ids.reshape([B * N])
         selected = input_ids == self.img_context_token_id
         try:
-            input_embeds[selected] = input_embeds[selected] * 0.0 + vit_embeds.reshape(-1, C)
+            input_embeds[selected] = input_embeds[selected] * 0.0 + vit_embeds.reshape([-1, C])
         except Exception as e:
-            vit_embeds = vit_embeds.reshape(-1, C)
+            vit_embeds = vit_embeds.reshape([-1, C])
             print(
                 f"warning: {e}, input_embeds[selected].shape={input_embeds[selected].shape}, "
                 f"vit_embeds.shape={vit_embeds.shape}"
@@ -175,13 +175,13 @@ class InternVLChatForCausalLM(PretrainedModel):
         )
 
     def pixel_shuffle(self, x, scale_factor=0.5):
-        n, w, h, c = x.size()
+        n, w, h, c = x.shape
         # N, W, H, C --> N, W, H * scale, C // scale
-        x = x.view(n, w, int(h * scale_factor), int(c / scale_factor))
+        x = x.reshape([n, w, int(h * scale_factor), int(c / scale_factor)])
         # N, W, H * scale, C // scale --> N, H * scale, W, C // scale
         x = x.transpose([0, 2, 1, 3])
         # N, H * scale, W, C // scale --> N, H * scale, W * scale, C // (scale ** 2)
-        x = x.view(n, int(h * scale_factor), int(w * scale_factor), int(c / (scale_factor * scale_factor)))
+        x = x.reshape([n, int(h * scale_factor), int(w * scale_factor), int(c / (scale_factor * scale_factor))])
         if self.ps_version == "v1":
             warnings.warn(
                 "In ps_version 'v1', the height and width have not been swapped back, "
@@ -203,9 +203,9 @@ class InternVLChatForCausalLM(PretrainedModel):
         vit_embeds = vit_embeds[:, 1:, :]
 
         h = w = int(vit_embeds.shape[1] ** 0.5)
-        vit_embeds = vit_embeds.reshape(vit_embeds.shape[0], h, w, -1)
+        vit_embeds = vit_embeds.reshape([vit_embeds.shape[0], h, w, -1])
         vit_embeds = self.pixel_shuffle(vit_embeds, scale_factor=self.downsample_ratio)
-        vit_embeds = vit_embeds.reshape(vit_embeds.shape[0], -1, vit_embeds.shape[-1])
+        vit_embeds = vit_embeds.reshape([vit_embeds.shape[0], -1, vit_embeds.shape[-1]])
         vit_embeds = self.mlp1(vit_embeds)
         return vit_embeds
 
@@ -310,9 +310,10 @@ class InternVLChatForCausalLM(PretrainedModel):
         for num_patches in num_patches_list:
             image_tokens = IMG_START_TOKEN + IMG_CONTEXT_TOKEN * self.num_image_token * num_patches + IMG_END_TOKEN
             query = query.replace("<image>", image_tokens, 1)
-
-        model_inputs = tokenizer(query, return_tensors="pt")
+        model_inputs = tokenizer(query, return_tensors="pd")
+        print(model_inputs)
         input_ids = model_inputs["input_ids"].cuda()
+        print(input_ids)
         attention_mask = model_inputs["attention_mask"].cuda()
         generation_config["eos_token_id"] = eos_token_id
         generation_output = self.generate(
@@ -351,14 +352,15 @@ class InternVLChatForCausalLM(PretrainedModel):
                 vit_embeds = self.extract_feature(pixel_values)
             input_embeds = self.language_model.get_input_embeddings()(input_ids)
             B, N, C = input_embeds.shape
-            input_embeds = input_embeds.reshape(B * N, C)
+            input_embeds = input_embeds.reshape([B * N, C])
 
-            input_ids = input_ids.reshape(B * N)
+            input_ids = input_ids.reshape([B * N])
+            print(input_ids)
             selected = input_ids == self.img_context_token_id
-            assert selected.sum() != 0
-            input_embeds[selected] = vit_embeds.reshape(-1, C)
+            assert selected.numpy().sum() != 0
+            input_embeds[selected] = vit_embeds.reshape([-1, C])
 
-            input_embeds = input_embeds.reshape(B, N, C)
+            input_embeds = input_embeds.reshape([B, N, C])
         else:
             input_embeds = self.language_model.get_input_embeddings()(input_ids)
 
