@@ -28,7 +28,7 @@ from ..utils import (
     recompute_use_reentrant,
     use_old_recompute,
 )
-from .sim_facebook_dit import SIM_FacebookDIT
+from .simplified_facebook_dit import Simplified_FacebookDIT
 
 from .attention import BasicTransformerBlock
 from .embeddings import CaptionProjection, PatchEmbed
@@ -220,7 +220,7 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
             ]
         )
         if self.Inference_Optimize:
-            self.FacebookDIT = SIM_FacebookDIT(num_layers, inner_dim, num_attention_heads, attention_head_dim)
+           self.Simplified_FacebookDIT = Simplified_FacebookDIT(num_layers, inner_dim, num_attention_heads, attention_head_dim)
 
         # 4. Define output layers
         self.out_channels = in_channels if out_channels is None else out_channels
@@ -394,9 +394,8 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
             encoder_hidden_states = self.caption_projection(encoder_hidden_states)
             encoder_hidden_states = encoder_hidden_states.reshape([batch_size, -1, hidden_states.shape[-1]])
         
-
         if self.Inference_Optimize:
-            hidden_states = self.FacebookDIT(hidden_states, timestep, class_labels)
+            hidden_states =self.Simplified_FacebookDIT(hidden_states, timestep, class_labels)
         else:
             for block in self.transformer_blocks:
                 if self.gradient_checkpointing and not hidden_states.stop_gradient and not use_old_recompute():
@@ -522,23 +521,23 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
         
         map_from_my_dit = {}
         for i in range(28):
-            map_from_my_dit[f'FacebookDIT.qkv.{i}.weight'] = f'transformer_blocks.{i}.attn1.to_qkv.weight'
-            map_from_my_dit[f'FacebookDIT.qkv.{i}.bias'] = f'transformer_blocks.{i}.attn1.to_qkv.bias'
-            map_from_my_dit[f'FacebookDIT.out_proj.{i}.weight'] = f'transformer_blocks.{i}.attn1.to_out.0.weight'
-            map_from_my_dit[f'FacebookDIT.out_proj.{i}.bias'] = f'transformer_blocks.{i}.attn1.to_out.0.bias'
-            map_from_my_dit[f'FacebookDIT.ffn1.{i}.weight'] = f'transformer_blocks.{i}.ff.net.0.proj.weight'
-            map_from_my_dit[f'FacebookDIT.ffn1.{i}.bias'] = f'transformer_blocks.{i}.ff.net.0.proj.bias'
-            map_from_my_dit[f'FacebookDIT.ffn2.{i}.weight'] = f'transformer_blocks.{i}.ff.net.2.weight'
-            map_from_my_dit[f'FacebookDIT.ffn2.{i}.bias'] = f'transformer_blocks.{i}.ff.net.2.bias'
+            map_from_my_dit[f'Simplified_FacebookDIT.qkv.{i}.weight'] = f'transformer_blocks.{i}.attn1.to_qkv.weight'
+            map_from_my_dit[f'Simplified_FacebookDIT.qkv.{i}.bias'] = f'transformer_blocks.{i}.attn1.to_qkv.bias'
+            map_from_my_dit[f'Simplified_FacebookDIT.out_proj.{i}.weight'] = f'transformer_blocks.{i}.attn1.to_out.0.weight'
+            map_from_my_dit[f'Simplified_FacebookDIT.out_proj.{i}.bias'] = f'transformer_blocks.{i}.attn1.to_out.0.bias'
+            map_from_my_dit[f'Simplified_FacebookDIT.ffn1.{i}.weight'] = f'transformer_blocks.{i}.ff.net.0.proj.weight'
+            map_from_my_dit[f'Simplified_FacebookDIT.ffn1.{i}.bias'] = f'transformer_blocks.{i}.ff.net.0.proj.bias'
+            map_from_my_dit[f'Simplified_FacebookDIT.ffn2.{i}.weight'] = f'transformer_blocks.{i}.ff.net.2.weight'
+            map_from_my_dit[f'Simplified_FacebookDIT.ffn2.{i}.bias'] = f'transformer_blocks.{i}.ff.net.2.bias'
 
-            map_from_my_dit[f'FacebookDIT.fcs0.{i}.weight'] = f'transformer_blocks.{i}.norm1.emb.timestep_embedder.linear_1.weight'
-            map_from_my_dit[f'FacebookDIT.fcs0.{i}.bias'] = f'transformer_blocks.{i}.norm1.emb.timestep_embedder.linear_1.bias'
-            map_from_my_dit[f'FacebookDIT.fcs1.{i}.weight'] = f'transformer_blocks.{i}.norm1.emb.timestep_embedder.linear_2.weight'
-            map_from_my_dit[f'FacebookDIT.fcs1.{i}.bias'] = f'transformer_blocks.{i}.norm1.emb.timestep_embedder.linear_2.bias'
-            map_from_my_dit[f'FacebookDIT.fcs2.{i}.weight'] = f'transformer_blocks.{i}.norm1.linear.weight'
-            map_from_my_dit[f'FacebookDIT.fcs2.{i}.bias'] = f'transformer_blocks.{i}.norm1.linear.bias'
+            map_from_my_dit[f'Simplified_FacebookDIT.fcs0.{i}.weight'] = f'transformer_blocks.{i}.norm1.emb.timestep_embedder.linear_1.weight'
+            map_from_my_dit[f'Simplified_FacebookDIT.fcs0.{i}.bias'] = f'transformer_blocks.{i}.norm1.emb.timestep_embedder.linear_1.bias'
+            map_from_my_dit[f'Simplified_FacebookDIT.fcs1.{i}.weight'] = f'transformer_blocks.{i}.norm1.emb.timestep_embedder.linear_2.weight'
+            map_from_my_dit[f'Simplified_FacebookDIT.fcs1.{i}.bias'] = f'transformer_blocks.{i}.norm1.emb.timestep_embedder.linear_2.bias'
+            map_from_my_dit[f'Simplified_FacebookDIT.fcs2.{i}.weight'] = f'transformer_blocks.{i}.norm1.linear.weight'
+            map_from_my_dit[f'Simplified_FacebookDIT.fcs2.{i}.bias'] = f'transformer_blocks.{i}.norm1.linear.bias'
 
-            map_from_my_dit[f'FacebookDIT.embs.{i}.weight'] = f'transformer_blocks.{i}.norm1.emb.class_embedder.embedding_table.weight'
+            map_from_my_dit[f'Simplified_FacebookDIT.embs.{i}.weight'] = f'transformer_blocks.{i}.norm1.emb.class_embedder.embedding_table.weight'
 
         for key in map_from_my_dit.keys():
             state_dict[key] = paddle.assign(state_dict[map_from_my_dit[key]])

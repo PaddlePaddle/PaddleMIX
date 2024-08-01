@@ -3,7 +3,7 @@ import paddle
 import paddle.nn.functional as F
 import math
 
-class SIM_FacebookDIT(nn.Layer):
+class Simplified_FacebookDIT(nn.Layer):
     def __init__(self, num_layers: int, dim: int, num_attention_heads: int, attention_head_dim: int):
         super().__init__()
         self.num_layers = num_layers
@@ -14,8 +14,8 @@ class SIM_FacebookDIT(nn.Layer):
         self.timestep_embedder_in_channels = 256
         self.timestep_embedder_time_embed_dim = 1152
         self.timestep_embedder_time_embed_dim_out = self.timestep_embedder_time_embed_dim
-        self.CombinedTimestepLabelEmbeddings_num_embeddings = 1001
-        self.CombinedTimestepLabelEmbeddings_embedding_dim = 1152
+        self.LabelEmbedding_num_classes = 1001
+        self.LabelEmbedding_num_hidden_size = 1152
         
         self.fcs0 = nn.LayerList([nn.Linear(self.timestep_embedder_in_channels, 
                                             self.timestep_embedder_time_embed_dim) for i in range(self.num_layers)])
@@ -26,8 +26,8 @@ class SIM_FacebookDIT(nn.Layer):
         self.fcs2 = nn.LayerList([nn.Linear(self.timestep_embedder_time_embed_dim,
                                             6 * self.timestep_embedder_time_embed_dim) for i in range(self.num_layers)])
         
-        self.embs = nn.LayerList([nn.Embedding(self.CombinedTimestepLabelEmbeddings_embedding_dim, 
-                                               self.CombinedTimestepLabelEmbeddings_num_embeddings) for i in range(self.num_layers)])
+        self.embs = nn.LayerList([nn.Embedding(self.LabelEmbedding_num_classes, 
+                                               self.LabelEmbedding_num_hidden_size) for i in range(self.num_layers)])
         
 
         self.qkv = nn.LayerList([nn.Linear(dim, dim * 3) for i in range(self.num_layers)])
@@ -36,7 +36,7 @@ class SIM_FacebookDIT(nn.Layer):
         self.ffn2 = nn.LayerList([nn.Linear(dim*4, dim) for i in range(self.num_layers)])
 
     @paddle.incubate.jit.inference(enable_new_ir=True, 
-                          cache_static_model=True,
+                          cache_static_model=False,
                           exp_enable_use_cutlass=True,
                           delete_pass_lists=["add_norm_fuse_pass"],
                         )
