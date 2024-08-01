@@ -1,0 +1,168 @@
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import argparse
+import paddle
+import paddle.vision.transforms as T
+from PIL import Image
+
+from paddlemix.models.internvl2.internlm2 import InternLM2Tokenizer
+from paddlenlp.transformers import AutoTokenizer, Qwen2Tokenizer, LlamaTokenizer, Llama3Tokenizer
+
+from paddlemix.models.internvl2.internvl_chat import InternVLChatModel
+
+paddle.set_grad_enabled(False)
+
+IMAGENET_MEAN = (0.485, 0.456, 0.406)
+IMAGENET_STD = (0.229, 0.224, 0.225)
+
+
+def build_transform(input_size):
+    MEAN, STD = IMAGENET_MEAN, IMAGENET_STD
+    transform = T.Compose([
+        # T.Lambda(lambda img: img.convert('RGB') if img.mode != 'RGB' else img),
+        T.Resize((input_size, input_size), interpolation='bicubic'),
+        T.ToTensor(),
+        T.Normalize(mean=MEAN, std=STD)
+    ])
+    return transform
+
+
+def find_closest_aspect_ratio(aspect_ratio, target_ratios, width, height, image_size):
+    best_ratio_diff = float('inf')
+    best_ratio = (1, 1)
+    area = width * height
+    for ratio in target_ratios:
+        target_aspect_ratio = ratio[0] / ratio[1]
+        ratio_diff = abs(aspect_ratio - target_aspect_ratio)
+        if ratio_diff < best_ratio_diff:
+            best_ratio_diff = ratio_diff
+            best_ratio = ratio
+        elif ratio_diff == best_ratio_diff:
+            if area > 0.5 * image_size * image_size * ratio[0] * ratio[1]:
+                best_ratio = ratio
+    return best_ratio
+
+
+def dynamic_preprocess(image, min_num=1, max_num=12, image_size=448, use_thumbnail=False):
+    orig_width, orig_height = image.size
+    aspect_ratio = orig_width / orig_height
+
+    # calculate the existing image aspect ratio
+    target_ratios = set(
+        (i, j) for n in range(min_num, max_num + 1) for i in range(1, n + 1) for j in range(1, n + 1) if
+        i * j <= max_num and i * j >= min_num)
+    target_ratios = sorted(target_ratios, key=lambda x: x[0] * x[1])
+
+    # find the closest aspect ratio to the target
+    target_aspect_ratio = find_closest_aspect_ratio(
+        aspect_ratio, target_ratios, orig_width, orig_height, image_size)
+
+    # calculate the target width and height
+    target_width = image_size * target_aspect_ratio[0]
+    target_height = image_size * target_aspect_ratio[1]
+    blocks = target_aspect_ratio[0] * target_aspect_ratio[1]
+
+    # resize the image
+    resized_img = image.resize((target_width, target_height))
+    processed_images = []
+    for i in range(blocks):
+        box = (
+            (i % (target_width // image_size)) * image_size,
+            (i // (target_width // image_size)) * image_size,
+            ((i % (target_width // image_size)) + 1) * image_size,
+            ((i // (target_width // image_size)) + 1) * image_size
+        )
+        # split the image
+        split_img = resized_img.crop(box)
+        processed_images.append(split_img)
+    assert len(processed_images) == blocks
+    if use_thumbnail and len(processed_images) != 1:
+        thumbnail_img = image.resize((image_size, image_size))
+        processed_images.append(thumbnail_img)
+    return processed_images
+
+
+def load_image(image_file, input_size=448, max_num=12):
+    image = Image.open(image_file).convert('RGB')
+    transform = build_transform(input_size=input_size)
+    images = dynamic_preprocess(image, image_size=input_size, use_thumbnail=True, max_num=max_num)
+    pixel_values = [transform(image) for image in images]
+    pixel_values = paddle.stack(pixel_values)
+    return pixel_values
+
+
+def main(args):
+    if args.image_path is not None:
+        args.text = '<image>\n' + args.text
+        pixel_values = load_image(args.image_path, max_num=12).to(paddle.bfloat16)
+    else:
+        pixel_values = None
+
+    # init model and tokenizer
+    MODEL_PATH = args.model_name_or_path
+    model_size = MODEL_PATH.split('-')[-1]
+    print(f'model size: {model_size}')
+    if model_size in ['1B']:
+        tokenizer = Qwen2Tokenizer.from_pretrained(MODEL_PATH)
+
+        # # 修复PaddleNLP不支持added_tokens_decoder从tokenizer_config.json中恢复问题
+        # ## 先删除所有错误添加的added_tokens_decoder 和 added_tokens_encoder
+        # tokenizer.added_tokens_decoder = {}
+        # tokenizer.added_tokens_encoder = {}
+        # ## 然后依照tokenizer_config.json重新添加
+        # tokenizer.add_tokens([DEFAULT_IM_PAD_TOKEN_QWEN], special_tokens=True) # 151643
+        # tokenizer.add_tokens([DEFAULT_IM_START_TOKEN_QWEN], special_tokens=True) # 151644
+        # tokenizer.add_tokens([DEFAULT_IM_END_TOKEN_QWEN], special_tokens=True) # 151645
+
+        #tokenizer = Qwen2Tokenizer.from_pretrained('models/Qwen2-0.5B-Instruct')
+    elif model_size in ['2B', '8B', '26B']:
+        tokenizer = InternLM2Tokenizer.from_pretrained(MODEL_PATH)
+    elif model_size in ['4B', '40B']:
+        tokenizer = LlamaTokenizer.from_pretrained(MODEL_PATH)
+    elif model_size in ['76B']:
+        tokenizer = Llama3Tokenizer.from_pretrained(MODEL_PATH)
+    else:
+        raise ValueError
+
+    print('tokenizer: ', tokenizer) # Qwen2-0.5B-Instruct len(tokenizer) 151645
+    print('len(tokenizer)', len(tokenizer))
+    model = InternVLChatModel.from_pretrained(MODEL_PATH).eval()
+
+    # im_start_token = tokenizer.convert_tokens_to_ids(['<img>'])[0] # 92544
+    # im_end_token = tokenizer.convert_tokens_to_ids(['</img>'])[0] # 92545
+    # im_patch_token = tokenizer.convert_tokens_to_ids(['<IMG_CONTEXT>'])[0] # 92546
+
+    generation_config = dict(max_new_tokens=1024, do_sample=False)
+
+    with paddle.no_grad():
+        response, history = model.chat(tokenizer, pixel_values, args.text, generation_config, history=None, return_history=True)
+        print(f'User:\n {args.text}\nAssistant:\n {response}')
+        # question = 'Please write a poem according to the image.'
+        # response, history = model.chat(tokenizer, pixel_values, question, generation_config, history=history, return_history=True)
+        # print(f'User:\n {question}\nAssistant:\n {response}')
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--model_name_or_path",
+        type=str,
+        default="OpenGVLab/InternVL2-8B",
+        help="pretrained ckpt and tokenizer",
+    )
+    parser.add_argument("--image_path", type=str)
+    parser.add_argument("--text", type=str, default='Please describe the image shortly.', required=True)
+    args = parser.parse_args()
+    main(args)

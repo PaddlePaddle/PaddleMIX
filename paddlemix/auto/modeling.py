@@ -57,6 +57,7 @@ ASSIGN_MAPPING = {
     "qwen_vl": "QWenLMHeadModel",
     "sam": "SamModel",
     "visualglm": "VisualGLMForConditionalGeneration",
+    "internvl2": "InternVLChatModel",
 }
 
 
