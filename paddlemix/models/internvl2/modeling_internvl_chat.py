@@ -28,6 +28,7 @@ from .configuration import InternVLChatConfig
 from .conversation import get_conv_template
 from .modeling_intern_vit import InternVisionModel
 from .modeling_internlm2 import InternLM2ForCausalLM
+from .modeling_phi3 import Phi3ForCausalLM
 
 logger = logging.get_logger(__name__)
 
@@ -48,7 +49,7 @@ def version_cmp(v1, v2, op="eq"):
 class InternVLChatForCausalLM(PretrainedModel):
     config_class = InternVLChatConfig
     main_input_name = "pixel_values"
-    _no_split_modules = ["InternVisionModel", "LlamaDecoderLayer", "InternLM2DecoderLayer"]
+    _no_split_modules = ["InternVisionModel", "LlamaDecoderLayer", "InternLM2DecoderLayer", "Phi3DecoderLayer"]
 
     def __init__(self, config: InternVLChatConfig, vision_model=None, language_model=None):
         super().__init__(config)
@@ -75,6 +76,8 @@ class InternVLChatForCausalLM(PretrainedModel):
                 self.language_model = LlamaForCausalLM(config.llm_config)
             elif config.llm_config.architectures[0] == "InternLM2ForCausalLM":
                 self.language_model = InternLM2ForCausalLM(config.llm_config)
+            elif config.llm_config.architectures[0] == "Phi3ForCausalLM":
+                self.language_model = Phi3ForCausalLM(config.llm_config)
             else:
                 raise NotImplementedError(f"{config.llm_config.architectures[0]} is not implemented.")
 
