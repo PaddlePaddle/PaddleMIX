@@ -516,7 +516,7 @@ def weight_only_int8(x, qweight, scales, bias=None, bool_trans_w=True):
     triton_uint_qweight = (triton_qweight.astype("int32") + 128).astype("uint8")
 
     for i in range(100):
-        triton_output = paddle.incubate.tt.weight_only_int8(
+        triton_output = paddlemix.custom_ops.weight_only_int8(
             activation,
             triton_uint_qweight,
             triton_scale,
@@ -526,7 +526,7 @@ def weight_only_int8(x, qweight, scales, bias=None, bool_trans_w=True):
 
     starttime = datetime.datetime.now()
     for i in range(100):
-        triton_output = paddle.incubate.tt.weight_only_int8(
+        triton_output = paddlemix.custom_ops.weight_only_int8(
             activation,
             triton_uint_qweight,
             triton_scale,
@@ -799,7 +799,7 @@ def fused_adaLN_scale_residual(
 
 
     for i in range(100):
-        resi_out_triton, adaLN_out_triton = paddle.incubate.tt.fused_adaLN_scale_residual(x, mha_out, gate_msa, scale_mlp_x, shift_mlp_x, weight, bias, epsilon)
+        resi_out_triton, adaLN_out_triton = paddlemix.custom_ops.fused_adaLN_scale_residual(x, mha_out, gate_msa, scale_mlp_x, shift_mlp_x, weight, bias, epsilon)
 
     for i in range(100):
         resi_out_paddle, adaLN_out_paddle = paddle_fused_adaLN(x, mha_out, gate_msa, hidd, scale_mlp_x, shift_mlp_x, weight, bias, epsilon)
@@ -1043,7 +1043,7 @@ def adaptive_layer_norm(x, scale, shift, weight=None, bias=None, epsilon=1e-05):
     scale_msa_x = paddle.rand([batch, hidd], dtype=dtype)
 
     for i in range(100):
-        mt_result = paddle.incubate.tt.adaptive_layer_norm(x, scale_msa_x, shift_msa_x, weight, bias)
+        mt_result = paddlemix.custom_ops.adaptive_layer_norm(x, scale_msa_x, shift_msa_x, weight, bias)
 
     for i in range(100):
         baseline = modulate(paddle.nn.functional.layer_norm(x, [hidd], weight, bias, 1e-5), shift_msa_x, scale_msa_x)
@@ -1240,7 +1240,7 @@ def rms_norm(x, weight=None, bias=None, epsilon=1e-05):
         baseline = paddle.incubate.nn.functional.fused_rms_norm(x, weight, bias, 1e-5, begin_norm_axis=3)
 
     for i in range(100):
-        mt_result = paddle.incubate.tt.rms_norm(x,weight,bias,1e-5)
+        mt_result = paddlemix.custom_ops.rms_norm(x,weight,bias,1e-5)
 
 
     baseline = baseline[0]
@@ -1285,7 +1285,6 @@ def rms_norm(x, weight=None, bias=None, epsilon=1e-05):
             -1,  # M,
             N,
             epsilon,
-            BLOCK_SIZE_M=4,
             N_npo2=N_npo2,
             weight_attr=weight_attr,
             bias_attr=bias_attr,
