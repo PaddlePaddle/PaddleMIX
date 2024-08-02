@@ -34,12 +34,10 @@ from paddlenlp.transformers.model_utils import PretrainedModel
 
 # from transformers.utils import is_flash_attn_greater_or_equal_2_10
 from .configuration_phi3 import Phi3Config
-
 from ppdiffusers.utils import logging
 logger = logging.get_logger(__name__)
 
-
-from .bert_padding import pad_input, unpad_input, index_first_axis
+from ..bert_padding import pad_input, unpad_input, index_first_axis
 try:
     from paddle.nn.functional.flash_attention import flash_attention as flash_attn_func
     from paddle.nn.functional.flash_attention import flash_attn_unpadded as flash_attn_varlen_func
@@ -58,12 +56,6 @@ try:
     _flash_supports_window_size = 'window_size' in list(inspect.signature(flash_attn_func).parameters)
 except:
     _flash_supports_window_size = False
-
-
-PHI3_PRETRAINED_MODEL_ARCHIVE_LIST = [
-    "microsoft/Phi-3-mini-4k-instruct",
-    "microsoft/Phi-3-mini-128k-instruct"
-]
 
 
 class Phi3RMSNorm(nn.Layer):
@@ -100,6 +92,40 @@ def _get_unpad_data(attention_mask):
         cu_seqlens,
         max_seqlen_in_batch,
     )
+
+
+def masked_fill(x, mask, value):
+    y = paddle.full(x.shape, value, x.dtype)
+    return paddle.where(mask, y, x)
+
+
+# Copied from transformers.models.bart.modeling_bart._make_causal_mask
+def _make_causal_mask(input_ids_shape: list, dtype: paddle.dtype, past_key_values_length: int = 0):
+    """
+    Make causal mask used for bi-directional self-attention.
+    """
+    bsz, tgt_len = input_ids_shape
+    mask = paddle.full(shape=(tgt_len, tgt_len), fill_value=paddle.finfo(dtype).min)
+    mask_cond = paddle.arange(end=mask.shape[-1])
+
+    mask = masked_fill(mask, mask_cond < (mask_cond + 1).reshape([mask.shape[-1], 1]), 0)
+    mask = mask.astype(dtype)
+    if past_key_values_length > 0:
+        mask = paddle.concat(x=[paddle.zeros(shape=[tgt_len, past_key_values_length], dtype=dtype), mask], axis=-1)
+    return mask[(None), (None), :, :].expand(shape=[bsz, 1, tgt_len, tgt_len + past_key_values_length])
+
+
+# Copied from transformers.models.bart.modeling_bart._expand_mask
+def _expand_mask(mask: paddle.Tensor, dtype: paddle.dtype, tgt_len: Optional[int] = None):
+    """
+    Expands attention_mask from `[bsz, seq_len]` to `[bsz, 1, tgt_seq_len, src_seq_len]`.
+    """
+    bsz, src_len = mask.shape
+    tgt_len = tgt_len if tgt_len is not None else src_len
+    expanded_mask = mask[:, (None), (None), :].expand(shape=[bsz, 1, tgt_len, src_len]).astype(dtype)
+    inverted_mask = 1.0 - expanded_mask
+
+    return masked_fill(inverted_mask, inverted_mask.astype("bool"), paddle.finfo(dtype).min)
 
 
 # Copied from transformers.models.gemma.modeling_gemma.GemmaRotaryEmbedding with gemma->phi3, Gemma->Phi3
@@ -376,14 +402,14 @@ class Phi3Attention(nn.Layer):
 
         attn_weights = paddle.matmul(query_states, key_states.transpose([0, 1, 3, 2])) / math.sqrt(self.head_dim) # transpose(2, 3)
 
-        if attn_weights.shape != (bsz, self.num_heads, q_len, kv_seq_len):
+        if attn_weights.shape != [bsz, self.num_heads, q_len, kv_seq_len]:
             raise ValueError(
                 f'Attention weights should be of size {(bsz, self.num_heads, q_len, kv_seq_len)}, but is'
                 f' {attn_weights.shape}'
             )
 
         if attention_mask is not None:
-            if attention_mask.shape != (bsz, 1, q_len, kv_seq_len):
+            if attention_mask.shape != [bsz, 1, q_len, kv_seq_len]:
                 raise ValueError(
                     f'Attention mask should be of size {(bsz, 1, q_len, kv_seq_len)}, but is {attention_mask.shape}'
                 )
@@ -395,7 +421,7 @@ class Phi3Attention(nn.Layer):
 
         attn_output = paddle.matmul(attn_weights, value_states)
 
-        if attn_output.shape != (bsz, self.num_heads, q_len, self.head_dim):
+        if attn_output.shape != [bsz, self.num_heads, q_len, self.head_dim]:
             raise ValueError(
                 f'`attn_output` should be of size {(bsz, self.num_heads, q_len, self.head_dim)}, but is'
                 f' {attn_output.shape}'
@@ -427,7 +453,7 @@ class Phi3FlashAttention2(Phi3Attention):
         # flash_attn<2.1 generates top-left aligned causal mask, while what is needed here is bottom-right alignement, that was made default for flash_attn>=2.1. This attribute is used to handle this difference. Reference: https://github.com/Dao-AILab/flash-attention/releases/tag/v2.1.0.
         # Beware that with flash_attn<2.1, using q_seqlen != k_seqlen (except for the case q_seqlen == 1) produces a wrong mask (top-left).
         # self._flash_attn_uses_top_left_mask = not is_flash_attn_greater_or_equal_2_10()
-        self._flash_attn_uses_top_left_mask = True
+        self._flash_attn_uses_top_left_mask = True # TODO
 
     def forward(
         self,
@@ -783,7 +809,7 @@ class Phi3SdpaAttention(Phi3Attention):
         value_states = repeat_kv(value_states, self.num_key_value_groups)
 
         if attention_mask is not None:
-            if attention_mask.shape != (bsz, 1, q_len, kv_seq_len):
+            if attention_mask.shape != [bsz, 1, q_len, kv_seq_len]:
                 raise ValueError(
                     f'Attention mask should be of size {(bsz, 1, q_len, kv_seq_len)}, but is {attention_mask.shape}'
                 )
@@ -818,8 +844,8 @@ PHI3_ATTENTION_CLASSES = {
     'flash_attention_2': Phi3FlashAttention2,
     'sdpa': Phi3SdpaAttention,
 }
+_attn_implementation = 'eager'
 
-_attn_implementation = 'flash_attention_2'
 
 class Phi3DecoderLayer(nn.Layer):
     def __init__(self, config: Phi3Config, layer_idx: int):
@@ -882,7 +908,6 @@ class Phi3DecoderLayer(nn.Layer):
             use_cache=use_cache,
         )
         # [1, 1879, 3072], None, None
-        #import pdb; pdb.set_trace()
 
         hidden_states = residual + self.resid_attn_dropout(attn_outputs)
 
@@ -963,6 +988,26 @@ class Phi3Model(Phi3PreTrainedModel):
     def set_input_embeddings(self, value):
         self.embed_tokens = value
 
+    def _prepare_decoder_attention_mask(self, attention_mask, input_shape, inputs_embeds, past_key_values_length):
+        # create causal mask
+        # [bsz, seq_len] -> [bsz, 1, tgt_seq_len, src_seq_len]
+        combined_attention_mask = None
+        if input_shape[-1] > 1:
+            combined_attention_mask = _make_causal_mask(
+                input_shape,
+                inputs_embeds.dtype,
+                past_key_values_length=past_key_values_length,
+            )
+
+        if attention_mask is not None:
+            # [bsz, seq_len] -> [bsz, 1, tgt_seq_len, src_seq_len]
+            expanded_attn_mask = _expand_mask(attention_mask, inputs_embeds.dtype, tgt_len=input_shape[-1])
+            combined_attention_mask = (
+                expanded_attn_mask if combined_attention_mask is None else expanded_attn_mask + combined_attention_mask
+            )
+
+        return combined_attention_mask
+
     def forward(
         self,
         input_ids: paddle.Tensor = None,
@@ -1016,6 +1061,7 @@ class Phi3Model(Phi3PreTrainedModel):
             )
             position_ids = position_ids.unsqueeze(0).reshape([-1, seq_length])
         else:
+            # run this, must fix use_cache
             position_ids = position_ids.reshape([-1, seq_length]).cast('int64')
 
         if inputs_embeds is None:
@@ -1034,14 +1080,23 @@ class Phi3Model(Phi3PreTrainedModel):
             # 2d mask is passed through the layers
             attention_mask = attention_mask if (attention_mask is not None and 0 in attention_mask.numpy()) else None
         else:
-            raise NotImplementedError
-            # 4d mask is passed through the layers
-            attention_mask = _prepare_4d_causal_attention_mask(
-                attention_mask,
-                (batch_size, seq_length),
-                inputs_embeds,
-                past_key_values_length,
-                sliding_window=self.config.sliding_window,
+            # raise NotImplementedError
+            # # 4d mask is passed through the layers
+            # attention_mask = _prepare_4d_causal_attention_mask(
+            #     attention_mask,
+            #     (batch_size, seq_length),
+            #     inputs_embeds,
+            #     past_key_values_length,
+            #     sliding_window=self.config.sliding_window,
+            # )
+
+            seq_length_with_past = seq_length
+            if attention_mask is None:
+                attention_mask = paddle.ones(
+                    (batch_size, seq_length_with_past), dtype=paddle.bool
+                )
+            attention_mask = self._prepare_decoder_attention_mask(
+                attention_mask, (batch_size, seq_length), inputs_embeds, past_key_values_length
             )
 
         hidden_states = inputs_embeds

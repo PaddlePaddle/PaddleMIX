@@ -18,10 +18,7 @@ from ..internlm2.configuration_internlm2 import InternLM2Config
 from ..phi3.configuration_phi3 import Phi3Config
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
 from .configuration_intern_vit import InternVisionConfig
-
-from ppdiffusers.utils import logging
-logger = logging.get_logger(__name__)
-
+from paddlemix.utils.log import logger
 
 class InternVLChatConfig(PretrainedConfig):
     model_type = 'internvl_chat'

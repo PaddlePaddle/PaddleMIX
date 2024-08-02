@@ -15,9 +15,7 @@
 import os
 from typing import Union
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
-from ppdiffusers.utils import logging
-logger = logging.get_logger(__name__)
-
+from paddlemix.utils.log import logger
 
 class InternVisionConfig(PretrainedConfig):
     r"""

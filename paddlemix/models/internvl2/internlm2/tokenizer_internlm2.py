@@ -23,10 +23,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import sentencepiece as spm
 from paddlenlp.transformers.tokenizer_utils import PretrainedTokenizer
-
-from ppdiffusers.utils import logging
-
-logger = logging.get_logger(__name__)
+from paddlemix.utils.log import logger
 
 VOCAB_FILES_NAMES = {'vocab_file': './tokenizer.model'}
 # VOCAB_FILES_NAMES = {"vocab_file": "sentencepiece.bpe.model"}

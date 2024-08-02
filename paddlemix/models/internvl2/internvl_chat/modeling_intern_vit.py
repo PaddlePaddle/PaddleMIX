@@ -32,15 +32,15 @@ from paddlenlp.transformers.model_outputs import (
 #from transformers.modeling_utils import PreTrainedModel
 from paddlemix.models.model_utils import MixPretrainedModel
 from .configuration_intern_vit import InternVisionConfig
-from ..conversation import pad_input, unpad_input
+from ..bert_padding import pad_input, unpad_input
 
 try:
     from paddle.nn.functional.flash_attention import flash_attn_varlen_qkvpacked
+    print("has_flash_attn is True.")
     has_flash_attn = True
 except:
-    print("FlashAttention is not installed.")
+    print("has_flash_attn is False.")
     has_flash_attn = False
-has_flash_attn = False # TODO: to be debug
 
 from ppdiffusers.utils import logging
 logger = logging.get_logger(__name__)
@@ -208,7 +208,6 @@ class InternVisionEmbeddings(nn.Layer):
         self.num_patches = (self.image_size // self.patch_size) ** 2
         self.num_positions = self.num_patches + 1
 
-        #self.position_embedding = nn.Parameter(torch.randn(1, self.num_positions, self.embed_dim))
         self.position_embedding = paddle.create_parameter(
             shape=[1, self.num_positions, self.embed_dim],
             default_initializer=paddle.nn.initializer.Normal(0.0, 1.0),
@@ -248,7 +247,7 @@ class InternAttention(nn.Layer):
         self.num_heads = config.num_attention_heads
         self.use_flash_attn = config.use_flash_attn and has_flash_attn
         if config.use_flash_attn and not has_flash_attn:
-            print('Warning: Flash Attention is not available, use_flash_attn is set to False.')
+            logger.warning_once('Warning: Flash Attention is not available, use_flash_attn is set to False.')
 
         self.head_dim = self.embed_dim // self.num_heads
         if self.head_dim * self.num_heads != self.embed_dim:
@@ -276,28 +275,13 @@ class InternAttention(nn.Layer):
     def _naive_attn(self, x):
         B, N, C = x.shape
         qkv = self.qkv(x).reshape([B, N, 3, self.num_heads, C // self.num_heads]).transpose([2, 0, 3, 1, 4])
-        #q, k, v = qkv.unbind(0)  # make torchscript happy (cannot use tensor as tuple)
-        q, k, v = paddle.split(qkv, num_or_sections=3, axis=0)
-        q = q.squeeze(0)
-        k = k.squeeze(0)
-        v = v.squeeze(0)
+        q, k, v = qkv.unbind(0)  # make torchscript happy (cannot use tensor as tuple)
 
         if self.qk_normalization: # False in 2B/8B, True in 26B
             B_, H_, N_, D_ = q.shape # (7, 25, 1025, 128)
             q = self.q_norm(q.transpose([0, 2, 1, 3]).flatten(2, 3)).reshape([B_, N_, H_, D_]).transpose([0, 2, 1, 3])
             k = self.k_norm(k.transpose([0, 2, 1, 3]).flatten(2, 3)).reshape([B_, N_, H_, D_]).transpose([0, 2, 1, 3])
-            # q = (
-            #     self.q_norm(q.transpose([0, 2, 1, 3]).reshape([B_, N_, -1]))
-            #     .reshape([B_, N_, H_, D_])
-            #     .transpose([0, 2, 1, 3])
-            # )
-            # k = (
-            #     self.k_norm(k.transpose([0, 2, 1, 3]).reshape([B_, N_, -1]))
-            #     .reshape([B_, N_, H_, D_])
-            #     .transpose([0, 2, 1, 3])
-            # )
 
-        #print('q.shape, k.shape, v.shape', q.shape, k.shape, v.shape)
         # [7, 16, 1025, 64]
         #attn = ((q * self.scale) @ k.transpose(-2, -1))
         attn = (q * self.scale) @ k.transpose([0, 1, 3, 2])
@@ -316,11 +300,7 @@ class InternAttention(nn.Layer):
         qkv = rearrange(qkv, 'b s (three h d) -> b s three h d', three=3, h=self.num_heads)
 
         if self.qk_normalization:
-            # q, k, v = paddle.unbind(qkv, axis=2)
-            q, k, v = paddle.split(qkv, num_or_sections=3, axis=2)
-            q = q.squeeze(2)
-            k = k.squeeze(2)
-            v = v.squeeze(2)
+            q, k, v = paddle.unbind(qkv, axis=2)
             q = self.q_norm(q.flatten(2, 3)).reshape(q.shape)
             k = self.k_norm(k.flatten(2, 3)).reshape(k.shape)
             qkv = paddle.stack([q, k, v], axis=2)
@@ -485,7 +465,7 @@ class InternVisionModel(MixPretrainedModel):
         pos_emb = F.interpolate(pos_emb.float(), size=new_size // patch_size, mode='bicubic', align_corners=False)
         pos_emb = pos_emb.astype(cls_emb.dtype).reshape([1, embed_dim, -1]).transpose([0, 2, 1])
         pos_emb = paddle.concat([cls_emb, pos_emb], axis=1)
-        #self.embeddings.position_embedding = nn.Parameter(pos_emb)
+
         self.embeddings.position_embedding = self.create_parameter(
             shape=pos_emb.shape, attr=paddle.ParamAttr(initializer=paddle.nn.initializer.Assign(pos_emb))
         )

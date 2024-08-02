@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# reference from Dao-AILAB flash-attn
+# https://github.com/Dao-AILab/flash-attention/blob/74b0761ff7efc7b90d4e5aeb529c1b2a09a7458c/flash_attn/bert_padding.py#L38
 import paddle
 import paddle.nn.functional as F
 from einops import rearrange, repeat
@@ -70,37 +72,6 @@ class IndexPutFirstAxis(paddle.autograd.PyLayer):
 index_put_first_axis = IndexPutFirstAxis.apply
 
 
-class IndexFirstAxisResidual(paddle.autograd.PyLayer):
-
-    @staticmethod
-    def forward(ctx, input, indices):
-        ctx.save_for_backward(indices)
-        assert input.ndim >= 2
-        ctx.first_axis_dim, other_shape = tuple(input.shape)[0], tuple(input
-            .shape)[1:]
-        second_dim = other_shape.size
-        output = input[indices]
-        return output, input.detach()
-
-    @staticmethod
-    def backward(ctx, grad_output, grad_residual):
-        """Class Attribute: torch.autograd.function.FunctionCtx.saved_tensors, can not convert, please check whether it is torch.Tensor.*/torch.autograd.function.FunctionCtx.*/torch.distributions.Distribution.* and convert manually"""
-        (indices,) = ctx.saved_tensor()
-        assert grad_output.ndim >= 2
-        other_shape = tuple(grad_output.shape)[1:]
-        assert tuple(grad_residual.shape)[1:] == other_shape
-        grad_input = grad_residual
-        indices = indices.reshape(tuple(indices.shape)[0], *((1,) * (
-            grad_output.ndim - 1)))
-        indices = indices.expand_as(y=grad_output)
-        grad_input.put_along_axis_(axis=0, indices=indices, values=
-            grad_output, reduce='add')
-        return grad_input.reshape(ctx.first_axis_dim, *other_shape), None
-
-
-index_first_axis_residual = IndexFirstAxisResidual.apply
-
-
 def unpad_input(hidden_states, attention_mask):
     """
     Arguments:
@@ -112,15 +83,17 @@ def unpad_input(hidden_states, attention_mask):
         cu_seqlens: (batch + 1), the cumulative sequence lengths, used to index into hidden_states.
         max_seqlen_in_batch: int
     """
-    seqlens_in_batch = attention_mask.sum(axis=-1, dtype='int32')
+    seqlens_in_batch = paddle.sum(attention_mask, axis=-1, dtype="int32")
     indices = paddle.nonzero(attention_mask.flatten(), as_tuple=False).flatten()
-    max_seqlen_in_batch = seqlens_in_batch.max().item()
-    # cu_seqlens = paddle_aux._FUNCTIONAL_PAD(pad=(1, 0), x=paddle.cumsum(x=
-    #     seqlens_in_batch, axis=0, dtype='int32'))
+    max_seqlen_in_batch = paddle.max(seqlens_in_batch).item()
     cu_seqlens = F.pad(paddle.cumsum(seqlens_in_batch, axis=0, dtype="int32"), [1, 0])
 
-    return index_first_axis(rearrange(hidden_states, 'b s ... -> (b s) ...'
-        ), indices), indices, cu_seqlens, max_seqlen_in_batch
+    return (
+        index_first_axis(rearrange(hidden_states, "b s ... -> (b s) ..."), indices),
+        indices,
+        cu_seqlens,
+        max_seqlen_in_batch,
+    )
 
 
 def pad_input(hidden_states, indices, batch, seqlen):
@@ -134,5 +107,4 @@ def pad_input(hidden_states, indices, batch, seqlen):
         hidden_states: (batch, seqlen, ...)
     """
     output = index_put_first_axis(hidden_states, indices, batch * seqlen)
-    return rearrange(output, '(b s) ... -> b s ...', b=batch)
-
+    return rearrange(output, "(b s) ... -> b s ...", b=batch)

@@ -104,7 +104,7 @@ def load_image(image_file, input_size=448, max_num=12):
 
 
 def main(args):
-    if args.image_path is not None:
+    if args.image_path is not None and args.image_path != 'None':
         args.text = '<image>\n' + args.text
         pixel_values = load_image(args.image_path, max_num=12).to(paddle.bfloat16)
     else:
@@ -116,42 +116,47 @@ def main(args):
     print(f'model size: {model_size}')
     if model_size in ['1B']:
         tokenizer = Qwen2Tokenizer.from_pretrained(MODEL_PATH)
+        # TODO:
+        tokenizer.added_tokens_encoder =  {'<|endoftext|>': 151643, '<|im_start|>': 151644, '<|im_end|>': 151645, '<img>': 151646, '</img>': 151647, '<IMG_CONTEXT>': 151648, '<quad>': 151649, '</quad>': 151650, '<ref>': 151651, '</ref>': 151652, '<box>': 151653, '</box>': 151654}
+        tokenizer.added_tokens_decoder = {v: k for k, v in tokenizer.added_tokens_encoder.items()}
 
-        # # 修复PaddleNLP不支持added_tokens_decoder从tokenizer_config.json中恢复问题
-        # ## 先删除所有错误添加的added_tokens_decoder 和 added_tokens_encoder
-        # tokenizer.added_tokens_decoder = {}
-        # tokenizer.added_tokens_encoder = {}
-        # ## 然后依照tokenizer_config.json重新添加
-        # tokenizer.add_tokens([DEFAULT_IM_PAD_TOKEN_QWEN], special_tokens=True) # 151643
-        # tokenizer.add_tokens([DEFAULT_IM_START_TOKEN_QWEN], special_tokens=True) # 151644
-        # tokenizer.add_tokens([DEFAULT_IM_END_TOKEN_QWEN], special_tokens=True) # 151645
-
-        #tokenizer = Qwen2Tokenizer.from_pretrained('models/Qwen2-0.5B-Instruct')
     elif model_size in ['2B', '8B', '26B']:
         tokenizer = InternLM2Tokenizer.from_pretrained(MODEL_PATH)
-    elif model_size in ['4B', '40B']:
+        # TODO:
+        tokenizer.added_tokens_encoder = {'<unk>': 0, '<s>': 1, '</s>': 2, '<|plugin|>': 92538, '<|interpreter|>': 92539, '<|action_end|>': 92540, '<|action_start|>': 92541, '<|im_end|>': 92542, '<|im_start|>': 92543, '<img>': 92544, '</img>': 92545, '<IMG_CONTEXT>': 92546, '<quad>': 92547, '</quad>': 92548, '<ref>': 92549, '</ref>': 92550, '<box>': 92551, '</box>': 92552}
+        tokenizer.added_tokens_decoder = {v: k for k, v in tokenizer.added_tokens_encoder.items()}
+
+    elif model_size in ['4B']:
         tokenizer = LlamaTokenizer.from_pretrained(MODEL_PATH)
+        # TODO:
+        tokenizer.added_tokens_encoder = {'<unk>': 0, '<s>': 1, '</s>': 2, '<|endoftext|>': 32000, '<|assistant|>': 32001, '<|placeholder1|>': 32002, '<|placeholder2|>': 32003, '<|placeholder3|>': 32004, '<|placeholder4|>': 32005, '<|system|>': 32006, '<|end|>': 32007, '<|placeholder5|>': 32008, '<|placeholder6|>': 32009, '<|user|>': 32010, '<img>': 32011, '</img>': 32012, '<IMG_CONTEXT>': 32013, '<quad>': 32014, '</quad>': 32015, '<ref>': 32016, '</ref>': 32017, '<box>': 32018, '</box>': 32019}
+        tokenizer.added_tokens_decoder = {v: k for k, v in tokenizer.added_tokens_encoder.items()}
+
+    elif model_size in ['40B']:
+        tokenizer = LlamaTokenizer.from_pretrained(MODEL_PATH)
+        # TODO:
+        tokenizer.added_tokens_encoder = {'<unk>': 0, '<|startoftext|>': 1, '<|endoftext|>': 2, '<|im_start|>': 6, '<|im_end|>': 7, '<img>': 68, '</img>': 70, '<IMG_CONTEXT>': 64000, '<quad>': 64001, '</quad>': 64002, '<ref>': 64003, '</ref>': 64004, '<box>': 64005, '</box>': 64006}
+        tokenizer.added_tokens_decoder = {v: k for k, v in tokenizer.added_tokens_encoder.items()}
+
     elif model_size in ['76B']:
         tokenizer = Llama3Tokenizer.from_pretrained(MODEL_PATH)
+        # TODO:
+        tokenizer.added_tokens_encoder = {'<unk>': 0, '<s>': 1, '</s>': 2, '<|plugin|>': 92538, '<|interpreter|>': 92539, '<|action_end|>': 92540, '<|action_start|>': 92541, '<|im_end|>': 92542, '<|im_start|>': 92543, '<img>': 92544, '</img>': 92545, '<IMG_CONTEXT>': 92546, '<quad>': 92547, '</quad>': 92548, '<ref>': 92549, '</ref>': 92550, '<box>': 92551, '</box>': 92552}
+        tokenizer.added_tokens_decoder = {v: k for k, v in tokenizer.added_tokens_encoder.items()}
+
     else:
         raise ValueError
 
-    print('tokenizer: ', tokenizer) # Qwen2-0.5B-Instruct len(tokenizer) 151645
-    print('len(tokenizer)', len(tokenizer))
-    model = InternVLChatModel.from_pretrained(MODEL_PATH).eval()
+    print('tokenizer:\n', tokenizer)
+    print('len(tokenizer): ', len(tokenizer))
 
-    # im_start_token = tokenizer.convert_tokens_to_ids(['<img>'])[0] # 92544
-    # im_end_token = tokenizer.convert_tokens_to_ids(['</img>'])[0] # 92545
-    # im_patch_token = tokenizer.convert_tokens_to_ids(['<IMG_CONTEXT>'])[0] # 92546
+    model = InternVLChatModel.from_pretrained(MODEL_PATH).eval()
 
     generation_config = dict(max_new_tokens=1024, do_sample=False)
 
     with paddle.no_grad():
         response, history = model.chat(tokenizer, pixel_values, args.text, generation_config, history=None, return_history=True)
         print(f'User:\n {args.text}\nAssistant:\n {response}')
-        # question = 'Please write a poem according to the image.'
-        # response, history = model.chat(tokenizer, pixel_values, question, generation_config, history=history, return_history=True)
-        # print(f'User:\n {question}\nAssistant:\n {response}')
 
 
 if __name__ == "__main__":

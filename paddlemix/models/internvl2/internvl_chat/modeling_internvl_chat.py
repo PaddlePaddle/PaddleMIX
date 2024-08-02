@@ -26,7 +26,7 @@ from ..conversation import get_conv_template
 from ..internlm2.modeling_internlm2 import InternLM2ForCausalLM
 from ..phi3.modeling_phi3 import Phi3ForCausalLM
 
-#from peft import LoraConfig, get_peft_model
+# from peft import LoraConfig, get_peft_model
 from paddlenlp.generation import GenerationConfig
 from paddlenlp.transformers import LlamaForCausalLM, Qwen2ForCausalLM
 from paddlenlp.transformers.model_outputs import CausalLMOutputWithPast
@@ -35,8 +35,7 @@ from paddlenlp.transformers.model_utils import PretrainedModel
 from .configuration_internvl_chat import InternVLChatConfig
 from .modeling_intern_vit import InternVisionModel
 
-from ppdiffusers.utils import logging
-logger = logging.get_logger(__name__)
+from paddlemix.utils.log import logger
 
 
 class InternVLChatModel(PretrainedModel):
@@ -300,7 +299,7 @@ class InternVLChatModel(PretrainedModel):
             num_patches_list = [pixel_values.shape[0]] if pixel_values is not None else []
         assert pixel_values is None or len(pixel_values) == sum(num_patches_list)
 
-        img_context_token_id = tokenizer.convert_tokens_to_ids(IMG_CONTEXT_TOKEN) # 
+        img_context_token_id = tokenizer.convert_tokens_to_ids(IMG_CONTEXT_TOKEN)
         self.img_context_token_id = img_context_token_id
 
         template = get_conv_template(self.template)
@@ -324,7 +323,6 @@ class InternVLChatModel(PretrainedModel):
             query = query.replace('<image>', image_tokens, 1)
 
         model_inputs = tokenizer(query, return_tensors='pd')
-        # import pdb; pdb.set_trace()
         input_ids = model_inputs['input_ids']
         attention_mask = model_inputs['attention_mask']
         generation_config['eos_token_id'] = eos_token_id
@@ -333,7 +331,7 @@ class InternVLChatModel(PretrainedModel):
             pixel_values=pixel_values, # [7, 3, 448, 448]
             input_ids=input_ids, # [1, 1847]
             attention_mask=attention_mask, # [1, 1847]
-            **generation_config # {'max_new_tokens': 1024, 'do_sample': False}
+            **generation_config # {'max_new_tokens': 1024, 'do_sample': False, 'eos_token_id': 92542}
         )
         response = tokenizer.batch_decode(generation_output[0], skip_special_tokens=True)[0]
         response = response.split(template.sep)[0].strip()
@@ -376,7 +374,6 @@ class InternVLChatModel(PretrainedModel):
 
             input_ids = input_ids.reshape([B * N]) # [5432]  [1847]
             selected = (input_ids == self.img_context_token_id)
-            #import pdb; pdb.set_trace()
             assert selected.sum() != 0, "None after  selected = input_ids == self.img_context_token_id"
 
             input_embeds[selected] = vit_embeds.reshape([-1, C]) # [7, 256, 896] -> [1792, 896]
@@ -384,12 +381,6 @@ class InternVLChatModel(PretrainedModel):
             input_embeds = input_embeds.reshape([B, N, C])
         else:
             input_embeds = self.language_model.get_input_embeddings()(input_ids)
-
-
-        # TODO: 有可能需要加
-        if attention_mask is None:
-            attention_mask = paddle.ones(input_embeds.shape[:2], dtype="int64")
-
 
         outputs = self.language_model.generate(
             inputs_embeds=input_embeds,

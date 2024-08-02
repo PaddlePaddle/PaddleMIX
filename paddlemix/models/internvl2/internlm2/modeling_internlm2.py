@@ -44,51 +44,21 @@ from .configuration_internlm2 import InternLM2Config
 
 from ppdiffusers.utils import logging
 logger = logging.get_logger(__name__)
-
-_CONFIG_FOR_DOC = 'InternLM2Config'
-
-flash_attn_func, flash_attn_varlen_func = None, None
-pad_input, index_first_axis, unpad_input = None, None, None
-
+from ..bert_padding import pad_input, unpad_input, index_first_axis
 try:
-    from paddle.nn.functional.flash_attention import flash_attention as _flash_attn_func
-    from paddle.nn.functional.flash_attention import (
-        flash_attn_unpadded as _flash_attn_varlen_func,
-    )
-    from utils import index_first_axis as _index_first_axis
-    from utils import pad_input as _pad_input
-    from utils import unpad_input as _unpad_input
-
-    flash_attn_func, flash_attn_varlen_func = _flash_attn_func, _flash_attn_varlen_func
-    pad_input, index_first_axis, unpad_input = _pad_input, _index_first_axis, _unpad_input
+    from paddle.nn.functional.flash_attention import flash_attention as flash_attn_func
+    from paddle.nn.functional.flash_attention import flash_attn_unpadded as flash_attn_varlen_func
+    logger.info("has_flash_attn is True.")
     has_flash_attn = True
 except:
+    flash_attn_func, flash_attn_varlen_func = None, None
+    print("has_flash_attn is False.")
     has_flash_attn = False
 
 
-def _import_flash_attn():
-    global flash_attn_func, flash_attn_varlen_func
-    global pad_input, index_first_axis, unpad_input
-    try:
-        from paddle.nn.functional.flash_attention import (
-            flash_attention as _flash_attn_func,
-        )
-        from paddle.nn.functional.flash_attention import (
-            flash_attn_unpadded as _flash_attn_varlen_func,
-        )
-        from utils import index_first_axis as _index_first_axis
-        from utils import pad_input as _pad_input
-        from utils import unpad_input as _unpad_input
-
-        flash_attn_func, flash_attn_varlen_func = _flash_attn_func, _flash_attn_varlen_func
-        pad_input, index_first_axis, unpad_input = _pad_input, _index_first_axis, _unpad_input
-    except ImportError:
-        raise ImportError("your paddle version not support flash_attn now.")
-
-
 def _get_unpad_data(attention_mask):
-    seqlens_in_batch = paddle.sum(attention_mask, axis=-1, dtype=paddle.int32)
-    indices = paddle.nonzero(attention_mask.reshape([-1]), as_tuple=False).reshape([-1])
+    seqlens_in_batch = attention_mask.sum(axis=-1, dtype="int32")
+    indices = paddle.nonzero(attention_mask.flatten(), as_tuple=False).flatten()
     max_seqlen_in_batch = seqlens_in_batch.max().item()
     cu_seqlens = F.pad(paddle.cumsum(seqlens_in_batch, axis=0, dtype=paddle.int32), (1, 0))
     return (
@@ -355,7 +325,7 @@ class InternLM2Attention(nn.Layer):
         position_ids: Optional[paddle.Tensor] = None,
         past_key_value: Optional[Tuple[paddle.Tensor]] = None,
         output_attentions: bool = False,
-        use_cache: bool = False, # im_mask: Optional[Tuple[paddle.Tensor]] = None, #  todo: check
+        use_cache: bool = False,
         **kwargs,
     ) -> Tuple[paddle.Tensor, Optional[paddle.Tensor], Optional[Tuple[paddle.Tensor]]]:
         if 'padding_mask' in kwargs:
@@ -364,9 +334,9 @@ class InternLM2Attention(nn.Layer):
                 'Please make sure use `attention_mask` instead.`'
             )
 
-        bsz, q_len, _ = hidden_states.shape
+        bsz, q_len, _ = hidden_states.shape # [1, 1847, 2048]
 
-        qkv_states = self.wqkv(hidden_states)
+        qkv_states = self.wqkv(hidden_states) # [1, 1847, 4096]
 
         qkv_states = rearrange(
             qkv_states,
@@ -374,15 +344,13 @@ class InternLM2Attention(nn.Layer):
             gs=2 + self.num_key_value_groups,
             d=self.head_dim,
         )
+        # [1, 1847, 8, 4, 128]
 
         query_states = qkv_states[..., : self.num_key_value_groups, :]
-        query_states = rearrange(query_states, 'b q h gs d -> b q (h gs) d')
-        key_states = qkv_states[..., -2, :]
-        value_states = qkv_states[..., -1, :]
+        query_states = rearrange(query_states, 'b q h gs d -> b q (h gs) d') # [1, 1847, 8, 2, 128]->[1, 1847, 16, 128]
+        key_states = qkv_states[..., -2, :] # [1, 1847, 8, 128]
+        value_states = qkv_states[..., -1, :] # [1, 1847, 8, 128]
 
-        # query_states = query_states.transpose(1, 2)
-        # key_states = key_states.transpose(1, 2)
-        # value_states = value_states.transpose(1, 2)
         query_states = query_states.transpose([0, 2, 1, 3])
         key_states = key_states.transpose([0, 2, 1, 3])
         value_states = value_states.transpose([0, 2, 1, 3])
@@ -391,6 +359,8 @@ class InternLM2Attention(nn.Layer):
         if past_key_value is not None:
             kv_seq_len += past_key_value[0].shape[-2]
         cos, sin = self.rotary_emb(value_states, seq_len=kv_seq_len)
+
+        # [1, 16, 1847, 128] [1, 8, 1847, 128] [1847, 128] [1847, 128] [1, 1847]
         query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin, position_ids)
 
         if past_key_value is not None:
@@ -403,7 +373,6 @@ class InternLM2Attention(nn.Layer):
         key_states = repeat_kv(key_states, self.num_key_value_groups)
         value_states = repeat_kv(value_states, self.num_key_value_groups)
 
-        #attn_weights = torch.matmul(query_states, key_states.transpose(2, 3)) / math.sqrt(self.head_dim)
         attn_weights = paddle.matmul(query_states, key_states.transpose([0, 1, 3, 2])) / math.sqrt(self.head_dim)
 
         if attn_weights.shape != [bsz, self.num_heads, q_len, kv_seq_len]:
@@ -468,9 +437,9 @@ class InternLM2FlashAttention2(InternLM2Attention):
 
         output_attentions = False
 
-        bsz, q_len, _ = hidden_states.shape
+        bsz, q_len, _ = hidden_states.shape # [1, 1847, 2048]
 
-        qkv_states = self.wqkv(hidden_states)
+        qkv_states = self.wqkv(hidden_states) # [1, 1847, 4096]
 
         qkv_states = rearrange(
             qkv_states,
@@ -478,11 +447,18 @@ class InternLM2FlashAttention2(InternLM2Attention):
             gs=2 + self.num_key_value_groups,
             d=self.head_dim,
         )
+        # [1, 1847, 8, 4, 128]
 
         query_states = qkv_states[..., : self.num_key_value_groups, :]
         query_states = rearrange(query_states, 'b q h gs d -> b q (h gs) d')
         key_states = qkv_states[..., -2, :]
         value_states = qkv_states[..., -1, :]
+
+        ### new added
+        query_states = query_states.transpose([0, 2, 1, 3])
+        key_states = key_states.transpose([0, 2, 1, 3])
+        value_states = value_states.transpose([0, 2, 1, 3])
+        ###
 
         kv_seq_len = key_states.shape[-2]
         if past_key_value is not None:
@@ -490,6 +466,7 @@ class InternLM2FlashAttention2(InternLM2Attention):
 
         cos, sin = self.rotary_emb(value_states, seq_len=kv_seq_len)
 
+        # real:[1, 16, 1847, 128] [1, 8, 1847, 128] [1847, 128] [1847, 128] [1, 1847]
         query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin, position_ids)
 
         if past_key_value is not None:
@@ -499,9 +476,6 @@ class InternLM2FlashAttention2(InternLM2Attention):
 
         past_key_value = (key_states, value_states) if use_cache else None
 
-        # query_states = query_states.transpose(1, 2)
-        # key_states = key_states.transpose(1, 2)
-        # value_states = value_states.transpose(1, 2)
         query_states = query_states.transpose(perm=[0, 2, 1, 3])
         key_states = key_states.transpose(perm=[0, 2, 1, 3])
         value_states = value_states.transpose(perm=[0, 2, 1, 3])
@@ -699,7 +673,7 @@ class InternLM2DecoderLayer(nn.Layer):
 # # Copied from transformers.models.llama.modeling_llama.LlamaPreTrainedModel with Llama->InternLM2
 class InternLM2PretrainedModel(PretrainedModel):
     config_class = InternLM2Config
-    base_model_prefix = 'model' # todo
+    base_model_prefix = 'model'
     supports_gradient_checkpointing = True
     _no_split_modules = ['InternLM2DecoderLayer']
     _skip_keys_device_placement = 'past_key_values'
@@ -736,7 +710,7 @@ class InternLM2Model(InternLM2PretrainedModel):
         self.config = config
         if not has_flash_attn:
             self.config.attn_implementation = 'eager'
-            # print('Warning: Flash attention is not available, using eager attention instead.')
+            logger.warning_once('Warning: Flash attention is not available, using eager attention instead.')
 
         self.tok_embeddings = nn.Embedding(config.vocab_size, config.hidden_size, self.padding_idx)
 
@@ -794,8 +768,8 @@ class InternLM2Model(InternLM2PretrainedModel):
 
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
-        if self.config.attn_implementation == "flash_attention_2":
-            _import_flash_attn()
+        # if self.config.attn_implementation == "flash_attention_2":
+        #     _import_flash_attn()
 
         # retrieve input_ids and inputs_embeds
         if input_ids is not None and inputs_embeds is not None:
@@ -824,7 +798,7 @@ class InternLM2Model(InternLM2PretrainedModel):
 
         if self.config.attn_implementation == 'flash_attention_2':
             # 2d mask is passed through the layers
-            attention_mask = attention_mask if (attention_mask is not None and 0 in attention_mask) else None
+            attention_mask = attention_mask if (attention_mask is not None and 0 in attention_mask.numpy()) else None
         else:
             if attention_mask is None:
                 attention_mask = paddle.ones(

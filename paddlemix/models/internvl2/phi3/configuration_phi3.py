@@ -26,8 +26,6 @@
 # limitations under the License.
 
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
-from ppdiffusers.utils import logging
-logger = logging.get_logger(__name__)
 
 
 class Phi3Config(PretrainedConfig):

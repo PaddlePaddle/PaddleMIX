@@ -13,8 +13,6 @@
 # limitations under the License.
 
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
-from ppdiffusers.utils import logging
-logger = logging.get_logger(__name__)
 
 
 # Modified from transformers.model.llama.configuration_llama.LlamaConfig
@@ -81,11 +79,10 @@ class InternLM2Config(PretrainedConfig):
         bos_token_id=1,
         eos_token_id=2,
         tie_word_embeddings=False,
-        bias=True, ### TODO: check
+        bias=True,
         rope_theta=10000,
         rope_scaling=None,
-        #attn_implementation='eager', # default
-        attn_implementation='flash_attention_2', # sanbu
+        attn_implementation='eager',
         **kwargs,
     ):
         self.vocab_size = vocab_size
