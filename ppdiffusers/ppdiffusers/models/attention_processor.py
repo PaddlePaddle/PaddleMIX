@@ -102,15 +102,20 @@ class Attention(nn.Layer):
         residual_connection: bool = False,
         _from_deprecated_attn_block: bool = False,
         processor: Optional["AttnProcessor"] = None,
+        out_dim: int = None,
+        context_pre_only=None,
     ):
         super().__init__()
         self.inner_dim = dim_head * heads
+        self.inner_dim = out_dim if out_dim is not None else dim_head * heads
         self.cross_attention_dim = cross_attention_dim if cross_attention_dim is not None else query_dim
         self.upcast_attention = upcast_attention
         self.upcast_softmax = upcast_softmax
         self.rescale_output_factor = rescale_output_factor
         self.residual_connection = residual_connection
         self.dropout = dropout
+        self.out_dim = out_dim if out_dim is not None else query_dim
+        self.context_pre_only = context_pre_only
 
         # we make use of this private variable to know whether this class is loaded
         # with an deprecated state dict so that we can convert it on the fly
@@ -119,7 +124,7 @@ class Attention(nn.Layer):
         self.scale_qk = scale_qk
         self.scale = dim_head**-0.5 if self.scale_qk else 1.0
 
-        self.heads = heads
+        self.heads = out_dim // dim_head if out_dim is not None else heads
         self.head_dim = dim_head
         # for slice_size > 0 the attention score computation
         # is split across the batch axis to save memory
@@ -185,11 +190,15 @@ class Attention(nn.Layer):
         if self.added_kv_proj_dim is not None:
             self.add_k_proj = linear_cls(added_kv_proj_dim, self.inner_dim)
             self.add_v_proj = linear_cls(added_kv_proj_dim, self.inner_dim)
+            if self.context_pre_only is not None:
+                self.add_q_proj = nn.Linear(added_kv_proj_dim, self.inner_dim)
 
         self.to_out = nn.LayerList([])
         self.to_out.append(linear_cls(self.inner_dim, query_dim, bias_attr=out_bias))
         self.to_out.append(nn.Dropout(dropout))
 
+        if self.context_pre_only is not None and not self.context_pre_only:
+            self.to_add_out = nn.Linear(self.inner_dim, self.out_dim, bias_attr=out_bias)
         # set attention processor
         # We use the AttnProcessor2_5 by default when paddle 2.5 is used which uses
         # paddle.nn.functional.scaled_dot_product_attention_ for native Flash/memory_efficient_attention
@@ -897,6 +906,163 @@ class AttnAddedKVProcessor:
 
         return hidden_states
 
+class JointAttnProcessor2_5:
+    """Attention processor used typically in processing the SD3-like self-attention projections."""
+
+    def __init__(self):
+        if not hasattr(F, "scaled_dot_product_attention"):
+            raise ImportError("AttnProcessor2_5 requires Paddle version >= 2.5, to use it, please upgrade Paddle.")
+
+    def __call__(
+        self,
+        attn: Attention,
+        hidden_states: paddle.Tensor,
+        encoder_hidden_states: paddle.Tensor = None,
+        attention_mask: Optional[paddle.Tensor] = None,
+        *args,
+        **kwargs,
+    ) -> paddle.Tensor:
+        residual = hidden_states
+
+        input_ndim = hidden_states.ndim
+        if input_ndim == 4:
+            batch_size, channel, height, width = hidden_states.shape
+            hidden_states = hidden_states.reshape([batch_size, channel, height * width]).transpose([0, 2, 1])
+        context_input_ndim = encoder_hidden_states.ndim
+        if context_input_ndim == 4:
+            batch_size, channel, height, width = encoder_hidden_states.shape
+            encoder_hidden_states = encoder_hidden_states.reshape([batch_size, channel, height * width]).transpose([0, 2, 1])
+
+        batch_size = encoder_hidden_states.shape[0]
+
+        # `sample` projections.
+        query = attn.to_q(hidden_states)
+        key = attn.to_k(hidden_states)
+        value = attn.to_v(hidden_states)
+
+        # `context` projections.
+        encoder_hidden_states_query_proj = attn.add_q_proj(encoder_hidden_states)
+        encoder_hidden_states_key_proj = attn.add_k_proj(encoder_hidden_states)
+        encoder_hidden_states_value_proj = attn.add_v_proj(encoder_hidden_states)
+
+        # attention
+        query = paddle.concat([query, encoder_hidden_states_query_proj], axis=1)
+        key = paddle.concat([key, encoder_hidden_states_key_proj], axis=1)
+        value = paddle.concat([value, encoder_hidden_states_value_proj], axis=1)
+
+        inner_dim = key.shape[-1]
+        head_dim = inner_dim // attn.heads
+        query = query.reshape([batch_size, -1, attn.heads, head_dim])
+        key = key.reshape([batch_size, -1, attn.heads, head_dim])
+        value = value.reshape([batch_size, -1, attn.heads, head_dim])
+
+        hidden_states = hidden_states = F.scaled_dot_product_attention_(
+            query, key, value, dropout_p=0.0, is_causal=False, attention_op='math'
+        )
+        hidden_states = hidden_states.reshape([batch_size, -1, attn.heads * head_dim])
+        hidden_states = hidden_states.astype(query.dtype)
+
+        # Split the attention outputs.
+        hidden_states, encoder_hidden_states = (
+            hidden_states[:, : residual.shape[1]],
+            hidden_states[:, residual.shape[1] :],
+        )
+
+        # linear proj
+        hidden_states = attn.to_out[0](hidden_states)
+        # dropout
+        hidden_states = attn.to_out[1](hidden_states)
+        if not attn.context_pre_only:
+            encoder_hidden_states = attn.to_add_out(encoder_hidden_states)
+
+        if input_ndim == 4:
+            hidden_states = hidden_states.transpose([0, 1, 3, 2]).reshape([batch_size, channel, height, width])
+        if context_input_ndim == 4:
+            encoder_hidden_states = encoder_hidden_states.transpose([0, 1, 3, 2]).reshape([batch_size, channel, height, width])
+
+        return hidden_states, encoder_hidden_states
+
+
+class FusedJointAttnProcessor2_5:
+    """Attention processor used typically in processing the SD3-like self-attention projections."""
+
+    def __init__(self, attention_op=None):
+        assert attention_op in [None, "math", "auto", "flash", "cutlass", "memory_efficient"]
+        if not hasattr(F, "scaled_dot_product_attention"):
+            raise ImportError("AttnProcessor2_5 requires Paddle >= 2.5, to use it, please upgrade Paddle.")
+
+    def __call__(
+        self,
+        attn: Attention,
+        hidden_states: paddle.Tensor,
+        encoder_hidden_states: paddle.Tensor = None,
+        attention_mask: Optional[paddle.Tensor] = None,
+        *args,
+        **kwargs,
+    ) -> paddle.Tensor:
+        residual = hidden_states
+
+        input_ndim = hidden_states.ndim
+        if input_ndim == 4:
+            batch_size, channel, height, width = hidden_states.shape
+            hidden_states = hidden_states.reshape([batch_size, channel, height * width]).transpose([0, 2, 1])
+        context_input_ndim = encoder_hidden_states.ndim
+        if context_input_ndim == 4:
+            batch_size, channel, height, width = encoder_hidden_states.shape
+            encoder_hidden_states = encoder_hidden_states.reshape([batch_size, channel, height * width]).transpose([0, 2, 1])
+
+        batch_size = encoder_hidden_states.shape[0]
+
+        # `sample` projections.
+        qkv = attn.to_qkv(hidden_states)
+        split_size = qkv.shape[-1] // 3
+        query, key, value = paddle.split(qkv, num_or_sections=[split_size, split_size, split_size], axis=-1)
+
+        # `context` projections.
+        encoder_qkv = attn.to_added_qkv(encoder_hidden_states)
+        split_size = encoder_qkv.shape[-1] // 3
+        (
+            encoder_hidden_states_query_proj,
+            encoder_hidden_states_key_proj,
+            encoder_hidden_states_value_proj,
+        ) = paddle.split(encoder_qkv, num_or_sections=[split_size, split_size, split_size], axis=-1)
+
+        # attention
+        query = paddle.concat([query, encoder_hidden_states_query_proj], axis=1)
+        key = paddle.concat([key, encoder_hidden_states_key_proj], axis=1)
+        value = paddle.concat([value, encoder_hidden_states_value_proj], axis=1)
+
+        inner_dim = key.shape[-1]
+        head_dim = inner_dim // attn.heads
+        query = query.reshape([batch_size, -1, attn.heads, head_dim])
+        key = key.reshape([batch_size, -1, attn.heads, head_dim])
+        value = value.reshape([batch_size, -1, attn.heads, head_dim])
+
+        hidden_states = hidden_states = F.scaled_dot_product_attention_(
+            query, key, value, dropout_p=0.0, is_causal=False, attention_op='math'
+        )
+        hidden_states = hidden_states.reshape([batch_size, -1, attn.heads * head_dim])
+        hidden_states = hidden_states.astype(query.dtype)
+
+        # Split the attention outputs.
+        hidden_states, encoder_hidden_states = (
+            hidden_states[:, : residual.shape[1]],
+            hidden_states[:, residual.shape[1] :],
+        )
+
+        # linear proj
+        hidden_states = attn.to_out[0](hidden_states)
+        # dropout
+        hidden_states = attn.to_out[1](hidden_states)
+        if not attn.context_pre_only:
+            encoder_hidden_states = attn.to_add_out(encoder_hidden_states)
+
+        if input_ndim == 4:
+            hidden_states = hidden_states.transpose([0, 1, 3, 2]).reshape([batch_size, channel, height, width])
+        if context_input_ndim == 4:
+            encoder_hidden_states = encoder_hidden_states.transpose([0, 1, 3, 2]).reshape([batch_size, channel, height, width])
+
+        return hidden_states, encoder_hidden_states
 
 class XFormersAttnAddedKVProcessor:
     r"""
