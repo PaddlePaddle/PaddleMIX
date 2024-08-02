@@ -20,3 +20,4 @@ __all__ = ["LlavaConfig"]
 class LlavaConfig(LlamaConfig):
     model_type = "llava"
     mm_patch_merge_type = "spatial_unpad"
+    use_cachekv_int8 = None
