@@ -20,7 +20,7 @@ import paddle.nn as nn
 
 from .activations import get_activation
 from .embeddings import CombinedTimestepLabelEmbeddings, CombinedTimestepSizeEmbeddings
-
+from paddle.incubate.tt import adaptive_layer_norm, fused_adaLN_scale_residual
 
 class AdaLayerNorm(nn.Layer):
     r"""
@@ -74,7 +74,8 @@ class AdaLayerNormZero(nn.Layer):
     ) -> Tuple[paddle.Tensor, paddle.Tensor, paddle.Tensor, paddle.Tensor, paddle.Tensor]:
         emb = self.linear(self.silu(self.emb(timestep, class_labels, hidden_dtype=hidden_dtype)))
         shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = emb.chunk(6, axis=1)
-        x = self.norm(x) * (1 + scale_msa[:, None]) + shift_msa[:, None]
+        # x = self.norm(x) * (1 + scale_msa[:, None]) + shift_msa[:, None]
+        x = paddle.incubate.tt.adaptive_layer_norm(x, scale_msa, shift_msa,self.norm.weight,self.norm.bias)
         return x, gate_msa, shift_mlp, scale_mlp, gate_mlp
 
 

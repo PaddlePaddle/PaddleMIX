@@ -255,6 +255,33 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
         if hasattr(module, "gradient_checkpointing"):
             module.gradient_checkpointing = value
 
+    @paddle.incubate.jit.inference(
+                          enable_new_ir=True, 
+                          cache_static_model=True,
+                          exp_enable_use_cutlass=True,
+                          delete_pass_lists=["add_norm_fuse_pass"],
+                        )
+    def transformer_2d_blocks(
+        self,
+        hidden_states,
+        attention_mask,
+        encoder_hidden_states,
+        encoder_attention_mask,
+        timestep,
+        cross_attention_kwargs,
+        class_labels):
+        # for block in self.transformer_blocks[-1:]:
+        for block in self.transformer_blocks:
+            hidden_states = block(
+                hidden_states,
+                attention_mask=attention_mask,
+                encoder_hidden_states=encoder_hidden_states,
+                encoder_attention_mask=encoder_attention_mask,
+                timestep=timestep,
+                cross_attention_kwargs=cross_attention_kwargs,
+                class_labels=class_labels)
+        return hidden_states
+    
     def forward(
         self,
         hidden_states: paddle.Tensor,
@@ -384,41 +411,53 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
             batch_size = hidden_states.shape[0]
             encoder_hidden_states = self.caption_projection(encoder_hidden_states)
             encoder_hidden_states = encoder_hidden_states.reshape([batch_size, -1, hidden_states.shape[-1]])
+        
+        # for block in self.transformer_blocks:
+        #     if self.gradient_checkpointing and not hidden_states.stop_gradient and not use_old_recompute():
 
-        for block in self.transformer_blocks:
-            if self.gradient_checkpointing and not hidden_states.stop_gradient and not use_old_recompute():
+        #         def create_custom_forward(module, return_dict=None):
+        #             def custom_forward(*inputs):
+        #                 if return_dict is not None:
+        #                     return module(*inputs, return_dict=return_dict)
+        #                 else:
+        #                     return module(*inputs)
 
-                def create_custom_forward(module, return_dict=None):
-                    def custom_forward(*inputs):
-                        if return_dict is not None:
-                            return module(*inputs, return_dict=return_dict)
-                        else:
-                            return module(*inputs)
+        #             return custom_forward
 
-                    return custom_forward
-
-                ckpt_kwargs = {} if recompute_use_reentrant() else {"use_reentrant": False}
-                hidden_states = recompute(
-                    create_custom_forward(block),
-                    hidden_states,
-                    attention_mask,
-                    encoder_hidden_states,
-                    encoder_attention_mask,
-                    timestep,
-                    cross_attention_kwargs,
-                    class_labels,
-                    **ckpt_kwargs,
-                )
-            else:
-                hidden_states = block(
-                    hidden_states,
-                    attention_mask=attention_mask,
-                    encoder_hidden_states=encoder_hidden_states,
-                    encoder_attention_mask=encoder_attention_mask,
-                    timestep=timestep,
-                    cross_attention_kwargs=cross_attention_kwargs,
-                    class_labels=class_labels,
-                )
+        #         ckpt_kwargs = {} if recompute_use_reentrant() else {"use_reentrant": False}
+        #         hidden_states = recompute(
+        #             create_custom_forward(block),
+        #             hidden_states,
+        #             attention_mask,
+        #             encoder_hidden_states,
+        #             encoder_attention_mask,
+        #             timestep,
+        #             cross_attention_kwargs,
+        #             class_labels,
+        #             **ckpt_kwargs,
+        #         )
+        #     else:
+        #         hidden_states = block(
+        #             hidden_states,
+        #             attention_mask=attention_mask,
+        #             encoder_hidden_states=encoder_hidden_states,
+        #             encoder_attention_mask=encoder_attention_mask,
+        #             timestep=timestep,
+        #             cross_attention_kwargs=cross_attention_kwargs,
+        #             class_labels=class_labels,
+        #         )
+                
+    
+        # to_static
+        hidden_states = self.transformer_2d_blocks(
+            hidden_states,
+            attention_mask=attention_mask,
+            encoder_hidden_states=encoder_hidden_states,
+            encoder_attention_mask=encoder_attention_mask,
+            timestep=timestep,
+            cross_attention_kwargs=cross_attention_kwargs,
+            class_labels=class_labels,
+        )
 
         # 3. Output
         if self.is_input_continuous:
@@ -482,3 +521,28 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
             return (output,)
 
         return Transformer2DModelOutput(sample=output)
+
+    @classmethod
+    def custom_modify_weight(cls, state_dict):
+        for key in list(state_dict.keys()):
+            if 'attn1.to_q.weight' in key or 'attn1.to_k.weight' in key or 'attn1.to_v.weight' in key:
+                part = key.split('.')[-2]
+                layer_id = key.split('.')[1]
+                qkv_key_w = f'transformer_blocks.{layer_id}.attn1.to_qkv.weight'
+                if part == 'to_q' and qkv_key_w not in state_dict:
+                    state_dict[qkv_key_w] = state_dict.pop(key)
+                elif part in ('to_k', 'to_v'):
+                    qkv = state_dict.get(qkv_key_w)
+                    if qkv is not None:
+                        state_dict[qkv_key_w] = paddle.concat([qkv, state_dict.pop(key)], axis=-1)
+            if 'attn1.to_q.bias' in key or 'attn1.to_k.bias' in key or 'attn1.to_v.bias' in key:
+                part = key.split('.')[-2]
+                layer_id = key.split('.')[1]
+                qkv_key_b = f'transformer_blocks.{layer_id}.attn1.to_qkv.bias'
+                if part == 'to_q' and qkv_key_b not in state_dict:
+                    state_dict[qkv_key_b] = state_dict.pop(key)
+                elif part in ('to_k', 'to_v'):
+                    qkv = state_dict.get(qkv_key_b)
+                    if qkv is not None:
+                        state_dict[qkv_key_b] = paddle.concat([qkv, state_dict.pop(key)], axis=-1)
+        

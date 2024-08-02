@@ -17,6 +17,7 @@ import paddle
 import paddle.nn.functional as F
 from paddle import nn
 
+from paddle.framework import LayerHelper, in_dynamic_mode
 from ..utils import USE_PEFT_BACKEND
 from .lora import LoRACompatibleLinear
 
@@ -64,9 +65,63 @@ class GELU(nn.Layer):
     def gelu(self, gate: paddle.Tensor) -> paddle.Tensor:
         return F.gelu(gate, approximate=self.approximate != "none")
 
+    def compute_activation(self,
+                            ffn1_out,
+                            bias=None,
+                            dequant_scales=None,
+                            shift=None,
+                            smooth=None,
+                            act_method="swiglu",
+                            compute_dtype="default",
+                            quant_scale=-1,
+                            quant_round_type=0,
+                            quant_max_bound=0,
+                            quant_min_bound=0):
+        if in_dynamic_mode():
+            out = paddle._C_ops.fused_bias_act(
+                ffn1_out,
+                bias,
+                dequant_scales,
+                shift,
+                smooth,
+                act_method,
+                compute_dtype,
+                quant_scale,
+                quant_round_type,
+                quant_max_bound,
+                quant_min_bound
+            )
+            return out
+
+        helper = LayerHelper("fused_bias_act")
+        out = helper.create_variable_for_type_inference(dtype=ffn1_out.dtype)
+        inputs = {}
+        inputs["x"] = ffn1_out
+        if bias is not None:
+            inputs["bias"] = bias
+        attrs = {
+            "act_method": act_method,
+            "compute_dtype": compute_dtype,
+            "quant_scale": quant_scale,
+            "quant_round_type": quant_round_type,
+            "quant_max_bound": quant_max_bound,
+            "quant_min_bound": quant_min_bound,
+        }
+        helper.append_op(
+            type="fused_bias_act",
+            inputs=inputs,
+            outputs={"out": out},
+            attrs=attrs,
+        )
+        return out
+
     def forward(self, hidden_states):
-        hidden_states = self.proj(hidden_states)
-        hidden_states = self.gelu(hidden_states)
+        # hidden_states = self.proj(hidden_states)
+        # hidden_states = self.gelu(hidden_states)
+        # out = paddle._C_ops.fused_bias_act()
+        hidden_states = paddle.matmul(hidden_states, self.proj.weight)
+        hidden_states = self.compute_activation(hidden_states, self.proj.bias, act_method="gelu")
+        
         return hidden_states
 
 

@@ -26,6 +26,7 @@ from .lora import LoRACompatibleLinear, LoRALinearLayer
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
+pass_fusion=True
 
 @maybe_allow_in_graph
 class Attention(nn.Layer):
@@ -172,20 +173,26 @@ class Attention(nn.Layer):
         else:
             linear_cls = LoRACompatibleLinear
 
-        self.to_q = linear_cls(query_dim, self.inner_dim, bias_attr=bias)
-
-        if not self.only_cross_attention:
-            # only relevant for the `AddedKVProcessor` classes
-            self.to_k = linear_cls(self.cross_attention_dim, self.inner_dim, bias_attr=bias)
-            self.to_v = linear_cls(self.cross_attention_dim, self.inner_dim, bias_attr=bias)
+        # @ AIbin
+        # add kqv_fusion pass start
+        if pass_fusion is True :
+            # print("Passing fusion!")
+            self.to_qkv = linear_cls(query_dim, 3 * self.inner_dim, bias_attr=bias)
         else:
-            self.to_k = None
-            self.to_v = None
-
+            self.to_q = linear_cls(query_dim, self.inner_dim, bias_attr=bias)
+            if not self.only_cross_attention:
+                # only relevant for the `AddedKVProcessor` classes
+                self.to_k = linear_cls(self.cross_attention_dim, self.inner_dim, bias_attr=bias)
+                self.to_v = linear_cls(self.cross_attention_dim, self.inner_dim, bias_attr=bias)
+            else:
+                self.to_k = None
+                self.to_v = None
+            
         if self.added_kv_proj_dim is not None:
             self.add_k_proj = linear_cls(added_kv_proj_dim, self.inner_dim)
             self.add_v_proj = linear_cls(added_kv_proj_dim, self.inner_dim)
-
+        # @ AIbin
+        # add kqv_fusion pass end
         self.to_out = nn.LayerList([])
         self.to_out.append(linear_cls(self.inner_dim, query_dim, bias_attr=out_bias))
         self.to_out.append(nn.Dropout(dropout))
@@ -1038,16 +1045,18 @@ class XFormersAttnProcessor:
 
         if attn.group_norm is not None:
             hidden_states = attn.group_norm(hidden_states.transpose([0, 2, 1])).transpose([0, 2, 1])
-
-        query = attn.to_q(hidden_states, *args)
-
-        if encoder_hidden_states is None:
-            encoder_hidden_states = hidden_states
-        elif attn.norm_cross:
-            encoder_hidden_states = attn.norm_encoder_hidden_states(encoder_hidden_states)
-
-        key = attn.to_k(encoder_hidden_states, *args)
-        value = attn.to_v(encoder_hidden_states, *args)
+            
+        if pass_fusion is True:
+            qkv = attn.to_qkv(hidden_states, *args)
+            query, key, value = paddle.split(qkv, 3, -1)
+        else:
+            query = attn.to_q(hidden_states, *args)
+            if encoder_hidden_states is None:
+                encoder_hidden_states = hidden_states
+            elif attn.norm_cross:
+                encoder_hidden_states = attn.norm_encoder_hidden_states(encoder_hidden_states)
+            key = attn.to_k(encoder_hidden_states, *args)
+            value = attn.to_v(encoder_hidden_states, *args)
 
         query = attn.head_to_batch_dim(query, transpose=False)
         key = attn.head_to_batch_dim(key, transpose=False)
