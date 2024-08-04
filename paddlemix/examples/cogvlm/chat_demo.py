@@ -51,8 +51,7 @@ model.eval()
 
 text_only_template = "A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. USER: {} ASSISTANT:"
 while True:
-    # image_path = input("image path >>>>> ")
-    image_path = '/home/myw/wuchangli/yk/pd/PaddleMIX/image1.jpg'
+    image_path = input("image path >>>>> ")
     if image_path == "":
         print("You did not enter image path, the following will be a plain text conversation.")
         image = None
@@ -61,8 +60,7 @@ while True:
         image = Image.open(image_path).convert("RGB")
     history = []
     while True:
-        # query = input("Human:")
-        query = "what's in the picture?"
+        query = input("Human:")
         if query == "clear":
             break
         if image is None:
@@ -96,6 +94,4 @@ while True:
             response = tokenizer.decode(outputs[0])
             response = response.split("</s>")[0]
             print("\nCog:", response)
-            import pdb
-            pdb.set_trace()
         history.append((query, response))

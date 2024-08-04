@@ -103,6 +103,8 @@ class VisionRotaryEmbeddingFast(paddle.nn.Layer):
             freqs_sin = freqs_sin[batch_indices, patch_indices_keep]
             freqs_sin = rearrange(freqs_sin, "n i m j -> n m i j")
             return t * freqs_cos + rotate_half(t) * freqs_sin
+        self.freqs_cos = self.freqs_cos.astype(t.dtype)
+        self.freqs_sin = self.freqs_sin.astype(t.dtype)
         return t * self.freqs_cos + rotate_half(t) * self.freqs_sin
 
 
@@ -856,7 +858,7 @@ class CrossVisionModel(paddle.nn.Layer):
                 (self.vit.config["vision_cfg"]["image_size"] // self.vit.config["vision_cfg"]["patch_size"]) ** 2,
                 self.vit.config["vision_cfg"]["width"],
             ],
-            dtype="float32",
+            dtype=config.dtype,
         )
         self.pos_embed.stop_gradient = False
 

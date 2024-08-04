@@ -153,6 +153,7 @@ def attention_fn(
     perm_3 = list(range(x.ndim))
     perm_3[-1] = -2
     perm_3[-2] = -1
+
     attention_scores = paddle.matmul(x=query_layer, y=x.transpose(perm=perm_3))
     attention_scores = attention_scores + attention_mask.astype(attention_scores.dtype)
     attention_scores = paddle.nn.functional.softmax(x=attention_scores, axis=-1, dtype="float32").to(query_layer.dtype)
@@ -392,14 +393,12 @@ class CogModelDecoderLayer(paddle.nn.Layer):
     ) -> Tuple[paddle.Tensor, Optional[Tuple[paddle.Tensor, paddle.Tensor]]]:
         residual = hidden_states
         hidden_states = self.input_layernorm(hidden_states)
-        if self.model_type == "cogagent":
-            past_key_value = past_key_value[:2] if past_key_value is not None else None
         hidden_states, self_attn_weights, present_key_value = self.self_attn(
             hidden_states=hidden_states,
             token_type_ids=token_type_ids,
             position_ids=position_ids,
             attention_mask=attention_mask,
-            past_key_value=past_key_value,
+            past_key_value=past_key_value[:2] if past_key_value is not None and self.model_type == 'cogagent' else None,
             output_attentions=output_attentions,
             use_cache=use_cache,
         )
@@ -416,9 +415,11 @@ class CogModelDecoderLayer(paddle.nn.Layer):
                 output_attentions=output_attentions,
                 use_cache=use_cache,
             )
+            hidden_states = hidden_states.astype(data_type)
             hidden_states = hidden_states + attention_output
             mlp_input = self.post_attention_layernorm(hidden_states)
             mlp_output = self.mlp(mlp_input, token_type_ids=token_type_ids)
+            hidden_states = hidden_states.astype(data_type)
             hidden_states = mlp_output + hidden_states
         elif self.model_type == "cogvlm":
             residual = hidden_states
@@ -565,7 +566,7 @@ class CogModel(CogPreTrainedModel):
             if position_ids is None:
                 position_ids = build_position_ids(token_type_ids, attention_mask)
             input_ids = None
-
+        
         return self.llm_forward(
             input_ids=input_ids,
             encoder_outputs=encoder_outputs,
