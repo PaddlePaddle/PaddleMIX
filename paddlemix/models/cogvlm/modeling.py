@@ -153,7 +153,6 @@ def attention_fn(
     perm_3 = list(range(x.ndim))
     perm_3[-1] = -2
     perm_3[-2] = -1
-
     attention_scores = paddle.matmul(x=query_layer, y=x.transpose(perm=perm_3))
     attention_scores = attention_scores + attention_mask.astype(attention_scores.dtype)
     attention_scores = paddle.nn.functional.softmax(x=attention_scores, axis=-1, dtype="float32").to(query_layer.dtype)
@@ -398,7 +397,8 @@ class CogModelDecoderLayer(paddle.nn.Layer):
             token_type_ids=token_type_ids,
             position_ids=position_ids,
             attention_mask=attention_mask,
-            past_key_value=past_key_value[:2] if past_key_value is not None and self.model_type == 'cogagent' else None,
+            # past_key_value=past_key_value[:2] if past_key_value is not None and self.model_type == 'cogagent' else None,
+            past_key_value=None if past_key_value is None else past_key_value[:2],
             output_attentions=output_attentions,
             use_cache=use_cache,
         )
