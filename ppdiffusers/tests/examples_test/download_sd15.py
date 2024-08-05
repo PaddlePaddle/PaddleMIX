@@ -22,7 +22,7 @@ p = DiffusionPipeline.from_pretrained("runwayml/stable-diffusion-v1-5")
 # stabilityai/stable-diffusion-xl-base-1.0
 p = DiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-xl-base-1.0")
 
-# "lambdalabs/pokemon-blip-captions"
+# "lambdalabs/naruto-blip-captions"
 dataset = load_dataset(
-    "lambdalabs/pokemon-blip-captions",
+    "lambdalabs/naruto-blip-captions",
 )

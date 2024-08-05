@@ -179,7 +179,7 @@ class TrainerArguments(TrainingArguments):
     )
     fp16: bool = field(
         default=False,
-        metadata={"help": "Whether to use fp16 (mixed) precision instead of 32-bit"},
+        metadata={"help": "Whether to Use fp16 (mixed) precision instead of 32-bit"},
     )
     fp16_opt_level: str = field(
         default="O1",
@@ -230,6 +230,15 @@ class TrainerArguments(TrainingArguments):
     tensorboard: bool = field(
         default=False,
         metadata={"help": "Whether to use tensorboard to record loss."},
+    )
+
+    transformer_engine_backend: bool = field(
+        default=False,
+        metadata={"help": "Whether to use transformer engine as transoformer backend."},
+    )
+    use_fp8: bool = field(
+        default=False,
+        metadata={"help": "Whether to use autocast fp32/16 to fp8 in transoformer engine."},
     )
 
 

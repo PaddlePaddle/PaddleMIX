@@ -29,7 +29,7 @@ pip install -U ppdiffusers visualdl
 #### 1.2.2 单机单卡训练
 ```bash
 export MODEL_NAME="CompVis/stable-diffusion-v1-4"
-export dataset_name="lambdalabs/pokemon-blip-captions"
+export dataset_name="lambdalabs/naruto-blip-captions"
 
 python -u train_text_to_image.py \
   --pretrained_model_name_or_path=$MODEL_NAME \
@@ -93,7 +93,7 @@ python -u train_text_to_image.py \
 
 ```bash
 export MODEL_NAME="CompVis/stable-diffusion-v1-4"
-export dataset_name="lambdalabs/pokemon-blip-captions"
+export dataset_name="lambdalabs/naruto-blip-captions"
 
 python -u -m paddle.distributed.launch --gpus "0,1,2,3" train_text_to_image.py \
   --pretrained_model_name_or_path=$MODEL_NAME \
@@ -196,7 +196,7 @@ python -u train_text_to_image.py \
 
 ```bash
 export MODEL_NAME="runwayml/stable-diffusion-v1-5"
-export DATASET_NAME="lambdalabs/pokemon-blip-captions"
+export DATASET_NAME="lambdalabs/naruto-blip-captions"
 export OUTPUT_DIR="sd-pokemon-model-lora"
 
 python train_text_to_image_lora.py \

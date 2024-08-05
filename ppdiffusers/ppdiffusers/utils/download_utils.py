@@ -31,7 +31,7 @@ from aistudio_sdk.hub import download as aistudio_base_download
 from aistudio_sdk.hub import upload as aistudio_upload
 from filelock import FileLock
 from huggingface_hub import hf_hub_download, try_to_load_from_cache
-from huggingface_hub.file_download import _chmod_and_replace, http_get
+from huggingface_hub.file_download import _chmod_and_move, http_get
 from huggingface_hub.utils import (
     EntryNotFoundError,
     RepositoryNotFoundError,
@@ -244,7 +244,7 @@ def ppdiffusers_url_download(
             )
 
         logger.info("storing %s in cache at %s", url_to_download, file_path)
-        _chmod_and_replace(temp_file.name, file_path)
+        _chmod_and_move(temp_file.name, Path(file_path))
     try:
         os.remove(lock_path)
     except OSError:
@@ -380,7 +380,7 @@ def bos_download(
             )
 
         logger.info("storing %s in cache at %s", url_to_download, blob_path)
-        _chmod_and_replace(temp_file.name, blob_path)
+        _chmod_and_move(temp_file.name, Path(blob_path))
     try:
         os.remove(lock_path)
     except OSError:

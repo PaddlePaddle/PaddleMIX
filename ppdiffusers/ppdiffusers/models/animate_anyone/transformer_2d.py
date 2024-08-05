@@ -106,6 +106,8 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
         self.attention_head_dim = attention_head_dim
         inner_dim = num_attention_heads * attention_head_dim
 
+        # conv_cls = LoRACompatibleConv if USE_PEFT_BACKEND else paddle.nn.Conv2D
+        # linear_cls = LoRACompatibleLinear if USE_PEFT_BACKEND else paddle.nn.Linear
         conv_cls = paddle.nn.Conv2D if USE_PEFT_BACKEND else LoRACompatibleConv
         linear_cls = paddle.nn.Linear if USE_PEFT_BACKEND else LoRACompatibleLinear
 

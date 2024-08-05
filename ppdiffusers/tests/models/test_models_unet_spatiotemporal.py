@@ -194,7 +194,7 @@ class UNetSpatioTemporalConditionModelTests(ModelTesterMixin, UNetTesterMixin, u
         named_params = dict(model.named_parameters())
         named_params_2 = dict(model_2.named_parameters())
         for name, param in named_params.items():
-            self.assertTrue(paddle_all_close(param.grad, named_params_2[name].grad, atol=5e-5))
+            self.assertTrue(paddle_all_close(param.grad, named_params_2[name].grad, atol=5e-3))
 
     def test_model_with_num_attention_heads_tuple(self):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()

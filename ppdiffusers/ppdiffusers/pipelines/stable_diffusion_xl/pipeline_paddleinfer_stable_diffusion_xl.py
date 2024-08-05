@@ -12,6 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import os
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import paddle
@@ -461,8 +462,11 @@ class PaddleInferStableDiffusionXLPipeline(DiffusionPipeline, PaddleInferDiffusi
 
                 # predict the noise residual
                 noise_pred = self.unet(**unet_inputs)[0]
-                if paddle.core._model_return_data():
-                    print(f"StableDiffusion infer: step {i+1} , origin output {noise_pred.abs().numpy().mean()} ", flush=True)
+                if str(os.environ.get("FLAGS_model_return_data")).lower() in ("true", "1"):
+                    print(
+                        f"StableDiffusion infer: step {i+1} , origin output {noise_pred.abs().numpy().mean()} ",
+                        flush=True,
+                    )
 
                 # perform guidance
                 if do_classifier_free_guidance:

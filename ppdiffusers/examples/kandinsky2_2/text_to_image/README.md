@@ -23,7 +23,7 @@ pip install -r requirements.txt
 #### 2.1 微调 decoder
 
 ```bash
-export DATASET_NAME="lambdalabs/pokemon-blip-captions"
+export DATASET_NAME="lambdalabs/naruto-blip-captions"
 
 python -u train_text_to_image_decoder.py \
   --dataset_name=$DATASET_NAME \
@@ -96,7 +96,7 @@ images[0].save("robot-pokemon.png")
 您可以使用`train_text_to_image_prior.py`脚本对Kandinsky prior模型进行微调：
 
 ```bash
-export DATASET_NAME="lambdalabs/pokemon-blip-captions"
+export DATASET_NAME="lambdalabs/naruto-blip-captions"
 
 python -u train_text_to_image_prior.py \
   --dataset_name=$DATASET_NAME \
@@ -135,7 +135,7 @@ images[0]
 通过设置`--gpus`，我们可以指定 GPU 为 `0,1,2,3` 卡。这里我们只训练了`4000step`，因为这里的`4000 step x 4卡`近似于`单卡训练 16000 step`。
 
 ```bash
-export DATASET_NAME="lambdalabs/pokemon-blip-captions"
+export DATASET_NAME="lambdalabs/naruto-blip-captions"
 
 python -u -m paddle.distributed.launch --gpus "0,1,2,3" train_text_to_image_decoder.py \
   --dataset_name=$DATASET_NAME \
@@ -173,7 +173,7 @@ python -u -m paddle.distributed.launch --gpus "0,1,2,3" train_text_to_image_deco
 #### 1.1 LoRA微调decoder
 
 ```bash
-export DATASET_NAME="lambdalabs/pokemon-blip-captions"
+export DATASET_NAME="lambdalabs/naruto-blip-captions"
 
 python -u train_text_to_image_decoder_lora.py \
   --dataset_name=$DATASET_NAME \
@@ -194,7 +194,7 @@ python -u train_text_to_image_decoder_lora.py \
 #### 1.2 LoRA微调prior
 
 ```bash
-export DATASET_NAME="lambdalabs/pokemon-blip-captions"
+export DATASET_NAME="lambdalabs/naruto-blip-captions"
 
 python -u train_text_to_image_prior_lora.py \
   --dataset_name=$DATASET_NAME \

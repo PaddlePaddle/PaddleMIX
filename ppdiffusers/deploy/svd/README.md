@@ -28,5 +28,5 @@ python export_model.py --pretrained_model_name_or_path stabilityai/stable-video-
 
 ### 基于图像条件的视频生成（Image-to-Video Generation）
 ```
-python infer.py --model_dir static_model/stable-video-diffusion-img2vid-xt --scheduler "euler" --backend paddle --width 256 --height 256 --device gpu --task_name img2video
+python infer.py --model_dir static_model/stable-video-diffusion-img2vid-xt --scheduler "ddim" --backend paddle --width 256 --height 256 --device gpu --task_name img2video
 ```
