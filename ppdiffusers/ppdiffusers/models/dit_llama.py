@@ -14,20 +14,19 @@
 
 import math
 from typing import Optional
+import os
 
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
 from paddle.nn.functional.flash_attention import flash_attention
+from paddle.framework import LayerHelper, in_dynamic_mode
 
 from ..configuration_utils import ConfigMixin, register_to_config
 from .embeddings import LabelEmbedding
 from .modeling_utils import ModelMixin
 from .transformer_2d import Transformer2DModelOutput
 
-from paddle.framework import LayerHelper, in_dynamic_mode
-from paddle.incubate.tt import adaptive_layer_norm, fused_adaLN_scale_residual, fused_rotary_emb
-import os
 
 def TypePromote(x, y):
     TYPE_PROMOTE_DICT = {
@@ -93,7 +92,7 @@ class TimestepEmbedder(nn.Layer):
 
 
 class Attention(nn.Layer):
-    def __init__(self, dim, n_heads, n_kv_heads, qk_norm=True, fused_attn=True, callZKK=False):
+    def __init__(self, dim, n_heads, n_kv_heads, qk_norm=True, fused_attn=True, optimize_inference_for_ditllama=False):
         """
         Initialize the Attention module.
 
@@ -111,7 +110,6 @@ class Attention(nn.Layer):
             wq (nn.Linear): Linear transformation for queries.
             wk (nn.Linear): Linear transformation for keys.
             wv (nn.Linear): Linear transformation for values.
-            qkv (nn.Linear): Linear transformation for queries, keys and values.
             wo (nn.Linear): Linear transformation for output.
             cache_k (paddle.Tensor): Cached keys for attention.
             cache_v (paddle.Tensor): Cached values for attention.
@@ -124,14 +122,10 @@ class Attention(nn.Layer):
         self.n_rep = self.n_local_heads // self.n_local_kv_heads
         self.head_dim = dim // n_heads
 
-        self.callZKK = callZKK
-        if not callZKK:
-            self.wq = nn.Linear(dim, n_heads * self.head_dim, bias_attr=False)
-            self.wk = nn.Linear(dim, self.n_kv_heads * self.head_dim, bias_attr=False)
-            self.wv = nn.Linear(dim, self.n_kv_heads * self.head_dim, bias_attr=False)
-        else:
-            self.qkv = nn.Linear(dim, (n_heads + 2 * self.n_kv_heads) * self.head_dim, bias_attr=False)
-            
+        self.optimize_inference_for_ditllama = optimize_inference_for_ditllama
+        self.wq = nn.Linear(dim, n_heads * self.head_dim, bias_attr=False)
+        self.wk = nn.Linear(dim, self.n_kv_heads * self.head_dim, bias_attr=False)
+        self.wv = nn.Linear(dim, self.n_kv_heads * self.head_dim, bias_attr=False)
         self.wo = nn.Linear(n_heads * self.head_dim, dim, bias_attr=False)
 
         if qk_norm:
@@ -214,12 +208,9 @@ class Attention(nn.Layer):
 
         """
         bsz, seqlen, _ = tuple(x.shape)
-
-        if not self.callZKK:
-            xq, xk, xv = self.wq(x), self.wk(x), self.wv(x)
-            
-            dtype = xq.dtype
-            
+        xq, xk, xv = self.wq(x), self.wk(x), self.wv(x)
+        dtype = xq.dtype
+        if not self.optimize_inference_for_ditllama: 
             xq = self.q_norm(xq)
             xk = self.k_norm(xk)
 
@@ -230,9 +221,10 @@ class Attention(nn.Layer):
             xq, xk = Attention.apply_rotary_emb(xq, xk, freqs_cis=freqs_cis)
             xq, xk = xq.cast(dtype), xk.cast(dtype)
         else:
-            qkv_out = self.qkv(x)
-            xq, xk, xv = fused_rotary_emb(qkv_out, self.q_norm.weight, self.q_norm.bias, 
-                                          self.k_norm.weight, self.k_norm.bias, freqs_cis)
+            qkv_out = paddle.concat([xq, xk, xv], axis=-1)
+            import paddlemix
+            xq, xk, xv = paddlemix.triton_ops.fused_rotary_emb(qkv_out, self.q_norm.weight, self.q_norm.bias, 
+                                              self.k_norm.weight, self.k_norm.bias, freqs_cis)
 
         if dtype in [paddle.float16, paddle.bfloat16]:
             output, _ = flash_attention(
@@ -269,7 +261,7 @@ class Attention(nn.Layer):
 
 
 class FeedForward(nn.Layer):
-    def __init__(self, dim, hidden_dim, multiple_of=256, ffn_dim_multiplier=None, callZKK=False):
+    def __init__(self, dim, hidden_dim, multiple_of=256, ffn_dim_multiplier=None, optimize_inference_for_ditllama=False):
         """
         Initialize the FeedForward module.
 
@@ -282,11 +274,12 @@ class FeedForward(nn.Layer):
                 dimension. Defaults to None.
 
         Attributes:
-            w1 (nn.Linear): Linear transformation for the first layer.
+            w1 (nn.Linear): Linear transformation for the first
+                layer.
             w2 (nn.Linear): Linear transformation for the second layer.
-            w3 (nn.Linear): Linear transformation for the third layer.
-            w13 (nn.Linear): Linear transformation for the first and the third layer.
-            
+            w3 (nn.Linear): Linear transformation for the third
+                layer.
+
         """
         super().__init__()
         hidden_dim = int(2 * hidden_dim / 3)
@@ -295,12 +288,12 @@ class FeedForward(nn.Layer):
         hidden_dim = int(multiple_of * ((hidden_dim + multiple_of - 1) // multiple_of))
 
         self.w2 = nn.Linear(hidden_dim, dim, bias_attr=False)
-        self.callZKK = callZKK
-        if not callZKK:
+        if not optimize_inference_for_ditllama:
             self.w1 = nn.Linear(dim, hidden_dim, bias_attr=False)
             self.w3 = nn.Linear(dim, hidden_dim, bias_attr=False)
         else:
             self.w13 = nn.Linear(dim, hidden_dim * 2, bias_attr=False)
+        self.optimize_inference_for_ditllama = optimize_inference_for_ditllama
 
     def compute_activation(self, 
                            ffn1_out, 
@@ -357,9 +350,9 @@ class FeedForward(nn.Layer):
             attrs=attrs,
         )
         return out
-
+    
     def forward(self, x):
-        if not self.callZKK:
+        if not self.optimize_inference_for_ditllama:
             xw1 = F.silu(self.w1(x))
             xw3 = self.w3(x)
             output = self.w2(xw1 * xw3)
@@ -368,7 +361,7 @@ class FeedForward(nn.Layer):
             ffn1_out = self.w13(x)
             ffn1_out = self.compute_activation(ffn1_out)
             ffn2_out = self.w2(ffn1_out)
-            return ffn2_out      
+            return ffn2_out  
 
 
 class TransformerBlock(nn.Layer):
@@ -384,7 +377,7 @@ class TransformerBlock(nn.Layer):
         norm_eps: float,
         qk_norm: bool,
         fused_attn: bool,
-        callZKK=False,
+        optimize_inference_for_ditllama=False,
     ) -> None:
         """
         Initialize a TransformerBlock.
@@ -419,11 +412,11 @@ class TransformerBlock(nn.Layer):
         super().__init__()
         self.dim = dim
         self.head_dim = dim // n_heads
-        self.attention = Attention(dim, n_heads, n_kv_heads, qk_norm, fused_attn, callZKK=callZKK)
+        self.attention = Attention(dim, n_heads, n_kv_heads, qk_norm, fused_attn, optimize_inference_for_ditllama=optimize_inference_for_ditllama)
         mlp_hidden_dim = int(dim * mlp_ratio)
         self.feed_forward = FeedForward(
-            dim=dim, hidden_dim=mlp_hidden_dim, multiple_of=multiple_of, 
-            ffn_dim_multiplier=ffn_dim_multiplier, callZKK=callZKK
+            dim=dim, hidden_dim=mlp_hidden_dim, multiple_of=multiple_of, ffn_dim_multiplier=ffn_dim_multiplier, 
+            optimize_inference_for_ditllama=optimize_inference_for_ditllama
         )
         self.layer_id = layer_id
         self.attention_norm = nn.LayerNorm(dim, epsilon=norm_eps, bias_attr=False)
@@ -433,8 +426,8 @@ class TransformerBlock(nn.Layer):
             nn.Silu(),
             nn.Linear(min(dim, 1024), 6 * dim),
         )
+        self.optimize_inference_for_ditllama = optimize_inference_for_ditllama
         self.norm_eps = norm_eps
-        self.callZKK = callZKK
 
     def forward(self, x, freqs_cis, adaln_input=None):
         """
@@ -455,15 +448,16 @@ class TransformerBlock(nn.Layer):
             shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.adaLN_modulation(adaln_input).chunk(
                 6, axis=1
             )
-            if not self.callZKK:
+            if not self.optimize_inference_for_ditllama:
                 h = x + gate_msa.unsqueeze(1) * self.attention(
                     modulate(self.attention_norm(x), shift_msa, scale_msa), freqs_cis
                 )
                 out = h + gate_mlp.unsqueeze(1) * self.feed_forward(modulate(self.ffn_norm(h), shift_mlp, scale_mlp))
             else:
-                attention_out = self.attention(adaptive_layer_norm(x, scale_msa, shift_msa, 
+                import paddlemix
+                attention_out = self.attention(paddlemix.triton_ops.adaptive_layer_norm(x, scale_msa, shift_msa, 
                                                 weight=self.attention_norm.weight, epsilon=self.norm_eps), freqs_cis)
-                residual_out, adaLN_out = fused_adaLN_scale_residual(x, attention_out, gate_msa, scale_mlp, shift_mlp,
+                residual_out, adaLN_out = paddlemix.triton_ops.fused_adaLN_scale_residual(x, attention_out, gate_msa, scale_mlp, shift_mlp,
                                                                     weight=self.ffn_norm.weight, epsilon=self.norm_eps)
                 out = residual_out + gate_mlp.unsqueeze(1) * self.feed_forward(adaLN_out)
         else:
@@ -527,6 +521,7 @@ class DiTLLaMA2DModel(ModelMixin, ConfigMixin):
         self.num_classes = num_classes
         self.learn_sigma = learn_sigma
         self.qk_norm = qk_norm
+
         self.gradient_checkpointing = True
         self.fused_attn = True
 
@@ -534,7 +529,8 @@ class DiTLLaMA2DModel(ModelMixin, ConfigMixin):
         self.t_embedder = TimestepEmbedder(min(dim, 1024))
         self.y_embedder = LabelEmbedding(num_classes, min(dim, 1024), class_dropout_prob)
 
-        self.callZKK = True if os.getenv('callZKK') else False
+        self.optimize_inference_for_ditllama = True if os.getenv('optimize_inference_for_ditllama') else False
+
         # 2. Define transformers blocks
         self.layers = nn.LayerList(
             [
@@ -549,13 +545,11 @@ class DiTLLaMA2DModel(ModelMixin, ConfigMixin):
                     norm_eps=norm_eps,
                     qk_norm=qk_norm,
                     fused_attn=self.fused_attn,
-                    callZKK=self.callZKK,
+                    optimize_inference_for_ditllama=self.optimize_inference_for_ditllama,
                 )
                 for idx in range(num_layers)
             ]
         )
-        
-        # del self.layers
 
         # 3. Define output layers
         self.final_layer = FinalLayer(dim, patch_size, self.out_channels)
@@ -620,17 +614,13 @@ class DiTLLaMA2DModel(ModelMixin, ConfigMixin):
         freqs = 1.0 / theta ** (paddle.arange(start=0, end=dim, step=2)[: dim // 2].cast("float32") / dim)
         t = paddle.arange(end=end)
         input_0, vec2_0 = TypePromote(t, freqs)
-        # [end, dim // 2]
         freqs = paddle.outer(input_0, vec2_0).cast("float32")
-        
-        if os.getenv('callZKK'):
-            # [end, dim // 2, 4]
+        if os.getenv('optimize_inference_for_ditllama'):
             freqs_cis = paddle.stack([  
                 paddle.cos(freqs),  
                 -paddle.sin(freqs),  
                 paddle.sin(freqs),  
                 paddle.cos(freqs)], axis=-1) 
-            # [end, dim, 2]
             freqs_cis = freqs_cis.reshape([freqs_cis.shape[0], -1, 2]).unsqueeze(1)
         else:
             freqs_cis = paddle.complex(
@@ -638,24 +628,16 @@ class DiTLLaMA2DModel(ModelMixin, ConfigMixin):
             )
         return freqs_cis
 
-    @paddle.jit.to_static(backend='inference', with_trt=False,
-                                    cache_static_model=False,
-                                    exp_enable_use_cutlass=True,
-                                    enable_new_ir=True,
-                                    delete_pass_lists = ["trt_prompt_tuning_embedding_eltwise_layernorm_fuse_pass",
-                                    "add_support_int8_pass", 
-                                    "fc_fuse_pass", 
-                                    "add_norm_fuse_pass",])
+    @paddle.incubate.jit.inference(cache_static_model=False,
+                                   enable_new_ir=True,
+                                   exp_enable_use_cutlass=True,)
     def transformer_blocks(self, x, adaln_input):
         for i, layer in enumerate(self.layers):
-            if self.gradient_checkpointing and False:
-                x = paddle.distributed.fleet.utils.recompute(layer, x, self.freqs_cis[: x.shape[1]], adaln_input)
-            else:
-                x = layer(
-                    x,
-                    self.freqs_cis[: x.shape[1]],
-                    adaln_input,
-                )
+            x = layer(
+                x,
+                self.freqs_cis[: x.shape[1]],
+                adaln_input,
+            )
         return x
 
     def forward(
@@ -683,9 +665,9 @@ class DiTLLaMA2DModel(ModelMixin, ConfigMixin):
         adaln_input = t + y
 
         # 2. Blocks
-        if not self.callZKK:
+        if not self.optimize_inference_for_ditllama:
             for i, layer in enumerate(self.layers):
-                if self.gradient_checkpointing:  
+                if self.gradient_checkpointing:
                     x = paddle.distributed.fleet.utils.recompute(layer, x, self.freqs_cis[: x.shape[1]], adaln_input)
                 else:
                     x = layer(
@@ -696,7 +678,7 @@ class DiTLLaMA2DModel(ModelMixin, ConfigMixin):
         else:
             self.freqs_cis = paddle.expand(self.freqs_cis, [-1, self.num_attention_heads, -1, -1])
             x = self.transformer_blocks(x, adaln_input)
-        
+
         # 3. Output
         hidden_states = self.final_layer(x, adaln_input)
         output = self.unpatchify(hidden_states)
@@ -705,11 +687,10 @@ class DiTLLaMA2DModel(ModelMixin, ConfigMixin):
             return (output,)
 
         return Transformer2DModelOutput(sample=output)
-
+    
     @classmethod
     def custom_modify_weight(cls, state_dict):
-        # If you're not invited to zkk, you won't get any performance optimizations.
-        if os.getenv('callZKK'):
+        if os.getenv('optimize_inference_for_ditllama'):
             for key in list(state_dict.keys()):
                 if 'feed_forward.w1.weight' in key:
                     w1 = state_dict.pop(key)
@@ -717,13 +698,3 @@ class DiTLLaMA2DModel(ModelMixin, ConfigMixin):
                     w3 = state_dict.pop(w3_key)
                     w13 = paddle.concat([w1, w3], axis=1)
                     state_dict[key.replace('w1', 'w13')] = w13
-                if 'attention.wq.weight' in key or 'attention.wk.weight' in key or 'attention.wv.weight' in key:
-                    part = key.split('.')[-2]
-                    layer_id = key.split('.')[1]
-                    qkv_key = f'layers.{layer_id}.attention.qkv.weight'
-                    if part == 'wq' and qkv_key not in state_dict:
-                        state_dict[qkv_key] = state_dict.pop(key)
-                    elif part in ('wk', 'wv'):
-                        qkv = state_dict.get(qkv_key)
-                        if qkv is not None:
-                            state_dict[qkv_key] = paddle.concat([qkv, state_dict.pop(key)], axis=1)

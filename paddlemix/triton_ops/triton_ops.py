@@ -1466,7 +1466,6 @@ def fused_rotary_emb(
     freqs_cis,
     epsilon=1e-5,
 ):
-    assert x.is_contiguous()
     assert q_norm_weight is not None, "q_norm_weight should not be none"
     assert q_norm_bias is not None, "q_norm_bias should not be none"
     assert k_norm_weight is not None, "k_norm_weight should not be none"
