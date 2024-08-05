@@ -36,7 +36,7 @@ class Simplified_FacebookDIT(nn.Layer):
         self.ffn2 = nn.LayerList([nn.Linear(dim*4, dim) for i in range(self.num_layers)])
 
     @paddle.incubate.jit.inference(enable_new_ir=True, 
-                          cache_static_model=False,
+                          cache_static_model=True,
                           exp_enable_use_cutlass=True,
                           delete_pass_lists=["add_norm_fuse_pass"],
                         )
@@ -62,7 +62,8 @@ class Simplified_FacebookDIT(nn.Layer):
             emb = F.silu(emb)
             emb = self.fcs2[i](emb)
             shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = emb.chunk(6, axis=1)
-            norm_hidden_states = paddle.incubate.tt.adaptive_layer_norm(hidden_states, scale_msa, shift_msa)
+            import paddlemix
+            norm_hidden_states =paddlemix.triton_ops.adaptive_layer_norm(hidden_states, scale_msa, shift_msa)
             q,k,v = self.qkv[i](norm_hidden_states).chunk(3, axis=-1)
             b,s,h = q.shape
             q = q.reshape([b,s,self.num_attention_heads,self.attention_head_dim])
@@ -74,9 +75,8 @@ class Simplified_FacebookDIT(nn.Layer):
             norm_hidden_states = self.out_proj[i](norm_hidden_states)
             
             # hidden_states = hidden_states + norm_hidden_states * gate_msa.reshape([b,1,self.dim])            
-            # norm_hidden_states = paddle.incubate.tt.adaptive_layer_norm(hidden_states, scale_mlp, shift_mlp)
-            
-            hidden_states,norm_hidden_states = paddle.incubate.tt.fused_adaLN_scale_residual(hidden_states, norm_hidden_states, gate_msa, scale_mlp, shift_mlp)
+            # norm_hidden_states =paddlemix.triton_ops.adaptive_layer_norm(hidden_states, scale_mlp, shift_mlp)
+            hidden_states,norm_hidden_states =paddlemix.triton_ops.fused_adaLN_scale_residual(hidden_states, norm_hidden_states, gate_msa, scale_mlp, shift_mlp)
 
             norm_hidden_states = self.ffn1[i](norm_hidden_states)
             norm_hidden_states = F.gelu(norm_hidden_states, approximate=True)
