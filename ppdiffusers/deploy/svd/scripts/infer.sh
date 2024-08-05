@@ -16,5 +16,5 @@ export FLAGS_use_cuda_managed_memory=False
 
 export USE_PPXFORMERS=False
 
-# python infer.py --model_dir static_model/stable-video-diffusion-img2vid-xt --scheduler "euler" --backend paddle --width 576 --height 576 --device gpu --task_name img2video
-python infer.py --model_dir static_model/stable-video-diffusion-img2vid-xt --scheduler "euler" --backend paddle --width 1024 --height 576 --device gpu --task_name img2video --tune True --inference_steps 1
+# python infer.py --model_dir static_model/stable-video-diffusion-img2vid-xt --scheduler "ddim" --backend paddle --width 576 --height 576 --device gpu --task_name img2video
+python infer.py --model_dir static_model/stable-video-diffusion-img2vid-xt --scheduler "ddim" --backend paddle --width 1024 --height 576 --device gpu --task_name img2video --tune True --inference_steps 1
