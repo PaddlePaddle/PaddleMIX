@@ -16,7 +16,7 @@ import argparse
 
 import paddle
 
-from deploy.llava.llama_inference_model import LlamaForClipInferenceModel
+from llama_inference_model import LlamaForClipInferenceModel
 from paddlemix.auto import AutoConfigMIX, AutoModelMIX
 from paddlemix.utils.log import logger
 
@@ -59,6 +59,8 @@ if __name__ == "__main__":
         type=str,
         help="The saving path of static llava vision.",
     )
+    parser.add_argument("--encode_image", action="store_true")
+    parser.add_argument("--encode_text", action="store_true")
     parser.add_argument("--fp16", action="store_true")
 
     args = parser.parse_args()
@@ -67,22 +69,29 @@ if __name__ == "__main__":
     if not paddle.amp.is_bfloat16_supported() and compute_dtype == "bfloat16":
         logger.warning("bfloat16 is not supported on your device,change to float32")
         compute_dtype = "float32"
+    
+    if args.encode_image:
+    
+        model = AutoModelMIX.from_pretrained(args.model_name_or_path, dtype=compute_dtype)
+        vision_tower = model.get_vision_tower()
+        vision_tower.load_model()
+        model.eval()
+        export_encode_image(model, compute_dtype)
 
-    model = AutoModelMIX.from_pretrained(args.model_name_or_path, dtype=compute_dtype)
-    vision_tower = model.get_vision_tower()
-    vision_tower.load_model()
-    model.eval()
-    export_encode_image(model, compute_dtype)
+    elif args.encode_text:
+    
+        config = AutoConfigMIX.from_pretrained(args.model_name_or_path)
+        config.tensor_parallel_degree = 1
+        config.tensor_parallel_rank = 0
+        config.weight_only_quant_bits = -1
+        config.quant_type = None
 
-    config = AutoConfigMIX.from_pretrained(args.model_name_or_path)
-    config.tensor_parallel_degree = 1
-    config.tensor_parallel_rank = 0
-    config.weight_only_quant_bits = -1
-    config.quant_type = None
+        model = LlamaForClipInferenceModel.from_pretrained(args.model_name_or_path, config=config)
 
-    model = LlamaForClipInferenceModel.from_pretrained(args.model_name_or_path, config=config)
+        model.to(dtype=compute_dtype)
+        model.eval()
 
-    model.to(dtype=compute_dtype)
-    model.eval()
-
-    export_encode_text(model, config, compute_dtype)
+        export_encode_text(model, config, compute_dtype)
+    
+    else:
+        logger.info("please specify the task to export,--encode_image or --encode_text")

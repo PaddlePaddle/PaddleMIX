@@ -32,7 +32,7 @@ class LoftQConfig:
             default bits specified by `bits`. For example, `{model.decoder.layers.0.encoder_attn.k_proj: 2`}.
         bits (`int`): Quantization bits for LoftQ.
         iter (`int`): Alternating iterations for LoftQ.
-        fake (`bool`): True: use fp16/fp32; used for first time to save weights. False: use bitsandbytes 4bit linear
+        fake (`bool`): True: Use fp16/fp32; used for first time to save weights. False: use bitsandbytes 4bit linear
             models. weights can't be saved. Recommend to set to True, save the weights and load the saved weights in 4
             bits.
     """

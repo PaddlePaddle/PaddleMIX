@@ -16,7 +16,7 @@ dependencies = [
     "paddlepaddle-gpu",
     "tokenizers",
     "numpy",
-    "opencv-python",
+    "opencv-python==4.6.0.66",
     "supervision==0.18.0",
     "openmim",
 ]

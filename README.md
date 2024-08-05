@@ -15,23 +15,21 @@
 
 ## 简介
 
-PaddleMIX是基于飞桨的跨模态大模型开发套件，聚合图像、文本、视频等多种模态，覆盖视觉语言预训练，文生图，文生视频等丰富的跨模态任务。提供开箱即用的开发体验，同时满足开发者灵活定制需求，探索通用人工智能。
+PaddleMIX是基于飞桨的多模态大模型开发套件，聚合图像、文本、视频等多种模态，覆盖视觉语言预训练，文生图，文生视频等丰富的多模态任务。提供开箱即用的开发体验，同时满足开发者灵活定制需求，探索通用人工智能。
 
 ## 最新进展
-**2024.07.15 发布 PPDiffusers v0.24.1**
-* [PPDiffusers](./ppdiffusers/README.md)发布 v0.24.1 版本，支持Open-Sora模型
 
-**2024.04.17 发布 PPDiffusers v0.24.0**
-* [PPDiffusers](./ppdiffusers/README.md)发布 v0.24.0 版本，支持DiT等Sora相关技术，支持SVD等多款视频生成模型
+📚《飞桨多模态大模型开发套件PaddleMIX 2.0 震撼发布》，图文音视频场景全覆盖，多模态高效助力产业创新。超大规模训练支持，覆盖图文预训练、文生图、跨模态视觉任务，覆盖金融、教育、电商、医疗等产业场景。8月8日（周四）20：00 带你直播了解多模态大模型最新架构，深度解析PaddleMIX高性能模型库，手把手演示LLaVA模型训推全流程。[报名链接](https://www.wjx.top/vm/wKqysjx.aspx?udsid=449688)
+
+**2024.07.25 发布PaddleMIX v2.0**
+* 多模态理解：新增LLaVA系列,Qwen-VL等；新增Auto模块统一SFT训练流程；新增mixtoken训练策略，SFT吞吐量提升5.6倍。
+* 多模态生成：发布[PPDiffusers 0.24.1](./ppdiffusers/README.md)版本，支持视频生成能力，文生图模型新增LCM。新增飞桨版peft，accelerate后端。提供基于飞桨开发的ComfyUI插件。
+* 多模态数据处理工具箱[DataCopilot](./paddlemix/datacopilot/)：支持自定义数据结构，数据转换，离线格式检查；支持基本的统计信息，数据可视化功能。
 
 **2023.10.7 发布 PaddleMIX v1.0**
 * 新增图文预训练模型分布式训练能力，BLIP-2支持千亿规模训练
 * 新增跨模态应用流水线[AppFlow](./applications/README.md)，一键支持自动标注，图像编辑，音生图等11种跨模态应用
 * [PPDiffusers](./ppdiffusers/README.md)发布 0.19.3 版本，新增SDXL及相关任务
-
-**2023.7.31 发布 PaddleMIX v0.1**
-* 首次发布PaddleMIX跨模态大模型开发套件，融合PPDiffusers多模态扩散模型工具箱，广泛支持PaddleNLP大语言模型
-* 新增EVA-CLIP，BLIP-2，miniGPT-4，Stable Diffusion，ControlNet等12个跨模态大模型
 
 ## 主要特性
 
@@ -45,7 +43,6 @@ PaddleMIX是基于飞桨的跨模态大模型开发套件，聚合图像、文�
 - 视频Demo展示（video Demo）
 
 https://github.com/PaddlePaddle/PaddleMIX/assets/29787866/8d32722a-e307-46cb-a8c0-be8acd93d2c8
-
 
 
 ## 安装
@@ -80,25 +77,25 @@ pip install -e .
 
 ## 特色应用
 
-1. 艺术风格二维码模型
+1. ComfyUI创作工作流
+
+<div align="center">
+<img src="https://github.com/PaddlePaddle/PaddleMIX/assets/35400185/36ba7261-1744-41a4-b1cb-c9e99f6931f2" height = "300",caption='' />
+<p>体验专区: https://aistudio.baidu.com/community/app/106043</p>
+</div>
+
+2. 艺术风格二维码模型
 
 <div align="center">
 <img src="https://github.com/PaddlePaddle/Paddle/assets/22989727/ba091291-a1ee-49dc-a1af-fc501c62bfc8" height = "300",caption='' />
 <p>体验专区: https://aistudio.baidu.com/community/app/1339</p>
 </div>
 
-2. Mix叠图
+3. Mix叠图
 
 <div align="center">
 <img src="https://github.com/PaddlePaddle/Paddle/assets/22989727/a71be5a0-b0f3-4aa8-bc20-740ea8ae6785" height = "300",caption='' />
 <p>体验专区: https://aistudio.baidu.com/community/app/1340</p>
-</div>
-
-3. ComfyUI创作工作流
-
-<div align="center">
-<img src="https://github.com/PaddlePaddle/PaddleMIX/assets/35400185/36ba7261-1744-41a4-b1cb-c9e99f6931f2" height = "300",caption='' />
-<p>体验专区: https://aistudio.baidu.com/community/app/106043</p>
 </div>
 
 ## 模型库
@@ -135,6 +132,7 @@ pip install -e .
         <ul>
             <li><a href="paddlemix/examples/groundingdino">Grounding DINO</a></li>
             <li><a href="paddlemix/examples/sam">SAM</a></li>
+            <li><a href="paddlemix/examples/YOLO-World">YOLO-World</a></li>
       </ul>
       </ul>
           <li><b>更多模态预训练模型</b></li>
@@ -153,6 +151,7 @@ pip install -e .
             <li><a href="ppdiffusers/examples/text_to_image_laion400m">LDM</a></li>
             <li><a href="ppdiffusers/ppdiffusers/pipelines/unidiffuser">Unidiffuser</a></li>
             <li><a href="ppdiffusers/examples/class_conditional_image_generation/DiT">DiT</a></li>
+            <li><a href="ppdiffusers/examples/HunyuanDiT">HunyuanDiT</a></li>
         </ul>
         </ul>
           <li><b>文生视频</b></li>
@@ -166,6 +165,7 @@ pip install -e .
           <li><b>音频生成</b></li>
         <ul>
            <li><a href="ppdiffusers/ppdiffusers/pipelines/audioldm">AudioLDM</a></li>
+           <li><a href="ppdiffusers/ppdiffusers/pipelines/audioldm2">AudioLDM2</a></li>
         </ul>
       </td>
     </tr>
@@ -173,6 +173,14 @@ pip install -e .
 </table>
 
 更多模型能力，可参考[模型能力矩阵](./paddlemix/examples/README.md)
+
+## 社区交流
+
+- 微信扫描二维码并填写问卷，即可加入交流群与众多社区开发者以及官方团队深度交流。
+<div align="center">
+    <img src="https://github.com/user-attachments/assets/ecf292da-9ac6-41cb-84b6-df726ef4522d" width="300" height="300" />
+</div>
+
 ## 许可证书
 
 本项目的发布受Apache 2.0 license许可认证。
