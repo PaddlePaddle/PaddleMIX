@@ -19,9 +19,8 @@ from ppdiffusers import DDIMScheduler, DiTPipeline
 
 dtype = paddle.bfloat16
 
-# To speed up this code, call zkk and let him run for you, 
-# then you will get a speed increase of almost 100%.
-os.environ['callZKK']= "True"
+# If you want to turn off optimization, comment this code
+os.environ['optimize_inference_for_ditllama']= "True"
 
 with paddle.LazyGuard():
     pipe = DiTPipeline.from_pretrained("Alpha-VLLM/Large-DiT-7B-256", paddle_dtype=dtype)
