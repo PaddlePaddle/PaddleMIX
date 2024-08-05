@@ -1134,7 +1134,8 @@ class ModelMixin(nn.Layer):
                     error_msgs.append(
                         f"Error size mismatch, {key_name} receives a shape {loaded_shape}, but the expected shape is {model_shape}."
                     )
-                cls.custom_modify_weight(state_dict)
+                if os.getenv('Inference_Optimize'):
+                    cls.custom_modify_weight(state_dict)
                 faster_set_state_dict(model_to_load, state_dict)
 
         missing_keys = sorted(list(set(expected_keys) - set(loaded_keys)))
