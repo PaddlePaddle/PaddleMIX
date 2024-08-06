@@ -957,7 +957,7 @@ class JointAttnProcessor2_5:
         value = value.reshape([batch_size, -1, attn.heads, head_dim])
 
         hidden_states = hidden_states = F.scaled_dot_product_attention_(
-            query, key, value, dropout_p=0.0, is_causal=False, attention_op='math'
+            query, key, value, dropout_p=0.0, is_causal=False
         )
         hidden_states = hidden_states.reshape([batch_size, -1, attn.heads * head_dim])
         hidden_states = hidden_states.astype(query.dtype)
@@ -1039,7 +1039,7 @@ class FusedJointAttnProcessor2_5:
         value = value.reshape([batch_size, -1, attn.heads, head_dim])
 
         hidden_states = hidden_states = F.scaled_dot_product_attention_(
-            query, key, value, dropout_p=0.0, is_causal=False, attention_op='math'
+            query, key, value, dropout_p=0.0, is_causal=False
         )
         hidden_states = hidden_states.reshape([batch_size, -1, attn.heads * head_dim])
         hidden_states = hidden_states.astype(query.dtype)

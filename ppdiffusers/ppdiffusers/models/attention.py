@@ -177,7 +177,6 @@ class JointTransformerBlock(nn.Layer):
         attn_output, context_attn_output = self.attn(
             hidden_states=norm_hidden_states, encoder_hidden_states=norm_encoder_hidden_states, 
         )
-        # breakpoint()
 
         # Process attention outputs for the `hidden_states`.
         attn_output = gate_msa.unsqueeze(1) * attn_output

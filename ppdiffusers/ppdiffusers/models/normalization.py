@@ -196,31 +196,22 @@ class AdaLayerNormContinuous(nn.Layer):
 class RMSNorm(nn.Layer):
     def __init__(self, dim, epsilon: float,  elementwise_affine: bool = True):
         super().__init__()
-
         self.epsilon = epsilon
-
-        if isinstance(dim, numbers.Integral):
-            dim = (dim,)
-
-        # self.dim = torch.Size(dim)
         self.dim = dim
-
         if elementwise_affine:
-            self.weight = nn.Parameter(paddle.ones(dim))
+            self.weight = paddle.create_parameter(
+                shape=[dim],
+                dtype=paddle.get_default_dtype(),
+                default_initializer=nn.initializer.Constant(1.0),
+            )
         else:
             self.weight = None
 
     def forward(self, hidden_states):
-        input_dtype = hidden_states.dtype
-        variance = hidden_states.cast(paddle.float32).pow(2).mean(-1, keepdim=True)
-        hidden_states = hidden_states * paddle.rsqrt(variance + self.epsilon)
-
-        if self.weight is not None:
-            # convert into half-precision if necessary
-            if self.weight.dtype in [paddle.float16, paddle.bfloat16]:
-                hidden_states = hidden_states.astype(self.weight.dtype)
-            hidden_states = hidden_states * self.weight
-        else:
-            hidden_states = hidden_states.astype(input_dtype)
-
-        return hidden_states
+        paddle.incubate.nn.functional.fused_rms_norm(
+            x=hidden_states,
+            norm_weight=self.weight,
+            norm_bias=None,
+            epsilon=self.epsilon,
+            begin_norm_axis=2,
+        )
