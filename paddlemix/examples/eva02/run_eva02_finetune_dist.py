@@ -190,7 +190,7 @@ class FinetuneArguments(TrainingArguments):
     )
     fp16: bool = field(
         default=False,
-        metadata={"help": "Whether to use fp16 (mixed) precision instead of 32-bit"},
+        metadata={"help": "Whether to Use fp16 (mixed) precision instead of 32-bit"},
     )
     fp16_opt_level: str = field(
         default="O1",

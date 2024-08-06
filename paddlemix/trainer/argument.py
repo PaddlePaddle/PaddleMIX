@@ -12,10 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from dataclasses import dataclass, field
-from typing import List, Optional
-
+import json
+from typing import List, Optional,Tuple,NewType,Any
+from pathlib import Path
 from paddlenlp.trainer import TrainingArguments
+from paddlenlp.trainer import PdArgumentParser
 
+DataClass = NewType("DataClass", Any)
 
 @dataclass
 class TrainingArguments(TrainingArguments):
@@ -103,3 +106,20 @@ class GenerateArgument:
     top_p: float = field(
         default=1.0, metadata={"help": "The cumulative probability for top-p-filtering in the sampling strategy."}
     )
+
+
+class PdMIXArgumentParser(PdArgumentParser):
+    def parse_json_file(self, json_file: str) -> Tuple[DataClass, ...]:
+        """
+        Alternative helper method that does not use `argparse` at all, instead loading a json file and populating the
+        dataclass types.
+        """
+        import dataclasses
+        data = json.loads(Path(json_file).read_text())
+        outputs = []
+        for dtype in self.dataclass_types:
+            keys = {f.name for f in dataclasses.fields(dtype) if f.init}
+            inputs = {k: v for k, v in data.items() if k in keys}
+            obj = dtype(**inputs)
+            outputs.append(obj)
+        return (*outputs,)

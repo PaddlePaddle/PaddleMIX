@@ -295,6 +295,10 @@ class ModelArguments:
         default=True,
         metadata={"help": "save visual image."},
     )
+    benchmark: bool = field(
+        default=False,
+        metadata={"help": "benchmark"}
+    )
 
 
 def main(model_args, data_args):
@@ -317,6 +321,19 @@ def main(model_args, data_args):
         auto_tune(model_args, [image_pil], tune_img_nums)
 
     predictor = Predictor(model_args)
+    
+    if model_args.benchmark:
+        import time
+        start = 0.0
+        total = 0.0
+        for i in range(20):
+            if i>10:
+                start = time.time()
+            seg_masks = predictor.run(image_pil, {"points": data_args.points_prompt, "boxs": data_args.box_prompt})
+            if i > 10:
+                total += time.time()-start
+
+        print("Time:",total/10)
 
     seg_masks = predictor.run(image_pil, {"points": data_args.points_prompt, "boxs": data_args.box_prompt})
 
