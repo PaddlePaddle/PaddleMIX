@@ -17,4 +17,5 @@ from .clip_model import *
 from .configuration import *
 from .mm_utils import *
 from .modeling import *
+from .siglip_encoder import *
 from .tokenizer import *

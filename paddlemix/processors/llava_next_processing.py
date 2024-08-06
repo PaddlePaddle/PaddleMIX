@@ -32,6 +32,7 @@ __all__ = ["LlavaNextProcessor"]
 
 
 class LlavaNextProcessor(ProcessorMixin):
+
     attributes = ["image_processor", "tokenizer"]
     image_processor_class = "CLIPImageProcessor"
     tokenizer_class = "AutoTokenizer"

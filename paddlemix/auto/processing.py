@@ -92,7 +92,6 @@ class AutoProcessorMIX:
 
     @classmethod
     def _get_processor_class(cls, pretrained_model_name_or_path, text_model_name_or_path=None, **kwargs):
-
         name_or_path = None
         processor = None
         tokenizer = None
@@ -121,7 +120,10 @@ class AutoProcessorMIX:
             text_model_name_or_path = pretrained_model_name_or_path
 
         for names, processor_class in cls._processor_mapping.items():
+
             if names.lower() in pretrained_model_name_or_path.lower().replace("-", "_").replace("vicuna", "llava"):
+                print(names.lower(), pretrained_model_name_or_path.lower())
+
                 attributes = processor_class["processor"].attributes
                 attributes_dict = {}
 

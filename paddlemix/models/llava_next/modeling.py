@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
 from typing import List, Optional, Tuple, Union
 
 import paddle
-import paddle.nn as nn
 from paddlenlp.transformers import Qwen2Config, Qwen2ForCausalLM, Qwen2Model
 from paddlenlp.transformers.model_outputs import CausalLMOutputWithPast
 
@@ -40,11 +40,12 @@ class LlavaQwenForCausalLM(Qwen2ForCausalLM, LlavaMetaForCausalLM):
     base_model_prefix = "llava_qwen"
 
     def __init__(self, config):
-        super(Qwen2ForCausalLM, self).__init__(config)
+        super().__init__(config)
         config.model_type = "llava_qwen"
         config.rope_scaling = None
         self.qwen2 = LlavaQwenModel(config)
-        self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias_attr=False)
+
+        # self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias_attr=False)
 
     def get_model(self):
         return self.qwen2
