@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import os
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
@@ -28,14 +29,12 @@ from ..utils import (
     recompute_use_reentrant,
     use_old_recompute,
 )
-from .simplified_facebook_dit import SimplifiedFacebookDIT
-
 from .attention import BasicTransformerBlock
 from .embeddings import CaptionProjection, PatchEmbed
 from .lora import LoRACompatibleConv, LoRACompatibleLinear
 from .modeling_utils import ModelMixin
 from .normalization import AdaLayerNormSingle
-import os
+from .simplified_facebook_dit import SimplifiedFacebookDIT
 
 
 @dataclass
@@ -117,7 +116,7 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
         self.inner_dim = inner_dim = num_attention_heads * attention_head_dim
         self.data_format = data_format
 
-        self.inference_optimize = os.getenv('INFOPTIMIZE') == "True"
+        self.inference_optimize = os.getenv("INFOPTIMIZE") == "True"
 
         conv_cls = nn.Conv2D if USE_PEFT_BACKEND else LoRACompatibleConv
         linear_cls = nn.Linear if USE_PEFT_BACKEND else LoRACompatibleLinear
@@ -159,11 +158,15 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
         if self.is_input_continuous:
             self.in_channels = in_channels
 
-            self.norm = nn.GroupNorm(num_groups=norm_num_groups, num_channels=in_channels, epsilon=1e-6, data_format=data_format)
+            self.norm = nn.GroupNorm(
+                num_groups=norm_num_groups, num_channels=in_channels, epsilon=1e-6, data_format=data_format
+            )
             if use_linear_projection:
                 self.proj_in = linear_cls(in_channels, inner_dim)
             else:
-                self.proj_in = conv_cls(in_channels, inner_dim, kernel_size=1, stride=1, padding=0, data_format=data_format)
+                self.proj_in = conv_cls(
+                    in_channels, inner_dim, kernel_size=1, stride=1, padding=0, data_format=data_format
+                )
         elif self.is_input_vectorized:
             assert sample_size is not None, "Transformer2DModel over discrete input must provide sample_size"
             assert num_vector_embeds is not None, "Transformer2DModel over discrete input must provide num_embed"
@@ -219,14 +222,11 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
             ]
         )
         if self.inference_optimize:
-            self.simplified_facebookDIT = SimplifiedFacebookDIT(
-                num_layers,
-                inner_dim,
-                num_attention_heads,
-                attention_head_dim
+            self.simplified_facebookdit = SimplifiedFacebookDIT(
+                num_layers, inner_dim, num_attention_heads, attention_head_dim
             )
-            self.simplified_facebookDIT = paddle.incubate.jit.inference(
-                self.simplified_facebookDIT,
+            self.simplified_facebookdit = paddle.incubate.jit.inference(
+                self.simplified_facebookdit,
                 enable_new_ir=True,
                 cache_static_model=False,
                 exp_enable_use_cutlass=True,
@@ -240,7 +240,9 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
             if use_linear_projection:
                 self.proj_out = linear_cls(inner_dim, in_channels)
             else:
-                self.proj_out = conv_cls(inner_dim, in_channels, kernel_size=1, stride=1, padding=0, data_format=data_format)
+                self.proj_out = conv_cls(
+                    inner_dim, in_channels, kernel_size=1, stride=1, padding=0, data_format=data_format
+                )
         elif self.is_input_vectorized:
             self.norm_out = nn.LayerNorm(inner_dim)
             self.out = nn.Linear(inner_dim, self.num_vector_embeds - 1)
@@ -405,7 +407,7 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
             encoder_hidden_states = encoder_hidden_states.reshape([batch_size, -1, hidden_states.shape[-1]])
 
         if self.inference_optimize:
-            hidden_states = self.simplified_facebookDIT(hidden_states, timestep, class_labels)
+            hidden_states = self.simplified_facebookdit(hidden_states, timestep, class_labels)
         else:
             for block in self.transformer_blocks:
                 if self.gradient_checkpointing and not hidden_states.stop_gradient and not use_old_recompute():
@@ -507,31 +509,44 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
 
     @classmethod
     def custom_modify_weight(cls, state_dict):
-        if os.getenv('INFOPTIMIZE') != "True":
+        if os.getenv("INFOPTIMIZE") != "True":
             return
         map_from_my_dit = {}
         for i in range(28):
-            map_from_my_dit[f'simplified_facebookDIT.q.{i}.weight'] = f'transformer_blocks.{i}.attn1.to_q.weight'
-            map_from_my_dit[f'simplified_facebookDIT.k.{i}.weight'] = f'transformer_blocks.{i}.attn1.to_k.weight'
-            map_from_my_dit[f'simplified_facebookDIT.v.{i}.weight'] = f'transformer_blocks.{i}.attn1.to_v.weight'
-            map_from_my_dit[f'simplified_facebookDIT.q.{i}.bias'] = f'transformer_blocks.{i}.attn1.to_q.bias'
-            map_from_my_dit[f'simplified_facebookDIT.k.{i}.bias'] = f'transformer_blocks.{i}.attn1.to_k.bias'
-            map_from_my_dit[f'simplified_facebookDIT.v.{i}.bias'] = f'transformer_blocks.{i}.attn1.to_v.bias'
-            map_from_my_dit[f'simplified_facebookDIT.out_proj.{i}.weight'] = f'transformer_blocks.{i}.attn1.to_out.0.weight'
-            map_from_my_dit[f'simplified_facebookDIT.out_proj.{i}.bias'] = f'transformer_blocks.{i}.attn1.to_out.0.bias'
-            map_from_my_dit[f'simplified_facebookDIT.ffn1.{i}.weight'] = f'transformer_blocks.{i}.ff.net.0.proj.weight'
-            map_from_my_dit[f'simplified_facebookDIT.ffn1.{i}.bias'] = f'transformer_blocks.{i}.ff.net.0.proj.bias'
-            map_from_my_dit[f'simplified_facebookDIT.ffn2.{i}.weight'] = f'transformer_blocks.{i}.ff.net.2.weight'
-            map_from_my_dit[f'simplified_facebookDIT.ffn2.{i}.bias'] = f'transformer_blocks.{i}.ff.net.2.bias'
+            map_from_my_dit[f"simplified_facebookdit.q.{i}.weight"] = f"transformer_blocks.{i}.attn1.to_q.weight"
+            map_from_my_dit[f"simplified_facebookdit.k.{i}.weight"] = f"transformer_blocks.{i}.attn1.to_k.weight"
+            map_from_my_dit[f"simplified_facebookdit.v.{i}.weight"] = f"transformer_blocks.{i}.attn1.to_v.weight"
+            map_from_my_dit[f"simplified_facebookdit.q.{i}.bias"] = f"transformer_blocks.{i}.attn1.to_q.bias"
+            map_from_my_dit[f"simplified_facebookdit.k.{i}.bias"] = f"transformer_blocks.{i}.attn1.to_k.bias"
+            map_from_my_dit[f"simplified_facebookdit.v.{i}.bias"] = f"transformer_blocks.{i}.attn1.to_v.bias"
+            map_from_my_dit[
+                f"simplified_facebookdit.out_proj.{i}.weight"
+            ] = f"transformer_blocks.{i}.attn1.to_out.0.weight"
+            map_from_my_dit[
+                f"simplified_facebookdit.out_proj.{i}.bias"
+            ] = f"transformer_blocks.{i}.attn1.to_out.0.bias"
+            map_from_my_dit[f"simplified_facebookdit.ffn1.{i}.weight"] = f"transformer_blocks.{i}.ff.net.0.proj.weight"
+            map_from_my_dit[f"simplified_facebookdit.ffn1.{i}.bias"] = f"transformer_blocks.{i}.ff.net.0.proj.bias"
+            map_from_my_dit[f"simplified_facebookdit.ffn2.{i}.weight"] = f"transformer_blocks.{i}.ff.net.2.weight"
+            map_from_my_dit[f"simplified_facebookdit.ffn2.{i}.bias"] = f"transformer_blocks.{i}.ff.net.2.bias"
 
-            map_from_my_dit[f'simplified_facebookDIT.fcs0.{i}.weight'] = f'transformer_blocks.{i}.norm1.emb.timestep_embedder.linear_1.weight'
-            map_from_my_dit[f'simplified_facebookDIT.fcs0.{i}.bias'] = f'transformer_blocks.{i}.norm1.emb.timestep_embedder.linear_1.bias'
-            map_from_my_dit[f'simplified_facebookDIT.fcs1.{i}.weight'] = f'transformer_blocks.{i}.norm1.emb.timestep_embedder.linear_2.weight'
-            map_from_my_dit[f'simplified_facebookDIT.fcs1.{i}.bias'] = f'transformer_blocks.{i}.norm1.emb.timestep_embedder.linear_2.bias'
-            map_from_my_dit[f'simplified_facebookDIT.fcs2.{i}.weight'] = f'transformer_blocks.{i}.norm1.linear.weight'
-            map_from_my_dit[f'simplified_facebookDIT.fcs2.{i}.bias'] = f'transformer_blocks.{i}.norm1.linear.bias'
-
-            map_from_my_dit[f'simplified_facebookDIT.embs.{i}.weight'] = f'transformer_blocks.{i}.norm1.emb.class_embedder.embedding_table.weight'
+            map_from_my_dit[
+                f"simplified_facebookdit.fcs0.{i}.weight"
+            ] = f"transformer_blocks.{i}.norm1.emb.timestep_embedder.linear_1.weight"
+            map_from_my_dit[
+                f"simplified_facebookdit.fcs0.{i}.bias"
+            ] = f"transformer_blocks.{i}.norm1.emb.timestep_embedder.linear_1.bias"
+            map_from_my_dit[
+                f"simplified_facebookdit.fcs1.{i}.weight"
+            ] = f"transformer_blocks.{i}.norm1.emb.timestep_embedder.linear_2.weight"
+            map_from_my_dit[
+                f"simplified_facebookdit.fcs1.{i}.bias"
+            ] = f"transformer_blocks.{i}.norm1.emb.timestep_embedder.linear_2.bias"
+            map_from_my_dit[f"simplified_facebookdit.fcs2.{i}.weight"] = f"transformer_blocks.{i}.norm1.linear.weight"
+            map_from_my_dit[f"simplified_facebookdit.fcs2.{i}.bias"] = f"transformer_blocks.{i}.norm1.linear.bias"
+            map_from_my_dit[
+                f"simplified_facebookdit.embs.{i}.weight"
+            ] = f"transformer_blocks.{i}.norm1.emb.class_embedder.embedding_table.weight"
 
         for key in map_from_my_dit.keys():
             state_dict[key] = paddle.assign(state_dict[map_from_my_dit[key]])

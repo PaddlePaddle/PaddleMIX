@@ -1,7 +1,22 @@
-from paddle import nn
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import math
+
 import paddle
 import paddle.nn.functional as F
-import math
+from paddle import nn
 
 
 class SimplifiedFacebookDIT(nn.Layer):
@@ -17,17 +32,33 @@ class SimplifiedFacebookDIT(nn.Layer):
         self.LabelEmbedding_num_classes = 1001
         self.LabelEmbedding_num_hidden_size = 1152
 
-        self.fcs0 = nn.LayerList([nn.Linear(self.timestep_embedder_in_channels,
-                                            self.timestep_embedder_time_embed_dim) for i in range(num_layers)])
+        self.fcs0 = nn.LayerList(
+            [
+                nn.Linear(self.timestep_embedder_in_channels, self.timestep_embedder_time_embed_dim)
+                for i in range(num_layers)
+            ]
+        )
 
-        self.fcs1 = nn.LayerList([nn.Linear(self.timestep_embedder_time_embed_dim,
-                                            self.timestep_embedder_time_embed_dim_out) for i in range(num_layers)])
+        self.fcs1 = nn.LayerList(
+            [
+                nn.Linear(self.timestep_embedder_time_embed_dim, self.timestep_embedder_time_embed_dim_out)
+                for i in range(num_layers)
+            ]
+        )
 
-        self.fcs2 = nn.LayerList([nn.Linear(self.timestep_embedder_time_embed_dim,
-                                            6 * self.timestep_embedder_time_embed_dim) for i in range(num_layers)])
+        self.fcs2 = nn.LayerList(
+            [
+                nn.Linear(self.timestep_embedder_time_embed_dim, 6 * self.timestep_embedder_time_embed_dim)
+                for i in range(num_layers)
+            ]
+        )
 
-        self.embs = nn.LayerList([nn.Embedding(self.LabelEmbedding_num_classes,
-                                               self.LabelEmbedding_num_hidden_size) for i in range(num_layers)])
+        self.embs = nn.LayerList(
+            [
+                nn.Embedding(self.LabelEmbedding_num_classes, self.LabelEmbedding_num_hidden_size)
+                for i in range(num_layers)
+            ]
+        )
 
         self.q = nn.LayerList([nn.Linear(dim, dim) for i in range(num_layers)])
         self.k = nn.LayerList([nn.Linear(dim, dim) for i in range(num_layers)])
@@ -59,29 +90,29 @@ class SimplifiedFacebookDIT(nn.Layer):
             emb = self.fcs2[i](emb)
             shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = emb.chunk(6, axis=1)
             import paddlemix
+
             norm_hidden_states = paddlemix.triton_ops.adaptive_layer_norm(hidden_states, scale_msa, shift_msa)
             q = self.q[i](norm_hidden_states).reshape([0, 0, self.heads_num, self.head_dim])
             k = self.k[i](norm_hidden_states).reshape([0, 0, self.heads_num, self.head_dim])
             v = self.v[i](norm_hidden_states).reshape([0, 0, self.heads_num, self.head_dim])
 
             norm_hidden_states = F.scaled_dot_product_attention_(q, k, v, scale=self.head_dim**-0.5)
-            norm_hidden_states = norm_hidden_states.reshape([norm_hidden_states.shape[0], norm_hidden_states.shape[1], self.dim])
+            norm_hidden_states = norm_hidden_states.reshape(
+                [norm_hidden_states.shape[0], norm_hidden_states.shape[1], self.dim]
+            )
             norm_hidden_states = self.out_proj[i](norm_hidden_states)
 
             # hidden_states = hidden_states + norm_hidden_states * gate_msa.reshape([b,1,self.dim])
             # norm_hidden_states =paddlemix.triton_ops.adaptive_layer_norm(hidden_states, scale_mlp, shift_mlp)
             hidden_states, norm_hidden_states = paddlemix.triton_ops.fused_adaLN_scale_residual(
-                hidden_states,
-                norm_hidden_states,
-                gate_msa,
-                scale_mlp,
-                shift_mlp
+                hidden_states, norm_hidden_states, gate_msa, scale_mlp, shift_mlp
             )
-
             norm_hidden_states = self.ffn1[i](norm_hidden_states)
             norm_hidden_states = F.gelu(norm_hidden_states, approximate=True)
             norm_hidden_states = self.ffn2[i](norm_hidden_states)
 
-            hidden_states = hidden_states + norm_hidden_states * gate_mlp.reshape([norm_hidden_states.shape[0], 1, self.dim])
+            hidden_states = hidden_states + norm_hidden_states * gate_mlp.reshape(
+                [norm_hidden_states.shape[0], 1, self.dim]
+            )
 
         return hidden_states
