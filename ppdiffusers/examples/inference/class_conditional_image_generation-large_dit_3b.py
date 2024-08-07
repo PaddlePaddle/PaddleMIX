@@ -17,7 +17,11 @@ from paddlenlp.trainer import set_seed
 
 from ppdiffusers import DDIMScheduler, DiTPipeline
 
-dtype = paddle.float32
+dtype = paddle.bfloat16
+
+# If you want to turn off optimization, comment this code
+os.environ['Inference_Optimize'] = "True"
+
 with paddle.LazyGuard():
     pipe = DiTPipeline.from_pretrained("Alpha-VLLM/Large-DiT-3B-256", paddle_dtype=dtype)
 pipe.scheduler = DDIMScheduler.from_config(pipe.scheduler.config)

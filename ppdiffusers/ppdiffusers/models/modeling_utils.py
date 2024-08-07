@@ -1053,7 +1053,7 @@ class ModelMixin(nn.Layer):
     @classmethod
     def custom_modify_weight(cls, state_dict):
         pass
-    
+
     @classmethod
     def _load_pretrained_model(
         cls,

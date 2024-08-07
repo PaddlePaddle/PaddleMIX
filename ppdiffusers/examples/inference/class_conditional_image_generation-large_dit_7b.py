@@ -20,7 +20,7 @@ from ppdiffusers import DDIMScheduler, DiTPipeline
 dtype = paddle.bfloat16
 
 # If you want to turn off optimization, comment this code
-os.environ['optimize_inference_for_ditllama']= "True"
+os.environ['Inference_Optimize'] = "True"
 
 with paddle.LazyGuard():
     pipe = DiTPipeline.from_pretrained("Alpha-VLLM/Large-DiT-7B-256", paddle_dtype=dtype)
