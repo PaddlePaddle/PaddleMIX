@@ -221,6 +221,12 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
         )
         if self.Inference_Optimize:
             self.simplified_facebookDIT = SimplifiedFacebookDIT(num_layers, inner_dim, num_attention_heads, attention_head_dim)
+            self.simplified_facebookDIT = paddle.incubate.jit.inference(self.simplified_facebookDIT,
+                                                                        enable_new_ir=True, 
+                                                                        cache_static_model=False,
+                                                                        exp_enable_use_cutlass=True,
+                                                                        delete_pass_lists=["add_norm_fuse_pass"],
+                                                                        )
 
         # 4. Define output layers
         self.out_channels = in_channels if out_channels is None else out_channels

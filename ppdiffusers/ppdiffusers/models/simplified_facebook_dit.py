@@ -36,11 +36,6 @@ class SimplifiedFacebookDIT(nn.Layer):
         self.ffn1 = nn.LayerList([nn.Linear(dim, dim*4) for i in range(num_layers)])
         self.ffn2 = nn.LayerList([nn.Linear(dim*4, dim) for i in range(num_layers)])
 
-    @paddle.incubate.jit.inference(enable_new_ir=True, 
-                          cache_static_model=False,
-                          exp_enable_use_cutlass=True,
-                          delete_pass_lists=["add_norm_fuse_pass"],
-                        )
     def forward(self, hidden_states, timesteps, class_labels):
         
         # below code are copied from PaddleMIX/ppdiffusers/ppdiffusers/models/embeddings.py
