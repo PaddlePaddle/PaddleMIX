@@ -124,4 +124,3 @@ class SimplifiedDiTLLaMA2DModel(nn.Layer):
       ffn_out = self.w2s[i](ffn_out)
       x = resi_out + gate_mlp.unsqueeze(1) * ffn_out
     return x
-    
