@@ -102,8 +102,6 @@ class SimplifiedFacebookDIT(nn.Layer):
             )
             norm_hidden_states = self.out_proj[i](norm_hidden_states)
 
-            # hidden_states = hidden_states + norm_hidden_states * gate_msa.reshape([b,1,self.dim])
-            # norm_hidden_states =paddlemix.triton_ops.adaptive_layer_norm(hidden_states, scale_mlp, shift_mlp)
             hidden_states, norm_hidden_states = paddlemix.triton_ops.fused_adaLN_scale_residual(
                 hidden_states, norm_hidden_states, gate_msa, scale_mlp, shift_mlp
             )
