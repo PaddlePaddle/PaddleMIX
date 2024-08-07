@@ -81,9 +81,12 @@ class AutoencoderKL(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
         norm_num_groups: int = 32,
         sample_size: int = 32,
         scaling_factor: float = 0.18215,
+        shift_factor: Optional[float] = None,
         latents_mean: Optional[Tuple[float]] = None,
         latents_std: Optional[Tuple[float]] = None,
         force_upcast: float = True,
+        use_quant_conv: bool = True,
+        use_post_quant_conv: bool = True,
     ):
         super().__init__()
         # if down_block_out_channels not given, we will use block_out_channels
@@ -114,8 +117,8 @@ class AutoencoderKL(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
             act_fn=act_fn,
         )
 
-        self.quant_conv = nn.Conv2D(2 * latent_channels, 2 * latent_channels, 1)
-        self.post_quant_conv = nn.Conv2D(latent_channels, latent_channels, 1)
+        self.quant_conv = nn.Conv2D(2 * latent_channels, 2 * latent_channels, 1) if use_quant_conv else None
+        self.post_quant_conv = nn.Conv2D(latent_channels, latent_channels, 1) if use_post_quant_conv else None
 
         self.use_slicing = False
         self.use_tiling = False
@@ -271,7 +274,10 @@ class AutoencoderKL(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
         else:
             h = self.encoder(x)
 
-        moments = self.quant_conv(h)
+        if self.quant_conv is not None:
+            moments = self.quant_conv(h)
+        else:
+            moments = h
         posterior = DiagonalGaussianDistribution(moments)
 
         if not return_dict:
@@ -283,7 +289,8 @@ class AutoencoderKL(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
         if self.use_tiling and (z.shape[-1] > self.tile_latent_min_size or z.shape[-2] > self.tile_latent_min_size):
             return self.tiled_decode(z, return_dict=return_dict)
 
-        z = self.post_quant_conv(z)
+        if self.post_quant_conv is not None:
+            z = self.post_quant_conv(z)
         dec = self.decoder(z)
 
         if not return_dict:
@@ -310,7 +317,8 @@ class AutoencoderKL(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
 
         """
         # TODO junnyu, add this to support pure fp16
-        z = z.cast(self.post_quant_conv.weight.dtype)
+        if hasattr(self, "post_quant_conv") and self.post_quant_conv is not None:
+            z = z.cast(self.post_quant_conv.weight.dtype)
         if self.use_slicing and z.shape[0] > 1:
             # split、chunk paddle vs pytorch may have some difference
             decoded_slices = [self._decode(z_slice).sample for z_slice in z.chunk(z.shape[0])]

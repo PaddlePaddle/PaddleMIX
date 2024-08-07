@@ -45,6 +45,16 @@ def get_activation(act_fn: str) -> nn.Layer:
     else:
         raise ValueError(f"Unsupported activation function: {act_fn}")
 
+class FP32SiLU(nn.Layer):
+    r"""
+    SiLU activation function with input upcasted to paddle.float32.
+    """
+
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, inputs: paddle.Tensor) -> paddle.Tensor:
+        return F.silu(inputs.astype(paddle.float32)).astype(inputs.dtype)
 
 class GELU(nn.Layer):
     r"""
