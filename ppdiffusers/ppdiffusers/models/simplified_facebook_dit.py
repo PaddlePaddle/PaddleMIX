@@ -3,7 +3,7 @@ import paddle
 import paddle.nn.functional as F
 import math
 
-class Simplified_FacebookDIT(nn.Layer):
+class SimplifiedFacebookDIT(nn.Layer):
     def __init__(self, num_layers: int, dim: int, num_attention_heads: int, attention_head_dim: int):
         super().__init__()
         self.num_layers = num_layers
@@ -29,7 +29,9 @@ class Simplified_FacebookDIT(nn.Layer):
                                                self.LabelEmbedding_num_hidden_size) for i in range(self.num_layers)])
         
 
-        self.qkv = nn.LayerList([nn.Linear(dim, dim * 3) for i in range(self.num_layers)])
+        self.q = nn.LayerList([nn.Linear(dim, dim ) for i in range(self.num_layers)])
+        self.k = nn.LayerList([nn.Linear(dim, dim ) for i in range(self.num_layers)])
+        self.v = nn.LayerList([nn.Linear(dim, dim ) for i in range(self.num_layers)])
         self.out_proj = nn.LayerList([nn.Linear(dim, dim) for i in range(self.num_layers)])
         self.ffn1 = nn.LayerList([nn.Linear(dim, dim*4) for i in range(self.num_layers)])
         self.ffn2 = nn.LayerList([nn.Linear(dim*4, dim) for i in range(self.num_layers)])
@@ -63,14 +65,12 @@ class Simplified_FacebookDIT(nn.Layer):
             shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = emb.chunk(6, axis=1)
             import paddlemix
             norm_hidden_states =paddlemix.triton_ops.adaptive_layer_norm(hidden_states, scale_msa, shift_msa)
-            q,k,v = self.qkv[i](norm_hidden_states).chunk(3, axis=-1)
-            b,s,h = q.shape
-            q = q.reshape([b,s,self.num_attention_heads,self.attention_head_dim])
-            k = k.reshape([b,s,self.num_attention_heads,self.attention_head_dim])
-            v = v.reshape([b,s,self.num_attention_heads,self.attention_head_dim])
+            q = self.q[i](norm_hidden_states).reshape([norm_hidden_states.shape[0],norm_hidden_states.shape[1],self.num_attention_heads,self.attention_head_dim])
+            k = self.k[i](norm_hidden_states).reshape([norm_hidden_states.shape[0],norm_hidden_states.shape[1],self.num_attention_heads,self.attention_head_dim])
+            v = self.v[i](norm_hidden_states).reshape([norm_hidden_states.shape[0],norm_hidden_states.shape[1],self.num_attention_heads,self.attention_head_dim])
 
             norm_hidden_states = F.scaled_dot_product_attention_(q, k, v, scale=self.attention_head_dim**-0.5)
-            norm_hidden_states = norm_hidden_states.reshape([b,s,self.dim])
+            norm_hidden_states = norm_hidden_states.reshape([norm_hidden_states.shape[0],norm_hidden_states.shape[1],self.dim])
             norm_hidden_states = self.out_proj[i](norm_hidden_states)
             
             # hidden_states = hidden_states + norm_hidden_states * gate_msa.reshape([b,1,self.dim])            
@@ -81,7 +81,7 @@ class Simplified_FacebookDIT(nn.Layer):
             norm_hidden_states = F.gelu(norm_hidden_states, approximate=True)
             norm_hidden_states = self.ffn2[i](norm_hidden_states)
 
-            hidden_states = hidden_states + norm_hidden_states * gate_mlp.reshape([b,1,self.dim])
+            hidden_states = hidden_states + norm_hidden_states * gate_mlp.reshape([norm_hidden_states.shape[0],1,self.dim])
             
         return hidden_states
     
