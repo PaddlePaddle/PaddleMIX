@@ -28,11 +28,11 @@ from paddlenlp.utils.downloader import (
     url_file_exists,
 )
 from paddlenlp.utils.env import HF_CACHE_HOME as PPNLP_HF_CACHE_HOME
-from paddlenlp.utils.env import MODEL_HOME as PPNLP_MODEL_HOME
 from paddlenlp.utils.import_utils import import_module
 from paddlenlp.utils.log import logger
 
 from paddlemix.utils.env import MODEL_HOME as PPMIX_MODEL_HOME
+
 from .configuration import get_configurations
 
 __all__ = [
@@ -57,6 +57,7 @@ ASSIGN_MAPPING = {
     "qwen_vl": "QWenLMHeadModel",
     "sam": "SamModel",
     "visualglm": "VisualGLMForConditionalGeneration",
+    "llava_qwen": "LlavaQwenForCausalLM",
     "internvl2": "InternVLChatModel",
 }
 
@@ -181,7 +182,6 @@ class _MIXBaseAutoModelClass:
         subfolder = kwargs.get("subfolder", "")
         cache_dir = resolve_cache_dir(from_hf_hub, from_aistudio, cache_dir)
         kwargs["cache_dir"] = cache_dir
-      
 
         if from_hf_hub:
             if hf_file_exists(repo_id=pretrained_model_name_or_path, filename=cls.model_config_file):
@@ -231,7 +231,7 @@ class _MIXBaseAutoModelClass:
                 [COMMUNITY_MODEL_PREFIX, pretrained_model_name_or_path, cls.legacy_model_config_file]
             )
             cache_dir = os.path.join(cache_dir, pretrained_model_name_or_path, subfolder)
-           
+
             try:
                 if url_file_exists(standard_community_url):
                     resolved_vocab_file = get_path_from_url_with_filelock(standard_community_url, cache_dir)
@@ -249,7 +249,7 @@ class _MIXBaseAutoModelClass:
                     "- or a correct model-identifier of community-contributed pretrained models,\n"
                     "- or the correct path to a directory containing relevant modeling files(model_weights and model_config).\n"
                 )
-            
+
             if os.path.exists(resolved_vocab_file):
                 model_class = cls._get_model_class_from_config(pretrained_model_name_or_path, resolved_vocab_file)
                 logger.info(f"We are using {model_class} to load '{pretrained_model_name_or_path}'.")

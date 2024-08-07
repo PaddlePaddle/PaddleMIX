@@ -51,6 +51,8 @@ def get_processor_mapping():
             model_name = "qwen_vl"
         elif "internlm_xcomposer2" in file_name:
             model_name = "internlm_xcomposer2"
+        elif "llava_next" in file_name:
+            model_name = "llava_next"
         elif "internvl2" in file_name:
             model_name = "internvl2"
         else:
@@ -93,7 +95,6 @@ class AutoProcessorMIX:
 
     @classmethod
     def _get_processor_class(cls, pretrained_model_name_or_path, text_model_name_or_path=None, **kwargs):
-
         name_or_path = None
         processor = None
         tokenizer = None
@@ -122,7 +123,9 @@ class AutoProcessorMIX:
             text_model_name_or_path = pretrained_model_name_or_path
 
         for names, processor_class in cls._processor_mapping.items():
+
             if names.lower() in pretrained_model_name_or_path.lower().replace("-", "_").replace("vicuna", "llava"):
+
                 attributes = processor_class["processor"].attributes
                 attributes_dict = {}
 

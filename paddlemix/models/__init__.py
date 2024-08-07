@@ -23,6 +23,7 @@ from .imagebind.multimodal_preprocessors import *
 from .internlm_xcomposer2 import *
 from .internvl2 import *
 from .llava import *
+from .llava_next import *
 from .minigpt4.configuration import *
 from .minigpt4.modeling import *
 from .qwen_vl import *
