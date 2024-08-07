@@ -27,29 +27,25 @@ set_seed(42)
 words = ["golden retriever"]  # class_ids [207]
 class_ids = pipe.get_label_ids(words)
 
+# warmup
+for i in range(5):
+    image = pipe(class_labels=class_ids, num_inference_steps=25).images[0]
 
-image = pipe(class_labels=class_ids, num_inference_steps=25).images[0]
-image = pipe(class_labels=class_ids, num_inference_steps=25).images[0]
-image = pipe(class_labels=class_ids, num_inference_steps=25).images[0]
 
-    
 import datetime
 import time
 repeat_times = 10
-sum_time = 0.
+paddle.device.synchronize()
+starttime = datetime.datetime.now()
 
 for i in range(repeat_times):
-    paddle.device.synchronize()
-    starttime = datetime.datetime.now()
-    
     image = pipe(class_labels=class_ids, num_inference_steps=25).images[0]
-    
-    paddle.device.synchronize()
-    endtime = datetime.datetime.now()
-    duringtime = endtime - starttime
-    
-    time_ms = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
-    sum_time+=time_ms
-print("The ave end to end time : ", sum_time / repeat_times, "ms")
-image.save("class_conditional_image_generation-dit_last_result.png")
+
+paddle.device.synchronize()    
+endtime = datetime.datetime.now()
+duringtime = endtime - starttime
+time_ms = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
+
+print("The ave end to end time : ", time_ms / repeat_times, "ms")
+image.save("class_conditional_image_generation-dit-result.png")
 
