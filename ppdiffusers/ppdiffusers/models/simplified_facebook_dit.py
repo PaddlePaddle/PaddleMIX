@@ -7,7 +7,6 @@ class Simplified_FacebookDIT(nn.Layer):
     def __init__(self, num_layers: int, dim: int, num_attention_heads: int, attention_head_dim: int):
         super().__init__()
         self.num_layers = num_layers
-        self.dtype = "float16"
         self.dim = dim
         self.num_attention_heads = num_attention_heads
         self.attention_head_dim = attention_head_dim
@@ -36,7 +35,7 @@ class Simplified_FacebookDIT(nn.Layer):
         self.ffn2 = nn.LayerList([nn.Linear(dim*4, dim) for i in range(self.num_layers)])
 
     @paddle.incubate.jit.inference(enable_new_ir=True, 
-                          cache_static_model=True,
+                          cache_static_model=False,
                           exp_enable_use_cutlass=True,
                           delete_pass_lists=["add_norm_fuse_pass"],
                         )
@@ -52,7 +51,7 @@ class Simplified_FacebookDIT(nn.Layer):
         emb = paddle.exp(exponent)
         emb = timesteps[:, None].cast("float32") * emb[None, :]
         emb = paddle.concat([paddle.cos(emb), paddle.sin(emb)], axis=-1)
-        common_emb = emb.cast(self.dtype)
+        common_emb = emb.cast(hidden_states.dtype)
         
         for i in range(self.num_layers):  
             emb = self.fcs0[i](common_emb)
