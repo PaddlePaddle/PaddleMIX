@@ -38,7 +38,6 @@ from .normalization import AdaLayerNormSingle
 import os
 
 
-
 @dataclass
 class Transformer2DModelOutput(BaseOutput):
     """
@@ -118,8 +117,8 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
         self.inner_dim = inner_dim = num_attention_heads * attention_head_dim
         self.data_format = data_format
 
-        self.Inference_Optimize = os.getenv('Inference_Optimize') == "True"
-        
+        self.inference_optimize = os.getenv('INFOPTIMIZE') == "True"
+
         conv_cls = nn.Conv2D if USE_PEFT_BACKEND else LoRACompatibleConv
         linear_cls = nn.Linear if USE_PEFT_BACKEND else LoRACompatibleLinear
 
@@ -219,14 +218,20 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
                 for d in range(num_layers)
             ]
         )
-        if self.Inference_Optimize:
-            self.simplified_facebookDIT = SimplifiedFacebookDIT(num_layers, inner_dim, num_attention_heads, attention_head_dim)
-            self.simplified_facebookDIT = paddle.incubate.jit.inference(self.simplified_facebookDIT,
-                                                                        enable_new_ir=True, 
-                                                                        cache_static_model=False,
-                                                                        exp_enable_use_cutlass=True,
-                                                                        delete_pass_lists=["add_norm_fuse_pass"],
-                                                                        )
+        if self.inference_optimize:
+            self.simplified_facebookDIT = SimplifiedFacebookDIT(
+                num_layers,
+                inner_dim,
+                num_attention_heads,
+                attention_head_dim
+            )
+            self.simplified_facebookDIT = paddle.incubate.jit.inference(
+                self.simplified_facebookDIT,
+                enable_new_ir=True,
+                cache_static_model=False,
+                exp_enable_use_cutlass=True,
+                delete_pass_lists=["add_norm_fuse_pass"],
+            )
 
         # 4. Define output layers
         self.out_channels = in_channels if out_channels is None else out_channels
@@ -264,7 +269,6 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
             self.caption_projection = CaptionProjection(in_features=caption_channels, hidden_size=inner_dim)
 
         self.gradient_checkpointing = False
-      
 
     def _set_gradient_checkpointing(self, module, value=False):
         if hasattr(module, "gradient_checkpointing"):
@@ -399,9 +403,9 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
             batch_size = hidden_states.shape[0]
             encoder_hidden_states = self.caption_projection(encoder_hidden_states)
             encoder_hidden_states = encoder_hidden_states.reshape([batch_size, -1, hidden_states.shape[-1]])
-        
-        if self.Inference_Optimize:
-            hidden_states =self.simplified_facebookDIT(hidden_states, timestep, class_labels)
+
+        if self.inference_optimize:
+            hidden_states = self.simplified_facebookDIT(hidden_states, timestep, class_labels)
         else:
             for block in self.transformer_blocks:
                 if self.gradient_checkpointing and not hidden_states.stop_gradient and not use_old_recompute():
@@ -503,7 +507,7 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
 
     @classmethod
     def custom_modify_weight(cls, state_dict):
-        if os.getenv('Inference_Optimize') != "True":
+        if os.getenv('INFOPTIMIZE') != "True":
             return
         map_from_my_dit = {}
         for i in range(28):
