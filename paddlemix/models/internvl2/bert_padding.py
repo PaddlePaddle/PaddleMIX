@@ -16,6 +16,8 @@
 import paddle
 import paddle.nn.functional as F
 from einops import rearrange, repeat
+from functools import reduce  
+import operator  
 
 
 class IndexFirstAxis(paddle.autograd.PyLayer):
@@ -24,26 +26,30 @@ class IndexFirstAxis(paddle.autograd.PyLayer):
     def forward(ctx, input, indices):
         ctx.save_for_backward(indices)
         assert input.ndim >= 2
-        ctx.first_axis_dim, other_shape = tuple(input.shape)[0], tuple(input
-            .shape)[1:]
-        second_dim = other_shape.size
-        return paddle.take_along_axis(arr=rearrange(input,
-            'b ... -> b (...)'), axis=0, indices=repeat(indices, 'z -> z d',
-            d=second_dim)).reshape(-1, *other_shape)
+        ctx.first_axis_dim, other_shape = input.shape[0], input.shape[1:]
+        second_dim = reduce(operator.mul, other_shape, 1)
+        return paddle.take_along_axis(
+            arr=rearrange(input, 'b ... -> b (...)'),
+            axis=0,
+            indices=repeat(indices, 'z -> z d', d=second_dim)
+        ).reshape([-1, *other_shape])
 
     @staticmethod
     def backward(ctx, grad_output):
         """Class Attribute: torch.autograd.function.FunctionCtx.saved_tensors, can not convert, please check whether it is torch.Tensor.*/torch.autograd.function.FunctionCtx.*/torch.distributions.Distribution.* and convert manually"""
         (indices,) = ctx.saved_tensor()
         assert grad_output.ndim >= 2
-        other_shape = tuple(grad_output.shape)[1:]
+        other_shape = grad_output.shape[1:]
         grad_output = rearrange(grad_output, 'b ... -> b (...)')
         grad_input = paddle.zeros(shape=[ctx.first_axis_dim, tuple(
             grad_output.shape)[1]], dtype=grad_output.dtype)
 
-        grad_input.put_along_axis_(axis=0, indices=repeat(indices,
-            'z -> z d', d=tuple(grad_output.shape)[1]), values=grad_output)
-        return grad_input.reshape(ctx.first_axis_dim, *other_shape), None
+        grad_input.put_along_axis_(
+            axis=0,
+            indices=repeat(indices, 'z -> z d', d=tuple(grad_output.shape)[1]),
+            values=grad_output,
+        )
+        return grad_input.reshape([ctx.first_axis_dim, *other_shape]), None
 
 
 index_first_axis = IndexFirstAxis.apply
@@ -86,7 +92,7 @@ def unpad_input(hidden_states, attention_mask):
     seqlens_in_batch = paddle.sum(attention_mask, axis=-1, dtype="int32")
     indices = paddle.nonzero(attention_mask.flatten(), as_tuple=False).flatten()
     max_seqlen_in_batch = paddle.max(seqlens_in_batch).item()
-    cu_seqlens = F.pad(paddle.cumsum(seqlens_in_batch, axis=0, dtype="int32"), [1, 0])
+    cu_seqlens = F.pad(paddle.cumsum(seqlens_in_batch, axis=0), [1, 0])
 
     return (
         index_first_axis(rearrange(hidden_states, "b s ... -> (b s) ..."), indices),

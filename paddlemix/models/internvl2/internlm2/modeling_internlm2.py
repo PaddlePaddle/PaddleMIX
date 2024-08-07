@@ -54,13 +54,14 @@ except:
     flash_attn_func, flash_attn_varlen_func = None, None
     print("has_flash_attn is False.")
     has_flash_attn = False
+has_flash_attn = False # TODO: batch_chat
 
 
 def _get_unpad_data(attention_mask):
     seqlens_in_batch = attention_mask.sum(axis=-1, dtype="int32")
     indices = paddle.nonzero(attention_mask.flatten(), as_tuple=False).flatten()
     max_seqlen_in_batch = seqlens_in_batch.max().item()
-    cu_seqlens = F.pad(paddle.cumsum(seqlens_in_batch, axis=0, dtype=paddle.int32), (1, 0))
+    cu_seqlens = F.pad(paddle.cumsum(seqlens_in_batch, axis=0), (1, 0))
     return (
         indices,
         cu_seqlens,
@@ -483,7 +484,7 @@ class InternLM2FlashAttention2(InternLM2Attention):
         # return tuple 0 is output, 1 is softmax return
         attn_output = self._flash_attention_forward(
             query_states, key_states, value_states, attention_mask, q_len
-        )[0]
+        )
         attn_output = attn_output.reshape([bsz, q_len, self.hidden_size])
         attn_output = self.wo(attn_output)
 
@@ -516,8 +517,13 @@ class InternLM2FlashAttention2(InternLM2Attention):
         """
         # Contains at least one padding token in the sequence
         causal = self.is_causal and query_length != 1
+
+        head_dim = query_states.shape[-1]
+        softmax_scale = head_dim**-0.5 # TODO: 需要手动加上
+
         if attention_mask is not None:
-            batch_size = query_states.shape[0]
+            batch_size = query_states.shape[0] # [2, 3383, 16, 128]
+
             query_states, key_states, value_states, indices_q, cu_seq_lens, max_seq_lens = self._unpad_input(
                 query_states, key_states, value_states, attention_mask, query_length
             )
@@ -525,24 +531,24 @@ class InternLM2FlashAttention2(InternLM2Attention):
             cu_seqlens_q, cu_seqlens_k = cu_seq_lens
             max_seqlen_in_batch_q, max_seqlen_in_batch_k = max_seq_lens
 
-            attn_output_unpad = flash_attn_varlen_func(
-                query_states,
-                key_states,
-                value_states,
+            attn_output_unpad = flash_attn_varlen_func( # TODO: flash_attn_unpadded 
+                query_states, # [5998, 16, 128]
+                key_states, # [5998, 8, 128]
+                value_states, # [5998, 8, 128]
                 cu_seqlens_q=cu_seqlens_q,
                 cu_seqlens_k=cu_seqlens_k,
                 max_seqlen_q=max_seqlen_in_batch_q,
                 max_seqlen_k=max_seqlen_in_batch_k,
-                dropout=dropout,
                 scale=softmax_scale, # not softmax_scale=
+                dropout=dropout,
                 causal=causal,
-            )
+            )[0]
 
             attn_output = pad_input(attn_output_unpad, indices_q, batch_size, query_length)
         else:
             attn_output = flash_attn_func(
                 query_states, key_states, value_states, dropout, causal=causal, # no softmax_scale=
-            )
+            )[0]
 
         return attn_output
 

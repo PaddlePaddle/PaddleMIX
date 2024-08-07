@@ -16,18 +16,30 @@
 ## 3. 快速开始
 完成环境准备后，我们目前提供单轮对话方式使用：
 
-
-## a. 单轮预测
+## 3.1. 图片预测
 ```bash
 python paddlemix/examples/internvl2/chat_demo.py \
-    --model_name_or_path "models/InternVL2-8B" \
+    --model_name_or_path "OpenGVLab/InternVL2-8B" \
     --image_path 'path/to/image.jpg' \
     --text "Please describe this image in detail."
 ```
 可配置参数说明：
-  * `model_name_or_path`: 指定 internvl2 的模型名字或权重路径以及tokenizer, processor 组件，默认 OpenGVLab/InternVL2-8B
+  * `model_name_or_path`: 指定 internvl2 的模型名字或权重路径以及tokenizer组件，默认 OpenGVLab/InternVL2-8B
   * `image_path`: 指定图片路径
   * `text`: 用户指令, 例如 "Please describe this image in detail."
+
+## 3.2. 视频预测
+```bash
+python paddlemix/examples/internvl2/chat_demo_video.py \
+    --model_name_or_path "OpenGVLab/InternVL2-8B" \
+    --video_path 'path/to/video.mp4' \
+    --text "Please describe this video in detail."
+```
+可配置参数说明：
+  * `model_name_or_path`: 指定 internvl2 的模型名字或权重路径以及tokenizer组件，默认 OpenGVLab/InternVL2-8B
+  * `video_path`: 指定视频路径
+  * `text`: 用户指令, 例如 "Please describe this video in detail."
+
 
 ## 4 模型微调
 我们提供 `supervised_finetune.py` 脚本，用于模型微调。模型微调支持全参数微调，以及lora微调。
@@ -76,7 +88,7 @@ python paddlemix/examples/internvl2/chat_demo.py \
 
 训练命令：
 ```bash
-paddlemix/tools/supervised_finetune.py paddlemix/config/internvl2/sft_argument.json
+python paddlemix/tools/supervised_finetune.py paddlemix/config/internvl2/sft_argument.json
 ```
 
 参数配置示例：

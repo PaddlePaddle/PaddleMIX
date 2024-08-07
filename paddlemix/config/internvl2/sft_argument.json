@@ -1,13 +1,12 @@
 {
-    "model_name_or_path": "/root/model/InternVL2-8B",
-    "freeze_exclude": ["*vit*", "*transformer"],
+    "model_name_or_path": "OpenGVLab/InternVL2-8B",
     "dataset": {
-        "train":[{"name": "chatml_dataset", "data_files": "/root/datasets/train.json", "chat_template":"/root/datasets/chat_template.json"}],
-        "eval": [{"name": "chatml_dataset", "data_files": "/root/datasets/val.json", "chat_template":"/root/datasets/chat_template.json"}]
+        "train":[{"name": "chatml_dataset", "data_files": "train.json", "chat_template":"chat_template.json"}],
+        "eval": [{"name": "chatml_dataset", "data_files": "val.json", "chat_template":"chat_template.json"}]
     },
-    "use_flash_attention": true,
+    "use_flash_attention": false,
     "mixtoken": false,
-    "output_dir": "./checkpoints/internvl_sft_ckpts",
+    "output_dir": "./checkpoints/internvl2_sft_ckpts",
     "overwrite_output_dir": true,
     "per_device_train_batch_size": 1,
     "per_device_eval_batch_size": 1,
@@ -25,7 +24,7 @@
     "save_strategy": "epoch",
     "max_length": 4096,
     "bf16": true,
-    "fp16_opt_level": "O1",
+    "fp16_opt_level": "O2",
     "do_train": true,
     "do_eval": false,
     "disable_tqdm": true,

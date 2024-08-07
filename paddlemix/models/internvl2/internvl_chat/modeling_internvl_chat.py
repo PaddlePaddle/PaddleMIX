@@ -18,6 +18,7 @@
 # --------------------------------------------------------
 import warnings
 from typing import List, Optional, Tuple, Union
+import numpy as np
 
 import paddle
 from paddle import nn
@@ -30,15 +31,18 @@ from ..phi3.modeling_phi3 import Phi3ForCausalLM
 from paddlenlp.generation import GenerationConfig
 from paddlenlp.transformers import LlamaForCausalLM, Qwen2ForCausalLM
 from paddlenlp.transformers.model_outputs import CausalLMOutputWithPast
-from paddlenlp.transformers.model_utils import PretrainedModel
-
+from paddlemix.models.model_utils import MixPretrainedModel
 from .configuration_internvl_chat import InternVLChatConfig
 from .modeling_intern_vit import InternVisionModel
 
 from paddlemix.utils.log import logger
 
+__all__ = [
+    "InternVLChatModel",
+]
 
-class InternVLChatModel(PretrainedModel):
+
+class InternVLChatModel(MixPretrainedModel):
     config_class = InternVLChatConfig
     main_input_name = 'pixel_values'
     _no_split_modules = ['InternVisionModel', 'LlamaDecoderLayer', 'InternLM2DecoderLayer',
@@ -69,11 +73,11 @@ class InternVLChatModel(PretrainedModel):
             if config.llm_config.architectures[0] == 'LlamaForCausalLM':
                 self.language_model = LlamaForCausalLM(config.llm_config)
             elif config.llm_config.architectures[0] == 'InternLM2ForCausalLM':
-                self.language_model = InternLM2ForCausalLM(config.llm_config)
+                self.language_model = InternLM2ForCausalLM(config.llm_config) # [2048, 92553]
             elif config.llm_config.architectures[0] == 'Phi3ForCausalLM':
                 self.language_model = Phi3ForCausalLM(config.llm_config)
             elif config.llm_config.architectures[0] == 'Qwen2ForCausalLM':
-                self.language_model = Qwen2ForCausalLM(config.llm_config)
+                self.language_model = Qwen2ForCausalLM(config.llm_config) # [151655, 896]
             else:
                 raise NotImplementedError(f'{config.llm_config.architectures[0]} is not implemented.')
 
@@ -273,11 +277,12 @@ class InternVLChatModel(PretrainedModel):
             queries.append(query)
 
         tokenizer.padding_side = 'left'
-        model_inputs = tokenizer(queries, return_tensors='pd', padding=True)
+        model_inputs = tokenizer(queries, return_tensors='pd', padding=True) # padding
         input_ids = model_inputs['input_ids']
         attention_mask = model_inputs['attention_mask']
         eos_token_id = tokenizer.convert_tokens_to_ids(template.sep)
         generation_config['eos_token_id'] = eos_token_id
+
         generation_output = self.generate(
             pixel_values=pixel_values,
             input_ids=input_ids,

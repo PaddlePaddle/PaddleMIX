@@ -29,7 +29,6 @@ from paddlenlp.transformers.model_outputs import (
     BaseModelOutput,
     BaseModelOutputWithPooling,
 )
-#from transformers.modeling_utils import PreTrainedModel
 from paddlemix.models.model_utils import MixPretrainedModel
 from .configuration_intern_vit import InternVisionConfig
 from ..bert_padding import pad_input, unpad_input
@@ -44,6 +43,10 @@ except:
 
 from ppdiffusers.utils import logging
 logger = logging.get_logger(__name__)
+
+__all__ = [
+    "InternVisionModel",
+]
 
 
 def drop_path(x, drop_prob: float = 0.0, training: bool = False, scale_by_keep: bool = True):
@@ -445,7 +448,6 @@ class InternVisionEncoder(nn.Layer):
         )
 
 
-#class InternVisionModel(PreTrainedModel):
 class InternVisionModel(MixPretrainedModel):
     main_input_name = 'pixel_values'
     config_class = InternVisionConfig
