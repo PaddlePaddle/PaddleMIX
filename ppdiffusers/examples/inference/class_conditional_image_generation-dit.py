@@ -17,11 +17,7 @@ import paddle
 from paddlenlp.trainer import set_seed
 from ppdiffusers import DDIMScheduler, DiTPipeline
 
-Inference_Optimize = True
-if Inference_Optimize:
-    os.environ["Inference_Optimize"] = "True"
-else: 
-    pass
+os.environ["Inference_Optimize"] = "True"
     
 dtype = paddle.float16
 pipe = DiTPipeline.from_pretrained("facebook/DiT-XL-2-256", paddle_dtype=dtype)

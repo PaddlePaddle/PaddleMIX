@@ -118,7 +118,7 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
         self.inner_dim = inner_dim = num_attention_heads * attention_head_dim
         self.data_format = data_format
 
-        self.Inference_Optimize = bool(os.getenv('Inference_Optimize'))
+        self.Inference_Optimize = os.getenv('Inference_Optimize') == "True"
         
         conv_cls = nn.Conv2D if USE_PEFT_BACKEND else LoRACompatibleConv
         linear_cls = nn.Linear if USE_PEFT_BACKEND else LoRACompatibleLinear
@@ -497,7 +497,7 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
 
     @classmethod
     def custom_modify_weight(cls, state_dict):
-        if not os.getenv('Inference_Optimize'):
+        if os.getenv('Inference_Optimize') != "True":
             return
         map_from_my_dit = {}
         for i in range(28):
