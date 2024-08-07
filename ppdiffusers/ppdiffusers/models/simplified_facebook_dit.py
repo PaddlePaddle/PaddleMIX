@@ -17,24 +17,24 @@ class SimplifiedFacebookDIT(nn.Layer):
         self.LabelEmbedding_num_hidden_size = 1152
         
         self.fcs0 = nn.LayerList([nn.Linear(self.timestep_embedder_in_channels, 
-                                            self.timestep_embedder_time_embed_dim) for i in range(self.num_layers)])
+                                            self.timestep_embedder_time_embed_dim) for i in range(num_layers)])
         
         self.fcs1 = nn.LayerList([nn.Linear(self.timestep_embedder_time_embed_dim,
-                                            self.timestep_embedder_time_embed_dim_out) for i in range(self.num_layers)])
+                                            self.timestep_embedder_time_embed_dim_out) for i in range(num_layers)])
         
         self.fcs2 = nn.LayerList([nn.Linear(self.timestep_embedder_time_embed_dim,
-                                            6 * self.timestep_embedder_time_embed_dim) for i in range(self.num_layers)])
+                                            6 * self.timestep_embedder_time_embed_dim) for i in range(num_layers)])
         
         self.embs = nn.LayerList([nn.Embedding(self.LabelEmbedding_num_classes, 
-                                               self.LabelEmbedding_num_hidden_size) for i in range(self.num_layers)])
+                                               self.LabelEmbedding_num_hidden_size) for i in range(num_layers)])
         
 
-        self.q = nn.LayerList([nn.Linear(dim, dim ) for i in range(self.num_layers)])
-        self.k = nn.LayerList([nn.Linear(dim, dim ) for i in range(self.num_layers)])
-        self.v = nn.LayerList([nn.Linear(dim, dim ) for i in range(self.num_layers)])
-        self.out_proj = nn.LayerList([nn.Linear(dim, dim) for i in range(self.num_layers)])
-        self.ffn1 = nn.LayerList([nn.Linear(dim, dim*4) for i in range(self.num_layers)])
-        self.ffn2 = nn.LayerList([nn.Linear(dim*4, dim) for i in range(self.num_layers)])
+        self.q = nn.LayerList([nn.Linear(dim, dim ) for i in range(num_layers)])
+        self.k = nn.LayerList([nn.Linear(dim, dim ) for i in range(num_layers)])
+        self.v = nn.LayerList([nn.Linear(dim, dim ) for i in range(num_layers)])
+        self.out_proj = nn.LayerList([nn.Linear(dim, dim) for i in range(num_layers)])
+        self.ffn1 = nn.LayerList([nn.Linear(dim, dim*4) for i in range(num_layers)])
+        self.ffn2 = nn.LayerList([nn.Linear(dim*4, dim) for i in range(num_layers)])
 
     @paddle.incubate.jit.inference(enable_new_ir=True, 
                           cache_static_model=False,
