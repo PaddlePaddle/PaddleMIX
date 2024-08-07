@@ -21,11 +21,15 @@ LLaVA-NeXT-Interleave 可以在不同的多图像基准测试中取得与之前�
 ```bash
 # llava
 python paddlemix/examples/llava_next/run_siglip_encoder_predict.py  \
---model-path "paddlemix/llava_next/llava-next-interleave-qwen-siglip-encoder-7b" \
+--model-path "paddlemix/llava_next/llava-next-interleave-qwen-7b" \
 --image-file "https://bj.bcebos.com/v1/paddlenlp/models/community/Llava-Next/twitter3.jpeg https://bj.bcebos.com/v1/paddlenlp/models/community/Llava-Next/twitter4.jpeg" \
 ```
 可配置参数说明：
-  * `model-path`: 指定llava系列的模型名字或权重路径 ，支持 'paddlemix/llava_next/llava-next-interleave-qwen-7b','paddlemix/llava_next/llava-next-interleave-qwen-7b-dpo','paddlemix/llava_next/llava-next-interleave-qwen-0.5b'
+  * `model-path`: 指定llava系列的模型名字或权重路径 ，支持 
+  - paddlemix/llava_next/llava-next-interleave-qwen-7b
+  - paddlemix/llava_next/llava-next-interleave-qwen-7b-dpo
+  - paddlemix/llava_next/llava-next-interleave-qwen-0.5b
+  - paddlemix/llava_next/llava-next-interleave-qwen-clip-encoder-7b
   * `image-flie` :输入图片路径或url，默认None。
 
 
