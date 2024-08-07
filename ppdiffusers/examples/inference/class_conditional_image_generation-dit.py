@@ -13,8 +13,10 @@
 # limitations under the License.
 
 import os
+
 import paddle
 from paddlenlp.trainer import set_seed
+
 from ppdiffusers import DDIMScheduler, DiTPipeline
 
 os.environ["INFOPTIMIZE"] = "False"
@@ -26,7 +28,6 @@ set_seed(42)
 
 words = ["golden retriever"]  # class_ids [207]
 class_ids = pipe.get_label_ids(words)
-
 
 image = pipe(class_labels=class_ids, num_inference_steps=25).images[0]
 image.save("class_conditional_image_generation-dit-result.png")
