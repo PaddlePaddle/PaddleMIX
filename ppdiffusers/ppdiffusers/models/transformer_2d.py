@@ -220,7 +220,7 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
             ]
         )
         if self.Inference_Optimize:
-           self.simplified_facebookDIT = SimplifiedFacebookDIT(num_layers, inner_dim, num_attention_heads, attention_head_dim)
+            self.simplified_facebookDIT = SimplifiedFacebookDIT(num_layers, inner_dim, num_attention_heads, attention_head_dim)
 
         # 4. Define output layers
         self.out_channels = in_channels if out_channels is None else out_channels
