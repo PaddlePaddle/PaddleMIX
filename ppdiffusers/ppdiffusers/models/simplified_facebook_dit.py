@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import math
+import os
 
 import paddle
 import paddle.nn.functional as F
@@ -66,6 +67,8 @@ class SimplifiedFacebookDIT(nn.Layer):
         self.out_proj = nn.LayerList([nn.Linear(dim, dim) for i in range(num_layers)])
         self.ffn1 = nn.LayerList([nn.Linear(dim, dim * 4) for i in range(num_layers)])
         self.ffn2 = nn.LayerList([nn.Linear(dim * 4, dim) for i in range(num_layers)])
+        self.norm = nn.LayerNorm(1152, epsilon=1e-06, weight_attr=False, bias_attr=False)
+        self.norm1 = nn.LayerNorm(1152, epsilon=1e-05, weight_attr=False, bias_attr=False)
 
     def forward(self, hidden_states, timesteps, class_labels):
 
@@ -89,9 +92,19 @@ class SimplifiedFacebookDIT(nn.Layer):
             emb = F.silu(emb)
             emb = self.fcs2[i](emb)
             shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = emb.chunk(6, axis=1)
-            import paddlemix
 
-            norm_hidden_states = paddlemix.triton_ops.adaptive_layer_norm(hidden_states, scale_msa, shift_msa)
+            if os.getenv("INFERENCE_OPTIMIZE_TRITON_AN"):
+                import paddlemix
+
+                norm_hidden_states = paddlemix.triton_ops.adaptive_layer_norm(
+                    hidden_states, scale_msa, shift_msa, epsilon=1e-06
+                )
+            else:
+                norm_hidden_states = self.norm(
+                    hidden_states,
+                )
+                norm_hidden_states = norm_hidden_states * (1 + scale_msa[:, None]) + shift_msa[:, None]
+
             q = self.q[i](norm_hidden_states).reshape([0, 0, self.heads_num, self.head_dim])
             k = self.k[i](norm_hidden_states).reshape([0, 0, self.heads_num, self.head_dim])
             v = self.v[i](norm_hidden_states).reshape([0, 0, self.heads_num, self.head_dim])
@@ -102,9 +115,21 @@ class SimplifiedFacebookDIT(nn.Layer):
             )
             norm_hidden_states = self.out_proj[i](norm_hidden_states)
 
-            hidden_states, norm_hidden_states = paddlemix.triton_ops.fused_adaLN_scale_residual(
-                hidden_states, norm_hidden_states, gate_msa, scale_mlp, shift_mlp
-            )
+            if os.getenv("INFERENCE_OPTIMIZE_TRITON_ASR"):
+                import paddlemix
+
+                hidden_states, norm_hidden_states = paddlemix.triton_ops.fused_adaLN_scale_residual(
+                    hidden_states, norm_hidden_states, gate_msa, scale_mlp, shift_mlp, epsilon=1e-05
+                )
+            else:
+                hidden_states = hidden_states + norm_hidden_states * gate_msa.reshape(
+                    [norm_hidden_states.shape[0], 1, self.dim]
+                )
+                norm_hidden_states = self.norm1(
+                    hidden_states,
+                )
+                norm_hidden_states = norm_hidden_states * (1 + scale_mlp[:, None]) + shift_mlp[:, None]
+
             norm_hidden_states = self.ffn1[i](norm_hidden_states)
             norm_hidden_states = F.gelu(norm_hidden_states, approximate=True)
             norm_hidden_states = self.ffn2[i](norm_hidden_states)

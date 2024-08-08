@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import argparse
 import os
 
 import paddle
@@ -19,7 +20,46 @@ from paddlenlp.trainer import set_seed
 
 from ppdiffusers import DDIMScheduler, DiTPipeline
 
-os.environ["INFOPTIMIZE"] = "False"
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description=" Use PaddleMIX to accelerate the Diffusion Transformer image generation model."
+    )
+    parser.add_argument(
+        "--benchmark",
+        type=(lambda x: str(x).lower() in ["true", "1", "yes"]),
+        default=False,
+        help="if benchmark is set to True, measure inference performance",
+    ),
+    parser.add_argument(
+        "--inference_optimize",
+        type=(lambda x: str(x).lower() in ["true", "1", "yes"]),
+        default=False,
+        help="If inference_optimize is set to True, all optimizations except Triton are enabled.",
+    ),
+    parser.add_argument(
+        "--inference_optimize_triton_an",
+        type=(lambda x: str(x).lower() in ["true", "1", "yes"]),
+        default=True,
+        help="If inference_optimize_triton_an is set to True, the Triton optimization operator 'adaptive_layer_norm' is enabled.",
+    ),
+    parser.add_argument(
+        "--inference_optimize_triton_asr",
+        type=(lambda x: str(x).lower() in ["true", "1", "yes"]),
+        default=True,
+        help="If inference_optimize_triton_an is set to True, the Triton optimization operator 'fused_adaLN_scale_residual' is enabled.",
+    )
+    return parser.parse_args()
+
+
+args = parse_args()
+
+if args.inference_optimize:
+    os.environ["INFERENCE_OPTIMIZE"] = "True"
+if args.inference_optimize_triton_an:
+    os.environ["INFERENCE_OPTIMIZE_TRITON_AN"] = "True"
+if args.inference_optimize_triton_asr:
+    os.environ["INFERENCE_OPTIMIZE_TRITON_ASR"] = "True"
 
 dtype = paddle.float16
 pipe = DiTPipeline.from_pretrained("facebook/DiT-XL-2-256", paddle_dtype=dtype)
@@ -28,6 +68,22 @@ set_seed(42)
 
 words = ["golden retriever"]  # class_ids [207]
 class_ids = pipe.get_label_ids(words)
-
 image = pipe(class_labels=class_ids, num_inference_steps=25).images[0]
+
+if args.benchmark:
+    import datetime
+
+    # warmup
+    for i in range(5):
+        image = pipe(class_labels=class_ids, num_inference_steps=25).images[0]
+    repeat_times = 5
+    paddle.device.synchronize()
+    starttime = datetime.datetime.now()
+    for i in range(repeat_times):
+        image = pipe(class_labels=class_ids, num_inference_steps=25).images[0]
+    paddle.device.synchronize()
+    endtime = datetime.datetime.now()
+    duringtime = endtime - starttime
+    time_ms = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
+    print("The ave end to end time : ", time_ms / repeat_times, "ms")
 image.save("class_conditional_image_generation-dit-result.png")
