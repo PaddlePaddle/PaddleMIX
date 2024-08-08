@@ -407,9 +407,7 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
             encoder_hidden_states = encoder_hidden_states.reshape([batch_size, -1, hidden_states.shape[-1]])
 
         if self.inference_optimize:
-            paddle.device.synchronize()
             hidden_states = self.simplified_facebookdit(hidden_states, timestep, class_labels)
-            paddle.device.synchronize()
         else:
             for block in self.transformer_blocks:
                 if self.gradient_checkpointing and not hidden_states.stop_gradient and not use_old_recompute():
