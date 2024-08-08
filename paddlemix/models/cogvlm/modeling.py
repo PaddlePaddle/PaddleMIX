@@ -247,7 +247,6 @@ class VisionExpertAttention(paddle.nn.Layer):
         shape = list(hidden_states.shape)
         shape[-1] = shape[-1] * 3
         mixed_raw_layer = paddle.empty(shape=shape, dtype=hidden_states.dtype)
-        # todo: When hidden_states[vision_token_mask].shape is [0, d], pd will occur error in linear forward func.
         if hidden_states[vision_token_mask].shape[0] != 0:
             mixed_raw_layer[vision_token_mask] = self.vision_expert_query_key_value(hidden_states[vision_token_mask])
         if hidden_states[language_token_mask].shape[0] != 0:
@@ -397,7 +396,6 @@ class CogModelDecoderLayer(paddle.nn.Layer):
             token_type_ids=token_type_ids,
             position_ids=position_ids,
             attention_mask=attention_mask,
-            # past_key_value=past_key_value[:2] if past_key_value is not None and self.model_type == 'cogagent' else None,
             past_key_value=None if past_key_value is None else past_key_value[:2],
             output_attentions=output_attentions,
             use_cache=use_cache,
