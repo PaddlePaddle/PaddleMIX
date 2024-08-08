@@ -40,7 +40,7 @@ TOKENIZER_PATH = MODEL_PATH
 
 tokenizer = AutoTokenizerMIX.from_pretrained(TOKENIZER_PATH)
 
-data_type = "float32"
+data_type = "float16"
 
 model = AutoModelMIX.from_pretrained(
     MODEL_PATH,
@@ -91,7 +91,6 @@ while True:
         gen_kwargs = {"max_new_tokens": 2048, "do_sample": False}
         with paddle.no_grad():
             outputs, _ = model.generate(**inputs, **gen_kwargs)
-            outputs = outputs[:, inputs["input_ids"].shape[1] :]
             response = tokenizer.decode(outputs[0])
             response = response.split("</s>")[0]
             print("\nCog:", response)
