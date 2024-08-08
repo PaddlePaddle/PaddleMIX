@@ -535,7 +535,7 @@ class DiTLLaMA2DModel(ModelMixin, ConfigMixin):
         t = paddle.arange(end=end)
         input_0, vec2_0 = TypePromote(t, freqs)
         freqs = paddle.outer(input_0, vec2_0).cast("float32")
-        if bool(os.getenv("INFOPTIMIZE")):
+        if os.getenv("INFOPTIMIZE"):
             freqs_cis = paddle.stack(
                 [paddle.cos(freqs), -paddle.sin(freqs), paddle.sin(freqs), paddle.cos(freqs)], axis=-1
             )
