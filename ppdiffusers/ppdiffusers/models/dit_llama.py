@@ -468,8 +468,8 @@ class DiTLLaMA2DModel(ModelMixin, ConfigMixin):
         self.final_layer = FinalLayer(dim, patch_size, self.out_channels)
         self.freqs_cis = self.precompute_freqs_cis(dim // num_attention_heads, 4096)
 
-        self.INFOPTIMIZE = os.getenv("INFOPTIMIZE") == "True"
-        if self.INFOPTIMIZE:
+        self.INFERENCE_OPTIMIZE = os.getenv("INFERENCE_OPTIMIZE") == "True"
+        if self.INFERENCE_OPTIMIZE:
             self.simplified_dit_llama = SimplifiedDiTLLaMA2DModel(
                 num_layers, dim, num_attention_heads, multiple_of, mlp_ratio, norm_eps
             )
@@ -535,7 +535,7 @@ class DiTLLaMA2DModel(ModelMixin, ConfigMixin):
         t = paddle.arange(end=end)
         input_0, vec2_0 = TypePromote(t, freqs)
         freqs = paddle.outer(input_0, vec2_0).cast("float32")
-        if os.getenv("INFOPTIMIZE"):
+        if os.getenv("INFERENCE_OPTIMIZE") == "True":
             freqs_cis = paddle.stack(
                 [paddle.cos(freqs), -paddle.sin(freqs), paddle.sin(freqs), paddle.cos(freqs)], axis=-1
             )
@@ -571,7 +571,7 @@ class DiTLLaMA2DModel(ModelMixin, ConfigMixin):
         adaln_input = t + y
 
         # 2. Blocks
-        if self.INFOPTIMIZE:
+        if self.INFERENCE_OPTIMIZE:
             x = self.simplified_dit_llama(x, self.freqs_cis[: x.shape[1]], adaln_input)
         else:
             for i, layer in enumerate(self.layers):
@@ -595,7 +595,7 @@ class DiTLLaMA2DModel(ModelMixin, ConfigMixin):
 
     @classmethod
     def custom_modify_weight(cls, state_dict):
-        if os.getenv("INFOPTIMIZE"):
+        if os.getenv("INFERENCE_OPTIMIZE") == "True":
             map_from_my_dit = {}
             for i in range(32):
                 map_from_my_dit[
