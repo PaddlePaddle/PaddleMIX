@@ -118,37 +118,59 @@ class SimplifiedDiTLLaMA2DModel(nn.Layer):
     def forward(self, x, freqs_cis, adaln_input):
         freqs_cis = paddle.expand(freqs_cis, [-1, self.n_heads, -1, -1])
         adaln_input = F.silu(adaln_input)
+        prev_gate_mlp = None
+
+        from paddlemix.triton_ops import (
+            adaptive_layer_norm,
+            fused_adaLN_scale_residual,
+            fused_rotary_emb,
+        )
+
         for i in range(self.num_layers):
             shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.adaLN_modulations[i](
                 adaln_input
             ).chunk(6, axis=1)
-            # AdaLN
-            import paddlemix
-
-            attn_in = paddlemix.triton_ops.adaptive_layer_norm(
-                x, scale_msa, shift_msa, weight=self.attention_norms[i].weight, epsilon=self.norm_eps
-            )
+            # (Fused_)adaLN
+            if i == 0:
+                attn_in = adaptive_layer_norm(
+                    x, scale_msa, shift_msa, weight=self.attention_norms[i].weight, epsilon=self.norm_eps
+                )
+            else:
+                x, attn_in = fused_adaLN_scale_residual(
+                    resi_out,
+                    ffn_out,
+                    prev_gate_mlp,
+                    scale_msa,
+                    shift_msa,
+                    weight=self.attention_norms[i].weight,
+                    epsilon=self.norm_eps,
+                )
             # Attention
             xq, xk, xv = self.wqs[i](attn_in), self.wks[i](attn_in), self.wvs[i](attn_in)
-            qkv_out = paddle.concat([xq, xk, xv], axis=-1)
-            xq, xk, xv = paddlemix.triton_ops.fused_rotary_emb(
-                qkv_out,
+            xq, xk = fused_rotary_emb(
+                xq,
+                xk,
                 self.q_norms[i].weight,
                 self.q_norms[i].bias,
                 self.k_norms[i].weight,
                 self.k_norms[i].bias,
                 freqs_cis,
+                self.norm_eps,
             )
+            xv = xv.reshape([xv.shape[0], xv.shape[1], self.n_heads, self.head_dim])
             attn_out, _ = flash_attention(xq, xk, xv, dropout=0.0, causal=False, return_softmax=False)
             attn_out = attn_out.flatten(start_axis=-2)
             attn_out = self.wos[i](attn_out)
             # Fused_adaLN
-            resi_out, adaLN_out = paddlemix.triton_ops.fused_adaLN_scale_residual(
+            resi_out, adaLN_out = fused_adaLN_scale_residual(
                 x, attn_out, gate_msa, scale_mlp, shift_mlp, weight=self.ffn_norms[i].weight, epsilon=self.norm_eps
             )
             # FFN
             ffn_out = self.w13s[i](adaLN_out)
             ffn_out = self.compute_activation(ffn_out)
             ffn_out = self.w2s[i](ffn_out)
-            x = resi_out + gate_mlp.unsqueeze(1) * ffn_out
+            #
+            prev_gate_mlp = gate_mlp
+
+        x = resi_out + prev_gate_mlp.unsqueeze(1) * ffn_out
         return x

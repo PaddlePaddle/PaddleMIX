@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import math
+import os
 from typing import Optional
 
 import paddle
@@ -23,10 +24,9 @@ from paddle.nn.functional.flash_attention import flash_attention
 from ..configuration_utils import ConfigMixin, register_to_config
 from .embeddings import LabelEmbedding
 from .modeling_utils import ModelMixin
+from .simplified_dit_llama import SimplifiedDiTLLaMA2DModel
 from .transformer_2d import Transformer2DModelOutput
 
-from .simplified_dit_llama import SimplifiedDiTLLaMA2DModel
-import os
 
 def TypePromote(x, y):
     TYPE_PROMOTE_DICT = {
@@ -467,13 +467,13 @@ class DiTLLaMA2DModel(ModelMixin, ConfigMixin):
         # 3. Define output layers
         self.final_layer = FinalLayer(dim, patch_size, self.out_channels)
         self.freqs_cis = self.precompute_freqs_cis(dim // num_attention_heads, 4096)
-        
-        self.Inference_Optimize = bool(os.getenv('Inference_Optimize'))
-        if self.Inference_Optimize:
-            self.simplified_dit_llama = SimplifiedDiTLLaMA2DModel(num_layers, dim, num_attention_heads, 
-                                                                  multiple_of, mlp_ratio, norm_eps)
+
+        self.INFOPTIMIZE = os.getenv("INFOPTIMIZE") == "True"
+        if self.INFOPTIMIZE:
+            self.simplified_dit_llama = SimplifiedDiTLLaMA2DModel(
+                num_layers, dim, num_attention_heads, multiple_of, mlp_ratio, norm_eps
+            )
             del self.layers
-            
 
     def _set_gradient_checkpointing(self, module, value=False):
         if hasattr(module, "gradient_checkpointing"):
@@ -535,12 +535,10 @@ class DiTLLaMA2DModel(ModelMixin, ConfigMixin):
         t = paddle.arange(end=end)
         input_0, vec2_0 = TypePromote(t, freqs)
         freqs = paddle.outer(input_0, vec2_0).cast("float32")
-        if bool(os.getenv('Inference_Optimize')):
-            freqs_cis = paddle.stack([  
-                paddle.cos(freqs),  
-                -paddle.sin(freqs),  
-                paddle.sin(freqs),  
-                paddle.cos(freqs)], axis=-1) 
+        if bool(os.getenv("INFOPTIMIZE")):
+            freqs_cis = paddle.stack(
+                [paddle.cos(freqs), -paddle.sin(freqs), paddle.sin(freqs), paddle.cos(freqs)], axis=-1
+            )
             freqs_cis = freqs_cis.reshape([freqs_cis.shape[0], -1, 2]).unsqueeze(1)
         else:
             freqs_cis = paddle.complex(
@@ -573,7 +571,7 @@ class DiTLLaMA2DModel(ModelMixin, ConfigMixin):
         adaln_input = t + y
 
         # 2. Blocks
-        if self.Inference_Optimize:
+        if self.INFOPTIMIZE:
             x = self.simplified_dit_llama(x, self.freqs_cis[: x.shape[1]], adaln_input)
         else:
             for i, layer in enumerate(self.layers):
@@ -597,32 +595,37 @@ class DiTLLaMA2DModel(ModelMixin, ConfigMixin):
 
     @classmethod
     def custom_modify_weight(cls, state_dict):
-        if os.getenv('Inference_Optimize'):
+        if os.getenv("INFOPTIMIZE"):
             map_from_my_dit = {}
             for i in range(32):
-                map_from_my_dit[f'simplified_dit_llama.adaLN_modulations.{i}.weight'] = f'layers.{i}.adaLN_modulation.1.weight'
-                map_from_my_dit[f'simplified_dit_llama.adaLN_modulations.{i}.bias'] = f'layers.{i}.adaLN_modulation.1.bias'
-                
-                map_from_my_dit[f'simplified_dit_llama.attention_norms.{i}.weight'] = f'layers.{i}.attention_norm.weight'
-                
-                map_from_my_dit[f'simplified_dit_llama.wqs.{i}.weight'] = f'layers.{i}.attention.wq.weight'
-                map_from_my_dit[f'simplified_dit_llama.wks.{i}.weight'] = f'layers.{i}.attention.wk.weight'
-                map_from_my_dit[f'simplified_dit_llama.wvs.{i}.weight'] = f'layers.{i}.attention.wv.weight'
-                map_from_my_dit[f'simplified_dit_llama.wos.{i}.weight'] = f'layers.{i}.attention.wo.weight'
-                
-                map_from_my_dit[f'simplified_dit_llama.q_norms.{i}.weight'] = f'layers.{i}.attention.q_norm.weight'
-                map_from_my_dit[f'simplified_dit_llama.q_norms.{i}.bias'] = f'layers.{i}.attention.q_norm.bias'
-                map_from_my_dit[f'simplified_dit_llama.k_norms.{i}.weight'] = f'layers.{i}.attention.k_norm.weight'
-                map_from_my_dit[f'simplified_dit_llama.k_norms.{i}.bias'] = f'layers.{i}.attention.k_norm.bias'
-                
-                map_from_my_dit[f'simplified_dit_llama.ffn_norms.{i}.weight'] = f'layers.{i}.ffn_norm.weight'
-                map_from_my_dit[f'simplified_dit_llama.w2s.{i}.weight'] = f'layers.{i}.feed_forward.w2.weight'
-                
- 
+                map_from_my_dit[
+                    f"simplified_dit_llama.adaLN_modulations.{i}.weight"
+                ] = f"layers.{i}.adaLN_modulation.1.weight"
+                map_from_my_dit[
+                    f"simplified_dit_llama.adaLN_modulations.{i}.bias"
+                ] = f"layers.{i}.adaLN_modulation.1.bias"
+
+                map_from_my_dit[
+                    f"simplified_dit_llama.attention_norms.{i}.weight"
+                ] = f"layers.{i}.attention_norm.weight"
+
+                map_from_my_dit[f"simplified_dit_llama.wqs.{i}.weight"] = f"layers.{i}.attention.wq.weight"
+                map_from_my_dit[f"simplified_dit_llama.wks.{i}.weight"] = f"layers.{i}.attention.wk.weight"
+                map_from_my_dit[f"simplified_dit_llama.wvs.{i}.weight"] = f"layers.{i}.attention.wv.weight"
+                map_from_my_dit[f"simplified_dit_llama.wos.{i}.weight"] = f"layers.{i}.attention.wo.weight"
+
+                map_from_my_dit[f"simplified_dit_llama.q_norms.{i}.weight"] = f"layers.{i}.attention.q_norm.weight"
+                map_from_my_dit[f"simplified_dit_llama.q_norms.{i}.bias"] = f"layers.{i}.attention.q_norm.bias"
+                map_from_my_dit[f"simplified_dit_llama.k_norms.{i}.weight"] = f"layers.{i}.attention.k_norm.weight"
+                map_from_my_dit[f"simplified_dit_llama.k_norms.{i}.bias"] = f"layers.{i}.attention.k_norm.bias"
+
+                map_from_my_dit[f"simplified_dit_llama.ffn_norms.{i}.weight"] = f"layers.{i}.ffn_norm.weight"
+                map_from_my_dit[f"simplified_dit_llama.w2s.{i}.weight"] = f"layers.{i}.feed_forward.w2.weight"
+
             for key in map_from_my_dit.keys():
                 state_dict[key] = paddle.assign(state_dict[map_from_my_dit[key]])
-            
-            for i in range(32): 
-                w1 = state_dict[f'layers.{i}.feed_forward.w1.weight']
-                w3 = state_dict[f'layers.{i}.feed_forward.w3.weight']
-                state_dict[f'simplified_dit_llama.w13s.{i}.weight'] = paddle.concat([w1, w3], axis=1)
+
+            for i in range(32):
+                w1 = state_dict[f"layers.{i}.feed_forward.w1.weight"]
+                w3 = state_dict[f"layers.{i}.feed_forward.w3.weight"]
+                state_dict[f"simplified_dit_llama.w13s.{i}.weight"] = paddle.concat([w1, w3], axis=1)
