@@ -19,7 +19,7 @@ import paddle
 from paddle import nn
 
 from ..utils import USE_PEFT_BACKEND
-from .activations import get_activation
+from .activations import get_activation, FP32SiLU
 from .lora import LoRACompatibleLinear
 
 
@@ -121,7 +121,7 @@ def get_1d_sincos_pos_embed_from_grid(embed_dim, pos):
 
 
 class PatchEmbed(nn.Layer):
-    """2D Image to Patch Embedding"""
+    """2D Image to Patch Embedding with support for SD3 cropping."""
 
     def __init__(
         self,
@@ -136,12 +136,14 @@ class PatchEmbed(nn.Layer):
         interpolation_scale=1,
         add_pos_embed=True,
         data_format="NCHW",
+        pos_embed_max_size=None, # For SD3 cropping
     ):
         super().__init__()
 
         num_patches = (height // patch_size) * (width // patch_size)
         self.flatten = flatten
         self.layer_norm = layer_norm
+        self.pos_embed_max_size = pos_embed_max_size
         self.data_format = data_format
 
         self.proj = nn.Conv2D(
@@ -160,25 +162,54 @@ class PatchEmbed(nn.Layer):
         self.base_size = height // patch_size
         self.interpolation_scale = interpolation_scale
 
+        # Calculate positional embeddings based on max size or default
+        if pos_embed_max_size:
+            grid_size = pos_embed_max_size
+        else:
+            grid_size = int(num_patches**0.5)
+
         # NOTE, new add for unidiffusers!
         self.add_pos_embed = add_pos_embed
         if add_pos_embed:
             pos_embed = get_2d_sincos_pos_embed(
-                embed_dim,
-                int(num_patches**0.5),
-                base_size=self.base_size,
-                interpolation_scale=self.interpolation_scale,
+                embed_dim, grid_size, base_size=self.base_size, interpolation_scale=self.interpolation_scale
             )
+            persistent = True if pos_embed_max_size else False
             self.register_buffer(
-                "pos_embed", paddle.to_tensor(pos_embed).cast("float32").unsqueeze(0), persistable=False
+                "pos_embed", paddle.to_tensor(pos_embed).cast("float32").unsqueeze(0), persistable=persistent
             )
+    def cropped_pos_embed(self, height, width):
+        """Crops positional embeddings for SD3 compatibility."""
+        if self.pos_embed_max_size is None:
+            raise ValueError("`pos_embed_max_size` must be set for cropping.")
+
+        height = height // self.patch_size
+        width = width // self.patch_size
+        if height > self.pos_embed_max_size:
+            raise ValueError(
+                f"Height ({height}) cannot be greater than `pos_embed_max_size`: {self.pos_embed_max_size}."
+            )
+        if width > self.pos_embed_max_size:
+            raise ValueError(
+                f"Width ({width}) cannot be greater than `pos_embed_max_size`: {self.pos_embed_max_size}."
+            )
+
+        top = (self.pos_embed_max_size - height) // 2
+        left = (self.pos_embed_max_size - width) // 2
+        spatial_pos_embed = self.pos_embed.reshape([1, self.pos_embed_max_size, self.pos_embed_max_size, -1])
+        spatial_pos_embed = spatial_pos_embed[:, top : top + height, left : left + width, :]
+        spatial_pos_embed = spatial_pos_embed.reshape([1, -1, spatial_pos_embed.shape[-1]])
+        return spatial_pos_embed
 
     def forward(self, latent):
         if self.data_format == "NCHW":
-            height, width = latent.shape[-2] // self.patch_size, latent.shape[-1] // self.patch_size
+            # height, width = latent.shape[-2] // self.patch_size, latent.shape[-1] // self.patch_size
+            if self.pos_embed_max_size is not None:
+                height, width = latent.shape[-2:]
+            else:
+                height, width = latent.shape[-2] // self.patch_size, latent.shape[-1] // self.patch_size
         else:
             height, width = latent.shape[-3] // self.patch_size, latent.shape[-2] // self.patch_size
-
         latent = self.proj(latent)
         if self.flatten:
             if self.data_format == "NCHW":
@@ -188,22 +219,20 @@ class PatchEmbed(nn.Layer):
         if self.layer_norm:
             latent = self.norm(latent)
 
-        # Interpolate positional embeddings if needed.
-        # (For PixArt-Alpha: https://github.com/PixArt-alpha/PixArt-alpha/blob/0f55e922376d8b797edd44d25d0e7464b260dcab/diffusion/model/nets/PixArtMS.py#L162C151-L162C160)
-        if self.height != height or self.width != width:
-            pos_embed = get_2d_sincos_pos_embed(
-                embed_dim=self.pos_embed.shape[-1],
-                grid_size=(height, width),
-                base_size=self.base_size,
-                interpolation_scale=self.interpolation_scale,
-            )
-            pos_embed = paddle.to_tensor(pos_embed)
-            pos_embed = pos_embed.cast("float32").unsqueeze(0)
+        # Interpolate or crop positional embeddings as needed
+        if self.pos_embed_max_size:
+            pos_embed = self.cropped_pos_embed(height, width)
         else:
-            if self.add_pos_embed:
-                pos_embed = self.pos_embed
+            if self.height != height or self.width != width:
+                pos_embed = get_2d_sincos_pos_embed(
+                    embed_dim=self.pos_embed.shape[-1],
+                    grid_size=(height, width),
+                    base_size=self.base_size,
+                    interpolation_scale=self.interpolation_scale,
+                )
+                pos_embed = paddle.to_tensor(pos_embed).astype(paddle.float32).unsqueeze(0)
             else:
-                pass
+                pos_embed = self.pos_embed
 
         # NOTE, new add for unidiffusers!
         if self.add_pos_embed:
@@ -491,6 +520,25 @@ class ImageProjection(nn.Layer):
         image_embeds = self.norm(image_embeds)
         return image_embeds
 
+
+
+class CombinedTimestepTextProjEmbeddings(nn.Layer):
+    def __init__(self, embedding_dim, pooled_projection_dim):
+        super().__init__()
+
+        self.time_proj = Timesteps(num_channels=256, flip_sin_to_cos=True, downscale_freq_shift=0)
+        self.timestep_embedder = TimestepEmbedding(in_channels=256, time_embed_dim=embedding_dim)
+        self.text_embedder = PixArtAlphaTextProjection(pooled_projection_dim, embedding_dim, act_fn="silu")
+
+    def forward(self, timestep, pooled_projection):
+        timesteps_proj = self.time_proj(timestep)
+        timesteps_emb = self.timestep_embedder(timesteps_proj.to(dtype=pooled_projection.dtype))  # (N, D)
+
+        pooled_projections = self.text_embedder(pooled_projection)
+
+        conditioning = timesteps_emb + pooled_projections
+
+        return conditioning
 
 class CombinedTimestepLabelEmbeddings(nn.Layer):
     def __init__(self, num_classes, embedding_dim, class_dropout_prob=0.1):
@@ -826,6 +874,35 @@ class CaptionProjection(nn.Layer):
         self.register_buffer("y_embedding", paddle.randn(num_tokens, in_features) / in_features**0.5)
 
     def forward(self, caption, force_drop_ids=None):
+        hidden_states = self.linear_1(caption)
+        hidden_states = self.act_1(hidden_states)
+        hidden_states = self.linear_2(hidden_states)
+        return hidden_states
+
+
+class PixArtAlphaTextProjection(nn.Layer):
+    """
+    Projects caption embeddings. Also handles dropout for classifier-free guidance.
+
+    Adapted from https://github.com/PixArt-alpha/PixArt-alpha/blob/master/diffusion/model/nets/PixArt_blocks.py
+    """
+
+    def __init__(self, in_features, hidden_size, out_features=None, act_fn="gelu_tanh"):
+        super().__init__()
+        if out_features is None:
+            out_features = hidden_size
+        self.linear_1 = nn.Linear(in_features=in_features, out_features=hidden_size, bias_attr=True)
+        if act_fn == "gelu_tanh":
+            self.act_1 = nn.GELU(approximate="tanh")
+        elif act_fn == "silu":
+            self.act_1 = nn.Silu()
+        elif act_fn == "silu_fp32":
+            self.act_1 = FP32SiLU()
+        else:
+            raise ValueError(f"Unknown activation function: {act_fn}")
+        self.linear_2 = nn.Linear(in_features=hidden_size, out_features=out_features, bias_attr=True)
+
+    def forward(self, caption):
         hidden_states = self.linear_1(caption)
         hidden_states = self.act_1(hidden_states)
         hidden_states = self.linear_2(hidden_states)
