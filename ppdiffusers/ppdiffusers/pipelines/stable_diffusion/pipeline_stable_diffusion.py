@@ -861,6 +861,7 @@ class StableDiffusionPipeline(
                 latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
                 # predict the noise residual
+                t = t.reshape([1])
                 noise_pred = self.unet(
                     latent_model_input,
                     t,
@@ -869,7 +870,7 @@ class StableDiffusionPipeline(
                     cross_attention_kwargs=self.cross_attention_kwargs,
                     added_cond_kwargs=added_cond_kwargs,
                     return_dict=False,
-                )[0]
+                )
 
                 # perform guidance
                 if self.do_classifier_free_guidance:

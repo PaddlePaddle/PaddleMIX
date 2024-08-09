@@ -32,17 +32,16 @@ pipe = StableDiffusionPipeline.from_pretrained("runwayml/stable-diffusion-v1-5",
 prompt = "a red photo of a village"  # or a little girl dances in the cherry blossom rain
 pipe.scheduler = EulerAncestralDiscreteScheduler.from_config(pipe.scheduler.config)
 
-pipe.unet.run_down_mid_up_blocks = paddle.incubate.jit.inference(
-    pipe.unet.run_down_mid_up_blocks,
+pipe.unet.forward = paddle.incubate.jit.inference(
+    pipe.unet.forward,
     save_model_dir="/root/.cache/haha",
-    cache_static_model=False,
+    cache_static_model=True,
     precision_mode="float32",
     switch_ir_optim=True,
-    with_trt=False,
+    with_trt=True,
     enable_new_ir=False,
     trt_precision_mode="float16",
     trt_use_static=True,
-    switch_ir_debug=False,
 )
 
 for i in range(5):
