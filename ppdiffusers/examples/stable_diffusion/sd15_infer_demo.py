@@ -32,11 +32,25 @@ pipe = StableDiffusionPipeline.from_pretrained("runwayml/stable-diffusion-v1-5",
 prompt = "a photo of an astronaut riding a horse on mars"  # or a little girl dances in the cherry blossom rain
 pipe.scheduler = EulerAncestralDiscreteScheduler.from_config(pipe.scheduler.config)
 
+#pipe.text_encoder = paddle.incubate.jit.inference(pipe.text_encoder, with_trt=False)
+
 pipe.unet.forward = paddle.incubate.jit.inference(
     pipe.unet.forward,
     save_model_dir="/root/.cache/haha",
     cache_static_model=True,
     precision_mode="float32",
+    enable_new_ir=False,
+    with_trt=True,
+    trt_precision_mode="float16",
+    trt_use_static=True,
+)
+
+pipe.vae.decode = paddle.incubate.jit.inference(
+    pipe.vae.decode,
+    save_model_dir="/root/.cache/haha",
+    cache_static_model=True,
+    precision_mode="float32",
+    enable_new_ir=False,
     with_trt=True,
     trt_precision_mode="float16",
     trt_use_static=True,
