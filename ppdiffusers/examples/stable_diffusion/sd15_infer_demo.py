@@ -36,10 +36,7 @@ pipe.scheduler = EulerAncestralDiscreteScheduler.from_config(pipe.scheduler.conf
 
 pipe.unet.forward = paddle.incubate.jit.inference(
     pipe.unet.forward,
-    save_model_dir="/root/.cache/haha",
     cache_static_model=True,
-    precision_mode="float32",
-    enable_new_ir=False,
     with_trt=True,
     trt_precision_mode="float16",
     trt_use_static=True,
@@ -47,10 +44,7 @@ pipe.unet.forward = paddle.incubate.jit.inference(
 
 pipe.vae.decode = paddle.incubate.jit.inference(
     pipe.vae.decode,
-    save_model_dir="/root/.cache/haha",
     cache_static_model=True,
-    precision_mode="float32",
-    enable_new_ir=False,
     with_trt=True,
     trt_precision_mode="float16",
     trt_use_static=True,
