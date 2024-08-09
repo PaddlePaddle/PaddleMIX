@@ -29,7 +29,7 @@ from ppdiffusers import (
 unet_model_name_or_path = "runwayml/stable-diffusion-v1-5/unet"
 unet = UNet2DConditionModel.from_pretrained(unet_model_name_or_path)
 pipe = StableDiffusionPipeline.from_pretrained("runwayml/stable-diffusion-v1-5", safety_checker=None, unet=unet)
-prompt = "a red photo of a village"  # or a little girl dances in the cherry blossom rain
+prompt = "a photo of an astronaut riding a horse on mars"  # or a little girl dances in the cherry blossom rain
 pipe.scheduler = EulerAncestralDiscreteScheduler.from_config(pipe.scheduler.config)
 
 pipe.unet.forward = paddle.incubate.jit.inference(
@@ -37,9 +37,7 @@ pipe.unet.forward = paddle.incubate.jit.inference(
     save_model_dir="/root/.cache/haha",
     cache_static_model=True,
     precision_mode="float32",
-    switch_ir_optim=True,
     with_trt=True,
-    enable_new_ir=False,
     trt_precision_mode="float16",
     trt_use_static=True,
 )
@@ -63,4 +61,4 @@ image.save("astronaut_rides_horse.png")
 endtime = datetime.datetime.now()
 duringtime = endtime - starttime
 time_ms = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
-print("The whoel end to end time : ", time_ms / repeat_times, "ms")
+print("The whole end to end time : ", time_ms / repeat_times, "ms")
