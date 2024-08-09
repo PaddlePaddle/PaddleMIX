@@ -861,6 +861,7 @@ class StableDiffusionPipeline(
                 latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
                 # predict the noise residual
+                # zero dimension not work perfectly for paddle inference
                 t = t.reshape([1])
                 noise_pred = self.unet(
                     latent_model_input,
