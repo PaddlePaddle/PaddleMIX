@@ -871,6 +871,8 @@ class StableDiffusionPipeline(
                     added_cond_kwargs=added_cond_kwargs,
                     return_dict=False,
                 )
+                if type(noise_pred) == tuple:
+                    noise_pred = noise_pred[0]
 
                 # perform guidance
                 if self.do_classifier_free_guidance:
