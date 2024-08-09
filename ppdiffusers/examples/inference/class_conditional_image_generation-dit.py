@@ -68,14 +68,18 @@ if args.benchmark:
     # warmup
     for i in range(5):
         image = pipe(class_labels=class_ids, num_inference_steps=25).images[0]
+
     repeat_times = 5
+
     paddle.device.synchronize()
     starttime = datetime.datetime.now()
     for i in range(repeat_times):
         image = pipe(class_labels=class_ids, num_inference_steps=25).images[0]
     paddle.device.synchronize()
     endtime = datetime.datetime.now()
+
     duringtime = endtime - starttime
     time_ms = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
     print("The ave end to end time : ", time_ms / repeat_times, "ms")
+
 image.save("class_conditional_image_generation-dit-result.png")

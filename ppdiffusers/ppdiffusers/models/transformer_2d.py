@@ -511,42 +511,27 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
     def custom_modify_weight(cls, state_dict):
         if os.getenv("INFERENCE_OPTIMIZE") != "True":
             return
-        map_from_my_dit = {}
         for i in range(28):
-            map_from_my_dit[f"simplified_facebookdit.q.{i}.weight"] = f"transformer_blocks.{i}.attn1.to_q.weight"
-            map_from_my_dit[f"simplified_facebookdit.k.{i}.weight"] = f"transformer_blocks.{i}.attn1.to_k.weight"
-            map_from_my_dit[f"simplified_facebookdit.v.{i}.weight"] = f"transformer_blocks.{i}.attn1.to_v.weight"
-            map_from_my_dit[f"simplified_facebookdit.q.{i}.bias"] = f"transformer_blocks.{i}.attn1.to_q.bias"
-            map_from_my_dit[f"simplified_facebookdit.k.{i}.bias"] = f"transformer_blocks.{i}.attn1.to_k.bias"
-            map_from_my_dit[f"simplified_facebookdit.v.{i}.bias"] = f"transformer_blocks.{i}.attn1.to_v.bias"
-            map_from_my_dit[
-                f"simplified_facebookdit.out_proj.{i}.weight"
-            ] = f"transformer_blocks.{i}.attn1.to_out.0.weight"
-            map_from_my_dit[
-                f"simplified_facebookdit.out_proj.{i}.bias"
-            ] = f"transformer_blocks.{i}.attn1.to_out.0.bias"
-            map_from_my_dit[f"simplified_facebookdit.ffn1.{i}.weight"] = f"transformer_blocks.{i}.ff.net.0.proj.weight"
-            map_from_my_dit[f"simplified_facebookdit.ffn1.{i}.bias"] = f"transformer_blocks.{i}.ff.net.0.proj.bias"
-            map_from_my_dit[f"simplified_facebookdit.ffn2.{i}.weight"] = f"transformer_blocks.{i}.ff.net.2.weight"
-            map_from_my_dit[f"simplified_facebookdit.ffn2.{i}.bias"] = f"transformer_blocks.{i}.ff.net.2.bias"
-
-            map_from_my_dit[
-                f"simplified_facebookdit.fcs0.{i}.weight"
-            ] = f"transformer_blocks.{i}.norm1.emb.timestep_embedder.linear_1.weight"
-            map_from_my_dit[
-                f"simplified_facebookdit.fcs0.{i}.bias"
-            ] = f"transformer_blocks.{i}.norm1.emb.timestep_embedder.linear_1.bias"
-            map_from_my_dit[
-                f"simplified_facebookdit.fcs1.{i}.weight"
-            ] = f"transformer_blocks.{i}.norm1.emb.timestep_embedder.linear_2.weight"
-            map_from_my_dit[
-                f"simplified_facebookdit.fcs1.{i}.bias"
-            ] = f"transformer_blocks.{i}.norm1.emb.timestep_embedder.linear_2.bias"
-            map_from_my_dit[f"simplified_facebookdit.fcs2.{i}.weight"] = f"transformer_blocks.{i}.norm1.linear.weight"
-            map_from_my_dit[f"simplified_facebookdit.fcs2.{i}.bias"] = f"transformer_blocks.{i}.norm1.linear.bias"
-            map_from_my_dit[
-                f"simplified_facebookdit.embs.{i}.weight"
-            ] = f"transformer_blocks.{i}.norm1.emb.class_embedder.embedding_table.weight"
-
-        for key in map_from_my_dit.keys():
-            state_dict[key] = paddle.assign(state_dict[map_from_my_dit[key]])
+            map_from_my_dit = [
+                (f"q.{i}.weight", f"{i}.attn1.to_q.weight"),
+                (f"k.{i}.weight", f"{i}.attn1.to_k.weight"),
+                (f"v.{i}.weight", f"{i}.attn1.to_v.weight"),
+                (f"q.{i}.bias", f"{i}.attn1.to_q.bias"),
+                (f"k.{i}.bias", f"{i}.attn1.to_k.bias"),
+                (f"v.{i}.bias", f"{i}.attn1.to_v.bias"),
+                (f"out_proj.{i}.weight", f"{i}.attn1.to_out.0.weight"),
+                (f"out_proj.{i}.bias", f"{i}.attn1.to_out.0.bias"),
+                (f"ffn1.{i}.weight", f"{i}.ff.net.0.proj.weight"),
+                (f"ffn1.{i}.bias", f"{i}.ff.net.0.proj.bias"),
+                (f"ffn2.{i}.weight", f"{i}.ff.net.2.weight"),
+                (f"ffn2.{i}.bias", f"{i}.ff.net.2.bias"),
+                (f"fcs0.{i}.weight", f"{i}.norm1.emb.timestep_embedder.linear_1.weight"),
+                (f"fcs0.{i}.bias", f"{i}.norm1.emb.timestep_embedder.linear_1.bias"),
+                (f"fcs1.{i}.weight", f"{i}.norm1.emb.timestep_embedder.linear_2.weight"),
+                (f"fcs1.{i}.bias", f"{i}.norm1.emb.timestep_embedder.linear_2.bias"),
+                (f"fcs2.{i}.weight", f"{i}.norm1.linear.weight"),
+                (f"fcs2.{i}.bias", f"{i}.norm1.linear.bias"),
+                (f"embs.{i}.weight", f"{i}.norm1.emb.class_embedder.embedding_table.weight"),
+            ]
+            for to_, from_ in map_from_my_dit:
+                state_dict["simplified_facebookdit." + to_] = paddle.assign(state_dict["transformer_blocks." + from_])

@@ -92,10 +92,9 @@ class SimplifiedFacebookDIT(nn.Layer):
             emb = F.silu(emb)
             emb = self.fcs2[i](emb)
             shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = emb.chunk(6, axis=1)
+            import paddlemix
 
             if os.getenv("INFERENCE_OPTIMIZE_TRITON"):
-                import paddlemix
-
                 norm_hidden_states = paddlemix.triton_ops.adaptive_layer_norm(
                     hidden_states, scale_msa, shift_msa, epsilon=1e-06
                 )
@@ -115,8 +114,6 @@ class SimplifiedFacebookDIT(nn.Layer):
             )
             norm_hidden_states = self.out_proj[i](norm_hidden_states)
             if os.getenv("INFERENCE_OPTIMIZE_TRITON"):
-                import paddlemix
-
                 hidden_states, norm_hidden_states = paddlemix.triton_ops.fused_adaLN_scale_residual(
                     hidden_states, norm_hidden_states, gate_msa, scale_mlp, shift_mlp, epsilon=1e-05
                 )
