@@ -871,11 +871,11 @@ class StableDiffusionPipeline(
                     added_cond_kwargs=added_cond_kwargs,
                     return_dict=False,
                 )
-            if isinstance(noise_pred, paddle.Tensor):
-                # this for paddle inference
-                noise_pred = noise_pred
-            else:
-                noise_pred = noise_pred[0]
+                if isinstance(noise_pred, paddle.Tensor):
+                    # this for paddle inference
+                    noise_pred = noise_pred
+                else:
+                    noise_pred = noise_pred[0]
 
                 # perform guidance
                 if self.do_classifier_free_guidance:
