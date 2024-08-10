@@ -596,36 +596,25 @@ class DiTLLaMA2DModel(ModelMixin, ConfigMixin):
     @classmethod
     def custom_modify_weight(cls, state_dict):
         if os.getenv("INFERENCE_OPTIMIZE") == "True":
-            map_from_my_dit = {}
             for i in range(32):
-                map_from_my_dit[
-                    f"simplified_dit_llama.adaLN_modulations.{i}.weight"
-                ] = f"layers.{i}.adaLN_modulation.1.weight"
-                map_from_my_dit[
-                    f"simplified_dit_llama.adaLN_modulations.{i}.bias"
-                ] = f"layers.{i}.adaLN_modulation.1.bias"
+                mappings = [
+                    (f"adaLN_modulations.{i}.weight", f"{i}.adaLN_modulation.1.weight"),
+                    (f"adaLN_modulations.{i}.bias", f"{i}.adaLN_modulation.1.bias"),
+                    (f"attention_norms.{i}.weight", f"{i}.attention_norm.weight"),
+                    (f"wqs.{i}.weight", f"{i}.attention.wq.weight"),
+                    (f"wks.{i}.weight", f"{i}.attention.wk.weight"),
+                    (f"wvs.{i}.weight", f"{i}.attention.wv.weight"),
+                    (f"wos.{i}.weight", f"{i}.attention.wo.weight"),
+                    (f"q_norms.{i}.weight", f"{i}.attention.q_norm.weight"),
+                    (f"q_norms.{i}.bias", f"{i}.attention.q_norm.bias"),
+                    (f"k_norms.{i}.weight", f"{i}.attention.k_norm.weight"),
+                    (f"k_norms.{i}.bias", f"{i}.attention.k_norm.bias"),
+                    (f"ffn_norms.{i}.weight", f"{i}.ffn_norm.weight"),
+                    (f"w2s.{i}.weight", f"{i}.feed_forward.w2.weight"),
+                ]
+                for to_, from_ in mappings:
+                    state_dict["simplified_dit_llama." + to_] = paddle.assign(state_dict["layers." + from_])
 
-                map_from_my_dit[
-                    f"simplified_dit_llama.attention_norms.{i}.weight"
-                ] = f"layers.{i}.attention_norm.weight"
-
-                map_from_my_dit[f"simplified_dit_llama.wqs.{i}.weight"] = f"layers.{i}.attention.wq.weight"
-                map_from_my_dit[f"simplified_dit_llama.wks.{i}.weight"] = f"layers.{i}.attention.wk.weight"
-                map_from_my_dit[f"simplified_dit_llama.wvs.{i}.weight"] = f"layers.{i}.attention.wv.weight"
-                map_from_my_dit[f"simplified_dit_llama.wos.{i}.weight"] = f"layers.{i}.attention.wo.weight"
-
-                map_from_my_dit[f"simplified_dit_llama.q_norms.{i}.weight"] = f"layers.{i}.attention.q_norm.weight"
-                map_from_my_dit[f"simplified_dit_llama.q_norms.{i}.bias"] = f"layers.{i}.attention.q_norm.bias"
-                map_from_my_dit[f"simplified_dit_llama.k_norms.{i}.weight"] = f"layers.{i}.attention.k_norm.weight"
-                map_from_my_dit[f"simplified_dit_llama.k_norms.{i}.bias"] = f"layers.{i}.attention.k_norm.bias"
-
-                map_from_my_dit[f"simplified_dit_llama.ffn_norms.{i}.weight"] = f"layers.{i}.ffn_norm.weight"
-                map_from_my_dit[f"simplified_dit_llama.w2s.{i}.weight"] = f"layers.{i}.feed_forward.w2.weight"
-
-            for key in map_from_my_dit.keys():
-                state_dict[key] = paddle.assign(state_dict[map_from_my_dit[key]])
-
-            for i in range(32):
                 w1 = state_dict[f"layers.{i}.feed_forward.w1.weight"]
                 w3 = state_dict[f"layers.{i}.feed_forward.w3.weight"]
                 state_dict[f"simplified_dit_llama.w13s.{i}.weight"] = paddle.concat([w1, w3], axis=1)
