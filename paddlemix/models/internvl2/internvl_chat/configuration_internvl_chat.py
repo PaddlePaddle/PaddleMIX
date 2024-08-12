@@ -81,7 +81,7 @@ class InternVLChatConfig(PretrainedConfig):
         logger.info(f'min_dynamic_patch: {self.min_dynamic_patch}')
         logger.info(f'max_dynamic_patch: {self.max_dynamic_patch}')
 
-    def to_dict(self):
+    def to_dict(self, saving_file=False):
         """
         Serializes this instance to a Python dictionary. Override the default [`~PretrainedConfig.to_dict`].
 

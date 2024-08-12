@@ -167,7 +167,7 @@ def load_tokenizer(model_size, model_path):
     elif model_size in ['76B']:
         tokenizer = Llama3Tokenizer.from_pretrained(model_path)
         # TODO:
-        tokenizer.added_tokens_encoder = {'<unk>': 0, '<s>': 1, '</s>': 2, '<|plugin|>': 92538, '<|interpreter|>': 92539, '<|action_end|>': 92540, '<|action_start|>': 92541, '<|im_end|>': 92542, '<|im_start|>': 92543, '<img>': 92544, '</img>': 92545, '<IMG_CONTEXT>': 92546, '<quad>': 92547, '</quad>': 92548, '<ref>': 92549, '</ref>': 92550, '<box>': 92551, '</box>': 92552}
+        tokenizer.added_tokens_encoder = {'<img>': 128256, '</img>': 128257, '<IMG_CONTEXT>': 128258, '<quad>': 128259, '</quad>': 128260, '<ref>': 128261, '</ref>': 128262, '<box>': 128263, '</box>': 128264}
         tokenizer.added_tokens_decoder = {v: k for k, v in tokenizer.added_tokens_encoder.items()}
 
     else:

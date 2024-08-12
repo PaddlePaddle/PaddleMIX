@@ -30,6 +30,7 @@ from paddlenlp.transformers.model_outputs import (
     BaseModelOutputWithPooling,
 )
 from paddlemix.models.model_utils import MixPretrainedModel
+from paddlenlp.transformers.model_utils import PretrainedModel
 from .configuration_intern_vit import InternVisionConfig
 from ..bert_padding import pad_input, unpad_input
 
@@ -40,6 +41,7 @@ try:
 except:
     print("has_flash_attn is False.")
     has_flash_attn = False
+has_flash_attn = False
 
 from ppdiffusers.utils import logging
 logger = logging.get_logger(__name__)
@@ -372,12 +374,9 @@ class InternVisionEncoderLayer(nn.Layer):
         Args:
             hidden_states (`Tuple[paddle.Tensor, Optional[paddle.Tensor]]`): input to the layer of shape `(batch, seq_len, embed_dim)`
         """
-        original_dtype = hidden_states.dtype
-        hidden_states = hidden_states + self.drop_path1(self.attn(self.norm1(hidden_states)) * self.ls1)
-        hidden_states = hidden_states.cast(original_dtype)
-        hidden_states = hidden_states + self.drop_path2(self.mlp(self.norm2(hidden_states)) * self.ls2)
-        hidden_states = hidden_states.cast(original_dtype)
-        return hidden_states
+        hidden_states = hidden_states + self.drop_path1(self.attn(self.norm1(hidden_states.cast("bfloat16"))) * self.ls1)
+        hidden_states = hidden_states + self.drop_path2(self.mlp(self.norm2(hidden_states.cast("bfloat16"))) * self.ls2)
+        return hidden_states.cast("bfloat16")
 
 
 class InternVisionEncoder(nn.Layer):
@@ -426,7 +425,7 @@ class InternVisionEncoder(nn.Layer):
         for idx, encoder_layer in enumerate(self.layers):
             if output_hidden_states:
                 encoder_states = encoder_states + (hidden_states,)
-            if self.gradient_checkpointing and self.training:
+            if 0: #self.gradient_checkpointing and self.training: # TODO: fix this
                 layer_outputs = paddle.distributed.fleet.utils.recompute(
                     encoder_layer,
                     hidden_states,

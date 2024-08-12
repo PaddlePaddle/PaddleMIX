@@ -32,6 +32,7 @@ from paddlenlp.generation import GenerationConfig
 from paddlenlp.transformers import LlamaForCausalLM, Qwen2ForCausalLM
 from paddlenlp.transformers.model_outputs import CausalLMOutputWithPast
 from paddlemix.models.model_utils import MixPretrainedModel
+from paddlenlp.transformers.model_utils import PretrainedModel
 from .configuration_internvl_chat import InternVLChatConfig
 from .modeling_intern_vit import InternVisionModel
 
@@ -127,13 +128,13 @@ class InternVLChatModel(MixPretrainedModel):
 
     def forward(
         self,
-        pixel_values: paddle.Tensor,
-        input_ids: paddle.Tensor = None,
-        attention_mask: Optional[paddle.Tensor] = None,
+        pixel_values: paddle.Tensor, # [14, 3, 448, 448]
+        input_ids: paddle.Tensor = None, # [2, 1918]
+        attention_mask: Optional[paddle.Tensor] = None, # [2, 1918]
         position_ids: Optional[paddle.Tensor] = None,
-        image_flags: Optional[paddle.Tensor] = None,
+        image_flags: Optional[paddle.Tensor] = None, # [14]
         past_key_values: Optional[List[paddle.Tensor]] = None,
-        labels: Optional[paddle.Tensor] = None,
+        labels: Optional[paddle.Tensor] = None, # [2, 1918]
         use_cache: Optional[bool] = None,
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
@@ -142,9 +143,17 @@ class InternVLChatModel(MixPretrainedModel):
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         image_flags = image_flags.squeeze(-1)
-        input_embeds = self.language_model.get_input_embeddings()(input_ids) #.clone()
+        input_embeds = self.language_model.get_input_embeddings()(input_ids).clone()
+        # [2, 1918, 2048] -3972.55566406  bfloat16
+        #print('input_ids', input_ids.shape, input_ids.sum().item()) # [2, 1916] 346392202
 
-        vit_embeds = self.extract_feature(pixel_values)
+        #print('pixel_values', pixel_values.sum().item(), pixel_values.mean().item())
+        vit_embeds = self.extract_feature(pixel_values) # pixel_values float32 [14, 3, 448, 448] sum=891674.56250000 mean=0.10577939
+        #print('vit_embeds', vit_embeds.sum().item(), vit_embeds.mean().item())
+        # [14, 256, 2048] bfloat16 -85460.1875 -0.01165771484375
+
+        #print('vit_embeds', vit_embeds.sum().item(), vit_embeds.mean().item())
+        # [14, 256, 2048] bfloat16 -87335.3984375 -0.01190185546875
         vit_embeds = vit_embeds[image_flags == 1]
         vit_batch_size = pixel_values.shape[0]
 
@@ -154,8 +163,9 @@ class InternVLChatModel(MixPretrainedModel):
         if paddle.distributed.get_rank() == 0:
             print(f'dynamic ViT batch size: {vit_batch_size}, images per sample: {vit_batch_size / B}, dynamic token length: {N}')
 
-        input_ids = input_ids.reshape([B * N])
-        selected = (input_ids == self.img_context_token_id)
+        input_ids = input_ids.reshape([B * N]) # [3836] sum 346393658
+        selected = (input_ids == self.img_context_token_id) # [3836] sum 3584
+        #print('selected ', selected.shape, selected.sum().item())#[3832] 3584
         try:
             input_embeds[selected] = input_embeds[selected] * 0.0 + vit_embeds.reshape([-1, C])
             ignore_flag = False
@@ -168,18 +178,22 @@ class InternVLChatModel(MixPretrainedModel):
             ignore_flag = True
 
         input_embeds = input_embeds.reshape([B, N, C])
+        # [2, 1918, 2048] -87403.26562500
+        #print('input_embeds.sum()', input_embeds.shape, input_embeds.sum().item())
 
         outputs = self.language_model(
-            inputs_embeds=input_embeds,
-            attention_mask=attention_mask,
+            inputs_embeds=input_embeds, # [2, 1918, 2048]  -87403.26562500
+            attention_mask=attention_mask, # [2, 1918]  3836
             position_ids=position_ids,
             past_key_values=past_key_values,
             use_cache=use_cache,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
-            return_dict=return_dict,
+            return_dict=True,
         )
         logits = outputs.logits
+        # print('logits.sum()', logits.shape, logits.dtype, logits.sum().item(), logits.mean().item())
+        # [2, 1918, 92553] -35019332.0 -0.09863674640655518
 
         loss = None
         if labels is not None:
@@ -191,7 +205,12 @@ class InternVLChatModel(MixPretrainedModel):
             shift_logits = shift_logits.reshape([-1, self.language_model.config.vocab_size])
             shift_labels = shift_labels.reshape([-1])
             # Enable model parallelism
+            #print('shift_logits.sum()', shift_logits.shape, shift_logits.sum().item()) # fp32 [3834, 92553] -34228768.0
+            #print('shift_labels.sum()', shift_labels.shape, shift_labels.sum().item()) # int64 [3834] 4330172
             loss = loss_fct(shift_logits, shift_labels)
+            #print('loss', loss.item()) # 1.746330976486206
+            #print('loss', loss.item()) #1.7383328676223755 # torch llm npy+img npy
+            #print('loss', loss.item()) #1.7464321851730347 # torch llm npy  1.7464323043823242 logits.npy
             if ignore_flag:
                 loss = loss * 0.0
 
