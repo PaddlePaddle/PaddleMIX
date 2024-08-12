@@ -42,13 +42,13 @@ def parse_arguments():
     parser.add_argument(
         "--inference_steps",
         type=int,
-        default=25,
+        default=50,
         help="The number of unet inference steps.",
     )
     parser.add_argument(
         "--benchmark_steps",
         type=int,
-        default=1,
+        default=10,
         help="The number of performance benchmark steps.",
     )
     parser.add_argument(
@@ -73,7 +73,7 @@ def parse_arguments():
     parser.add_argument(
         "--task_name",
         type=str,
-        default="text2img",
+        default="img2video",
         choices=[
             "img2video",
             "all",
@@ -283,6 +283,8 @@ def main(args):
             time_costs += [latency]
             # print(f"No {step:3d} time cost: {latency:2f} s")
         print(
+            f"Use fp16: {'true' if args.use_fp16 else 'false'}, "
+            f"Mean iter/sec: {1 / (np.mean(time_costs) / args.inference_steps):2f} it/s, "
             f"Mean latency: {np.mean(time_costs):2f} s, p50 latency: {np.percentile(time_costs, 50):2f} s, "
             f"p90 latency: {np.percentile(time_costs, 90):2f} s, p95 latency: {np.percentile(time_costs, 95):2f} s."
         )

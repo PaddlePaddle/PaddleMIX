@@ -63,7 +63,7 @@ logger = get_logger(__name__)
 
 
 DATASET_NAME_MAPPING = {
-    "lambdalabs/pokemon-blip-captions": ("image", "text"),
+    "lambdalabs/naruto-blip-captions": ("image", "text"),
 }
 
 
@@ -1250,7 +1250,7 @@ def main(args):
         images = []
         if args.validation_prompt and args.num_validation_images > 0:
             generator = paddle.Generator().manual_seed(args.seed) if args.seed else None
-            with paddle.amp.auto_cast(enable=True, custom_white_list=None, custom_black_list=None, level="O2"):
+            with paddle.amp.auto_cast(enable=False, custom_white_list=None, custom_black_list=None, level="O2"):
                 images = [
                     pipeline(args.validation_prompt, num_inference_steps=25, generator=generator).images[0]
                     for _ in range(args.num_validation_images)

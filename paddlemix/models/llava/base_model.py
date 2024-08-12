@@ -52,7 +52,7 @@ class LlavaMetaModel:
             vision_tower = vision_tower[0]
         return vision_tower
 
-    def initialize_vision_modules(self, model_args, fsdp=None):
+    def initialize_vision_modules(self, model_args):
         vision_tower = model_args.mm_vision_tower
         mm_vision_select_layer = model_args.mm_vision_select_layer
         mm_vision_select_feature = model_args.mm_vision_select_feature
@@ -62,15 +62,9 @@ class LlavaMetaModel:
 
         if self.get_vision_tower() is None:
             vision_tower = build_vision_tower(model_args)
-            if fsdp is not None and len(fsdp) > 0:
-                self.vision_tower = [vision_tower]
-            else:
-                self.vision_tower = vision_tower
+            self.vision_tower = vision_tower
         else:
-            if fsdp is not None and len(fsdp) > 0:
-                vision_tower = self.vision_tower[0]
-            else:
-                vision_tower = self.vision_tower
+            vision_tower = self.vision_tower
             vision_tower.load_model()
 
         self.config.use_mm_proj = True
@@ -266,10 +260,11 @@ class LlavaMetaForCausalLM:
             for i in range(len(image_token_indices) - 1):
                 cur_input_ids_noim.append(cur_input_ids[image_token_indices[i] + 1 : image_token_indices[i + 1]])
                 cur_labels_noim.append(cur_labels[image_token_indices[i] + 1 : image_token_indices[i + 1]])
+
             split_sizes = [x.shape[0] for x in cur_labels_noim]
+
             cur_input_embeds = self.get_model().embed_tokens(paddle.concat(x=cur_input_ids_noim))
             cur_input_embeds_no_im = paddle.split(x=cur_input_embeds, num_or_sections=split_sizes, axis=0)
-
             cur_new_input_embeds = []
             cur_new_labels = []
 

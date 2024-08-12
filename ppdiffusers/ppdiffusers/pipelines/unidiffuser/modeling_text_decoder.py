@@ -335,7 +335,7 @@ class UniDiffuserTextDecoder(ModelMixin, ConfigMixin, ModuleUtilsMixin):
                 logits[is_stopped, 0] = 0
                 scores_sum = scores[:, None] + logits
                 seq_lengths[~is_stopped] += 1
-                scores_sum_average = scores_sum / seq_lengths[:, None]
+                scores_sum_average = scores_sum / seq_lengths[:, None].cast(scores_sum.dtype)
                 scores_sum_average, next_tokens = scores_sum_average.reshape([-1]).topk(beam_size, -1)
                 next_tokens_source = next_tokens // scores_sum.shape[1]
                 seq_lengths = seq_lengths[next_tokens_source]
@@ -344,7 +344,7 @@ class UniDiffuserTextDecoder(ModelMixin, ConfigMixin, ModuleUtilsMixin):
                 tokens = tokens[next_tokens_source]
                 tokens = paddle.concat(x=(tokens, next_tokens), axis=1)
                 generated = generated[next_tokens_source]
-                scores = scores_sum_average * seq_lengths
+                scores = scores_sum_average * seq_lengths.cast(scores_sum_average.dtype)
                 is_stopped = paddle.cast(is_stopped, "int32")  # TODO: nf
                 is_stopped = is_stopped[next_tokens_source]
                 is_stopped = paddle.cast(is_stopped, "bool")
@@ -357,7 +357,7 @@ class UniDiffuserTextDecoder(ModelMixin, ConfigMixin, ModuleUtilsMixin):
             if is_stopped.astype("bool").all():
                 break
 
-        scores = scores / seq_lengths
+        scores = scores / seq_lengths.cast(scores.dtype)
         order = scores.argsort(descending=True)
         # tokens tensors are already padded to max_seq_length
         output_texts = [tokens[i] for i in order]
