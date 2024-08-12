@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import os
+
 os.environ["USE_PPXFORMERS"] = "False"
 import datetime
 
@@ -31,11 +32,18 @@ pipe = StableDiffusionPipeline.from_pretrained("runwayml/stable-diffusion-v1-5",
 prompt = "a photo of an astronaut riding a horse on mars"  # or a little girl dances in the cherry blossom rain
 pipe.scheduler = EulerAncestralDiscreteScheduler.from_config(pipe.scheduler.config)
 
-# because of paddlenlp problem, we can not use paddle.incubate.jit.inference in pipe.text_encoder
-# pipe.text_encoder.forward = paddle.incubate.jit.inference(pipe.text_encoder.forward, with_trt=False)
+pipe.text_encoder.text_model = paddle.incubate.jit.inference(
+    pipe.text_encoder.text_model,
+    save_model_dir="./tmp/text_encoder_static_models",
+    cache_static_model=True,
+    with_trt=True,
+    trt_precision_mode="float16",
+    trt_use_static=True,
+)
 
-pipe.unet.forward = paddle.incubate.jit.inference(
-    pipe.unet.forward,
+pipe.unet = paddle.incubate.jit.inference(
+    pipe.unet,
+    save_model_dir="./tmp/unet_static_models",
     cache_static_model=True,
     with_trt=True,
     trt_precision_mode="float16",
@@ -44,6 +52,7 @@ pipe.unet.forward = paddle.incubate.jit.inference(
 
 pipe.vae.decode = paddle.incubate.jit.inference(
     pipe.vae.decode,
+    save_model_dir="./tmp/vae_static_models",
     cache_static_model=True,
     with_trt=True,
     trt_precision_mode="float16",
@@ -59,8 +68,8 @@ starttime = datetime.datetime.now()
 for i in range(repeat_times):
     image = pipe(prompt, guidance_scale=7.5, width=512, height=512).images[0]
 
-image.save("astronaut_rides_horse.png")
 endtime = datetime.datetime.now()
 duringtime = endtime - starttime
 time_ms = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
 print("The whole end to end time : ", time_ms / repeat_times, "ms")
+image.save("astronaut_rides_horse.png")
