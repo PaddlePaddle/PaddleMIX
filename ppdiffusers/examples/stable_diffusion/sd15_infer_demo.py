@@ -37,13 +37,13 @@ pipe.scheduler = EulerAncestralDiscreteScheduler.from_config(pipe.scheduler.conf
 pipe.unet.forward = paddle.incubate.jit.inference(
     pipe.unet.forward,
     cache_static_model=True,
-    with_trt=True, trt_precision_mode="float16", trt_use_static=True
+    with_trt=True, trt_precision_mode="float16", trt_use_static=True,
 )
 
 pipe.vae.decode = paddle.incubate.jit.inference(
     pipe.vae.decode,
     cache_static_model=True,
-    with_trt=True, trt_precision_mode="float16", trt_use_static=True
+    with_trt=True, trt_precision_mode="float16", trt_use_static=True,
 )
 
 for i in range(5):
