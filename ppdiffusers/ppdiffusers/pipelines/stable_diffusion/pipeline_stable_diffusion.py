@@ -873,7 +873,7 @@ class StableDiffusionPipeline(
                     return_dict=False,
                 )
                 if isinstance(noise_pred, paddle.Tensor):
-                    # this for paddle inference
+                    # this for paddle inference's paddle.incubate.jit.inference
                     noise_pred = noise_pred
                 else:
                     noise_pred = noise_pred[0]
@@ -910,7 +910,7 @@ class StableDiffusionPipeline(
         if not output_type == "latent":
             image = self.vae.decode(latents / self.vae.config.scaling_factor, return_dict=False, generator=generator)
             if isinstance(image, paddle.Tensor):
-                # this for paddle inference
+                # this for paddle inference's paddle.incubate.jit.inference
                 image = image
             else:
                 image = image[0]
