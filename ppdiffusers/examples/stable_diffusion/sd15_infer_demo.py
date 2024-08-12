@@ -13,10 +13,7 @@
 # limitations under the License.
 
 import os
-
 os.environ["USE_PPXFORMERS"] = "False"
-os.environ["CUDA_VISIBLE_DEVICES"] = "4"
-
 import datetime
 
 import paddle
