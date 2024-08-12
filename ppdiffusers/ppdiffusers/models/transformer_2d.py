@@ -343,14 +343,8 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
         if self.is_input_continuous:
             if self.data_format == "NCHW":
                 # batch, _, height, width = paddle.shape(hidden_states)  # (NOTE,junnyu) make export happier
-                (
-                    batch,
-                    _,
-                    height,
-                    width,
-                ) = (
-                    hidden_states.shape
-                )  # (NOTE,zhoukangkang paddle inference ) make hit paddle inference elementwiseadd_transpose_pass.
+                # (NOTE,zhoukangkang paddle inference ) make hit paddle inference elementwiseadd_transpose_pass.
+                batch, _, height, width = hidden_states.shape
             else:
                 batch, height, width, _ = paddle.shape(hidden_states)
             residual = hidden_states
