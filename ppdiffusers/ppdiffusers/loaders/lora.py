@@ -15,6 +15,7 @@ import os
 from contextlib import nullcontext
 from functools import partial
 from typing import Callable, Dict, List, Optional, Union
+from pathlib import Path
 
 import numpy as np
 import paddle
@@ -83,6 +84,7 @@ logger = logging.get_logger(__name__)
 
 TEXT_ENCODER_NAME = "text_encoder"
 UNET_NAME = "unet"
+TRANSFORMER_NAME = "transformer"
 
 TORCH_LORA_WEIGHT_NAME = "pytorch_lora_weights.bin"
 TORCH_LORA_WEIGHT_NAME_SAFE = "pytorch_lora_weights.safetensors"
@@ -1470,3 +1472,400 @@ class StableDiffusionXLLoraLoaderMixin(LoraLoaderMixin):
         else:
             self._remove_text_encoder_monkey_patch_classmethod(self.text_encoder)
             self._remove_text_encoder_monkey_patch_classmethod(self.text_encoder_2)
+
+
+class SD3LoraLoaderMixin:
+    r"""
+    Load LoRA layers into [`SD3Transformer2DModel`].
+    """
+
+    transformer_name = TRANSFORMER_NAME
+    num_fused_loras = 0
+
+    def load_lora_weights(
+        self, pretrained_model_name_or_path_or_dict: Union[str, Dict[str, torch.Tensor]], adapter_name=None, **kwargs
+    ):
+        """
+        Load LoRA weights specified in `pretrained_model_name_or_path_or_dict` into `self.unet` and
+        `self.text_encoder`.
+        All kwargs are forwarded to `self.lora_state_dict`.
+        See [`~loaders.LoraLoaderMixin.lora_state_dict`] for more details on how the state dict is loaded.
+        See [`~loaders.LoraLoaderMixin.load_lora_into_transformer`] for more details on how the state dict is loaded
+        into `self.transformer`.
+        Parameters:
+            pretrained_model_name_or_path_or_dict (`str` or `os.PathLike` or `dict`):
+                See [`~loaders.LoraLoaderMixin.lora_state_dict`].
+            kwargs (`dict`, *optional*):
+                See [`~loaders.LoraLoaderMixin.lora_state_dict`].
+            adapter_name (`str`, *optional*):
+                Adapter name to be used for referencing the loaded adapter model. If not specified, it will use
+                `default_{i}` where i is the total number of adapters being loaded.
+        """
+        if not USE_PEFT_BACKEND:
+            raise ValueError("PEFT backend is required for this method.")
+
+        # if a dict is passed, copy it instead of modifying it inplace
+        if isinstance(pretrained_model_name_or_path_or_dict, dict):
+            pretrained_model_name_or_path_or_dict = pretrained_model_name_or_path_or_dict.copy()
+
+        # First, ensure that the checkpoint is a compatible one and can be successfully loaded.
+        state_dict, from_diffusers = self.lora_state_dict(pretrained_model_name_or_path_or_dict, **kwargs)
+
+        is_correct_format = all("lora" in key or "dora_scale" in key for key in state_dict.keys())
+        if not is_correct_format:
+            raise ValueError("Invalid LoRA checkpoint.")
+
+        self.load_lora_into_transformer(
+            state_dict,
+            transformer=getattr(self, self.transformer_name) if not hasattr(self, "transformer") else self.transformer,
+            adapter_name=adapter_name,
+            _pipeline=self,
+            from_diffusers=from_diffusers,
+        )
+
+    @classmethod
+    def lora_state_dict(
+        cls,
+        pretrained_model_name_or_path_or_dict: Union[str, Dict[str, paddle.Tensor]],
+        **kwargs,
+    ):
+        r"""
+        Return state dict for lora weights and the network alphas.
+        <Tip warning={true}>
+        We support loading A1111 formatted LoRA checkpoints in a limited capacity.
+        This function is experimental and might change in the future.
+        </Tip>
+        Parameters:
+            pretrained_model_name_or_path_or_dict (`str` or `os.PathLike` or `dict`):
+                Can be either:
+                    - A string, the *model id* (for example `google/ddpm-celebahq-256`) of a pretrained model hosted on
+                      the Hub.
+                    - A path to a *directory* (for example `./my_model_directory`) containing the model weights saved
+                      with [`ModelMixin.save_pretrained`].
+                    - A [torch state
+                      dict](https://pytorch.org/tutorials/beginner/saving_loading_models.html#what-is-a-state-dict).
+            cache_dir (`Union[str, os.PathLike]`, *optional*):
+                Path to a directory where a downloaded pretrained model configuration is cached if the standard cache
+                is not used.
+            force_download (`bool`, *optional*, defaults to `False`):
+                Whether or not to force the (re-)download of the model weights and configuration files, overriding the
+                cached versions if they exist.
+            resume_download (`bool`, *optional*, defaults to `False`):
+                Whether or not to resume downloading the model weights and configuration files. If set to `False`, any
+                incompletely downloaded files are deleted.
+            proxies (`Dict[str, str]`, *optional*):
+                A dictionary of proxy servers to use by protocol or endpoint, for example, `{'http': 'foo.bar:3128',
+                'http://hostname': 'foo.bar:4012'}`. The proxies are used on each request.
+            local_files_only (`bool`, *optional*, defaults to `False`):
+                Whether to only load local model weights and configuration files or not. If set to `True`, the model
+                won't be downloaded from the Hub.
+            revision (`str`, *optional*, defaults to `"main"`):
+                The specific model version to use. It can be a branch name, a tag name, a commit id, or any identifier
+                allowed by Git.
+            subfolder (`str`, *optional*, defaults to `""`):
+                The subfolder location of a model file within a larger model repository on the Hub or locally.
+        """
+        # Load the main state dict first which has the LoRA layers for either of
+        # UNet and text encoder or both.
+        from_hf_hub = kwargs.pop("from_hf_hub", FROM_HF_HUB)
+        from_aistudio = kwargs.pop("from_aistudio", FROM_AISTUDIO)
+        cache_dir = kwargs.pop("cache_dir", None)
+        if cache_dir is None:
+            if from_aistudio:
+                cache_dir = None  # TODO, check aistudio cache
+            elif from_hf_hub:
+                cache_dir = DIFFUSERS_CACHE
+            else:
+                cache_dir = PPDIFFUSERS_CACHE
+        from_diffusers = kwargs.pop("from_diffusers", FROM_DIFFUSERS)
+        force_download = kwargs.pop("force_download", False)
+        resume_download = kwargs.pop("resume_download", False)
+        proxies = kwargs.pop("proxies", None)
+        local_files_only = kwargs.pop("local_files_only", None)
+        use_auth_token = kwargs.pop("use_auth_token", None)
+        revision = kwargs.pop("revision", None)
+        subfolder = kwargs.pop("subfolder", None)
+        weight_name = kwargs.pop("weight_name", None)
+        use_safetensors = kwargs.pop("use_safetensors", None)
+
+        allow_pickle = False
+        if use_safetensors is None:
+            use_safetensors = True
+            allow_pickle = True
+
+        user_agent = {
+            "file_type": "attn_procs_weights",
+            "framework": "pytorch" if from_diffusers else "paddle",
+        }
+
+        model_file = None
+        if not isinstance(pretrained_model_name_or_path_or_dict, dict):
+            # Let's first try to load .safetensors weights
+            if (use_safetensors and weight_name is None) or (
+                weight_name is not None and weight_name.endswith(".safetensors")
+            ):
+                try:
+                    model_file = _get_model_file(
+                        pretrained_model_name_or_path_or_dict,
+                        weights_name=(weight_name or TORCH_LORA_WEIGHT_NAME_SAFE)
+                        if from_diffusers
+                        else ((weight_name or PADDLE_LORA_WEIGHT_NAME_SAFE)),
+                        cache_dir=cache_dir,
+                        force_download=force_download,
+                        resume_download=resume_download,
+                        proxies=proxies,
+                        local_files_only=local_files_only,
+                        use_auth_token=use_auth_token,
+                        revision=revision,
+                        subfolder=subfolder,
+                        user_agent=user_agent,
+                        from_aistudio=from_aistudio,
+                        from_hf_hub=from_hf_hub,
+                    )
+                except Exception:
+                    model_file = None
+
+            if model_file is None:
+                model_file = _get_model_file(
+                    pretrained_model_name_or_path_or_dict,
+                    weights_name=(weight_name or TORCH_LORA_WEIGHT_NAME)
+                    if from_diffusers
+                    else ((weight_name or PADDLE_LORA_WEIGHT_NAME)),
+                    cache_dir=cache_dir,
+                    force_download=force_download,
+                    resume_download=resume_download,
+                    proxies=proxies,
+                    local_files_only=local_files_only,
+                    use_auth_token=use_auth_token,
+                    revision=revision,
+                    subfolder=subfolder,
+                    user_agent=user_agent,
+                    from_aistudio=from_aistudio,
+                    from_hf_hub=from_hf_hub,
+                )
+
+            assert model_file is not None, "Could not find the model file!"
+            # TODO, check this
+            from ppdiffusers.utils import smart_load
+
+            state_dict = smart_load(model_file, return_is_torch_weight=True)
+            is_torch_weight = state_dict.pop("is_torch_weight", False)
+            if not from_diffusers and is_torch_weight:
+                logger.warning(
+                    "Detect the weight is in diffusers format, but currently, `from_diffusers` is set to `False`. To proceed, we will change the value of `from_diffusers` to `True`!"
+                )
+                from_diffusers = True
+        else:
+            state_dict = pretrained_model_name_or_path_or_dict
+
+        return state_dict, from_diffusers
+
+    @classmethod
+    def load_lora_into_transformer(cls, state_dict, transformer, adapter_name=None, _pipeline=None, from_diffusers=None,):
+        """
+        This will load the LoRA layers specified in `state_dict` into `transformer`.
+        Parameters:
+            state_dict (`dict`):
+                A standard state dict containing the lora layer parameters. The keys can either be indexed directly
+                into the unet or prefixed with an additional `unet` which can be used to distinguish between text
+                encoder lora layers.
+            transformer (`SD3Transformer2DModel`):
+                The Transformer model to load the LoRA layers into.
+            adapter_name (`str`, *optional*):
+                Adapter name to be used for referencing the loaded adapter model. If not specified, it will use
+                `default_{i}` where i is the total number of adapters being loaded.
+        """
+        if from_diffusers is None:
+            from_diffusers = FROM_DIFFUSERS
+
+        from ppdiffusers.peft import LoraConfig, inject_adapter_in_model, set_peft_model_state_dict
+
+        keys = list(state_dict.keys())
+
+        transformer_keys = [k for k in keys if k.startswith(cls.transformer_name)]
+        state_dict = {
+            k.replace(f"{cls.transformer_name}.", ""): v for k, v in state_dict.items() if k in transformer_keys
+        }
+
+        if len(state_dict.keys()) > 0:
+            if adapter_name in getattr(transformer, "peft_config", {}):
+                raise ValueError(
+                    f"Adapter name {adapter_name} already in use in the transformer - please select a new adapter name."
+                )
+
+            rank = {}
+            for key, val in state_dict.items():
+                if "lora_B" in key:
+                    rank[key] = val.shape[1]
+
+            lora_config_kwargs = get_peft_kwargs(rank, network_alpha_dict=None, peft_state_dict=state_dict)
+            if "use_dora" in lora_config_kwargs:
+                raise ValueError(
+                    "ppdiffusers.peft does not support dora yet"
+                )
+            lora_config = LoraConfig(**lora_config_kwargs)
+
+            # adapter_name
+            if adapter_name is None:
+                adapter_name = get_adapter_name(transformer)
+
+            inject_adapter_in_model(lora_config, transformer, adapter_name=adapter_name)
+            incompatible_keys = set_peft_model_state_dict(transformer, state_dict, adapter_name)
+
+            if incompatible_keys is not None:
+                # check only for unexpected keys
+                unexpected_keys = getattr(incompatible_keys, "unexpected_keys", None)
+                if unexpected_keys:
+                    logger.warning(
+                        f"Loading adapter weights from state_dict led to unexpected keys not found in the model: "
+                        f" {unexpected_keys}. "
+                    )
+
+            # Unsafe code />
+
+    @classmethod
+    def save_lora_weights(
+        cls,
+        save_directory: Union[str, os.PathLike],
+        transformer_lora_layers: Dict[str, paddle.nn.Layer] = None,
+        is_main_process: bool = True,
+        weight_name: str = None,
+        save_function: Callable = None,
+        safe_serialization: bool = True,
+        to_diffusers=None,
+    ):
+        r"""
+        Save the LoRA parameters corresponding to the UNet and text encoder.
+        Arguments:
+            save_directory (`str` or `os.PathLike`):
+                Directory to save LoRA parameters to. Will be created if it doesn't exist.
+            transformer_lora_layers (`Dict[str, paddle.nn.Layer]` or `Dict[str, paddletorch.Tensor]`):
+                State dict of the LoRA layers corresponding to the `transformer`.
+            is_main_process (`bool`, *optional*, defaults to `True`):
+                Whether the process calling this is the main process or not. Useful during distributed training and you
+                need to call this function on all processes. In this case, set `is_main_process=True` only on the main
+                process to avoid race conditions.
+            save_function (`Callable`):
+                The function to use to save the state dictionary. Useful during distributed training when you need to
+                replace `torch.save` or `paddle.save` with another method. Can be configured with the environment variable
+                `DIFFUSERS_SAVE_MODE`.
+            safe_serialization (`bool`, *optional*, defaults to `True`):
+                Whether to save the model using `safetensors` or the traditional way.
+        """
+        if to_diffusers is None:
+            to_diffusers = TO_DIFFUSERS
+
+        state_dict = {}
+
+        def pack_weights(layers, prefix):
+            layers_weights = layers.state_dict() if isinstance(layers, nn.Layer) else layers
+            layers_state_dict = {f"{prefix}.{module_name}": param for module_name, param in layers_weights.items()}
+            return layers_state_dict
+
+        if not transformer_lora_layers:
+            raise ValueError("You must pass `transformer_lora_layers`.")
+
+        if transformer_lora_layers:
+            state_dict.update(pack_weights(transformer_lora_layers, cls.transformer_name))
+
+        # Save the model
+        cls.write_lora_layers(
+            state_dict=state_dict,
+            save_directory=save_directory,
+            is_main_process=is_main_process,
+            weight_name=weight_name,
+            save_function=save_function,
+            safe_serialization=safe_serialization,
+            to_diffusers=to_diffusers,  # only change save weights name and save function
+        )
+
+    @staticmethod
+    def write_lora_layers(
+        state_dict: Dict[str, torch.Tensor],
+        save_directory: str,
+        is_main_process: bool,
+        weight_name: str,
+        save_function: Callable,
+        safe_serialization: bool,
+        to_diffusers=None,
+    ):
+        if to_diffusers is None:
+            to_diffusers = TO_DIFFUSERS
+
+        if os.path.isfile(save_directory):
+            logger.error(f"Provided path ({save_directory}) should be a directory, not a file")
+            return
+
+        if save_function is None:
+            if to_diffusers:
+                if not is_torch_available() and not safe_serialization:
+                    safe_serialization = True
+                    logger.warning(
+                        "PyTorch is not installed, and `safe_serialization` is currently set to `False`. "
+                        "To ensure proper model saving, we will automatically set `safe_serialization=True`. "
+                        "If you want to keep `safe_serialization=False`, please make sure PyTorch is installed."
+                    )
+                if safe_serialization:
+                    if is_torch_available():
+                        save_function = partial(torch_safe_save_file, metadata={"format": "pt"})
+                    else:
+                        save_function = partial(np_safe_save_file, metadata={"format": "pt"})
+                else:
+                    save_function = torch.save
+            else:
+                if safe_serialization:
+                    state_dict = {k: np.ascontiguousarray(v) for k, v in state_dict.items()}
+                    save_function = partial(np_safe_save_file, metadata={"format": "pd"})
+                else:
+                    save_function = paddle.save
+
+        os.makedirs(save_directory, exist_ok=True)
+
+        if weight_name is None:
+            if to_diffusers:
+                if safe_serialization:
+                    weight_name = TORCH_LORA_WEIGHT_NAME_SAFE
+                else:
+                    weight_name = TORCH_LORA_WEIGHT_NAME
+            else:
+                if safe_serialization:
+                    weight_name = PADDLE_LORA_WEIGHT_NAME_SAFE
+                else:
+                    weight_name = PADDLE_LORA_WEIGHT_NAME
+        else:
+            if "paddle" in weight_name.lower() or "pdparams" in weight_name.lower():
+                to_diffusers = False
+            elif "torch" in weight_name.lower() or "bin" in weight_name.lower():
+                to_diffusers = True
+
+        save_path = Path(save_directory, weight_name).as_posix()
+        save_function(state_dict, save_path)
+        logger.info(f"Model weights saved in {save_path}")
+
+    def unload_lora_weights(self):
+        """
+        Unloads the LoRA parameters.
+        Examples:
+        ```python
+        >>> # Assuming `pipeline` is already loaded with the LoRA parameters.
+        >>> pipeline.unload_lora_weights()
+        >>> ...
+        ```
+        """
+        transformer = getattr(self, self.transformer_name) if not hasattr(self, "transformer") else self.transformer
+        recurse_remove_peft_layers(transformer)
+        if hasattr(transformer, "peft_config"):
+            del transformer.peft_config
+
+    @classmethod
+    def _optionally_disable_offloading(cls, _pipeline):
+        """
+        Optionally removes offloading in case the pipeline has been already sequentially offloaded to CPU.
+        Args:
+            _pipeline (`DiffusionPipeline`):
+                The pipeline to disable offloading for.
+        Returns:
+            tuple:
+                A tuple indicating if `is_model_cpu_offload` or `is_sequential_cpu_offload` is True.
+        """
+        pass
