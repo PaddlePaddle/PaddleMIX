@@ -20,6 +20,7 @@ import re
 from io import BytesIO
 from typing import Dict, Optional, Sequence
 
+import cv2
 import paddle
 import requests
 from paddlenlp.generation import (
@@ -42,6 +43,8 @@ from .constants import (
 
 __all__ = [
     "load_image",
+    "sample_frames",
+    "is_valid_video_filename",
     "tokenizer_image_token",
     "get_model_name_from_path",
     "KeywordsStoppingCriteria",
@@ -200,6 +203,34 @@ def load_image(image_file):
     else:
         image = Image.open(image_file).convert("RGB")
     return image
+
+
+def is_valid_video_filename(name):
+    video_extensions = ["avi", "mp4", "mov", "mkv", "flv", "wmv", "mjpeg"]
+
+    ext = name.split(".")[-1].lower()
+
+    if ext in video_extensions:
+        return True
+    else:
+        return False
+
+
+def sample_frames(video_file, num_frames):
+    video = cv2.VideoCapture(video_file)
+    total_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
+    interval = total_frames // num_frames
+    frames = []
+    for i in range(total_frames):
+        ret, frame = video.read()
+        pil_img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+        if not ret:
+            continue
+        if i % interval == 0:
+            frames.append(pil_img)
+    video.release()
+    return frames
+
 
 
 def expand2square(pil_img, background_color):
