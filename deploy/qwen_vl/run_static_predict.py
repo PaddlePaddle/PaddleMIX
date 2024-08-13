@@ -175,6 +175,7 @@ if __name__ == "__main__":
         "--device", default="gpu", choices=["gpu", "cpu", "xpu"], help="Device selected for inference."
     )
     parser.add_argument("--seed", default=1234)
+    parser.add_argument("--benchmark", action="store_true")
     args = parser.parse_args()
 
     paddle.seed(args.seed)
@@ -183,6 +184,20 @@ if __name__ == "__main__":
 
     url = "https://bj.bcebos.com/v1/paddlenlp/models/community/GroundingDino/000000004505.jpg"
     prompt = "Generate the caption in English with grounding:"
+    
+    if not args.benchmark:
+        msg = predictor.predict(url, prompt)
+        print("Outputs: ", msg)
+    else:
+        import time
+        start = 0.0
+        total = 0.0
+        for i in range(20):
+            if i>10:
+                start = time.time()
+            msg = predictor.predict(url, prompt)
 
-    msg = predictor.predict(url, prompt)
-    print("Outputs: ", msg)
+            if i > 10:
+                total += time.time()-start
+
+        print("Time :",total/10)

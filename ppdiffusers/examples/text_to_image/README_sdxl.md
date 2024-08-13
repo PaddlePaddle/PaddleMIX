@@ -31,7 +31,7 @@ pip install -r requirements_sdxl.txt
 ```bash
 export MODEL_NAME="stabilityai/stable-diffusion-xl-base-1.0"
 export VAE_NAME="madebyollin/sdxl-vae-fp16-fix"
-export DATASET_NAME="lambdalabs/pokemon-blip-captions"
+export DATASET_NAME="lambdalabs/naruto-blip-captions"
 
 export HF_ENDPOINT=https://hf-mirror.com
 export FLAGS_conv_workspace_size_limit=4096
@@ -57,7 +57,7 @@ python -u train_text_to_image_sdxl.py \
 
 **注释**：
 
-* `train_text_to_image_sdxl.py` 脚本会预计算文本嵌入和VAE编码，并将它们保存在内存中。对于像 [`lambdalabs/pokemon-blip-captions`](https://hf.co/datasets/lambdalabs/pokemon-blip-captions) 这样的小数据集来说，这可能不是问题，但当脚本用于更大的数据集时，肯定会导致内存问题。对于这些情况，你可能会希望将这些预计算的表示序列化到磁盘上，并在微调过程中加载它们。有关更深入的讨论，请参阅 [这个 PR](https://github.com/huggingface/diffusers/pull/4505)。
+* `train_text_to_image_sdxl.py` 脚本会预计算文本嵌入和VAE编码，并将它们保存在内存中。对于像 [`lambdalabs/naruto-blip-captions`](https://hf.co/datasets/lambdalabs/naruto-blip-captions) 这样的小数据集来说，这可能不是问题，但当脚本用于更大的数据集时，肯定会导致内存问题。对于这些情况，你可能会希望将这些预计算的表示序列化到磁盘上，并在微调过程中加载它们。有关更深入的讨论，请参阅 [这个 PR](https://github.com/huggingface/diffusers/pull/4505)。
 * 训练脚本是计算密集型的，可能无法在消费级GPU上运行，比如 Tesla T4。
 * 上面显示的训练命令在训练周期之间执行中间质量验证，并将结果记录到 Weights and Biases。`--report_to`、`--validation_prompt` 和 `--validation_epochs` 是这里相关的 CLI 参数。
 * 众所周知，SDXL的VAE存在数值不稳定性问题。这就是为什么我们还暴露了一个 CLI 参数，即 `--pretrained_vae_model_name_or_path`，让你指定更好的VAE的位置（例如[这个](https://huggingface.co/madebyollin/sdxl-vae-fp16-fix)）。
@@ -127,14 +127,14 @@ Low-Rank Adaptation of Large Language Models 最初由 Microsoft 在 [LoRA: Low-
 
 ### 训练
 
-首先，你需要按照[安装部分](#安装依赖项)中解释的设置开发环境。确保设置了 `MODEL_NAME` 和 `DATASET_NAME` 环境变量，以及可选的 `VAE_NAME` 变量。这里，我们将使用 [Stable Diffusion XL 1.0-base](https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0) 和 [Pokemons 数据集](https://huggingface.co/datasets/lambdalabs/pokemon-blip-captions)。
+首先，你需要按照[安装部分](#安装依赖项)中解释的设置开发环境。确保设置了 `MODEL_NAME` 和 `DATASET_NAME` 环境变量，以及可选的 `VAE_NAME` 变量。这里，我们将使用 [Stable Diffusion XL 1.0-base](https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0) 和 [Pokemons 数据集](https://huggingface.co/datasets/lambdalabs/naruto-blip-captions)。
 
 **___注：通过在训练过程中定期生成样本图像来监控训练进度非常有用。[Weights and Biases](https://docs.wandb.ai/quickstart) 是一个很好的解决方案，可以轻松地在训练过程中查看生成的图像。你需要做的就是在训练前运行 `pip install wandb`，以自动记录图像。___**
 
 ```bash
 export MODEL_NAME="stabilityai/stable-diffusion-xl-base-1.0"
 export VAE_NAME="madebyollin/sdxl-vae-fp16-fix"
-export DATASET_NAME="lambdalabs/pokemon-blip-captions"
+export DATASET_NAME="lambdalabs/naruto-blip-captions"
 
 export HF_ENDPOINT=https://hf-mirror.com
 export FLAGS_conv_workspace_size_limit=4096

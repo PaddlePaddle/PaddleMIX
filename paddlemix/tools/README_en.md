@@ -154,23 +154,25 @@ For convenience in testing, we also provide a dataset in the chatml_dataset form
 
 **Full-parameter Fine-tuning: SFT**
 ```bash
-# 单卡Qwen-vl SFT启动命令参考
+# single card 
 python paddlemix/tools/supervised_finetune.py paddlemix/config/qwen_vl/sft_argument.json
 
-# 多卡Qwen-vl SFT启动命令参考
+# multi-card 
 python -u  -m paddle.distributed.launch --gpus "0,1,2,3" paddlemix/tools/supervised_finetune.py paddlemix/config/qwen_vl/sft_argument.json
+
+# or
+sh paddlemix/tools/train.sh paddlemix/config/qwen_vl/sft_argument.json
 ```
 
 **LoRA**
 ```bash
-# 单卡Qwen-vl LoRA启动命令参考
 python  paddlemix/tools/supervised_finetune.py paddlemix/config/qwen_vl/lora_sft_argument.json
 ```
 
 Note: After training with LoRA, it's necessary to merge the LoRA parameters. We provide a script for merging LoRA parameters, which combines the LoRA parameters into the main model and saves the corresponding weights. The command is as follows:
 
 ```bash
-python paddlemix/paddlemix/tools/merge_lora_params.py \
+python paddlemix/tools/merge_lora_params.py \
 --model_name_or_path qwen-vl/qwen-vl-chat-7b \
 --lora_path output_qwen_vl\
 --merge_model_path qwen_vl_merge

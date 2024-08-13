@@ -12,20 +12,31 @@
 
 注：图片引用自[LLaVA](https://github.com/haotian-liu/LLaVA).
 
+本目录提供paddle版本的llava静态图推理部署示例，推荐使用A100进行推理部署。
+
 
 ## 2. 安装依赖
 
 * `paddlenlp_ops`依赖安装
 
 ```bash
-git clone https://github.com/PaddlePaddle/PaddleNLP.git
+git submodule update --init --recursive
 cd PaddleNLP
+git reset --hard 498f70988431be278dac618411fbfb0287853cd9
 pip install -e .
 cd csrc
 python setup_cuda.py install
 ```
+* 如果在V100上安装报错，可屏蔽 /PaddleNLP/csrc/generation/quant_int8.cu 以下语句:
 
-* `fused_ln`需要安装[此目录](https://github.com/PaddlePaddle/PaddleNLP/tree/develop/model_zoo/gpt-3/external_ops)下的自定义OP, `python setup.py install`
+```bash
+# template<>
+# __forceinline__ __device__ __nv_bfloat16 add_mul<__nv_bfloat16>(__nv_bfloat16 a, __nv_bfloat16 b, __nv_bfloat16 c) {
+#     return __hmul(__hadd(a, b), c);
+# }
+```
+
+* `fused_ln`需要安装 /PaddleNLP/model_zoo/gpt-3/external_ops 下的自定义OP, `python setup.py install`
 
 ## 3. 示例
 
@@ -35,10 +46,23 @@ python setup_cuda.py install
 
 ```bash
 #!/bin/bash
-
+export PYTHONPATH=/path/to/PaddleNLP/:/path/to/PaddleMIX
 python deploy/llava/export_model.py \
     --model_name_or_path "paddlemix/llava/llava-v1.5-7b" \
     --save_path "./llava_static" \
+    --encode_image \
+    --fp16
+```
+
+* 在`PaddleMIX`目录下，执行转换脚本，得到语言模型部分静态图
+
+```bash
+#!/bin/bash
+export PYTHONPATH=/path/to/PaddleNLP/:/path/to/PaddleMIX
+python deploy/llava/export_model.py \
+    --model_name_or_path "paddlemix/llava/llava-v1.5-7b" \
+    --save_path "./llava_static" \
+    --encode_text \
     --fp16
 ```
 
@@ -50,7 +74,7 @@ python deploy/llava/export_model.py \
 ```bash
 #!/bin/bash
 
-python3.10 deploy/llava/run_static_predict.py --model_name_or_path "paddlemix/llava/llava-v1.5-7b" \
+python deploy/llava/run_static_predict.py --model_name_or_path "paddlemix/llava/llava-v1.5-7b" \
 --image_file "https://bj.bcebos.com/v1/paddlenlp/models/community/GroundingDino/000000004505.jpg" \
 --first_model_path "llava_static/encode_image/clip"  \
 --second_model_path "llava_static/encode_text/llama" \

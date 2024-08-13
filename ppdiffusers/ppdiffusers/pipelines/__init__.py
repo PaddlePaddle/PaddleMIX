@@ -192,6 +192,7 @@ else:
             "PaddleInferStableDiffusionMegaPipeline",
         ]
     )
+    _import_structure["stable_diffusion_3"] = ["StableDiffusion3Pipeline", "StableDiffusion3Img2ImgPipeline"]
     _import_structure["stable_diffusion_safe"] = ["StableDiffusionPipelineSafe"]
     _import_structure["stable_video_diffusion"] = [
         "StableVideoDiffusionPipeline",
@@ -461,6 +462,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             StableUnCLIPImg2ImgPipeline,
             StableUnCLIPPipeline,
         )
+        from .stable_diffusion_3 import StableDiffusion3Img2ImgPipeline, StableDiffusion3Pipeline
         from .stable_diffusion_safe import StableDiffusionPipelineSafe
         from .stable_diffusion_xl import (
             PaddleInferStableDiffusionXLImg2ImgPipeline,

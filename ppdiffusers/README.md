@@ -20,6 +20,8 @@
 **PPDiffusers**是一款支持多种模态（如文本图像跨模态、图像、语音）扩散模型（Diffusion Model）训练和推理的国产化工具箱，依托于[**PaddlePaddle**](https://www.paddlepaddle.org.cn/)框架和[**PaddleNLP**](https://github.com/PaddlePaddle/PaddleNLP)自然语言处理开发库。
 
 ## News 📢
+* 🔥 **2024.07.15 发布 0.24.1 版本，新增[Open-Sora](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/Open-Sora)，支持模型训练和推理；全面支持Paddle 3.0。**
+
 * 🔥 **2024.04.17 发布 0.24.0 版本，支持[Sora相关技术](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/sora)，支持[DiT](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/class_conditional_image_generation/DiT)、[SiT](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/class_conditional_image_generation/DiT#exploring-flow-and-diffusion-based-generative-models-with-scalable-interpolant-transformers-sit)、[UViT](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/text_to_image_mscoco_uvit)训练推理，新增[NaViT](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/navit)、[MAGVIT-v2](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/video_tokenizer/magvit2)模型；
 视频生成能力全面升级；
 新增视频生成模型[SVD](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/stable_video_diffusion)，支持模型微调和推理；
@@ -1248,6 +1250,9 @@ PPDiffusers 遵循 [Apache-2.0开源协议](https://github.com/PaddlePaddle/Padd
 
 Stable Diffusion 遵循 [The CreativeML OpenRAIL M 开源协议](https://huggingface.co/spaces/CompVis/stable-diffusion-license)。
 > The CreativeML OpenRAIL M is an [Open RAIL M license](https://www.licenses.ai/blog/2022/8/18/naming-convention-of-responsible-ai-licenses), adapted from the work that [BigScience](https://bigscience.huggingface.co/) and [the RAIL Initiative](https://www.licenses.ai/) are jointly carrying in the area of responsible AI licensing. See also [the article about the BLOOM Open RAIL license](https://bigscience.huggingface.co/blog/the-bigscience-rail-license) on which this license is based.
+
+Stable Diffusion 3遵循 [Stability Community 开源协议](https://stability.ai/license)。
+> Community License: Free for research, non-commercial, and commercial use for organisations or individuals with less than $1M annual revenue. You only need a paid Enterprise license if your yearly revenues exceed USD$1M and you use Stability AI models in commercial products or services. Read more: https://stability.ai/license
 
 ## Acknowledge
 我们借鉴了🤗 Hugging Face的[Diffusers](https://github.com/huggingface/diffusers)关于预训练扩散模型使用的优秀设计，在此对Hugging Face作者及其开源社区表示感谢。
