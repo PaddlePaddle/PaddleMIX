@@ -16,8 +16,8 @@ from typing import Optional
 
 import paddle
 
-from ..models.llava_next.constants import IMAGE_TOKEN_INDEX
-from ..models.llava_next.mm_utils import (
+from ..models.llava.constants import IMAGE_TOKEN_INDEX
+from ..models.llava.mm_utils import (
     expand2square,
     get_conversation,
     is_valid_video_filename,
