@@ -145,11 +145,11 @@ class InternVLChatModel(MixPretrainedModel):
         image_flags = image_flags.squeeze(-1)
         input_embeds = self.language_model.get_input_embeddings()(input_ids).clone()
         # [2, 1918, 2048] -3972.55566406  bfloat16
-        #print('input_ids', input_ids.shape, input_ids.sum().item()) # [2, 1916] 346392202
-
-        #print('pixel_values', pixel_values.sum().item(), pixel_values.mean().item())
+        #print('input_ids', input_ids.shape, input_ids.dtype, input_ids.sum().item()) # [2, 1916] int64 346392202
+        #print('input_embeds', input_embeds.shape, input_embeds.dtype, input_embeds.sum().item()) # [2, 1916] bfloat16 346392202
+        #print('pixel_values', pixel_values.shape, pixel_values.dtype, pixel_values.sum().item(), pixel_values.mean().item())
         vit_embeds = self.extract_feature(pixel_values) # pixel_values float32 [14, 3, 448, 448] sum=891674.56250000 mean=0.10577939
-        #print('vit_embeds', vit_embeds.sum().item(), vit_embeds.mean().item())
+        #print('vit_embeds', vit_embeds.sum().item(), vit_embeds.dtype, vit_embeds.mean().item())
         # [14, 256, 2048] bfloat16 -85460.1875 -0.01165771484375
 
         #print('vit_embeds', vit_embeds.sum().item(), vit_embeds.mean().item())
@@ -161,7 +161,7 @@ class InternVLChatModel(MixPretrainedModel):
         input_embeds = input_embeds.reshape([B * N, C])
 
         if paddle.distributed.get_rank() == 0:
-            print(f'dynamic ViT batch size: {vit_batch_size}, images per sample: {vit_batch_size / B}, dynamic token length: {N}')
+            logger.info(f'dynamic ViT batch size: {vit_batch_size}, images per sample: {vit_batch_size / B}, dynamic token length: {N}')
 
         input_ids = input_ids.reshape([B * N]) # [3836] sum 346393658
         selected = (input_ids == self.img_context_token_id) # [3836] sum 3584
@@ -171,15 +171,15 @@ class InternVLChatModel(MixPretrainedModel):
             ignore_flag = False
         except Exception as e:
             vit_embeds = vit_embeds.reshape([-1, C])
-            print(f'warning: {e}, input_embeds[selected].shape={input_embeds[selected].shape}, '
+            logger.info(f'warning: {e}, input_embeds[selected].shape={input_embeds[selected].shape}, '
                   f'vit_embeds.shape={vit_embeds.shape}')
             n_token = selected.sum()
             input_embeds[selected] = input_embeds[selected] * 0.0 + vit_embeds[:n_token]
             ignore_flag = True
 
         input_embeds = input_embeds.reshape([B, N, C])
-        # [2, 1918, 2048] -87403.26562500
-        #print('input_embeds.sum()', input_embeds.shape, input_embeds.sum().item())
+        # [2, 1918, 2048] bfloat16 -87403.26562500
+        #print('input_embeds.sum()', input_embeds.dtype, input_embeds.shape, input_embeds.sum().item())
 
         outputs = self.language_model(
             inputs_embeds=input_embeds, # [2, 1918, 2048]  -87403.26562500
@@ -192,8 +192,8 @@ class InternVLChatModel(MixPretrainedModel):
             return_dict=True,
         )
         logits = outputs.logits
-        # print('logits.sum()', logits.shape, logits.dtype, logits.sum().item(), logits.mean().item())
-        # [2, 1918, 92553] -35019332.0 -0.09863674640655518
+        #print('logits.sum()', logits.shape, logits.dtype, logits.sum().item(), logits.mean().item())
+        # [2, 1918, 92553] bfloat16 -35019332.0 -0.09863674640655518
 
         loss = None
         if labels is not None:
@@ -208,7 +208,7 @@ class InternVLChatModel(MixPretrainedModel):
             #print('shift_logits.sum()', shift_logits.shape, shift_logits.sum().item()) # fp32 [3834, 92553] -34228768.0
             #print('shift_labels.sum()', shift_labels.shape, shift_labels.sum().item()) # int64 [3834] 4330172
             loss = loss_fct(shift_logits, shift_labels)
-            #print('loss', loss.item()) # 1.746330976486206
+            # print('loss', loss.dtype, loss.item()) # 1.746330976486206
             #print('loss', loss.item()) #1.7383328676223755 # torch llm npy+img npy
             #print('loss', loss.item()) #1.7464321851730347 # torch llm npy  1.7464323043823242 logits.npy
             if ignore_flag:
@@ -267,19 +267,19 @@ class InternVLChatModel(MixPretrainedModel):
                    history=None, return_history=False, IMG_START_TOKEN='<img>', IMG_END_TOKEN='</img>',
                    IMG_CONTEXT_TOKEN='<IMG_CONTEXT>', verbose=False, image_counts=None):
         if history is not None or return_history:
-            print('Now multi-turn chat is not supported in batch_chat.')
+            logger.info('Now multi-turn chat is not supported in batch_chat.')
             raise NotImplementedError
 
         if image_counts is not None:
             num_patches_list = image_counts
-            print('Warning: `image_counts` is deprecated. Please use `num_patches_list` instead.')
+            logger.info('Warning: `image_counts` is deprecated. Please use `num_patches_list` instead.')
 
         img_context_token_id = tokenizer.convert_tokens_to_ids(IMG_CONTEXT_TOKEN)
         self.img_context_token_id = img_context_token_id
 
         if verbose and pixel_values is not None:
             image_bs = pixel_values.shape[0]
-            print(f'dynamic ViT batch size: {image_bs}')
+            logger.info(f'dynamic ViT batch size: {image_bs}')
 
         queries = []
         for idx, num_patches in enumerate(num_patches_list):
@@ -340,7 +340,7 @@ class InternVLChatModel(MixPretrainedModel):
 
         if verbose and pixel_values is not None:
             image_bs = pixel_values.shape[0]
-            print(f'dynamic ViT batch size: {image_bs}')
+            logger.info(f'dynamic ViT batch size: {image_bs}')
 
         for num_patches in num_patches_list:
             image_tokens = IMG_START_TOKEN + IMG_CONTEXT_TOKEN * self.num_image_token * num_patches + IMG_END_TOKEN
@@ -366,7 +366,7 @@ class InternVLChatModel(MixPretrainedModel):
             query_to_print = query.replace(IMG_CONTEXT_TOKEN, '')
             query_to_print = query_to_print.replace(f'{IMG_START_TOKEN}{IMG_END_TOKEN}', '<image>')
             if verbose:
-                print(query_to_print, response)
+                logger.info(query_to_print, response)
             return response
 
     @paddle.no_grad()

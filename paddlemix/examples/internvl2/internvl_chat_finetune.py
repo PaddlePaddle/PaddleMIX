@@ -318,7 +318,6 @@ class LazySupervisedDataset(Dataset):
             preprocess_function = preprocess_phi3
         else:
             preprocess_function = preprocess
-        print('preprocess_function:\n', preprocess_function)
         return preprocess_function
 
     def load_image(self, image_path):
@@ -735,7 +734,7 @@ def main():
         vision_config = InternVisionConfig.from_pretrained(model_args.vision_path)
         vision_config.drop_path_rate = model_args.drop_path_rate
         vision_model = InternVisionModel.from_pretrained(
-            model_args.vision_path, config=vision_config) # dtype=paddle.bfloat16,
+            model_args.vision_path, config=vision_config, dtype=dtype)
         logger.info('Loading LLaMA...')
 
 
@@ -754,7 +753,7 @@ def main():
             logger.info('Using flash_attention_2 for LLaMA')
 
         llm = model_type.from_pretrained(
-            model_args.llm_path, # dtype=paddle.bfloat16,
+            model_args.llm_path, dtype=dtype,
             config=llm_config, trust_remote_code=True)
         logger.info('Building InternVLChatConfig...')
 

@@ -23,16 +23,12 @@ import paddle.nn.functional as F
 from paddle import nn
 from paddle.nn import CrossEntropyLoss, MSELoss, BCEWithLogitsLoss
 from paddlenlp.transformers.activations import ACT2FN
-#from transformers.cache_utils import Cache, DynamicCache
-# from transformers.modeling_attn_mask_utils import \
-#     _prepare_4d_causal_attention_mask
 from paddlenlp.transformers.model_outputs import (
     BaseModelOutputWithPast,
     CausalLMOutputWithPast,
 )
 from paddlenlp.transformers.model_utils import PretrainedModel
 
-# from transformers.utils import is_flash_attn_greater_or_equal_2_10
 from .configuration_phi3 import Phi3Config
 from ppdiffusers.utils import logging
 logger = logging.get_logger(__name__)
@@ -41,23 +37,29 @@ from ..bert_padding import pad_input, unpad_input, index_first_axis
 try:
     from paddle.nn.functional.flash_attention import flash_attention as flash_attn_func
     from paddle.nn.functional.flash_attention import flash_attn_unpadded as flash_attn_varlen_func
-    print("has_flash_attn is True.")
+    print("modeling_phi3 has_flash_attn is True.")
     has_flash_attn = True
 except:
     flash_attn_func, flash_attn_varlen_func = None, None
-    print("has_flash_attn is False.")
+    print("modeling_phi3 has_flash_attn is False.")
     has_flash_attn = False
-has_flash_attn = False # TODO: to be fixed
 
 # Transformers scans dependencies in the modeling file, causing issues on conditional loading. The regex only ignores try/catch blocks, but not if statements
 # if is_flash_attn_2_available():
 _flash_supports_window_size = False
-try: 
+try:
     _flash_supports_window_size = 'window_size' in list(inspect.signature(flash_attn_func).parameters)
-except:
-    _flash_supports_window_size = False
+except ImportError as error:
+    logger.warning(
+        f'`flash-attention` package not found, consider installing for better performance: {error}.'
+    )
+    if not _flash_supports_window_size:
+        logger.warning(
+            "Current `flash-attenton` does not support `window_size`. Either upgrade or use `attn_implementation='eager'`."
+        )
 
 
+# Copied from transformers.models.llama.modeling_llama.LlamaRMSNorm with Llama->Phi3
 class Phi3RMSNorm(nn.Layer):
     def __init__(self, hidden_size, epsilon=1e-6):
         """
@@ -86,46 +88,12 @@ def _get_unpad_data(attention_mask):
     seqlens_in_batch = attention_mask.sum(axis=-1, dtype="int32")
     indices = paddle.nonzero(attention_mask.flatten(), as_tuple=False).flatten()
     max_seqlen_in_batch = seqlens_in_batch.max().item()
-    cu_seqlens = F.pad(paddle.cumsum(seqlens_in_batch, axis=0, dtype=paddle.int32), (1, 0))
+    cu_seqlens = F.pad(paddle.cumsum(seqlens_in_batch, axis=0), (1, 0))
     return (
         indices,
         cu_seqlens,
         max_seqlen_in_batch,
     )
-
-
-def masked_fill(x, mask, value):
-    y = paddle.full(x.shape, value, x.dtype)
-    return paddle.where(mask, y, x)
-
-
-# Copied from transformers.models.bart.modeling_bart._make_causal_mask
-def _make_causal_mask(input_ids_shape: list, dtype: paddle.dtype, past_key_values_length: int = 0):
-    """
-    Make causal mask used for bi-directional self-attention.
-    """
-    bsz, tgt_len = input_ids_shape
-    mask = paddle.full(shape=(tgt_len, tgt_len), fill_value=paddle.finfo(dtype).min)
-    mask_cond = paddle.arange(end=mask.shape[-1])
-
-    mask = masked_fill(mask, mask_cond < (mask_cond + 1).reshape([mask.shape[-1], 1]), 0)
-    mask = mask.astype(dtype)
-    if past_key_values_length > 0:
-        mask = paddle.concat(x=[paddle.zeros(shape=[tgt_len, past_key_values_length], dtype=dtype), mask], axis=-1)
-    return mask[(None), (None), :, :].expand(shape=[bsz, 1, tgt_len, tgt_len + past_key_values_length])
-
-
-# Copied from transformers.models.bart.modeling_bart._expand_mask
-def _expand_mask(mask: paddle.Tensor, dtype: paddle.dtype, tgt_len: Optional[int] = None):
-    """
-    Expands attention_mask from `[bsz, seq_len]` to `[bsz, 1, tgt_seq_len, src_seq_len]`.
-    """
-    bsz, src_len = mask.shape
-    tgt_len = tgt_len if tgt_len is not None else src_len
-    expanded_mask = mask[:, (None), (None), :].expand(shape=[bsz, 1, tgt_len, src_len]).astype(dtype)
-    inverted_mask = 1.0 - expanded_mask
-
-    return masked_fill(inverted_mask, inverted_mask.astype("bool"), paddle.finfo(dtype).min)
 
 
 # Copied from transformers.models.gemma.modeling_gemma.GemmaRotaryEmbedding with gemma->phi3, Gemma->Phi3
@@ -467,11 +435,11 @@ class Phi3FlashAttention2(Phi3Attention):
     ) -> Tuple[paddle.Tensor, Optional[paddle.Tensor], Optional[Tuple[paddle.Tensor]]]:
         # Phi3FlashAttention2 attention does not support output_attentions
 
-        if not _flash_supports_window_size:
-            logger.warning_once(
-                "The current flash attention version does not support sliding window attention. Please use `attn_implementation='eager'` or upgrade flash-attn library."
-            )
-            raise ValueError('The current flash attention version does not support sliding window attention.')
+        # if not _flash_supports_window_size:
+        #     logger.warning_once(
+        #         "The current flash attention version does not support sliding window attention. Please use `attn_implementation='eager'` or upgrade flash-attn library."
+        #     )
+        #     raise ValueError('The current flash attention version does not support sliding window attention.')
 
         output_attentions = False
 
@@ -485,7 +453,11 @@ class Phi3FlashAttention2(Phi3Attention):
 
         bsz, q_len, _ = hidden_states.shape
 
-        qkv = self.qkv_proj(hidden_states)
+        try:
+            qkv = self.qkv_proj(hidden_states)
+        except:
+            qkv = self.qkv_proj(hidden_states.astype('bfloat16'))
+
         query_pos = self.num_heads * self.head_dim
         query_states = qkv[..., :query_pos]
         key_states = qkv[..., query_pos : query_pos + self.num_key_value_heads * self.head_dim]
@@ -561,8 +533,7 @@ class Phi3FlashAttention2(Phi3Attention):
         # This might slowdown training & inference so it is recommended to not cast the LayerNorms
         # in fp32.
 
-
-        if query_states.dtype == "float32":
+        if query_states.dtype == paddle.float32:
             # if paddle.is_autocast_enabled():
             #     target_dtype = paddle.get_autocast_gpu_dtype()
             # # Handle the case where the model is quantized
@@ -570,6 +541,7 @@ class Phi3FlashAttention2(Phi3Attention):
                 target_dtype = self.config._pre_quantization_dtype
             else:
                 target_dtype = self.qkv_proj.weight.dtype
+
             logger.warning_once(
                 f'The input hidden states seems to be silently casted in float32, this might be related to'
                 f' the fact you have upcasted embedding or layer norm layers in float32. We will cast back the input in'
@@ -585,6 +557,10 @@ class Phi3FlashAttention2(Phi3Attention):
         key_states = key_states.transpose([0, 2, 1, 3])
         value_states = value_states.transpose([0, 2, 1, 3])
 
+        original_dtype = query_states.dtype
+        query_states = query_states.astype('bfloat16')
+        key_states = key_states.astype('bfloat16')
+        value_states = value_states.astype('bfloat16')
         # return tuple 0 is output, 1 is softmax return
         attn_output = self._flash_attention_forward(
             query_states,
@@ -594,7 +570,8 @@ class Phi3FlashAttention2(Phi3Attention):
             q_len,
             dropout=attn_dropout,
             use_sliding_windows=use_sliding_windows,
-        )[0]
+        )
+        attn_output = attn_output.astype(original_dtype)
         attn_output = attn_output.reshape([bsz, q_len, self.hidden_size])
         attn_output = self.o_proj(attn_output)
 
@@ -642,9 +619,13 @@ class Phi3FlashAttention2(Phi3Attention):
             # TODO: Remove the `query_length != 1` check once Flash Attention for RoCm is bumped to 2.1. For details, please see the comment in LlamaFlashAttention2 __init__.
             causal = self.is_causal and query_length != 1
 
+        head_dim = query_states.shape[-1]
+        softmax_scale = head_dim**-0.5 # TODO: 需要手动加上
+
         # Contains at least one padding token in the sequence
         if attention_mask is not None:
             batch_size = query_states.shape[0]
+
             query_states, key_states, value_states, indices_q, cu_seq_lens, max_seq_lens = self._upad_input(
                 query_states, key_states, value_states, attention_mask, query_length
             )
@@ -661,10 +642,10 @@ class Phi3FlashAttention2(Phi3Attention):
                     cu_seqlens_k=cu_seqlens_k,
                     max_seqlen_q=max_seqlen_in_batch_q,
                     max_seqlen_k=max_seqlen_in_batch_k,
-                    dropout_p=dropout,
+                    dropout=dropout,
                     scale=softmax_scale, # not softmax_scale=
                     causal=causal,
-                )
+                )[0]
             else:
                 attn_output_unpad = flash_attn_varlen_func(
                     query_states,
@@ -674,11 +655,11 @@ class Phi3FlashAttention2(Phi3Attention):
                     cu_seqlens_k=cu_seqlens_k,
                     max_seqlen_q=max_seqlen_in_batch_q,
                     max_seqlen_k=max_seqlen_in_batch_k,
-                    dropout_p=dropout,
+                    dropout=dropout,
                     scale=softmax_scale, # not softmax_scale=
                     causal=causal,
                     window_size=(self.config.sliding_window, self.config.sliding_window),
-                )
+                )[0]
 
             attn_output = pad_input(attn_output_unpad, indices_q, batch_size, query_length)
         else:
@@ -690,7 +671,7 @@ class Phi3FlashAttention2(Phi3Attention):
                     dropout,
                     #softmax_scale,
                     causal=causal,
-                ) # return tuple, [0] is attn_output, [1] is None
+                )[0] # return tuple, [0] is attn_output, [1] is None
             else:
                 attn_output = flash_attn_func(
                     query_states,
@@ -700,7 +681,7 @@ class Phi3FlashAttention2(Phi3Attention):
                     #softmax_scale,
                     causal=causal,
                     window_size=(self.config.sliding_window, self.config.sliding_window),
-                )
+                )[0]
 
         return attn_output
 
@@ -784,7 +765,10 @@ class Phi3SdpaAttention(Phi3Attention):
 
         bsz, q_len, _ = hidden_states.shape
 
-        qkv = self.qkv_proj(hidden_states)
+        try:
+            qkv = self.qkv_proj(hidden_states)
+        except:
+            qkv = self.qkv_proj(hidden_states.astype('bfloat16'))
         query_pos = self.num_heads * self.head_dim
         query_states = qkv[..., :query_pos]
         key_states = qkv[..., query_pos : query_pos + self.num_key_value_heads * self.head_dim]
@@ -829,7 +813,7 @@ class Phi3SdpaAttention(Phi3Attention):
             dropout_p=self.attention_dropout if self.training else 0.0,
             # The q_len > 1 is necessary to match with AttentionMaskConverter.to_causal_4d that does not create a causal mask in case q_len == 1.
             is_causal=self.is_causal and attention_mask is None and q_len > 1,
-        )
+        ) # use flash_attention in scaled_dot_product_attention
 
         attn_output = attn_output.transpose([0, 2, 1, 3]) # transpose(1, 2)
         attn_output = attn_output.reshape([bsz, q_len, self.hidden_size])
@@ -844,7 +828,6 @@ PHI3_ATTENTION_CLASSES = {
     'flash_attention_2': Phi3FlashAttention2,
     'sdpa': Phi3SdpaAttention,
 }
-_attn_implementation = 'eager'
 
 
 class Phi3DecoderLayer(nn.Layer):
@@ -852,11 +835,11 @@ class Phi3DecoderLayer(nn.Layer):
         super().__init__()
 
         self.config = config
-        #self.self_attn = PHI3_ATTENTION_CLASSES[config._attn_implementation](config, layer_idx=layer_idx)
-        self.self_attn = PHI3_ATTENTION_CLASSES[_attn_implementation](config, layer_idx=layer_idx)
+        self.self_attn = PHI3_ATTENTION_CLASSES[config.attn_implementation](config, layer_idx=layer_idx)
 
         self.mlp = Phi3MLP(config)
         self.input_layernorm = Phi3RMSNorm(config.hidden_size, epsilon=config.rms_norm_eps)
+
         self.resid_attn_dropout = nn.Dropout(config.resid_pdrop)
         self.resid_mlp_dropout = nn.Dropout(config.resid_pdrop)
         self.post_attention_layernorm = Phi3RMSNorm(config.hidden_size, epsilon=config.rms_norm_eps)
@@ -901,20 +884,23 @@ class Phi3DecoderLayer(nn.Layer):
         # Self Attention
         attn_outputs, self_attn_weights, present_key_value = self.self_attn(
             hidden_states=hidden_states,
-            attention_mask=attention_mask,
+            attention_mask=attention_mask, # None
             position_ids=position_ids,
-            past_key_value=past_key_value,
-            output_attentions=output_attentions,
-            use_cache=use_cache,
+            past_key_value=past_key_value, # None
+            output_attentions=output_attentions, # False
+            use_cache=use_cache, # True
         )
         # [1, 1879, 3072], None, None
 
         hidden_states = residual + self.resid_attn_dropout(attn_outputs)
 
         original_dtype = hidden_states.dtype
+        residual = hidden_states.astype(original_dtype) # todo
         hidden_states = self.post_attention_layernorm(hidden_states)
-        hidden_states = hidden_states.astype(original_dtype) # todo
-        hidden_states = self.mlp(hidden_states)
+        try:
+            hidden_states = self.mlp(hidden_states)
+        except:
+            hidden_states = self.mlp(hidden_states.astype('bfloat16'))
         hidden_states = residual + self.resid_mlp_dropout(hidden_states)
 
         outputs = (hidden_states,)
@@ -937,12 +923,6 @@ class Phi3PreTrainedModel(PretrainedModel):
     _supports_flash_attn_2 = True
     _supports_sdpa = False
     _supports_cache_class = True
-
-    # def __init__(self, config: Phi3Config):
-    #     if not has_flash_attn:
-    #         config._attn_implementation = "eager"
-    #         print("Warning: Flash attention is not available, using eager attention instead.")
-    #     super().__init__(config)
 
     def _init_weights(self, layer):
         std = self.config.initializer_range
@@ -975,7 +955,7 @@ class Phi3Model(Phi3PreTrainedModel):
         self.layers = nn.LayerList(
             [Phi3DecoderLayer(config, layer_idx) for layer_idx in range(config.num_hidden_layers)]
         )
-        self._attn_implementation = _attn_implementation #config._attn_implementation
+        self._attn_implementation = config.attn_implementation
         self.norm = Phi3RMSNorm(config.hidden_size, epsilon=config.rms_norm_eps)
 
         self.gradient_checkpointing = False
@@ -987,26 +967,6 @@ class Phi3Model(Phi3PreTrainedModel):
 
     def set_input_embeddings(self, value):
         self.embed_tokens = value
-
-    def _prepare_decoder_attention_mask(self, attention_mask, input_shape, inputs_embeds, past_key_values_length):
-        # create causal mask
-        # [bsz, seq_len] -> [bsz, 1, tgt_seq_len, src_seq_len]
-        combined_attention_mask = None
-        if input_shape[-1] > 1:
-            combined_attention_mask = _make_causal_mask(
-                input_shape,
-                inputs_embeds.dtype,
-                past_key_values_length=past_key_values_length,
-            )
-
-        if attention_mask is not None:
-            # [bsz, seq_len] -> [bsz, 1, tgt_seq_len, src_seq_len]
-            expanded_attn_mask = _expand_mask(attention_mask, inputs_embeds.dtype, tgt_len=input_shape[-1])
-            combined_attention_mask = (
-                expanded_attn_mask if combined_attention_mask is None else expanded_attn_mask + combined_attention_mask
-            )
-
-        return combined_attention_mask
 
     def forward(
         self,
@@ -1061,8 +1021,10 @@ class Phi3Model(Phi3PreTrainedModel):
             )
             position_ids = position_ids.unsqueeze(0).reshape([-1, seq_length])
         else:
-            # run this, must fix use_cache
-            position_ids = position_ids.reshape([-1, seq_length]).cast('int64')
+            # run this, must fix use_cache, TODO: fix this
+            position_ids = position_ids[:, -1:]
+            # seq_length = 1
+            position_ids = position_ids.reshape([-1, 1]).cast('int64')
 
         if inputs_embeds is None:
             inputs_embeds = self.embed_tokens(input_ids)
@@ -1080,8 +1042,8 @@ class Phi3Model(Phi3PreTrainedModel):
             # 2d mask is passed through the layers
             attention_mask = attention_mask if (attention_mask is not None and 0 in attention_mask.numpy()) else None
         else:
-            # raise NotImplementedError
-            # # 4d mask is passed through the layers
+            raise NotImplementedError
+            # # 4d mask is passed through the layers # TODO
             # attention_mask = _prepare_4d_causal_attention_mask(
             #     attention_mask,
             #     (batch_size, seq_length),
@@ -1090,15 +1052,7 @@ class Phi3Model(Phi3PreTrainedModel):
             #     sliding_window=self.config.sliding_window,
             # )
 
-            seq_length_with_past = seq_length
-            if attention_mask is None:
-                attention_mask = paddle.ones(
-                    (batch_size, seq_length_with_past), dtype=paddle.bool
-                )
-            attention_mask = self._prepare_decoder_attention_mask(
-                attention_mask, (batch_size, seq_length), inputs_embeds, past_key_values_length
-            )
-
+        # embed positions
         hidden_states = inputs_embeds
 
         # decoder layers
@@ -1157,10 +1111,8 @@ class Phi3Model(Phi3PreTrainedModel):
         if use_cache:
             use_legacy_cache = False # TODO, next_decoder_cache is None
             next_cache = next_decoder_cache.to_legacy_cache() if use_legacy_cache else next_decoder_cache
-
         if not return_dict:
             return tuple(v for v in [hidden_states, next_cache, all_hidden_states, all_self_attns] if v is not None)
-
         return BaseModelOutputWithPast(
             last_hidden_state=hidden_states,
             past_key_values=next_cache,
@@ -1265,7 +1217,10 @@ class Phi3ForCausalLM(Phi3PreTrainedModel):
         )
 
         hidden_states = outputs[0]
-        logits = self.lm_head(hidden_states)
+        try:
+            logits = self.lm_head(hidden_states)
+        except:
+            logits = self.lm_head(hidden_states.cast('bfloat16'))
         logits = logits.cast('float32')
 
         loss = None

@@ -25,6 +25,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+""" Phi-3 model configuration"""
+
+
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
 
 

@@ -34,21 +34,18 @@ from paddlenlp.transformers.model_utils import PretrainedModel
 from .configuration_intern_vit import InternVisionConfig
 from ..bert_padding import pad_input, unpad_input
 
-try:
-    from paddle.nn.functional.flash_attention import flash_attn_varlen_qkvpacked
-    print("has_flash_attn is True.")
-    has_flash_attn = True
-except:
-    print("has_flash_attn is False.")
-    has_flash_attn = False
-has_flash_attn = False
-
 from ppdiffusers.utils import logging
 logger = logging.get_logger(__name__)
 
-__all__ = [
-    "InternVisionModel",
-]
+try:
+    from paddle.nn.functional.flash_attention import flash_attn_varlen_qkvpacked
+    print("modeling_intern_vit has_flash_attn is True.")
+    has_flash_attn = True
+except:
+    print("modeling_intern_vit has_flash_attn is False.")
+    has_flash_attn = False
+
+__all__ = ["InternVisionModel"]
 
 
 def drop_path(x, drop_prob: float = 0.0, training: bool = False, scale_by_keep: bool = True):
@@ -229,7 +226,10 @@ class InternVisionEmbeddings(nn.Layer):
 
     def forward(self, pixel_values) -> paddle.Tensor:
         target_dtype = self.patch_embedding.weight.dtype
-        patch_embeds = self.patch_embedding(pixel_values)  # shape = [*, channel, width, height]
+        try:
+            patch_embeds = self.patch_embedding(pixel_values)  # shape = [*, channel, width, height]
+        except:
+            patch_embeds = self.patch_embedding(pixel_values.astype(target_dtype))  # shape = [*, channel, width, height]
         batch_size, _, height, width = patch_embeds.shape
         patch_embeds = patch_embeds.flatten(2).transpose([0, 2, 1])  #.transpose(1, 2)
         class_embeds = self.class_embedding.expand([batch_size, 1, -1]).astype(target_dtype)
@@ -310,9 +310,12 @@ class InternAttention(nn.Layer):
             k = self.k_norm(k.flatten(2, 3)).reshape(k.shape)
             qkv = paddle.stack([q, k, v], axis=2)
 
+        original_dtype = qkv.dtype
+        qkv = qkv.astype('bfloat16')
         context, _ = self.inner_attn(
             qkv, key_padding_mask=key_padding_mask, need_weights=need_weights, causal=False
         )
+        context = context.astype(original_dtype)
         outs = self.proj(rearrange(context, 'b s h d -> b s (h d)'))
         outs = self.proj_drop(outs)
         return outs
@@ -374,9 +377,17 @@ class InternVisionEncoderLayer(nn.Layer):
         Args:
             hidden_states (`Tuple[paddle.Tensor, Optional[paddle.Tensor]]`): input to the layer of shape `(batch, seq_len, embed_dim)`
         """
-        hidden_states = hidden_states + self.drop_path1(self.attn(self.norm1(hidden_states.cast("bfloat16"))) * self.ls1)
-        hidden_states = hidden_states + self.drop_path2(self.mlp(self.norm2(hidden_states.cast("bfloat16"))) * self.ls2)
-        return hidden_states.cast("bfloat16")
+        if not self.training:
+            original_dtype = hidden_states.dtype
+            hidden_states = hidden_states + self.drop_path1(self.attn(self.norm1(hidden_states)) * self.ls1)
+            hidden_states = hidden_states.cast(original_dtype)
+            hidden_states = hidden_states + self.drop_path2(self.mlp(self.norm2(hidden_states)) * self.ls2)
+            hidden_states = hidden_states.cast(original_dtype)
+            return hidden_states
+        else:
+            hidden_states = hidden_states + self.drop_path1(self.attn(self.norm1(hidden_states.cast("bfloat16"))) * self.ls1)
+            hidden_states = hidden_states + self.drop_path2(self.mlp(self.norm2(hidden_states.cast("bfloat16"))) * self.ls2)
+            return hidden_states.cast("bfloat16")
 
 
 class InternVisionEncoder(nn.Layer):

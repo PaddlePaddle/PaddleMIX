@@ -33,13 +33,6 @@ from paddlenlp.transformers.model_outputs import (
     CausalLMOutputWithPast,
 )
 from paddlenlp.transformers.model_utils import PretrainedModel
-
-# try:
-#     from transformers.generation.streamers import BaseStreamer
-# except:  # noqa # pylint: disable=bare-except
-#     BaseStreamer = None
-BaseStreamer = None
-
 from .configuration_internlm2 import InternLM2Config
 
 from ppdiffusers.utils import logging
@@ -48,13 +41,12 @@ from ..bert_padding import pad_input, unpad_input, index_first_axis
 try:
     from paddle.nn.functional.flash_attention import flash_attention as flash_attn_func
     from paddle.nn.functional.flash_attention import flash_attn_unpadded as flash_attn_varlen_func
-    logger.info("has_flash_attn is True.")
+    print("modeling_internlm2 has_flash_attn is True.")
     has_flash_attn = True
 except:
     flash_attn_func, flash_attn_varlen_func = None, None
-    print("has_flash_attn is False.")
+    print("modeling_internlm2 has_flash_attn is False.")
     has_flash_attn = False
-has_flash_attn = False # TODO: batch_chat
 
 
 def _get_unpad_data(attention_mask):
@@ -481,10 +473,15 @@ class InternLM2FlashAttention2(InternLM2Attention):
         key_states = key_states.transpose(perm=[0, 2, 1, 3])
         value_states = value_states.transpose(perm=[0, 2, 1, 3])
 
+        original_dtype = query_states.dtype
+        query_states = query_states.astype('bfloat16')
+        key_states = key_states.astype('bfloat16')
+        value_states = value_states.astype('bfloat16')
         # return tuple 0 is output, 1 is softmax return
         attn_output = self._flash_attention_forward(
             query_states, key_states, value_states, attention_mask, q_len
         )
+        attn_output = attn_output.astype(original_dtype)
         attn_output = attn_output.reshape([bsz, q_len, self.hidden_size])
         attn_output = self.wo(attn_output)
 
@@ -774,9 +771,6 @@ class InternLM2Model(InternLM2PretrainedModel):
 
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
-        # if self.config.attn_implementation == "flash_attention_2":
-        #     _import_flash_attn()
-
         # retrieve input_ids and inputs_embeds
         if input_ids is not None and inputs_embeds is not None:
             raise ValueError('You cannot specify both input_ids and inputs_embeds at the same time')
@@ -922,16 +916,16 @@ class InternLM2ForCausalLM(InternLM2PretrainedModel):
 
     def forward(
         self,
-        input_ids: paddle.Tensor = None,
-        attention_mask: Optional[paddle.Tensor] = None,
-        position_ids: Optional[paddle.Tensor] = None,
-        past_key_values: Optional[List[paddle.Tensor]] = None,
-        inputs_embeds: Optional[paddle.Tensor] = None,
-        labels: Optional[paddle.Tensor] = None,
-        use_cache: Optional[bool] = None,
-        output_attentions: Optional[bool] = None,
-        output_hidden_states: Optional[bool] = None,
-        return_dict: Optional[bool] = None,
+        input_ids: paddle.Tensor = None, # Nonr
+        attention_mask: Optional[paddle.Tensor] = None, # [2, 2336]
+        position_ids: Optional[paddle.Tensor] = None, # None
+        past_key_values: Optional[List[paddle.Tensor]] = None, # None
+        inputs_embeds: Optional[paddle.Tensor] = None, # [2, 2336, 2048]
+        labels: Optional[paddle.Tensor] = None, # None
+        use_cache: Optional[bool] = None, 
+        output_attentions: Optional[bool] = None, # False
+        output_hidden_states: Optional[bool] = None, # False
+        return_dict: Optional[bool] = None, # True
     ) -> Union[Tuple, CausalLMOutputWithPast]:
         r"""
         Args:
@@ -979,10 +973,7 @@ class InternLM2ForCausalLM(InternLM2PretrainedModel):
         )
 
         hidden_states = outputs[0]
-        # print('self.output', self.output) # 26B: Linear(in_features=6144, out_features=92553)
         logits = self.output(hidden_states)
-        # print('self.output hidden_states', hidden_states.shape)
-        # exit()
 
         logits = logits.cast('float32')
 
@@ -1077,9 +1068,9 @@ class InternLM2ForCausalLM(InternLM2PretrainedModel):
     def chat(
         self,
         tokenizer,
-        query: str,
-        history: List[Tuple[str, str]] = [],
-        streamer: Optional[BaseStreamer] = None,
+        query,
+        history=[],
+        streamer=None,
         max_new_tokens: int = 1024,
         do_sample: bool = True,
         temperature: float = 0.8,
@@ -1108,89 +1099,3 @@ class InternLM2ForCausalLM(InternLM2PretrainedModel):
         response = response.split('<|im_end|>')[0]
         history = history + [(query, response)]
         return response, history
-
-    @paddle.no_grad()
-    def stream_chat(
-        self,
-        tokenizer,
-        query: str,
-        history: List[Tuple[str, str]] = [],
-        max_new_tokens: int = 1024,
-        do_sample: bool = True,
-        temperature: float = 0.8,
-        top_p: float = 0.8,
-        **kwargs,
-    ):
-        """
-        Return a generator in format: (response, history)
-        Eg.
-        ('你好，有什么可以帮助您的吗', [('你好', '你好，有什么可以帮助您的吗')])
-        ('你好，有什么可以帮助您的吗？', [('你好', '你好，有什么可以帮助您的吗？')])
-        """
-        if BaseStreamer is None:
-            raise ModuleNotFoundError(
-                'The version of `transformers` is too low. Please make sure '
-                'that you have installed `transformers>=4.28.0`.'
-            )
-
-        response_queue = queue.Queue(maxsize=20)
-
-        class ChatStreamer(BaseStreamer):
-            def __init__(self, tokenizer) -> None:
-                super().__init__()
-                self.tokenizer = tokenizer
-                self.queue = response_queue
-                self.query = query
-                self.history = history
-                self.response = ''
-                self.cache = []
-                self.received_inputs = False
-                self.queue.put((self.response, history + [(self.query, self.response)]))
-
-            def put(self, value):
-                if len(value.shape) > 1 and value.shape[0] > 1:
-                    raise ValueError('ChatStreamer only supports batch size 1')
-                elif len(value.shape) > 1:
-                    value = value[0]
-
-                if not self.received_inputs:
-                    # The first received value is input_ids, ignore here
-                    self.received_inputs = True
-                    return
-
-                self.cache.extend(value.tolist())
-                token = self.tokenizer.decode(self.cache, skip_special_tokens=True)
-                if token.strip() != '<|im_end|>':
-                    self.response = self.response + token
-                    history = self.history + [(self.query, self.response)]
-                    self.queue.put((self.response, history))
-                    self.cache = []
-                else:
-                    self.end()
-
-            def end(self):
-                self.queue.put(None)
-
-        def stream_producer():
-            return self.chat(
-                tokenizer=tokenizer,
-                query=query,
-                streamer=ChatStreamer(tokenizer=tokenizer),
-                history=history,
-                max_new_tokens=max_new_tokens,
-                do_sample=do_sample,
-                temperature=temperature,
-                top_p=top_p,
-                **kwargs,
-            )
-
-        def consumer():
-            producer = threading.Thread(target=stream_producer)
-            producer.start()
-            while True:
-                res = response_queue.get()
-                if res is None:
-                    return
-                yield res
-
-        return consumer()

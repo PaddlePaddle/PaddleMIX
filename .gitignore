@@ -72,6 +72,10 @@ coverage.xml
 # NPU meta folder
 kernel_meta/
 
+pretrained/
+playground/
+log/
+
 # MAC
 *.DS_Store
 
