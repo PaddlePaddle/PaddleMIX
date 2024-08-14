@@ -17,8 +17,8 @@ YOLO-World 是由腾讯AI Lab、ARC Lab、腾讯PCG和华中科技大学合作�
 # 克隆 PaddleMIX 仓库
 git clone https://github.com/PaddlePaddle/PaddleMIX
 
-# 安装2.6.0版本的paddlepaddle-gpu，当前我们选择了cuda12.0的版本，可以查看 https://www.paddlepaddle.org.cn/ 寻找自己适合的版本
-python -m pip install paddlepaddle-gpu==2.6.0.post120 -f https://www.paddlepaddle.org.cn/whl/linux/mkl/avx/stable.html
+# 安装3.0b版本的paddlepaddle-gpu，当前我们选择了cuda11.8的版本，可以查看 https://www.paddlepaddle.org.cn/ 寻找自己适合的版本
+ python -m pip install paddlepaddle-gpu==3.0.0b1 -i https://www.paddlepaddle.org.cn/packages/stable/cu118/
 
 # 进入目录
 cd PaddleMIX/ppdiffusers/examples/YOLO-World/

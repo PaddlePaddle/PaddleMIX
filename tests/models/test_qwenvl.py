@@ -14,7 +14,7 @@
 
 import os
 import sys
-
+os.environ["FLAGS_use_cuda_managed_memory"] = "true"
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
 import unittest
 
@@ -31,7 +31,7 @@ class QWenLMHeadModelTester:
     def __init__(self, parent):
         self.parent = parent
         self.model_name_or_path = "qwen-vl/qwen-vl-chat-7b"
-        self.tokenizer = QWenVLTokenizer.from_pretrained(self.model_name_or_path, dtype="float16")
+        self.tokenizer = QWenVLTokenizer.from_pretrained(self.model_name_or_path, dtype="float32")
         self.processor = QwenVLProcessor(tokenizer=self.tokenizer)
 
     def get_config(self):
@@ -59,7 +59,7 @@ class QWenLMHeadModelTester:
             "seq_length": 2,
             "tie_word_embeddings": False,
             "tokenizer_type": "QWenTokenizer",
-            "dtype": "float16",
+            "dtype": "float32",
             "transformers_version": "4.31.0",
             "use_cache": True,
             "recompute": True,
@@ -107,7 +107,7 @@ class QWenLMHeadModelTester:
 
 
 class QWenLMHeadModelTest(ModelTesterMixin, unittest.TestCase):
-    all_model_classes = (QWenLMHeadModel,)
+    all_model_classes = ( QWenLMHeadModel,)
     fx_compatible = False
     test_head_masking = False
     test_pruning = False
