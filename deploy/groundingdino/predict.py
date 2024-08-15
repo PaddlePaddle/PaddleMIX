@@ -229,6 +229,19 @@ def main(model_args, data_args):
         image_pil = Image.open(data_args.input_image).convert("RGB")
     else:
         image_pil = Image.open(requests.get(url, stream=True).raw).convert("RGB")
+    
+    if model_args.benchmark:
+        import time
+        start = 0.0
+        total = 0.0
+        for i in range(20):
+            if i>10:
+                start = time.time()
+            boxes_filt, pred_phrases = predictor.run(image_pil, data_args.prompt)
+            if i > 10:
+                total += time.time()-start
+
+        print("Time:",total/10)
 
     boxes_filt, pred_phrases = predictor.run(image_pil, data_args.prompt)
 
@@ -293,6 +306,10 @@ class ModelArguments:
     device: str = field(
         default="GPU",
         metadata={"help": "Choose the device you want to run, it can be: CPU/GPU/XPU, default is CPU."},
+    )
+    benchmark: bool = field(
+        default=False,
+        metadata={"help": "benchmark"}
     )
 
 

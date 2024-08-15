@@ -13,10 +13,17 @@
 # limitations under the License.
 
 from paddlenlp.transformers import LlamaConfig
+from paddlenlp.transformers import Qwen2Config
 
-__all__ = ["LlavaConfig"]
+__all__ = ["LlavaConfig", "LlavaQwenConfig"]
 
 
 class LlavaConfig(LlamaConfig):
     model_type = "llava"
     mm_patch_merge_type = "spatial_unpad"
+    use_cachekv_int8 = None
+    
+class LlavaQwenConfig(Qwen2Config):
+    model_type = "llava_qwen"
+    mm_patch_merge_type = "spatial_unpad"
+    use_cachekv_int8 = None

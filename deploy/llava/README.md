@@ -20,12 +20,20 @@
 * `paddlenlp_ops`依赖安装
 
 ```bash
-wget https://github.com/PaddlePaddle/PaddleNLP/archive/refs/tags/v2.7.2.tar.gz
-tar xf v2.7.2
+git submodule update --init --recursive
 cd PaddleNLP
+git reset --hard 498f70988431be278dac618411fbfb0287853cd9
 pip install -e .
 cd csrc
 python setup_cuda.py install
+```
+* 如果在V100上安装报错，可屏蔽 /PaddleNLP/csrc/generation/quant_int8.cu 以下语句:
+
+```bash
+# template<>
+# __forceinline__ __device__ __nv_bfloat16 add_mul<__nv_bfloat16>(__nv_bfloat16 a, __nv_bfloat16 b, __nv_bfloat16 c) {
+#     return __hmul(__hadd(a, b), c);
+# }
 ```
 
 * `fused_ln`需要安装 /PaddleNLP/model_zoo/gpt-3/external_ops 下的自定义OP, `python setup.py install`
@@ -38,6 +46,7 @@ python setup_cuda.py install
 
 ```bash
 #!/bin/bash
+export PYTHONPATH=/path/to/PaddleNLP/:/path/to/PaddleMIX
 python deploy/llava/export_model.py \
     --model_name_or_path "paddlemix/llava/llava-v1.5-7b" \
     --save_path "./llava_static" \
@@ -49,6 +58,7 @@ python deploy/llava/export_model.py \
 
 ```bash
 #!/bin/bash
+export PYTHONPATH=/path/to/PaddleNLP/:/path/to/PaddleMIX
 python deploy/llava/export_model.py \
     --model_name_or_path "paddlemix/llava/llava-v1.5-7b" \
     --save_path "./llava_static" \

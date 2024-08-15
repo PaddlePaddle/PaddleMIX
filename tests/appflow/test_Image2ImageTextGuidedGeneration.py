@@ -38,7 +38,7 @@ class Image2ImageTextGuidedGeneration(unittest.TestCase):
         negative_prompt = "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry"
 
 
-        app = Appflow(app='image2image_text_guided_generation',models=['Linaqruf/anything-v3.0'])
+        app = Appflow(app='image2image_text_guided_generation',models=['admruul/anything-v3.0'])
         image = app(prompt=prompt,negative_prompt=negative_prompt,image=image)['result']
 
         self.assertIsNotNone(image)
@@ -61,6 +61,7 @@ class Image2ImageTextGuidedGeneration(unittest.TestCase):
         average_diff = diff_sum / len(data1)
 
         self.assertLessEqual(average_diff, 5)
+
 
 if __name__ == "__main__":
 

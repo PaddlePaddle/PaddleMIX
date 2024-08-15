@@ -61,7 +61,7 @@ def parse_arguments():
     parser.add_argument(
         "--benchmark_steps",
         type=int,
-        default=1,
+        default=10,
         help="The number of performance benchmark steps.",
     )
     parser.add_argument(
@@ -131,6 +131,7 @@ def parse_arguments():
     )
     parser.add_argument("--height", type=int, default=512, help="Height of input image")
     parser.add_argument("--width", type=int, default=512, help="Width of input image")
+    parser.add_argument("--strength", type=float, default=1.0, help="Strength for img2img / inpaint")
     parser.add_argument("--hr_resize_height", type=int, default=768, help="HR Height of input image")
     parser.add_argument("--hr_resize_width", type=int, default=768, help="HR Width of input image")
     parser.add_argument("--is_sd2_0", type=strtobool, default=False, help="Is sd2_0 model?")
@@ -325,6 +326,8 @@ def main(args):
             time_costs += [latency]
             # print(f"No {step:3d} time cost: {latency:2f} s")
         print(
+            f"Use fp16: {'true' if args.use_fp16 else 'false'}, "
+            f"Mean iter/sec: {1 / (np.mean(time_costs) / args.inference_steps):2f} it/s, "
             f"Mean latency: {np.mean(time_costs):2f} s, p50 latency: {np.percentile(time_costs, 50):2f} s, "
             f"p90 latency: {np.percentile(time_costs, 90):2f} s, p95 latency: {np.percentile(time_costs, 95):2f} s."
         )
@@ -345,6 +348,7 @@ def main(args):
             num_inference_steps=20,
             height=height,
             width=width,
+            strength=args.strength,
             parse_prompt_type=parse_prompt_type,
             controlnet_cond=controlnet_cond,
             controlnet_conditioning_scale=1.0,
@@ -359,6 +363,7 @@ def main(args):
                 num_inference_steps=args.inference_steps,
                 height=height,
                 width=width,
+                strength=args.strength,
                 parse_prompt_type=parse_prompt_type,
                 controlnet_cond=controlnet_cond,
                 controlnet_conditioning_scale=1.0,
@@ -367,6 +372,8 @@ def main(args):
             time_costs += [latency]
             # print(f"No {step:3d} time cost: {latency:2f} s")
         print(
+            f"Use fp16: {'true' if args.use_fp16 else 'false'}, "
+            f"Mean iter/sec: {1 / (np.mean(time_costs) / args.inference_steps):2f} it/s, "
             f"Mean latency: {np.mean(time_costs):2f} s, p50 latency: {np.percentile(time_costs, 50):2f} s, "
             f"p90 latency: {np.percentile(time_costs, 90):2f} s, p95 latency: {np.percentile(time_costs, 95):2f} s."
         )
@@ -390,6 +397,7 @@ def main(args):
             num_inference_steps=20,
             height=height,
             width=width,
+            strength=args.strength,
             parse_prompt_type=parse_prompt_type,
             controlnet_cond=controlnet_cond,
             controlnet_conditioning_scale=1.0,
@@ -405,6 +413,7 @@ def main(args):
                 num_inference_steps=args.inference_steps,
                 height=height,
                 width=width,
+                strength=args.strength,
                 parse_prompt_type=parse_prompt_type,
                 controlnet_cond=controlnet_cond,
                 controlnet_conditioning_scale=1.0,
@@ -413,6 +422,8 @@ def main(args):
             time_costs += [latency]
             # print(f"No {step:3d} time cost: {latency:2f} s")
         print(
+            f"Use fp16: {'true' if args.use_fp16 else 'false'}, "
+            f"Mean iter/sec: {1 / (np.mean(time_costs) / args.inference_steps):2f} it/s, "
             f"Mean latency: {np.mean(time_costs):2f} s, p50 latency: {np.percentile(time_costs, 50):2f} s, "
             f"p90 latency: {np.percentile(time_costs, 90):2f} s, p95 latency: {np.percentile(time_costs, 95):2f} s."
         )

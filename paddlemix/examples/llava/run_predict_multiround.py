@@ -41,7 +41,7 @@ def main(args):
         compute_dtype = "float32"
 
     model_name = get_model_name_from_path(args.model_path)
-    tokenizer = AutoTokenizerMIX.from_pretrained(args.model_path, use_fast=False)
+    tokenizer = AutoTokenizerMIX.from_pretrained(args.model_path)
     model_config = AutoConfigMIX.from_pretrained(args.model_path)
     model = AutoModelMIX.from_pretrained(args.model_path, dtype=compute_dtype)
     model.eval()

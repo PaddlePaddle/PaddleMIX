@@ -74,3 +74,37 @@ python export.py \
  --prompt "bus"
 
 ```
+
+## 3. 推理 BenchMark
+
+> Note: 
+> 测试环境为:
+Paddle 3.0，
+PaddleMIX release/2.0 
+PaddleNLP2.7.2
+A100 80G单卡。
+
+### 3.1 benchmark命令
+
+在 `deploy` 对应模型目录下的运行后加 --benchmark,
+如 GroundingDino 的benchmark命令为：
+
+```bash
+ cd deploy/groundingdino
+ python predict.py  \
+ --text_encoder_type GroundingDino/groundingdino-swint-ogc \
+ --model_path output_groundingdino/GroundingDino/groundingdino-swint-ogc \
+ --input_image https://bj.bcebos.com/v1/paddlenlp/models/community/GroundingDino/000000004505.jpg \
+ --output_dir ./groundingdino_predict_output \
+ --prompt "bus" \
+ --benchmark True
+```
+
+# A100性能数据
+|模型|图片分辨率|数据类型 |Paddle Deploy |
+|-|-|-|-|
+|qwen-vl-7b|448*448|fp16|669.8 ms|
+|llava-1.5-7b|336*336|fp16|981.2 ms|
+|llava-1.6-7b|336*336|fp16|778.7 ms|
+|groundingDino/groundingdino-swint-ogc|800*1193|fp32|100 ms|
+|Sam/SamVitH-1024|1024*1024|fp32|121 ms|
