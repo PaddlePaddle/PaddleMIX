@@ -15,7 +15,7 @@
 为了确保你能成功运行最新版本的示例脚本，我们强烈推荐 **从源代码安装** 并保持安装是最新的，因为我们经常更新示例脚本并安装一些特定于示例的要求。为此，执行以下步骤在一个新的虚拟环境中：
 
 ```bash
-git clone https://github.com/PaddlePaddle/PaddleMIX
+git clone https://github.com/PaddlePaddle/PaddleMIX.git
 cd PaddleMIX/ppdiffusers
 pip install -e .
 ```
