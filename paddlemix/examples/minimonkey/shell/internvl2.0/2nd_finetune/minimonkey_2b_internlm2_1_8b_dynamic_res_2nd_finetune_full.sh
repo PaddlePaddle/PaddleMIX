@@ -2,7 +2,7 @@ set -x
 
 GPUS=${GPUS:-8}
 BATCH_SIZE=${BATCH_SIZE:-32}
-PER_DEVICE_BATCH_SIZE=${PER_DEVICE_BATCH_SIZE:-2}
+PER_DEVICE_BATCH_SIZE=${PER_DEVICE_BATCH_SIZE:-1}
 GRADIENT_ACC=$((BATCH_SIZE / PER_DEVICE_BATCH_SIZE / GPUS))
 tensor_parallel_degree=${tensor_parallel_degree:-1}
 sharding_parallel_degree=$((GPUS / tensor_parallel_degree))
@@ -38,7 +38,7 @@ ${TRAINING_PYTHON} --log_dir ${OUTPUT_DIR}/paddle_distributed_logs \
   --meta_path "paddlemix/examples/minimonkey/shell/data/minimonkey_finetune.json" \
   --overwrite_output_dir True \
   --force_image_size 448 \
-  --max_dynamic_patch 6 \
+  --max_dynamic_patch 12 \
   --down_sample_ratio 0.5 \
   --drop_path_rate 0.1 \
   --freeze_llm False \
@@ -78,7 +78,3 @@ ${TRAINING_PYTHON} --log_dir ${OUTPUT_DIR}/paddle_distributed_logs \
   --sharding="stage1" \
   --amp_master_grad=1 \
   --hybrid_parallel_topo_order="sharding_first" \
-
-  # --sharding="stage2" \
-  # --pipeline_parallel_config="disable_p2p_cache_shape" \
-  # --unified_checkpoint=True \

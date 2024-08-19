@@ -78,7 +78,3 @@ ${TRAINING_PYTHON} --log_dir ${OUTPUT_DIR}/paddle_distributed_logs \
   --sharding="stage1" \
   --amp_master_grad=1 \
   --hybrid_parallel_topo_order="sharding_first" \
-
-  # --sharding="stage2" \
-  # --pipeline_parallel_config="disable_p2p_cache_shape" \
-  # --unified_checkpoint=True \
