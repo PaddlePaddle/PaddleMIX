@@ -542,7 +542,6 @@ def preprocess_internlm(
         parts = conversation.split(conv.roles[1])  # [UNUSED_TOKEN_146]assistant\n
         info = parts[0] + conv.roles[1]
         temp_len = len(tokenizer(info).input_ids) - 1  # 去除tokenizer的<s>
-        print('temp_len after info', cur_len, temp_len) # 1 1846
         target[cur_len: cur_len + temp_len] = IGNORE_TOKEN_ID
         cur_len = cur_len + temp_len
 
@@ -557,7 +556,6 @@ def preprocess_internlm(
             cur_len = cur_len + temp_len
         last_info = parts[-1]
         temp_len = len(tokenizer(last_info).input_ids) - 1
-        print('temp_len after last_info', cur_len, temp_len) # 1899 14
         cur_len = cur_len + temp_len
 
         target[cur_len:] = IGNORE_TOKEN_ID
@@ -596,7 +594,7 @@ def find_closest_aspect_ratio(aspect_ratio, target_ratios, width, height, image_
     return best_ratio
 
 
-def dynamic_preprocess(image, min_num=1, max_num=6, image_size=448, use_thumbnail=False):
+def dynamic_preprocess(image, min_num=1, max_num=6, image_size=448, use_thumbnail=False, return_target_aspect_ratio=False):
     orig_width, orig_height = image.size
     aspect_ratio = orig_width / orig_height
 
@@ -609,6 +607,56 @@ def dynamic_preprocess(image, min_num=1, max_num=6, image_size=448, use_thumbnai
     # find the closest aspect ratio to the target
     target_aspect_ratio = find_closest_aspect_ratio(
         aspect_ratio, target_ratios, orig_width, orig_height, image_size)
+
+    # calculate the target width and height
+    target_width = image_size * target_aspect_ratio[0]
+    target_height = image_size * target_aspect_ratio[1]
+    blocks = target_aspect_ratio[0] * target_aspect_ratio[1]
+
+    # resize the image
+    resized_img = image.resize((target_width, target_height))
+    processed_images = []
+    for i in range(blocks):
+        box = (
+            (i % (target_width // image_size)) * image_size,
+            (i // (target_width // image_size)) * image_size,
+            ((i % (target_width // image_size)) + 1) * image_size,
+            ((i // (target_width // image_size)) + 1) * image_size
+        )
+        # split the image
+        split_img = resized_img.crop(box)
+        processed_images.append(split_img)
+    assert len(processed_images) == blocks
+    if use_thumbnail and len(processed_images) != 1:
+        thumbnail_img = image.resize((image_size, image_size))
+        processed_images.append(thumbnail_img)
+    if return_target_aspect_ratio:
+        return processed_images, target_aspect_ratio
+    else:
+        return processed_images
+
+
+def dynamic_preprocess2(image, min_num=1, max_num=6, image_size=448, use_thumbnail=False, prior_aspect_ratio=None):
+    orig_width, orig_height = image.size
+    aspect_ratio = orig_width / orig_height
+
+    # calculate the existing image aspect ratio
+    target_ratios = set(
+        (i, j) for n in range(min_num, max_num + 1) for i in range(1, n + 1) for j in range(1, n + 1) if
+        i * j <= max_num and i * j >= min_num)
+    target_ratios = sorted(target_ratios, key=lambda x: x[0] * x[1])
+
+    new_target_ratios = []
+    if prior_aspect_ratio is not None:
+        for i in target_ratios:
+            if prior_aspect_ratio[0]%i[0] != 0 and prior_aspect_ratio[1]%i[1] != 0:
+                new_target_ratios.append(i)
+            else:
+                continue
+
+    # find the closest aspect ratio to the target
+    target_aspect_ratio = find_closest_aspect_ratio(
+        aspect_ratio, new_target_ratios, orig_width, orig_height, image_size)
 
     # calculate the target width and height
     target_width = image_size * target_aspect_ratio[0]

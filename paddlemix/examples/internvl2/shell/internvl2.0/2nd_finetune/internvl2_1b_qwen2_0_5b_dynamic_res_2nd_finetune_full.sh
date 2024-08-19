@@ -31,7 +31,7 @@ TRAINING_PYTHON="python -m paddle.distributed.launch --master ${MASTER} --nnodes
 ${TRAINING_PYTHON} --log_dir ${OUTPUT_DIR}/paddle_distributed_logs \
   paddlemix/examples/internvl2/internvl_chat_finetune.py \
   --do_train \
-  --model_name_or_path "pretrained/InternVL2-1B" \
+  --model_name_or_path "OpenGVLab/InternVL2-1B" \
   --conv_style "Hermes-2" \
   --output_dir ${OUTPUT_DIR} \
   --logging_dir ${OUTPUT_DIR}/logs \

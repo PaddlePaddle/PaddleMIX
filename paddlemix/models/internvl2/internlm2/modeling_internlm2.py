@@ -47,7 +47,7 @@ except:
     flash_attn_func, flash_attn_varlen_func = None, None
     print("modeling_internlm2 has_flash_attn is False.")
     has_flash_attn = False
-
+has_flash_attn = False # TODO
 
 def _get_unpad_data(attention_mask):
     seqlens_in_batch = attention_mask.sum(axis=-1, dtype="int32")
@@ -329,7 +329,11 @@ class InternLM2Attention(nn.Layer):
 
         bsz, q_len, _ = hidden_states.shape # [1, 1847, 2048]
 
-        qkv_states = self.wqkv(hidden_states) # [1, 1847, 4096]
+        try:
+            qkv_states = self.wqkv(hidden_states)
+        except:
+            qkv_states = self.wqkv(hidden_states.cast('bfloat16'))
+        # [1, 1847, 4096]
 
         qkv_states = rearrange(
             qkv_states,
@@ -659,7 +663,10 @@ class InternLM2DecoderLayer(nn.Layer):
         residual = hidden_states.astype(original_dtype) # todo
 
         hidden_states = self.ffn_norm(hidden_states)
-        hidden_states = self.feed_forward(hidden_states)
+        try:
+            hidden_states = self.feed_forward(hidden_states)
+        except:
+            hidden_states = self.feed_forward(hidden_states.cast('bfloat16'))
         hidden_states = residual + hidden_states
 
         outputs = (hidden_states,)
@@ -973,7 +980,10 @@ class InternLM2ForCausalLM(InternLM2PretrainedModel):
         )
 
         hidden_states = outputs[0]
-        logits = self.output(hidden_states)
+        try:
+            logits = self.output(hidden_states)
+        except:
+            logits = self.output(hidden_states.cast('bfloat16'))
 
         logits = logits.cast('float32')
 

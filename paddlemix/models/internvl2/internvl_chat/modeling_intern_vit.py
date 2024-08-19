@@ -44,6 +44,7 @@ try:
 except:
     print("modeling_intern_vit has_flash_attn is False.")
     has_flash_attn = False
+has_flash_attn = False # TODO
 
 __all__ = ["InternVisionModel"]
 
