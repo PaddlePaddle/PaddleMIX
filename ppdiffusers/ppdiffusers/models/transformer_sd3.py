@@ -17,6 +17,7 @@ from typing import Any, Dict, Optional, Union
 
 import paddle
 import paddle.nn as nn
+from paddle.distributed.fleet.utils import recompute
 
 from ..configuration_utils import ConfigMixin, register_to_config
 
@@ -25,18 +26,17 @@ from ..models.attention import JointTransformerBlock
 from ..models.attention_processor import Attention, AttentionProcessor
 from ..models.modeling_utils import ModelMixin
 from ..models.normalization import AdaLayerNormContinuous
-from ..utils import (  # recompute_use_reentrant,; use_old_recompute,
+from ..utils import (
     USE_PEFT_BACKEND,
     logging,
+    recompute_use_reentrant,
     scale_lora_layers,
     unscale_lora_layers,
+    use_old_recompute,
 )
 from .embeddings import CombinedTimestepTextProjEmbeddings, PatchEmbed
 from .simplified_sd3 import SimplifiedSD3
 from .transformer_2d import Transformer2DModelOutput
-
-# from paddle.distributed.fleet.utils import recompute
-
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
