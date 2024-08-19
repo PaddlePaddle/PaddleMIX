@@ -21,6 +21,7 @@ from paddlemix.datasets.collator import (
     CLIPCollator,
     EVA02Collator,
     InternLMXComposer2Collator,
+    InternVL2Collator,
     LLaVACollator,
     MiniGPT4Collator,
     QwenVLCollator,
@@ -224,6 +225,8 @@ def get_trainer(
             collator = VisualglmCollator(train_processor, mode="train")
         elif "internlm" in pretrained_model_name_or_path:
             collator = InternLMXComposer2Collator(train_processor, mode="train")
+        elif "internvl" in pretrained_model_name_or_path:
+            collator = InternVL2Collator(train_processor, mode="train")
         else:
             collator = None
 

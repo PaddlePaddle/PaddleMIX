@@ -1,4 +1,4 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,12 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .caption_dataset import *
-from .chatml_dataset import *
-from .coco_caption import *
-from .coco_clip import *
-from .collator import *
-from .dataset import *
-from .mixtoken_dataset import *
-from .vg_caption import *
-from .internvl_dataset import *
+from .internvl_chat import *
+from .internlm2 import *
+from .phi3 import *
+from .constants import *
+from .patch import *
