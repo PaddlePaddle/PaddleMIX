@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import argparse
+import datetime
 import os
 
 import paddle
@@ -63,7 +64,6 @@ class_ids = pipe.get_label_ids(words)
 image = pipe(class_labels=class_ids, num_inference_steps=25).images[0]
 
 if args.benchmark:
-    import datetime
 
     # warmup
     for i in range(5):
