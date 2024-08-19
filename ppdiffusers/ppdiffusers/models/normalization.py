@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import numbers
 from typing import Dict, Optional, Tuple
 
 import paddle
@@ -62,8 +61,8 @@ class AdaLayerNormZero(nn.Layer):
         if num_embeddings is not None:
             self.emb = CombinedTimestepLabelEmbeddings(num_embeddings, embedding_dim)
         else:
+            # print("Using None") this
             self.emb = None
-
         self.silu = nn.Silu()
         self.linear = nn.Linear(embedding_dim, 6 * embedding_dim)
         norm_elementwise_affine_kwargs = dict(weight_attr=False, bias_attr=False)
@@ -81,8 +80,13 @@ class AdaLayerNormZero(nn.Layer):
         if self.emb is not None:
             emb = self.emb(timestep, class_labels, hidden_dtype=hidden_dtype)
         emb = self.linear(self.silu(emb))
+
         shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = emb.chunk(6, axis=1)
+        # import paddlemix
+        # print(self.norm.weight,self.norm.bias)
         x = self.norm(x) * (1 + scale_msa[:, None]) + shift_msa[:, None]
+        # x = paddlemix.triton_ops.adaptive_layer_norm(x, scale_msa, shift_msa, self.norm.weight,self.norm.bias,epsilon=1e-06)
+
         return x, gate_msa, shift_mlp, scale_mlp, gate_mlp
 
 
@@ -161,6 +165,7 @@ class AdaGroupNorm(nn.Layer):
         x = x * (1 + scale) + shift
         return x
 
+
 class AdaLayerNormContinuous(nn.Layer):
     def __init__(
         self,
@@ -188,13 +193,16 @@ class AdaLayerNormContinuous(nn.Layer):
 
     def forward(self, x: paddle.Tensor, conditioning_embedding: paddle.Tensor) -> paddle.Tensor:
         # convert back to the original dtype in case `conditioning_embedding`` is upcasted to float32 (needed for hunyuanDiT)
-        emb = self.linear(self.silu(conditioning_embedding).to(x.dtype))
+        emb = self.linear(self.silu(conditioning_embedding).cast(x.dtype))
         scale, shift = paddle.chunk(emb, 2, axis=1)
         x = self.norm(x) * (1 + scale)[:, None, :] + shift[:, None, :]
+        # import paddlemix
+        # x = paddlemix.triton_ops.adaptive_layer_norm(x, scale, shift, self.norm.weight, self.norm.bias)
         return x
 
+
 class RMSNorm(nn.Layer):
-    def __init__(self, dim, epsilon: float,  elementwise_affine: bool = True):
+    def __init__(self, dim, epsilon: float, elementwise_affine: bool = True):
         super().__init__()
         self.epsilon = epsilon
         self.dim = dim

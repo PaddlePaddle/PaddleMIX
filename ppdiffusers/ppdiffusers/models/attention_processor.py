@@ -906,6 +906,7 @@ class AttnAddedKVProcessor:
 
         return hidden_states
 
+
 class JointAttnProcessor2_5:
     """Attention processor used typically in processing the SD3-like self-attention projections."""
 
@@ -923,7 +924,6 @@ class JointAttnProcessor2_5:
         **kwargs,
     ) -> paddle.Tensor:
         residual = hidden_states
-
         input_ndim = hidden_states.ndim
         if input_ndim == 4:
             batch_size, channel, height, width = hidden_states.shape
@@ -931,7 +931,9 @@ class JointAttnProcessor2_5:
         context_input_ndim = encoder_hidden_states.ndim
         if context_input_ndim == 4:
             batch_size, channel, height, width = encoder_hidden_states.shape
-            encoder_hidden_states = encoder_hidden_states.reshape([batch_size, channel, height * width]).transpose([0, 2, 1])
+            encoder_hidden_states = encoder_hidden_states.reshape([batch_size, channel, height * width]).transpose(
+                [0, 2, 1]
+            )
 
         batch_size = encoder_hidden_states.shape[0]
 
@@ -944,6 +946,10 @@ class JointAttnProcessor2_5:
         encoder_hidden_states_query_proj = attn.add_q_proj(encoder_hidden_states)
         encoder_hidden_states_key_proj = attn.add_k_proj(encoder_hidden_states)
         encoder_hidden_states_value_proj = attn.add_v_proj(encoder_hidden_states)
+
+        # print("hidden_states_q", encoder_hidden_states_query_proj)
+        # print("hidden_states_K", encoder_hidden_states_key_proj)
+        # print("hidden_states_V", encoder_hidden_states_value_proj)
 
         # attention
         query = paddle.concat([query, encoder_hidden_states_query_proj], axis=1)
@@ -962,6 +968,12 @@ class JointAttnProcessor2_5:
         hidden_states = hidden_states.reshape([batch_size, -1, attn.heads * head_dim])
         hidden_states = hidden_states.astype(query.dtype)
 
+        # print("hidden_states",hidden_states)
+        # print("encoder_hidden_states",encoder_hidden_states)
+        # hidden_states.fill_(0.11189012)
+        # print("hidden_states", hidden_states)
+        # print("encoder_hidden_states",norm_encoder_hidden_states)
+
         # Split the attention outputs.
         hidden_states, encoder_hidden_states = (
             hidden_states[:, : residual.shape[1]],
@@ -970,7 +982,10 @@ class JointAttnProcessor2_5:
 
         # linear proj
         hidden_states = attn.to_out[0](hidden_states)
+        # print(type(attn.to_out[0]))
+        # print("hidden_states", hidden_states)
         # dropout
+
         hidden_states = attn.to_out[1](hidden_states)
         if not attn.context_pre_only:
             encoder_hidden_states = attn.to_add_out(encoder_hidden_states)
@@ -978,7 +993,9 @@ class JointAttnProcessor2_5:
         if input_ndim == 4:
             hidden_states = hidden_states.transpose([0, 1, 3, 2]).reshape([batch_size, channel, height, width])
         if context_input_ndim == 4:
-            encoder_hidden_states = encoder_hidden_states.transpose([0, 1, 3, 2]).reshape([batch_size, channel, height, width])
+            encoder_hidden_states = encoder_hidden_states.transpose([0, 1, 3, 2]).reshape(
+                [batch_size, channel, height, width]
+            )
 
         return hidden_states, encoder_hidden_states
 
@@ -1009,7 +1026,9 @@ class FusedJointAttnProcessor2_5:
         context_input_ndim = encoder_hidden_states.ndim
         if context_input_ndim == 4:
             batch_size, channel, height, width = encoder_hidden_states.shape
-            encoder_hidden_states = encoder_hidden_states.reshape([batch_size, channel, height * width]).transpose([0, 2, 1])
+            encoder_hidden_states = encoder_hidden_states.reshape([batch_size, channel, height * width]).transpose(
+                [0, 2, 1]
+            )
 
         batch_size = encoder_hidden_states.shape[0]
 
@@ -1060,9 +1079,12 @@ class FusedJointAttnProcessor2_5:
         if input_ndim == 4:
             hidden_states = hidden_states.transpose([0, 1, 3, 2]).reshape([batch_size, channel, height, width])
         if context_input_ndim == 4:
-            encoder_hidden_states = encoder_hidden_states.transpose([0, 1, 3, 2]).reshape([batch_size, channel, height, width])
+            encoder_hidden_states = encoder_hidden_states.transpose([0, 1, 3, 2]).reshape(
+                [batch_size, channel, height, width]
+            )
 
         return hidden_states, encoder_hidden_states
+
 
 class XFormersAttnAddedKVProcessor:
     r"""

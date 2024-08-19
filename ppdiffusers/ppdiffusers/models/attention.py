@@ -14,8 +14,8 @@
 from typing import Any, Dict, Optional
 
 import paddle
-from paddle import nn
 import paddle.nn.functional as F
+from paddle import nn
 
 from ..utils import USE_PEFT_BACKEND
 from ..utils.paddle_utils import maybe_allow_in_graph
@@ -92,6 +92,7 @@ class GatedSelfAttentionDense(nn.Layer):
 
         return x
 
+
 @maybe_allow_in_graph
 class JointTransformerBlock(nn.Layer):
     r"""
@@ -112,7 +113,6 @@ class JointTransformerBlock(nn.Layer):
         context_norm_type = "ada_norm_continous" if context_pre_only else "ada_norm_zero"
 
         self.norm1 = AdaLayerNormZero(dim)
-
         if context_norm_type == "ada_norm_continous":
             self.norm1_context = AdaLayerNormContinuous(
                 dim, dim, elementwise_affine=False, eps=1e-6, bias=True, norm_type="layer_norm"
@@ -161,9 +161,7 @@ class JointTransformerBlock(nn.Layer):
         self._chunk_size = chunk_size
         self._chunk_dim = dim
 
-    def forward(
-        self, hidden_states: paddle.Tensor, encoder_hidden_states: paddle.Tensor, temb: paddle.Tensor
-    ):
+    def forward(self, hidden_states: paddle.Tensor, encoder_hidden_states: paddle.Tensor, temb: paddle.Tensor):
         norm_hidden_states, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.norm1(hidden_states, emb=temb)
 
         if self.context_pre_only:
@@ -175,7 +173,8 @@ class JointTransformerBlock(nn.Layer):
 
         # Attention.
         attn_output, context_attn_output = self.attn(
-            hidden_states=norm_hidden_states, encoder_hidden_states=norm_encoder_hidden_states, 
+            hidden_states=norm_hidden_states,
+            encoder_hidden_states=norm_encoder_hidden_states,
         )
 
         # Process attention outputs for the `hidden_states`.
@@ -184,6 +183,11 @@ class JointTransformerBlock(nn.Layer):
 
         norm_hidden_states = self.norm2(hidden_states)
         norm_hidden_states = norm_hidden_states * (1 + scale_mlp[:, None]) + shift_mlp[:, None]
+        # import paddlemix
+        # # norm_hidden_states = paddlemix.triton_ops.adaptive_layer_norm(hidden_states, scale_mlp, shift_mlp, epsilon=1e-6)
+        # hidden_states, norm_hidden_states = paddlemix.triton_ops.fused_adaLN_scale_residual(
+        #             hidden_states, attn_output, gate_msa, scale_mlp, shift_mlp, epsilon=1e-06
+        #         )
         if self._chunk_size is not None:
             # "feed_forward_chunk_size" can be used to save memory
             ff_output = _chunked_feed_forward(self.ff, norm_hidden_states, self._chunk_dim, self._chunk_size)
@@ -202,6 +206,11 @@ class JointTransformerBlock(nn.Layer):
 
             norm_encoder_hidden_states = self.norm2_context(encoder_hidden_states)
             norm_encoder_hidden_states = norm_encoder_hidden_states * (1 + c_scale_mlp[:, None]) + c_shift_mlp[:, None]
+            # import paddlemix
+            # norm_encoder_hidden_states = paddlemix.triton_ops.adaptive_layer_norm(encoder_hidden_states, scale_mlp, shift_mlp, epsilon=1e-6)
+            # encoder_hidden_states, norm_encoder_hidden_states = paddlemix.triton_ops.fused_adaLN_scale_residual(
+            #             encoder_hidden_states, context_attn_output, c_gate_msa, c_scale_mlp, c_shift_mlp, epsilon=1e-06
+            #         )
             if self._chunk_size is not None:
                 # "feed_forward_chunk_size" can be used to save memory
                 context_ff_output = _chunked_feed_forward(
@@ -212,6 +221,7 @@ class JointTransformerBlock(nn.Layer):
             encoder_hidden_states = encoder_hidden_states + c_gate_mlp.unsqueeze(1) * context_ff_output
 
         return encoder_hidden_states, hidden_states
+
 
 @maybe_allow_in_graph
 class BasicTransformerBlock(nn.Layer):
