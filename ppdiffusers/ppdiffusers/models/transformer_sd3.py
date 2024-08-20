@@ -17,7 +17,6 @@ from typing import Any, Dict, Optional, Union
 
 import paddle
 import paddle.nn as nn
-from paddle.distributed.fleet.utils import recompute
 
 from ..configuration_utils import ConfigMixin, register_to_config
 
@@ -26,17 +25,18 @@ from ..models.attention import JointTransformerBlock
 from ..models.attention_processor import Attention, AttentionProcessor
 from ..models.modeling_utils import ModelMixin
 from ..models.normalization import AdaLayerNormContinuous
-from ..utils import (
+from ..utils import (  # recompute_use_reentrant,; use_old_recompute,
     USE_PEFT_BACKEND,
     logging,
-    recompute_use_reentrant,
     scale_lora_layers,
     unscale_lora_layers,
-    use_old_recompute,
 )
 from .embeddings import CombinedTimestepTextProjEmbeddings, PatchEmbed
 from .simplified_sd3 import SimplifiedSD3
 from .transformer_2d import Transformer2DModelOutput
+
+# from paddle.distributed.fleet.utils import recompute
+
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -115,13 +115,13 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
             attention_head_dim=self.inner_dim,
             # context_pre_onl,
         )
-        # self.simplified_sd3 = paddle.incubate.jit.inference(
-        #     self.simplified_sd3,
-        #     enable_new_ir=True,
-        #     cache_static_model=False,
-        #     exp_enable_use_cutlass=True,
-        #     delete_pass_lists=["add_norm_fuse_pass"],
-        #     )
+        self.simplified_sd3 = paddle.incubate.jit.inference(
+            self.simplified_sd3,
+            enable_new_ir=True,
+            cache_static_model=False,
+            exp_enable_use_cutlass=True,
+            delete_pass_lists=["add_norm_fuse_pass"],
+        )
 
         self.norm_out = AdaLayerNormContinuous(self.inner_dim, self.inner_dim, elementwise_affine=False, eps=1e-6)
         self.proj_out = nn.Linear(self.inner_dim, patch_size * patch_size * self.out_channels, bias_attr=True)
@@ -168,7 +168,9 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
         # set recursively
         processors = {}
 
-        def fn_recursive_add_processors(name: str, module: torch.nn.Module, processors: Dict[str, AttentionProcessor]):
+        def fn_recursive_add_processors(
+            name: str, module: paddle.nn.Module, processors: Dict[str, AttentionProcessor]
+        ):
             if hasattr(module, "get_processor"):
                 processors[f"{name}.processor"] = module.get_processor(return_deprecated_lora=True)
 
@@ -201,7 +203,7 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
                 f" number of attention layers: {count}. Please make sure to pass {count} processor classes."
             )
 
-        def fn_recursive_attn_processor(name: str, module: torch.nn.Module, processor):
+        def fn_recursive_attn_processor(name: str, module: paddle.nn.Module, processor):
             if hasattr(module, "set_processor"):
                 if not isinstance(processor, dict):
                     module.set_processor(processor)
@@ -344,10 +346,19 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
         #         print(f"Layer: {name} | Shape: {param.shape} | Values: {param.data.numpy()[:5]}...")
         #     paddle.device.synchronize()
 
-        encoder_hidden_states, hidden_states = self.simplified_sd3(
+        paddle.device.synchronize()
+        import nvtx
+
+        transformer_nvtx = nvtx.start_range(message="simple_transformer", color="yellow")
+
+        hidden_states = self.simplified_sd3(
             hidden_states=hidden_states, encoder_hidden_states=encoder_hidden_states, temb=temb
         )
-        # encoder_hidden_states = None
+
+        paddle.device.synchronize()
+        nvtx.end_range(transformer_nvtx)
+
+        encoder_hidden_states = None
 
         # print((hidden_states - hidden_states_my))
         # print(paddle.max(paddle.abs(hidden_states - hidden_states_my)))
@@ -387,6 +398,8 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
 
     @classmethod
     def custom_modify_weight(cls, state_dict):
+        # state_dict["simplified_sd3.linear1.weight"] = paddle.assign(state_dict["transformer_blocks.0.norm1.linear.weight"])
+        # state_dict["simplified_sd3.linear1.bias"] = paddle.assign(state_dict["transformer_blocks.0.norm1.linear.bias"])
         for i in range(24):
             base_map_sd3 = [
                 (f"linear1.{i}.weight", f"{i}.norm1.linear.weight"),
@@ -425,7 +438,6 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
                 extra_map_sd3 = [
                     ("linear_context0.weight", f"{i}.norm1_context.linear.weight"),
                     ("linear_context0.bias", f"{i}.norm1_context.linear.bias"),
-                    # (f"norm1_context0.{i}.bias", f"{i}.norm1_context.norm.bias"),
                 ]
             map_sd3 = base_map_sd3 + extra_map_sd3
 
@@ -435,65 +447,11 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
                 else:
                     print(f"Warning!!: '{from_}' not found in state_dict")
 
-    # for i in range(24):
-    #     if i < 23:
-    #         map_sd3=[
-    #             (f"linear1.{i}.weight", f"{i}.norm1.linear.weight"),
-    #             (f"linear1.{i}.bias", f"{i}.norm1.linear.bias"),
-    #             (f"linear_context01.{i}.weight", f"{i}.norm1_context.linear.weight"),
-    #             (f"linear_context01.{i}.bias", f"{i}.norm1_context.linear.bias"),
-    #             (f"q.{i}.weight", f"{i}.attn.to_q.weight"),
-    #             (f"q.{i}.bias", f"{i}.attn.to_q.bias"),
-    #             (f"k.{i}.weight", f"{i}.attn.to_k.weight"),
-    #             (f"k.{i}.bias", f"{i}.attn.to_k.bias"),
-    #             (f"v.{i}.weight", f"{i}.attn.to_v.weight"),
-    #             (f"v.{i}.bias", f"{i}.attn.to_v.bias"),
-    #             (f"ek.{i}.weight", f"{i}.attn.add_k_proj.weight"),
-    #             (f"ek.{i}.bias", f"{i}.attn.add_k_proj.bias"),
-    #             (f"ev.{i}.weight", f"{i}.attn.add_v_proj.weight"),
-    #             (f"ev.{i}.bias", f"{i}.attn.add_v_proj.bias"),
-    #             (f"eq.{i}.weight", f"{i}.attn.add_q_proj.weight"),
-    #             (f"eq.{i}.bias", f"{i}.attn.add_q_proj.bias"),
-    #             (f"to_out_linear.{i}.weight", f"{i}.attn.to_out.0.weight"),
-    #             (f"to_out_linear.{i}.bias", f"{i}.attn.to_out.0.bias"),
-    #             (f"to_add_out_linear.{i}.weight", f"{i}.attn.to_add_out.weight"),
-    #             (f"to_add_out_linear.{i}.bias", f"{i}.attn.to_add_out.bias"),
-    #             (f"ffn1.{i}.weight", f"{i}.ff.net.0.proj.weight"),
-    #             (f"ffn1.{i}.bias", f"{i}.ff.net.0.proj.bias"),
-    #             (f"ffn2.{i}.weight", f"{i}.ff.net.2.weight"),
-    #             (f"ffn2.{i}.bias", f"{i}.ff.net.2.bias"),
-    #             (f"ffn_context1.{i}.weight", f"{i}.ff_context.net.0.proj.weight"),
-    #             (f"ffn_context1.{i}.bias", f"{i}.ff_context.net.0.proj.bias"),
-    #             (f"ffn_context2.{i}.weight", f"{i}.ff_context.net.2.weight"),
-    #             (f"ffn_context2.{i}.bias", f"{i}.ff_context.net.2.bias"),
-    #         ]
-    #     else:
-    #         map_sd3=[
-    #             (f"linear1.{i}.weight", f"{i}.norm1.linear.weight"),
-    #             (f"linear1.{i}.bias", f"{i}.norm1.linear.bias"),
-    #             (f"linear_context0.weight", f"{i}.norm1_context.linear.weight"),
-    #             (f"linear_context0.bias", f"{i}.norm1_context.linear.bias"),
-    #             (f"q.{i}.weight", f"{i}.attn.to_q.weight"),
-    #             (f"q.{i}.bias", f"{i}.attn.to_q.bias"),
-    #             (f"k.{i}.weight", f"{i}.attn.to_k.weight"),
-    #             (f"k.{i}.bias", f"{i}.attn.to_k.bias"),
-    #             (f"v.{i}.weight", f"{i}.attn.to_v.weight"),
-    #             (f"v.{i}.bias", f"{i}.attn.to_v.bias"),
-    #             (f"ek.{i}.weight", f"{i}.attn.add_k_proj.weight"),
-    #             (f"ek.{i}.bias", f"{i}.attn.add_k_proj.bias"),
-    #             (f"ev.{i}.weight", f"{i}.attn.add_v_proj.weight"),
-    #             (f"ev.{i}.bias", f"{i}.attn.add_v_proj.bias"),
-    #             (f"eq.{i}.weight", f"{i}.attn.add_q_proj.weight"),
-    #             (f"eq.{i}.bias", f"{i}.attn.add_q_proj.bias"),
-    #             (f"to_out_linear.{i}.weight", f"{i}.attn.to_out.0.weight"),
-    #             (f"to_out_linear.{i}.bias", f"{i}.attn.to_out.0.bias"),
-    #             (f"ffn1.{i}.weight", f"{i}.ff.net.0.proj.weight"),
-    #             (f"ffn1.{i}.bias", f"{i}.ff.net.0.proj.bias"),
-    #             (f"ffn2.{i}.weight", f"{i}.ff.net.2.weight"),
-    #             (f"ffn2.{i}.bias", f"{i}.ff.net.2.bias"),
-    #         ]
-    #     for to_, from_ in map_sd3:
-    #         if "transformer_blocks." + from_ in state_dict:
-    #             state_dict["simplified_sd3." + to_] = paddle.assign(state_dict["transformer_blocks." + from_])
-    #         else:
-    #             print(f"Warning!!: '{from_}' not found in state_dict")
+            # if  i > 0:
+            #     state_dict["simplified_sd3.linear1.weight"] = paddle.concat([state_dict["simplified_sd3.linear1.weight"], state_dict[f"transformer_blocks.{i}.norm1.linear.weight"]], axis=1)
+            #     state_dict["simplified_sd3.linear1.bias"] = paddle.concat([state_dict["simplified_sd3.linear1.bias"],state_dict[f"transformer_blocks.{i}.norm1.linear.bias"]], axis=0)
+            #     print("old_weight",state_dict[f"simplified_sd3.linear1.{i}.weight"])
+            #     print("old_bias",state_dict[f"simplified_sd3.linear1.{i}.bias"])
+
+            # print("weight",state_dict["simplified_sd3.linear1.weight"])
+        # exit(0)

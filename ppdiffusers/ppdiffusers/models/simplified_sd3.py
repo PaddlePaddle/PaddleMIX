@@ -18,6 +18,9 @@
 import paddle
 import paddle.nn.functional as F
 from paddle import nn
+from paddle.incubate.nn.functional import fused_linear, fused_linear_activation
+
+optimize = True
 
 
 class SimplifiedSD3(nn.Layer):
@@ -36,22 +39,24 @@ class SimplifiedSD3(nn.Layer):
 
         # silu + matmul + add
         # self.silu1 = nn.LayerList([nn.Silu() for i in range(num_layers)])
-        self.silu1 = nn.Silu()
+        self.silu = nn.Silu()
         self.linear1 = nn.LayerList([nn.Linear(1536, 6 * 1536) for i in range(num_layers)])  # 1536,9216
+        # self.linear1 = nn.Linear(1536, 6 * 1536 * 24)
+
         norm_elementwise_affine_kwargs = dict(weight_attr=False, bias_attr=False)
         self.norm1 = nn.LayerList(
             [nn.LayerNorm(1536, epsilon=1e-6, **norm_elementwise_affine_kwargs) for i in range(num_layers)]
         )
 
         # not last layer
-        self.silu2_context01 = nn.LayerList([nn.Silu() for i in range(num_layers - 1)])
+        # self.silu2_context01 = nn.LayerList([nn.Silu() for i in range(num_layers - 1)])
         self.linear_context01 = nn.LayerList([nn.Linear(1536, 6 * 1536) for i in range(num_layers - 1)])  # 1536,9216
         self.norm1_context01 = nn.LayerList(
             [nn.LayerNorm(1536, epsilon=1e-6, **norm_elementwise_affine_kwargs) for i in range(num_layers - 1)]
         )  # another
 
         # last layer
-        self.silu2_context0 = nn.Silu()
+        # self.silu2_context0 = nn.Silu()
         self.linear_context0 = nn.Linear(1536, 1536 * 2, bias_attr=self.bias)
         self.norm1_context0 = nn.LayerNorm(1536, epsilon=1e-06, weight_attr=False, bias_attr=self.bias)
 
@@ -84,42 +89,59 @@ class SimplifiedSD3(nn.Layer):
     def forward(self, hidden_states, encoder_hidden_states, temb):
 
         # nnemb = nn.Silu(temb)
-        temb_silu1 = self.silu1(temb)
-        temb_silu2 = self.silu1(temb)
-
+        temb_silu1 = self.silu(temb)
+        # temb_silu2 = self.silu(temb)
+        # emb1 = self.linear1(temb_silu1)
         for i in range(self.num_layers):
+            # emb=emb1[:,i*6*1536:(i+1)*1536*6]
             context_pre_only = i == self.num_layers - 1
 
             # emb  = self.linear1[i](self.silu1(temb))
             emb = self.linear1[i](temb_silu1)
 
             shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = emb.chunk(6, axis=1)
-            norm_hidden_states = self.norm1[i](hidden_states) * (1 + scale_msa[:, None]) + shift_msa[:, None]
-            # import paddlemix
-            # norm_hidden_states = paddlemix.triton_ops.adaptive_layer_norm(hidden_states, scale_msa, shift_msa, epsilon=1e-06)
+            if optimize:
+                import paddlemix
+
+                norm_hidden_states = paddlemix.triton_ops.adaptive_layer_norm(
+                    hidden_states, scale_msa, shift_msa, epsilon=1e-06
+                )
+            else:
+                norm_hidden_states = self.norm1[i](hidden_states) * (1 + scale_msa[:, None]) + shift_msa[:, None]
 
             if not context_pre_only:
                 # emb = self.linear_context01[i](self.silu2_context01[i](temb))
-                emb = self.linear_context01[i](temb_silu2)
+                emb = self.linear_context01[i](temb_silu1)
                 shift_msa, scale_msa, c_gate_msa, c_shift_mlp, c_scale_mlp, c_gate_mlp = emb.chunk(6, axis=1)
-                norm_encoder_hidden_states = (
-                    self.norm1_context01[i](encoder_hidden_states) * (1 + scale_msa[:, None]) + shift_msa[:, None]
-                )
-                # import paddlemix
-                # norm_encoder_hidden_states = paddlemix.triton_ops.adaptive_layer_norm(encoder_hidden_states, scale_msa, shift_msa, epsilon=1e-06)
+
+                if optimize:
+                    import paddlemix
+
+                    norm_encoder_hidden_states = paddlemix.triton_ops.adaptive_layer_norm(
+                        encoder_hidden_states, scale_msa, shift_msa, epsilon=1e-06
+                    )
+                else:
+                    norm_encoder_hidden_states = (
+                        self.norm1_context01[i](encoder_hidden_states) * (1 + scale_msa[:, None]) + shift_msa[:, None]
+                    )
 
             else:  # last layer
-                emb = self.linear_context0(self.silu2_context0(temb).cast(encoder_hidden_states.dtype))
+                emb = self.linear_context0(temb_silu1.cast(encoder_hidden_states.dtype))
                 scale, shift = paddle.chunk(emb, 2, axis=1)
-                norm_encoder_hidden_states = (
-                    self.norm1_context0(encoder_hidden_states) * (1 + scale)[:, None, :] + shift[:, None, :]
-                )
-                # print("self.norm1_context0.bias=",self.norm1_context0.bias)
-                # import paddlemix
-                # norm_encoder_hidden_states = paddlemix.triton_ops.adaptive_layer_norm(encoder_hidden_states, scale, shift, bias=self.norm1_context0.bias)
+
+                if optimize:
+                    import paddlemix
+
+                    norm_encoder_hidden_states = paddlemix.triton_ops.adaptive_layer_norm(
+                        encoder_hidden_states, scale, shift, bias=self.norm1_context0.bias
+                    )
+                else:
+                    norm_encoder_hidden_states = (
+                        self.norm1_context0(encoder_hidden_states) * (1 + scale)[:, None, :] + shift[:, None, :]
+                    )
 
             # -------------------------^ attention ^-----------------------
-            residual = norm_hidden_states
+            # residual = norm_hidden_states
             q = self.q[i](norm_hidden_states)
             k = self.k[i](norm_hidden_states)
             v = self.v[i](norm_hidden_states)
@@ -129,15 +151,19 @@ class SimplifiedSD3(nn.Layer):
             q = paddle.concat([q, eq], axis=1).reshape([2, -1, 24, 64])
             k = paddle.concat([k, ek], axis=1).reshape([2, -1, 24, 64])
             v = paddle.concat([v, ev], axis=1).reshape([2, -1, 24, 64])
+            # qkv = paddle.concat([q, eq, k, ek, v, ev], axis=1).reshape([2, -1, 24, 64])
+            # q,k,v = paddle.split(qkv,axis=1, num_or_sections=3)
 
             norm_hidden_states1 = F.scaled_dot_product_attention_(q, k, v, dropout_p=0.0, is_causal=False)
             norm_hidden_states1 = norm_hidden_states1.reshape([2, -1, 1536])
             norm_hidden_states1 = norm_hidden_states1.astype(q.dtype)
 
-            attn_output, context_attn_output = (
-                norm_hidden_states1[:, : residual.shape[1]],
-                norm_hidden_states1[:, residual.shape[1] :],
-            )
+            # attn_output, context_attn_output = (
+            #     norm_hidden_states1[:, : residual.shape[1]],
+            #     norm_hidden_states1[:, residual.shape[1] :],
+            # )
+
+            attn_output, context_attn_output = paddle.split(norm_hidden_states1, num_or_sections=[1024, 154], axis=1)
 
             attn_output = paddle.nn.functional.linear(
                 attn_output, self.to_out_linear[i].weight, self.to_out_linear[i].bias
@@ -148,38 +174,62 @@ class SimplifiedSD3(nn.Layer):
 
             # -------------------------^ attention ^-----------------------
             # ===============FF_First
-            attn_output = gate_msa.unsqueeze(1) * attn_output
-            hidden_states = hidden_states + attn_output
-            norm_hidden_states = self.ffn_norm[i](hidden_states)
-            norm_hidden_states = norm_hidden_states * (1 + scale_mlp[:, None]) + shift_mlp[:, None]
-            # import paddlemix
-            # hidden_states, norm_hidden_states = paddlemix.triton_ops.fused_adaLN_scale_residual(
-            #             hidden_states, attn_output, gate_msa, scale_mlp, shift_mlp, epsilon=1e-06
-            #         )
 
-            ff_output = self.ffn1[i](norm_hidden_states)
-            ff_output = F.gelu(ff_output, approximate=True)
-            ff_output = self.ffn2[i](ff_output)
+            if optimize:
+                import paddlemix
+
+                hidden_states, norm_hidden_states = paddlemix.triton_ops.fused_adaLN_scale_residual(
+                    hidden_states, attn_output, gate_msa, scale_mlp, shift_mlp, epsilon=1e-06
+                )
+            else:
+                attn_output = gate_msa.unsqueeze(1) * attn_output
+                hidden_states = hidden_states + attn_output
+                norm_hidden_states = self.ffn_norm[i](hidden_states)
+                norm_hidden_states = norm_hidden_states * (1 + scale_mlp[:, None]) + shift_mlp[:, None]
+
+            # ff_output = self.ffn1[i](norm_hidden_states)
+            # ff_output = fused_linear(norm_hidden_states, self.ffn1[i].weight, self.ffn1[i].bias)
+            # ff_output = F.gelu(ff_output, approximate=True)
+            ff_output = fused_linear_activation(
+                norm_hidden_states, self.ffn1[i].weight, self.ffn1[i].bias, activation="gelu"
+            )
+            # ff_output = self.ffn2[i](ff_output)
+            ff_output = fused_linear(ff_output, self.ffn2[i].weight, self.ffn2[i].bias)
 
             ff_output = gate_mlp.unsqueeze(1) * ff_output
             hidden_states = hidden_states + ff_output
 
             # ===========FF_Second
             if not context_pre_only:
-                context_attn_output = c_gate_msa.unsqueeze(1) * context_attn_output
-                encoder_hidden_states = encoder_hidden_states + context_attn_output
-                norm_encoder_hidden_states = self.ffn_context_norm[i](encoder_hidden_states)
-                norm_encoder_hidden_states = (
-                    norm_encoder_hidden_states * (1 + c_scale_mlp[:, None]) + c_shift_mlp[:, None]
-                )
-                # import paddlemix
-                # encoder_hidden_states, norm_encoder_hidden_states = paddlemix.triton_ops.fused_adaLN_scale_residual(
-                #             encoder_hidden_states, context_attn_output, c_gate_msa, c_scale_mlp, c_shift_mlp, epsilon=1e-06
-                #         )
+                if optimize:
+                    import paddlemix
 
-                context_ff_output = self.ffn_context1[i](norm_encoder_hidden_states)
-                context_ff_output = F.gelu(context_ff_output, approximate=True)
-                context_ff_output = self.ffn_context2[i](context_ff_output)
+                    (
+                        encoder_hidden_states,
+                        norm_encoder_hidden_states,
+                    ) = paddlemix.triton_ops.fused_adaLN_scale_residual(
+                        encoder_hidden_states, context_attn_output, c_gate_msa, c_scale_mlp, c_shift_mlp, epsilon=1e-06
+                    )
+                else:
+                    context_attn_output = c_gate_msa.unsqueeze(1) * context_attn_output
+                    encoder_hidden_states = encoder_hidden_states + context_attn_output
+                    norm_encoder_hidden_states = self.ffn_context_norm[i](encoder_hidden_states)
+                    norm_encoder_hidden_states = (
+                        norm_encoder_hidden_states * (1 + c_scale_mlp[:, None]) + c_shift_mlp[:, None]
+                    )
+
+                # context_ff_output = self.ffn_context1[i](norm_encoder_hidden_states)
+                # context_ff_output = F.gelu(context_ff_output, approximate=True)
+                # context_ff_output = self.ffn_context2[i](context_ff_output)
+                context_ff_output = fused_linear_activation(
+                    norm_encoder_hidden_states,
+                    self.ffn_context1[i].weight,
+                    self.ffn_context1[i].bias,
+                    activation="gelu",
+                )
+                context_ff_output = fused_linear(
+                    context_ff_output, self.ffn_context2[i].weight, self.ffn_context2[i].bias
+                )
 
                 encoder_hidden_states = encoder_hidden_states + c_gate_mlp.unsqueeze(1) * context_ff_output
             else:
