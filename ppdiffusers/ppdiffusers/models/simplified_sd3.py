@@ -185,7 +185,6 @@ class SimplifiedSD3(nn.Layer):
                 norm_hidden_states = norm_hidden_states * (1 + scale_mlp[:, None]) + shift_mlp[:, None]
 
             ff_output = self.ffn1[i](norm_hidden_states)
-            ff_output = fused_linear(norm_hidden_states, self.ffn1[i].weight, self.ffn1[i].bias)
             ff_output = F.gelu(ff_output, approximate=True)
             ff_output = self.ffn2[i](ff_output)
 
