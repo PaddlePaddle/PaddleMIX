@@ -88,9 +88,7 @@ class SimplifiedSD3(nn.Layer):
 
     def forward(self, hidden_states, encoder_hidden_states, temb):
 
-        # nnemb = nn.Silu(temb)
         temb_silu1 = self.silu(temb)
-        # temb_silu2 = self.silu(temb)
         # emb1 = self.linear1(temb_silu1)
         for i in range(self.num_layers):
             # emb=emb1[:,i*6*1536:(i+1)*1536*6]
