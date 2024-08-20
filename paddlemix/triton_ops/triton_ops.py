@@ -1567,3 +1567,165 @@ def fused_rotary_emb(
             outputs={"q_out": q_out, "k_out": k_out, "v_out": v_out},
         )
         return q_out, k_out, v_out
+
+
+########################### adaptive layer norm ###############################
+split_concat_template = (
+    """
+
+
+std::vector<paddle::Tensor> ${op_name}_func(
+    const paddle::Tensor &x,
+    const paddle::Tensor &y) {
+
+  int batch = x.dims()[0];
+  
+  int seq_qkv = x.dims()[1];
+  int seq_eqkv = y.dims()[1];
+  int output_hidden = x.dims()[2] / 3;
+  
+  
+  auto qkv = get_tensor_ptr(x);
+  auto eqkv = get_tensor_ptr(y);
+  
+  
+  auto out0_tensor = paddle::empty({batch, seq_qkv+seq_eqkv, output_hidden}, x.dtype(), x.place());
+  auto out1_tensor = paddle::empty({batch, seq_qkv+seq_eqkv, output_hidden}, x.dtype(), x.place());
+  auto out2_tensor = paddle::empty({batch, seq_qkv+seq_eqkv, output_hidden}, x.dtype(), x.place());
+  
+  auto out0 = get_tensor_ptr(out0_tensor);
+  auto out1 = get_tensor_ptr(out1_tensor);
+  auto out2 = get_tensor_ptr(out2_tensor);
+  
+  
+  auto  run_stream = out0_tensor.stream();
+  
+"""
+    + tune_and_invoke_part
+    + """
+    return {out0_tensor, out1_tensor, out2_tensor};
+}
+
+std::vector<std::vector<int64_t>> ${op_name}_InferShape(
+        const std::vector<int64_t>& A_shape, const std::vector<int64_t>& B_shape) {
+  
+  std::vector<int64_t> out_shape = {A_shape[0], A_shape[1]+B_shape[1], A_shape[2]/3};
+  
+  return {out_shape, out_shape, out_shape};
+}
+
+std::vector<paddle::DataType> ${op_name}_InferDtype(const paddle::DataType& A_dtype) {
+    return {A_dtype, A_dtype, A_dtype};
+}
+
+PD_BUILD_OP(${op_name})
+    .Inputs({"x", "y"})
+    .Outputs({"out0_tensor", "out1_tensor", "out2_tensor"})
+    .SetKernelFn(PD_KERNEL(${op_name}_func))
+    .SetInferDtypeFn(PD_INFER_DTYPE(${op_name}_InferDtype))
+    .SetInferShapeFn(PD_INFER_SHAPE(${op_name}_InferShape));
+"""
+)
+
+
+@paddle_use_triton(
+    custom_op_template=split_concat_template,
+    key=["1"],
+)
+def splcat_kernel(
+    out0,
+    out1,
+    out2,
+    qkv,
+    eqkv,
+    batch,
+    seq_qkv,
+    seq_eqkv,
+    output_hidden,  # 1536
+    BLOCK_SIZE: tl.constexpr,
+):
+
+    # grid = (3, batch, (seq_x + seq_y))
+    out_id = tl.program_id(axis=0)
+    batch = tl.program_id(axis=1)
+    out_row = tl.program_id(axis=2)
+    # if out_id == 0 and out_row < seq_qkv:
+    #     read_ptr = out_row * (output_hidden * 3) + out_id * output_hidden + x  + (batch * seq_qkv * output_hidden * 3)
+    # elif out_id == 0 and out_row < seq_eqkv:
+    #     read_ptr = (out_row - seq_qkv) * (output_hidden * 3) + out_id * output_hidden + y
+
+    if out_row < seq_qkv:
+        read_ptr = out_id * output_hidden + out_row * 3 * output_hidden + batch * seq_qkv * output_hidden * 3 + qkv
+    else:
+        read_ptr = (
+            out_id * output_hidden
+            + (out_row - seq_qkv) * 3 * output_hidden
+            + batch * seq_eqkv * output_hidden * 3
+            + eqkv
+        )
+
+    read_offsets = tl.arange(0, BLOCK_SIZE)
+
+    mask = read_offsets < output_hidden
+
+    read_data = tl.load(read_ptr + read_offsets, mask=mask)
+
+    real_output = out0
+    if out_id == 1:
+        real_output = out1
+    elif out_id == 2:
+        real_output = out2
+
+    write_ptr = batch * (seq_qkv + seq_eqkv) * output_hidden + out_row * output_hidden + real_output + read_offsets
+
+    tl.store(write_ptr, read_data, mask=mask)
+
+
+def my_splcat(x, y):
+    assert len(x.shape) == 3
+    assert len(y.shape) == 3
+
+    assert x.shape[0] == y.shape[0]
+    assert x.shape[2] == y.shape[2]
+
+    batch = x.shape[0]
+    seq_qkv = x.shape[1]
+    hidd_x = x.shape[2]
+    seq_eqkv = y.shape[1]
+    ouput_hidden = hidd_x // 3
+
+    op_name = "my_splitconcat"
+
+    if op_name not in OpProtoHolder.instance().op_proto_map.keys():
+        out0 = paddle.empty(shape=[batch, seq_qkv + seq_eqkv, ouput_hidden], dtype=x.dtype)
+        out1 = paddle.empty(shape=[batch, seq_qkv + seq_eqkv, ouput_hidden], dtype=x.dtype)
+        out2 = paddle.empty(shape=[batch, seq_qkv + seq_eqkv, ouput_hidden], dtype=x.dtype)
+        grid = ("3", "batch", "seq_qkv + seq_eqkv")
+
+        splcat_kernel[(op_name, grid)](out0, out1, out2, x, y, batch, seq_qkv, seq_eqkv, ouput_hidden, BLOCK_SIZE=2048)
+
+    if in_dynamic_or_pir_mode():
+        print(f"== we are in dynamic mode, op_name: {op_name}")
+        outs = _C_ops._run_custom_op(
+            op_name,
+            x,
+            y,
+        )
+        return outs[0], outs[1], outs[2]
+    else:
+        print(f"== we are in dynamic to static mode, op_name: {op_name}")
+        helper = LayerHelper(op_name, **locals())
+        inputs = {
+            "x": x,
+            "y": y,
+        }
+        out0 = helper.create_variable_for_type_inference(dtype=x.dtype)
+        out1 = helper.create_variable_for_type_inference(dtype=x.dtype)
+        out2 = helper.create_variable_for_type_inference(dtype=x.dtype)
+
+        helper.append_op(
+            type=op_name,
+            inputs=inputs,
+            outputs={"out0_tensor": out0, "out1_tensor": out1, "out2_tensor": out2},
+        )
+        return out0, out1, out2

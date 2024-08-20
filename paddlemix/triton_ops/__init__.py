@@ -19,6 +19,7 @@ try:
         adaptive_layer_norm,
         fused_adaLN_scale_residual,
         fused_rotary_emb,
+        my_splcat,
         paddle_use_triton,
         rms_norm,
         weight_only_int8,
@@ -39,6 +40,7 @@ try:
         "rms_norm",
         "get_dtype_str",
         "fused_rotary_emb",
+        "my_splcat",
     ]
 except:
     pass

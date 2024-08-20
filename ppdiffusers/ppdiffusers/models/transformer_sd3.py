@@ -447,11 +447,57 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
                 else:
                     print(f"Warning!!: '{from_}' not found in state_dict")
 
-            # if  i > 0:
             #     state_dict["simplified_sd3.linear1.weight"] = paddle.concat([state_dict["simplified_sd3.linear1.weight"], state_dict[f"transformer_blocks.{i}.norm1.linear.weight"]], axis=1)
             #     state_dict["simplified_sd3.linear1.bias"] = paddle.concat([state_dict["simplified_sd3.linear1.bias"],state_dict[f"transformer_blocks.{i}.norm1.linear.bias"]], axis=0)
             #     print("old_weight",state_dict[f"simplified_sd3.linear1.{i}.weight"])
             #     print("old_bias",state_dict[f"simplified_sd3.linear1.{i}.bias"])
-
-            # print("weight",state_dict["simplified_sd3.linear1.weight"])
+            state_dict[f"simplified_sd3.qkv.{i}.weight"] = paddle.assign(
+                paddle.concat(
+                    [
+                        state_dict[f"simplified_sd3.q.{i}.weight"],
+                        state_dict[f"simplified_sd3.k.{i}.weight"],
+                        state_dict[f"simplified_sd3.v.{i}.weight"],
+                    ],
+                    axis=1,
+                )
+            )
+            state_dict[f"simplified_sd3.qkv.{i}.bias"] = paddle.assign(
+                paddle.concat(
+                    [
+                        state_dict[f"simplified_sd3.q.{i}.bias"],
+                        state_dict[f"simplified_sd3.q.{i}.bias"],
+                        state_dict[f"simplified_sd3.q.{i}.bias"],
+                    ],
+                    axis=0,
+                )
+            )
+            state_dict[f"simplified_sd3.eqkv.{i}.weight"] = paddle.assign(
+                paddle.concat(
+                    [
+                        state_dict[f"simplified_sd3.eq.{i}.weight"],
+                        state_dict[f"simplified_sd3.ek.{i}.weight"],
+                        state_dict[f"simplified_sd3.ev.{i}.weight"],
+                    ],
+                    axis=1,
+                )
+            )
+            state_dict[f"simplified_sd3.eqkv.{i}.bias"] = paddle.assign(
+                paddle.concat(
+                    [
+                        state_dict[f"simplified_sd3.eq.{i}.bias"],
+                        state_dict[f"simplified_sd3.ek.{i}.bias"],
+                        state_dict[f"simplified_sd3.ev.{i}.bias"],
+                    ],
+                    axis=0,
+                )
+            )
+            print("old_weight_q", state_dict[f"simplified_sd3.eq.{i}.bias"])
+            print("old_weight_k", state_dict[f"simplified_sd3.ek.{i}.bias"])
+            print("old_weight_v", state_dict[f"simplified_sd3.ev.{i}.bias"])
+            print(
+                "weight",
+                state_dict[f"simplified_sd3.eqkv.{i}.bias"],
+            )
+        # exit(0)
+        # print("weight",state_dict["simplified_sd3.linear1.weight"])
         # exit(0)

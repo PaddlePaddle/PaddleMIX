@@ -61,12 +61,15 @@ class SimplifiedSD3(nn.Layer):
         self.norm1_context0 = nn.LayerNorm(1536, epsilon=1e-06, weight_attr=False, bias_attr=self.bias)
 
         # attention
-        self.q = nn.LayerList([nn.Linear(1536, 1536) for i in range(num_layers)])
-        self.k = nn.LayerList([nn.Linear(1536, 1536) for i in range(num_layers)])
-        self.v = nn.LayerList([nn.Linear(1536, 1536) for i in range(num_layers)])
-        self.eq = nn.LayerList([nn.Linear(1536, 1536) for i in range(num_layers)])
-        self.ek = nn.LayerList([nn.Linear(1536, 1536) for i in range(num_layers)])
-        self.ev = nn.LayerList([nn.Linear(1536, 1536) for i in range(num_layers)])
+        # self.q = nn.LayerList([nn.Linear(1536, 1536) for i in range(num_layers)])
+        # self.k = nn.LayerList([nn.Linear(1536, 1536) for i in range(num_layers)])
+        # self.v = nn.LayerList([nn.Linear(1536, 1536) for i in range(num_layers)])
+        self.qkv = nn.LayerList([nn.Linear(1536, 1536 * 3) for i in range(num_layers)])
+
+        # self.eq = nn.LayerList([nn.Linear(1536, 1536) for i in range(num_layers)])
+        # self.ek = nn.LayerList([nn.Linear(1536, 1536) for i in range(num_layers)])
+        # self.ev = nn.LayerList([nn.Linear(1536, 1536) for i in range(num_layers)])
+        self.eqkv = nn.LayerList([nn.Linear(1536, 1536 * 3) for i in range(num_layers)])
         self.to_out_linear = nn.LayerList([nn.Linear(1536, 1536) for i in range(num_layers)])
         # self.to_out =  nn.LayerList([nn.Dropout(0.0) for i in range(num_layers)])
 
@@ -140,15 +143,29 @@ class SimplifiedSD3(nn.Layer):
 
             # -------------------------^ attention ^-----------------------
             # residual = norm_hidden_states
-            q = self.q[i](norm_hidden_states)
-            k = self.k[i](norm_hidden_states)
-            v = self.v[i](norm_hidden_states)
-            eq = self.eq[i](norm_encoder_hidden_states)
-            ek = self.ek[i](norm_encoder_hidden_states)
-            ev = self.ev[i](norm_encoder_hidden_states)
-            q = paddle.concat([q, eq], axis=1).reshape([2, -1, 24, 64])
-            k = paddle.concat([k, ek], axis=1).reshape([2, -1, 24, 64])
-            v = paddle.concat([v, ev], axis=1).reshape([2, -1, 24, 64])
+            # q = self.q[i](norm_hidden_states)
+            # k = self.k[i](norm_hidden_states)
+            # v = self.v[i](norm_hidden_states)
+            qkv = self.qkv[i](norm_hidden_states)
+            # q,k,v = paddle.split(qkv,axis=2, num_or_sections=3)
+
+            # eq = self.eq[i](norm_encoder_hidden_states)
+            # ek = self.ek[i](norm_encoder_hidden_states)
+            # ev = self.ev[i](norm_encoder_hidden_states)
+            eqkv = self.eqkv[i](norm_encoder_hidden_states)
+            # eq,ek,ev = paddle.split(eqkv,axis=2, num_or_sections=3)
+
+            # q = paddle.concat([q, eq], axis=1).reshape([2, -1, 24, 64])
+            # k = paddle.concat([k, ek], axis=1).reshape([2, -1, 24, 64])
+            # v = paddle.concat([v, ev], axis=1).reshape([2, -1, 24, 64])
+
+            import paddlemix
+
+            q, k, v = paddlemix.triton_ops.my_splcat(qkv, eqkv)
+            q = q.reshape([2, -1, 24, 64])
+            k = k.reshape([2, -1, 24, 64])
+            v = v.reshape([2, -1, 24, 64])
+
             # qkv = paddle.concat([q, eq, k, ek, v, ev], axis=1).reshape([2, -1, 24, 64])
             # q,k,v = paddle.split(qkv,axis=1, num_or_sections=3)
 
