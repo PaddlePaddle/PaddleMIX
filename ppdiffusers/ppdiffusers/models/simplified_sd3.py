@@ -88,14 +88,14 @@ class SimplifiedSD3(nn.Layer):
 
     def forward(self, hidden_states, encoder_hidden_states, temb):
 
-        temb_silu1 = self.silu(temb)
-        # emb1 = self.linear1(temb_silu1)
+        temb_silu = self.silu(temb)
+        # emb1 = self.linear1(temb_silu)
         for i in range(self.num_layers):
             # emb=emb1[:,i*6*1536:(i+1)*1536*6]
             context_pre_only = i == self.num_layers - 1
 
             # emb  = self.linear1[i](self.silu1(temb))
-            emb = self.linear1[i](temb_silu1)
+            emb = self.linear1[i](temb_silu)
 
             shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = emb.chunk(6, axis=1)
             if optimize:
@@ -109,7 +109,7 @@ class SimplifiedSD3(nn.Layer):
 
             if not context_pre_only:
                 # emb = self.linear_context01[i](self.silu2_context01[i](temb))
-                emb = self.linear_context01[i](temb_silu1)
+                emb = self.linear_context01[i](temb_silu)
                 shift_msa, scale_msa, c_gate_msa, c_shift_mlp, c_scale_mlp, c_gate_mlp = emb.chunk(6, axis=1)
 
                 if optimize:
@@ -124,7 +124,7 @@ class SimplifiedSD3(nn.Layer):
                     )
 
             else:  # last layer
-                emb = self.linear_context0(temb_silu1.cast(encoder_hidden_states.dtype))
+                emb = self.linear_context0(temb_silu.cast(encoder_hidden_states.dtype))
                 scale, shift = paddle.chunk(emb, 2, axis=1)
 
                 if optimize:

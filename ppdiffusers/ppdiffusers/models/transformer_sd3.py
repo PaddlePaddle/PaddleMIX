@@ -346,17 +346,17 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
         #         print(f"Layer: {name} | Shape: {param.shape} | Values: {param.data.numpy()[:5]}...")
         #     paddle.device.synchronize()
 
-        paddle.device.synchronize()
-        import nvtx
+        # paddle.device.synchronize()
+        # import nvtx
 
-        transformer_nvtx = nvtx.start_range(message="simple_transformer", color="yellow")
+        # transformer_nvtx = nvtx.start_range(message="simple_transformer", color="yellow")
 
         hidden_states = self.simplified_sd3(
             hidden_states=hidden_states, encoder_hidden_states=encoder_hidden_states, temb=temb
         )
 
-        paddle.device.synchronize()
-        nvtx.end_range(transformer_nvtx)
+        # paddle.device.synchronize()
+        # nvtx.end_range(transformer_nvtx)
 
         encoder_hidden_states = None
 
