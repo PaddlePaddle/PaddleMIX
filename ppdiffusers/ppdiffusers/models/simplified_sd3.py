@@ -160,7 +160,6 @@ class SimplifiedSD3(nn.Layer):
             #     norm_hidden_states1[:, : residual.shape[1]],
             #     norm_hidden_states1[:, residual.shape[1] :],
             # )
-
             attn_output, context_attn_output = paddle.split(norm_hidden_states1, num_or_sections=[1024, 154], axis=1)
 
             attn_output = paddle.nn.functional.linear(
@@ -185,14 +184,10 @@ class SimplifiedSD3(nn.Layer):
                 norm_hidden_states = self.ffn_norm[i](hidden_states)
                 norm_hidden_states = norm_hidden_states * (1 + scale_mlp[:, None]) + shift_mlp[:, None]
 
-            # ff_output = self.ffn1[i](norm_hidden_states)
-            # ff_output = fused_linear(norm_hidden_states, self.ffn1[i].weight, self.ffn1[i].bias)
-            # ff_output = F.gelu(ff_output, approximate=True)
-            ff_output = fused_linear_activation(
-                norm_hidden_states, self.ffn1[i].weight, self.ffn1[i].bias, activation="gelu"
-            )
-            # ff_output = self.ffn2[i](ff_output)
-            ff_output = fused_linear(ff_output, self.ffn2[i].weight, self.ffn2[i].bias)
+            ff_output = self.ffn1[i](norm_hidden_states)
+            ff_output = fused_linear(norm_hidden_states, self.ffn1[i].weight, self.ffn1[i].bias)
+            ff_output = F.gelu(ff_output, approximate=True)
+            ff_output = self.ffn2[i](ff_output)
 
             ff_output = gate_mlp.unsqueeze(1) * ff_output
             hidden_states = hidden_states + ff_output
@@ -216,18 +211,9 @@ class SimplifiedSD3(nn.Layer):
                         norm_encoder_hidden_states * (1 + c_scale_mlp[:, None]) + c_shift_mlp[:, None]
                     )
 
-                # context_ff_output = self.ffn_context1[i](norm_encoder_hidden_states)
-                # context_ff_output = F.gelu(context_ff_output, approximate=True)
-                # context_ff_output = self.ffn_context2[i](context_ff_output)
-                context_ff_output = fused_linear_activation(
-                    norm_encoder_hidden_states,
-                    self.ffn_context1[i].weight,
-                    self.ffn_context1[i].bias,
-                    activation="gelu",
-                )
-                context_ff_output = fused_linear(
-                    context_ff_output, self.ffn_context2[i].weight, self.ffn_context2[i].bias
-                )
+                context_ff_output = self.ffn_context1[i](norm_encoder_hidden_states)
+                context_ff_output = F.gelu(context_ff_output, approximate=True)
+                context_ff_output = self.ffn_context2[i](context_ff_output)
 
                 encoder_hidden_states = encoder_hidden_states + c_gate_mlp.unsqueeze(1) * context_ff_output
             else:
