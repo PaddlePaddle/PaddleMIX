@@ -1,4 +1,4 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,13 +11,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# --------------------------------------------------------
+# InternVL
+# Copyright (c) 2024 OpenGVLab
+# Licensed under The MIT License [see LICENSE for details]
+# --------------------------------------------------------
 
-from .caption_dataset import *
-from .chatml_dataset import *
-from .coco_caption import *
-from .coco_clip import *
-from .collator import *
-from .dataset import *
-from .mixtoken_dataset import *
-from .vg_caption import *
-from .internvl_dataset import *
+from .configuration_phi3 import Phi3Config
+from .modeling_phi3 import Phi3ForCausalLM
+
+__all__ = ['Phi3Config', 'Phi3ForCausalLM']
