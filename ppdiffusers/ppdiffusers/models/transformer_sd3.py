@@ -326,10 +326,6 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
             `tuple` where the first element is the sample tensor.
         """
 
-        # print(str(self))
-        # with open("/cwb/wenbin/PaddleMIX/ppdiffusers/examples/inference/AibinSD3/state_dict_817.txt", "a") as time_file:
-        #     time_file.write(str(self.state_dict().keys()))
-
         if joint_attention_kwargs is not None:
             joint_attention_kwargs = joint_attention_kwargs.copy()
             lora_scale = joint_attention_kwargs.pop("scale", 1.0)
