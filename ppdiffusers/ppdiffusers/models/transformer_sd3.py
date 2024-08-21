@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 from typing import Any, Dict, Optional, Union
 
 import paddle
@@ -94,6 +95,8 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
         )
         self.context_embedder = nn.Linear(self.config.joint_attention_dim, self.config.caption_projection_dim)
 
+        self.inference_optimize = os.getenv("INFERENCE_OPTIMIZE") == "True"
+        self.inference_optimize_origin = os.getenv("INFERENCE_OPTIMIZE_ORIGIN") == "True"
         # `attention_head_dim` is doubled to account for the mixing.
         # It needs to crafted when we get the actual checkpoints.
         self.transformer_blocks = nn.LayerList(
@@ -107,21 +110,29 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
                 for i in range(self.config.num_layers)
             ]
         )
-
-        self.simplified_sd3 = SimplifiedSD3(
-            num_layers,
-            dim=self.inner_dim,
-            num_attention_heads=self.config.num_attention_heads,
-            attention_head_dim=self.inner_dim,
-            # context_pre_onl,
-        )
-        self.simplified_sd3 = paddle.incubate.jit.inference(
-            self.simplified_sd3,
-            enable_new_ir=True,
-            cache_static_model=False,
-            exp_enable_use_cutlass=True,
-            delete_pass_lists=["add_norm_fuse_pass"],
-        )
+        if self.inference_optimize:
+            self.simplified_sd3 = SimplifiedSD3(
+                num_layers,
+                dim=self.inner_dim,
+                num_attention_heads=self.config.num_attention_heads,
+                attention_head_dim=self.inner_dim,
+                # context_pre_onl,
+            )
+            self.simplified_sd3 = paddle.incubate.jit.inference(
+                self.simplified_sd3,
+                enable_new_ir=True,
+                cache_static_model=False,
+                exp_enable_use_cutlass=True,
+                delete_pass_lists=["add_norm_fuse_pass"],
+            )
+        if self.inference_optimize_origin:
+            self.sd3_origin_transformer = paddle.incubate.jit.inference(
+                self.sd3_origin_transformer,
+                enable_new_ir=True,
+                cache_static_model=False,
+                exp_enable_use_cutlass=True,
+                delete_pass_lists=["add_norm_fuse_pass"],
+            )
 
         self.norm_out = AdaLayerNormContinuous(self.inner_dim, self.inner_dim, elementwise_affine=False, eps=1e-6)
         self.proj_out = nn.Linear(self.inner_dim, patch_size * patch_size * self.out_channels, bias_attr=True)
@@ -251,26 +262,17 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
         if hasattr(module, "gradient_checkpointing"):
             module.gradient_checkpointing = value
 
-    # @paddle.incubate.jit.inference(
-    #     enable_new_ir=True,
-    #     cache_static_model=False,
-    #     switch_ir_optim=True,
-    #     exp_enable_use_cutlass=True,
-    #     delete_pass_lists=["add_norm_fuse_pass"],
-    #     )
-    # def sd3_transformer(
-    #         self,
-    #         hidden_states,
-    #         encoder_hidden_states,
-    #         temb,):
-    #         # print(encoder_hidden_states)
-    #     for block in self.transformer_blocks:
-    #         encoder_hidden_states, hidden_states = block(
-    #             hidden_states=hidden_states,
-    #             encoder_hidden_states=encoder_hidden_states,
-    #             temb=temb
-    #             )
-    #     return encoder_hidden_states, hidden_states
+    def sd3_origin_transformer(
+        self,
+        hidden_states,
+        encoder_hidden_states,
+        temb,
+    ):
+        for block in self.transformer_blocks:
+            encoder_hidden_states, hidden_states = block(
+                hidden_states=hidden_states, encoder_hidden_states=encoder_hidden_states, temb=temb
+            )
+        return encoder_hidden_states, hidden_states
 
     def forward(
         self,
@@ -326,50 +328,44 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
         temb = self.time_text_embed(timestep, pooled_projections)
         encoder_hidden_states = self.context_embedder(encoder_hidden_states)
 
-        # hidden_states_my = paddle.clone(hidden_states)
-        # encoder_hidden_states_my = paddle.clone(encoder_hidden_states)
+        if self.inference_optimize:
+            hidden_states = self.simplified_sd3(
+                hidden_states=hidden_states, encoder_hidden_states=encoder_hidden_states, temb=temb
+            )
+            encoder_hidden_states = None
 
-        # for block in self.transformer_blocks:
-        #     if self.training and self.gradient_checkpointing and not use_old_recompute() and False:
-        #         pass
-        #     else:
-        #         encoder_hidden_states_my, hidden_states_my = block(
-        #             hidden_states=hidden_states_my, encoder_hidden_states=encoder_hidden_states_my, temb=temb
-        #         )
+        elif self.inference_optimize_origin:
+            hidden_states = self.sd3_origin_transformer(
+                hidden_states=hidden_states, encoder_hidden_states=encoder_hidden_states, temb=temb
+            )
+            encoder_hidden_states = None
 
-        # encoder_hidden_states_my, hidden_states_my = self.simplified_sd3(
-        #     hidden_states=hidden_states_my, encoder_hidden_states=encoder_hidden_states_my, temb=temb
-        # )
+        else:
+            for block in self.transformer_blocks:
+                if self.training and self.gradient_checkpointing and not use_old_recompute():
 
-        # for name, param in self.simplified_sd3.named_parameters():
-        #     if param.requires_grad:
-        #         print(f"Layer: {name} | Shape: {param.shape} | Values: {param.data.numpy()[:5]}...")
-        #     paddle.device.synchronize()
+                    def create_custom_forward(module, return_dict=None):
+                        def custom_forward(*inputs):
+                            if return_dict is not None:
+                                return module(*inputs, return_dict=return_dict)
+                            else:
+                                return module(*inputs)
 
-        # paddle.device.synchronize()
-        # import nvtx
+                        return custom_forward
 
-        # transformer_nvtx = nvtx.start_range(message="simple_transformer", color="yellow")
+                    ckpt_kwargs = {} if recompute_use_reentrant() else {"use_reentrant": False}
+                    hidden_states = recompute(
+                        create_custom_forward(block),
+                        hidden_states,
+                        encoder_hidden_states,
+                        temb,
+                        **ckpt_kwargs,
+                    )
 
-        hidden_states = self.simplified_sd3(
-            hidden_states=hidden_states, encoder_hidden_states=encoder_hidden_states, temb=temb
-        )
-
-        # paddle.device.synchronize()
-        # nvtx.end_range(transformer_nvtx)
-
-        encoder_hidden_states = None
-
-        # print((hidden_states - hidden_states_my))
-        # print(paddle.max(paddle.abs(hidden_states - hidden_states_my)))
-        # exit()
-
-        # hidden_states = self.sd3_transformer(hidden_states=hidden_states, encoder_hidden_states=encoder_hidden_states, temb=temb)
-        # print(encoder_hidden_states)
-        # encoder_hidden_states = None
-        # print((hidden_states - hidden_states_my))
-        # print(paddle.max(paddle.abs(hidden_states - hidden_states_my)))
-        # exit()
+                else:
+                    encoder_hidden_states, hidden_states = block(
+                        hidden_states=hidden_states, encoder_hidden_states=encoder_hidden_states, temb=temb
+                    )
 
         hidden_states = self.norm_out(hidden_states, temb)
         hidden_states = self.proj_out(hidden_states)
@@ -398,8 +394,6 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
 
     @classmethod
     def custom_modify_weight(cls, state_dict):
-        # state_dict["simplified_sd3.linear1.weight"] = paddle.assign(state_dict["transformer_blocks.0.norm1.linear.weight"])
-        # state_dict["simplified_sd3.linear1.bias"] = paddle.assign(state_dict["transformer_blocks.0.norm1.linear.bias"])
         for i in range(24):
             base_map_sd3 = [
                 (f"linear1.{i}.weight", f"{i}.norm1.linear.weight"),
@@ -447,10 +441,6 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
                 else:
                     print(f"Warning!!: '{from_}' not found in state_dict")
 
-            #     state_dict["simplified_sd3.linear1.weight"] = paddle.concat([state_dict["simplified_sd3.linear1.weight"], state_dict[f"transformer_blocks.{i}.norm1.linear.weight"]], axis=1)
-            #     state_dict["simplified_sd3.linear1.bias"] = paddle.concat([state_dict["simplified_sd3.linear1.bias"],state_dict[f"transformer_blocks.{i}.norm1.linear.bias"]], axis=0)
-            #     print("old_weight",state_dict[f"simplified_sd3.linear1.{i}.weight"])
-            #     print("old_bias",state_dict[f"simplified_sd3.linear1.{i}.bias"])
             state_dict[f"simplified_sd3.qkv.{i}.weight"] = paddle.assign(
                 paddle.concat(
                     [

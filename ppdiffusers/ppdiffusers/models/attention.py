@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import os
 from typing import Any, Dict, Optional
 
 import paddle
@@ -178,16 +179,18 @@ class JointTransformerBlock(nn.Layer):
         )
 
         # Process attention outputs for the `hidden_states`.
-        attn_output = gate_msa.unsqueeze(1) * attn_output
-        hidden_states = hidden_states + attn_output
+        if os.getenv("INFERENCE_OPTIMIZE_TRITON"):
+            import paddlemix
 
-        norm_hidden_states = self.norm2(hidden_states)
-        norm_hidden_states = norm_hidden_states * (1 + scale_mlp[:, None]) + shift_mlp[:, None]
-        # import paddlemix
-        # # norm_hidden_states = paddlemix.triton_ops.adaptive_layer_norm(hidden_states, scale_mlp, shift_mlp, epsilon=1e-6)
-        # hidden_states, norm_hidden_states = paddlemix.triton_ops.fused_adaLN_scale_residual(
-        #             hidden_states, attn_output, gate_msa, scale_mlp, shift_mlp, epsilon=1e-06
-        #         )
+            hidden_states, norm_hidden_states = paddlemix.triton_ops.fused_adaLN_scale_residual(
+                hidden_states, attn_output, gate_msa, scale_mlp, shift_mlp, epsilon=1e-06
+            )
+        else:
+            attn_output = gate_msa.unsqueeze(1) * attn_output
+            hidden_states = hidden_states + attn_output
+            norm_hidden_states = self.norm2(hidden_states)
+            norm_hidden_states = norm_hidden_states * (1 + scale_mlp[:, None]) + shift_mlp[:, None]
+
         if self._chunk_size is not None:
             # "feed_forward_chunk_size" can be used to save memory
             ff_output = _chunked_feed_forward(self.ff, norm_hidden_states, self._chunk_dim, self._chunk_size)
@@ -201,16 +204,20 @@ class JointTransformerBlock(nn.Layer):
         if self.context_pre_only:
             encoder_hidden_states = None
         else:
-            context_attn_output = c_gate_msa.unsqueeze(1) * context_attn_output
-            encoder_hidden_states = encoder_hidden_states + context_attn_output
+            if os.getenv("INFERENCE_OPTIMIZE_TRITON"):
+                import paddlemix
 
-            norm_encoder_hidden_states = self.norm2_context(encoder_hidden_states)
-            norm_encoder_hidden_states = norm_encoder_hidden_states * (1 + c_scale_mlp[:, None]) + c_shift_mlp[:, None]
-            # import paddlemix
-            # norm_encoder_hidden_states = paddlemix.triton_ops.adaptive_layer_norm(encoder_hidden_states, scale_mlp, shift_mlp, epsilon=1e-6)
-            # encoder_hidden_states, norm_encoder_hidden_states = paddlemix.triton_ops.fused_adaLN_scale_residual(
-            #             encoder_hidden_states, context_attn_output, c_gate_msa, c_scale_mlp, c_shift_mlp, epsilon=1e-06
-            #         )
+                encoder_hidden_states, norm_encoder_hidden_states = paddlemix.triton_ops.fused_adaLN_scale_residual(
+                    encoder_hidden_states, context_attn_output, c_gate_msa, c_scale_mlp, c_shift_mlp, epsilon=1e-06
+                )
+            else:
+                context_attn_output = c_gate_msa.unsqueeze(1) * context_attn_output
+                encoder_hidden_states = encoder_hidden_states + context_attn_output
+                norm_encoder_hidden_states = self.norm2_context(encoder_hidden_states)
+                norm_encoder_hidden_states = (
+                    norm_encoder_hidden_states * (1 + c_scale_mlp[:, None]) + c_shift_mlp[:, None]
+                )
+
             if self._chunk_size is not None:
                 # "feed_forward_chunk_size" can be used to save memory
                 context_ff_output = _chunked_feed_forward(

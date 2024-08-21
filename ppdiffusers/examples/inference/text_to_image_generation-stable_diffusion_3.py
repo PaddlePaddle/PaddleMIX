@@ -21,15 +21,6 @@ import paddle
 
 from ppdiffusers import StableDiffusion3Pipeline
 
-pipe = StableDiffusion3Pipeline.from_pretrained(
-    "/root/.cache/huggingface/hub/models--stabilityai--stable-diffusion-3-medium-diffusers/snapshots/stable-diffusion-3-medium-diffusers",
-    paddle_dtype=paddle.float16,
-    from_hf_hub=True,
-    from_diffusers=True,
-)
-generator = paddle.Generator().manual_seed(42)
-prompt = "A cat holding a sign that says hello world"
-
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -50,8 +41,14 @@ def parse_args():
     parser.add_argument(
         "--inference_optimize_triton",
         type=(lambda x: str(x).lower() in ["true", "1", "yes"]),
-        default=False,
+        default=True,
         help="If inference_optimize_triton is set to True, Triton operator optimized inference is enabled.",
+    )
+    parser.add_argument(
+        "--inference_optimize_origin",
+        type=(lambda x: str(x).lower() in ["true", "1", "yes"]),
+        default=False,
+        help="If inference_optimize_origin is set to True, the original dynamic graph inference optimization is enabled.",
     )
     parser.add_argument("--height", type=int, default=512, help="Height of the generated image.")
     parser.add_argument("--width", type=int, default=512, help="Width of the generated image.")
@@ -65,6 +62,18 @@ if args.inference_optimize:
     os.environ["INFERENCE_OPTIMIZE"] = "True"
 if args.inference_optimize_triton:
     os.environ["INFERENCE_OPTIMIZE_TRITON"] = "True"
+if args.inference_optimize_origin:
+    os.environ["INFERENCE_OPTIMIZE_ORIGIN"] = "True"
+
+
+pipe = StableDiffusion3Pipeline.from_pretrained(
+    "stabilityai/stable-diffusion-3-medium-diffusers",
+    paddle_dtype=paddle.float16,
+    # from_hf_hub=True,
+    # from_diffusers=True,
+)
+generator = paddle.Generator().manual_seed(42)
+prompt = "A cat holding a sign that says hello world"
 
 
 image = pipe(
@@ -73,7 +82,7 @@ image = pipe(
 
 if args.benchmark:
     # warmup
-    for i in range(5):
+    for i in range(3):
         image = pipe(
             prompt,
             num_inference_steps=args.num_inference_steps,
@@ -82,10 +91,11 @@ if args.benchmark:
             generator=generator,
         ).images[0]
 
-    repeat_times = 10
-    paddle.device.synchronize()
-    starttime = datetime.datetime.now()
+    repeat_times = 5
+    sumtime = 0.0
     for i in range(repeat_times):
+        paddle.device.synchronize()
+        starttime = datetime.datetime.now()
         image = pipe(
             prompt,
             num_inference_steps=args.num_inference_steps,
@@ -93,13 +103,14 @@ if args.benchmark:
             height=args.height,
             generator=generator,
         ).images[0]
-    paddle.device.synchronize()
-    endtime = datetime.datetime.now()
+        paddle.device.synchronize()
+        endtime = datetime.datetime.now()
+        duringtime = endtime - starttime
+        duringtime = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
+        sumtime += duringtime
+        print("The this end to end time : ", duringtime, "ms")
 
-    duringtime = endtime - starttime
-    time_ms = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
-    print("The ave end to end time : ", time_ms / repeat_times, "ms")
-
+    print("The ave end to end time : ", sumtime / repeat_times, "ms")
     cuda_mem_after_used = paddle.device.cuda.max_memory_allocated() / (1024**3)
     print(f"Max used CUDA memory : {cuda_mem_after_used:.3f} GiB")
 

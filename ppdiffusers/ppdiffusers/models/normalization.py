@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 from typing import Dict, Optional, Tuple
 
 import paddle
@@ -82,10 +83,15 @@ class AdaLayerNormZero(nn.Layer):
         emb = self.linear(self.silu(emb))
 
         shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = emb.chunk(6, axis=1)
-        # import paddlemix
-        # print(self.norm.weight,self.norm.bias)
-        x = self.norm(x) * (1 + scale_msa[:, None]) + shift_msa[:, None]
-        # x = paddlemix.triton_ops.adaptive_layer_norm(x, scale_msa, shift_msa, self.norm.weight,self.norm.bias,epsilon=1e-06)
+
+        if os.getenv("INFERENCE_OPTIMIZE_TRITON"):
+            import paddlemix
+
+            x = paddlemix.triton_ops.adaptive_layer_norm(
+                x, scale_msa, shift_msa, self.norm.weight, self.norm.bias, epsilon=1e-06
+            )
+        else:
+            x = self.norm(x) * (1 + scale_msa[:, None]) + shift_msa[:, None]
 
         return x, gate_msa, shift_mlp, scale_mlp, gate_mlp
 
@@ -195,9 +201,12 @@ class AdaLayerNormContinuous(nn.Layer):
         # convert back to the original dtype in case `conditioning_embedding`` is upcasted to float32 (needed for hunyuanDiT)
         emb = self.linear(self.silu(conditioning_embedding).cast(x.dtype))
         scale, shift = paddle.chunk(emb, 2, axis=1)
-        x = self.norm(x) * (1 + scale)[:, None, :] + shift[:, None, :]
-        # import paddlemix
-        # x = paddlemix.triton_ops.adaptive_layer_norm(x, scale, shift, self.norm.weight, self.norm.bias)
+        if os.getenv("INFERENCE_OPTIMIZE_TRITON"):
+            import paddlemix
+
+            x = paddlemix.triton_ops.adaptive_layer_norm(x, scale, shift, self.norm.weight, self.norm.bias)
+        else:
+            x = self.norm(x) * (1 + scale)[:, None, :] + shift[:, None, :]
         return x
 
 
