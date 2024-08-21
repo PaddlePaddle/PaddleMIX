@@ -41,7 +41,7 @@ def parse_args():
     parser.add_argument(
         "--inference_optimize_triton",
         type=(lambda x: str(x).lower() in ["true", "1", "yes"]),
-        default=True,
+        default=False,
         help="If inference_optimize_triton is set to True, Triton operator optimized inference is enabled.",
     )
     parser.add_argument(

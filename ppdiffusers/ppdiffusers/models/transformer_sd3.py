@@ -18,6 +18,7 @@ from typing import Any, Dict, Optional, Union
 
 import paddle
 import paddle.nn as nn
+from paddle.distributed.fleet.utils import recompute
 
 from ..configuration_utils import ConfigMixin, register_to_config
 
@@ -26,18 +27,17 @@ from ..models.attention import JointTransformerBlock
 from ..models.attention_processor import Attention, AttentionProcessor
 from ..models.modeling_utils import ModelMixin
 from ..models.normalization import AdaLayerNormContinuous
-from ..utils import (  # recompute_use_reentrant,; use_old_recompute,
+from ..utils import (
     USE_PEFT_BACKEND,
     logging,
+    recompute_use_reentrant,
     scale_lora_layers,
     unscale_lora_layers,
+    use_old_recompute,
 )
 from .embeddings import CombinedTimestepTextProjEmbeddings, PatchEmbed
 from .simplified_sd3 import SimplifiedSD3
 from .transformer_2d import Transformer2DModelOutput
-
-# from paddle.distributed.fleet.utils import recompute
-
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -269,9 +269,29 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
         temb,
     ):
         for block in self.transformer_blocks:
-            encoder_hidden_states, hidden_states = block(
-                hidden_states=hidden_states, encoder_hidden_states=encoder_hidden_states, temb=temb
-            )
+            if self.training and self.gradient_checkpointing and not use_old_recompute():
+
+                def create_custom_forward(module, return_dict=None):
+                    def custom_forward(*inputs):
+                        if return_dict is not None:
+                            return module(*inputs, return_dict=return_dict)
+                        else:
+                            return module(*inputs)
+
+                    return custom_forward
+
+                ckpt_kwargs = {} if recompute_use_reentrant() else {"use_reentrant": False}
+                hidden_states = recompute(
+                    create_custom_forward(block),
+                    hidden_states,
+                    encoder_hidden_states,
+                    temb,
+                    **ckpt_kwargs,
+                )
+            else:
+                encoder_hidden_states, hidden_states = block(
+                    hidden_states=hidden_states, encoder_hidden_states=encoder_hidden_states, temb=temb
+                )
         return encoder_hidden_states, hidden_states
 
     def forward(
@@ -341,31 +361,9 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
             encoder_hidden_states = None
 
         else:
-            for block in self.transformer_blocks:
-                if self.training and self.gradient_checkpointing and not use_old_recompute():
-
-                    def create_custom_forward(module, return_dict=None):
-                        def custom_forward(*inputs):
-                            if return_dict is not None:
-                                return module(*inputs, return_dict=return_dict)
-                            else:
-                                return module(*inputs)
-
-                        return custom_forward
-
-                    ckpt_kwargs = {} if recompute_use_reentrant() else {"use_reentrant": False}
-                    hidden_states = recompute(
-                        create_custom_forward(block),
-                        hidden_states,
-                        encoder_hidden_states,
-                        temb,
-                        **ckpt_kwargs,
-                    )
-
-                else:
-                    encoder_hidden_states, hidden_states = block(
-                        hidden_states=hidden_states, encoder_hidden_states=encoder_hidden_states, temb=temb
-                    )
+            encoder_hidden_states, hidden_states = self.sd3_origin_transformer(
+                hidden_states=hidden_states, encoder_hidden_states=encoder_hidden_states, temb=temb
+            )
 
         hidden_states = self.norm_out(hidden_states, temb)
         hidden_states = self.proj_out(hidden_states)
