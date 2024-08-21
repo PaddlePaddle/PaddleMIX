@@ -71,7 +71,6 @@ class SimplifiedSD3(nn.Layer):
         # self.ev = nn.LayerList([nn.Linear(1536, 1536) for i in range(num_layers)])
         self.eqkv = nn.LayerList([nn.Linear(1536, 1536 * 3) for i in range(num_layers)])
         self.to_out_linear = nn.LayerList([nn.Linear(1536, 1536) for i in range(num_layers)])
-        # self.to_out =  nn.LayerList([nn.Dropout(0.0) for i in range(num_layers)])
 
         # not last layer
         self.to_add_out_linear = nn.LayerList([nn.Linear(1536, 1536) for i in range(num_layers - 1)])
@@ -97,7 +96,6 @@ class SimplifiedSD3(nn.Layer):
             # emb=emb1[:,i*6*1536:(i+1)*1536*6]
             context_pre_only = i == self.num_layers - 1
 
-            # emb  = self.linear1[i](self.silu1(temb))
             emb = self.linear1[i](temb_silu)
 
             shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = emb.chunk(6, axis=1)
@@ -111,7 +109,6 @@ class SimplifiedSD3(nn.Layer):
                 norm_hidden_states = self.norm1[i](hidden_states) * (1 + scale_msa[:, None]) + shift_msa[:, None]
 
             if not context_pre_only:
-                # emb = self.linear_context01[i](self.silu2_context01[i](temb))
                 emb = self.linear_context01[i](temb_silu)
                 shift_msa, scale_msa, c_gate_msa, c_shift_mlp, c_scale_mlp, c_gate_mlp = emb.chunk(6, axis=1)
 
@@ -161,7 +158,7 @@ class SimplifiedSD3(nn.Layer):
 
             import paddlemix
 
-            q, k, v = paddlemix.triton_ops.my_splcat(qkv, eqkv)
+            q, k, v = paddlemix.triton_ops.split_concat(qkv, eqkv)
             q = q.reshape([2, -1, 24, 64])
             k = k.reshape([2, -1, 24, 64])
             v = v.reshape([2, -1, 24, 64])

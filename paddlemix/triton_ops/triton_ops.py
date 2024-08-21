@@ -1569,11 +1569,9 @@ def fused_rotary_emb(
         return q_out, k_out, v_out
 
 
-########################### adaptive layer norm ###############################
+########################### split concat ###############################
 split_concat_template = (
     """
-
-
 std::vector<paddle::Tensor> ${op_name}_func(
     const paddle::Tensor &x,
     const paddle::Tensor &y) {
@@ -1632,7 +1630,7 @@ PD_BUILD_OP(${op_name})
     custom_op_template=split_concat_template,
     key=["1"],
 )
-def splcat_kernel(
+def split_concat_kernel(
     out0,
     out1,
     out2,
@@ -1641,19 +1639,12 @@ def splcat_kernel(
     batch,
     seq_qkv,
     seq_eqkv,
-    output_hidden,  # 1536
+    output_hidden,
     BLOCK_SIZE: tl.constexpr,
 ):
-
-    # grid = (3, batch, (seq_x + seq_y))
     out_id = tl.program_id(axis=0)
     batch = tl.program_id(axis=1)
     out_row = tl.program_id(axis=2)
-    # if out_id == 0 and out_row < seq_qkv:
-    #     read_ptr = out_row * (output_hidden * 3) + out_id * output_hidden + x  + (batch * seq_qkv * output_hidden * 3)
-    # elif out_id == 0 and out_row < seq_eqkv:
-    #     read_ptr = (out_row - seq_qkv) * (output_hidden * 3) + out_id * output_hidden + y
-
     if out_row < seq_qkv:
         read_ptr = out_id * output_hidden + out_row * 3 * output_hidden + batch * seq_qkv * output_hidden * 3 + qkv
     else:
@@ -1665,9 +1656,7 @@ def splcat_kernel(
         )
 
     read_offsets = tl.arange(0, BLOCK_SIZE)
-
     mask = read_offsets < output_hidden
-
     read_data = tl.load(read_ptr + read_offsets, mask=mask)
 
     real_output = out0
@@ -1681,7 +1670,7 @@ def splcat_kernel(
     tl.store(write_ptr, read_data, mask=mask)
 
 
-def my_splcat(x, y):
+def split_concat(x, y):
     assert len(x.shape) == 3
     assert len(y.shape) == 3
 
@@ -1693,8 +1682,10 @@ def my_splcat(x, y):
     hidd_x = x.shape[2]
     seq_eqkv = y.shape[1]
     ouput_hidden = hidd_x // 3
-
-    op_name = "my_splitconcat"
+    BLOCK_SIZE = triton.next_power_of_2(ouput_hidden)
+    op_name = "triton_split_concat"
+    op_name += get_dtype_str(x.dtype)
+    op_name += f"_{BLOCK_SIZE}"
 
     if op_name not in OpProtoHolder.instance().op_proto_map.keys():
         out0 = paddle.empty(shape=[batch, seq_qkv + seq_eqkv, ouput_hidden], dtype=x.dtype)
@@ -1702,7 +1693,9 @@ def my_splcat(x, y):
         out2 = paddle.empty(shape=[batch, seq_qkv + seq_eqkv, ouput_hidden], dtype=x.dtype)
         grid = ("3", "batch", "seq_qkv + seq_eqkv")
 
-        splcat_kernel[(op_name, grid)](out0, out1, out2, x, y, batch, seq_qkv, seq_eqkv, ouput_hidden, BLOCK_SIZE=2048)
+        split_concat_kernel[(op_name, grid)](
+            out0, out1, out2, x, y, batch, seq_qkv, seq_eqkv, ouput_hidden, BLOCK_SIZE=2048
+        )
 
     if in_dynamic_or_pir_mode():
         print(f"== we are in dynamic mode, op_name: {op_name}")

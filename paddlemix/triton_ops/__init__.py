@@ -19,9 +19,9 @@ try:
         adaptive_layer_norm,
         fused_adaLN_scale_residual,
         fused_rotary_emb,
-        my_splcat,
         paddle_use_triton,
         rms_norm,
+        split_concat,
         weight_only_int8,
     )
     from .triton_utils import (
@@ -40,7 +40,7 @@ try:
         "rms_norm",
         "get_dtype_str",
         "fused_rotary_emb",
-        "my_splcat",
+        "split_concat",
     ]
 except:
     pass

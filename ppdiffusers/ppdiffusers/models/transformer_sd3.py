@@ -491,13 +491,3 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
                     axis=0,
                 )
             )
-            print("old_weight_q", state_dict[f"simplified_sd3.eq.{i}.bias"])
-            print("old_weight_k", state_dict[f"simplified_sd3.ek.{i}.bias"])
-            print("old_weight_v", state_dict[f"simplified_sd3.ev.{i}.bias"])
-            print(
-                "weight",
-                state_dict[f"simplified_sd3.eqkv.{i}.bias"],
-            )
-        # exit(0)
-        # print("weight",state_dict["simplified_sd3.linear1.weight"])
-        # exit(0)
