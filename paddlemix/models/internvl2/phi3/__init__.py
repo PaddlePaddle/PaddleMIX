@@ -11,13 +11,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# --------------------------------------------------------
+# InternVL
+# Copyright (c) 2024 OpenGVLab
+# Licensed under The MIT License [see LICENSE for details]
+# --------------------------------------------------------
 
-from paddlenlp.transformers import Qwen2Config
+from .configuration_phi3 import Phi3Config
+from .modeling_phi3 import Phi3ForCausalLM
 
-__all__ = ["LlavaQwenConfig"]
-
-
-class LlavaQwenConfig(Qwen2Config):
-    model_type = "llava_qwen"
-    mm_patch_merge_type = "spatial_unpad"
-    use_cachekv_int8 = None
+__all__ = ['Phi3Config', 'Phi3ForCausalLM']

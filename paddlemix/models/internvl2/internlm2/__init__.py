@@ -11,11 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# --------------------------------------------------------
+# InternVL
+# Copyright (c) 2024 OpenGVLab
+# Licensed under The MIT License [see LICENSE for details]
+# --------------------------------------------------------
 
-from .clip_encoder import *
-from .clip_model import *
-from .configuration import *
-from .mm_utils import *
-from .modeling import *
-from .siglip_encoder import *
-from .tokenizer import *
+from .configuration_internlm2 import InternLM2Config
+from .modeling_internlm2 import InternLM2ForCausalLM
+from .tokenizer_internlm2 import InternLM2Tokenizer
+
+__all__ = ['InternLM2Config', 'InternLM2ForCausalLM', 'InternLM2Tokenizer']

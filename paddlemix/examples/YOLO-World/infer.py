@@ -116,6 +116,8 @@ def run_inference(
     image = LABEL_ANNOTATOR.annotate(image, detections, labels=labels)
     if masks is not None:
         image = MASK_ANNOTATOR.annotate(image, detections)
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
     cv2.imwrite(osp.join(output_dir, osp.basename(image_path)), image)
 
     if annotation:
