@@ -1072,7 +1072,7 @@ def adaptive_layer_norm(x, scale, shift, weight=None, bias=None, epsilon=1e-05):
     M = x.shape[0] * x.shape[1]
     N = x.shape[2]
     seq_size = x.shape[1]
-    BLOCK_SIZE = min(1024, triton.next_power_of_2(N))
+    BLOCK_SIZE = 2048#min(1024, triton.next_power_of_2(N))
 
     op_name = "triton_adaptive_layer_norm"
     op_name += get_dtype_str(x.dtype)
@@ -1683,7 +1683,7 @@ def split_concat(x, y):
     seq_eqkv = y.shape[1]
     ouput_hidden = hidd_x // 3
     BLOCK_SIZE = triton.next_power_of_2(ouput_hidden)
-    op_name = "triton_split_concat"
+    op_name = "split_concat"
     op_name += get_dtype_str(x.dtype)
     op_name += f"_{BLOCK_SIZE}"
 
