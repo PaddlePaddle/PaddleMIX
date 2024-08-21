@@ -52,7 +52,7 @@ python train_dreambooth_sd3.py \
   --validation_prompt="A photo of sks dog in a bucket" \
   --validation_epochs=25 \
   --seed="0" \
-  --checkpointing_steps=100
+  --checkpointing_steps=250
 ```
 
 为了更好地跟踪我们的训练实验，我们在上面的命令中使用了以下标志：
@@ -115,7 +115,7 @@ python train_dreambooth_lora_sd3.py \
   --validation_prompt="A photo of sks dog in a bucket" \
   --validation_epochs=25 \
   --seed="0" \
-  --checkpointing_steps=100
+  --checkpointing_steps=250
 ```
 
 训练完成后，我们可以通过以下python脚本执行推理：
