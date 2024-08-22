@@ -35,19 +35,16 @@ class SimplifiedSD3(nn.Layer):
         self.bias = True
         norm_elementwise_affine_kwargs = dict(weight_attr=False, bias_attr=False)
 
-        # self.silu1 = nn.LayerList([nn.Silu() for i in range(num_layers)])
         self.silu = nn.Silu()
-        self.linear1 = nn.LayerList([nn.Linear(self.dim, 6 * self.dim) for i in range(num_layers)])  # 1536,9216
+        self.linear1 = nn.LayerList([nn.Linear(self.dim, 6 * self.dim) for i in range(num_layers)])
         # self.linear1 = nn.Linear(self.dim, 6 * self.dim * 24)
         self.norm1 = nn.LayerList(
             [nn.LayerNorm(self.dim, epsilon=1e-6, **norm_elementwise_affine_kwargs) for i in range(num_layers)]
         )
-        # self.silu2_context01 = nn.LayerList([nn.Silu() for i in range(num_layers - 1)])
-        self.linear_context01 = nn.LayerList([nn.Linear(self.dim, 6 * self.dim) for i in range(num_layers - 1)])  # 1536,9216
+        self.linear_context01 = nn.LayerList([nn.Linear(self.dim, 6 * self.dim) for i in range(num_layers - 1)])
         self.norm1_context01 = nn.LayerList(
             [nn.LayerNorm(self.dim, epsilon=1e-6, **norm_elementwise_affine_kwargs) for i in range(num_layers - 1)]
         )
-        # self.silu2_context0 = nn.Silu()
         self.linear_context0 = nn.Linear(self.dim, self.dim * 2, bias_attr=self.bias)
         self.norm1_context0 = nn.LayerNorm(self.dim, epsilon=1e-06, weight_attr=False, bias_attr=self.bias)
         self.q = nn.LayerList([nn.Linear(self.dim, self.dim) for i in range(num_layers)])
@@ -150,8 +147,7 @@ class SimplifiedSD3(nn.Layer):
                 q = paddle.concat([q, eq], axis=1).reshape([2, -1, 24, 64])
                 k = paddle.concat([k, ek], axis=1).reshape([2, -1, 24, 64])
                 v = paddle.concat([v, ev], axis=1).reshape([2, -1, 24, 64])
-                print(q.shape, k.shape, v.shape)
-                exit(0)
+
             norm_hidden_states1 = F.scaled_dot_product_attention_(q, k, v, dropout_p=0.0, is_causal=False)
             norm_hidden_states1 = norm_hidden_states1.reshape([2, -1, self.dim])
             norm_hidden_states1 = norm_hidden_states1.astype(q.dtype)
