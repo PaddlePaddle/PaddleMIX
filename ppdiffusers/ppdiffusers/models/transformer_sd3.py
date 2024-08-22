@@ -416,10 +416,10 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
                 extra_map_sd3 = [
                     (f"to_add_out_linear.{i}.weight", f"{i}.attn.to_add_out.weight"),
                     (f"to_add_out_linear.{i}.bias", f"{i}.attn.to_add_out.bias"),
-                    (f"ffn_context1.{i}.weight", f"{i}.ff_context.net.0.proj.weight"),
-                    (f"ffn_context1.{i}.bias", f"{i}.ff_context.net.0.proj.bias"),
-                    (f"ffn_context2.{i}.weight", f"{i}.ff_context.net.2.weight"),
-                    (f"ffn_context2.{i}.bias", f"{i}.ff_context.net.2.bias"),
+                    (f"ffn1_context.{i}.weight", f"{i}.ff_context.net.0.proj.weight"),
+                    (f"ffn1_context.{i}.bias", f"{i}.ff_context.net.0.proj.bias"),
+                    (f"ffn2_context.{i}.weight", f"{i}.ff_context.net.2.weight"),
+                    (f"ffn2_context.{i}.bias", f"{i}.ff_context.net.2.bias"),
                 ]
             map_sd3 = base_map_sd3 + extra_map_sd3
 
