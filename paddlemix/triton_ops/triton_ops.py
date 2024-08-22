@@ -839,6 +839,13 @@ def fused_adaLN_scale_residual(
     seq_size = x.shape[1]
     N_npo2 = triton.next_power_of_2(N)
 
+    # baseline.
+    if os.getenv("INFERENCE_OPTIMIZE_TRITON") is None:
+        resi_out_paddle = mha_out * gate_msa.unsqueeze(axis=1) + x
+        norm_hidden_states = paddle.nn.functional.layer_norm(resi_out_paddle, [N], weight, bias, epsilon)
+        norm_hidden_states = norm_hidden_states * (1 + scale_mlp[:, None]) + shift_mlp[:, None]
+        return resi_out_paddle, norm_hidden_states
+
     op_name = "triton_fused_adaLN_scale_residual"
     op_name += get_dtype_str(x.dtype)
     op_name += f"_{N_npo2}_{weight_attr}_{bias_attr}"
@@ -1072,11 +1079,10 @@ def adaptive_layer_norm(x, scale, shift, weight=None, bias=None, epsilon=1e-05):
     M = x.shape[0] * x.shape[1]
     N = x.shape[2]
     seq_size = x.shape[1]
-    BLOCK_SIZE = 2048#min(1024, triton.next_power_of_2(N))
+    BLOCK_SIZE = 2048  # min(1024, triton.next_power_of_2(N))
 
-    
     # baseline.
-    if os.getenv("INFERENCE_OPTIMIZE_TRITON") is None :
+    if os.getenv("INFERENCE_OPTIMIZE_TRITON") is None:
         norm_hidden_states = paddle.nn.functional.layer_norm(x, [N], weight, bias, epsilon)
         norm_hidden_states = norm_hidden_states * (1 + scale[:, None]) + shift[:, None]
         return norm_hidden_states
