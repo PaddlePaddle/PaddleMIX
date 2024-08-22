@@ -25,7 +25,7 @@ optimize = True
 
 class SimplifiedSD3(nn.Layer):
     def __init__(
-        self, num_layers: int, dim: int, num_attention_heads: int, attention_head_dim: int, context_pre_only=False
+        self, num_layers: int, dim: int, num_attention_heads: int, attention_head_dim: int
     ):
         super().__init__()
 

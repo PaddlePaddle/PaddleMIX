@@ -116,7 +116,6 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
                 dim=self.inner_dim,
                 num_attention_heads=self.config.num_attention_heads,
                 attention_head_dim=self.inner_dim,
-                # context_pre_onl,
             )
             self.simplified_sd3 = paddle.incubate.jit.inference(
                 self.simplified_sd3,
