@@ -443,8 +443,8 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
                 paddle.concat(
                     [
                         state_dict[f"simplified_sd3.q.{i}.bias"],
-                        state_dict[f"simplified_sd3.q.{i}.bias"],
-                        state_dict[f"simplified_sd3.q.{i}.bias"],
+                        state_dict[f"simplified_sd3.k.{i}.bias"],
+                        state_dict[f"simplified_sd3.v.{i}.bias"],
                     ],
                     axis=0,
                 )

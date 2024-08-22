@@ -28,8 +28,6 @@ class SimplifiedSD3(nn.Layer):
         self, num_layers: int, dim: int, num_attention_heads: int, attention_head_dim: int
     ):
         super().__init__()
-
-        self.context_pre_only = context_pre_only
         self.num_layers = num_layers
         self.dim = dim
         self.bias = True
@@ -76,50 +74,23 @@ class SimplifiedSD3(nn.Layer):
             context_pre_only = i == self.num_layers - 1
 
             emb = self.linear1[i](temb_silu)
-
             shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = emb.chunk(6, axis=1)
-            if os.getenv("INFERENCE_OPTIMIZE_TRITON"):
-                import paddlemix
-
-                norm_hidden_states = paddlemix.triton_ops.adaptive_layer_norm(
-                    hidden_states, scale_msa, shift_msa, epsilon=1e-06
-                )
-            else:
-                norm_hidden_states = self.norm1[i](hidden_states) * (1 + scale_msa[:, None]) + shift_msa[:, None]
+            import paddlemix
+            norm_hidden_states = paddlemix.triton_ops.adaptive_layer_norm(hidden_states, scale_msa, shift_msa, epsilon=1e-06)
             
             emb = self.linear_context[i](temb_silu)
             if not context_pre_only:
                 shift_msa, scale_msa, c_gate_msa, c_shift_mlp, c_scale_mlp, c_gate_mlp = emb.chunk(6, axis=1)
-
-                if os.getenv("INFERENCE_OPTIMIZE_TRITON"):
-                    import paddlemix
-                    norm_encoder_hidden_states = paddlemix.triton_ops.adaptive_layer_norm(
-                        encoder_hidden_states, scale_msa, shift_msa, epsilon=1e-06
-                    )
-                else:
-                    norm_encoder_hidden_states = (
-                        self.norm1_context[i](encoder_hidden_states) * (1 + scale_msa[:, None]) + shift_msa[:, None]
-                    )
-
+                norm_encoder_hidden_states = paddlemix.triton_ops.adaptive_layer_norm(encoder_hidden_states, scale_msa, shift_msa, epsilon=1e-06)
             else:
                 scale, shift = paddle.chunk(emb, 2, axis=1)
-
-                if os.getenv("INFERENCE_OPTIMIZE_TRITON"):
-                    import paddlemix
-                    norm_encoder_hidden_states = paddlemix.triton_ops.adaptive_layer_norm(
-                        encoder_hidden_states, scale, shift, bias=self.norm1_context[i].bias
-                    )
-                else:
-                    norm_encoder_hidden_states = (
-                        self.norm1_context[i](encoder_hidden_states) * (1 + scale)[:, None, :] + shift[:, None, :]
-                    )
+                norm_encoder_hidden_states = paddlemix.triton_ops.adaptive_layer_norm(encoder_hidden_states, scale, shift, bias=self.norm1_context[i].bias)
 
             if os.getenv("INFERENCE_OPTIMIZE_TRITON"):
                 qkv = self.qkv[i](norm_hidden_states)
                 eqkv = self.eqkv[i](norm_encoder_hidden_states)
 
                 import paddlemix
-
                 q, k, v = paddlemix.triton_ops.split_concat(qkv, eqkv)
                 q = q.reshape([2, -1, 24, 64])
                 k = k.reshape([2, -1, 24, 64])
@@ -159,7 +130,6 @@ class SimplifiedSD3(nn.Layer):
 
             if os.getenv("INFERENCE_OPTIMIZE_TRITON"):
                 import paddlemix
-
                 hidden_states, norm_hidden_states = paddlemix.triton_ops.fused_adaLN_scale_residual(
                     hidden_states, attn_output, gate_msa, scale_mlp, shift_mlp, epsilon=1e-06
                 )
@@ -179,7 +149,6 @@ class SimplifiedSD3(nn.Layer):
             if not context_pre_only:
                 if os.getenv("INFERENCE_OPTIMIZE_TRITON"):
                     import paddlemix
-
                     (
                         encoder_hidden_states,
                         norm_encoder_hidden_states,
@@ -201,4 +170,5 @@ class SimplifiedSD3(nn.Layer):
                 encoder_hidden_states = encoder_hidden_states + c_gate_mlp.unsqueeze(1) * context_ff_output
             else:
                 encoder_hidden_states = None
+                
         return encoder_hidden_states, hidden_states
