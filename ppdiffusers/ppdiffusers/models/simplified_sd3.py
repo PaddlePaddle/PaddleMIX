@@ -16,6 +16,7 @@ import paddle
 import paddle.nn.functional as F
 from paddle import nn
 
+
 class SimplifiedSD3(nn.Layer):
     def __init__(self, num_layers: int, dim: int, num_attention_heads: int, attention_head_dim: int):
         super().__init__()
@@ -27,9 +28,9 @@ class SimplifiedSD3(nn.Layer):
         self.linear_context = nn.LayerList(
             [nn.Linear(self.dim, (6 if i < num_layers - 1 else 2) * self.dim) for i in range(num_layers)]
         )
-        
+
         self.norm_last_context = nn.LayerNorm(self.dim, epsilon=1e-6, weight_attr=False, bias_attr=True)
-        
+
         self.qkv = nn.LayerList([nn.Linear(self.dim, self.dim * 3) for i in range(num_layers)])
         self.eqkv = nn.LayerList([nn.Linear(self.dim, self.dim * 3) for i in range(num_layers)])
         self.to_out_linear = nn.LayerList([nn.Linear(self.dim, self.dim) for i in range(num_layers)])
@@ -46,6 +47,10 @@ class SimplifiedSD3(nn.Layer):
         last_ffn_output = None
         last_hidden_states = None
         last_gate_mlp = None
+
+        last_context_ffn_output = None
+        last_context_hidden_states = None
+        last_context_gate_mlp = None
 
         for i in range(self.num_layers):
             context_pre_only = i == self.num_layers - 1
@@ -67,13 +72,32 @@ class SimplifiedSD3(nn.Layer):
             emb = self.linear_context[i](temb_silu)
             if not context_pre_only:
                 shift_msa, scale_msa, c_gate_msa, c_shift_mlp, c_scale_mlp, c_gate_mlp = emb.chunk(6, axis=1)
-                norm_encoder_hidden_states = paddlemix.triton_ops.adaptive_layer_norm(
-                    encoder_hidden_states, scale_msa, shift_msa, epsilon=1e-06
-                )
+                if last_context_ffn_output is None:
+                    norm_encoder_hidden_states = paddlemix.triton_ops.adaptive_layer_norm(
+                        encoder_hidden_states, scale_msa, shift_msa, epsilon=1e-06
+                    )
+                else:
+                    (
+                        encoder_hidden_states,
+                        norm_encoder_hidden_states,
+                    ) = paddlemix.triton_ops.fused_adaLN_scale_residual(
+                        last_context_hidden_states,
+                        last_context_ffn_output,
+                        last_context_gate_mlp,
+                        scale_msa,
+                        shift_msa,
+                        epsilon=1e-06,
+                    )
             else:
+                # the last layer.
                 scale, shift = paddle.chunk(emb, 2, axis=1)
-                norm_encoder_hidden_states = paddlemix.triton_ops.adaptive_layer_norm(
-                    encoder_hidden_states, scale, shift, bias=self.norm_last_context.bias
+                (encoder_hidden_states, norm_encoder_hidden_states,) = paddlemix.triton_ops.fused_adaLN_scale_residual(
+                    last_context_hidden_states,
+                    last_context_ffn_output,
+                    last_context_gate_mlp,
+                    scale,
+                    shift,
+                    epsilon=1e-06,
                 )
 
             qkv = self.qkv[i](norm_hidden_states)
@@ -124,7 +148,9 @@ class SimplifiedSD3(nn.Layer):
                 context_ffn_output = F.gelu(context_ffn_output, approximate=True)
                 context_ffn_output = self.ffn2_context[i](context_ffn_output)
 
-                encoder_hidden_states = encoder_hidden_states + c_gate_mlp.unsqueeze(1) * context_ffn_output
+                last_context_ffn_output = context_ffn_output
+                last_context_hidden_states = encoder_hidden_states
+                last_context_gate_mlp = c_gate_mlp
             else:
                 encoder_hidden_states = None
 

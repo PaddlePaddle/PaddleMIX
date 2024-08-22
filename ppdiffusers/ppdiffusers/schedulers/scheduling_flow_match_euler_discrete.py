@@ -24,7 +24,6 @@ from ..utils import BaseOutput, logging
 from ..utils.paddle_utils import randn_tensor
 from .scheduling_utils import SchedulerMixin
 
-
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
 
@@ -246,11 +245,12 @@ class FlowMatchEulerDiscreteScheduler(SchedulerMixin, ConfigMixin):
 
         sigma = self.sigmas[self.step_index]
 
-        gamma = min(s_churn / (len(self.sigmas) - 1), 2**0.5 - 1) if s_tmin <= sigma <= s_tmax else 0.0
+        if s_churn == 0.0:
+            gamma = 0.0
+        else:
+            gamma = min(s_churn / (len(self.sigmas) - 1), 2**0.5 - 1) if s_tmin <= sigma <= s_tmax else 0.0
 
-        noise = randn_tensor(
-            model_output.shape, dtype=model_output.dtype, generator=generator
-        )
+        noise = randn_tensor(model_output.shape, dtype=model_output.dtype, generator=generator)
 
         eps = noise * s_noise
         sigma_hat = sigma * (gamma + 1)
