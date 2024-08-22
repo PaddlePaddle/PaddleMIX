@@ -34,6 +34,7 @@ class SimplifiedSD3(nn.Layer):
         self.dim = dim
         self.bias = True
         norm_elementwise_affine_kwargs = dict(weight_attr=False, bias_attr=False)
+        context_norm_elementwise_affine_kwargs = dict(weight_attr=False, bias_attr=self.bias)
 
         self.silu = nn.Silu()
         self.linear1 = nn.LayerList([nn.Linear(self.dim, 6 * self.dim) for i in range(num_layers)])
@@ -41,12 +42,10 @@ class SimplifiedSD3(nn.Layer):
         self.norm1 = nn.LayerList(
             [nn.LayerNorm(self.dim, epsilon=1e-6, **norm_elementwise_affine_kwargs) for i in range(num_layers)]
         )
-        self.linear_context01 = nn.LayerList([nn.Linear(self.dim, 6 * self.dim) for i in range(num_layers - 1)])
-        self.norm1_context01 = nn.LayerList(
-            [nn.LayerNorm(self.dim, epsilon=1e-6, **norm_elementwise_affine_kwargs) for i in range(num_layers - 1)]
+        self.linear_context = nn.LayerList([nn.Linear(self.dim, (6 if i <num_layers - 1 else 2) * self.dim) for i in range(num_layers)])
+        self.norm1_context = nn.LayerList(
+            [nn.LayerNorm(self.dim, epsilon=1e-6, **(norm_elementwise_affine_kwargs if i < num_layers - 1 else context_norm_elementwise_affine_kwargs)) for i in range(num_layers)]
         )
-        self.linear_context0 = nn.Linear(self.dim, self.dim * 2, bias_attr=self.bias)
-        self.norm1_context0 = nn.LayerNorm(self.dim, epsilon=1e-06, weight_attr=False, bias_attr=self.bias)
         self.q = nn.LayerList([nn.Linear(self.dim, self.dim) for i in range(num_layers)])
         self.k = nn.LayerList([nn.Linear(self.dim, self.dim) for i in range(num_layers)])
         self.v = nn.LayerList([nn.Linear(self.dim, self.dim) for i in range(num_layers)])
@@ -87,35 +86,32 @@ class SimplifiedSD3(nn.Layer):
                 )
             else:
                 norm_hidden_states = self.norm1[i](hidden_states) * (1 + scale_msa[:, None]) + shift_msa[:, None]
-
+            
+            emb = self.linear_context[i](temb_silu)
             if not context_pre_only:
-                emb = self.linear_context01[i](temb_silu)
                 shift_msa, scale_msa, c_gate_msa, c_shift_mlp, c_scale_mlp, c_gate_mlp = emb.chunk(6, axis=1)
 
                 if os.getenv("INFERENCE_OPTIMIZE_TRITON"):
                     import paddlemix
-
                     norm_encoder_hidden_states = paddlemix.triton_ops.adaptive_layer_norm(
                         encoder_hidden_states, scale_msa, shift_msa, epsilon=1e-06
                     )
                 else:
                     norm_encoder_hidden_states = (
-                        self.norm1_context01[i](encoder_hidden_states) * (1 + scale_msa[:, None]) + shift_msa[:, None]
+                        self.norm1_context[i](encoder_hidden_states) * (1 + scale_msa[:, None]) + shift_msa[:, None]
                     )
 
             else:
-                emb = self.linear_context0(temb_silu.cast(encoder_hidden_states.dtype))
                 scale, shift = paddle.chunk(emb, 2, axis=1)
 
                 if os.getenv("INFERENCE_OPTIMIZE_TRITON"):
                     import paddlemix
-
                     norm_encoder_hidden_states = paddlemix.triton_ops.adaptive_layer_norm(
-                        encoder_hidden_states, scale, shift, bias=self.norm1_context0.bias
+                        encoder_hidden_states, scale, shift, bias=self.norm1_context[i].bias
                     )
                 else:
                     norm_encoder_hidden_states = (
-                        self.norm1_context0(encoder_hidden_states) * (1 + scale)[:, None, :] + shift[:, None, :]
+                        self.norm1_context[i](encoder_hidden_states) * (1 + scale)[:, None, :] + shift[:, None, :]
                     )
 
             if os.getenv("INFERENCE_OPTIMIZE_TRITON"):

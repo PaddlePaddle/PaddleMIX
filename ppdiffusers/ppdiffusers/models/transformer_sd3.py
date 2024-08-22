@@ -392,6 +392,8 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
             base_map_sd3 = [
                 (f"linear1.{i}.weight", f"{i}.norm1.linear.weight"),
                 (f"linear1.{i}.bias", f"{i}.norm1.linear.bias"),
+                (f"linear_context.{i}.weight", f"{i}.norm1_context.linear.weight"),
+                (f"linear_context.{i}.bias", f"{i}.norm1_context.linear.bias"),
                 (f"q.{i}.weight", f"{i}.attn.to_q.weight"),
                 (f"q.{i}.bias", f"{i}.attn.to_q.bias"),
                 (f"k.{i}.weight", f"{i}.attn.to_k.weight"),
@@ -413,19 +415,12 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
             ]
             if i < 23:
                 extra_map_sd3 = [
-                    (f"linear_context01.{i}.weight", f"{i}.norm1_context.linear.weight"),
-                    (f"linear_context01.{i}.bias", f"{i}.norm1_context.linear.bias"),
                     (f"to_add_out_linear.{i}.weight", f"{i}.attn.to_add_out.weight"),
                     (f"to_add_out_linear.{i}.bias", f"{i}.attn.to_add_out.bias"),
                     (f"ffn_context1.{i}.weight", f"{i}.ff_context.net.0.proj.weight"),
                     (f"ffn_context1.{i}.bias", f"{i}.ff_context.net.0.proj.bias"),
                     (f"ffn_context2.{i}.weight", f"{i}.ff_context.net.2.weight"),
                     (f"ffn_context2.{i}.bias", f"{i}.ff_context.net.2.bias"),
-                ]
-            else:
-                extra_map_sd3 = [
-                    ("linear_context0.weight", f"{i}.norm1_context.linear.weight"),
-                    ("linear_context0.bias", f"{i}.norm1_context.linear.bias"),
                 ]
             map_sd3 = base_map_sd3 + extra_map_sd3
 
