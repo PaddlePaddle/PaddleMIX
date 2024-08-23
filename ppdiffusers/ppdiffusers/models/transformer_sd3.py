@@ -1,4 +1,3 @@
-# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -344,9 +343,14 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
         encoder_hidden_states = self.context_embedder(encoder_hidden_states)
 
         if self.inference_optimize:
-            hidden_states = self.simplified_sd3(
+            out = self.simplified_sd3(
                 hidden_states=hidden_states, encoder_hidden_states=encoder_hidden_states, temb=temb
             )
+            # this is for paddle inference.
+            if isinstance(out, paddle.Tensor):
+                hidden_states = out
+            else:
+                hidden_states = out[1]
             encoder_hidden_states = None
 
         elif self.inference_optimize_origin:
