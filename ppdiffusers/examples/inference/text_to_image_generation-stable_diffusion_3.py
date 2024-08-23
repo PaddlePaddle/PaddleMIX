@@ -72,6 +72,16 @@ pipe = StableDiffusion3Pipeline.from_pretrained(
     # from_hf_hub=True,
     # from_diffusers=True,
 )
+
+# for vae model
+pipe.vae.decode = paddle.incubate.jit.inference(
+    pipe.vae.decode,
+    save_model_dir="./tmp/vae_static_models",
+    cache_static_model=False,
+    enable_new_ir=True,
+    exp_enable_use_cutlass=True,
+)
+
 generator = paddle.Generator().manual_seed(42)
 prompt = "A cat holding a sign that says hello world"
 
@@ -91,7 +101,7 @@ if args.benchmark:
             generator=generator,
         ).images[0]
 
-    repeat_times = 5
+    repeat_times = 6
     sumtime = 0.0
     for i in range(repeat_times):
         paddle.device.synchronize()

@@ -22,6 +22,7 @@ try:
         paddle_use_triton,
         rms_norm,
         split_concat,
+        triton_split,
         weight_only_int8,
     )
     from .triton_utils import (
@@ -41,6 +42,7 @@ try:
         "get_dtype_str",
         "fused_rotary_emb",
         "split_concat",
+        "triton_split",
     ]
 except:
     pass
