@@ -232,7 +232,6 @@ def sample_frames(video_file, num_frames):
     return frames
 
 
-
 def expand2square(pil_img, background_color):
     width, height = pil_img.size
     if width == height:
@@ -428,6 +427,7 @@ def preprocess_v1(sources, tokenizer: PretrainedTokenizer, has_image: bool = Fal
     targets = input_ids.clone()
     assert conv.sep_style == conversation_lib.SeparatorStyle.TWO
     sep = conv.sep + conv.roles[1] + ": "
+    new_targets = []  # FIXME: In npu device, the inplace modification does not take effect
     for conversation, target in zip(conversations, targets):
         total_len = int(target.not_equal(y=paddle.to_tensor(tokenizer.pad_token_id)).sum())
         rounds = conversation.split(conv.sep2)
@@ -453,7 +453,9 @@ def preprocess_v1(sources, tokenizer: PretrainedTokenizer, has_image: bool = Fal
             if cur_len != total_len:
                 target[:] = IGNORE_INDEX
                 print(f"WARNING: tokenization mismatch: {cur_len} vs. {total_len}. (ignored)")
-    return dict(input_ids=input_ids, labels=targets)
+        new_targets.append(target)
+    new_targets = paddle.stack(new_targets, axis=0)
+    return dict(input_ids=input_ids, labels=new_targets)
 
 
 def preprocess_plain(sources: Sequence[str], tokenizer: PretrainedTokenizer) -> Dict:
