@@ -1,4 +1,4 @@
-# LLaVA
+# LLaVA-NeXT-Interleave
 
 ## 1. 模型介绍
 
@@ -39,4 +39,16 @@ python paddlemix/examples/llava_next/run_siglip_encoder_predict.py  \
 ```
 USER: Please write a twitter blog post with the images.
 ASSISTANT: ✨ Launch! 🚀✨ The sky is alight with the brilliance of a rocket's ascent. The fiery trail of the rocket cuts through the darkness, a testament to human ingenuity and the relentless pursuit of exploration. The water below mirrors the spectacle, its surface rippling with the reflection of the celestial display. This moment captures the awe-inspiring power of technology and the boundless possibilities it holds for our future. #SpaceExploration #RocketLaunch
+```
+
+
+### 参考文献
+```BibTeX
+@misc{li2024llavanext-interleave,
+	title={LLaVA-NeXT: Tackling Multi-image, Video, and 3D in Large Multimodal Models},
+	url={https://llava-vl.github.io/blog/2024-06-16-llava-next-interleave/},
+	author={Li, Feng and Zhang, Renrui and Zhang, Hao and Zhang, Yuanhan and Li, Bo and Li, Wei and Ma, Zejun and Li, Chunyuan},
+	month={June},
+	year={2024}
+}
 ```

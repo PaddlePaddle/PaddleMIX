@@ -31,6 +31,8 @@ CogAgent-18B在9个经典的跨模态基准测试中实现了最先进的全能�
 
 ## 3. 环境准备
 
+> 推荐显存：float16下推理，37G+显存；float32下推理，74G+显存
+
 1） [安装PaddleNLP](https://github.com/PaddlePaddle/PaddleNLP?tab=readme-ov-file#%E5%AE%89%E8%A3%85)
 
 2）[安装 PaddleMix 环境依赖包](https://github.com/PaddlePaddle/PaddleMIX/tree/b4f97ff859e1964c839fc5fab94f7ba63b1e5959?tab=readme-ov-file#%E5%AE%89%E8%A3%85)
