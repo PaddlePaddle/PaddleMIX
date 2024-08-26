@@ -272,14 +272,25 @@ class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):
                 "The following part of your input was truncated because CLIP can only handle sequences up to"
                 f" {self.tokenizer_max_length} tokens: {removed_text}"
             )
-        prompt_embeds = text_encoder(text_input_ids, output_hidden_states=True)
+        # prompt_embeds = text_encoder(text_input_ids, output_hidden_states=True)
+        # pooled_prompt_embeds = prompt_embeds[0]
+
+        # if clip_skip is None:
+        #     prompt_embeds = prompt_embeds.hidden_states[-2]
+        # else:
+        #     prompt_embeds = prompt_embeds.hidden_states[-(clip_skip + 2)]
+
+
+        prompt_embeds = text_encoder(text_input_ids)
         pooled_prompt_embeds = prompt_embeds[0]
 
         if clip_skip is None:
-            prompt_embeds = prompt_embeds.hidden_states[-2]
+            prompt_embeds = prompt_embeds[1:][-2]
         else:
-            prompt_embeds = prompt_embeds.hidden_states[-(clip_skip + 2)]
+            prompt_embeds = prompt_embeds[1:][-(clip_skip + 2)]
 
+    
+        pooled_prompt_embeds = pooled_prompt_embeds.astype(dtype=text_encoder.dtype)
         prompt_embeds = prompt_embeds.astype(dtype=self.text_encoder.dtype)
 
         _, seq_len, _ = prompt_embeds.shape

@@ -40,6 +40,7 @@ from paddlenlp.transformers.model_outputs import (
     Seq2SeqSequenceClassifierOutput,
 )
 from paddlenlp.transformers.model_utils import register_base_model
+from paddle.framework import in_dynamic_or_pir_mode
 
 from ...utils import logging
 from ..model_utils import ALL_LAYERNORM_LAYERS, PretrainedModel
@@ -1572,22 +1573,11 @@ class T5EncoderModel(T5PretrainedModel):
     def get_encoder(self):
         return self.encoder
 
-    @paddle.incubate.jit.inference(
-        enable_new_ir=False,
-        cache_static_model=True,
-        save_model_dir="./tmp/T5",
-        with_trt=True,
-        trt_precision_mode="float16",
-        trt_use_static=True,
-    )
     def forward(
         self,
         input_ids: Optional[paddle.Tensor] = None,
         attention_mask: Optional[paddle.Tensor] = None,
         inputs_embeds: Optional[paddle.Tensor] = None,
-        output_attentions: Optional[bool] = None,
-        output_hidden_states: Optional[bool] = None,
-        return_dict: Optional[bool] = None,
     ) -> Union[Tuple[paddle.Tensor], BaseModelOutput]:
         r"""
         Returns:
@@ -1605,6 +1595,11 @@ class T5EncoderModel(T5PretrainedModel):
         >>> outputs = model(input_ids=input_ids)
         >>> last_hidden_states = outputs.last_hidden_state
         ```"""
+        
+        output_attentions = None
+        output_hidden_states = None
+        return_dict = None
+        
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         encoder_output = self.encoder(
@@ -1615,10 +1610,12 @@ class T5EncoderModel(T5PretrainedModel):
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
         )
-
-        # there is a bug in dy2s
-        return encoder_output.last_hidden_state
-        return encoder_output
+        
+        if in_dynamic_or_pir_mode():
+            return encoder_output
+        else:
+            # there is a bug in dy2s,we fix it here.
+            return encoder_output.last_hidden_state
 
 
 class T5ForSequenceClassification(T5PretrainedModel):

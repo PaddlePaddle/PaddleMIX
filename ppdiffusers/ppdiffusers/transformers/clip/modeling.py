@@ -1256,9 +1256,9 @@ class CLIPTextModelWithProjection(CLIPPretrainedModel):
         input_ids: Optional[paddle.Tensor] = None,
         attention_mask: Optional[paddle.Tensor] = None,
         position_ids: Optional[paddle.Tensor] = None,
-        output_attentions: Optional[bool] = None,
-        output_hidden_states: Optional[bool] = None,
-        return_dict: Optional[bool] = None,
+        # output_attentions: Optional[bool] = None,
+        # output_hidden_states: Optional[bool] = None,
+        # return_dict: Optional[bool] = None,
     ) -> Union[Tuple, CLIPTextModelOutput]:
         r"""
         Returns:
@@ -1276,6 +1276,11 @@ class CLIPTextModelWithProjection(CLIPPretrainedModel):
         >>> outputs = model(**inputs)
         >>> text_embeds = outputs.text_embeds
         ```"""
+        
+        output_attentions = None
+        output_hidden_states = True
+        return_dict = False
+        
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         text_outputs = self.text_model(

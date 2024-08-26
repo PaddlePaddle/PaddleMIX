@@ -73,16 +73,45 @@ pipe = StableDiffusion3Pipeline.from_pretrained(
     # from_diffusers=True,
 )
 
+pipe.text_encoder = paddle.incubate.jit.inference(
+    pipe.text_encoder,
+    save_model_dir="./tmp/text_encoder",
+    cache_static_model=True,
+    with_trt=True,
+    trt_precision_mode="float16",
+    trt_use_static=True,
+)
+
+pipe.text_encoder_2 = paddle.incubate.jit.inference(
+    pipe.text_encoder_2,
+    save_model_dir="./tmp/text_encoder_2",
+    cache_static_model=True,
+    with_trt=True,
+    trt_precision_mode="float16",
+    trt_use_static=True,
+)
+
+
+
+pipe.text_encoder_3 = paddle.incubate.jit.inference(
+    pipe.text_encoder_3,
+    save_model_dir="./tmp/text_encoder_3_T5",
+    cache_static_model=True,
+    with_trt=True,
+    trt_precision_mode="float16",
+    trt_use_static=True,
+)
+
+
+
 # for vae model
 pipe.vae.decode = paddle.incubate.jit.inference(
     pipe.vae.decode,
     save_model_dir="./tmp/vae_static_models",
     cache_static_model=True,
-    enable_new_ir=False,
     with_trt=True,
     trt_precision_mode="float16",
     trt_use_static=True,
-    collect_shape=False,
 )
 
 generator = paddle.Generator().manual_seed(42)
