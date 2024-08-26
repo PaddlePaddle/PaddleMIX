@@ -77,9 +77,12 @@ pipe = StableDiffusion3Pipeline.from_pretrained(
 pipe.vae.decode = paddle.incubate.jit.inference(
     pipe.vae.decode,
     save_model_dir="./tmp/vae_static_models",
-    cache_static_model=False,
-    enable_new_ir=True,
-    exp_enable_use_cutlass=True,
+    cache_static_model=True,
+    enable_new_ir=False,
+    with_trt=True,
+    trt_precision_mode="float16",
+    trt_use_static=True,
+    collect_shape=False,
 )
 
 generator = paddle.Generator().manual_seed(42)
