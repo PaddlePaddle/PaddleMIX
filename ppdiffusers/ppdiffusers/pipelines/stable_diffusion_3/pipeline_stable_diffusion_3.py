@@ -110,7 +110,7 @@ def retrieve_timesteps(
     return timesteps, num_inference_steps
 
 
-class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):  # SD3LoraLoaderMixin
+class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):
 
     r"""
     Args:
@@ -221,7 +221,12 @@ class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):  # SD3Lo
                 f" {self.tokenizer_max_length} tokens: {removed_text}"
             )
 
-        prompt_embeds = self.text_encoder_3(text_input_ids)[0]
+        outputs = self.text_encoder_3(text_input_ids)
+        # in order to d2s
+        if isinstance(outputs, paddle.Tensor):
+            prompt_embeds = outputs
+        else:
+            prompt_embeds = outputs[0]
 
         dtype = self.text_encoder_3.dtype
         prompt_embeds = prompt_embeds.astype(dtype=dtype)
@@ -793,14 +798,19 @@ class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):  # SD3Lo
                 # broadcast to batch dimension in a way that's compatible with ONNX/Core ML
                 timestep = t.expand(latent_model_input.shape[0])
 
-                noise_pred = self.transformer(
+                # in order to d2s
+                noise_pred_out = self.transformer(
                     hidden_states=latent_model_input,
                     timestep=timestep,
                     encoder_hidden_states=prompt_embeds,
                     pooled_projections=pooled_prompt_embeds,
                     joint_attention_kwargs=self.joint_attention_kwargs,
                     return_dict=False,
-                )[0]
+                )
+                if isinstance(noise_pred_out, paddle.Tensor):
+                    noise_pred = noise_pred_out
+                else:
+                    noise_pred = noise_pred_out[0]
 
                 # perform guidance
                 if self.do_classifier_free_guidance:
@@ -834,6 +844,8 @@ class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):  # SD3Lo
         else:
             latents = (latents / self.vae.config.scaling_factor) + self.vae.config.shift_factor
 
+            # in order to d2s
+            latents = latents.cast("float32")
             image_out = self.vae.decode(latents, return_dict=False)
             if isinstance(image_out, paddle.Tensor):
                 image = image_out

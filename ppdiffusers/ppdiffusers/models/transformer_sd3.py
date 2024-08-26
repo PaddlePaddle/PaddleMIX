@@ -116,13 +116,13 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
                 num_attention_heads=self.config.num_attention_heads,
                 attention_head_dim=self.inner_dim,
             )
-            self.simplified_sd3 = paddle.incubate.jit.inference(
-                self.simplified_sd3,
-                enable_new_ir=True,
-                cache_static_model=False,
-                exp_enable_use_cutlass=True,
-                delete_pass_lists=["add_norm_fuse_pass"],
-            )
+            # self.simplified_sd3 = paddle.incubate.jit.inference(
+            #     self.simplified_sd3,
+            #     enable_new_ir=True,
+            #     cache_static_model=False,
+            #     exp_enable_use_cutlass=True,
+            #     delete_pass_lists=["add_norm_fuse_pass"],
+            # )
         if self.inference_optimize_origin:
             self.sd3_origin_transformer = paddle.incubate.jit.inference(
                 self.sd3_origin_transformer,
@@ -292,6 +292,13 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
                 )
         return encoder_hidden_states, hidden_states
 
+    @paddle.incubate.jit.inference(
+        enable_new_ir=True,
+        cache_static_model=False,
+        save_model_dir="./tmp/sd3",
+        exp_enable_use_cutlass=True,
+        delete_pass_lists=["add_norm_fuse_pass"],
+    )
     def forward(
         self,
         hidden_states: paddle.Tensor,
@@ -375,7 +382,8 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
         hidden_states = hidden_states.reshape(
             shape=(hidden_states.shape[0], height, width, patch_size, patch_size, self.out_channels)
         )
-        hidden_states = paddle.einsum("nhwpqc->nchpwq", hidden_states)
+        # hidden_states = paddle.einsum("nhwpqc->nchpwq", hidden_states)
+        hidden_states = paddle.transpose(hidden_states, [0, 5, 1, 3, 2, 4])
         output = hidden_states.reshape(
             shape=(hidden_states.shape[0], self.out_channels, height * patch_size, width * patch_size)
         )

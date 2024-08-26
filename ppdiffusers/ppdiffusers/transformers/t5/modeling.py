@@ -1555,6 +1555,9 @@ class T5EncoderModel(T5PretrainedModel):
         # Initialize weights and apply final processing
         self.post_init()
 
+        # in order to d2s
+        del self.encoder
+
     def get_input_embeddings(self):
         return self.shared
 
@@ -1569,6 +1572,14 @@ class T5EncoderModel(T5PretrainedModel):
     def get_encoder(self):
         return self.encoder
 
+    @paddle.incubate.jit.inference(
+        enable_new_ir=False,
+        cache_static_model=True,
+        save_model_dir="./tmp/T5",
+        with_trt=True,
+        trt_precision_mode="float16",
+        trt_use_static=True,
+    )
     def forward(
         self,
         input_ids: Optional[paddle.Tensor] = None,
@@ -1605,6 +1616,8 @@ class T5EncoderModel(T5PretrainedModel):
             return_dict=return_dict,
         )
 
+        # there is a bug in dy2s
+        return encoder_output.last_hidden_state
         return encoder_output
 
 

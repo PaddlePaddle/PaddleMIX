@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import os
 from typing import Dict, Optional, Tuple, Union
 
 import paddle
@@ -88,6 +89,7 @@ class AutoencoderKL(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
         use_quant_conv: bool = True,
         use_post_quant_conv: bool = True,
     ):
+        os.environ["USE_PPXFORMERS"] = "False"
         super().__init__()
         # if down_block_out_channels not given, we will use block_out_channels
         _down_block_out_channels = block_out_channels if down_block_out_channels is None else down_block_out_channels
@@ -116,7 +118,7 @@ class AutoencoderKL(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
             norm_num_groups=norm_num_groups,
             act_fn=act_fn,
         )
-
+        del os.environ["USE_PPXFORMERS"]
         self.quant_conv = nn.Conv2D(2 * latent_channels, 2 * latent_channels, 1) if use_quant_conv else None
         self.post_quant_conv = nn.Conv2D(latent_channels, latent_channels, 1) if use_post_quant_conv else None
 
