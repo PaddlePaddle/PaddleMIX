@@ -1592,7 +1592,6 @@ class T5EncoderModel(T5PretrainedModel):
 
         ```python
         >>> from ppdiffusers.transformers import AutoTokenizer, T5EncoderModel
-
         >>> tokenizer = AutoTokenizer.from_pretrained("t5-small")
         >>> model = T5EncoderModel.from_pretrained("t5-small")
         >>> input_ids = tokenizer(
