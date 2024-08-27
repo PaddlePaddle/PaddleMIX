@@ -244,7 +244,7 @@ class FlowMatchEulerDiscreteScheduler(SchedulerMixin, ConfigMixin):
         sample = sample.cast(paddle.float32)
 
         sigma = self.sigmas[self.step_index]
-
+        # NOTE:(changwenbin & zhoukangkang) when s_churn == 0.0,not need to compute gamma, Can reduce cuda synchronization
         if s_churn == 0.0:
             gamma = 0.0
         else:
