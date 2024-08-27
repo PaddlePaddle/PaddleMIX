@@ -19,6 +19,7 @@ from typing import Any, Callable, Dict, List, Optional, Union
 import paddle
 
 from ppdiffusers.transformers import (  # T5TokenizerFast,
+    CLIPTextModelOutput,
     CLIPTextModelWithProjection,
     CLIPTokenizer,
     T5EncoderModel,
@@ -214,7 +215,7 @@ class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):
         text_input_ids = text_inputs.input_ids
         untruncated_ids = self.tokenizer_3(prompt, padding="longest", return_tensors="pd").input_ids
 
-        if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not torch.equal(text_input_ids, untruncated_ids):
+        if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal(text_input_ids, untruncated_ids):
             removed_text = self.tokenizer_3.batch_decode(untruncated_ids[:, self.tokenizer_max_length - 1 : -1])
             logger.warning(
                 "The following part of your input was truncated because CLIP can only handle sequences up to"
@@ -222,8 +223,8 @@ class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):
             )
 
         outputs = self.text_encoder_3(text_input_ids)
-        # in order to d2s
         if isinstance(outputs, paddle.Tensor):
+            # NOTE:(changwenbin,zhoukangkang) this is for paddle.incubate.jit.inference
             prompt_embeds = outputs
         else:
             prompt_embeds = outputs[0]
@@ -266,30 +267,31 @@ class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):
 
         text_input_ids = text_inputs.input_ids
         untruncated_ids = tokenizer(prompt, padding="longest", return_tensors="pd").input_ids
-        if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not torch.equal(text_input_ids, untruncated_ids):
+        if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal(text_input_ids, untruncated_ids):
             removed_text = tokenizer.batch_decode(untruncated_ids[:, self.tokenizer_max_length - 1 : -1])
             logger.warning(
                 "The following part of your input was truncated because CLIP can only handle sequences up to"
                 f" {self.tokenizer_max_length} tokens: {removed_text}"
             )
-        # prompt_embeds = text_encoder(text_input_ids, output_hidden_states=True)
-        # pooled_prompt_embeds = prompt_embeds[0]
+        prompt_embeds = text_encoder(text_input_ids, output_hidden_states=True)
 
-        # if clip_skip is None:
-        #     prompt_embeds = prompt_embeds.hidden_states[-2]
-        # else:
-        #     prompt_embeds = prompt_embeds.hidden_states[-(clip_skip + 2)]
+        if isinstance(prompt_embeds, CLIPTextModelOutput):
+            pooled_prompt_embeds = prompt_embeds[0]
 
-
-        prompt_embeds = text_encoder(text_input_ids)
-        pooled_prompt_embeds = prompt_embeds[0]
-
-        if clip_skip is None:
-            prompt_embeds = prompt_embeds[1:][-2]
+            if clip_skip is None:
+                prompt_embeds = prompt_embeds.hidden_states[-2]
+            else:
+                prompt_embeds = prompt_embeds.hidden_states[-(clip_skip + 2)]
+        elif isinstance(prompt_embeds, list):
+            # NOTE:(changwenbin,zhoukangkang) this is for paddle.incubate.jit.inference
+            pooled_prompt_embeds = prompt_embeds[-1]
+            if clip_skip is None:
+                prompt_embeds = prompt_embeds[:-2][-2]
+            else:
+                prompt_embeds = prompt_embeds[:-2][-(clip_skip + 2)]
         else:
-            prompt_embeds = prompt_embeds[1:][-(clip_skip + 2)]
+            raise ValueError("ERRORS!")
 
-    
         pooled_prompt_embeds = pooled_prompt_embeds.astype(dtype=text_encoder.dtype)
         prompt_embeds = prompt_embeds.astype(dtype=self.text_encoder.dtype)
 
@@ -818,6 +820,7 @@ class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):
                     joint_attention_kwargs=self.joint_attention_kwargs,
                     return_dict=False,
                 )
+
                 if isinstance(noise_pred_out, paddle.Tensor):
                     noise_pred = noise_pred_out
                 else:

@@ -24,6 +24,7 @@ import paddle
 from paddle import nn
 from paddle.amp.auto_cast import amp_state
 from paddle.distributed import fleet
+from paddle.framework import in_dynamic_or_pir_mode
 from paddle.nn import BCEWithLogitsLoss, CrossEntropyLoss, MSELoss
 from paddlenlp.transformers.activations import ACT2FN
 from paddlenlp.transformers.conversion_utils import (
@@ -40,7 +41,6 @@ from paddlenlp.transformers.model_outputs import (
     Seq2SeqSequenceClassifierOutput,
 )
 from paddlenlp.transformers.model_utils import register_base_model
-from paddle.framework import in_dynamic_or_pir_mode
 
 from ...utils import logging
 from ..model_utils import ALL_LAYERNORM_LAYERS, PretrainedModel
@@ -1556,8 +1556,11 @@ class T5EncoderModel(T5PretrainedModel):
         # Initialize weights and apply final processing
         self.post_init()
 
-        # in order to d2s
-        del self.encoder
+        # NOTE:(changwenbin,zhoukangkang)
+        # When you use 'paddle.incubate.jit.inference' to reconstruct the model,
+        # if you have set 'cache_static_model=True',
+        # you can use 'del self.encoder' to reduce the global memory usage.
+        # del self.encoder
 
     def get_input_embeddings(self):
         return self.shared
@@ -1578,6 +1581,9 @@ class T5EncoderModel(T5PretrainedModel):
         input_ids: Optional[paddle.Tensor] = None,
         attention_mask: Optional[paddle.Tensor] = None,
         inputs_embeds: Optional[paddle.Tensor] = None,
+        output_attentions: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
+        return_dict: Optional[bool] = None,
     ) -> Union[Tuple[paddle.Tensor], BaseModelOutput]:
         r"""
         Returns:
@@ -1595,11 +1601,7 @@ class T5EncoderModel(T5PretrainedModel):
         >>> outputs = model(input_ids=input_ids)
         >>> last_hidden_states = outputs.last_hidden_state
         ```"""
-        
-        output_attentions = None
-        output_hidden_states = None
-        return_dict = None
-        
+
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         encoder_output = self.encoder(
@@ -1610,11 +1612,11 @@ class T5EncoderModel(T5PretrainedModel):
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
         )
-        
+
         if in_dynamic_or_pir_mode():
             return encoder_output
         else:
-            # there is a bug in dy2s,we fix it here.
+            # NOTE:(changwenbin,zhoukangkang)there is a bug in dy2s,we fix it here.
             return encoder_output.last_hidden_state
 
 

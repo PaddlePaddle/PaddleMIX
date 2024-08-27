@@ -68,7 +68,7 @@ if args.inference_optimize_origin:
 
 pipe = StableDiffusion3Pipeline.from_pretrained(
     "stabilityai/stable-diffusion-3-medium-diffusers",
-    paddle_dtype=paddle.float16,
+    paddle_dtype=paddle.float32,
     # from_hf_hub=True,
     # from_diffusers=True,
 )
@@ -92,7 +92,6 @@ pipe.text_encoder_2 = paddle.incubate.jit.inference(
 )
 
 
-
 pipe.text_encoder_3 = paddle.incubate.jit.inference(
     pipe.text_encoder_3,
     save_model_dir="./tmp/text_encoder_3_T5",
@@ -101,7 +100,6 @@ pipe.text_encoder_3 = paddle.incubate.jit.inference(
     trt_precision_mode="float16",
     trt_use_static=True,
 )
-
 
 
 # for vae model
@@ -133,7 +131,7 @@ if args.benchmark:
             generator=generator,
         ).images[0]
 
-    repeat_times = 6
+    repeat_times = 10
     sumtime = 0.0
     for i in range(repeat_times):
         paddle.device.synchronize()
