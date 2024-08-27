@@ -1592,6 +1592,7 @@ class T5EncoderModel(T5PretrainedModel):
 
         ```python
         >>> from ppdiffusers.transformers import AutoTokenizer, T5EncoderModel
+
         >>> tokenizer = AutoTokenizer.from_pretrained("t5-small")
         >>> model = T5EncoderModel.from_pretrained("t5-small")
         >>> input_ids = tokenizer(
@@ -1600,7 +1601,6 @@ class T5EncoderModel(T5PretrainedModel):
         >>> outputs = model(input_ids=input_ids)
         >>> last_hidden_states = outputs.last_hidden_state
         ```"""
-
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         encoder_output = self.encoder(
