@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import os
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
@@ -33,6 +34,7 @@ from .embeddings import CaptionProjection, PatchEmbed
 from .lora import LoRACompatibleConv, LoRACompatibleLinear
 from .modeling_utils import ModelMixin
 from .normalization import AdaLayerNormSingle
+from .simplified_facebook_dit import SimplifiedFacebookDIT
 
 
 @dataclass
@@ -113,6 +115,8 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
         self.attention_head_dim = attention_head_dim
         self.inner_dim = inner_dim = num_attention_heads * attention_head_dim
         self.data_format = data_format
+
+        self.inference_optimize = os.getenv("INFERENCE_OPTIMIZE") == "True"
 
         conv_cls = nn.Conv2D if USE_PEFT_BACKEND else LoRACompatibleConv
         linear_cls = nn.Linear if USE_PEFT_BACKEND else LoRACompatibleLinear
@@ -217,6 +221,17 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
                 for d in range(num_layers)
             ]
         )
+        if self.inference_optimize:
+            self.simplified_facebookdit = SimplifiedFacebookDIT(
+                num_layers, inner_dim, num_attention_heads, attention_head_dim
+            )
+            self.simplified_facebookdit = paddle.incubate.jit.inference(
+                self.simplified_facebookdit,
+                enable_new_ir=True,
+                cache_static_model=False,
+                exp_enable_use_cutlass=True,
+                delete_pass_lists=["add_norm_fuse_pass"],
+            )
 
         # 4. Define output layers
         self.out_channels = in_channels if out_channels is None else out_channels
@@ -392,40 +407,43 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
             encoder_hidden_states = self.caption_projection(encoder_hidden_states)
             encoder_hidden_states = encoder_hidden_states.reshape([batch_size, -1, hidden_states.shape[-1]])
 
-        for block in self.transformer_blocks:
-            if self.gradient_checkpointing and not hidden_states.stop_gradient and not use_old_recompute():
+        if self.inference_optimize:
+            hidden_states = self.simplified_facebookdit(hidden_states, timestep, class_labels)
+        else:
+            for block in self.transformer_blocks:
+                if self.gradient_checkpointing and not hidden_states.stop_gradient and not use_old_recompute():
 
-                def create_custom_forward(module, return_dict=None):
-                    def custom_forward(*inputs):
-                        if return_dict is not None:
-                            return module(*inputs, return_dict=return_dict)
-                        else:
-                            return module(*inputs)
+                    def create_custom_forward(module, return_dict=None):
+                        def custom_forward(*inputs):
+                            if return_dict is not None:
+                                return module(*inputs, return_dict=return_dict)
+                            else:
+                                return module(*inputs)
 
-                    return custom_forward
+                        return custom_forward
 
-                ckpt_kwargs = {} if recompute_use_reentrant() else {"use_reentrant": False}
-                hidden_states = recompute(
-                    create_custom_forward(block),
-                    hidden_states,
-                    attention_mask,
-                    encoder_hidden_states,
-                    encoder_attention_mask,
-                    timestep,
-                    cross_attention_kwargs,
-                    class_labels,
-                    **ckpt_kwargs,
-                )
-            else:
-                hidden_states = block(
-                    hidden_states,
-                    attention_mask=attention_mask,
-                    encoder_hidden_states=encoder_hidden_states,
-                    encoder_attention_mask=encoder_attention_mask,
-                    timestep=timestep,
-                    cross_attention_kwargs=cross_attention_kwargs,
-                    class_labels=class_labels,
-                )
+                    ckpt_kwargs = {} if recompute_use_reentrant() else {"use_reentrant": False}
+                    hidden_states = recompute(
+                        create_custom_forward(block),
+                        hidden_states,
+                        attention_mask,
+                        encoder_hidden_states,
+                        encoder_attention_mask,
+                        timestep,
+                        cross_attention_kwargs,
+                        class_labels,
+                        **ckpt_kwargs,
+                    )
+                else:
+                    hidden_states = block(
+                        hidden_states,
+                        attention_mask=attention_mask,
+                        encoder_hidden_states=encoder_hidden_states,
+                        encoder_attention_mask=encoder_attention_mask,
+                        timestep=timestep,
+                        cross_attention_kwargs=cross_attention_kwargs,
+                        class_labels=class_labels,
+                    )
 
         # 3. Output
         if self.is_input_continuous:
@@ -489,3 +507,32 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
             return (output,)
 
         return Transformer2DModelOutput(sample=output)
+
+    @classmethod
+    def custom_modify_weight(cls, state_dict):
+        if os.getenv("INFERENCE_OPTIMIZE") != "True":
+            return
+        for i in range(28):
+            map_from_my_dit = [
+                (f"q.{i}.weight", f"{i}.attn1.to_q.weight"),
+                (f"k.{i}.weight", f"{i}.attn1.to_k.weight"),
+                (f"v.{i}.weight", f"{i}.attn1.to_v.weight"),
+                (f"q.{i}.bias", f"{i}.attn1.to_q.bias"),
+                (f"k.{i}.bias", f"{i}.attn1.to_k.bias"),
+                (f"v.{i}.bias", f"{i}.attn1.to_v.bias"),
+                (f"out_proj.{i}.weight", f"{i}.attn1.to_out.0.weight"),
+                (f"out_proj.{i}.bias", f"{i}.attn1.to_out.0.bias"),
+                (f"ffn1.{i}.weight", f"{i}.ff.net.0.proj.weight"),
+                (f"ffn1.{i}.bias", f"{i}.ff.net.0.proj.bias"),
+                (f"ffn2.{i}.weight", f"{i}.ff.net.2.weight"),
+                (f"ffn2.{i}.bias", f"{i}.ff.net.2.bias"),
+                (f"fcs0.{i}.weight", f"{i}.norm1.emb.timestep_embedder.linear_1.weight"),
+                (f"fcs0.{i}.bias", f"{i}.norm1.emb.timestep_embedder.linear_1.bias"),
+                (f"fcs1.{i}.weight", f"{i}.norm1.emb.timestep_embedder.linear_2.weight"),
+                (f"fcs1.{i}.bias", f"{i}.norm1.emb.timestep_embedder.linear_2.bias"),
+                (f"fcs2.{i}.weight", f"{i}.norm1.linear.weight"),
+                (f"fcs2.{i}.bias", f"{i}.norm1.linear.bias"),
+                (f"embs.{i}.weight", f"{i}.norm1.emb.class_embedder.embedding_table.weight"),
+            ]
+            for to_, from_ in map_from_my_dit:
+                state_dict["simplified_facebookdit." + to_] = paddle.assign(state_dict["transformer_blocks." + from_])
