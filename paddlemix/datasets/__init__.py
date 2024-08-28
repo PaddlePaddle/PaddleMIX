@@ -20,3 +20,4 @@ from .collator import *
 from .dataset import *
 from .mixtoken_dataset import *
 from .vg_caption import *
+from .internvl_dataset import *

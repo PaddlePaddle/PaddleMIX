@@ -20,6 +20,7 @@ import re
 from io import BytesIO
 from typing import Dict, Optional, Sequence
 
+import cv2
 import paddle
 import requests
 from paddlenlp.generation import (
@@ -42,6 +43,8 @@ from .constants import (
 
 __all__ = [
     "load_image",
+    "sample_frames",
+    "is_valid_video_filename",
     "tokenizer_image_token",
     "get_model_name_from_path",
     "KeywordsStoppingCriteria",
@@ -200,6 +203,33 @@ def load_image(image_file):
     else:
         image = Image.open(image_file).convert("RGB")
     return image
+
+
+def is_valid_video_filename(name):
+    video_extensions = ["avi", "mp4", "mov", "mkv", "flv", "wmv", "mjpeg"]
+
+    ext = name.split(".")[-1].lower()
+
+    if ext in video_extensions:
+        return True
+    else:
+        return False
+
+
+def sample_frames(video_file, num_frames):
+    video = cv2.VideoCapture(video_file)
+    total_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
+    interval = total_frames // num_frames
+    frames = []
+    for i in range(total_frames):
+        ret, frame = video.read()
+        pil_img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+        if not ret:
+            continue
+        if i % interval == 0:
+            frames.append(pil_img)
+    video.release()
+    return frames
 
 
 def expand2square(pil_img, background_color):
@@ -397,6 +427,7 @@ def preprocess_v1(sources, tokenizer: PretrainedTokenizer, has_image: bool = Fal
     targets = input_ids.clone()
     assert conv.sep_style == conversation_lib.SeparatorStyle.TWO
     sep = conv.sep + conv.roles[1] + ": "
+    new_targets = []  # FIXME: In npu device, the inplace modification does not take effect
     for conversation, target in zip(conversations, targets):
         total_len = int(target.not_equal(y=paddle.to_tensor(tokenizer.pad_token_id)).sum())
         rounds = conversation.split(conv.sep2)
@@ -422,7 +453,9 @@ def preprocess_v1(sources, tokenizer: PretrainedTokenizer, has_image: bool = Fal
             if cur_len != total_len:
                 target[:] = IGNORE_INDEX
                 print(f"WARNING: tokenization mismatch: {cur_len} vs. {total_len}. (ignored)")
-    return dict(input_ids=input_ids, labels=targets)
+        new_targets.append(target)
+    new_targets = paddle.stack(new_targets, axis=0)
+    return dict(input_ids=input_ids, labels=new_targets)
 
 
 def preprocess_plain(sources: Sequence[str], tokenizer: PretrainedTokenizer) -> Dict:

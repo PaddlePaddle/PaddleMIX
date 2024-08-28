@@ -36,7 +36,11 @@ class PaddleSaveImage:
     @classmethod
     def INPUT_TYPES(s):
         return {
-            "required": {"images": ("IMAGE",), "filename_prefix": ("STRING", {"default": "ComfyUI"})},
+            "required": {
+                "images": ("IMAGE",), 
+                "filename_prefix": ("STRING", {"default": "ComfyUI"}),
+                "censor": ("BOOLEAN", {"default": True})
+            },
             "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
         }
 
@@ -59,7 +63,7 @@ class PaddleSaveImage:
         print(response)
         return response["result"]["pass"]
 
-    def save_images(self, images, filename_prefix="ComfyUI", prompt=None, extra_pnginfo=None):
+    def save_images(self, images, censor=True, filename_prefix="ComfyUI", prompt=None, extra_pnginfo=None):
         filename_prefix += self.prefix_append
         full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(
             filename_prefix, self.output_dir, images[0].shape[1], images[0].shape[0]
@@ -67,7 +71,10 @@ class PaddleSaveImage:
         results = list()
         for (batch_number, image) in enumerate(images):
             img = Image.fromarray(image)
-            pass_censor = self.censor_image(img)
+            if censor:
+                pass_censor = self.censor_image(img)
+            else:
+                pass_censor = True
             # breakpoint()
             if pass_censor:
                 metadata = None

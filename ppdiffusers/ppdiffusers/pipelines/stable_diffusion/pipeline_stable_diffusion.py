@@ -861,6 +861,8 @@ class StableDiffusionPipeline(
                 latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
                 # predict the noise residual
+                # zero dimension not work perfectly for paddle inference
+                t = t.reshape([1])
                 noise_pred = self.unet(
                     latent_model_input,
                     t,
@@ -869,7 +871,12 @@ class StableDiffusionPipeline(
                     cross_attention_kwargs=self.cross_attention_kwargs,
                     added_cond_kwargs=added_cond_kwargs,
                     return_dict=False,
-                )[0]
+                )
+                if isinstance(noise_pred, paddle.Tensor):
+                    # this for paddle inference's paddle.incubate.jit.inference
+                    noise_pred = noise_pred
+                else:
+                    noise_pred = noise_pred[0]
 
                 # perform guidance
                 if self.do_classifier_free_guidance:
@@ -901,9 +908,12 @@ class StableDiffusionPipeline(
                         callback(step_idx, t, latents)
 
         if not output_type == "latent":
-            image = self.vae.decode(latents / self.vae.config.scaling_factor, return_dict=False, generator=generator)[
-                0
-            ]
+            image = self.vae.decode(latents / self.vae.config.scaling_factor, return_dict=False, generator=generator)
+            if isinstance(image, paddle.Tensor):
+                # this for paddle inference's paddle.incubate.jit.inference
+                image = image
+            else:
+                image = image[0]
             image, has_nsfw_concept = self.run_safety_checker(image, prompt_embeds.dtype)
         else:
             image = latents

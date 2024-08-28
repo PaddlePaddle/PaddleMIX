@@ -60,7 +60,8 @@ class AutoTokenizerMIX(AutoTokenizer):
                 if class_name == "processors":
                     import_class = import_module(f"paddlemix.{class_name}.tokenizer")
                 else:
-                    import_class = import_module(f"paddlemix.models.{class_name}.tokenizer")
+                    #import_class = import_module(f"paddlemix.models.{class_name}.tokenizer")
+                    import_class = import_module(f"paddlemix.models.{class_name}")
 
             tokenizer_class = getattr(import_class, init_class)
             if use_fast:

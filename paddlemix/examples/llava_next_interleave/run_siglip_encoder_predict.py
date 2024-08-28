@@ -18,14 +18,14 @@ import paddle
 from paddlenlp.generation import TextStreamer
 
 from paddlemix.auto import AutoConfigMIX, AutoModelMIX, AutoTokenizerMIX
-from paddlemix.models.llava_next.constants import (
+from paddlemix.models.llava.constants import (
     DEFAULT_IM_END_TOKEN,
     DEFAULT_IM_START_TOKEN,
     DEFAULT_IMAGE_TOKEN,
     IMAGE_TOKEN_INDEX,
 )
-from paddlemix.models.llava_next.conversation import conv_templates
-from paddlemix.models.llava_next.mm_utils import (
+from paddlemix.models.llava.conversation import conv_templates
+from paddlemix.models.llava.mm_utils import (
     get_model_name_from_path,
     is_valid_video_filename,
     load_image,
@@ -109,8 +109,8 @@ def main(args):
 
     while True:
         try:
-            # inp = input(f"{roles[0]}: ")
-            inp = "Please write a twitter blog post with the images."
+            inp = input(f"{roles[0]}: ")
+            # inp = "Please write a twitter blog post with the images."
         except EOFError:
             inp = ""
         if not inp:

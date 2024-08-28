@@ -21,7 +21,7 @@
   "lr_scheduler_type": "cosine",
   "logging_steps": 1,
   "save_steps": 100,
-  "evaluation_strategy": "epoch",
+  "evaluation_strategy": "no",
   "save_strategy": "epoch",
   "max_length": 2048,
   "fp16": false,
@@ -30,7 +30,6 @@
   "do_eval": false,
   "disable_tqdm": true,
   "save_total_limit": 1,
-  "eval_steps": 120,
-  "version":"plain"
+  "eval_steps": 120
 
 }
