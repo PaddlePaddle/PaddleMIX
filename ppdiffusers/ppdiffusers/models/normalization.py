@@ -62,7 +62,6 @@ class AdaLayerNormZero(nn.Layer):
         if num_embeddings is not None:
             self.emb = CombinedTimestepLabelEmbeddings(num_embeddings, embedding_dim)
         else:
-
             self.emb = None
 
         self.silu = nn.Silu()
@@ -82,7 +81,6 @@ class AdaLayerNormZero(nn.Layer):
         if self.emb is not None:
             emb = self.emb(timestep, class_labels, hidden_dtype=hidden_dtype)
         emb = self.linear(self.silu(emb))
-
         shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = emb.chunk(6, axis=1)
 
         if os.getenv("INFERENCE_OPTIMIZE_TRITON"):
