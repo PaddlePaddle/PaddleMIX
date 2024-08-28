@@ -40,7 +40,6 @@ class PaddleSDCheckpointLoader:
     def load_checkpoint(self, ckpt_name):
         ckpt_path = folder_paths.get_full_path("checkpoints", ckpt_name)
         pipe = StableDiffusionPipeline.from_single_file(ckpt_path)
-        pipe = pipe.to(dtype=paddle.float16)
         return (pipe,)
 
 

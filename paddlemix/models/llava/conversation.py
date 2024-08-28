@@ -30,7 +30,11 @@ class SeparatorStyle(Enum):
     TWO = auto()
     MPT = auto()
     PLAIN = auto()
+    CHATML = auto()
     LLAMA_2 = auto()
+    LLAMA_3 = auto()
+    QWEN = auto()
+    GEMMA = auto()
 
 
 @dataclasses.dataclass
@@ -78,6 +82,30 @@ class Conversation:
                     ret += role + ": " + message + seps[i % 2]
                 else:
                     ret += role + ":"
+        elif self.sep_style == SeparatorStyle.CHATML:
+            ret = "" if self.system == "" else self.system + self.sep + "\n"
+            for role, message in messages:
+                if message:
+                    if type(message) is tuple:
+                        message, images = message
+                        message = "<image>" * len(images) + message
+                    ret += role + "\n" + message + self.sep + "\n"
+                else:
+                    ret += role + "\n"
+            return ret
+
+        elif self.sep_style == SeparatorStyle.LLAMA_3:
+            chat_template_messages = [{"role": "system", "content": self.system}]
+            for role, message in messages:
+                if message:
+                    if type(message) is tuple:
+                        message, images = message
+                        message = "<image>" * len(images) + message
+                    chat_template_messages.append({"role": role, "content": message})
+            return self.tokenizer.apply_chat_template(
+                chat_template_messages, tokenize=False, add_generation_prompt=True
+            )
+
         elif self.sep_style == SeparatorStyle.MPT:
             ret = self.system + self.sep
             for role, message in messages:
@@ -87,6 +115,17 @@ class Conversation:
                     ret += role + message + self.sep
                 else:
                     ret += role
+        elif self.sep_style == SeparatorStyle.GEMMA:
+            ret = ""
+            for i, (role, message) in enumerate(messages):
+                assert role == self.roles[i % 2], "Conversation should alternate user/assistant/user/assistant/..."
+                if message:
+                    if type(message) is tuple:
+                        message, _, _ = message
+                    ret += role + message + self.sep
+                else:
+                    ret += role
+
         elif self.sep_style == SeparatorStyle.LLAMA_2:
             wrap_sys = lambda msg: f"<<SYS>>\n{msg}\n<</SYS>>\n\n"
             wrap_inst = lambda msg: f"[INST] {msg} [/INST]"
@@ -283,6 +322,39 @@ conv_llava_llama_2 = Conversation(
     sep="<s>",
     sep2="</s>",
 )
+conv_mistral_instruct = Conversation(
+    system="",
+    roles=("USER", "ASSISTANT"),
+    version="llama_v2",
+    messages=[],
+    offset=0,
+    sep_style=SeparatorStyle.LLAMA_2,
+    sep="",
+    sep2="</s>",
+)
+conv_llava_llama_2_simple = Conversation(
+    system="Answer the questions about the visual content that the user provides.",
+    roles=("USER", "ASSISTANT"),
+    version="llama_v2",
+    messages=[],
+    offset=0,
+    sep_style=SeparatorStyle.LLAMA_2,
+    sep="<s>",
+    sep2="</s>",
+)
+
+conv_llava_llama_2_mmtag = Conversation(
+    system="Answer the questions about the visual content that the user provides."
+    "The visual content will be provided with the following format: <Image>visual content</Image>.",
+    roles=("USER", "ASSISTANT"),
+    version="llama_v2_mmtag",
+    messages=[],
+    offset=0,
+    sep_style=SeparatorStyle.LLAMA_2,
+    sep="<s>",
+    sep2="</s>",
+)
+
 conv_mpt = Conversation(
     system="""<|im_start|>system
 A conversation between a user and an LLM-based AI assistant. The assistant gives helpful and honest answers.""",
@@ -297,6 +369,26 @@ A conversation between a user and an LLM-based AI assistant. The assistant gives
     sep_style=SeparatorStyle.MPT,
     sep="<|im_end|>",
 )
+conv_qwen = Conversation(
+    system="""<|im_start|>system
+You are a helpful assistant.""",
+    roles=("<|im_start|>user", "<|im_start|>assistant"),
+    version="qwen",
+    messages=[],
+    offset=0,
+    sep_style=SeparatorStyle.CHATML,
+    sep="<|im_end|>",
+)
+conv_gemma_instruct = Conversation(
+    system="",
+    roles=("<start_of_turn>user\n", "<start_of_turn>model\n"),
+    version="gemma",
+    messages=[],
+    offset=0,
+    sep_style=SeparatorStyle.GEMMA,
+    sep="<end_of_turn>\n",
+)
+
 conv_llava_plain = Conversation(
     system="", roles=("", ""), messages=(), offset=0, sep_style=SeparatorStyle.PLAIN, sep="\n"
 )
@@ -337,6 +429,46 @@ conv_llava_v1_mmtag = Conversation(
     sep2="</s>",
     version="v1_mmtag",
 )
+conv_mistral_orca = Conversation(
+    system="""<|im_start|>system
+You are MistralOrca, a large language model trained by Alignment Lab AI. Write out your reasoning step-by-step to be sure you get the right answers!""",
+    roles=("<|im_start|>user\n", "<|im_start|>assistant\n"),
+    version="mpt",
+    messages=[],
+    offset=0,
+    sep_style=SeparatorStyle.MPT,
+    sep="<|im_end|>",
+)
+conv_mistral_zephyr = Conversation(
+    system="""<|system|>
+You are a helpful AI assistant.""",
+    roles=("<|user|>\n", "<|assistant|>\n"),
+    version="mpt",
+    messages=[],
+    offset=0,
+    sep_style=SeparatorStyle.MPT,
+    sep="</s>",
+)
+conv_mistral_direct = Conversation(
+    system="""<|im_start|>system
+Answer the questions.""",
+    roles=("<|im_start|>user\n", "<|im_start|>assistant\n"),
+    version="mpt",
+    messages=[],
+    offset=0,
+    sep_style=SeparatorStyle.MPT,
+    sep="<|im_end|>",
+)
+conv_chatml_direct = Conversation(
+    system="""<|im_start|>system
+Answer the questions.""",
+    roles=("<|im_start|>user\n", "<|im_start|>assistant\n"),
+    version="mpt",
+    messages=[],
+    offset=0,
+    sep_style=SeparatorStyle.MPT,
+    sep="<|im_end|>",
+)
 default_conversation = conv_vicuna_v1
 conv_templates = {
     "default": conv_vicuna_v0,
@@ -344,12 +476,23 @@ conv_templates = {
     "v1": conv_vicuna_v1,
     "vicuna_v1": conv_vicuna_v1,
     "llama_2": conv_llama_2,
+    "mistral_instruct": conv_mistral_instruct,
+    "mistral_orca": conv_mistral_orca,
+    "mistral_zephyr": conv_mistral_zephyr,
+    "mistral_direct": conv_mistral_direct,
     "plain": conv_llava_plain,
     "v0_plain": conv_llava_plain,
+    "chatml_direct": conv_chatml_direct,
     "llava_v0": conv_llava_v0,
-    "v0_mmtag": conv_llava_v0_mmtag,
+    "llava_v0_mmtag": conv_llava_v0_mmtag,
     "llava_v1": conv_llava_v1,
-    "v1_mmtag": conv_llava_v1_mmtag,
+    "llava_v1_mmtag": conv_llava_v1_mmtag,
     "llava_llama_2": conv_llava_llama_2,
+    # "llava_llama_3": conv_llava_llama_3,
+    "llava_llama_2_simple": conv_llava_llama_2_simple,
+    "llava_llama_2_mmtag": conv_llava_llama_2_mmtag,
+    "llava_mistral_instruct": conv_mistral_instruct,
     "mpt": conv_mpt,
+    "qwen_1_5": conv_qwen,
+    "gemma_instruct": conv_gemma_instruct,
 }
