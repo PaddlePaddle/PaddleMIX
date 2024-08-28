@@ -62,8 +62,9 @@ class AdaLayerNormZero(nn.Layer):
         if num_embeddings is not None:
             self.emb = CombinedTimestepLabelEmbeddings(num_embeddings, embedding_dim)
         else:
-            # print("Using None") this
+
             self.emb = None
+
         self.silu = nn.Silu()
         self.linear = nn.Linear(embedding_dim, 6 * embedding_dim)
         norm_elementwise_affine_kwargs = dict(weight_attr=False, bias_attr=False)
