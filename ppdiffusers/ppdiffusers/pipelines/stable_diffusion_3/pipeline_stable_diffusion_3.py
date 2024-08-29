@@ -223,7 +223,7 @@ class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):
             )
 
         outputs = self.text_encoder_3(text_input_ids)
-        if isinstance(outputs, paddle.Tensor):
+        if paddle.incubate.jit.is_inference_mode(self.text_encoder_3):
             # NOTE:(changwenbin,zhoukangkang) this is for paddle.incubate.jit.inference
             prompt_embeds = outputs
         else:
@@ -275,14 +275,7 @@ class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):
             )
         prompt_embeds = text_encoder(text_input_ids, output_hidden_states=True)
 
-        if isinstance(prompt_embeds, CLIPTextModelOutput):
-            pooled_prompt_embeds = prompt_embeds[0]
-
-            if clip_skip is None:
-                prompt_embeds = prompt_embeds.hidden_states[-2]
-            else:
-                prompt_embeds = prompt_embeds.hidden_states[-(clip_skip + 2)]
-        elif isinstance(prompt_embeds, list):
+        if paddle.incubate.jit.is_inference_mode(text_encoder):
             # NOTE:(changwenbin,zhoukangkang) this is for paddle.incubate.jit.inference
             pooled_prompt_embeds = prompt_embeds[-1]
             if clip_skip is None:
@@ -290,7 +283,12 @@ class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):
             else:
                 prompt_embeds = prompt_embeds[:-2][-(clip_skip + 2)]
         else:
-            raise ValueError("ERRORS!")
+            pooled_prompt_embeds = prompt_embeds[0]
+
+            if clip_skip is None:
+                prompt_embeds = prompt_embeds.hidden_states[-2]
+            else:
+                prompt_embeds = prompt_embeds.hidden_states[-(clip_skip + 2)]
 
         pooled_prompt_embeds = pooled_prompt_embeds.astype(dtype=text_encoder.dtype)
         prompt_embeds = prompt_embeds.astype(dtype=self.text_encoder.dtype)
@@ -859,9 +857,11 @@ class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):
             latents = (latents / self.vae.config.scaling_factor) + self.vae.config.shift_factor
 
             # in order to d2s
-            latents = latents.cast("float32")
+            if paddle.incubate.jit.is_inference_mode(self.vae.decode):
+                latents = latents.cast("float32")
             image_out = self.vae.decode(latents, return_dict=False)
-            if isinstance(image_out, paddle.Tensor):
+            if paddle.incubate.jit.is_inference_mode(self.vae.decode):
+                # NOTE:(changwenbin,zhoukangkang) this is for paddle.incubate.jit.inference
                 image = image_out
             else:
                 image = image_out[0]

@@ -68,7 +68,7 @@ if args.inference_optimize_origin:
 
 pipe = StableDiffusion3Pipeline.from_pretrained(
     "stabilityai/stable-diffusion-3-medium-diffusers",
-    paddle_dtype=paddle.float32,
+    paddle_dtype=paddle.float16,
     # from_hf_hub=True,
     # from_diffusers=True,
 )
