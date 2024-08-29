@@ -227,8 +227,7 @@ python -m pip install triton
 ```
 一键推理指令：
 ```shell
-cd ppdiffusers/examples/inference
-python class_conditional_image_generation-dit.py --inference_optimize 1
+python ppdiffusers/examples/inference/class_conditional_image_generation-dit.py --inference_optimize 1
 ```
 
 - 在 NVIDIA A100-SXM4-40GB 上测试的性能如下：
