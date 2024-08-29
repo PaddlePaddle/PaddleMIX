@@ -111,9 +111,7 @@ class SimplifiedFacebookDIT(nn.Layer):
             v = self.v[i](norm_hidden_states).reshape([0, 0, self.heads_num, self.head_dim])
 
             norm_hidden_states = F.scaled_dot_product_attention_(q, k, v, scale=self.head_dim**-0.5)
-            norm_hidden_states = norm_hidden_states.reshape(
-                [norm_hidden_states.shape[0], norm_hidden_states.shape[1], self.dim]
-            )
+            norm_hidden_states = norm_hidden_states.reshape([0, 0, self.dim])
             norm_hidden_states = self.out_proj[i](norm_hidden_states)
 
             hidden_states, norm_hidden_states = paddlemix.triton_ops.fused_adaLN_scale_residual(

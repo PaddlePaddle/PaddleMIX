@@ -240,18 +240,6 @@ python class_conditional_image_generation-dit.py --inference_optimize 1
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 ## 引用
 ```
 @article{Peebles2022DiT,
