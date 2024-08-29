@@ -216,6 +216,47 @@ image.save("result_DiT_golden_retriever.png")
 ```
 
 
+### 2.3 Paddle Inference 高性能推理
+
+
+- Paddle Inference加速DIT推理
+
+
+```shell
+# 安装develop版本的paddle
+python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu123/
+# 安装 triton
+python -m pip install triton
+```
+
+执行高性能推理的命令是：
+
+```shell
+cd ppdiffusers/examples/inference
+python class_conditional_image_generation-dit.py --inference_optimize 1
+```
+
+- 在 NVIDIA A100-SXM4-40GB 上测试的性能如下：
+
+| Paddle Inference| TensorRT-LLM |
+| --------------- | ------------ |
+|      219 ms     |    242 ms    |
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## 引用
 ```
 @article{Peebles2022DiT,
