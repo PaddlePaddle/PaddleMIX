@@ -226,10 +226,10 @@ class DiTPipeline(DiffusionPipeline):
 
         latents = 1 / self.vae.config.scaling_factor * latents
 
-        import datetime
+        # import datetime
 
-        paddle.device.synchronize()
-        starttime = datetime.datetime.now()
+        # paddle.device.synchronize()
+        # starttime = datetime.datetime.now()
 
         samples_out = self.vae.decode(latents)
         if paddle.incubate.jit.is_inference_mode(self.vae.decode):
@@ -238,11 +238,11 @@ class DiTPipeline(DiffusionPipeline):
         else:
             samples = samples_out.sample
 
-        paddle.device.synchronize()
-        endtime = datetime.datetime.now()
-        duringtime = endtime - starttime
-        time_ms = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
-        print("The VAE decode time : ", time_ms, "ms")
+        # paddle.device.synchronize()
+        # endtime = datetime.datetime.now()
+        # duringtime = endtime - starttime
+        # time_ms = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
+        # print("The VAE decode time : ", time_ms, "ms")
 
         samples = (samples / 2 + 0.5).clip(0, 1)
 
