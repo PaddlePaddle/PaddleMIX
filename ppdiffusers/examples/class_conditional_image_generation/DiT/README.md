@@ -222,9 +222,13 @@ image.save("result_DiT_golden_retriever.png")
 ```shell
 # 安装develop版本的paddle
 python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu123/
-# 安装 triton
+
+# 安装 triton并适配paddle
 python -m pip install triton
-```
+python -m pip install git+https://github.com/zhoutianzi666/UseTritonInPaddle.git
+python -c "import use_triton_in_paddle; use_triton_in_paddle.make_triton_compatible_with_paddle()"
+````
+
 一键推理指令：
 ```shell
 python ppdiffusers/examples/inference/class_conditional_image_generation-dit.py --inference_optimize 1
