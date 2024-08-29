@@ -218,7 +218,7 @@ image.save("result_DiT_golden_retriever.png")
 ### 2.3 Paddle Inference 高性能推理
 
 - Paddle Inference提供DIT模型高性能推理实现，推理性能提升80%+
-推理步骤如下：
+环境准备：
 ```shell
 # 安装develop版本的paddle
 python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu123/
