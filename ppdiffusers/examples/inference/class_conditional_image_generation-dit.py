@@ -59,6 +59,17 @@ pipe = DiTPipeline.from_pretrained("facebook/DiT-XL-2-256", paddle_dtype=dtype)
 pipe.scheduler = DDIMScheduler.from_config(pipe.scheduler.config)
 set_seed(42)
 
+if args.inference_optimize:
+    # optimize the transformer using paddle.incubate.jit.inference
+    pipe.transformer = paddle.incubate.jit.inference(
+        pipe.transformer,
+        enable_new_ir=True,
+        save_model_dir="./tmp/dit",
+        cache_static_model=True,
+        exp_enable_use_cutlass=True,
+        delete_pass_lists=["add_norm_fuse_pass"],
+    )
+
 words = ["golden retriever"]  # class_ids [207]
 class_ids = pipe.get_label_ids(words)
 image = pipe(class_labels=class_ids, num_inference_steps=25).images[0]

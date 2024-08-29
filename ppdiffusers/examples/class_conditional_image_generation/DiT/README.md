@@ -233,9 +233,9 @@ python class_conditional_image_generation-dit.py --inference_optimize 1
 
 - 在 NVIDIA A100-SXM4-40GB 上测试的性能如下：
 
-| Paddle Inference| TensorRT-LLM |
-| --------------- | ------------ |
-|      219 ms     |    242 ms    |
+| Paddle Inference| TensorRT-LLM |  Paddle |
+| --------------- | ------------ | ------- |
+|      219 ms     |    242 ms    | 1200 ms |
 
 
 

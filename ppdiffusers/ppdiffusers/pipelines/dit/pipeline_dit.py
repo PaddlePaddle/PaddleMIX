@@ -191,9 +191,12 @@ class DiTPipeline(DiffusionPipeline):
                 ]
             )
             # predict noise model_output
-            noise_pred = self.transformer(
-                latent_model_input, timestep=timesteps, class_labels=class_labels_input
-            ).sample
+            noise_pred_out = self.transformer(latent_model_input, timestep=timesteps, class_labels=class_labels_input)
+            if paddle.incubate.jit.is_inference_mode(self.transformer):
+                # self.transformer run in paddle inference.
+                noise_pred = noise_pred_out
+            else:
+                noise_pred = noise_pred_out.sample
 
             # perform guidance
             if guidance_scale > 1:
