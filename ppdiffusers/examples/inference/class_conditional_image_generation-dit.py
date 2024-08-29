@@ -75,7 +75,6 @@ if args.inference_optimize:
         save_model_dir="./tmp/dit/vae",
         cache_static_model=True,
         exp_enable_use_cutlass=True,
-        delete_pass_lists=["add_norm_fuse_pass"],
     )
 
 words = ["golden retriever"]  # class_ids [207]
@@ -90,15 +89,15 @@ if args.benchmark:
 
     repeat_times = 5
 
-    paddle.device.synchronize()
-    starttime = datetime.datetime.now()
     for i in range(repeat_times):
+        paddle.device.synchronize()
+        starttime = datetime.datetime.now()
         image = pipe(class_labels=class_ids, num_inference_steps=25).images[0]
-    paddle.device.synchronize()
-    endtime = datetime.datetime.now()
+        paddle.device.synchronize()
+        endtime = datetime.datetime.now()
 
-    duringtime = endtime - starttime
-    time_ms = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
-    print("The ave end to end time : ", time_ms / repeat_times, "ms")
+        duringtime = endtime - starttime
+        time_ms = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
+        print("The this end to end time : ", time_ms, "ms")
 
 image.save("class_conditional_image_generation-dit-result.png")
