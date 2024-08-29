@@ -215,22 +215,17 @@ image = pipe(class_labels=class_ids, num_inference_steps=25, generator=generator
 image.save("result_DiT_golden_retriever.png")
 ```
 
-
 ### 2.3 Paddle Inference 高性能推理
 
-
-- Paddle Inference加速DIT推理
-
-
+- Paddle Inference提供DIT模型高性能推理实现，推理性能提升80%+
+推理步骤如下：
 ```shell
 # 安装develop版本的paddle
 python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu123/
 # 安装 triton
 python -m pip install triton
 ```
-
-执行高性能推理的命令是：
-
+一键推理指令：
 ```shell
 cd ppdiffusers/examples/inference
 python class_conditional_image_generation-dit.py --inference_optimize 1
