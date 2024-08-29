@@ -1079,7 +1079,7 @@ def adaptive_layer_norm(x, scale, shift, weight=None, bias=None, epsilon=1e-05):
     M = x.shape[0] * x.shape[1]
     N = x.shape[2]
     seq_size = x.shape[1]
-    BLOCK_SIZE = 2048  # min(1024, triton.next_power_of_2(N))
+    BLOCK_SIZE = triton.next_power_of_2(N)
 
     # baseline.
     if os.getenv("INFERENCE_OPTIMIZE_TRITON") is None:
