@@ -232,9 +232,9 @@ python ppdiffusers/examples/inference/class_conditional_image_generation-dit.py 
 
 - 在 NVIDIA A100-SXM4-40GB 上测试的性能如下：
 
-| Paddle Inference| TensorRT-LLM |  Paddle |
-| --------------- | ------------ | ------- |
-|      219 ms     |    242 ms    | 1200 ms |
+| Paddle Inference| TensorRT-LLM |  Paddle动态图 |
+| --------------- | ------------ | ------------ |
+|      219 ms     |    242 ms    |    1200 ms   |
 
 
 
