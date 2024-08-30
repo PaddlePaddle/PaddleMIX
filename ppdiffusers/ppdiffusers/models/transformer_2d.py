@@ -225,13 +225,6 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
             self.simplified_facebookdit = SimplifiedFacebookDIT(
                 num_layers, inner_dim, num_attention_heads, attention_head_dim
             )
-            self.simplified_facebookdit = paddle.incubate.jit.inference(
-                self.simplified_facebookdit,
-                enable_new_ir=True,
-                cache_static_model=False,
-                exp_enable_use_cutlass=True,
-                delete_pass_lists=["add_norm_fuse_pass"],
-            )
 
         # 4. Define output layers
         self.out_channels = in_channels if out_channels is None else out_channels
@@ -498,7 +491,8 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
             hidden_states = hidden_states.reshape(
                 shape=(-1, height, width, self.patch_size, self.patch_size, self.out_channels)
             )
-            hidden_states = paddle.einsum("nhwpqc->nchpwq", hidden_states)
+            # hidden_states = paddle.einsum("nhwpqc->nchpwq", hidden_states)
+            hidden_states = hidden_states.transpose([0, 5, 1, 3, 2, 4])
             output = hidden_states.reshape(
                 shape=(-1, self.out_channels, height * self.patch_size, width * self.patch_size)
             )

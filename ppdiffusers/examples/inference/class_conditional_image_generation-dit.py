@@ -57,8 +57,26 @@ if args.inference_optimize_triton:
 dtype = paddle.float16
 pipe = DiTPipeline.from_pretrained("facebook/DiT-XL-2-256", paddle_dtype=dtype)
 pipe.scheduler = DDIMScheduler.from_config(pipe.scheduler.config)
-set_seed(42)
 
+
+if args.inference_optimize:
+    # optimize the transformer using paddle.incubate.jit.inference
+    pipe.transformer = paddle.incubate.jit.inference(
+        pipe.transformer,
+        enable_new_ir=True,
+        save_model_dir="./tmp/dit",
+        cache_static_model=True,
+        exp_enable_use_cutlass=True,
+        delete_pass_lists=["add_norm_fuse_pass"],
+    )
+    pipe.vae.decode = paddle.incubate.jit.inference(
+        pipe.vae.decode,
+        enable_new_ir=True,
+        save_model_dir="./tmp/dit/vae",
+        cache_static_model=True,
+        exp_enable_use_cutlass=True,
+    )
+set_seed(42)
 words = ["golden retriever"]  # class_ids [207]
 class_ids = pipe.get_label_ids(words)
 image = pipe(class_labels=class_ids, num_inference_steps=25).images[0]
@@ -66,20 +84,22 @@ image = pipe(class_labels=class_ids, num_inference_steps=25).images[0]
 if args.benchmark:
 
     # warmup
-    for i in range(5):
+    for i in range(3):
+        set_seed(42)
         image = pipe(class_labels=class_ids, num_inference_steps=25).images[0]
 
     repeat_times = 5
 
-    paddle.device.synchronize()
-    starttime = datetime.datetime.now()
     for i in range(repeat_times):
+        paddle.device.synchronize()
+        starttime = datetime.datetime.now()
+        set_seed(42)
         image = pipe(class_labels=class_ids, num_inference_steps=25).images[0]
-    paddle.device.synchronize()
-    endtime = datetime.datetime.now()
+        paddle.device.synchronize()
+        endtime = datetime.datetime.now()
 
-    duringtime = endtime - starttime
-    time_ms = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
-    print("The ave end to end time : ", time_ms / repeat_times, "ms")
+        duringtime = endtime - starttime
+        time_ms = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
+        print("DIT end to end time : ", time_ms, "ms")
 
 image.save("class_conditional_image_generation-dit-result.png")
