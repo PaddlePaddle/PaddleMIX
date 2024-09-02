@@ -148,9 +148,9 @@ if args.benchmark:
         duringtime = endtime - starttime
         duringtime = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
         sumtime += duringtime
-        print("The this end to end time : ", duringtime, "ms")
+        print("SD3 end to end time : ", duringtime, "ms")
 
-    print("The ave end to end time : ", sumtime / repeat_times, "ms")
+    print("SD3 ave end to end time : ", sumtime / repeat_times, "ms")
     cuda_mem_after_used = paddle.device.cuda.max_memory_allocated() / (1024**3)
     print(f"Max used CUDA memory : {cuda_mem_after_used:.3f} GiB")
 

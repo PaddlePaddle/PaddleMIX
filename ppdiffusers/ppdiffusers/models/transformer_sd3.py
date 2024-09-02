@@ -118,12 +118,13 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
             )
             # self.simplified_sd3 = paddle.incubate.jit.inference(
             #     self.simplified_sd3,
+            #     save_model_dir="./tmp/sd3",
             #     enable_new_ir=True,
             #     cache_static_model=False,
             #     exp_enable_use_cutlass=True,
             #     delete_pass_lists=["add_norm_fuse_pass"],
             # )
-        if self.inference_optimize_origin:
+        elif self.inference_optimize_origin:
             self.sd3_origin_transformer = paddle.incubate.jit.inference(
                 self.sd3_origin_transformer,
                 enable_new_ir=True,
@@ -294,7 +295,7 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
 
     @paddle.incubate.jit.inference(
         enable_new_ir=True,
-        cache_static_model=False,
+        cache_static_model=True,
         save_model_dir="./tmp/sd3",
         exp_enable_use_cutlass=True,
         delete_pass_lists=["add_norm_fuse_pass"],
