@@ -104,19 +104,6 @@ python paddlemix/tools/supervised_finetune.py paddlemix/config/llava/v1_5/lora_s
 python paddlemix/tools/supervised_finetune.py paddlemix/config/llava/v1_5/sft_argument.json
 ```
 
-## 6 NPU硬件训练
-PaddleMIX支持Llava在NPU硬件上训练，只需要在预训练或微调的json配置文件中增加`device`字段指定设备即可:
-```json
-{
-    ...
-    "model_name_or_path": "paddlemix/llava/llava-v1.5-7b",
-    "device": "npu",
-    "output_dir": "./checkpoints/llava_sft_ckpts",
-    ...
-}
-
-```
-
 ### 参考文献
 ```BibTeX
 @misc{liu2024llavanext,

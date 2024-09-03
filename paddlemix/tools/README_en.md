@@ -3,13 +3,13 @@ The PaddleMIX toolkit embodies the design philosophy of one-stop experience, ult
 
 [[中文文档](README.md)]
 
-##  🛠️ Supported Model List 🛠️
-| Model | Inference |Pretrain | SFT | LoRA | Deploy |
-| --- | --- | --- | --- | --- | --- |
-| [qwen_vl](../examples/qwen_vl/) | ✅  | ❌  | ✅  | ✅  |  ✅ |
-| [blip2](../examples/blip2/) | ✅  | ✅ | ✅  | ✅ | ✅  |
-| [visualglm](../examples/visualglm/) | ✅ | ❌ | ✅ | ✅ | ❌ |
-| [llava](../examples/llava/) | ✅  | ✅   | ✅  | ✅  | 🚧  |
+##  🛠️ 支持模型列表 🛠️
+| Model | Inference |Pretrain | SFT | LoRA | Deploy | NPU training |
+| --- | --- | --- | --- | --- | --- | --- |
+| [qwen_vl](../examples/qwen_vl/) | ✅  | ❌  | ✅  | ✅  |  ✅ | ❌ |
+| [blip2](../examples/blip2/) | ✅  | ✅ | ✅  | ✅ | ✅  | ❌ |
+| [visualglm](../examples/visualglm/) | ✅ | ❌ | ✅ | ✅ | ❌ | ❌ |
+| [llava](../examples/llava/) | ✅  | ✅   | ✅  | ✅  | 🚧  | ✅ |
 
 * ✅: Supported
 * 🚧: In Progress
@@ -69,6 +69,8 @@ For convenience in testing, we also provide a dataset in the chatml_dataset form
     },  #数据集配置
 
     “mixtoken” : #是否使用mixtoken策略，默认False,
+
+    "device": #训练硬件，gpu、npu
 
     "output_dir":  #模型存储路径
 
@@ -177,3 +179,17 @@ python paddlemix/tools/merge_lora_params.py \
 --lora_path output_qwen_vl\
 --merge_model_path qwen_vl_merge
 ```
+
+**NPU training**
+
+PaddleMIX supports training on NPU device，you cat add the `device` field in the configuration file to specify the device:
+```json
+{
+    ...
+    "model_name_or_path": "paddlemix/llava/llava-v1.5-7b",
+    "device": "npu",
+    "output_dir": "./checkpoints/llava_sft_ckpts",
+    ...
+}
+```
+For models that support NPU training, please refer to this [doc](../examples/README.md)

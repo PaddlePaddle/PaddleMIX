@@ -4,12 +4,12 @@ PaddleMIX工具箱秉承了飞桨套件一站式体验、性能极致、生态�
 [[English](README_en.md)]
 
 ##  🛠️ 支持模型列表 🛠️
-| Model | Inference |Pretrain | SFT | LoRA | Deploy |
-| --- | --- | --- | --- | --- | --- |
-| [qwen_vl](../examples/qwen_vl/) | ✅  | ❌  | ✅  | ✅  |  ✅ |
-| [blip2](../examples/blip2/) | ✅  | ✅ | ✅  | ✅ | ✅  |
-| [visualglm](../examples/visualglm/) | ✅ | ❌ | ✅ | ✅ | ❌ |
-| [llava](../examples/llava/) | ✅  | ✅   | ✅  | ✅  | 🚧  |
+| Model | Inference |Pretrain | SFT | LoRA | Deploy | NPU training |
+| --- | --- | --- | --- | --- | --- | --- |
+| [qwen_vl](../examples/qwen_vl/) | ✅  | ❌  | ✅  | ✅  |  ✅ | ❌ |
+| [blip2](../examples/blip2/) | ✅  | ✅ | ✅  | ✅ | ✅  | ❌ |
+| [visualglm](../examples/visualglm/) | ✅ | ❌ | ✅ | ✅ | ❌ | ❌ |
+| [llava](../examples/llava/) | ✅  | ✅   | ✅  | ✅  | 🚧  | ✅ |
 
 * ✅: Supported
 * 🚧: In Progress
@@ -73,6 +73,8 @@ PaddleMIX 精调支持多个主流跨模态大模型的SFT、LoRA等精调策略
     },  #数据集配置
 
     “mixtoken” : #是否使用mixtoken策略，默认False,
+
+    "device": #训练硬件，npu、gpu
 
     "output_dir":  #模型存储路径
 
@@ -188,3 +190,17 @@ python paddlemix/tools/merge_lora_params.py \
 --lora_path output_qwen_vl\
 --merge_model_path qwen_vl_merge
 ```
+
+**NPU硬件训练**
+
+PaddleMIX支持在NPU硬件上训练，只需要在config配置文件中增加`device`字段制定设备即可：
+```json
+{
+    ...
+    "model_name_or_path": "paddlemix/llava/llava-v1.5-7b",
+    "device": "npu",
+    "output_dir": "./checkpoints/llava_sft_ckpts",
+    ...
+}
+```
+目前支持NPU训练的模型可以参考此[文档](../examples/README.md)
