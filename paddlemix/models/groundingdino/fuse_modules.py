@@ -15,6 +15,7 @@
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
+from paddle.framework import in_dynamic_mode
 from paddle.nn.initializer import Constant
 from paddlenlp.utils.initializer import constant_, xavier_uniform_
 
@@ -183,7 +184,7 @@ class BiMultiHeadAttention(nn.Layer):
         src_len = key_states.shape[1]
         attn_weights = paddle.bmm(query_states, key_states.transpose([0, 2, 1]))  # bs*nhead, nimg, ntxt
 
-        if attn_weights.shape != [bsz * self.num_heads, tgt_len, src_len]:
+        if in_dynamic_mode() and attn_weights.shape != [bsz * self.num_heads, tgt_len, src_len]:
             raise ValueError(
                 f"Attention weights should be of size {(bsz * self.num_heads, tgt_len, src_len)}, but is {attn_weights.shape}"
             )
@@ -236,12 +237,12 @@ class BiMultiHeadAttention(nn.Layer):
         attn_output_v = paddle.bmm(attn_probs_v, value_l_states)
         attn_output_l = paddle.bmm(attn_probs_l, value_v_states)
 
-        if attn_output_v.shape != [bsz * self.num_heads, tgt_len, self.head_dim]:
+        if in_dynamic_mode() and attn_output_v.shape != [bsz * self.num_heads, tgt_len, self.head_dim]:
             raise ValueError(
                 f"`attn_output_v` should be of size {(bsz, self.num_heads, tgt_len, self.head_dim)}, but is {attn_output_v.shape}"
             )
 
-        if attn_output_l.shape != [bsz * self.num_heads, src_len, self.head_dim]:
+        if in_dynamic_mode() and attn_output_l.shape != [bsz * self.num_heads, src_len, self.head_dim]:
             raise ValueError(
                 f"`attn_output_l` should be of size {(bsz, self.num_heads, src_len, self.head_dim)}, but is {attn_output_l.shape}"
             )
