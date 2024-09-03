@@ -3,7 +3,7 @@ The PaddleMIX toolkit embodies the design philosophy of one-stop experience, ult
 
 [[中文文档](README.md)]
 
-##  🛠️ 支持模型列表 🛠️
+##  🛠️ Supported Model List 🛠️
 | Model | Inference |Pretrain | SFT | LoRA | Deploy | NPU training |
 | --- | --- | --- | --- | --- | --- | --- |
 | [qwen_vl](../examples/qwen_vl/) | ✅  | ❌  | ✅  | ✅  |  ✅ | ❌ |
