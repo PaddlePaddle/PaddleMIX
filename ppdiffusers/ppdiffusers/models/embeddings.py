@@ -52,12 +52,11 @@ def get_timestep_embedding(
     # scale embeddings
     emb = scale * emb
 
-    # concat sine and cosine embeddings
-    emb = paddle.concat([paddle.cos(emb), paddle.sin(emb)], axis=-1)
-
     # flip sine and cosine embeddings
-    # if flip_sin_to_cos:
-    #     emb = paddle.concat([emb[:, half_dim:], emb[:, :half_dim]], axis=-1)
+    if flip_sin_to_cos:
+        emb = paddle.concat([paddle.cos(emb), paddle.sin(emb)], axis=-1)
+    else:
+        emb = paddle.concat([paddle.sin(emb), paddle.cos(emb)], axis=-1)
 
     # zero pad
     if embedding_dim % 2 == 1:
