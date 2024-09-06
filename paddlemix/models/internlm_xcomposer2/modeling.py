@@ -143,11 +143,11 @@ class CLIPVisionTower(paddle.nn.Layer):
             image_features = []
             for image in images:
                 image_forward_out = self.vision_tower(image.unsqueeze(axis=0), output_hidden_states=True)
-                image_feature = self.feature_select(image_forward_out).to(image.dtype)
+                image_feature = self.feature_select(image_forward_out)
                 image_features.append(image_feature)
         else:
             image_forward_outs = self.vision_tower(images, output_hidden_states=True)
-            image_features = self.feature_select(image_forward_outs).to(images.dtype)
+            image_features = self.feature_select(image_forward_outs)
         return image_features
 
     @property
@@ -265,7 +265,7 @@ class InternLM2RMSNorm(paddle.nn.Layer):
 
     def forward(self, hidden_states):
         input_dtype = hidden_states.dtype
-        hidden_states = hidden_states.to("float32")
+        hidden_states = hidden_states
         variance = hidden_states.pow(y=2).mean(axis=-1, keepdim=True)
         hidden_states = hidden_states * paddle.rsqrt(x=variance + self.variance_epsilon)
         return self.weight * hidden_states.to(input_dtype)
@@ -331,7 +331,7 @@ class InternLM2DynamicNTKScalingRotaryEmbedding(InternLM2RotaryEmbedding):
             base = self.base * (
                 self.scaling_factor * seq_len / self.max_position_embeddings - (self.scaling_factor - 1)
             ) ** (self.dim / (self.dim - 2))
-            inv_freq = 1.0 / base ** (paddle.arange(start=0, end=self.dim, step=2).astype(dtype="float32") / self.dim)
+            inv_freq = 1.0 / base ** (paddle.arange(start=0, end=self.dim, step=2) / self.dim)
             self.register_buffer(name="inv_freq", tensor=inv_freq, persistable=False)
         t = paddle.arange(dtype=self.inv_freq.dtype, end=self.max_seq_len_cached)
         freqs = paddle.einsum("i,j->ij", t, self.inv_freq)
@@ -514,7 +514,7 @@ class InternLM2Attention(paddle.nn.Layer):
                     f"Attention mask should be of size {bsz, 1, q_len, kv_seq_len}, but is {attention_mask.shape}"
                 )
             attn_weights = attn_weights + attention_mask
-        attn_weights = paddle.nn.functional.softmax(x=attn_weights, axis=-1, dtype="float32").to(query_states.dtype)
+        attn_weights = paddle.nn.functional.softmax(x=attn_weights, axis=-1).to(query_states.dtype)
         attn_output = paddle.matmul(x=attn_weights, y=value_states)
         if attn_output.shape != [bsz, self.num_heads, q_len, self.head_dim]:
             raise ValueError(
@@ -1073,7 +1073,7 @@ class InternLMXComposer2ForCausalLM(InternLM2PretrainedModel):
         )
         hidden_states = outputs[0]
         logits = self.output(hidden_states)
-        logits = logits.astype(dtype="float32")
+        logits = logits
 
         loss = None
         if labels is not None:
