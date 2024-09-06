@@ -14,8 +14,8 @@
 """
 Processor class for Qwen2-VL.
 """
-import io
 from typing import Dict, List, Optional, Union
+import decord
 
 from paddlenlp.transformers.feature_extraction_utils import BatchFeature
 from paddlenlp.transformers.image_transforms import (
@@ -213,7 +213,7 @@ class Qwen2VLProcessor(ProcessorMixin):
             for i in range(len(text)):
                 while "<|video_pad|>" in text[i]:
                     text[i] = text[i].replace(
-                        "<|video_pad|>", "<|placeholder|>" * (video_grid_thw[index].prod() // merge_length), 1
+                        "<|video_pad|>", "<|placeholder|>" * int((video_grid_thw[index].prod() // merge_length)), 1
                     )
                     index += 1
                 text[i] = text[i].replace("<|placeholder|>", "<|video_pad|>")
@@ -707,6 +707,37 @@ def fetch_image(ele: dict[str, str | Image.Image], size_factor: int = IMAGE_FACT
     return image
 
 
+def read_video_decord(filename, pts_unit='sec', output_format='TCHW'):
+    # Use decord's VideoReader for video frames
+    vr = decord.VideoReader(filename)
+    video_frames = vr.get_batch(range(len(vr))).asnumpy()
+
+    # Adjust the shape based on the desired output format
+    if output_format == 'TCHW':
+        video_frames = video_frames.transpose(0, 3, 1, 2)  # From NHWC to NCHW
+
+    # Use decord's AudioReader for audio frames if audio exists
+    try:
+        ar = decord.AudioReader(filename)
+        audio_frames = ar.read_all().asnumpy()
+    except:  # Catch errors if no audio stream is found
+        audio_frames = None
+
+    # Convert NumPy arrays to Paddle tensors
+    video_tensor = paddle.to_tensor(video_frames, dtype=paddle.float32)
+    audio_tensor = paddle.to_tensor(audio_frames, dtype=paddle.float32) if audio_frames is not None else None
+
+    # Construct video info
+    fps = vr.get_avg_fps()
+    info = {
+        'duration': len(vr) / fps if fps else None,
+        'fps': fps,
+        'total_frames': len(vr)
+    }
+
+    return video_tensor, audio_tensor, info
+
+
 def fetch_video(ele: dict, size_factor: int = FRAME_FACTOR) -> paddle.Tensor | list[Image.Image]:
     if isinstance(ele["video"], str):
         # TODO: support http url
@@ -715,10 +746,10 @@ def fetch_video(ele: dict, size_factor: int = FRAME_FACTOR) -> paddle.Tensor | l
         if video.startswith("file://"):
             video = video[7:]
 
-        video, audio, info = io.read_video(  # TODO
+        video, audio, info = read_video_decord(  # TODO
             video,
-            start_pts=ele.get("video_start", 0.0),
-            end_pts=ele.get("video_end", None),
+            #start_pts=ele.get("video_start", 0.0),
+            #end_pts=ele.get("video_end", None),
             pts_unit="sec",
             output_format="TCHW",
         )
@@ -728,7 +759,7 @@ def fetch_video(ele: dict, size_factor: int = FRAME_FACTOR) -> paddle.Tensor | l
             nframes = round_by_factor(ele["nframes"], size_factor)
         else:
             fps = ele.get("fps", FPS)
-            nframes = video.shape[0] / info["video_fps"] * fps
+            nframes = video.shape[0] / info["fps"] * fps
             nframes = round_by_factor(nframes, size_factor)
             if "min_frames" in ele:
                 min_frames = ele["min_frames"]
@@ -752,7 +783,7 @@ def fetch_video(ele: dict, size_factor: int = FRAME_FACTOR) -> paddle.Tensor | l
         if not (size_factor <= nframes and nframes <= video.shape[0]):
             raise ValueError(f"nframes should in interval [{size_factor}, {video.shape[0]}], but got {nframes}.")
 
-        idx = paddle.linspace(0, video.shape[0] - 1, nframes).round().long()
+        idx = paddle.linspace(0, video.shape[0] - 1, nframes).round().cast('int64')
         height, width = video.shape[2:]
         video = video[idx]
 
@@ -774,12 +805,13 @@ def fetch_video(ele: dict, size_factor: int = FRAME_FACTOR) -> paddle.Tensor | l
                 min_pixels=min_pixels,
                 max_pixels=max_pixels,
             )
-        video = transforms.functional.resize(
-            video,
-            [resized_height, resized_width],
-            interpolation="bicubic",
-            antialias=True,
-        ).astype("float32")
+
+        bs = video.shape[0]
+        resized_video = []
+        for i in range(bs):
+            resized_img = transforms.functional.resize(video[i], [resized_height, resized_width], interpolation="bicubic").astype("float32")
+            resized_video.append(resized_img.unsqueeze(0))
+        video = paddle.concat(resized_video)
         return video
     else:
         assert isinstance(ele["video"], (list, tuple))

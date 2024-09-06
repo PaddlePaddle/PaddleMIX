@@ -33,25 +33,51 @@ processor = Qwen2VLProcessor(image_processor, tokenizer)
 # processor = Qwen2VLProcessor(image_processor, tokenizer, min_pixels=min_pixels, max_pixels=max_pixels)
 
 
+# # Messages containing a images list as a video and a text query
+# messages = [
+#     {
+#         "role": "user",
+#         "content": [
+#             {
+#                 "type": "video",
+#                 "video": [
+#                     "file:///path/to/frame1.jpg",
+#                     "file:///path/to/frame2.jpg",
+#                     "file:///path/to/frame3.jpg",
+#                     "file:///path/to/frame4.jpg",
+#                 ],
+#                 "fps": 1.0,
+#             },
+#             {"type": "text", "text": "Describe this video."},
+#         ],
+#     }
+# ]
+
+
+# Messages containing a video and a text query
 messages = [
     {
         "role": "user",
         "content": [
             {
-                "type": "image",
-                "image": "./image1.jpg",
+                "type": "video",
+                "video": "./video1.mp4",
+                "max_pixels": 360 * 420,
+                "fps": 1.0,
             },
-            {"type": "text", "text": "Describe this image."},
+            {"type": "text", "text": "Describe this video."},
         ],
     }
 ]
 
+
 # Preparation for inference
 image_inputs, video_inputs = process_vision_info(messages)
 
-question = "Describe this image."
-image_pad_token = '<|vision_start|><|image_pad|><|vision_end|>'
-text = f'<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n{image_pad_token}{question}<|im_end|>\n<|im_start|>assistant\n'
+question = "Describe this video."
+video_pad_token = '<|vision_start|><|video_pad|><|vision_end|>'
+text = f'<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n{video_pad_token}{question}<|im_end|>\n<|im_start|>assistant\n'
+
 
 inputs = processor(
     text=[text],
@@ -63,5 +89,6 @@ inputs = processor(
 
 # Inference: Generation of the output
 generated_ids = model.generate(**inputs, max_new_tokens=128)  # already trimmed in paddle
+print("generated_ids:\n", generated_ids)
 output_text = processor.batch_decode(generated_ids[0], skip_special_tokens=True, clean_up_tokenization_spaces=False)
 print("output_text:\n", output_text[0])

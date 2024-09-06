@@ -37,11 +37,9 @@ messages = [
     {
         "role": "user",
         "content": [
-            {
-                "type": "image",
-                "image": "./image1.jpg",
-            },
-            {"type": "text", "text": "Describe this image."},
+            {"type": "image", "image": "./image1.jpg"},
+            {"type": "image", "image": "./image2.jpg"},
+            {"type": "text", "text": "Identify the similarities between these images."},
         ],
     }
 ]
@@ -49,9 +47,9 @@ messages = [
 # Preparation for inference
 image_inputs, video_inputs = process_vision_info(messages)
 
-question = "Describe this image."
-image_pad_token = '<|vision_start|><|image_pad|><|vision_end|>'
-text = f'<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n{image_pad_token}{question}<|im_end|>\n<|im_start|>assistant\n'
+question = "Identify the similarities between these images."
+image_pad_tokens = '<|vision_start|><|image_pad|><|vision_end|>' * len(image_inputs)
+text = f'<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n{image_pad_tokens}{question}<|im_end|>\n<|im_start|>assistant\n'
 
 inputs = processor(
     text=[text],

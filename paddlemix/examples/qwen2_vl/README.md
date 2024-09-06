@@ -22,6 +22,15 @@
 python paddlemix/examples/qwen2_vl/single_image_infer.py
 ```
 
+### b. 多图预测
+```bash
+python paddlemix/examples/qwen2_vl/multi_image_infer.py
+```
+
+### c. 视频预测
+```bash
+python paddlemix/examples/qwen2_vl/video_infer.py
+```
 
 ## 参考文献
 ```BibTeX
