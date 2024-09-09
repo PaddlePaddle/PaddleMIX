@@ -15,15 +15,15 @@
 import argparse
 import os
 import time
-
-import torch
-
-torch.nn.functional.scaled_dot_product_attention_ = torch.nn.functional.scaled_dot_product_attention
-delattr(torch.nn.functional, "scaled_dot_product_attention")
+import warnings
 
 import cv2
 import numpy as np
-from diffusers import (
+import paddle
+from PIL import Image
+from tqdm.auto import trange
+
+from ppdiffusers import (
     DDIMScheduler,
     DDPMScheduler,
     DEISMultistepScheduler,
@@ -41,10 +41,7 @@ from diffusers import (
     StableDiffusionXLPipeline,
     UniPCMultistepScheduler,
 )
-from diffusers.models.attention_processor import AttnProcessor, AttnProcessor2_0
-from diffusers.utils import load_image
-from PIL import Image
-from tqdm.auto import trange
+from ppdiffusers.utils import load_image
 
 
 def get_canny_image(image, args):
@@ -156,24 +153,9 @@ def parse_arguments():
         ],
         help="The parse_prompt_type can be one of [raw, lpw]. ",
     )
-    parser.add_argument(
-        "--channels_last",
-        type=strtobool,
-        default=False,
-        help="Wheter to use channels_last",
-    )
     parser.add_argument("--use_fp16", type=strtobool, default=True, help="Wheter to use FP16 mode")
-    parser.add_argument("--tf32", type=strtobool, default=True, help="tf32")
-    parser.add_argument("--compile", type=strtobool, default=False, help="compile")
     parser.add_argument(
-        "--attention_type",
-        type=str,
-        default="sdp",
-        choices=[
-            "raw",
-            "sdp",
-        ],
-        help="attention_type.",
+        "--attention_type", type=str, default="raw", choices=["raw", "cutlass", "flash", "all"], help="attention_type."
     )
     parser.add_argument("--device_id", type=int, default=0, help="The selected gpu id. -1 means use cpu")
     parser.add_argument(
@@ -203,98 +185,56 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def attn_processors(self):
-    processors = {}
-
-    def fn_recursive_add_processors(name: str, module, processors):
-        if hasattr(module, "set_processor"):
-            processors[f"{name}.processor"] = module.processor
-
-        for sub_name, child in module.named_children():
-            fn_recursive_add_processors(f"{name}.{sub_name}", child, processors)
-
-        return processors
-
-    for name, module in self.named_children():
-        fn_recursive_add_processors(name, module, processors)
-
-    return processors
-
-
-def set_attn_processor(self, processor):
-    count = len(attn_processors(self).keys())
-
-    if isinstance(processor, dict) and len(processor) != count:
-        raise ValueError(
-            f"A dict of processors was passed, but the number of processors {len(processor)} does not match the"
-            f" number of attention layers: {count}. Please make sure to pass {count} processor classes."
-        )
-
-    def fn_recursive_attn_processor(name: str, module, processor):
-        if hasattr(module, "set_processor"):
-            if not isinstance(processor, dict):
-                module.set_processor(processor)
-            else:
-                module.set_processor(processor.pop(f"{name}.processor"))
-
-        for sub_name, child in module.named_children():
-            fn_recursive_attn_processor(f"{name}.{sub_name}", child, processor)
-
-    for name, module in self.named_children():
-        fn_recursive_attn_processor(name, module, processor)
-
-
 def main(args):
-    if args.tf32:
-        torch.backends.cuda.matmul.allow_tf32 = True
-    else:
-        torch.backends.cuda.matmul.allow_tf32 = False
 
     seed = 1024
-    torch_dtype = torch.float16 if args.use_fp16 else torch.float32
+    paddle_dtype = paddle.float16 if args.use_fp16 else paddle.float32
     pipe = StableDiffusionXLPipeline.from_pretrained(
         args.pretrained_model_name_or_path,
         safety_checker=None,
         feature_extractor=None,
         requires_safety_checker=False,
-        torch_dtype=torch_dtype,
+        paddle_dtype=paddle_dtype,
     )
     scheduler = change_scheduler(pipe, args.scheduler)
     pipe.scheduler = scheduler
-    if args.device_id >= 0:
-        pipe.to(f"cuda:{args.device_id}")
 
     if args.attention_type == "all":
-        args.attention_type = ["raw", "sdp"]
+        args.attention_type = ["raw", "cutlass", "flash"]
     else:
         args.attention_type = [args.attention_type]
 
     for attention_type in args.attention_type:
-        attn_prrocessor_cls = AttnProcessor if attention_type == "raw" else AttnProcessor2_0
-        if attention_type == "sdp":
-            torch.nn.functional.scaled_dot_product_attention = torch.nn.functional.scaled_dot_product_attention_
-        set_attn_processor(pipe.unet, attn_prrocessor_cls())
-        set_attn_processor(pipe.vae, attn_prrocessor_cls())
+        if attention_type == "raw":
+            pipe.disable_xformers_memory_efficient_attention()
+        else:
+            try:
+                pipe.enable_xformers_memory_efficient_attention(attention_type)
+            except Exception as e:
+                if attention_type == "flash":
+                    warnings.warn(
+                        "Attention type flash is not supported on your GPU! We need to use 3060、3070、3080、3090、4060、4070、4080、4090、A30、A100 etc."
+                    )
+                    continue
+                else:
+                    raise ValueError(e)
 
-        if args.channels_last:
-            pipe.unet.to(memory_format=torch.channels_last)
-
-        if args.compile:
-            print("Run torch compile")
-            pipe.unet = torch.compile(pipe.unet, mode="reduce-overhead", fullgraph=True)
+        if not args.use_fp16 and attention_type == "flash":
+            print("Flash attention is not supported dtype=float32! Please use float16 or bfloat16. We will skip this!")
+            continue
 
         width = args.width
         height = args.height
         pipe.set_progress_bar_config(disable=False)
 
-        folder = f"torch_attn_{attention_type}_fp16" if args.use_fp16 else f"torch_attn_{attention_type}_fp32"
+        folder = f"paddle_attn_{attention_type}_fp16" if args.use_fp16 else f"paddle_attn_{attention_type}_fp32"
         os.makedirs(folder, exist_ok=True)
         if args.task_name in ["text2img", "all"]:
             init_image = load_image(
                 "https://paddlenlp.bj.bcebos.com/models/community/junnyu/develop/control_bird_canny_demo.png"
             )
             # text2img
-            prompt = "bird"
+            prompt = "a photo of an astronaut riding a horse on mars"
             time_costs = []
             # warmup
             pipe(
@@ -306,7 +246,7 @@ def main(args):
             print("==> Test text2img performance.")
             for step in trange(args.benchmark_steps):
                 start = time.time()
-                torch.cuda.manual_seed(seed)
+                paddle.seed(seed)
                 images = pipe(
                     prompt,
                     num_inference_steps=args.inference_steps,
@@ -344,7 +284,7 @@ def main(args):
             print("==> Test img2img performance.")
             for step in trange(args.benchmark_steps):
                 start = time.time()
-                torch.cuda.manual_seed(seed)
+                paddle.seed(seed)
                 images = pipe_img2img(
                     prompt,
                     image=init_image,
@@ -389,7 +329,7 @@ def main(args):
             print(f"==> Test {task_name} performance.")
             for step in trange(args.benchmark_steps):
                 start = time.time()
-                torch.cuda.manual_seed(seed)
+                paddle.seed(seed)
                 images = pipe_inpaint(
                     prompt,
                     image=init_image,

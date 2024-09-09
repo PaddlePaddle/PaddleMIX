@@ -123,6 +123,24 @@ def parse_arguments():
         help="Path to the `diffusers` checkpoint to convert (either a local directory or on the bos).",
     )
     parser.add_argument(
+        "--ipadapter_pretrained_model_name_or_path",
+        type=str,
+        default="h94/IP-Adapter",
+        help="Path to the `ppdiffusers`'s ip-adapter checkpoint to convert (either a local directory or on the bos).Example: h94/IP-Adapter",
+    )
+    parser.add_argument(
+        "--ipadapter_model_subfolder",
+        type=str,
+        default="sdxl_models",
+        help="Path to the `ppdiffusers`'s ip-adapter checkpoint to convert (either a local directory or on the bos).Example: sdxl_models",
+    )
+    parser.add_argument(
+        "--ipadapter_weight_name",
+        type=str,
+        default="ip-adapter_sdxl.safetensors",
+        help="Name of the weight to convert.Example: ip-adapter_sdxl.safetensors",
+    )
+    parser.add_argument(
         "--inference_steps",
         type=int,
         default=50,
@@ -259,6 +277,11 @@ def main(args):
         requires_safety_checker=False,
         torch_dtype=torch_dtype,
     )
+    pipe.load_ip_adapter(
+        args.ipadapter_pretrained_model_name_or_path,
+        subfolder=args.ipadapter_model_subfolder,
+        weight_name=args.ipadapter_weight_name,
+    )
     scheduler = change_scheduler(pipe, args.scheduler)
     pipe.scheduler = scheduler
     if args.device_id >= 0:
@@ -288,13 +311,15 @@ def main(args):
         pipe.set_progress_bar_config(disable=False)
 
         folder = f"torch_attn_{attention_type}_fp16" if args.use_fp16 else f"torch_attn_{attention_type}_fp32"
+        img_url = "https://paddlenlp.bj.bcebos.com/models/community/examples/images/load_neg_embed.png"
+        ip_image = load_image(img_url)
         os.makedirs(folder, exist_ok=True)
         if args.task_name in ["text2img", "all"]:
             init_image = load_image(
                 "https://paddlenlp.bj.bcebos.com/models/community/junnyu/develop/control_bird_canny_demo.png"
             )
             # text2img
-            prompt = "bird"
+            prompt = "a photo of an astronaut riding a horse on mars"
             time_costs = []
             # warmup
             pipe(
@@ -302,6 +327,7 @@ def main(args):
                 num_inference_steps=10,
                 height=height,
                 width=width,
+                ip_adapter_image=ip_image,
             )
             print("==> Test text2img performance.")
             for step in trange(args.benchmark_steps):
@@ -312,6 +338,7 @@ def main(args):
                     num_inference_steps=args.inference_steps,
                     height=height,
                     width=width,
+                    ip_adapter_image=ip_image,
                 ).images
                 latency = time.time() - start
                 time_costs += [latency]
@@ -340,6 +367,7 @@ def main(args):
                 height=height,
                 width=width,
                 strength=args.strength,
+                ip_adapter_image=ip_image,
             )
             print("==> Test img2img performance.")
             for step in trange(args.benchmark_steps):
@@ -352,6 +380,7 @@ def main(args):
                     height=height,
                     width=width,
                     strength=args.strength,
+                    ip_adapter_image=ip_image,
                 ).images
                 latency = time.time() - start
                 time_costs += [latency]
@@ -385,6 +414,7 @@ def main(args):
                 height=height,
                 width=width,
                 strength=args.strength,
+                ip_adapter_image=ip_image,
             )
             print(f"==> Test {task_name} performance.")
             for step in trange(args.benchmark_steps):
@@ -398,6 +428,7 @@ def main(args):
                     height=height,
                     width=width,
                     strength=args.strength,
+                    ip_adapter_image=ip_image,
                 ).images
                 latency = time.time() - start
                 time_costs += [latency]

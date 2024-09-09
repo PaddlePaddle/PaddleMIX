@@ -36,9 +36,9 @@ from diffusers import (
     KDPM2DiscreteScheduler,
     LMSDiscreteScheduler,
     PNDMScheduler,
-    StableDiffusionXLImg2ImgPipeline,
-    StableDiffusionXLInpaintPipeline,
-    StableDiffusionXLPipeline,
+    StableDiffusionImg2ImgPipeline,
+    StableDiffusionInpaintPipeline,
+    StableDiffusionPipeline,
     UniPCMultistepScheduler,
 )
 from diffusers.models.attention_processor import AttnProcessor, AttnProcessor2_0
@@ -119,7 +119,7 @@ def parse_arguments():
     parser.add_argument(
         "--pretrained_model_name_or_path",
         type=str,
-        default="stabilityai/stable-diffusion-xl-base-1.0",
+        default="runwayml/stable-diffusion-v1-5",
         help="Path to the `diffusers` checkpoint to convert (either a local directory or on the bos).",
     )
     parser.add_argument(
@@ -252,7 +252,7 @@ def main(args):
 
     seed = 1024
     torch_dtype = torch.float16 if args.use_fp16 else torch.float32
-    pipe = StableDiffusionXLPipeline.from_pretrained(
+    pipe = StableDiffusionPipeline.from_pretrained(
         args.pretrained_model_name_or_path,
         safety_checker=None,
         feature_extractor=None,
@@ -326,7 +326,7 @@ def main(args):
             images[0].save(f"{folder}/text2img.png")
 
         if args.task_name in ["img2img", "all"]:
-            pipe_img2img = StableDiffusionXLImg2ImgPipeline(**pipe.components)
+            pipe_img2img = StableDiffusionImg2ImgPipeline(**pipe.components)
             pipe_img2img.set_progress_bar_config(disable=False)
             img_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/sketch-mountains-input.png"
             init_image = load_image(img_url).resize((width, height))
@@ -366,7 +366,7 @@ def main(args):
             images[0].save(f"{folder}/img2img.png")
 
         if args.task_name in ["inpaint_legacy", "all"]:
-            pipe_inpaint = StableDiffusionXLInpaintPipeline(**pipe.components)
+            pipe_inpaint = StableDiffusionInpaintPipeline(**pipe.components)
             pipe_inpaint.set_progress_bar_config(disable=False)
             img_url = (
                 "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations.png"

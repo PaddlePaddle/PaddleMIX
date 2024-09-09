@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,9 +14,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-export FLAGS_use_cuda_managed_memory=False
+export CUDA_VISIBLE_DEVICES=5 # 填写: GPU卡号
+LOCAL_PATH=/root/lxl/project/paddlemx/20240723/PaddleMIX/ppdiffusers/deploy # 填写: deploy文件夹所在的本地路径
 
-export USE_PPXFORMERS=False
+find $LOCAL_PATH -type d -name 'scripts' | while read script_dir; do
+    parent_dir=$(dirname "$script_dir")
 
-# python infer.py --model_dir static_model/stable-video-diffusion-img2vid-xt --scheduler "ddim" --backend paddle --width 576 --height 576 --device gpu --task_name img2video
-python infer.py --model_dir static_model/stable-video-diffusion-img2vid-xt --scheduler "ddim" --backend paddle --width 1024 --height 576 --device gpu --task_name img2video --tune True --inference_steps 1
+    script_path="$script_dir/benchmark_paddle.sh"
+    
+    if [ -f "$script_path" ]; then
+        echo "Executing $script_path in directory $parent_dir..."
+        cd "$parent_dir"
+        bash "$script_path"
+        cd - > /dev/null
+    else
+        echo "Script not found: $script_path"
+    fi
+done
