@@ -12,5 +12,5 @@ librosa
 h5py
 jsonschema>=4.19.0
 referencing>=0.32.1
-decord==0.6.0
+decord>=0.6.0
 paddlenlp==3.0.0b0
