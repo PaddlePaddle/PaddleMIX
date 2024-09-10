@@ -82,16 +82,7 @@ class AdaLayerNormZero(nn.Layer):
             emb = self.emb(timestep, class_labels, hidden_dtype=hidden_dtype)
         emb = self.linear(self.silu(emb))
         shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = emb.chunk(6, axis=1)
-
-        if os.getenv("INFERENCE_OPTIMIZE_TRITON"):
-            import paddlemix
-
-            x = paddlemix.triton_ops.adaptive_layer_norm(
-                x, scale_msa, shift_msa, self.norm.weight, self.norm.bias, epsilon=1e-06
-            )
-        else:
-            x = self.norm(x) * (1 + scale_msa[:, None]) + shift_msa[:, None]
-
+        x = self.norm(x) * (1 + scale_msa[:, None]) + shift_msa[:, None]
         return x, gate_msa, shift_mlp, scale_mlp, gate_mlp
 
 
