@@ -947,6 +947,7 @@ class CLIPVisionTransformer(nn.Layer):
         super().__init__()
         self.config = config
         embed_dim = config.hidden_size
+        self.embed_dim = embed_dim
         self.input_resolution = config.image_size
         self.class_embedding = self.create_parameter(
             (embed_dim,),
@@ -1016,17 +1017,18 @@ class CLIPVisionTransformer(nn.Layer):
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
         target_dtype = self.conv1.weight.dtype
         pixel_values = self.conv1(pixel_values.cast(target_dtype))
-
+      
         # for to_static
-        pixel_values_shape = paddle.to_tensor(pixel_values.shape, dtype="int32")
+        pixel_values_shape = paddle.shape(pixel_values)
 
         pixel_values = pixel_values.reshape(
             (pixel_values_shape[0], pixel_values_shape[1], pixel_values_shape[2] * pixel_values_shape[3])
         )
         pixel_values = pixel_values.transpose((0, 2, 1))
         embedding_output = paddle.concat(
-            [self.class_embedding.unsqueeze([0, 1]).expand([pixel_values.shape[0], -1, -1]), pixel_values], axis=1
+            [self.class_embedding.unsqueeze([0, 1]).expand([pixel_values_shape[0], -1, -1]), pixel_values], axis=1
         )
+        
         hidden_states = embedding_output + self.positional_embedding.weight
         hidden_states = self.ln_pre(hidden_states)
 
