@@ -53,6 +53,8 @@ def parse_args():
     parser.add_argument("--height", type=int, default=512, help="Height of the generated image.")
     parser.add_argument("--width", type=int, default=512, help="Width of the generated image.")
     parser.add_argument("--num-inference-steps", type=int, default=50, help="Number of inference steps.")
+    parser.add_argument("--dtype", type=str, default="float32", help="Inference data types.")
+
     return parser.parse_args()
 
 
@@ -64,13 +66,14 @@ if args.inference_optimize_triton:
     os.environ["INFERENCE_OPTIMIZE_TRITON"] = "True"
 if args.inference_optimize_origin:
     os.environ["INFERENCE_OPTIMIZE_ORIGIN"] = "True"
-
+if args.dtype == "float32":
+    inference_dtype = paddle.float32
+elif args.dtype == "float16":
+    inference_dtype = paddle.float16
 
 pipe = StableDiffusion3Pipeline.from_pretrained(
     "stabilityai/stable-diffusion-3-medium-diffusers",
-    paddle_dtype=paddle.float16,
-    # from_hf_hub=True,
-    # from_diffusers=True,
+    paddle_dtype=inference_dtype,
 )
 
 pipe.text_encoder = paddle.incubate.jit.inference(
