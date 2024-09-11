@@ -119,7 +119,7 @@ pip install -e .
             <li><a href="paddlemix/examples/clip">CLIP</a></li>
             <li><a href="paddlemix/examples/evaclip">EVA-CLIP</a></li>
             <li><a href="paddlemix/examples/llava">LLaVA</a></li>
-            <li><a href="paddlemix/examples/llava">LLaVA 1.5</a></li>
+            <li><a href="paddlemix/examples/llava">LLaVA-1.5</a></li>
             <li><a href="paddlemix/examples/llava">LLaVA-NeXT</a></li>
             <li><a href="paddlemix/examples/qwen_vl">Qwen-VL</a></li>
             <li><a href="paddlemix/examples/qwen2_vl">Qwen2-VL</a></li>
