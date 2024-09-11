@@ -100,7 +100,7 @@ pip install -e .
   <tbody>
     <tr align="center" valign="center">
       <td>
-        <b>Multi-modal Pre-training</b>
+        <b>Multi-modal Large Language Models</b>
       </td>
       <td>
         <b>Diffusion-based Models</b>
