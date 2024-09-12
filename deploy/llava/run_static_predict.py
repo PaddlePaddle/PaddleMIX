@@ -91,8 +91,7 @@ class Predictor(object):
             concat_images = paddle.concat(x=[image for image in images], axis=0)
 
             image_features = self.first_predictor.run(concat_images)[0]
-            print(image_features)
-            exit()
+      
             split_sizes = [image.shape[0] for image in images]
             image_features = paddle.split(image_features, split_sizes, axis=0)
             mm_patch_merge_type = getattr(self.config, "mm_patch_merge_type", "flat")
