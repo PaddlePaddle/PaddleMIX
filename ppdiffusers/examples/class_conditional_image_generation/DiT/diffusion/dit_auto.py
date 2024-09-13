@@ -19,6 +19,7 @@ from typing import Optional
 
 import numpy as np
 import paddle
+import paddle.distributed as dist
 import paddle.nn as nn
 import paddle.nn.functional as F
 import paddle.nn.initializer as initializer
@@ -28,7 +29,9 @@ from paddle.nn.functional.flash_attention import flash_attention
 
 from ppdiffusers.configuration_utils import ConfigMixin
 from ppdiffusers.models.modeling_utils import ModelMixin
-from .diffusion_utils import get_mesh
+
+from .diffusion_utils import get_layer_ipp, get_mesh
+
 
 def _ntuple(n):
     def parse(x):
@@ -197,7 +200,7 @@ class ParallelTimestepEmbedder(nn.Layer):
         """
         half = dim // 2
         freqs = paddle.exp(x=-math.log(max_period) * paddle.arange(start=0, end=half, dtype="float32") / half)
-        args = t[:, (None)].astype(dtype="float32") * freqs[None]
+        args = t[:, (None)].astype(dtype="float32") * freqs
         embedding = paddle.concat(x=[paddle.cos(x=args), paddle.sin(x=args)], axis=-1)
         if dim % 2:
             embedding = paddle.concat(x=[embedding, paddle.zeros_like(x=embedding[:, :1])], axis=-1)
@@ -252,7 +255,9 @@ class DiTBlock(nn.Layer):
     A DiT block with adaptive layer norm zero (adaLN-Zero) conditioning.
     """
 
-    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, fused_attn=False, pp_stage=None, index=None, **block_kwargs):
+    def __init__(
+        self, hidden_size, num_heads, mlp_ratio=4.0, fused_attn=False, pp_stage=None, index=None, **block_kwargs
+    ):
         super().__init__()
         self.pp_stage = pp_stage
         self.index = index
@@ -373,8 +378,16 @@ class DiT_AUTO(ModelMixin, ConfigMixin):
         # )
         self.blocks = nn.LayerList()
         for i in range(num_layers):
+            pp_stage_id, _ = get_layer_ipp(i, num_layers)
             self.blocks.append(
-                DiTBlock(hidden_size, num_attention_heads, mlp_ratio=mlp_ratio, fused_attn=self.fused_attn, pp_stage=get_layer_ipp(i, config.num_layers), index=i)
+                DiTBlock(
+                    hidden_size,
+                    num_attention_heads,
+                    mlp_ratio=mlp_ratio,
+                    fused_attn=self.fused_attn,
+                    pp_stage=pp_stage_id,
+                    index=i,
+                )
             )
 
         # 3. Define output layers

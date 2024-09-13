@@ -23,7 +23,6 @@ import math
 
 import numpy as np
 import paddle
-import paddle.distributed as dist
 
 from .diffusion_utils import discretized_gaussian_log_likelihood, normal_kl
 
@@ -437,6 +436,7 @@ def _extract_into_tensor(arr, timesteps, broadcast_shape):
         res = res[..., None]
     return res + paddle.zeros(broadcast_shape)
 
+
 def _extract_into_shardtensor(arr, timesteps, x):
     """
     Extract values from a 1-D numpy array for a batch of indices and shard as x.
@@ -450,5 +450,4 @@ def _extract_into_shardtensor(arr, timesteps, x):
     broadcast_shape = x.shape
     while len(res.shape) < len(broadcast_shape):
         res = res[..., None]
-    # res = dist.reshard(res, x.process_mesh, x.placements)  # may not be needed? outside multiply will reshard?
     return res

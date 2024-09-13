@@ -429,7 +429,7 @@ if is_ppxformers_available():
             # (2) FLAG_USE_CUTLASS_V2 in yes, y, true, t, 1, use cutlass v2
             use_cutlass_v2 = attn_mask is not None or str2bool(os.getenv("FLAG_USE_CUTLASS_V2", "no"))
             if not use_cutlass_v2:
-                with requires_grad_and_without_random(query, key, value):
+                with requires_grad_and_without_random(query, key, value, stop_gradient=False):
                     output = memory_efficient_attention(
                         query,
                         key,
@@ -463,7 +463,7 @@ if is_ppxformers_available():
                     pre_cache_length=0,
                 ).transpose([0, 2, 1, 3])
         elif attention_op == "flash":
-            with requires_grad_and_without_random(query, key, value):
+            with requires_grad_and_without_random(query, key, value, stop_gradient=False):
                 output = paddle.nn.functional.scaled_dot_product_attention(
                     query,
                     key,

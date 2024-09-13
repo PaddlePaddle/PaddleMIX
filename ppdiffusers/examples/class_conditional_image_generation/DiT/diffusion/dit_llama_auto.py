@@ -12,15 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import math
-from functools import partial
 from typing import Optional
 
 import paddle
+import paddle.distributed as dist
 import paddle.nn as nn
 import paddle.nn.functional as F
 import paddle.nn.initializer as initializer
-import paddle.distributed as dist
 from paddle.distributed import fleet
 from paddle.nn.functional.flash_attention import flash_attention
 from paddle.utils import try_import
@@ -32,29 +30,11 @@ from ppdiffusers.models.modeling_utils import ModelMixin
 from .dit_auto import (
     ParallelLabelEmbedder,
     ParallelTimestepEmbedder,
-    modulate,
+    get_layer_ipp,
     get_mesh,
+    modulate,
 )
 
-def get_layer_ipp(layer_index, num_layers):
-    """
-    Retrieve the position of the specified layer in the pipeline parallel network, and return None if it is not an pipeline parallel network.
-    
-    Args:
-        layer_index (int): The layer index that needs to be queried is counted from 0.
-        num_layers (int): The total number of transformer layers in the pipeline parallel network.
-    
-    Returns:
-        Optional[int, bool]: If it is an pipeline parallel network, return the position of the specified layer and whether the input needs to be resharded; Otherwise, return None and False.
-    """
-    mesh = fleet.auto.get_mesh()
-    if "pp" not in mesh.dim_names:
-        return None, False
-    else:
-        pp_degree = mesh.get_dim_size("pp")
-        layer_per_stage = math.ceil(num_layers / pp_degree)
-        input_need_reshard = layer_index % layer_per_stage == 0
-        return layer_index // layer_per_stage, input_need_reshard
 
 def rms_norm_fused(x_in, w, eps):
     fused_ln = try_import("fused_ln")
@@ -72,6 +52,16 @@ def TypePromote(x, y):
         "INT64FP16": "float64",
         "INT64FP32": "float64",
         "INT64FP64": "float64",
+        # for pir
+        "INT16FLOAT16": "float16",
+        "INT16FLOAT32": "float32",
+        "INT16FLOAT64": "float64",
+        "INT32FLOAT16": "float32",
+        "INT32FLOAT32": "float32",
+        "INT32FLOAT64": "float64",
+        "INT64FLOAT16": "float64",
+        "INT64FLOAT32": "float64",
+        "INT64FLOAT64": "float64",
     }
     if x.dtype.name + y.dtype.name in TYPE_PROMOTE_DICT:
         promote_type = TYPE_PROMOTE_DICT[x.dtype.name + y.dtype.name]
@@ -95,7 +85,7 @@ class RMSNorm(nn.Layer):
     `epsilon` is added to the mean-square, then the root of the sum is taken.
     """
 
-    def __init__(self, normalized_shape, epsilon=1e-5):
+    def __init__(self, normalized_shape, epsilon=1e-5, use_fused_rms_norm=True):
         super().__init__()
         if isinstance(normalized_shape, int):
             normalized_shape = [normalized_shape]
@@ -106,10 +96,20 @@ class RMSNorm(nn.Layer):
             default_initializer=nn.initializer.Constant(1.0),
         )
         self.epsilon = epsilon
+        self.use_fused_rms_norm = use_fused_rms_norm
 
     def forward(self, hidden_states):
-        out = rms_norm_fused(hidden_states, self.weight, self.epsilon)
-        return out
+        if self.use_fused_rms_norm:
+            return rms_norm_fused(hidden_states, self.weight, self.epsilon)
+
+        with paddle.amp.auto_cast(False):
+            variance = hidden_states.astype("float32").pow(2).mean(-1, keepdim=True)
+            hidden_states = paddle.rsqrt(variance + self.epsilon) * hidden_states
+
+        if self.weight.dtype in [paddle.float16, paddle.bfloat16]:
+            hidden_states = paddle.cast(hidden_states, self.weight.dtype)
+
+        return hidden_states * self.weight
 
 
 class Attention(nn.Layer):
@@ -336,6 +336,7 @@ class TransformerBlock(nn.Layer):
         ffn_dim_multiplier: float,
         norm_eps: float,
         qk_norm: bool,
+        use_fused_rms_norm: bool,
         fused_attn: bool,
         pp_stage=None,
         index=None,
@@ -379,8 +380,8 @@ class TransformerBlock(nn.Layer):
             dim=dim, hidden_dim=mlp_hidden_dim, multiple_of=multiple_of, ffn_dim_multiplier=ffn_dim_multiplier
         )
         self.layer_id = layer_id
-        self.attention_norm = RMSNorm(dim, epsilon=norm_eps)
-        self.ffn_norm = RMSNorm(dim, epsilon=norm_eps)
+        self.attention_norm = RMSNorm(dim, epsilon=norm_eps, use_fused_rms_norm=use_fused_rms_norm)
+        self.ffn_norm = RMSNorm(dim, epsilon=norm_eps, use_fused_rms_norm=use_fused_rms_norm)
         self.pp_stage = pp_stage
         self.index = index
 
@@ -412,9 +413,7 @@ class TransformerBlock(nn.Layer):
                 get_mesh(self.pp_stage),
                 [dist.Shard(0), dist.Replicate()],
             )
-            shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = adaln_input.chunk(
-                6, axis=1
-            )
+            shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = adaln_input.chunk(6, axis=1)
             h = x + gate_msa.unsqueeze(1) * self.attention(
                 modulate(self.attention_norm(x), shift_msa, scale_msa), freqs_cis
             )
@@ -477,6 +476,7 @@ class DiT_Llama_AUTO(ModelMixin, ConfigMixin, ConversionMixin):
         num_classes: int = 1000,
         learn_sigma: bool = True,
         qk_norm: bool = True,
+        use_fused_rms_norm=True,
     ):
         super().__init__()
         self.sample_size = sample_size
@@ -495,6 +495,7 @@ class DiT_Llama_AUTO(ModelMixin, ConfigMixin, ConversionMixin):
         self.num_classes = num_classes
         self.learn_sigma = learn_sigma
         self.qk_norm = qk_norm
+        self.use_fused_rms_norm = use_fused_rms_norm
 
         self.gradient_checkpointing = False
         self.fused_attn = True
@@ -519,6 +520,7 @@ class DiT_Llama_AUTO(ModelMixin, ConfigMixin, ConversionMixin):
                     ffn_dim_multiplier=ffn_dim_multiplier,
                     norm_eps=norm_eps,
                     qk_norm=qk_norm,
+                    use_fused_rms_norm=use_fused_rms_norm,
                     fused_attn=self.fused_attn,
                     pp_stage=pp_stage_id,
                     index=i,
@@ -534,9 +536,7 @@ class DiT_Llama_AUTO(ModelMixin, ConfigMixin, ConversionMixin):
     def initialize_weights(self):
         # Initialize transformer layers: need to review, may be move to train_image_generation_trainer_auto.py
         def _basic_init(module):
-            if isinstance(
-                module, (nn.Linear)
-            ):
+            if isinstance(module, (nn.Linear)):
                 initializer.XavierUniform()(module.weight)
                 if module.bias is not None:
                     initializer.Constant(value=0)(module.bias)
@@ -680,9 +680,7 @@ class DiT_Llama_AUTO(ModelMixin, ConfigMixin, ConversionMixin):
                 )
             pre_pp_stage = layer.pp_stage
             if self.gradient_checkpointing:
-                x = paddle.distributed.fleet.utils.recompute(
-                    layer, x, freqs_cis, adaln_input, use_reentrant=False
-                )
+                x = fleet.utils.recompute(layer, x, freqs_cis, adaln_input, use_reentrant=False)
             else:
                 x = layer(x, freqs_cis, adaln_input)
 

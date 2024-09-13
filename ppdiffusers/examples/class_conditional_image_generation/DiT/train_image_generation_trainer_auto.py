@@ -21,16 +21,17 @@ import numpy as np
 import paddle
 import paddle.distributed as dist
 from diffusion import (
+    AutoTrainerArguments,
     DataArguments,
     DiTDiffusionModelAuto,
     LatentDiffusionAutoTrainer,
     ModelArguments,
-    AutoTrainerArguments,
     shard_w,
 )
+from paddlenlp.data import Stack
 from paddlenlp.trainer import PdArgumentParser, get_last_checkpoint, set_seed
 from paddlenlp.utils.log import logger
-from paddlenlp.data import Stack
+
 # from transport import SiTDiffusionModel
 
 MODEL_CLASSES = {
@@ -39,6 +40,7 @@ MODEL_CLASSES = {
     # to do SiT support auto parallel
     # "SiT": SiTDiffusionModelAuto,
 }
+
 
 class FeatureDataset(paddle.io.Dataset):
     def __init__(self, features_dir, labels_dir):
@@ -61,25 +63,27 @@ class FeatureDataset(paddle.io.Dataset):
         labels = np.load(os.path.join(self.labels_dir, label_file))
         return {"latents": features.squeeze(0), "label_id": labels.squeeze(0)}
 
+
 def collate_data(data, stack_fn=Stack()):
     latents = stack_fn([x["latents"] for x in data])
     label_id = stack_fn([x["label_id"] for x in data])
 
     return {
         "latents": [latents, label_id],
-        "label_id": label_id, # for dynamic to static, must be 2 fields
+        "label_id": label_id,  # for dynamic to static, must be 2 fields
     }
+
 
 def shard_model(model):
     """
     shard the model and initialize each parameter
-    
+
     Args:
         model (paddle.nn.Layer): Neural network model of PaddlePaddle
-    
+
     Returns:
         None
-    
+
     Raises:
         None
     """
@@ -89,7 +93,10 @@ def shard_model(model):
             if hasattr(layer, "pp_stage"):
                 pp_stage = layer.pp_stage
 
-            if any(n in name for n in ["attention.wq", "attention.wk", "attention.wv", "feed_forward.w1", "feed_forward.w3"]):
+            if any(
+                n in name
+                for n in ["attention.wq", "attention.wk", "attention.wv", "feed_forward.w1", "feed_forward.w3"]
+            ):
                 layer.weight = shard_w(layer.weight, pp_stage, [dist.Replicate(), dist.Shard(1)])
 
             if any(n in name for n in ["attention.wo", "feed_forward.w2"]):
@@ -107,7 +114,7 @@ def shard_model(model):
             if any(n in name for n in ["adaLN_modulation.1"]) and "final_layer" not in name:
                 layer.weight = shard_w(layer.weight, pp_stage, [dist.Replicate(), dist.Shard(1)])
                 layer.bias = shard_w(layer.bias, pp_stage, [dist.Replicate(), dist.Shard(0)])
-                
+
             if any(n in name for n in ["x_embedder", "t_embedder.mlp.0"]):
                 # first pp stage
                 layer.weight = shard_w(layer.weight, 0, [dist.Replicate(), dist.Shard(1)])
@@ -132,16 +139,16 @@ def shard_model(model):
             if any(n in name for n in ["vae.encoder", "vae.quant_conv"]):
                 if hasattr(layer, "weight"):
                     # first pp stage
+                    print(f"pp_stage 0 layer {name}")
                     layer.weight = shard_w(layer.weight, 0, [dist.Replicate(), dist.Replicate()])
                     layer.bias = shard_w(layer.bias, 0, [dist.Replicate(), dist.Replicate()])
-                print(f"pp_stage 0 layer {name}")
 
             if any(n in name for n in ["vae.decoder", "vae.post_quant_conv"]):
                 if hasattr(layer, "weight"):
                     # last pp stage
+                    print(f"pp_stage -1 layer {name}")
                     layer.weight = shard_w(layer.weight, -1, [dist.Replicate(), dist.Replicate()])
                     layer.bias = shard_w(layer.bias, -1, [dist.Replicate(), dist.Replicate()])
-                print(f"pp_stage -1 layer {name}")
 
 
 def main():
@@ -193,7 +200,7 @@ def main():
     model_name = model_config_name.split("_")[0]
     assert model_name in ["DiT", "SiT", "LargeDiT"], f"Model {model_name} not supported."
     model_class = MODEL_CLASSES[model_name]
-    model = model_class(model_args, training_args) # and initialized model
+    model = model_class(model_args, training_args)  # and initialized model
 
     assert model.transformer.sample_size == data_args.resolution // 8
     model.set_recompute(training_args.recompute)
