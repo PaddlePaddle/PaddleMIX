@@ -30,13 +30,13 @@ def export_encode_text(model, config, compute_dtype):
 
 
 def export_encode_image(model, compute_dtype):
-
+    paddle.save(model.llama.image_newline,args.save_path + "/encode_image/clip/image_newline.pdparams")
     # convert to static graph with specific input description
     model = paddle.jit.to_static(
         model.encode_images,
         input_spec=[
-            paddle.static.InputSpec(shape=[None, 3, 336, 336], dtype=compute_dtype),  # images
-        ],
+            paddle.static.InputSpec(shape=[None,3, 336, 336], dtype=compute_dtype),  # images
+        ]
     )
 
     # save to static model
@@ -76,6 +76,7 @@ if __name__ == "__main__":
         vision_tower = model.get_vision_tower()
         vision_tower.load_model()
         model.eval()
+        
         export_encode_image(model, compute_dtype)
 
     elif args.encode_text:

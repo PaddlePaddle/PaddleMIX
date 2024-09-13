@@ -19,7 +19,7 @@ import paddle
 from paddle import nn
 
 from ..utils import USE_PEFT_BACKEND
-from .activations import get_activation, FP32SiLU
+from .activations import FP32SiLU, get_activation
 from .lora import LoRACompatibleLinear
 
 
@@ -52,12 +52,11 @@ def get_timestep_embedding(
     # scale embeddings
     emb = scale * emb
 
-    # concat sine and cosine embeddings
-    emb = paddle.concat([paddle.sin(emb), paddle.cos(emb)], axis=-1)
-
     # flip sine and cosine embeddings
     if flip_sin_to_cos:
-        emb = paddle.concat([emb[:, half_dim:], emb[:, :half_dim]], axis=-1)
+        emb = paddle.concat([paddle.cos(emb), paddle.sin(emb)], axis=-1)
+    else:
+        emb = paddle.concat([paddle.sin(emb), paddle.cos(emb)], axis=-1)
 
     # zero pad
     if embedding_dim % 2 == 1:
@@ -136,7 +135,7 @@ class PatchEmbed(nn.Layer):
         interpolation_scale=1,
         add_pos_embed=True,
         data_format="NCHW",
-        pos_embed_max_size=None, # For SD3 cropping
+        pos_embed_max_size=None,  # For SD3 cropping
     ):
         super().__init__()
 
@@ -147,7 +146,12 @@ class PatchEmbed(nn.Layer):
         self.data_format = data_format
 
         self.proj = nn.Conv2D(
-            in_channels, embed_dim, kernel_size=(patch_size, patch_size), stride=patch_size, bias_attr=bias, data_format=data_format,
+            in_channels,
+            embed_dim,
+            kernel_size=(patch_size, patch_size),
+            stride=patch_size,
+            bias_attr=bias,
+            data_format=data_format,
         )
         if layer_norm:
             norm_elementwise_affine_kwargs = dict(weight_attr=False, bias_attr=False)
@@ -178,6 +182,7 @@ class PatchEmbed(nn.Layer):
             self.register_buffer(
                 "pos_embed", paddle.to_tensor(pos_embed).cast("float32").unsqueeze(0), persistable=persistent
             )
+
     def cropped_pos_embed(self, height, width):
         """Crops positional embeddings for SD3 compatibility."""
         if self.pos_embed_max_size is None:
@@ -215,7 +220,7 @@ class PatchEmbed(nn.Layer):
             if self.data_format == "NCHW":
                 latent = latent.flatten(2).transpose([0, 2, 1])  # BCHW -> BNC
             else:
-                latent = latent.flatten(1, 2)                    # BHWC -> BNC
+                latent = latent.flatten(1, 2)  # BHWC -> BNC
         if self.layer_norm:
             latent = self.norm(latent)
 
@@ -521,7 +526,6 @@ class ImageProjection(nn.Layer):
         return image_embeds
 
 
-
 class CombinedTimestepTextProjEmbeddings(nn.Layer):
     def __init__(self, embedding_dim, pooled_projection_dim):
         super().__init__()
@@ -532,13 +536,14 @@ class CombinedTimestepTextProjEmbeddings(nn.Layer):
 
     def forward(self, timestep, pooled_projection):
         timesteps_proj = self.time_proj(timestep)
-        timesteps_emb = self.timestep_embedder(timesteps_proj.to(dtype=pooled_projection.dtype))  # (N, D)
+        timesteps_emb = self.timestep_embedder(timesteps_proj.cast(dtype=pooled_projection.dtype))  # (N, D)
 
         pooled_projections = self.text_embedder(pooled_projection)
 
         conditioning = timesteps_emb + pooled_projections
 
         return conditioning
+
 
 class CombinedTimestepLabelEmbeddings(nn.Layer):
     def __init__(self, num_classes, embedding_dim, class_dropout_prob=0.1):

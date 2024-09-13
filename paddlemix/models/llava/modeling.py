@@ -19,11 +19,17 @@ import paddle
 import paddle.distributed.fleet.meta_parallel as mpu
 from paddle.autograd import PyLayer
 from paddle.distributed import fleet
-from paddlenlp.transformers import LlamaConfig, LlamaForCausalLM, LlamaModel
-from paddlenlp.transformers import Qwen2Config, Qwen2ForCausalLM, Qwen2Model
+from paddlenlp.transformers import (
+    LlamaConfig,
+    LlamaForCausalLM,
+    LlamaModel,
+    Qwen2Config,
+    Qwen2ForCausalLM,
+    Qwen2Model,
+)
 from paddlenlp.transformers.llama.modeling import LlamaLMHead
-from paddlenlp.transformers.utils import get_scale_by_dtype
 from paddlenlp.transformers.model_outputs import CausalLMOutputWithPast
+from paddlenlp.transformers.utils import get_scale_by_dtype
 
 from .base_model import LlavaMetaForCausalLM, LlavaMetaModel
 from .configuration import LlavaConfig, LlavaQwenConfig
@@ -221,12 +227,19 @@ class LlavaCriterion(paddle.nn.Layer):
             if self.config.sep_parallel_degree > 1:
                 _hcg = fleet.get_hybrid_communicate_group()
                 masked_lm_loss = ConcatSePMaskedLoss.apply(masked_lm_loss, axis=1, group=_hcg.get_sep_parallel_group())
-            # skip ignore_index which loss == 0
-            masked_lm_loss = masked_lm_loss[masked_lm_loss > 0].astype("float32")
-            loss = paddle.mean(masked_lm_loss)
+            # # skip ignore_index which loss == 0
+            # masked_lm_loss = masked_lm_loss[masked_lm_loss > 0].astype("float32")
+            # loss = paddle.mean(masked_lm_loss)
+            binary_sequence = paddle.where(
+                masked_lm_loss > 0, paddle.ones_like(masked_lm_loss), paddle.zeros_like(masked_lm_loss)
+            )
+            count = paddle.sum(binary_sequence)
+            if count == 0:
+                loss = paddle.sum(masked_lm_loss * binary_sequence)
+            else:
+                loss = paddle.sum(masked_lm_loss * binary_sequence) / count
 
         return loss
-
 
 
 class LlavaQwenModel(LlavaMetaModel, Qwen2Model):

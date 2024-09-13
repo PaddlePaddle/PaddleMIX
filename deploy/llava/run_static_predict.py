@@ -26,6 +26,8 @@ from paddlemix.models.llava.constants import (
     IMAGE_TOKEN_INDEX,
 )
 from paddlemix.models.llava.conversation import conv_templates
+from paddlemix.models.llava.mm_utils import load_image,get_anyres_image_grid_shape
+from paddlemix.models.llava.base_model import unpad_image
 from paddlemix.utils.log import logger
 
 
@@ -39,14 +41,19 @@ class Predictor(object):
 
         self.args = args
         self.config = AutoConfigMIX.from_pretrained(args.model_name_or_path)
+        self.clip_config = AutoConfigMIX.from_pretrained(self.config.mm_vision_tower)
+
 
         self.tokenizer = AutoTokenizerMIX.from_pretrained(args.model_name_or_path)
-        self.processor, _ = AutoProcessorMIX.from_pretrained(args.model_name_or_path, eval="eval")
+        self.processor, _ = AutoProcessorMIX.from_pretrained(args.model_name_or_path, image_aspect_ratio=self.config.image_aspect_ratio,eval="eval")
 
         self.first_predictor = self.create_predictor(args.first_model_path)
         print(f"first_model_path: {args.first_model_path}, {self.first_predictor}")
+
         self.second_predictor = self.create_predictor(args.second_model_path)
         print(f"second_model_path: {args.second_model_path}, {self.second_predictor}")
+
+        self.image_newline = paddle.load(os.path.join(args.first_model_path, "image_newline.pdparams"))
 
     def create_predictor(self, model_path):
 
@@ -77,9 +84,79 @@ class Predictor(object):
         return predictor
 
     @paddle.no_grad()
-    def encode_images(self, pixel_values):
-        language_model_inputs = self.first_predictor.run(pixel_values)
-        return language_model_inputs
+    def encode_images(self, images, image_sizes):
+        if type(images) is list or images.ndim == 5:
+            if type(images) is list:
+                images = [(x.unsqueeze(axis=0) if x.ndim == 3 else x) for x in images]
+            concat_images = paddle.concat(x=[image for image in images], axis=0)
+
+            image_features = self.first_predictor.run(concat_images)[0]
+      
+            split_sizes = [image.shape[0] for image in images]
+            image_features = paddle.split(image_features, split_sizes, axis=0)
+            mm_patch_merge_type = getattr(self.config, "mm_patch_merge_type", "flat")
+            image_aspect_ratio = getattr(self.config, "image_aspect_ratio", "square")
+            if mm_patch_merge_type == "flat":
+                image_features = [x.flatten(start_axis=0, stop_axis=1) for x in image_features]
+            elif mm_patch_merge_type.startswith("spatial"):
+                new_image_features = []
+                for image_idx, image_feature in enumerate(image_features):
+                    if image_feature.shape[0] > 1:
+                        base_image_feature = image_feature[0]
+                        image_feature = image_feature[1:]
+                        height = width = self.clip_config.image_resolution // self.clip_config.vision_patch_size
+                        assert height * width == base_image_feature.shape[0]
+                        if image_aspect_ratio == "anyres":
+                            num_patch_width, num_patch_height = get_anyres_image_grid_shape(
+                                image_sizes[image_idx],
+                                self.config.image_grid_pinpoints,
+                                self.clip_config.image_resolution,
+                            )
+
+                            image_feature = paddle.reshape(
+                                image_feature, (num_patch_height, num_patch_width, height, width, -1)
+                            )
+                        else:
+                            raise NotImplementedError
+                        if "unpad" in mm_patch_merge_type:
+                            image_feature = image_feature.transpose(perm=[4, 0, 2, 1, 3])
+                            image_feature = image_feature.flatten(start_axis=1, stop_axis=2).flatten(
+                                start_axis=2, stop_axis=3
+                            )
+                            image_feature = unpad_image(image_feature, image_sizes[image_idx])
+                            image_feature = paddle.concat(
+                                x=(
+                                    image_feature,
+                                    self.image_newline[:, (None), (None)].expand(
+                                        shape=[*image_feature.shape[:-1], 1]
+                                    ).astype(image_feature.dtype),
+                                ),
+                                axis=-1,
+                            )
+                            x = image_feature.flatten(start_axis=1, stop_axis=2)
+                            perm_12 = list(range(x.ndim))
+                            perm_12[0] = 1
+                            perm_12[1] = 0
+                            image_feature = x.transpose(perm=perm_12)
+                        else:
+                            image_feature = image_feature.transpose(perm=[0, 2, 1, 3, 4])
+                            image_feature = image_feature.flatten(start_axis=0, stop_axis=3)
+                        image_feature = paddle.concat(x=(base_image_feature, image_feature), axis=0)
+                    else:
+                        image_feature = image_feature[0]
+                        if "unpad" in mm_patch_merge_type:
+                            image_feature = paddle.concat(
+                                x=(image_feature, self.image_newline[None].to(image_feature.place)), axis=0
+                            )
+                    new_image_features.append(image_feature)
+                image_features = new_image_features
+                image_features = paddle.stack(x=image_features, axis=0)
+            else:
+                raise ValueError(f"Unexpected mm_patch_merge_type: {self.config.mm_patch_merge_type}")
+        else:
+            image_features = self.first_predictor.run(images)[0]
+        
+        return image_features
 
     @paddle.no_grad()
     def generate_with_image_features(self, image_features, input_ids):
@@ -225,9 +302,9 @@ class Predictor(object):
         conv.append_message(conv.roles[1], None)
         prompt = conv.get_prompt()
         record = {"image": self.args.image_file, "conversations": prompt}
-
+        image_size = load_image(args.image_file).size
         data_dict = self.processor(record=record, image_aspect_ratio=self.config.image_aspect_ratio)
-
+        data_dict['image_size'] = [image_size]
         return data_dict
 
     def post_processing(self, generate_ids):
@@ -245,8 +322,8 @@ class Predictor(object):
             inp = "user: Generate the caption in English with grounding"
             data_dict = self.pre_processing(inp, first_message)
             image = paddle.cast(data_dict["images"], self.compute_dtype)
-            
-            image_features = self.encode_images(image)[0]
+          
+            image_features = self.encode_images(image,data_dict['image_size'])
 
             generate_ids, _ = self.generate_with_image_features(
                 image_features,
@@ -277,9 +354,9 @@ class Predictor(object):
                 print(f"{roles[1]}: ", end="")
                 data_dict = self.pre_processing(inp, first_message)
                 image = paddle.cast(data_dict["images"], self.compute_dtype)
-
-                image_features = self.encode_images(image)[0]
-
+               
+                image_features = self.encode_images(image,data_dict['image_size'])
+           
                 generate_ids, _ = self.generate_with_image_features(
                     image_features,
                     data_dict["input_ids"],

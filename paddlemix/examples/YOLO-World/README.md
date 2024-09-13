@@ -21,7 +21,7 @@ git clone https://github.com/PaddlePaddle/PaddleMIX
  python -m pip install paddlepaddle-gpu==3.0.0b1 -i https://www.paddlepaddle.org.cn/packages/stable/cu118/
 
 # 进入目录
-cd PaddleMIX/ppdiffusers/examples/YOLO-World/
+cd PaddleMIX/paddlemix/examples/YOLO-World/
 
 # 安装新版本ppdiffusers
 pip install https://paddlenlp.bj.bcebos.com/models/community/junnyu/wheels/ppdiffusers-0.24.0-py3-none-any.whl --user

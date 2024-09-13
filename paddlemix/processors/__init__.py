@@ -19,10 +19,12 @@ from .eva02_processing import *
 from .groundingdino_processing import *
 from .imagebind_processing import *
 from .internlm_xcomposer2_processing import *
+from .internvl_processing import *
 from .llava_next_processing import *
 from .llava_processing import *
 from .minigpt4_image_processing import *
 from .minigpt4_processing import *
+from .qwen2_vl_processing import *
 from .qwen_vl_processing import *
 from .sam_processing import *
 from .tokenizer import SimpleTokenizer, tokenize
