@@ -14,6 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+echo "new pr here"
+
 function abort(){
     echo "Your commit not fit PaddlePaddle code style" 1>&2
     echo "Please use pre-commit scripts to auto-format your code" 1>&2
