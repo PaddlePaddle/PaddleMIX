@@ -27,6 +27,12 @@ from ...schedulers import KarrasDiffusionSchedulers
 from ...utils.paddle_utils import randn_tensor
 from ..pipeline_utils import DiffusionPipeline, ImagePipelineOutput
 
+try:
+    # paddle.incubate.jit.inference is available in paddle develop but not in paddle 3.0beta, so we add a try except.
+    from paddle.incubate.jit import is_inference_mode
+except:
+    def is_inference_mode(mode):
+        return False
 
 class DiTPipeline(DiffusionPipeline):
     r"""
@@ -192,7 +198,7 @@ class DiTPipeline(DiffusionPipeline):
             )
             # predict noise model_output
             noise_pred_out = self.transformer(latent_model_input, timestep=timesteps, class_labels=class_labels_input)
-            if paddle.incubate.jit.is_inference_mode(self.transformer):
+            if is_inference_mode(self.transformer):
                 # self.transformer run in paddle inference.
                 noise_pred = noise_pred_out
             else:
@@ -227,7 +233,7 @@ class DiTPipeline(DiffusionPipeline):
         latents = 1 / self.vae.config.scaling_factor * latents
 
         samples_out = self.vae.decode(latents)
-        if paddle.incubate.jit.is_inference_mode(self.vae.decode):
+        if is_inference_mode(self.vae.decode):
             # self.vae.decode run in paddle inference.
             samples = samples_out
         else:
