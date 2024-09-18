@@ -31,8 +31,10 @@ try:
     # paddle.incubate.jit.inference is available in paddle develop but not in paddle 3.0beta, so we add a try except.
     from paddle.incubate.jit import is_inference_mode
 except:
+
     def is_inference_mode(mode):
         return False
+
 
 class DiTPipeline(DiffusionPipeline):
     r"""
