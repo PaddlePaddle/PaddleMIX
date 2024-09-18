@@ -22,7 +22,7 @@ PaddleMIX是基于飞桨的多模态大模型开发套件，聚合图像、文�
 📚《飞桨多模态大模型开发套件PaddleMIX 2.0 震撼发布》，图文音视频场景全覆盖，多模态高效助力产业创新。超大规模训练支持，覆盖图文预训练、文生图、跨模态视觉任务，覆盖金融、教育、电商、医疗等产业场景。8月8日（周四）20：00 带你直播了解多模态大模型最新架构，深度解析PaddleMIX高性能模型库，手把手演示LLaVA模型训推全流程。[报名链接](https://www.wjx.top/vm/wKqysjx.aspx?udsid=449688)  
 
 **2024.09.11 更新**
-* 新增Intern-VL2，InternVL2，SD3等模型
+* 新增Qwen2-VL、InternVL2、SD3等模型
 
 **2024.07.25 发布PaddleMIX v2.0**
 * 多模态理解：新增LLaVA系列，Qwen-VL等；新增Auto模块统一SFT训练流程；新增mixtoken训练策略，SFT吞吐量提升5.6倍。
