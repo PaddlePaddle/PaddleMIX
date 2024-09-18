@@ -21,7 +21,7 @@ export LD_LIBRARY_PATH=/your_dir/Paddle/paddle/phi/kernels/fusion/cutlass/gemm_e
 
 高性能推理指令：
 ```shell
-#step1: 生成FP32的TRT模型
+#step1: 生成FP32的paddle模型，同时根据Paddle模型生成FP16的TensorRT engine。
 python  text_to_image_generation-stable_diffusion_3.py  --dtype float32 --height 512 --width 512 \
 --num-inference-steps 50 --inference_optimize 1  --inference_optimize_triton 1 \
 --benchmark 1
