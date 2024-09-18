@@ -32,7 +32,7 @@ try:
     from paddle.incubate.jit import is_inference_mode
 except:
 
-    def is_inference_mode(mode):
+    def is_inference_mode(func):
         return False
 
 
