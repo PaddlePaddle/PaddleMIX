@@ -104,6 +104,15 @@ pipe.text_encoder_3 = paddle.incubate.jit.inference(
     trt_use_static=True,
 )
 
+pipe.transformer = paddle.incubate.jit.inference(
+    pipe.transformer,
+    save_model_dir="./tmp/sd3",
+    enable_new_ir=True,
+    cache_static_model=True,
+    exp_enable_use_cutlass=True,
+    delete_pass_lists=["add_norm_fuse_pass"],
+)
+
 
 # for vae model
 pipe.vae.decode = paddle.incubate.jit.inference(
