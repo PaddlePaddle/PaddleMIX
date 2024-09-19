@@ -73,9 +73,8 @@ pipe.transformer = paddle.incubate.jit.inference(
     pipe.transformer,
     save_model_dir="./tmp/sd3",
     enable_new_ir=True,
-    cache_static_model=False,
+    cache_static_model=True,
     exp_enable_use_cutlass=True,
-    delete_pass_lists=["add_norm_fuse_pass"],
 )
 
 generator = paddle.Generator().manual_seed(42)
