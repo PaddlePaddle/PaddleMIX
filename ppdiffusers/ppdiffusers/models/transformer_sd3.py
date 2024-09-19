@@ -387,6 +387,8 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
 
     @classmethod
     def custom_modify_weight(cls, state_dict):
+        if os.getenv("INFERENCE_OPTIMIZE") != "True":
+            return
         # NOTE:(changwenbin,zhoukangkang) SD3 num_layers is 24
         sd3_num_layers = 24
         for i in range(sd3_num_layers):

@@ -11,6 +11,10 @@ python -c "import use_triton_in_paddle; use_triton_in_paddle.make_triton_compati
 # 安装develop版本的paddle
 python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu123/
 
+# 安装PaddleNLP，请使用2024年9月6日之后的PaddleNLP，因为在该天，我们修复了一个针对PaddleNLP的bug。
+# https://github.com/PaddlePaddle/PaddleNLP/pull/9016/files
+python -m pip install paddlenlp==3.0.0b1
+
 # 指定Tensor-RT的lib路径
 export LD_LIBRARY_PATH=/your_TensorRT_dir//lib:$LD_LIBRARY_PATH
 
