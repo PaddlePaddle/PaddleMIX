@@ -511,7 +511,6 @@ if is_ppxformers_available() or is_npu_available():
                     training=training,
                 )
         elif attention_op == "flash_npu":
-            print('flash_npu')
             output = paddle.nn.functional.scaled_dot_product_attention_npu(
                 query,
                 key,
