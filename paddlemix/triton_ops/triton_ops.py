@@ -1620,7 +1620,13 @@ std::vector<paddle::Tensor> ${op_name}_func(
 std::vector<std::vector<int64_t>> ${op_name}_InferShape(
         const std::vector<int64_t>& A_shape, const std::vector<int64_t>& B_shape) {
   
-  std::vector<int64_t> out_shape = {A_shape[0], A_shape[1]+B_shape[1], A_shape[2]/3};
+  int64_t seq1 = A_shape[1];
+  int64_t seq2 = B_shape[1];
+  int64_t seq = -1;
+  if (seq1 > 0 && seq2 > 0){
+    seq = seq1 + seq2;
+  }
+  std::vector<int64_t> out_shape = {A_shape[0], seq, A_shape[2]/3};
   
   return {out_shape, out_shape, out_shape};
 }
