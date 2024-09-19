@@ -19,7 +19,6 @@ from typing import Any, Callable, Dict, List, Optional, Union
 import paddle
 
 from ppdiffusers.transformers import (  # T5TokenizerFast,
-    CLIPTextModelOutput,
     CLIPTextModelWithProjection,
     CLIPTokenizer,
     T5EncoderModel,
@@ -111,7 +110,7 @@ def retrieve_timesteps(
     return timesteps, num_inference_steps
 
 
-class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):
+class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):  # SD3LoraLoaderMixin
 
     r"""
     Args:
@@ -221,13 +220,8 @@ class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):
                 "The following part of your input was truncated because CLIP can only handle sequences up to"
                 f" {self.tokenizer_max_length} tokens: {removed_text}"
             )
-
-        outputs = self.text_encoder_3(text_input_ids)
-        if paddle.incubate.jit.is_inference_mode(self.text_encoder_3):
-            # NOTE:(changwenbin,zhoukangkang) this is for paddle.incubate.jit.inference
-            prompt_embeds = outputs
-        else:
-            prompt_embeds = outputs[0]
+        # breakpoint()
+        prompt_embeds = self.text_encoder_3(text_input_ids)[0]
 
         dtype = self.text_encoder_3.dtype
         prompt_embeds = prompt_embeds.astype(dtype=dtype)
@@ -274,23 +268,13 @@ class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):
                 f" {self.tokenizer_max_length} tokens: {removed_text}"
             )
         prompt_embeds = text_encoder(text_input_ids, output_hidden_states=True)
+        pooled_prompt_embeds = prompt_embeds[0]
 
-        if paddle.incubate.jit.is_inference_mode(text_encoder):
-            # NOTE:(changwenbin,zhoukangkang) this is for paddle.incubate.jit.inference
-            pooled_prompt_embeds = prompt_embeds[-1]
-            if clip_skip is None:
-                prompt_embeds = prompt_embeds[:-2][-2]
-            else:
-                prompt_embeds = prompt_embeds[:-2][-(clip_skip + 2)]
+        if clip_skip is None:
+            prompt_embeds = prompt_embeds.hidden_states[-2]
         else:
-            pooled_prompt_embeds = prompt_embeds[0]
+            prompt_embeds = prompt_embeds.hidden_states[-(clip_skip + 2)]
 
-            if clip_skip is None:
-                prompt_embeds = prompt_embeds.hidden_states[-2]
-            else:
-                prompt_embeds = prompt_embeds.hidden_states[-(clip_skip + 2)]
-
-        pooled_prompt_embeds = pooled_prompt_embeds.astype(dtype=text_encoder.dtype)
         prompt_embeds = prompt_embeds.astype(dtype=self.text_encoder.dtype)
 
         _, seq_len, _ = prompt_embeds.shape
@@ -809,7 +793,6 @@ class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):
                 # broadcast to batch dimension in a way that's compatible with ONNX/Core ML
                 timestep = t.expand(latent_model_input.shape[0])
 
-                # in order to d2s
                 noise_pred_out = self.transformer(
                     hidden_states=latent_model_input,
                     timestep=timestep,
@@ -856,15 +839,7 @@ class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):
         else:
             latents = (latents / self.vae.config.scaling_factor) + self.vae.config.shift_factor
 
-            # in order to d2s
-            if paddle.incubate.jit.is_inference_mode(self.vae.decode):
-                latents = latents.cast("float32")
-            image_out = self.vae.decode(latents, return_dict=False)
-            if paddle.incubate.jit.is_inference_mode(self.vae.decode):
-                # NOTE:(changwenbin,zhoukangkang) this is for paddle.incubate.jit.inference
-                image = image_out
-            else:
-                image = image_out[0]
+            image = self.vae.decode(latents, return_dict=False)[0]
             image = self.image_processor.postprocess(image, output_type=output_type)
 
         # Offload all models
