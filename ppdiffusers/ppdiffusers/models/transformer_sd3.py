@@ -387,8 +387,9 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
 
     @classmethod
     def custom_modify_weight(cls, state_dict):
-        # SD3 num_layers is 24
-        for i in range(24):
+        # NOTE:(changwenbin,zhoukangkang) SD3 num_layers is 24
+        sd3_num_layers = 24
+        for i in range(sd3_num_layers):
             base_map_sd3 = [
                 (f"linear1.{i}.weight", f"{i}.norm1.linear.weight"),
                 (f"linear1.{i}.bias", f"{i}.norm1.linear.bias"),
@@ -413,7 +414,7 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
                 (f"ffn2.{i}.weight", f"{i}.ff.net.2.weight"),
                 (f"ffn2.{i}.bias", f"{i}.ff.net.2.bias"),
             ]
-            if i < 23:
+            if i < sd3_num_layers - 1:
                 extra_map_sd3 = [
                     (f"to_add_out_linear.{i}.weight", f"{i}.attn.to_add_out.weight"),
                     (f"to_add_out_linear.{i}.bias", f"{i}.attn.to_add_out.bias"),
