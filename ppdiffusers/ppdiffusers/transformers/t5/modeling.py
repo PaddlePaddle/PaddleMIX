@@ -24,7 +24,6 @@ import paddle
 from paddle import nn
 from paddle.amp.auto_cast import amp_state
 from paddle.distributed import fleet
-from paddle.framework import in_dynamic_or_pir_mode
 from paddle.nn import BCEWithLogitsLoss, CrossEntropyLoss, MSELoss
 from paddlenlp.transformers.activations import ACT2FN
 from paddlenlp.transformers.conversion_utils import (
@@ -1556,12 +1555,6 @@ class T5EncoderModel(T5PretrainedModel):
         # Initialize weights and apply final processing
         self.post_init()
 
-        # NOTE:(changwenbin,zhoukangkang)
-        # When you use 'paddle.incubate.jit.inference' to speed up your model,
-        # if you have set 'cache_static_model=True',
-        # you can use 'del self.encoder' to reduce the global memory usage.
-        # del self.encoder
-
     def get_input_embeddings(self):
         return self.shared
 
@@ -1612,11 +1605,7 @@ class T5EncoderModel(T5PretrainedModel):
             return_dict=return_dict,
         )
 
-        if in_dynamic_or_pir_mode():
-            return encoder_output
-        else:
-            # NOTE:(changwenbin,zhoukangkang)there is a bug in dy2s,we fix it here.
-            return encoder_output.last_hidden_state
+        return encoder_output
 
 
 class T5ForSequenceClassification(T5PretrainedModel):
