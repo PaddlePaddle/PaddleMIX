@@ -35,6 +35,15 @@ from ...utils.paddle_utils import randn_tensor
 from ..pipeline_utils import DiffusionPipeline
 from .pipeline_output import StableDiffusion3PipelineOutput
 
+try:
+    # paddle.incubate.jit.inference is available in paddle develop but not in paddle 3.0beta, so we add a try except.
+    from paddle.incubate.jit import is_inference_mode
+except:
+
+    def is_inference_mode(func):
+        return False
+
+
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
 EXAMPLE_DOC_STRING = """
@@ -802,7 +811,7 @@ class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):  # SD3Lo
                     return_dict=False,
                 )
 
-                if isinstance(noise_pred_out, paddle.Tensor):
+                if is_inference_mode(self.transformer):
                     noise_pred = noise_pred_out
                 else:
                     noise_pred = noise_pred_out[0]
