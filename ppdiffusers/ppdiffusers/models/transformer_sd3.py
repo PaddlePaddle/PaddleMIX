@@ -110,6 +110,8 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
             ]
         )
         if self.inference_optimize:
+            # we do not need self.transformer_blocks, del it to save memory.
+            del self.transformer_blocks
             self.simplified_sd3 = SimplifiedSD3(
                 num_layers,
                 dim=self.inner_dim,
