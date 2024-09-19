@@ -39,12 +39,6 @@ def parse_args():
         help="If inference_optimize is set to True, all optimizations except Triton are enabled.",
     )
     parser.add_argument(
-        "--inference_optimize_triton",
-        type=(lambda x: str(x).lower() in ["true", "1", "yes"]),
-        default=False,
-        help="If inference_optimize_triton is set to True, Triton operator optimized inference is enabled.",
-    )
-    parser.add_argument(
         "--inference_optimize_origin",
         type=(lambda x: str(x).lower() in ["true", "1", "yes"]),
         default=False,
@@ -62,7 +56,6 @@ args = parse_args()
 
 if args.inference_optimize:
     os.environ["INFERENCE_OPTIMIZE"] = "True"
-if args.inference_optimize_triton:
     os.environ["INFERENCE_OPTIMIZE_TRITON"] = "True"
 if args.inference_optimize_origin:
     os.environ["INFERENCE_OPTIMIZE_ORIGIN"] = "True"
@@ -108,7 +101,7 @@ pipe.transformer = paddle.incubate.jit.inference(
     pipe.transformer,
     save_model_dir="./tmp/sd3",
     enable_new_ir=True,
-    cache_static_model=True,
+    cache_static_model=False,
     exp_enable_use_cutlass=True,
     delete_pass_lists=["add_norm_fuse_pass"],
 )
