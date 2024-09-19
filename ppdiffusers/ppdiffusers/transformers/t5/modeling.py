@@ -1557,7 +1557,7 @@ class T5EncoderModel(T5PretrainedModel):
         self.post_init()
 
         # NOTE:(changwenbin,zhoukangkang)
-        # When you use 'paddle.incubate.jit.inference' to reconstruct the model,
+        # When you use 'paddle.incubate.jit.inference' to speed up your model,
         # if you have set 'cache_static_model=True',
         # you can use 'del self.encoder' to reduce the global memory usage.
         # del self.encoder

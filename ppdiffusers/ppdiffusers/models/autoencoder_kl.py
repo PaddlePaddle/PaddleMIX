@@ -89,6 +89,7 @@ class AutoencoderKL(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
         use_quant_conv: bool = True,
         use_post_quant_conv: bool = True,
     ):
+        # set USE_PPXFORMERS=False to avoid using ppxformers
         os.environ["USE_PPXFORMERS"] = "False"
         super().__init__()
         # if down_block_out_channels not given, we will use block_out_channels
@@ -119,6 +120,8 @@ class AutoencoderKL(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
             act_fn=act_fn,
         )
         del os.environ["USE_PPXFORMERS"]
+        # del set USE_PPXFORMERS=False to Restore Defaults
+
         self.quant_conv = nn.Conv2D(2 * latent_channels, 2 * latent_channels, 1) if use_quant_conv else None
         self.post_quant_conv = nn.Conv2D(latent_channels, latent_channels, 1) if use_post_quant_conv else None
 

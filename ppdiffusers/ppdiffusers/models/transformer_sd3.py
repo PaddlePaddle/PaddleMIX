@@ -387,6 +387,7 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
 
     @classmethod
     def custom_modify_weight(cls, state_dict):
+        # SD3 num_layers is 24
         for i in range(24):
             base_map_sd3 = [
                 (f"linear1.{i}.weight", f"{i}.norm1.linear.weight"),
