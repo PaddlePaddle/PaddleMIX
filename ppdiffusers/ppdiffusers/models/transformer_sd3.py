@@ -383,6 +383,10 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
 
     @classmethod
     def custom_modify_weight(cls, state_dict):
+
+        if os.getenv("INFERENCE_OPTIMIZE") != "True":
+            return
+
         # NOTE:(changwenbin,zhoukangkang) SD3 num_layers is 24
         sd3_num_layers = 24
         for i in range(sd3_num_layers):
@@ -427,35 +431,14 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
                 else:
                     print(f"Warning!!: '{from_}' not found in state_dict")
 
-            state_dict[f"simplified_sd3.qkv.{i}.weight"] = paddle.concat(
-                [
-                    state_dict[f"simplified_sd3.q.{i}.weight"],
-                    state_dict[f"simplified_sd3.k.{i}.weight"],
-                    state_dict[f"simplified_sd3.v.{i}.weight"],
-                ],
-                axis=1,
-            )
-            state_dict[f"simplified_sd3.qkv.{i}.bias"] = paddle.concat(
-                [
-                    state_dict[f"simplified_sd3.q.{i}.bias"],
-                    state_dict[f"simplified_sd3.k.{i}.bias"],
-                    state_dict[f"simplified_sd3.v.{i}.bias"],
-                ],
-                axis=0,
-            )
-            state_dict[f"simplified_sd3.eqkv.{i}.weight"] = paddle.concat(
-                [
-                    state_dict[f"simplified_sd3.eq.{i}.weight"],
-                    state_dict[f"simplified_sd3.ek.{i}.weight"],
-                    state_dict[f"simplified_sd3.ev.{i}.weight"],
-                ],
-                axis=1,
-            )
-            state_dict[f"simplified_sd3.eqkv.{i}.bias"] = paddle.concat(
-                [
-                    state_dict[f"simplified_sd3.eq.{i}.bias"],
-                    state_dict[f"simplified_sd3.ek.{i}.bias"],
-                    state_dict[f"simplified_sd3.ev.{i}.bias"],
-                ],
-                axis=0,
-            )
+            # concat qkv weight and bias.
+            for placeholder1 in ["", "e"]:
+                for placeholder2 in ["weight", "bias"]:
+                    state_dict[f"simplified_sd3.{placeholder1}qkv.{i}.{placeholder2}"] = paddle.concat(
+                        [
+                            state_dict[f"simplified_sd3.{placeholder1}q.{i}.{placeholder2}"],
+                            state_dict[f"simplified_sd3.{placeholder1}k.{i}.{placeholder2}"],
+                            state_dict[f"simplified_sd3.{placeholder1}v.{i}.{placeholder2}"],
+                        ],
+                        axis=-1,
+                    )
