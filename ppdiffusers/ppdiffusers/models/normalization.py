@@ -192,6 +192,8 @@ class AdaLayerNormContinuous(nn.Layer):
         emb = self.linear(self.silu(conditioning_embedding).cast(x.dtype))
         scale, shift = paddle.chunk(emb, 2, axis=1)
         if os.getenv("INFERENCE_OPTIMIZE_TRITON"):
+            # NOTE:(changwenbin,zhoukangkang)
+            # This is a fused faster op using Triton, only used in inference, not used in training.
             import paddlemix
 
             x = paddlemix.triton_ops.adaptive_layer_norm(x, scale, shift, self.norm.weight, self.norm.bias)
