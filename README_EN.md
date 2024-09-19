@@ -100,7 +100,7 @@ pip install -e .
   <tbody>
     <tr align="center" valign="center">
       <td>
-        <b>Multi-modal Pre-training</b>
+        <b>Multi-modal Large Language Models</b>
       </td>
       <td>
         <b>Diffusion-based Models</b>
@@ -112,14 +112,19 @@ pip install -e .
         </ul>
           <li><b>Image-Text Pre-training</b></li>
         <ul>
-            <li><a href="paddlemix/examples/evaclip">EVA-CLIP</a></li>
-            <li><a href="paddlemix/examples/coca">CoCa</a></li>
             <li><a href="paddlemix/examples/clip">CLIP</a></li>
+            <li><a href="paddlemix/examples/evaclip">EVA-CLIP</a></li>
+            <li><a href="paddlemix/examples/llava">LLaVA</a></li>
+            <li><a href="paddlemix/examples/llava">LLaVA-1.5</a></li>
+            <li><a href="paddlemix/examples/llava">LLaVA-NeXT</a></li>
+            <li><a href="paddlemix/examples/qwen_vl">Qwen-VL</a></li>
+            <li><a href="paddlemix/examples/qwen2_vl">Qwen2-VL</a></li>
+            <li><a href="paddlemix/examples/internvl2">InternVL2</a></li>
+            <li><a href="paddlemix/examples/minimonkey">Mini-Monkey</a></li>
+            <li><a href="paddlemix/examples/coca">CoCa</a></li>
             <li><a href="paddlemix/examples/blip2">BLIP-2</a></li>
             <li><a href="paddlemix/examples/minigpt4">miniGPT-4</a></li>
             <li><a href="paddlemix/examples/visualglm">VIsualGLM</a></li>
-            <li><a href="paddlemix/examples/qwen_vl">Qwen_VL</a></li>
-            <li><a href="paddlemix/examples/llava">LLaVA</a></li>
             <li><a href="paddlemix/examples/cogvlm">CogVLM && CogAgent</a></li>
             <li><a href="paddlemix/examples/internlm_xcomposer2">InternLM-XComposer2</a></li>
       </ul>
