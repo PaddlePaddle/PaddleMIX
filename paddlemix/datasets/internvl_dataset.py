@@ -532,6 +532,7 @@ def preprocess_internlm(
     ).input_ids
     targets = input_ids.clone()
 
+    new_targets = []
     # print('tokenizer.pad_token_id:\n', tokenizer.pad_token_id) # 151643
     # print('targets', targets, targets.shape, targets.sum().item())
     # [[151644, 8948  , 198   , ..., 103978, 1773  , 151645]]   [1, 1918]   281157253
@@ -569,10 +570,14 @@ def preprocess_internlm(
                 target[:] = IGNORE_TOKEN_ID
                 print(f'WARNING: tokenization mismatch: {cur_len} vs. {total_len}. This dataset is {ds_name}.')
                 sys.stdout.flush()
+        
+        new_targets.append(target)
+    
+    new_targets = paddle.stack(new_targets, axis=0)
 
     return dict(
         input_ids=input_ids,
-        labels=targets,
+        labels=new_targets,
         attention_mask=input_ids.not_equal(paddle.to_tensor(tokenizer.pad_token_id)),
     )
 
