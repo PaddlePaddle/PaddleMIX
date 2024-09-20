@@ -95,7 +95,6 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
         self.context_embedder = nn.Linear(self.config.joint_attention_dim, self.config.caption_projection_dim)
 
         self.inference_optimize = os.getenv("INFERENCE_OPTIMIZE") == "True"
-        self.inference_optimize_origin = os.getenv("INFERENCE_OPTIMIZE_ORIGIN") == "True"
         # `attention_head_dim` is doubled to account for the mixing.
         # It needs to crafted when we get the actual checkpoints.
         self.transformer_blocks = nn.LayerList(
@@ -117,14 +116,6 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
                 dim=self.inner_dim,
                 num_attention_heads=self.config.num_attention_heads,
                 attention_head_dim=self.inner_dim,
-            )
-        elif self.inference_optimize_origin:
-            self.sd3_origin_transformer = paddle.incubate.jit.inference(
-                self.sd3_origin_transformer,
-                enable_new_ir=True,
-                cache_static_model=False,
-                exp_enable_use_cutlass=True,
-                delete_pass_lists=["add_norm_fuse_pass"],
             )
 
         self.norm_out = AdaLayerNormContinuous(self.inner_dim, self.inner_dim, elementwise_affine=False, eps=1e-6)
@@ -343,13 +334,6 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
             )
             hidden_states = out[1]
             encoder_hidden_states = None
-
-        elif self.inference_optimize_origin:
-            hidden_states = self.sd3_origin_transformer(
-                hidden_states=hidden_states, encoder_hidden_states=encoder_hidden_states, temb=temb
-            )
-            encoder_hidden_states = None
-
         else:
             encoder_hidden_states, hidden_states = self.sd3_origin_transformer(
                 hidden_states=hidden_states, encoder_hidden_states=encoder_hidden_states, temb=temb
