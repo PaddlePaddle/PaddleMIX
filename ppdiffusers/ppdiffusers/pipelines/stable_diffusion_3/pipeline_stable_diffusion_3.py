@@ -812,6 +812,8 @@ class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):  # SD3Lo
                 )
 
                 if is_inference_mode(self.transformer):
+                    # NOTE:(changwenbin,zhoukangkang)
+                    # This is for paddle inference mode
                     noise_pred = model_output
                 else:
                     noise_pred = model_output[0]
