@@ -8,14 +8,11 @@ python -m pip install triton
 python -m pip install git+https://github.com/zhoutianzi666/UseTritonInPaddle.git
 python -c "import use_triton_in_paddle; use_triton_in_paddle.make_triton_compatible_with_paddle()"
 
-# 安装develop版本的paddle
+# 安装develop版本的paddle，请根据自己的cuda版本选择对应的paddle版本，这里选择12.3的cuda版本
 python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu123/
 
-# 指定Tensor-RT的lib路径
-export LD_LIBRARY_PATH=/your_TensorRT_dir//lib:$LD_LIBRARY_PATH
-
-# 指定cutlass包路径
-export LD_LIBRARY_PATH=/your_dir/Paddle/paddle/phi/kernels/fusion/cutlass/conv2d/build:$LD_LIBRARY_PATH
+# 指定 libCutlassGemmEpilogue.so 的路径
+# 详情请参考 https://github.com/PaddlePaddle/Paddle/blob/develop/paddle/phi/kernels/fusion/cutlass/gemm_epilogue/README.md
 export LD_LIBRARY_PATH=/your_dir/Paddle/paddle/phi/kernels/fusion/cutlass/gemm_epilogue/build:$LD_LIBRARY_PATH
 ```
 

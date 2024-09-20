@@ -802,7 +802,7 @@ class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):  # SD3Lo
                 # broadcast to batch dimension in a way that's compatible with ONNX/Core ML
                 timestep = t.expand(latent_model_input.shape[0])
 
-                noise_pred_out = self.transformer(
+                model_output = self.transformer(
                     hidden_states=latent_model_input,
                     timestep=timestep,
                     encoder_hidden_states=prompt_embeds,
@@ -812,9 +812,9 @@ class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):  # SD3Lo
                 )
 
                 if is_inference_mode(self.transformer):
-                    noise_pred = noise_pred_out
+                    noise_pred = model_output
                 else:
-                    noise_pred = noise_pred_out[0]
+                    noise_pred = model_output[0]
 
                 # perform guidance
                 if self.do_classifier_free_guidance:
