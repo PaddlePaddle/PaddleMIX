@@ -104,6 +104,9 @@ python paddlemix/tools/supervised_finetune.py paddlemix/config/llava/v1_5/lora_s
 python paddlemix/tools/supervised_finetune.py paddlemix/config/llava/v1_5/sft_argument.json
 ```
 
+## 5 NPU硬件训练
+请参照[tools](../../tools/README.md)进行NPU硬件Paddle安装和环境变量设置，配置完成后可直接执行微调命令进行训练或预测。
+
 ### 参考文献
 ```BibTeX
 @misc{liu2024llavanext,
