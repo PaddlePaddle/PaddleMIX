@@ -19,25 +19,29 @@ import os
 
 import numpy as np
 import paddle
-import paddle.nn as nn
 import paddle.distributed as dist
-from paddle.distributed import fleet
+import paddle.nn as nn
 from paddlenlp.utils.log import logger
 
 from ppdiffusers import AutoencoderKL, DDIMScheduler, is_ppxformers_available
 from ppdiffusers.models.ema import LitEma
 from ppdiffusers.training_utils import freeze_params
 
-from .diffusion_utils import discretized_gaussian_log_likelihood, normal_kl, get_mesh
+from .diffusion_utils import discretized_gaussian_log_likelihood, get_mesh, normal_kl
 from .dit_auto import DiT_AUTO
 from .dit_llama_auto import DiT_Llama_AUTO
-from .gaussian_diffusion import _extract_into_shardtensor, get_named_beta_schedule, mean_flat
+from .gaussian_diffusion import (
+    _extract_into_shardtensor,
+    get_named_beta_schedule,
+    mean_flat,
+)
 
 
 def read_json(file):
     with open(file, "r", encoding="utf-8") as f:
         data = json.load(f)
     return data
+
 
 class DiTDiffusionModelAuto(nn.Layer):
     def __init__(self, model_args, training_args):
@@ -173,11 +177,11 @@ class DiTDiffusionModelAuto(nn.Layer):
 
         x_start = latents
         timesteps = paddle.randint(0, self.num_timesteps, (latents.shape[0],))
-        timesteps = dist.shard_tensor(timesteps, label_id.process_mesh, label_id.placements) # as label_id
+        timesteps = dist.shard_tensor(timesteps, label_id.process_mesh, label_id.placements)  # as label_id
 
         self.vae.eval()
         noise = paddle.randn(latents.shape)
-        noise = dist.shard_tensor(noise, latents.process_mesh, latents.placements) # as latents
+        noise = dist.shard_tensor(noise, latents.process_mesh, latents.placements)  # as latents
         x_t = self.q_sample(latents, timesteps, noise=noise)
 
         model_output = self.transformer(x=x_t, t=timesteps, y=label_id)
@@ -210,7 +214,7 @@ class DiTDiffusionModelAuto(nn.Layer):
             loss = mse_loss + vb_loss
         else:
             loss = mse_loss
-        return loss.mean()
+        return loss.mean().astype("float32")
 
     def q_sample(self, x_start, t, noise=None):
         """
@@ -241,7 +245,7 @@ class DiTDiffusionModelAuto(nn.Layer):
         x_start = dist.reshard(x_start, get_mesh(-1), [dist.Shard(0), dist.Replicate()])
         x_t = dist.reshard(x_t, get_mesh(-1), [dist.Shard(0), dist.Replicate()])
         t = dist.reshard(t, get_mesh(-1), [dist.Shard(0), dist.Replicate()])
-        
+
         true_mean, _, true_log_variance_clipped = self.q_posterior_mean_variance(x_start=x_start, x_t=x_t, t=t)
         out = self.p_mean_variance(model, x_t, t, clip_denoised=clip_denoised, model_kwargs=model_kwargs)
         kl = normal_kl(true_mean, true_log_variance_clipped, out["mean"], out["log_variance"])
