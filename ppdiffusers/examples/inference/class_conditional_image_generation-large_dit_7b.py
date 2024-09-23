@@ -12,12 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+
 import paddle
 from paddlenlp.trainer import set_seed
 
 from ppdiffusers import DDIMScheduler, DiTPipeline
 
-dtype = paddle.float32
+dtype = paddle.bfloat16
+
+# True for inference optimizate
+os.environ["INFERENCE_OPTIMIZE"] = "False"
+
 with paddle.LazyGuard():
     pipe = DiTPipeline.from_pretrained("Alpha-VLLM/Large-DiT-7B-256", paddle_dtype=dtype)
 pipe.scheduler = DDIMScheduler.from_config(pipe.scheduler.config)
