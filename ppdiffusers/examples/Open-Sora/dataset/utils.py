@@ -17,6 +17,7 @@ import re
 from collections.abc import Sequence
 
 import cv2
+import imageio
 import numpy as np
 import paddle
 import pandas as pd
@@ -247,40 +248,53 @@ def read_from_path(path, image_size, transform_name="center"):
         assert ext.lower() in IMG_EXTENSIONS, f"Unsupported file format: {ext}"
     return read_image_from_path(path, image_size=image_size, transform_name=transform_name)
 
-
 def save_sample(x, fps=8, save_path=None, normalize=True, value_range=(-1.0, 1.0)):
     """
+    Saves a video sample from a tensor without using OpenCV.
+
     Args:
-        x (Tensor): shape [C, T, H, W]
+        x (Tensor): Tensor of shape [C, T, H, W].
+        fps (int, optional): Frames per second for the saved video. Defaults to 8.
+        save_path (str, optional): Path to save the video. If None, a default path is used.
+        normalize (bool, optional): Whether to normalize the tensor values. Defaults to True.
+        value_range (tuple, optional): Tuple specifying the (min, max) range for normalization. Defaults to (-1.0, 1.0).
+
+    Returns:
+        str: The path where the video is saved.
     """
-    assert x.ndim == 4
+    assert x.ndim == 4, f"Expected tensor with 4 dimensions [C, T, H, W], but got {x.ndim} dimensions."
+
+    if save_path is None:
+        raise ValueError("save_path must be provided.")
 
     save_path += ".mp4"
+
     if normalize:
-
         low, high = paddle.to_tensor(value_range, dtype="float32")
-        x.clip_(min=low, max=high)
-        x.subtract_(low).divide_(max(high - low, 1e-5))
+        x = x.clip(min=low, max=high)
+        x = (x - low) / paddle.maximum(high - low, paddle.to_tensor(1e-5))
 
+    # Scale to [0, 255] and convert to uint8
     video_data = (
-        x.multiply(y=paddle.to_tensor(255.0, dtype="float32"))
-        .add_(paddle.to_tensor(0.5, dtype="float32"))
-        .clip_(0, 255)
+        x.multiply(paddle.to_tensor(255.0, dtype="float32"))
+        .add(paddle.to_tensor(0.5, dtype="float32"))  # For rounding
+        .clip(0, 255)
     )
     video_data = video_data.transpose([1, 2, 3, 0])
-    video_data = video_data.numpy()
-    video_data = video_data.astype(np.uint8)
+    video_data = video_data.numpy().astype(np.uint8)
 
     frames, height, width, channels = video_data.shape
 
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    out = cv2.VideoWriter(save_path, fourcc, fps, (width, height))
+    # Initialize the video writer using imageio
+    writer = imageio.get_writer(save_path, fps=fps, codec='libx264', format='mp4')
 
-    for i in range(frames):
-        frame = cv2.cvtColor(video_data[i], cv2.COLOR_RGB2BGR)
-        out.write(frame)
-
-    out.release()
+    try:
+        for i in range(frames):
+            frame = video_data[i]
+            # Ensure frame is in RGB format
+            writer.append_data(frame)
+    finally:
+        writer.close()
 
     print(f"Saved to {save_path}")
     return save_path
