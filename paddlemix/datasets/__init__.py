@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Standard imports
+
+# Local imports
 from .caption_dataset import *
 from .chatml_dataset import *
 from .coco_caption import *
@@ -20,4 +23,15 @@ from .collator import *
 from .dataset import *
 from .mixtoken_dataset import *
 from .vg_caption import *
-from .internvl_dataset import *
+
+import pkg_resources
+
+version = pkg_resources.get_distribution("paddlenlp").version   
+try:
+    if version.startswith('3'):
+        from .internvl_dataset import *
+    else:
+        print(f"paddlenlp version {version} is not 3.x, skipping import.")
+
+except ImportError:
+    print("paddlenlp is not installed.")
