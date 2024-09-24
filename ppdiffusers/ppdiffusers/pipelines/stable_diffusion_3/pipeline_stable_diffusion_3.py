@@ -19,7 +19,6 @@ from typing import Any, Callable, Dict, List, Optional, Union
 import paddle
 
 from ppdiffusers.transformers import (  # T5TokenizerFast,
-    CLIPTextModelOutput,
     CLIPTextModelWithProjection,
     CLIPTokenizer,
     T5EncoderModel,
@@ -35,6 +34,15 @@ from ...utils import logging, replace_example_docstring
 from ...utils.paddle_utils import randn_tensor
 from ..pipeline_utils import DiffusionPipeline
 from .pipeline_output import StableDiffusion3PipelineOutput
+
+try:
+    # paddle.incubate.jit.inference is available in paddle develop but not in paddle 3.0beta, so we add a try except.
+    from paddle.incubate.jit import is_inference_mode
+except:
+
+    def is_inference_mode(func):
+        return False
+
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -111,7 +119,7 @@ def retrieve_timesteps(
     return timesteps, num_inference_steps
 
 
-class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):
+class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):  # SD3LoraLoaderMixin
 
     r"""
     Args:
@@ -398,6 +406,9 @@ class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):
                 clip_prompt_embeds,
                 (0, t5_prompt_embed.shape[-1] - clip_prompt_embeds.shape[-1]),
                 data_format="NCL",
+                clip_prompt_embeds,
+                (0, t5_prompt_embed.shape[-1] - clip_prompt_embeds.shape[-1]),
+                data_format="NCL",
             )
 
             prompt_embeds = paddle.concat([clip_prompt_embeds, t5_prompt_embed], axis=-2)
@@ -446,10 +457,14 @@ class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):
             t5_negative_prompt_embed = self._get_t5_prompt_embeds(
                 prompt=negative_prompt_3,
                 num_images_per_prompt=num_images_per_prompt,
+                prompt=negative_prompt_3,
+                num_images_per_prompt=num_images_per_prompt,
             )
 
             negative_clip_prompt_embeds = paddle.nn.functional.pad(
                 negative_clip_prompt_embeds,
+                (0, t5_negative_prompt_embed.shape[-1] - negative_clip_prompt_embeds.shape[-1]),
+                data_format="NCL",
                 (0, t5_negative_prompt_embed.shape[-1] - negative_clip_prompt_embeds.shape[-1]),
                 data_format="NCL",
             )
@@ -809,8 +824,7 @@ class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):
                 # broadcast to batch dimension in a way that's compatible with ONNX/Core ML
                 timestep = t.expand(latent_model_input.shape[0])
 
-                # in order to d2s
-                noise_pred_out = self.transformer(
+                model_output = self.transformer(
                     hidden_states=latent_model_input,
                     timestep=timestep,
                     encoder_hidden_states=prompt_embeds,
@@ -819,10 +833,12 @@ class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):
                     return_dict=False,
                 )
 
-                if isinstance(noise_pred_out, paddle.Tensor):
-                    noise_pred = noise_pred_out
+                if is_inference_mode(self.transformer):
+                    # NOTE:(changwenbin,zhoukangkang)
+                    # This is for paddle inference mode
+                    noise_pred = model_output
                 else:
-                    noise_pred = noise_pred_out[0]
+                    noise_pred = model_output[0]
 
                 # perform guidance
                 if self.do_classifier_free_guidance:
@@ -874,3 +890,4 @@ class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):
             return (image,)
 
         return StableDiffusion3PipelineOutput(images=image)
+

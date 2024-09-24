@@ -57,28 +57,6 @@ def rank0_print(*args):
             print(f"Rank {dist.get_rank()}: ", *args)
 
 
-# @dataclass
-# class BaseModelOutput:
-#     last_hidden_state: paddle.Tensor
-#     hidden_states: Optional[Tuple[paddle.Tensor]] = None
-#     attentions: Optional[Tuple[paddle.Tensor]] = None
-
-# @dataclass
-# class BaseModelOutputWithPooling:
-#     last_hidden_state: paddle.Tensor
-#     pooler_output: paddle.Tensor
-#     hidden_states: Optional[Tuple[paddle.Tensor]] = None
-#     attentions: Optional[Tuple[paddle.Tensor]] = None
-
-# @dataclass
-# class ModelOutput:
-#     """
-#     Base class for model's outputs, with potential hidden states and attentions.
-#     """
-#     last_hidden_state: Optional[paddle.Tensor] = None
-#     hidden_states: Optional[Tuple[paddle.Tensor]] = None
-#     attentions: Optional[Tuple[paddle.Tensor]] = None
-
 
 class SigLipImageProcessor:
     def __init__(
@@ -175,27 +153,10 @@ class SigLipVisionConfig(PretrainedConfig):
 
 
 @dataclass
-# Copied from transformers.models.clip.modeling_clip.CLIPVisionModelOutput with CLIP->SigLip
 class SigLipVisionModelOutput(ModelOutput):
     """
     Base class for vision model's outputs that also contains image embeddings of the pooling of the last hidden states.
 
-    Args:
-        image_embeds (`torch.Tensor` of shape `(batch_size, output_dim)` *optional* returned when model is initialized with `with_projection=True`):
-            The image embeddings obtained by applying the projection layer to the pooler_output.
-        last_hidden_state (`torch.Tensor` of shape `(batch_size, sequence_length, hidden_size)`):
-            Sequence of hidden-states at the output of the last layer of the model.
-        hidden_states (`tuple(torch.Tensor)`, *optional*, returned when `output_hidden_states=True` is passed or when `config.output_hidden_states=True`):
-            Tuple of `torch.Tensor` (one for the output of the embeddings, if the model has an embedding layer, +
-            one for the output of each layer) of shape `(batch_size, sequence_length, hidden_size)`.
-
-            Hidden-states of the model at the output of each layer plus the optional initial embedding outputs.
-        attentions (`tuple(torch.Tensor)`, *optional*, returned when `output_attentions=True` is passed or when `config.output_attentions=True`):
-            Tuple of `torch.Tensor` (one for each layer) of shape `(batch_size, num_heads, sequence_length,
-            sequence_length)`.
-
-            Attentions weights after the attention softmax, used to compute the weighted average in the self-attention
-            heads.
     """
 
     image_embeds: Optional[paddle.Tensor] = None
@@ -309,7 +270,6 @@ class SigLipAttention(nn.Layer):
         return attn_output, attn_weights
 
 
-# Copied from transformers.models.clip.modeling_clip.CLIPMLP with CLIP->SigLip
 class SigLipMLP(nn.Layer):
     def __init__(self, config):
         super().__init__()
@@ -325,7 +285,6 @@ class SigLipMLP(nn.Layer):
         return hidden_states
 
 
-# Copied from transformers.models.clip.modeling_clip.CLIPEncoderLayer with CLIP->SigLip
 class SigLipEncoderLayer(nn.Layer):
     def __init__(self, config: SigLipVisionConfig):
         super().__init__()
@@ -344,9 +303,9 @@ class SigLipEncoderLayer(nn.Layer):
     ) -> Tuple[paddle.Tensor]:
         """
         Args:
-            hidden_states (`torch.Tensor`):
+            hidden_states (`paddle.Tensor`):
                 Input to the layer of shape `(batch, seq_len, embed_dim)`.
-            attention_mask (`torch.Tensor`):
+            attention_mask (`paddle.Tensor`):
                 Attention mask of shape `(batch, 1, q_len, k_v_seq_len)` where padding elements are indicated by very large negative values.
             output_attentions (`bool`, *optional*, defaults to `False`):
                 Whether or not to return the attentions tensors of all attention layers. See `attentions` under
@@ -417,11 +376,11 @@ class SigLipEncoder(nn.Layer):
     ) -> Union[Tuple, BaseModelOutput]:
         r"""
         Args:
-            inputs_embeds (`torch.Tensor` of shape `(batch_size, sequence_length, hidden_size)`):
+            inputs_embeds (`paddle.Tensor` of shape `(batch_size, sequence_length, hidden_size)`):
                 Optionally, instead of passing `input_ids` you can choose to directly pass an embedded representation.
                 This is useful if you want more control over how to convert `input_ids` indices into associated vectors
                 than the model's internal embedding lookup matrix.
-            attention_mask (`torch.Tensor` of shape `(batch_size, sequence_length)`, *optional*):
+            attention_mask (`paddle.Tensor` of shape `(batch_size, sequence_length)`, *optional*):
                 Mask to avoid performing attention on padding token indices. Mask values selected in `[0, 1]`:
 
                 - 1 for tokens that are **not masked**,
@@ -560,7 +519,7 @@ class SigLipMultiheadAttentionPoolingHead(nn.Layer):
 
     def forward(self, hidden_state):
         batch_size = hidden_state.shape[0]
-        probe = self.probe.repeat(batch_size, 1, 1)
+        probe = self.probe.tile([batch_size, 1, 1])
 
         hidden_state = self.attention(probe, hidden_state, hidden_state)[0]
 
@@ -581,8 +540,6 @@ class SigLipVisionModel(SigLipPreTrainedModel):
 
         self.vision_model = SigLipVisionTransformer(config)
 
-        # Initialize weights and apply final processing
-        # self.post_init()
 
     def get_input_embeddings(self) -> nn.Layer:
         return self.vision_model.embeddings.patch_embedding
@@ -602,20 +559,22 @@ class SigLipVisionModel(SigLipPreTrainedModel):
         ```python
         >>> from PIL import Image
         >>> import requests
-        >>> from transformers import AutoProcessor, SigLipVisionModel
+        >>> from paddlemix.models.llava.siglip_encoder import SigLipVisionModel, SigLipImageProcessor
+        >>> import paddle
 
-        >>> model = SigLipVisionModel.from_pretrained("google/siglip-base-patch16-224")
-        >>> processor = AutoProcessor.from_pretrained("google/siglip-base-patch16-224")
+        # 加载模型和处理器
+        >>> model = SigLipVisionModel.from_pretrained("google/siglip-so400m-patch14-384/")
+        >>> processor = SigLipImageProcessor()
 
+        # 获取测试图片
         >>> url = "http://images.cocodataset.org/val2017/000000039769.jpg"
         >>> image = Image.open(requests.get(url, stream=True).raw)
 
-        >>> inputs = processor(images=image, return_tensors="pt")
+        # 推理输入
+        >>> inputs = processor.preprocess(images=image, return_tensors="pd")["pixel_values"]
 
-        >>> outputs = model(**inputs)
-        >>> last_hidden_state = outputs.last_hidden_state
-        >>> pooled_output = outputs.pooler_output  # pooled features
-        ```"""
+        ```
+        """
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         return self.vision_model(
@@ -686,16 +645,6 @@ class SigLipVisionTower(nn.Layer):
     def dummy_feature(self):
         return paddle.zeros(1, self.hidden_size)
 
-    # @property
-    # def dtype(self):
-    #     for p in self.vision_tower.parameters():
-    #         return p.dtype
-
-    # @property
-    # def device(self):
-    #     for p in self.vision_tower.parameters():
-    #         return p.device
-
     @property
     def hidden_size(self):
         return self.config.hidden_size
@@ -707,7 +656,6 @@ class SigLipVisionTower(nn.Layer):
     @property
     def num_patches_per_side(self):
         return self.config.image_size // self.config.patch_size
-        # return self.model_config["vision_cfg"]["image_size"] // self.model_config["vision_cfg"]["patch_size"]
 
     @property
     def image_size(self):

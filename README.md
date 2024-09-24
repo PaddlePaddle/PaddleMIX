@@ -19,10 +19,13 @@ PaddleMIX是基于飞桨的多模态大模型开发套件，聚合图像、文�
 
 ## 最新进展
 
-📚《飞桨多模态大模型开发套件PaddleMIX 2.0 震撼发布》，图文音视频场景全覆盖，多模态高效助力产业创新。超大规模训练支持，覆盖图文预训练、文生图、跨模态视觉任务，覆盖金融、教育、电商、医疗等产业场景。8月8日（周四）20：00 带你直播了解多模态大模型最新架构，深度解析PaddleMIX高性能模型库，手把手演示LLaVA模型训推全流程。[报名链接](https://www.wjx.top/vm/wKqysjx.aspx?udsid=449688)
+📚《飞桨多模态大模型开发套件PaddleMIX 2.0 震撼发布》，图文音视频场景全覆盖，多模态高效助力产业创新。超大规模训练支持，覆盖图文预训练、文生图、跨模态视觉任务，覆盖金融、教育、电商、医疗等产业场景。8月8日（周四）20：00 带你直播了解多模态大模型最新架构，深度解析PaddleMIX高性能模型库，手把手演示LLaVA模型训推全流程。[报名链接](https://www.wjx.top/vm/wKqysjx.aspx?udsid=449688)  
+
+**2024.09.11 更新**
+* 新增Qwen2-VL、InternVL2、SD3等模型
 
 **2024.07.25 发布PaddleMIX v2.0**
-* 多模态理解：新增LLaVA系列,Qwen-VL等；新增Auto模块统一SFT训练流程；新增mixtoken训练策略，SFT吞吐量提升5.6倍。
+* 多模态理解：新增LLaVA系列，Qwen-VL等；新增Auto模块统一SFT训练流程；新增mixtoken训练策略，SFT吞吐量提升5.6倍。
 * 多模态生成：发布[PPDiffusers 0.24.1](./ppdiffusers/README.md)版本，支持视频生成能力，文生图模型新增LCM。新增飞桨版peft，accelerate后端。提供基于飞桨开发的ComfyUI插件。
 * 多模态数据处理工具箱[DataCopilot](./paddlemix/datacopilot/)：支持自定义数据结构，数据转换，离线格式检查；支持基本的统计信息，数据可视化功能。
 
@@ -104,10 +107,10 @@ pip install -e .
   <tbody>
     <tr align="center" valign="center">
       <td>
-        <b>多模态预训练</b>
+        <b>多模态理解</b>
       </td>
       <td>
-        <b>扩散类模型</b>
+        <b>多模态生成</b>
       </td>
     </tr>
     <tr valign="top">
@@ -116,14 +119,19 @@ pip install -e .
         </ul>
           <li><b>图文预训练</b></li>
         <ul>
-            <li><a href="paddlemix/examples/evaclip">EVA-CLIP</a></li>
-            <li><a href="paddlemix/examples/coca">CoCa</a></li>
             <li><a href="paddlemix/examples/clip">CLIP</a></li>
+            <li><a href="paddlemix/examples/evaclip">EVA-CLIP</a></li>
+            <li><a href="paddlemix/examples/llava">LLaVA</a></li>
+            <li><a href="paddlemix/examples/llava">LLaVA-1.5</a></li>
+            <li><a href="paddlemix/examples/llava">LLaVA-NeXT</a></li>
+            <li><a href="paddlemix/examples/qwen_vl">Qwen-VL</a></li>
+            <li><a href="paddlemix/examples/qwen2_vl">Qwen2-VL</a></li>
+            <li><a href="paddlemix/examples/internvl2">InternVL2</a></li>
+            <li><a href="paddlemix/examples/minimonkey">Mini-Monkey</a></li>
+            <li><a href="paddlemix/examples/coca">CoCa</a></li>
             <li><a href="paddlemix/examples/blip2">BLIP-2</a></li>
             <li><a href="paddlemix/examples/minigpt4">miniGPT-4</a></li>
             <li><a href="paddlemix/examples/visualglm">VIsualGLM</a></li>
-            <li><a href="paddlemix/examples/qwen_vl">Qwen_VL</a></li>
-            <li><a href="paddlemix/examples/llava">LLaVA</a></li>
             <li><a href="paddlemix/examples/cogvlm">CogVLM && CogAgent</a></li>
             <li><a href="paddlemix/examples/internlm_xcomposer2">InternLM-XComposer2</a></li>
       </ul>

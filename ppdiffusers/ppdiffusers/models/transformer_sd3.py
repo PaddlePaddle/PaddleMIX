@@ -95,7 +95,6 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
         self.context_embedder = nn.Linear(self.config.joint_attention_dim, self.config.caption_projection_dim)
 
         self.inference_optimize = os.getenv("INFERENCE_OPTIMIZE") == "True"
-        self.inference_optimize_origin = os.getenv("INFERENCE_OPTIMIZE_ORIGIN") == "True"
         # `attention_head_dim` is doubled to account for the mixing.
         # It needs to crafted when we get the actual checkpoints.
         self.transformer_blocks = nn.LayerList(
@@ -117,14 +116,6 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
                 dim=self.inner_dim,
                 num_attention_heads=self.config.num_attention_heads,
                 attention_head_dim=self.inner_dim,
-            )
-        elif self.inference_optimize_origin:
-            self.sd3_origin_transformer = paddle.incubate.jit.inference(
-                self.sd3_origin_transformer,
-                enable_new_ir=True,
-                cache_static_model=False,
-                exp_enable_use_cutlass=True,
-                delete_pass_lists=["add_norm_fuse_pass"],
             )
 
         self.norm_out = AdaLayerNormContinuous(self.inner_dim, self.inner_dim, elementwise_affine=False, eps=1e-6)
@@ -208,6 +199,7 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
             )
 
         def fn_recursive_attn_processor(name: str, module: paddle.nn.Module, processor):
+        def fn_recursive_attn_processor(name: str, module: paddle.nn.Module, processor):
             if hasattr(module, "set_processor"):
                 if not isinstance(processor, dict):
                     module.set_processor(processor)
@@ -287,6 +279,38 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
                 )
         return encoder_hidden_states, hidden_states
 
+    def sd3_origin_transformer(
+        self,
+        hidden_states,
+        encoder_hidden_states,
+        temb,
+    ):
+        for block in self.transformer_blocks:
+            if self.training and self.gradient_checkpointing and not use_old_recompute():
+
+                def create_custom_forward(module, return_dict=None):
+                    def custom_forward(*inputs):
+                        if return_dict is not None:
+                            return module(*inputs, return_dict=return_dict)
+                        else:
+                            return module(*inputs)
+
+                    return custom_forward
+
+                ckpt_kwargs = {} if recompute_use_reentrant() else {"use_reentrant": False}
+                hidden_states = recompute(
+                    create_custom_forward(block),
+                    hidden_states,
+                    encoder_hidden_states,
+                    temb,
+                    **ckpt_kwargs,
+                )
+            else:
+                encoder_hidden_states, hidden_states = block(
+                    hidden_states=hidden_states, encoder_hidden_states=encoder_hidden_states, temb=temb
+                )
+        return encoder_hidden_states, hidden_states
+
     def forward(
         self,
         hidden_states: paddle.Tensor,
@@ -330,6 +354,7 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
             scale_lora_layers(self, lora_scale)
         else:
             logger.info("Passing `scale` via `joint_attention_kwargs` when not using the PEFT backend is ineffective.")
+            logger.info("Passing `scale` via `joint_attention_kwargs` when not using the PEFT backend is ineffective.")
 
         height, width = hidden_states.shape[-2:]
 
@@ -341,19 +366,8 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
             out = self.simplified_sd3(
                 hidden_states=hidden_states, encoder_hidden_states=encoder_hidden_states, temb=temb
             )
-            # this is for paddle inference.
-            if isinstance(out, paddle.Tensor):
-                hidden_states = out
-            else:
-                hidden_states = out[1]
+            hidden_states = out[1]
             encoder_hidden_states = None
-
-        elif self.inference_optimize_origin:
-            hidden_states = self.sd3_origin_transformer(
-                hidden_states=hidden_states, encoder_hidden_states=encoder_hidden_states, temb=temb
-            )
-            encoder_hidden_states = None
-
         else:
             encoder_hidden_states, hidden_states = self.sd3_origin_transformer(
                 hidden_states=hidden_states, encoder_hidden_states=encoder_hidden_states, temb=temb
@@ -372,6 +386,8 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
         )
 
         hidden_states = paddle.transpose(hidden_states, [0, 5, 1, 3, 2, 4])
+
+        hidden_states = paddle.transpose(hidden_states, [0, 5, 1, 3, 2, 4])
         output = hidden_states.reshape(
             shape=(hidden_states.shape[0], self.out_channels, height * patch_size, width * patch_size)
         )
@@ -387,8 +403,10 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
 
     @classmethod
     def custom_modify_weight(cls, state_dict):
+
         if os.getenv("INFERENCE_OPTIMIZE") != "True":
             return
+
         # NOTE:(changwenbin,zhoukangkang) SD3 num_layers is 24
         sd3_num_layers = 24
         for i in range(sd3_num_layers):
@@ -433,35 +451,14 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
                 else:
                     print(f"Warning!!: '{from_}' not found in state_dict")
 
-            state_dict[f"simplified_sd3.qkv.{i}.weight"] = paddle.concat(
-                [
-                    state_dict[f"simplified_sd3.q.{i}.weight"],
-                    state_dict[f"simplified_sd3.k.{i}.weight"],
-                    state_dict[f"simplified_sd3.v.{i}.weight"],
-                ],
-                axis=1,
-            )
-            state_dict[f"simplified_sd3.qkv.{i}.bias"] = paddle.concat(
-                [
-                    state_dict[f"simplified_sd3.q.{i}.bias"],
-                    state_dict[f"simplified_sd3.k.{i}.bias"],
-                    state_dict[f"simplified_sd3.v.{i}.bias"],
-                ],
-                axis=0,
-            )
-            state_dict[f"simplified_sd3.eqkv.{i}.weight"] = paddle.concat(
-                [
-                    state_dict[f"simplified_sd3.eq.{i}.weight"],
-                    state_dict[f"simplified_sd3.ek.{i}.weight"],
-                    state_dict[f"simplified_sd3.ev.{i}.weight"],
-                ],
-                axis=1,
-            )
-            state_dict[f"simplified_sd3.eqkv.{i}.bias"] = paddle.concat(
-                [
-                    state_dict[f"simplified_sd3.eq.{i}.bias"],
-                    state_dict[f"simplified_sd3.ek.{i}.bias"],
-                    state_dict[f"simplified_sd3.ev.{i}.bias"],
-                ],
-                axis=0,
-            )
+            # concat qkv weight and bias.
+            for placeholder1 in ["", "e"]:
+                for placeholder2 in ["weight", "bias"]:
+                    state_dict[f"simplified_sd3.{placeholder1}qkv.{i}.{placeholder2}"] = paddle.concat(
+                        [
+                            state_dict[f"simplified_sd3.{placeholder1}q.{i}.{placeholder2}"],
+                            state_dict[f"simplified_sd3.{placeholder1}k.{i}.{placeholder2}"],
+                            state_dict[f"simplified_sd3.{placeholder1}v.{i}.{placeholder2}"],
+                        ],
+                        axis=-1,
+                    )

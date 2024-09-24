@@ -16,6 +16,11 @@ import os
 os.environ["FLAGS_use_cuda_managed_memory"] = "true"
 import argparse
 import datetime
+import os
+
+os.environ["FLAGS_use_cuda_managed_memory"] = "true"
+import argparse
+import datetime
 
 import paddle
 
@@ -38,12 +43,6 @@ def parse_args():
         default=False,
         help="If inference_optimize is set to True, all optimizations except Triton are enabled.",
     )
-    parser.add_argument(
-        "--inference_optimize_origin",
-        type=(lambda x: str(x).lower() in ["true", "1", "yes"]),
-        default=False,
-        help="If inference_optimize_origin is set to True, the original dynamic graph inference optimization is enabled.",
-    )
     parser.add_argument("--height", type=int, default=512, help="Height of the generated image.")
     parser.add_argument("--width", type=int, default=512, help="Width of the generated image.")
     parser.add_argument("--num-inference-steps", type=int, default=50, help="Number of inference steps.")
@@ -57,8 +56,6 @@ args = parse_args()
 if args.inference_optimize:
     os.environ["INFERENCE_OPTIMIZE"] = "True"
     os.environ["INFERENCE_OPTIMIZE_TRITON"] = "True"
-if args.inference_optimize_origin:
-    os.environ["INFERENCE_OPTIMIZE_ORIGIN"] = "True"
 if args.dtype == "float32":
     inference_dtype = paddle.float32
 elif args.dtype == "float16":
@@ -119,6 +116,45 @@ pipe.vae.decode = paddle.incubate.jit.inference(
 
 generator = paddle.Generator().manual_seed(42)
 prompt = "A cat holding a sign that says hello world"
+
+
+image = pipe(
+    prompt, num_inference_steps=args.num_inference_steps, width=args.width, height=args.height, generator=generator
+).images[0]
+
+if args.benchmark:
+    # warmup
+    for i in range(3):
+        image = pipe(
+            prompt,
+            num_inference_steps=args.num_inference_steps,
+            width=args.width,
+            height=args.height,
+            generator=generator,
+        ).images[0]
+
+    repeat_times = 10
+    sumtime = 0.0
+    for i in range(repeat_times):
+        paddle.device.synchronize()
+        starttime = datetime.datetime.now()
+        image = pipe(
+            prompt,
+            num_inference_steps=args.num_inference_steps,
+            width=args.width,
+            height=args.height,
+            generator=generator,
+        ).images[0]
+        paddle.device.synchronize()
+        endtime = datetime.datetime.now()
+        duringtime = endtime - starttime
+        duringtime = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
+        sumtime += duringtime
+        print("SD3 end to end time : ", duringtime, "ms")
+
+    print("SD3 ave end to end time : ", sumtime / repeat_times, "ms")
+    cuda_mem_after_used = paddle.device.cuda.max_memory_allocated() / (1024**3)
+    print(f"Max used CUDA memory : {cuda_mem_after_used:.3f} GiB")
 
 
 image = pipe(

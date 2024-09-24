@@ -52,6 +52,9 @@ class SimplifiedSD3(nn.Layer):
         last_context_hidden_states = None
         last_context_gate_mlp = None
 
+        seq1 = hidden_states.shape[1]
+        seq2 = encoder_hidden_states.shape[1]
+
         for i in range(self.num_layers):
             context_pre_only = i == self.num_layers - 1
 
@@ -109,13 +112,11 @@ class SimplifiedSD3(nn.Layer):
 
             norm_hidden_states1 = F.scaled_dot_product_attention_(q, k, v, dropout_p=0.0, is_causal=False)
             norm_hidden_states1 = norm_hidden_states1.reshape([2, -1, self.dim])
-            # attn_output, context_attn_output = paddle.split(
-            #     norm_hidden_states1, num_or_sections=[hidden_states.shape[1], encoder_hidden_states.shape[1]], axis=1
-            # )
+            attn_output, context_attn_output = paddle.split(norm_hidden_states1, num_or_sections=[seq1, seq2], axis=1)
 
-            attn_output, context_attn_output = paddlemix.triton_ops.triton_split(
-                norm_hidden_states1, num_or_sections=[1024, 154], axis=1
-            )
+            # attn_output, context_attn_output = paddlemix.triton_ops.triton_split(
+            #     norm_hidden_states1, num_or_sections=[1024, 154], axis=1
+            # )
 
             attn_output = paddle.nn.functional.linear(
                 attn_output, self.to_out_linear[i].weight, self.to_out_linear[i].bias
