@@ -47,7 +47,9 @@ class LlavaProcessor(ProcessorMixin):
         **kwargs,
     ):
         if record is not None:
-            image_paths = [record["image"]] if "image" in record.keys() else []
+            image_paths = record["image"] if "image" in record.keys() else []
+            if isinstance(image_paths, str):
+                image_paths = [image_paths]
             prompt = record["conversations"] if "conversations" in record.keys() else None
 
         image_aspect_ratio = self.image_aspect_ratio
