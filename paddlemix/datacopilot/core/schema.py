@@ -74,6 +74,74 @@ properties:
 required: ['id', 'image', 'conversations']
 """
 
+    MIX = \
+"""
+$id: 'https://example.com/schemas/multimodal_mix'
+$schema: 'https://json-schema.org/draft/2020-12/schema'
+
+type: object
+properties:
+  id:
+    anyOf:
+      - 
+        type: string
+        pattern: '\S{1,}'
+      - 
+        type: integer
+        minimum: 0
+
+  images:
+    anyOf:
+      - 
+        type: 'null'
+      - 
+        type: array
+        minItems: 1
+        items:
+          type: object
+          properties:
+            id:
+              type: integer
+              minimum: 0
+            url:
+              type: string
+              pattern: '\.(jpg|jpeg|png|webp|JPG|JPEG|PNG)$'
+              description: '.png or .jpg or .jpeg or .webp'
+            heigh:
+              type: integer
+              minimum: 0
+            width:
+              type: integer
+              minimum: 0
+          required:
+            - id
+            - url
+            
+  conversations:
+    type: array
+    minItems: 1
+    items:
+      type: object
+      properties:
+        from:
+          type: string
+          description: 'user or assistant'
+          enum: 
+            - user
+            - assistant
+        value:
+          anyOf:
+            - type: string
+            - type: 'null'
+      required:
+        - from
+        - value
+required:
+  - id
+  - images
+  - conversations
+"""
+
 SCHEMA_VALIDATORS = {
     k: JsonSchemaValidator.from_string(k.value) for k in SCHEMA
 }
