@@ -19,3 +19,20 @@ from .clip_model import *
 from .mm_utils import *
 from .modeling import *
 from .tokenizer import *
+
+import pkg_resources
+
+version = pkg_resources.get_distribution("paddlenlp").version   
+try:
+    if version.startswith('3'):
+        from .modeling_qwen import *
+        from .configuration_qwen import *
+    else:
+        print(f"paddlenlp version {version} is not 3.x, skipping import.")
+
+except ImportError:
+    print("paddlenlp is not installed.")
+
+
+
+
