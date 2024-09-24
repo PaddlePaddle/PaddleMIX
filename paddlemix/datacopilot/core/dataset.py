@@ -122,6 +122,11 @@ class MMDataset(object):
             random.shuffle(self._items)
         return self
 
+    def sample(self, k: int) -> 'MMDataset':
+        indices = random.sample(range(len(self)), k)
+        items = [self.items[i] for i in indices]
+        return MMDataset(items)
+
     @classmethod
     def from_json(cls, path: str, schema: SCHEMA=SCHEMA.MM) -> 'MMDataset':
         with open(path, 'r') as f:
