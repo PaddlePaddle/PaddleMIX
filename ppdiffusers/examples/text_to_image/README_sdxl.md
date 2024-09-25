@@ -224,3 +224,14 @@ for file_name in sorted(os.listdir(dir_name)):
     image = pipe(prompt, num_inference_steps=30, guidance_scale=7.5).images[0]
     image.save("pokemon_" + file_name + ".png")
 ```
+
+## NPU硬件训练
+请参照[tools](../../tools/README.md)进行NPU硬件Paddle安装。
+
+使用NPU进行LoRA训练和推理时参考如下命令设置相应的环境变量，训练和推理运行命令可直接参照上述LoRA训练和推理命令。
+```bash
+export FLAGS_npu_storage_format=0
+export FLAGS_use_stride_kernel=0
+export FLAGS_npu_scale_aclnn=True
+export FLAGS_allocator_strategy=auto_growth
+```
