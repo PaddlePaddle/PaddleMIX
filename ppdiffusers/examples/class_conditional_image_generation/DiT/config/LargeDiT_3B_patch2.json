@@ -5,6 +5,5 @@
   "num_layers": 32,
   "num_attention_heads": 32,
   "attention_head_dim": 96,
-  "qk_norm": false,
-  "use_fused_rms_norm": false
+  "qk_norm": false
 }
