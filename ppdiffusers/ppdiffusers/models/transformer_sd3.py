@@ -145,7 +145,7 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):   # , PeftAdapterMixin, Fr
         # set recursively
         processors = {}
 
-        def fn_recursive_add_processors(name: str, module: torch.nn.Module, processors: Dict[str, AttentionProcessor]):
+        def fn_recursive_add_processors(name: str, module: paddle.nn.Layer, processors: Dict[str, AttentionProcessor]):
             if hasattr(module, "get_processor"):
                 processors[f"{name}.processor"] = module.get_processor(return_deprecated_lora=True)
 
@@ -178,7 +178,7 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):   # , PeftAdapterMixin, Fr
                 f" number of attention layers: {count}. Please make sure to pass {count} processor classes."
             )
 
-        def fn_recursive_attn_processor(name: str, module: torch.nn.Module, processor):
+        def fn_recursive_attn_processor(name: str, module: paddle.nn.Layer, processor):
             if hasattr(module, "set_processor"):
                 if not isinstance(processor, dict):
                     module.set_processor(processor)
@@ -267,7 +267,7 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):   # , PeftAdapterMixin, Fr
             # weight the lora layers by setting `lora_scale` for each PEFT layer
             scale_lora_layers(self, lora_scale)
         else:
-            logger.info(
+            logger.debug(
                 "Passing `scale` via `joint_attention_kwargs` when not using the PEFT backend is ineffective."
             )
 
