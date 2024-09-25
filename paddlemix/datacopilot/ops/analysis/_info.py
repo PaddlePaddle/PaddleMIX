@@ -17,7 +17,7 @@ from rich.console import Console
 from rich.table import Table
 from rich.columns import Columns
 
-from ..core import register, MMDataset
+from ...core import register, MMDataset
 
 
 @register(force=True)

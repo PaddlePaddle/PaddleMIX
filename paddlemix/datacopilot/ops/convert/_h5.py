@@ -24,8 +24,8 @@ from contextlib import contextmanager
 
 from typing import List, Union
 
-from ..core import MMDataset, SCHEMA
-from ..misc import ParallelMode, parallel_map, freeze_rng_state, enumerate_chunk
+from ...core import MMDataset, SCHEMA
+from ...misc import ParallelMode, parallel_map, freeze_rng_state, enumerate_chunk
 
 __all__ = ['export_h5', 'check_h5', 'from_h5']
 
