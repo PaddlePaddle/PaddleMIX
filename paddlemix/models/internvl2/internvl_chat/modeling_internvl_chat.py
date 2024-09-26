@@ -31,7 +31,7 @@ from ..phi3.modeling_phi3 import Phi3ForCausalLM
 from paddlenlp.generation import GenerationConfig
 from paddlenlp.transformers import LlamaForCausalLM, Qwen2ForCausalLM
 from paddlenlp.transformers.model_outputs import CausalLMOutputWithPast
-from paddlemix.models.model_utils import MixPretrainedModel
+from paddlemix.models.model_utils import MixPretrainedModel, NPUCrossEntropyLoss
 from paddlenlp.transformers.model_utils import PretrainedModel
 from .configuration_internvl_chat import InternVLChatConfig
 from .modeling_intern_vit import InternVisionModel
@@ -201,7 +201,7 @@ class InternVLChatModel(MixPretrainedModel):
             shift_logits = logits[..., :-1, :]
             shift_labels = labels[..., 1:]
             # Flatten the tokens
-            loss_fct = CrossEntropyLoss()
+            loss_fct = NPUCrossEntropyLoss() if "npu" in paddle.get_device() else CrossEntropyLoss()
             shift_logits = shift_logits.reshape([-1, self.language_model.config.vocab_size])
             shift_labels = shift_labels.reshape([-1])
             # Enable model parallelism
