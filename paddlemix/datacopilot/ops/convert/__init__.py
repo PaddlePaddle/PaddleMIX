@@ -13,5 +13,5 @@
 # limitations under the License.
 
 
-from .analysis import *
-from .convert import *
+from ._h5 import from_h5, check_h5, export_h5
+from ._schema import convert_schema
