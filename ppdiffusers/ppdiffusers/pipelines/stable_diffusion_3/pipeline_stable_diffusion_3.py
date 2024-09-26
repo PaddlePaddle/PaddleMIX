@@ -708,58 +708,6 @@ class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):  # SD3Lo
                 The list of tensor inputs for the `callback_on_step_end` function. The tensors specified in the list
                 will be passed as `callback_kwargs` argument. You will only be able to include variables listed in the
                 `._callback_tensor_inputs` attribute of your pipeline class.
-
-            prompt (`str` 或 `List[str]`，*可选*)：
-                引导图像生成的提示。如果未定义，则必须传递 `prompt_embeds`。代替。
-            prompt_2 (`str` 或 `List[str]`，*可选*)：
-                发送给 `tokenizer_2` 和 `text_encoder_2` 的提示。如果未定义，则将改用 `prompt`
-            prompt_3 (`str` 或 `List[str]`，*可选*)：
-                发送给 `tokenizer_3` 和 `text_encoder_3` 的提示。如果未定义，则将改用 `prompt`
-            height (`int`，*可选*，默认为 self.unet.config.sample_size * self.vae_scale_factor)：
-                生成图像的高度（以像素为单位）。为获得最佳效果，默认设置为 1024。
-            width (`int`，*可选*，默认为 self.unet.config.sample_size * self.vae_scale_factor):
-                生成图像的宽度（以像素为单位）。为获得最佳效果，默认设置为 1024。
-            num_inference_steps (`int`，*可选*，默认为 50):
-                去噪步骤的数量。去噪步骤越多，图像质量越高，但推理速度越慢。
-            timesteps (`List[int]`，*可选*):
-                自定义时间步长，用于在其 `set_timesteps` 方法中支持 `timesteps` 参数的调度程序的去噪过程。如果未定义，则将使用传递 `num_inference_steps` 时的默认行为。必须按降序排列。
-            guide_scale（`float`，*可选*，默认为 5.0）：
-                指导尺度，如 [无分类器扩散指导](https://arxiv.org/abs/2207.12598) 中定义。`guidance_scale` 定义为 [Imagen论文](https://arxiv.org/pdf/2205.11487.pdf) 中公式 2 的 `w`。通过设置 `guidance_scale >
-                1` 来启用指导尺度。较高的指导尺度鼓励生成与文本 `prompt` 紧密相关的图像，通常以较低的图像质量为代价。
-            negative_prompt（`str` 或 `List[str]`，*可选*）：
-                不指导图像生成的提示。如果未定义，则必须传递`negative_prompt_embeds`。不使用指导时忽略（即，如果 `guidance_scale` 小于 `1`，则忽略）。
-            negative_prompt_2（`str` 或 `List[str]`，*可选*）：
-                提示或不指导图像生成的提示将被发送到 `tokenizer_2` 和`text_encoder_2`。如果未定义，则改用 `negative_prompt`
-            negative_prompt_3（`str` 或 `List[str]`，*可选*）：
-                提示或不指导图像生成的提示将被发送到 `tokenizer_3` 和`text_encoder_3`。如果未定义，则改用 `negative_prompt`
-            num_images_per_prompt（`int`，*可选*，默认为 1）：
-                每个提示要生成的图像数量。
-            generator（`paddle.Generator` 或 `List[paddle.Generator]`，*可选*）：
-                一个或多个 [[paddle] 生成器](https://pytorch.org/docs/stable/generated/torch.Generator.html)以使生成具有确定性。
-            latents（`paddle.Tensor`，*可选*）：
-                从高斯分布中采样的预生成噪声潜变量，用作图像生成的输入。可用于调整具有不同提示的同一生成。如果未提供，将通过使用提供的随机 `generator` 进行采样来生成潜变量张量。
-            prompt_embeds（`paddle.Tensor`，*可选*）：
-                预生成的文本嵌入。可用于轻松调整文本输入，*例如*提示权重。如果未提供，文本嵌入将从 `prompt` 输入参数生成。
-            negative_prompt_embeds (`paddle.Tensor`，*可选*)：
-                预生成的负文本嵌入。可用于轻松调整文本输入，*例如*提示权重。如果未提供，将从 `negative_prompt` 输入参数生成 negative_prompt_embeds。
-            pooled_prompt_embeds (`paddle.Tensor`，*可选*)：
-                预生成的池化文本嵌入。可用于轻松调整文本输入，*例如*提示权重。如果未提供，将从 `prompt` 输入参数生成池化文本嵌入。
-            negative_pooled_prompt_embeds (`paddle.Tensor`，*可选*)：
-                预生成的负池化文本嵌入。可用于轻松调整文本输入，*例如*提示权重。如果未提供，池化的 negative_prompt_embeds 将从 `negative_prompt`输入参数生成。
-            output_type（`str`，*可选*，默认为`"pil"`）：
-                生成图像的输出格式。在[PIL](https://pillow.readthedocs.io/en/stable/)：`PIL.Image.Image` 或 `np.array` 之间进行选择。
-            return_dict（`bool`，*可选*，默认为`True`）：
-                是否返回 [`~pipelines.stable_diffusion_xl.StableDiffusionXLPipelineOutput`] 而不是普通元组。
-            joint_attention_kwargs (`dict`，*可选*)：
-                一个 kwargs 字典，如果指定，则传递给 `AttentionProcessor`，如[diffusers.models.attention_processor](https://github.com/huggingface/diffusers/blob/main/src/diffusers/models/attention_processor.py) 中`self.processor` 下所定义。
-            callback_on_step_end (`Callable`，*可选*)：
-                在推理过程中，在每个去噪步骤结束时调用的函数。使用以下参数调用该函数：`callback_on_step_end(self: DiffusionPipeline, step: int, timestep: int,
-            callback_kwargs: Dict)`。`callback_kwargs` 将包含由
-                `callback_on_step_end_tensor_inputs` 指定的所有张量的列表。
-            callback_on_step_end_tensor_inputs (`List`，*可选*)：
-                `callback_on_step_end` 函数的张量输入列表。列表中指定的张量 将作为 `callback_kwargs` 参数传递。您只能包含管道类的`._callback_tensor_inputs` 属性中列出的变量。
-
-
         Examples:
 
         Returns:
