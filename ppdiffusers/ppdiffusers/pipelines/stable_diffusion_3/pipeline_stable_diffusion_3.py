@@ -803,47 +803,36 @@ class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):  # SD3Lo
                 timestep = t.expand(latent_model_input.shape[0])
                 
                 if self.inference_optimize_cfg:
-                    latent_model_input0 ,latent_model_input1 = paddle.split(latent_model_input,2,axis=0)
-                    timestep0 ,timestep1 = paddle.split(timestep,2,axis=0)
-                    prompt_embeds0 ,prompt_embeds1 = paddle.split(prompt_embeds,2,axis=0)
-                    pooled_prompt_embeds0 ,pooled_prompt_embeds1 = paddle.split(pooled_prompt_embeds,2,axis=0)
+                    latent_model_input ,latent_model_input_ = paddle.split(latent_model_input,2,axis=0)
+                    timestep ,timestep_ = paddle.split(timestep,2,axis=0)
+                    prompt_embeds ,prompt_embeds_ = paddle.split(prompt_embeds,2,axis=0)
+                    pooled_prompt_embeds ,pooled_prompt_embeds_ = paddle.split(pooled_prompt_embeds,2,axis=0)
                     
-                    dist.scatter(latent_model_input0,[latent_model_input0,latent_model_input1])
-                    dist.scatter(timestep0,[timestep0,timestep1])
-                    dist.scatter(prompt_embeds0,[prompt_embeds0,prompt_embeds1])
-                    dist.scatter(pooled_prompt_embeds0,[pooled_prompt_embeds0,pooled_prompt_embeds1])
+                    dist.scatter(latent_model_input,[latent_model_input,latent_model_input_])
+                    dist.scatter(timestep,[timestep,timestep_])
+                    dist.scatter(prompt_embeds,[prompt_embeds,prompt_embeds_])
+                    dist.scatter(pooled_prompt_embeds,[pooled_prompt_embeds,pooled_prompt_embeds_])
                     
-                    model_output = self.transformer(
-                        hidden_states=latent_model_input0,
-                        timestep=timestep0,
-                        encoder_hidden_states=prompt_embeds0,
-                        pooled_projections=pooled_prompt_embeds0,
-                        joint_attention_kwargs=self.joint_attention_kwargs,
-                        return_dict=False,
-                    )
-                    if is_inference_mode(self.transformer):
-                        # NOTE:(changwenbin,zhoukangkang)
-                        # This is for paddle inference mode
-                        output = model_output
-                    else:
-                        output = model_output[0]
-                    noise_pred = latent_model_input
+                model_output = self.transformer(
+                    hidden_states=latent_model_input,
+                    timestep=timestep,
+                    encoder_hidden_states=prompt_embeds,
+                    pooled_projections=pooled_prompt_embeds,
+                    joint_attention_kwargs=self.joint_attention_kwargs,
+                    return_dict=False,
+                )
+                if is_inference_mode(self.transformer):
+                    # NOTE:(changwenbin,zhoukangkang)
+                    # This is for paddle inference mode
+                    output = model_output
+                else:
+                    output = model_output[0]
+                    
+                if self.inference_optimize_cfg:
+                    noise_pred = paddle.concat([output, output], axis=0)
                     dist.all_gather(noise_pred,output)
                 else:
-                    model_output = self.transformer(
-                        hidden_states=latent_model_input,
-                        timestep=timestep,
-                        encoder_hidden_states=prompt_embeds,
-                        pooled_projections=pooled_prompt_embeds,
-                        joint_attention_kwargs=self.joint_attention_kwargs,
-                        return_dict=False,
-                    )
-                    if is_inference_mode(self.transformer):
-                        # NOTE:(changwenbin,zhoukangkang)
-                        # This is for paddle inference mode
-                        noise_pred = model_output
-                    else:
-                        noise_pred = model_output[0]
+                    noise_pred = output
 
 
 
