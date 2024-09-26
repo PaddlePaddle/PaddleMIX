@@ -16,6 +16,11 @@ import os
 os.environ["FLAGS_use_cuda_managed_memory"] = "true"
 import argparse
 import datetime
+import os
+
+os.environ["FLAGS_use_cuda_managed_memory"] = "true"
+import argparse
+import datetime
 
 import paddle
 
@@ -61,16 +66,95 @@ pipe = StableDiffusion3Pipeline.from_pretrained(
     paddle_dtype=inference_dtype,
 )
 
+pipe.text_encoder = paddle.incubate.jit.inference(
+    pipe.text_encoder,
+    save_model_dir="./tmp/text_encoder",
+    cache_static_model=True,
+    with_trt=True,
+    trt_precision_mode="float16",
+    trt_use_static=True,
+)
+
+pipe.text_encoder_2 = paddle.incubate.jit.inference(
+    pipe.text_encoder_2,
+    save_model_dir="./tmp/text_encoder_2",
+    cache_static_model=True,
+    with_trt=True,
+    trt_precision_mode="float16",
+    trt_use_static=True,
+)
+
+
+pipe.text_encoder_3 = paddle.incubate.jit.inference(
+    pipe.text_encoder_3,
+    save_model_dir="./tmp/text_encoder_3_T5",
+    cache_static_model=True,
+    with_trt=True,
+    trt_precision_mode="float16",
+    trt_use_static=True,
+)
+
 pipe.transformer = paddle.incubate.jit.inference(
     pipe.transformer,
     save_model_dir="./tmp/sd3",
     enable_new_ir=True,
-    cache_static_model=True,
+    cache_static_model=False,
     exp_enable_use_cutlass=True,
+    delete_pass_lists=["add_norm_fuse_pass"],
+)
+
+
+# for vae model
+pipe.vae.decode = paddle.incubate.jit.inference(
+    pipe.vae.decode,
+    save_model_dir="./tmp/vae_static_models",
+    cache_static_model=True,
+    with_trt=True,
+    trt_precision_mode="float16",
+    trt_use_static=True,
 )
 
 generator = paddle.Generator().manual_seed(42)
 prompt = "A cat holding a sign that says hello world"
+
+
+image = pipe(
+    prompt, num_inference_steps=args.num_inference_steps, width=args.width, height=args.height, generator=generator
+).images[0]
+
+if args.benchmark:
+    # warmup
+    for i in range(3):
+        image = pipe(
+            prompt,
+            num_inference_steps=args.num_inference_steps,
+            width=args.width,
+            height=args.height,
+            generator=generator,
+        ).images[0]
+
+    repeat_times = 10
+    sumtime = 0.0
+    for i in range(repeat_times):
+        paddle.device.synchronize()
+        starttime = datetime.datetime.now()
+        image = pipe(
+            prompt,
+            num_inference_steps=args.num_inference_steps,
+            width=args.width,
+            height=args.height,
+            generator=generator,
+        ).images[0]
+        paddle.device.synchronize()
+        endtime = datetime.datetime.now()
+        duringtime = endtime - starttime
+        duringtime = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
+        sumtime += duringtime
+        print("SD3 end to end time : ", duringtime, "ms")
+
+    print("SD3 ave end to end time : ", sumtime / repeat_times, "ms")
+    cuda_mem_after_used = paddle.device.cuda.max_memory_allocated() / (1024**3)
+    print(f"Max used CUDA memory : {cuda_mem_after_used:.3f} GiB")
 
 
 image = pipe(

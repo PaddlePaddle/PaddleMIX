@@ -11,6 +11,16 @@ python -c "import use_triton_in_paddle; use_triton_in_paddle.make_triton_compati
 # 安装develop版本的paddle，请根据自己的cuda版本选择对应的paddle版本，这里选择12.3的cuda版本
 python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu123/
 
+# 安装PaddleNLP，请使用2024年9月6日之后的PaddleNLP，因为在该天，我们修复了一个针对PaddleNLP的bug。
+# https://github.com/PaddlePaddle/PaddleNLP/pull/9016/files
+python -m pip install paddlenlp==3.0.0b1
+
+# 指定Tensor-RT的lib路径
+export LD_LIBRARY_PATH=/your_TensorRT_dir//lib:$LD_LIBRARY_PATH
+
+# 指定cutlass包路径
+export LD_LIBRARY_PATH=/your_dir/Paddle/paddle/phi/kernels/fusion/cutlass/conv2d/build:$LD_LIBRARY_PATH
+
 # 指定 libCutlassGemmEpilogue.so 的路径
 # 详情请参考 https://github.com/PaddlePaddle/Paddle/blob/develop/paddle/phi/kernels/fusion/cutlass/gemm_epilogue/README.md
 export LD_LIBRARY_PATH=/your_dir/Paddle/paddle/phi/kernels/fusion/cutlass/gemm_epilogue/build:$LD_LIBRARY_PATH
@@ -18,7 +28,12 @@ export LD_LIBRARY_PATH=/your_dir/Paddle/paddle/phi/kernels/fusion/cutlass/gemm_e
 
 高性能推理指令：
 ```shell
-# 执行FP16推理
+# step1: 生成FP32的paddle模型，同时根据Paddle模型生成FP16的TensorRT engine。
+python  text_to_image_generation-stable_diffusion_3.py  --dtype float32 --height 512 --width 512 \
+--num-inference-steps 50 --inference_optimize 1 \
+--benchmark 1
+
+# step2: 执行FP16推理
 python  text_to_image_generation-stable_diffusion_3.py  --dtype float16 --height 512 --width 512 \
 --num-inference-steps 50 --inference_optimize 1  \
 --benchmark 1

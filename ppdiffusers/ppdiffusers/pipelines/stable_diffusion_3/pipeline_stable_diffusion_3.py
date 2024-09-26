@@ -229,8 +229,13 @@ class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):  # SD3Lo
                 "The following part of your input was truncated because CLIP can only handle sequences up to"
                 f" {self.tokenizer_max_length} tokens: {removed_text}"
             )
-        # breakpoint()
-        prompt_embeds = self.text_encoder_3(text_input_ids)[0]
+
+        outputs = self.text_encoder_3(text_input_ids)
+        if paddle.incubate.jit.is_inference_mode(self.text_encoder_3):
+            # NOTE:(changwenbin,zhoukangkang) this is for paddle.incubate.jit.inference
+            prompt_embeds = outputs
+        else:
+            prompt_embeds = outputs[0]
 
         dtype = self.text_encoder_3.dtype
         prompt_embeds = prompt_embeds.astype(dtype=dtype)
@@ -277,13 +282,23 @@ class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):  # SD3Lo
                 f" {self.tokenizer_max_length} tokens: {removed_text}"
             )
         prompt_embeds = text_encoder(text_input_ids, output_hidden_states=True)
-        pooled_prompt_embeds = prompt_embeds[0]
 
-        if clip_skip is None:
-            prompt_embeds = prompt_embeds.hidden_states[-2]
+        if paddle.incubate.jit.is_inference_mode(text_encoder):
+            # NOTE:(changwenbin,zhoukangkang) this is for paddle.incubate.jit.inference
+            pooled_prompt_embeds = prompt_embeds[-1]
+            if clip_skip is None:
+                prompt_embeds = prompt_embeds[:-2][-2]
+            else:
+                prompt_embeds = prompt_embeds[:-2][-(clip_skip + 2)]
         else:
-            prompt_embeds = prompt_embeds.hidden_states[-(clip_skip + 2)]
+            pooled_prompt_embeds = prompt_embeds[0]
 
+            if clip_skip is None:
+                prompt_embeds = prompt_embeds.hidden_states[-2]
+            else:
+                prompt_embeds = prompt_embeds.hidden_states[-(clip_skip + 2)]
+
+        pooled_prompt_embeds = pooled_prompt_embeds.astype(dtype=text_encoder.dtype)
         prompt_embeds = prompt_embeds.astype(dtype=self.text_encoder.dtype)
 
         _, seq_len, _ = prompt_embeds.shape
@@ -391,6 +406,9 @@ class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):  # SD3Lo
                 clip_prompt_embeds,
                 (0, t5_prompt_embed.shape[-1] - clip_prompt_embeds.shape[-1]),
                 data_format="NCL",
+                clip_prompt_embeds,
+                (0, t5_prompt_embed.shape[-1] - clip_prompt_embeds.shape[-1]),
+                data_format="NCL",
             )
 
             prompt_embeds = paddle.concat([clip_prompt_embeds, t5_prompt_embed], axis=-2)
@@ -439,10 +457,14 @@ class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):  # SD3Lo
             t5_negative_prompt_embed = self._get_t5_prompt_embeds(
                 prompt=negative_prompt_3,
                 num_images_per_prompt=num_images_per_prompt,
+                prompt=negative_prompt_3,
+                num_images_per_prompt=num_images_per_prompt,
             )
 
             negative_clip_prompt_embeds = paddle.nn.functional.pad(
                 negative_clip_prompt_embeds,
+                (0, t5_negative_prompt_embed.shape[-1] - negative_clip_prompt_embeds.shape[-1]),
+                data_format="NCL",
                 (0, t5_negative_prompt_embed.shape[-1] - negative_clip_prompt_embeds.shape[-1]),
                 data_format="NCL",
             )
@@ -850,7 +872,15 @@ class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):  # SD3Lo
         else:
             latents = (latents / self.vae.config.scaling_factor) + self.vae.config.shift_factor
 
-            image = self.vae.decode(latents, return_dict=False)[0]
+            # in order to d2s
+            if paddle.incubate.jit.is_inference_mode(self.vae.decode):
+                latents = latents.cast("float32")
+            image_out = self.vae.decode(latents, return_dict=False)
+            if paddle.incubate.jit.is_inference_mode(self.vae.decode):
+                # NOTE:(changwenbin,zhoukangkang) this is for paddle.incubate.jit.inference
+                image = image_out
+            else:
+                image = image_out[0]
             image = self.image_processor.postprocess(image, output_type=output_type)
 
         # Offload all models
@@ -860,3 +890,4 @@ class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):  # SD3Lo
             return (image,)
 
         return StableDiffusion3PipelineOutput(images=image)
+

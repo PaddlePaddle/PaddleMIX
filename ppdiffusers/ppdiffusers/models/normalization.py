@@ -190,6 +190,7 @@ class AdaLayerNormContinuous(nn.Layer):
     def forward(self, x: paddle.Tensor, conditioning_embedding: paddle.Tensor) -> paddle.Tensor:
         # convert back to the original dtype in case `conditioning_embedding`` is upcasted to float32 (needed for hunyuanDiT)
         emb = self.linear(self.silu(conditioning_embedding).cast(x.dtype))
+        emb = self.linear(self.silu(conditioning_embedding).cast(x.dtype))
         scale, shift = paddle.chunk(emb, 2, axis=1)
         if os.getenv("INFERENCE_OPTIMIZE_TRITON"):
             # NOTE:(changwenbin,zhoukangkang)
