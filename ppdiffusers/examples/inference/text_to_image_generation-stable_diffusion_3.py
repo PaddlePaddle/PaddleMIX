@@ -13,6 +13,35 @@
 # limitations under the License.
 import os
 
+
+
+# python3.8 -m paddle.distributed.launch --gpus "0,1,2,3" demo.py 
+
+from paddle.distributed import fleet
+from paddle.distributed.fleet.utils import recompute
+import paddle
+import paddle
+import numpy as np
+import random
+import paddle.distributed as dist
+import paddle.distributed.fleet as fleet
+strategy = fleet.DistributedStrategy()
+# 设置4路张量模型并行
+model_parallel_size = 2
+data_parallel_size = 1
+strategy.hybrid_configs = {
+   "dp_degree": data_parallel_size,
+   "mp_degree": model_parallel_size,
+   "pp_degree": 1
+}
+# 注意 strategy 是这里传递的，动态图只能这里，静态图还可以在 distributed_optimizer 里传
+fleet.init(is_collective=True, strategy=strategy)
+hcg = fleet.get_hybrid_communicate_group()
+mp_id = hcg.get_model_parallel_rank()
+rank_id = dist.get_rank()
+
+
+
 os.environ["FLAGS_use_cuda_managed_memory"] = "true"
 import argparse
 import datetime
@@ -61,12 +90,13 @@ pipe = StableDiffusion3Pipeline.from_pretrained(
     paddle_dtype=inference_dtype,
 )
 
-pipe.transformer = paddle.incubate.jit.inference(
-    pipe.transformer,
-    save_model_dir="./tmp/sd3",
+pipe.transformer.simplified_sd3 = paddle.incubate.jit.inference(
+    pipe.transformer.simplified_sd3,
+    save_model_dir="./tmp/sd3_1",
     enable_new_ir=True,
-    cache_static_model=True,
+    cache_static_model=False,
     exp_enable_use_cutlass=True,
+    delete_pass_lists=["add_norm_fuse_pass"],
 )
 
 generator = paddle.Generator().manual_seed(42)
@@ -111,4 +141,7 @@ if args.benchmark:
     cuda_mem_after_used = paddle.device.cuda.max_memory_allocated() / (1024**3)
     print(f"Max used CUDA memory : {cuda_mem_after_used:.3f} GiB")
 
-image.save("text_to_image_generation-stable_diffusion_3-result.png")
+if rank_id == 0:
+    image.save("text_to_image_generation-stable_diffusion_3-result0.png")
+else:
+    image.save("text_to_image_generation-stable_diffusion_3-result1.png")

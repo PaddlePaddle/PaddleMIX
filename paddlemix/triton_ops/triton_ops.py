@@ -1713,7 +1713,7 @@ def split_concat(x, y):
         grid = ("3", "batch", "seq_qkv + seq_eqkv")
 
         split_concat_kernel[(op_name, grid)](
-            out0, out1, out2, x, y, batch, seq_qkv, seq_eqkv, ouput_hidden, BLOCK_SIZE=BLOCK_SIZE
+            out0, out1, out2, x, y, -1, seq_qkv, seq_eqkv, ouput_hidden, BLOCK_SIZE=BLOCK_SIZE
         )
 
     if in_dynamic_or_pir_mode():

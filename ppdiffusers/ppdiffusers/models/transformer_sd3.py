@@ -17,6 +17,7 @@ from typing import Any, Dict, Optional, Union
 
 import paddle
 import paddle.nn as nn
+import paddle.distributed as dist
 from paddle.distributed.fleet.utils import recompute
 
 from ..configuration_utils import ConfigMixin, register_to_config
@@ -328,16 +329,26 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
         temb = self.time_text_embed(timestep, pooled_projections)
         encoder_hidden_states = self.context_embedder(encoder_hidden_states)
 
+        hidden_states0,hidden_states1 = paddle.split(hidden_states, 2, axis=0)
+        encoder_hidden_states0,encoder_hidden_states1 = paddle.split(encoder_hidden_states, 2, axis=0) 
+        temb0,temb1 = paddle.split(temb, 2, axis=0) 
+
+        dist.scatter(hidden_states0,[hidden_states0,hidden_states1])
+        dist.scatter(encoder_hidden_states0,[encoder_hidden_states0,encoder_hidden_states1])
+        dist.scatter(temb0,[temb0,temb1])
+        
         if self.inference_optimize:
-            out = self.simplified_sd3(
-                hidden_states=hidden_states, encoder_hidden_states=encoder_hidden_states, temb=temb
+            hidden_states_out = self.simplified_sd3(
+                hidden_states=hidden_states0, encoder_hidden_states=encoder_hidden_states0, temb=temb0
             )
-            hidden_states = out[1]
             encoder_hidden_states = None
         else:
-            encoder_hidden_states, hidden_states = self.sd3_origin_transformer(
-                hidden_states=hidden_states, encoder_hidden_states=encoder_hidden_states, temb=temb
+            encoder_hidden_states, hidden_states_out = self.sd3_origin_transformer(
+                hidden_states=hidden_states0, encoder_hidden_states=encoder_hidden_states0, temb=temb0
             )
+            
+        dist.all_gather(hidden_states,hidden_states_out)
+
 
         hidden_states = self.norm_out(hidden_states, temb)
         hidden_states = self.proj_out(hidden_states)

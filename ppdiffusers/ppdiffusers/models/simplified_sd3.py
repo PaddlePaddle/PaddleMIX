@@ -106,12 +106,12 @@ class SimplifiedSD3(nn.Layer):
             qkv = self.qkv[i](norm_hidden_states)
             eqkv = self.eqkv[i](norm_encoder_hidden_states)
             q, k, v = paddlemix.triton_ops.split_concat(qkv, eqkv)
-            q = q.reshape([2, -1, 24, 64])
-            k = k.reshape([2, -1, 24, 64])
-            v = v.reshape([2, -1, 24, 64])
+            q = q.reshape([hidden_states.shape[0], -1, 24, 64])
+            k = k.reshape([hidden_states.shape[0], -1, 24, 64])
+            v = v.reshape([hidden_states.shape[0], -1, 24, 64])
 
             norm_hidden_states1 = F.scaled_dot_product_attention_(q, k, v, dropout_p=0.0, is_causal=False)
-            norm_hidden_states1 = norm_hidden_states1.reshape([2, -1, self.dim])
+            norm_hidden_states1 = norm_hidden_states1.reshape([hidden_states.shape[0], -1, self.dim])
             attn_output, context_attn_output = paddle.split(norm_hidden_states1, num_or_sections=[seq1, seq2], axis=1)
 
             # attn_output, context_attn_output = paddlemix.triton_ops.triton_split(
@@ -155,7 +155,5 @@ class SimplifiedSD3(nn.Layer):
                 last_context_ffn_output = context_ffn_output
                 last_context_hidden_states = encoder_hidden_states
                 last_context_gate_mlp = c_gate_mlp
-            else:
-                encoder_hidden_states = None
 
-        return encoder_hidden_states, hidden_states
+        return hidden_states
