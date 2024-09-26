@@ -45,10 +45,16 @@ def main(args):
     model_name = get_model_name_from_path(args.model_path)
 
     tokenizer = AutoTokenizerMIX.from_pretrained(args.model_path)
-
     # TO DO: add image token to tokenizer paddle 和 torch的对不齐，要手动自己设置
     tokenizer.added_tokens_decoder = {151643: "<|endoftext|>", 151644: "<|im_start|>", 151645: "<|im_end|>"}
     tokenizer.added_tokens_encoder = {"<|endoftext|>": 151643, "<|im_start|>": 151644, "<|im_end|>": 151645}
+    
+    
+    # or you can use the following code
+    
+    # from paddlenlp.transformers import Qwen2Tokenizer
+    # tokenizer = Qwen2Tokenizer.from_pretrained(args.model_path)
+    
 
     model_config = AutoConfigMIX.from_pretrained(args.model_path)
     model = AutoModelMIX.from_pretrained(args.model_path, dtype=compute_dtype)

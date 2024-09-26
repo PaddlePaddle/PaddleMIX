@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import numbers
+import os
 from typing import Dict, Optional, Tuple
 
 import paddle
@@ -161,6 +161,7 @@ class AdaGroupNorm(nn.Layer):
         x = x * (1 + scale) + shift
         return x
 
+
 class AdaLayerNormContinuous(nn.Layer):
     def __init__(
         self,
@@ -188,13 +189,21 @@ class AdaLayerNormContinuous(nn.Layer):
 
     def forward(self, x: paddle.Tensor, conditioning_embedding: paddle.Tensor) -> paddle.Tensor:
         # convert back to the original dtype in case `conditioning_embedding`` is upcasted to float32 (needed for hunyuanDiT)
-        emb = self.linear(self.silu(conditioning_embedding).to(x.dtype))
+        emb = self.linear(self.silu(conditioning_embedding).cast(x.dtype))
         scale, shift = paddle.chunk(emb, 2, axis=1)
-        x = self.norm(x) * (1 + scale)[:, None, :] + shift[:, None, :]
+        if os.getenv("INFERENCE_OPTIMIZE_TRITON"):
+            # NOTE:(changwenbin,zhoukangkang)
+            # This is a fused faster op using Triton, only used in inference, not used in training.
+            import paddlemix
+
+            x = paddlemix.triton_ops.adaptive_layer_norm(x, scale, shift, self.norm.weight, self.norm.bias)
+        else:
+            x = self.norm(x) * (1 + scale)[:, None, :] + shift[:, None, :]
         return x
 
+
 class RMSNorm(nn.Layer):
-    def __init__(self, dim, epsilon: float,  elementwise_affine: bool = True):
+    def __init__(self, dim, epsilon: float, elementwise_affine: bool = True):
         super().__init__()
         self.epsilon = epsilon
         self.dim = dim

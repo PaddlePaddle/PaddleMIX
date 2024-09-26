@@ -12,7 +12,17 @@ LLaVA-NeXT-Interleave 可以在不同的多图像基准测试中取得与之前�
 
 ## 2 环境准备
 - **python >= 3.8**
-- **paddlenlp >= 3.0**
+- <span style="color:red;">**paddlenlp >= 3.0**</span>
+```
+cd PaddleMIX/paddlemix/examples/llava_next_interleave
+pip install -r requirement.txt
+
+or 
+
+pip install paddlenlp==3.0.0b0
+```
+
+
 
 ## 3 快速开始
 完成环境准备后，我们提供多轮对话示例：
@@ -20,9 +30,9 @@ LLaVA-NeXT-Interleave 可以在不同的多图像基准测试中取得与之前�
 ### 多轮对话启动
 ```bash
 # llava
-python paddlemix/examples/llava_next/run_siglip_encoder_predict.py  \
+python paddlemix/examples/llava_next_interleave/run_siglip_encoder_predict.py  \
 --model-path "paddlemix/llava_next/llava-next-interleave-qwen-7b" \
---image-file "https://bj.bcebos.com/v1/paddlenlp/models/community/Llava-Next/twitter3.jpeg https://bj.bcebos.com/v1/paddlenlp/models/community/Llava-Next/twitter4.jpeg" \
+--image-file "paddlemix/examples/llava_next_interleave/demo_images/twitter3.jpeg" "paddlemix/examples/llava_next_interleave/demo_images/twitter4.jpeg" \
 ```
 可配置参数说明：
   * `model-path`: 指定llava系列的模型名字或权重路径 ，支持 
