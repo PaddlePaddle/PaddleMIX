@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import os
 import inspect
 from typing import Any, Callable, Dict, List, Optional, Union
 
@@ -196,6 +196,7 @@ class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):  # SD3Lo
             if hasattr(self, "transformer") and self.transformer is not None
             else 128
         )
+        self.inference_optimize_cfg = os.getenv("INFERENCE_OPTIMIZE_CFGP") == "True"
 
     def _get_t5_prompt_embeds(
         self,
@@ -230,7 +231,6 @@ class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):  # SD3Lo
                 "The following part of your input was truncated because CLIP can only handle sequences up to"
                 f" {self.tokenizer_max_length} tokens: {removed_text}"
             )
-        # breakpoint()
         prompt_embeds = self.text_encoder_3(text_input_ids)[0]
 
         dtype = self.text_encoder_3.dtype
@@ -854,30 +854,49 @@ class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):  # SD3Lo
                 # broadcast to batch dimension in a way that's compatible with ONNX/Core ML
                 timestep = t.expand(latent_model_input.shape[0])
                 
-                # latent0 ,latent1 = paddle.split(latent_model_input,2,axis=0)
-                # dist.scatter(latent0,[latent0,latent1])
-                # dist.scatter(timestep[0],[timestep[0],timestep[1]])
-                # dist.scatter(prompt_embeds[0],[prompt_embeds[0],prompt_embeds[1]])
-                # dist.scatter(pooled_prompt_embeds[0],[pooled_prompt_embeds[0],pooled_prompt_embeds[1]])
-                
-                model_output = self.transformer(
-                    hidden_states=latent_model_input,
-                    timestep=timestep,
-                    encoder_hidden_states=prompt_embeds,
-                    pooled_projections=pooled_prompt_embeds,
-                    joint_attention_kwargs=self.joint_attention_kwargs,
-                    return_dict=False,
-                )
-
-                if is_inference_mode(self.transformer):
-                    # NOTE:(changwenbin,zhoukangkang)
-                    # This is for paddle inference mode
-                    noise_pred = model_output
+                if self.inference_optimize_cfg:
+                    latent_model_input0 ,latent_model_input1 = paddle.split(latent_model_input,2,axis=0)
+                    timestep0 ,timestep1 = paddle.split(timestep,2,axis=0)
+                    prompt_embeds0 ,prompt_embeds1 = paddle.split(prompt_embeds,2,axis=0)
+                    pooled_prompt_embeds0 ,pooled_prompt_embeds1 = paddle.split(pooled_prompt_embeds,2,axis=0)
+                    
+                    dist.scatter(latent_model_input0,[latent_model_input0,latent_model_input1])
+                    dist.scatter(timestep0,[timestep0,timestep1])
+                    dist.scatter(prompt_embeds0,[prompt_embeds0,prompt_embeds1])
+                    dist.scatter(pooled_prompt_embeds0,[pooled_prompt_embeds0,pooled_prompt_embeds1])
+                    
+                    model_output = self.transformer(
+                        hidden_states=latent_model_input0,
+                        timestep=timestep0,
+                        encoder_hidden_states=prompt_embeds0,
+                        pooled_projections=pooled_prompt_embeds0,
+                        joint_attention_kwargs=self.joint_attention_kwargs,
+                        return_dict=False,
+                    )
+                    if is_inference_mode(self.transformer):
+                        # NOTE:(changwenbin,zhoukangkang)
+                        # This is for paddle inference mode
+                        output = model_output
+                    else:
+                        output = model_output[0]
+                    noise_pred = latent_model_input
+                    dist.all_gather(noise_pred,output)
                 else:
-                    noise_pred = model_output[0]
-                # noise_pred = []
-                # dist.all_gather(noise_pred,output)
-                # noise_pred = paddle.concat(x = [noise_pred[0],noise_pred[1]], axis=0)
+                    model_output = self.transformer(
+                        hidden_states=latent_model_input,
+                        timestep=timestep,
+                        encoder_hidden_states=prompt_embeds,
+                        pooled_projections=pooled_prompt_embeds,
+                        joint_attention_kwargs=self.joint_attention_kwargs,
+                        return_dict=False,
+                    )
+                    if is_inference_mode(self.transformer):
+                        # NOTE:(changwenbin,zhoukangkang)
+                        # This is for paddle inference mode
+                        noise_pred = model_output
+                    else:
+                        noise_pred = model_output[0]
+
 
 
                 # perform guidance

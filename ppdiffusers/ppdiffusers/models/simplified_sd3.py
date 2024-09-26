@@ -156,4 +156,4 @@ class SimplifiedSD3(nn.Layer):
                 last_context_hidden_states = encoder_hidden_states
                 last_context_gate_mlp = c_gate_mlp
 
-        return hidden_states
+        return  hidden_states

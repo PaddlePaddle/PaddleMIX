@@ -12,6 +12,49 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import os
+import argparse
+import paddle
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description=" Use PaddleMIX to accelerate the Stable Diffusion3 image generation model."
+    )
+    parser.add_argument(
+        "--benchmark",
+        type=(lambda x: str(x).lower() in ["true", "1", "yes"]),
+        default=False,
+        help="if benchmark is set to True, measure inference performance",
+    )
+    parser.add_argument(
+        "--inference_optimize",
+        type=(lambda x: str(x).lower() in ["true", "1", "yes"]),
+        default=False,
+        help="If inference_optimize is set to True, all optimizations except Triton are enabled.",
+    )
+    parser.add_argument(
+        "--inference_optimize_cfgp",
+        type=(lambda x: str(x).lower() in ["true", "1", "yes"]),
+        default=False,
+        help="If inference_optimize_cfgp is set to True, Classifier-Free Guidance Parallel is enabled and dual-GPU acceleration is used.",
+    )
+    parser.add_argument("--height", type=int, default=512, help="Height of the generated image.")
+    parser.add_argument("--width", type=int, default=512, help="Width of the generated image.")
+    parser.add_argument("--num-inference-steps", type=int, default=50, help="Number of inference steps.")
+    parser.add_argument("--dtype", type=str, default="float32", help="Inference data types.")
+
+    return parser.parse_args()
+
+
+args = parse_args()
+
+if args.inference_optimize:
+    os.environ["INFERENCE_OPTIMIZE"] = "True"
+    os.environ["INFERENCE_OPTIMIZE_TRITON"] = "True"
+if args.inference_optimize_cfgp:
+    os.environ["INFERENCE_OPTIMIZE_CFGP"] = "True"
+if args.dtype == "float32":
+    inference_dtype = paddle.float32
+elif args.dtype == "float16":
+    inference_dtype = paddle.float16
 
 
 
@@ -19,8 +62,6 @@ import os
 
 from paddle.distributed import fleet
 from paddle.distributed.fleet.utils import recompute
-import paddle
-import paddle
 import numpy as np
 import random
 import paddle.distributed as dist
@@ -43,58 +84,20 @@ rank_id = dist.get_rank()
 
 
 os.environ["FLAGS_use_cuda_managed_memory"] = "true"
-import argparse
 import datetime
-
-import paddle
-
 from ppdiffusers import StableDiffusion3Pipeline
 
-
-def parse_args():
-    parser = argparse.ArgumentParser(
-        description=" Use PaddleMIX to accelerate the Stable Diffusion3 image generation model."
-    )
-    parser.add_argument(
-        "--benchmark",
-        type=(lambda x: str(x).lower() in ["true", "1", "yes"]),
-        default=False,
-        help="if benchmark is set to True, measure inference performance",
-    )
-    parser.add_argument(
-        "--inference_optimize",
-        type=(lambda x: str(x).lower() in ["true", "1", "yes"]),
-        default=False,
-        help="If inference_optimize is set to True, all optimizations except Triton are enabled.",
-    )
-    parser.add_argument("--height", type=int, default=512, help="Height of the generated image.")
-    parser.add_argument("--width", type=int, default=512, help="Width of the generated image.")
-    parser.add_argument("--num-inference-steps", type=int, default=50, help="Number of inference steps.")
-    parser.add_argument("--dtype", type=str, default="float32", help="Inference data types.")
-
-    return parser.parse_args()
-
-
-args = parse_args()
-
-if args.inference_optimize:
-    os.environ["INFERENCE_OPTIMIZE"] = "True"
-    os.environ["INFERENCE_OPTIMIZE_TRITON"] = "True"
-if args.dtype == "float32":
-    inference_dtype = paddle.float32
-elif args.dtype == "float16":
-    inference_dtype = paddle.float16
 
 pipe = StableDiffusion3Pipeline.from_pretrained(
     "stabilityai/stable-diffusion-3-medium-diffusers",
     paddle_dtype=inference_dtype,
 )
 
-pipe.transformer.simplified_sd3 = paddle.incubate.jit.inference(
-    pipe.transformer.simplified_sd3,
-    save_model_dir="./tmp/sd3_1",
+pipe.transformer = paddle.incubate.jit.inference(
+    pipe.transformer,
+    save_model_dir="./tmp/sd3",
     enable_new_ir=True,
-    cache_static_model=False,
+    cache_static_model=True,
     exp_enable_use_cutlass=True,
     delete_pass_lists=["add_norm_fuse_pass"],
 )
@@ -141,7 +144,12 @@ if args.benchmark:
     cuda_mem_after_used = paddle.device.cuda.max_memory_allocated() / (1024**3)
     print(f"Max used CUDA memory : {cuda_mem_after_used:.3f} GiB")
 
-if rank_id == 0:
-    image.save("text_to_image_generation-stable_diffusion_3-result0.png")
+if args.inference_optimize_cfgp:
+    if rank_id == 0:
+        print(f"Max used CUDA_rank_1 memory : {cuda_mem_after_used:.3f} GiB")
+        image.save("text_to_image_generation-stable_diffusion_3-result0.png")
+    else:
+        print(f"Max used CUDA_rank_2 memory : {cuda_mem_after_used:.3f} GiB")
+        image.save("text_to_image_generation-stable_diffusion_3-result1.png")
 else:
-    image.save("text_to_image_generation-stable_diffusion_3-result1.png")
+    image.save("text_to_image_generation-stable_diffusion_3-result_single.png")
