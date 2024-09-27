@@ -184,7 +184,7 @@ class GaussianDiffusion:
         # Use float64 for accuracy.
         self.betas = betas
         assert len(self.betas.shape) == 1, "betas must be 1-D"
-        assert (self.betas > 0).all() and (self.betas <= 1).all()
+        assert (self.betas > 0).all() and (self.betas <= 1).all(), self.betas
 
         self.num_timesteps = int(betas.shape[0])
 

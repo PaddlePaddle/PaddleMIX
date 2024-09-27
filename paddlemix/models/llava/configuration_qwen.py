@@ -12,13 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from paddlenlp.transformers import LlamaConfig
+from paddlenlp.transformers import Qwen2Config
 
-__all__ = ["LlavaConfig"]
+__all__ = ["LlavaQwenConfig"]
 
-
-class LlavaConfig(LlamaConfig):
-    model_type = "llava"
+    
+class LlavaQwenConfig(Qwen2Config):
+    model_type = "llava_qwen"
     mm_patch_merge_type = "spatial_unpad"
     use_cachekv_int8 = None
-    

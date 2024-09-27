@@ -12,13 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from paddlenlp.transformers import LlamaConfig
 
-__all__ = ["LlavaConfig"]
-
-
-class LlavaConfig(LlamaConfig):
-    model_type = "llava"
-    mm_patch_merge_type = "spatial_unpad"
-    use_cachekv_int8 = None
-    
+from ._h5 import from_h5, check_h5, export_h5
+from ._schema import convert_schema

@@ -3,3 +3,4 @@ SimpleTokenizer: processors
 LLavaTokenizer: llava
 InternLMXComposer2Tokenizer: internlm_xcomposer2
 InternLM2Tokenizer: internvl2
+Qwen2Tokenizer: qwen2

@@ -21,10 +21,24 @@ from .cogvlm.modeling import *
 from .imagebind.modeling import *
 from .imagebind.multimodal_preprocessors import *
 from .internlm_xcomposer2 import *
-from .internvl2 import *
 from .llava import *
 from .minigpt4.configuration import *
 from .minigpt4.modeling import *
-from .qwen_vl import *
 from .visualglm.configuration import *
 from .visualglm.modeling import *
+
+
+import pkg_resources
+
+version = pkg_resources.get_distribution("paddlenlp").version   
+try:
+    if version.startswith('3'):
+        from .internvl2 import *
+        from .qwen_vl import *
+    else:
+        print(f"paddlenlp version {version} is not 3.x, skipping import.")
+
+except ImportError:
+    print("paddlenlp is not installed.")
+
+
