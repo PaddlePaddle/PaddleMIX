@@ -26,7 +26,7 @@ from ppdiffusers.transformers import (  # T5TokenizerFast,
 )
 
 from ...image_processor import VaeImageProcessor
-from ...loaders import FromSingleFileMixin  # SD3LoraLoaderMixin
+from ...loaders import FromSingleFileMixin, SD3LoraLoaderMixin
 from ...models.autoencoder_kl import AutoencoderKL
 from ...models.transformer_sd3 import SD3Transformer2DModel
 from ...schedulers import FlowMatchEulerDiscreteScheduler
@@ -119,7 +119,7 @@ def retrieve_timesteps(
     return timesteps, num_inference_steps
 
 
-class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):  # SD3LoraLoaderMixin
+class StableDiffusion3Pipeline(DiffusionPipeline, SD3LoraLoaderMixin,  FromSingleFileMixin):
 
     r"""
     Args:
