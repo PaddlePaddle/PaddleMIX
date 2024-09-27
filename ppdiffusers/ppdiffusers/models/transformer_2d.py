@@ -355,6 +355,7 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
             else:
                 batch, height, width, _ = hidden_states.shape
             residual = hidden_states
+            shape = paddle.shape(hidden_states)
 
             hidden_states = self.norm(hidden_states)
             if not self.use_linear_projection:
@@ -441,7 +442,11 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
         # 3. Output
         if self.is_input_continuous:
             if not self.use_linear_projection:
-                hidden_states = hidden_states.reshape([batch, height, width, self.inner_dim])
+                if self.data_format == "NCHW":
+                    hidden_states = hidden_states.reshape([shape[0], shape[2], shape[3], self.inner_dim])
+                else:
+                    hidden_states = hidden_states.reshape([shape[0], shape[1], shape[2], self.inner_dim])
+
                 if self.data_format == "NCHW":
                     hidden_states = hidden_states.transpose([0, 3, 1, 2])
                 hidden_states = (
@@ -455,7 +460,10 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
                     if not USE_PEFT_BACKEND
                     else self.proj_out(hidden_states)
                 )
-                hidden_states = hidden_states.reshape([batch, height, width, self.inner_dim])
+                if self.data_format == "NCHW":
+                    hidden_states = hidden_states.reshape([shape[0], shape[2], shape[3], self.inner_dim])
+                else:
+                    hidden_states = hidden_states.reshape([shape[0], shape[1], shape[2], self.inner_dim])
                 if self.data_format == "NCHW":
                     hidden_states = hidden_states.transpose([0, 3, 1, 2])
 

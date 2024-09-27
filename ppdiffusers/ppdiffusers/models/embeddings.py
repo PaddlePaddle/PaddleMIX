@@ -175,12 +175,12 @@ class PatchEmbed(nn.Layer):
         # NOTE, new add for unidiffusers!
         self.add_pos_embed = add_pos_embed
         if add_pos_embed:
-            pos_embed = get_2d_sincos_pos_embed(
+            self.pos_embed = get_2d_sincos_pos_embed(
                 embed_dim, grid_size, base_size=self.base_size, interpolation_scale=self.interpolation_scale
             )
             persistent = True if pos_embed_max_size else False
             self.register_buffer(
-                "pos_embed", paddle.to_tensor(pos_embed).cast("float32").unsqueeze(0), persistable=persistent
+                "pos_embed", paddle.to_tensor(self.pos_embed).cast("float32").unsqueeze(0), persistable=persistent
             )
 
     def cropped_pos_embed(self, height, width):
@@ -225,19 +225,20 @@ class PatchEmbed(nn.Layer):
             latent = self.norm(latent)
 
         # Interpolate or crop positional embeddings as needed
-        if self.pos_embed_max_size:
-            pos_embed = self.cropped_pos_embed(height, width)
-        else:
-            if self.height != height or self.width != width:
-                pos_embed = get_2d_sincos_pos_embed(
-                    embed_dim=self.pos_embed.shape[-1],
-                    grid_size=(height, width),
-                    base_size=self.base_size,
-                    interpolation_scale=self.interpolation_scale,
-                )
-                pos_embed = paddle.to_tensor(pos_embed).astype(paddle.float32).unsqueeze(0)
+        if self.add_pos_embed:
+            if self.pos_embed_max_size:
+                pos_embed = self.cropped_pos_embed(height, width)
             else:
-                pos_embed = self.pos_embed
+                if self.height != height or self.width != width:
+                    pos_embed = get_2d_sincos_pos_embed(
+                        embed_dim=self.pos_embed.shape[-1],
+                        grid_size=(height, width),
+                        base_size=self.base_size,
+                        interpolation_scale=self.interpolation_scale,
+                    )
+                    pos_embed = paddle.to_tensor(pos_embed).astype(paddle.float32).unsqueeze(0)
+                else:
+                    pos_embed = self.pos_embed
 
         # NOTE, new add for unidiffusers!
         if self.add_pos_embed:
