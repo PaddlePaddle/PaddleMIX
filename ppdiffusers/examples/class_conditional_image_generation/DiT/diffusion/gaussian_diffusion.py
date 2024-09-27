@@ -435,19 +435,3 @@ def _extract_into_tensor(arr, timesteps, broadcast_shape):
     while len(res.shape) < len(broadcast_shape):
         res = res[..., None]
     return res + paddle.zeros(broadcast_shape)
-
-
-def _extract_into_shardtensor(arr, timesteps, x):
-    """
-    Extract values from a 1-D numpy array for a batch of indices and shard as x.
-    :param arr: the 1-D numpy array.
-    :param timesteps: a tensor of indices into the array to extract.
-    :param x: a shard tensor with K dimensions and the batch
-        dimension(shard) equal to the length of timesteps.
-    :return: a shard tensor of shape [batch_size, 1, ...] where the batch shard as x.
-    """
-    res = paddle.to_tensor(arr)[timesteps].cast("float32")
-    broadcast_shape = x.shape
-    while len(res.shape) < len(broadcast_shape):
-        res = res[..., None]
-    return res

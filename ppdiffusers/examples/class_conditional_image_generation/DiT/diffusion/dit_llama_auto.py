@@ -138,13 +138,6 @@ class Attention(nn.Layer):
         """
         super().__init__()
         self.n_kv_heads = n_heads if n_kv_heads is None else n_kv_heads
-        # if is_model_parrallel():
-        #     hcg = paddle.distributed.fleet.get_hybrid_communicate_group()
-        #     model_parallel_size = hcg.get_model_parallel_world_size()
-        # else:
-        #     model_parallel_size = 1
-        # self.n_local_heads = n_heads // model_parallel_size  #
-        # self.n_local_kv_heads = self.n_kv_heads // model_parallel_size
         self.n_heads = n_heads
         self.n_rep = self.n_heads // self.n_kv_heads
         self.head_dim = dim // self.n_heads
@@ -156,9 +149,6 @@ class Attention(nn.Layer):
         if qk_norm:
             self.q_norm = nn.LayerNorm(self.n_heads * self.head_dim)
             self.k_norm = nn.LayerNorm(self.n_kv_heads * self.head_dim)
-            # if is_model_parrallel():
-            #     setattr(self.q_norm.weight, "qk_norm_in_tp", True)
-            #     setattr(self.k_norm.weight, "qk_norm_in_tp", True)
         else:
             self.q_norm = self.k_norm = nn.Identity()
 
@@ -223,11 +213,6 @@ class Attention(nn.Layer):
                 and key tensor with rotary embeddings.
         """
         with paddle.amp.auto_cast(enable=False):
-            # xq_ = paddle.as_complex(xq.cast("float32").reshape([*tuple(xq.shape)[:-1], -1, 2]))
-            # xk_ = paddle.as_complex(xk.cast("float32").reshape([*tuple(xk.shape)[:-1], -1, 2]))
-            # freqs_cis = Attention.reshape_for_broadcast(freqs_cis, xq_)
-            # xq_out = paddle.as_real(xq_ * freqs_cis).flatten(start_axis=3)
-            # xk_out = paddle.as_real(xk_ * freqs_cis).flatten(start_axis=3)
             cos, sin = freqs_cis.chunk(2, axis=-1)
             cos = cos.unsqueeze([0, 2])
             sin = sin.unsqueeze([0, 2])

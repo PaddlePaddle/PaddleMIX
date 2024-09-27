@@ -133,20 +133,20 @@ def shard_model(model):
                 # last pp stage
                 layer.weight = shard_w(layer.weight, -1, [dist.Replicate(), dist.Shard(1)])
                 layer.bias = shard_w(layer.bias, -1, [dist.Replicate(), dist.Shard(0)])
-            print(f"pp_stage {pp_stage} layer {name}")
+            # print(f"pp_stage {pp_stage} layer {name}")
 
         elif name.startswith("vae"):
             if any(n in name for n in ["vae.encoder", "vae.quant_conv"]):
                 if hasattr(layer, "weight"):
                     # first pp stage
-                    print(f"pp_stage 0 layer {name}")
+                    # print(f"pp_stage 0 layer {name}")
                     layer.weight = shard_w(layer.weight, 0, [dist.Replicate(), dist.Replicate()])
                     layer.bias = shard_w(layer.bias, 0, [dist.Replicate(), dist.Replicate()])
 
             if any(n in name for n in ["vae.decoder", "vae.post_quant_conv"]):
                 if hasattr(layer, "weight"):
                     # last pp stage
-                    print(f"pp_stage -1 layer {name}")
+                    # print(f"pp_stage -1 layer {name}")
                     layer.weight = shard_w(layer.weight, -1, [dist.Replicate(), dist.Replicate()])
                     layer.bias = shard_w(layer.bias, -1, [dist.Replicate(), dist.Replicate()])
 
