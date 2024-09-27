@@ -803,21 +803,27 @@ class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):  # SD3Lo
                 timestep = t.expand(latent_model_input.shape[0])
                 
                 if self.inference_optimize_cfg:
-                    latent_model_input ,latent_model_input_ = paddle.split(latent_model_input,2,axis=0)
-                    timestep ,timestep_ = paddle.split(timestep,2,axis=0)
-                    prompt_embeds ,prompt_embeds_ = paddle.split(prompt_embeds,2,axis=0)
-                    pooled_prompt_embeds ,pooled_prompt_embeds_ = paddle.split(pooled_prompt_embeds,2,axis=0)
+                    latent_input ,latent_model_input_ = paddle.split(latent_model_input,2,axis=0)
+                    timestep_input ,timestep_ = paddle.split(timestep,2,axis=0)
+                    prompt_embeds_input ,prompt_embeds_ = paddle.split(prompt_embeds,2,axis=0)
+                    pooled_prompt_embeds_input ,pooled_prompt_embeds_ = paddle.split(pooled_prompt_embeds,2,axis=0)
                     
-                    dist.scatter(latent_model_input,[latent_model_input,latent_model_input_])
-                    dist.scatter(timestep,[timestep,timestep_])
-                    dist.scatter(prompt_embeds,[prompt_embeds,prompt_embeds_])
-                    dist.scatter(pooled_prompt_embeds,[pooled_prompt_embeds,pooled_prompt_embeds_])
-                    
+                    dist.scatter(latent_input,[latent_input,latent_model_input_])
+                    dist.scatter(timestep_input,[timestep_input,timestep_])
+                    dist.scatter(prompt_embeds_input,[prompt_embeds_input,prompt_embeds_])
+                    dist.scatter(pooled_prompt_embeds_input,[pooled_prompt_embeds_input,pooled_prompt_embeds_])
+
+                else:
+                    latent_input = latent_model_input
+                    timestep_input = timestep
+                    prompt_embeds_input = prompt_embeds
+                    pooled_prompt_embeds_input = pooled_prompt_embeds
+                
                 model_output = self.transformer(
-                    hidden_states=latent_model_input,
-                    timestep=timestep,
-                    encoder_hidden_states=prompt_embeds,
-                    pooled_projections=pooled_prompt_embeds,
+                    hidden_states=latent_input,
+                    timestep=timestep_input,
+                    encoder_hidden_states=prompt_embeds_input,
+                    pooled_projections=pooled_prompt_embeds_input,
                     joint_attention_kwargs=self.joint_attention_kwargs,
                     return_dict=False,
                 )
