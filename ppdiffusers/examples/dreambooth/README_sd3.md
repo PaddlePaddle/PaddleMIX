@@ -136,3 +136,18 @@ pipeline.load_lora_weights('your-lora-checkpoint')
 image = pipe("A picture of a sks dog in a bucket", num_inference_steps=25).images[0]
 image.save("sks_dog_dreambooth_lora.png")
 ```
+
+## NPU硬件训练
+请参照[tools](../../../paddlemix/tools/README.md)进行NPU硬件Paddle安装。
+
+使用NPU进行LoRA训练和推理时参考如下命令设置相应的环境变量，训练和推理运行命令可直接参照上述LoRA训练和推理命令。
+```bash
+export FLAGS_npu_storage_format=0
+export FLAGS_use_stride_kernel=0
+export FLAGS_npu_scale_aclnn=True
+export FLAGS_allocator_strategy=auto_growth
+```
+训练时如果显存不够，可以尝试添加参数(训练完成后不进行评测)
+```
+--not_validation_final
+```

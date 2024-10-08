@@ -511,6 +511,12 @@ def parse_args(input_args=None):
         ),
     )
     parser.add_argument("--local_rank", type=int, default=-1, help="For distributed training: local_rank")
+    parser.add_argument(
+        "--not_validation_final",
+        default=False,
+        action="store_true",
+        help="Flag to not validation when train finish in order to save memory.",
+    )
 
     if input_args is not None:
         args = parser.parse_args(input_args)
@@ -1606,25 +1612,26 @@ def main(args):
 
         # Final inference
         # Load previous pipeline
-        pipeline = StableDiffusion3Pipeline.from_pretrained(
-            args.output_dir,
-            revision=args.revision,
-            variant=args.variant,
-            paddle_dtype=weight_dtype,
-        )
-
-        # run inference
-        images = []
-        if args.validation_prompt and args.num_validation_images > 0:
-            pipeline_args = {"prompt": args.validation_prompt}
-            images = log_validation(
-                pipeline=pipeline,
-                args=args,
-                accelerator=accelerator,
-                pipeline_args=pipeline_args,
-                epoch=epoch,
-                is_final_validation=True,
+        if not args.not_validation_final:
+            pipeline = StableDiffusion3Pipeline.from_pretrained(
+                args.output_dir,
+                revision=args.revision,
+                variant=args.variant,
+                paddle_dtype=weight_dtype,
             )
+                
+            # run inference
+            images = []
+            if args.validation_prompt and args.num_validation_images > 0:
+                pipeline_args = {"prompt": args.validation_prompt}
+                images = log_validation(
+                    pipeline=pipeline,
+                    args=args,
+                    accelerator=accelerator,
+                    pipeline_args=pipeline_args,
+                    epoch=epoch,
+                    is_final_validation=True,
+                )
 
     accelerator.end_training()
 
