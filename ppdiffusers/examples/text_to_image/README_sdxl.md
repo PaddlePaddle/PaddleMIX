@@ -111,7 +111,7 @@ for file_name in sorted(os.listdir(dir_name)):
 ```
 
 ## NPU硬件训练推理
-请参照[tools](../../tools/README.md)进行NPU硬件Paddle安装。
+请参照[tools](../../../paddlemix/tools/README.md)进行NPU硬件Paddle安装。
 
 使用NPU进行sdxl微调训练和推理时参考如下命令设置相应的环境变量，训练和推理运行命令可直接参照上述LoRA训练和推理命令。
 ```bash
@@ -235,7 +235,7 @@ for file_name in sorted(os.listdir(dir_name)):
 ```
 
 ## NPU硬件训练
-请参照[tools](../../tools/README.md)进行NPU硬件Paddle安装。
+请参照[tools](../../../paddlemix/tools/README.md)进行NPU硬件Paddle安装。
 
 使用NPU进行LoRA训练和推理时参考如下命令设置相应的环境变量，训练和推理运行命令可直接参照上述LoRA训练和推理命令。
 ```bash
