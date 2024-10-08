@@ -193,7 +193,9 @@ python paddlemix/tools/merge_lora_params.py \
 
 **NPU硬件训练**
 
-PaddleMIX支持在NPU硬件上训练，只需要在config配置文件中增加`device`字段制定设备即可：
+PaddleMIX支持在NPU硬件上进行训练：
+1. 请先参照[PaddleCustomDevice](https://github.com/PaddlePaddle/PaddleCustomDevice/blob/develop/backends/npu/README_cn.md)安装NPU硬件Paddle
+2. 在config配置文件中增加`device`字段指定设备：
 ```json
 {
     ...
@@ -202,5 +204,14 @@ PaddleMIX支持在NPU硬件上训练，只需要在config配置文件中增加`d
     "output_dir": "./checkpoints/llava_sft_ckpts",
     ...
 }
+```
+3. 启动训练前请设置如下环境变量用于性能加速和精度对齐
+```shell
+export FLAGS_use_stride_kernel=0
+export FLAGS_npu_storage_format=0 # 关闭私有格式
+export FLAGS_npu_jit_compile=0 # 关闭即时编译
+export FLAGS_npu_scale_aclnn=True # aclnn加速
+export FLAGS_npu_split_aclnn=True # aclnn加速
+export CUSTOM_DEVICE_BLACK_LIST=set_value,set_value_with_tensor # set_value加入黑名单
 ```
 目前支持NPU训练的模型可以参考此[文档](../examples/README.md)

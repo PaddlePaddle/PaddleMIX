@@ -53,6 +53,8 @@ sh paddlemix/examples/internvl2/shell/internvl2.0/2nd_finetune/internvl2_2b_inte
 sh paddlemix/examples/internvl2/shell/internvl2.0/2nd_finetune/internvl2_8b_internlm2_7b_dynamic_res_2nd_finetune_full.sh
 ```
 
+## 5 NPU硬件训练
+请参照[tools](../../tools/README.md)进行NPU硬件Paddle安装和环境变量设置，配置完成后可直接执行微调命令进行训练或预测。
 
 ### 参考文献
 ```BibTeX
