@@ -452,7 +452,8 @@ class DiT_AUTO(ModelMixin, ConfigMixin):
         assert h * w == x.shape[1]
 
         x = x.reshape(shape=(x.shape[0], h, w, p, p, c))
-        x = paddle.einsum("nhwpqc->nchpwq", x)
+        # x = paddle.einsum("nhwpqc->nchpwq", x)
+        x = x.transpose([0, 5, 1, 3, 2, 4])
         imgs = x.reshape(shape=(x.shape[0], c, h * p, h * p))
         return imgs
 

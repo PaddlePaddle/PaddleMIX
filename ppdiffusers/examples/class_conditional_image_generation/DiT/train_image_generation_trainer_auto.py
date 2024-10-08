@@ -117,8 +117,12 @@ def shard_model(model):
 
             if any(n in name for n in ["x_embedder", "t_embedder.mlp.0"]):
                 # first pp stage
-                layer.weight = shard_w(layer.weight, 0, [dist.Replicate(), dist.Shard(1)])
-                layer.bias = shard_w(layer.bias, 0, [dist.Replicate(), dist.Shard(0)])
+                if hasattr(layer, "weight") and "proj" not in name:
+                    layer.weight = shard_w(layer.weight, 0, [dist.Replicate(), dist.Shard(1)])
+                    layer.bias = shard_w(layer.bias, 0, [dist.Replicate(), dist.Shard(0)])
+                elif hasattr(layer, "proj"):
+                    layer.proj.weight = shard_w(layer.proj.weight, 0, [dist.Replicate(), dist.Replicate()])
+                    layer.proj.bias = shard_w(layer.proj.bias, 0, [dist.Replicate(), dist.Replicate()])
 
             if any(n in name for n in ["t_embedder.mlp.2"]):
                 # first pp stage
