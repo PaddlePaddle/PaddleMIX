@@ -77,9 +77,6 @@ if args.inference_optimize_bp:
     mp_id = hcg.get_model_parallel_rank()
     rank_id = dist.get_rank()
 
-
-
-os.environ["FLAGS_use_cuda_managed_memory"] = "true"
 import datetime
 from ppdiffusers import StableDiffusion3Pipeline
 
@@ -142,10 +139,6 @@ if args.benchmark:
 
 if args.inference_optimize_bp:
     if rank_id == 0:
-        print(f"Max used CUDA_rank_1 memory : {cuda_mem_after_used:.3f} GiB")
         image.save("text_to_image_generation-stable_diffusion_3-result0.png")
-    else:
-        print(f"Max used CUDA_rank_2 memory : {cuda_mem_after_used:.3f} GiB")
-        image.save("text_to_image_generation-stable_diffusion_3-result1.png")
 else:
     image.save("text_to_image_generation-stable_diffusion_3-result_single.png")
