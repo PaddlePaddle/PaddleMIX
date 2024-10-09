@@ -215,7 +215,6 @@ class PatchEmbed(nn.Layer):
                 height, width = latent.shape[-2] // self.patch_size, latent.shape[-1] // self.patch_size
         else:
             height, width = latent.shape[-3] // self.patch_size, latent.shape[-2] // self.patch_size
-        # latent =latent.reshape([1,latent.shape[0],latent.shape[1],latent.shape[2],latent.shape[3]])
         latent = self.proj(latent)
         if self.flatten:
             if self.data_format == "NCHW":

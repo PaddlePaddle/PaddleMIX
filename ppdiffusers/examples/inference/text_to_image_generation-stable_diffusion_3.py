@@ -67,7 +67,6 @@ if args.inference_optimize_bp:
     import paddle.distributed as dist
     import paddle.distributed.fleet as fleet
     strategy = fleet.DistributedStrategy()
-    # 设置4路张量模型并行
     model_parallel_size = 2
     data_parallel_size = 1
     strategy.hybrid_configs = {
@@ -75,7 +74,6 @@ if args.inference_optimize_bp:
     "mp_degree": model_parallel_size,
     "pp_degree": 1
     }
-    # 注意 strategy 是这里传递的，动态图只能这里，静态图还可以在 distributed_optimizer 里传
     fleet.init(is_collective=True, strategy=strategy)
     hcg = fleet.get_hybrid_communicate_group()
     mp_id = hcg.get_model_parallel_rank()
