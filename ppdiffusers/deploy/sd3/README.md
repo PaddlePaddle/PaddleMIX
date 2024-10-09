@@ -32,7 +32,7 @@ python  text_to_image_generation-stable_diffusion_3.py  --dtype float16 --height
 
 
 ## Paddle Stable Diffusion 3 模型多卡推理： 
-Paddle Inference 提供了SD3模型的多卡推理功能，用户可以通过设置环境变量 `inference_optimize_bp 1` 来开启这一功能，  
+Paddle Inference 提供了SD3模型的多卡推理功能，用户可以通过设置 `--inference_optimize_bp 1` 来开启这一功能，  
 使用 `python -m paddle.distributed.launch --gpus 0,1` 指定使用哪些卡进行推理。  
 高性能多卡推理指令：
 ```shell
