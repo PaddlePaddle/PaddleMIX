@@ -364,7 +364,7 @@ class DiT_AUTO(ModelMixin, ConfigMixin):
         num_patches = self.x_embedder.num_patches
         # Will use fixed sin-cos embedding:
         self.pos_embed = self.create_parameter(
-            shape=(1, num_patches, hidden_size),
+            shape=(num_patches, hidden_size),
             default_initializer=initializer.Constant(0.0),
         )
         # self.add_parameter("pos_embed", self.pos_embed)
@@ -409,7 +409,7 @@ class DiT_AUTO(ModelMixin, ConfigMixin):
 
         # Initialize (and freeze) pos_embed by sin-cos embedding:
         pos_embed = get_2d_sincos_pos_embed(self.pos_embed.shape[-1], int(self.x_embedder.num_patches**0.5))
-        self.pos_embed.set_value(paddle.to_tensor(pos_embed, dtype="float32").unsqueeze(0))
+        self.pos_embed.set_value(paddle.to_tensor(pos_embed, dtype="float32"))
 
         # Initialize patch_embed like nn.Linear (instead of nn.Conv2D):
         w = self.x_embedder.proj.weight
