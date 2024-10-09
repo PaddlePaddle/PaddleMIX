@@ -835,7 +835,9 @@ class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):  # SD3Lo
                     output = model_output[0]
                     
                 if self.inference_optimize_bp:
-                    noise_pred = paddle.concat([output, output], axis=0)
+                    tmp_shape = output.shape
+                    tmp_shape[0] *=2
+                    noise_pred = paddle.zeros(tmp_shape,dtype=output.dtype)
                     dist.all_gather(noise_pred,output)
                 else:
                     noise_pred = output
