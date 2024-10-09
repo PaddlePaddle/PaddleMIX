@@ -29,3 +29,24 @@ python  text_to_image_generation-stable_diffusion_3.py  --dtype float16 --height
 | Paddle Inference|    PyTorch   | Paddle 动态图 |
 | --------------- | ------------ | ------------ |
 |       1.2 s     |     1.78 s   |    4.202 s   |
+
+
+## Paddle Stable Diffusion 3 模型多卡推理： 
+Paddle Inference 提供了SD3模型的多卡推理功能，用户可以通过设置环境变量 `inference_optimize_bp 1` 来开启这一功能，  
+使用 `python -m paddle.distributed.launch --gpus 0,1` 指定使用哪些卡进行推理。  
+高性能多卡推理指令：
+```shell
+# 执行多卡推理指令
+python -m paddle.distributed.launch --gpus 0,1 text_to_image_generation-stable_diffusion_3.py \
+--dtype float16 \
+--height 512 --width 512 \
+--num-inference-steps 50 \
+--inference_optimize 1 \
+--inference_optimize_bp 1 \
+--benchmark 1
+```
+- 在 NVIDIA A800-SXM4-80GB 上测试的性能如下：
+
+| Paddle parallel Inference| Paddle Inference|    PyTorch   | Paddle 动态图 |
+| ------------------------ | --------------- | ------------ | ------------ |
+|            0.86 s        |       1.2 s     |     1.78 s   |    4.202 s   |
