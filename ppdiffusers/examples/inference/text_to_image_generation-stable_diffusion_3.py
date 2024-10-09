@@ -58,8 +58,6 @@ elif args.dtype == "float16":
 
 
 if args.inference_optimize_bp:
-    # python3.8 -m paddle.distributed.launch --gpus "0,1,2,3" demo.py 
-
     from paddle.distributed import fleet
     from paddle.distributed.fleet.utils import recompute
     import numpy as np
