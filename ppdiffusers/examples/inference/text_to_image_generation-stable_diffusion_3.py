@@ -31,10 +31,10 @@ def parse_args():
         help="If inference_optimize is set to True, all optimizations except Triton are enabled.",
     )
     parser.add_argument(
-        "--inference_optimize_cfgp",
+        "--inference_optimize_bp",
         type=(lambda x: str(x).lower() in ["true", "1", "yes"]),
         default=False,
-        help="If inference_optimize_cfgp is set to True, Classifier-Free Guidance Parallel is enabled and dual-GPU acceleration is used.",
+        help="If inference_optimize_bp is set to True, batch Parallel is enabled and dual-GPU acceleration is used.",
     )
     parser.add_argument("--height", type=int, default=512, help="Height of the generated image.")
     parser.add_argument("--width", type=int, default=512, help="Width of the generated image.")
@@ -49,15 +49,15 @@ args = parse_args()
 if args.inference_optimize:
     os.environ["INFERENCE_OPTIMIZE"] = "True"
     os.environ["INFERENCE_OPTIMIZE_TRITON"] = "True"
-if args.inference_optimize_cfgp:
-    os.environ["INFERENCE_OPTIMIZE_CFGP"] = "True"
+if args.inference_optimize_bp:
+    os.environ["INFERENCE_OPTIMIZE_BP"] = "True"
 if args.dtype == "float32":
     inference_dtype = paddle.float32
 elif args.dtype == "float16":
     inference_dtype = paddle.float16
 
 
-if args.inference_optimize_cfgp:
+if args.inference_optimize_bp:
     # python3.8 -m paddle.distributed.launch --gpus "0,1,2,3" demo.py 
 
     from paddle.distributed import fleet
@@ -144,7 +144,7 @@ if args.benchmark:
     cuda_mem_after_used = paddle.device.cuda.max_memory_allocated() / (1024**3)
     print(f"Max used CUDA memory : {cuda_mem_after_used:.3f} GiB")
 
-if args.inference_optimize_cfgp:
+if args.inference_optimize_bp:
     if rank_id == 0:
         print(f"Max used CUDA_rank_1 memory : {cuda_mem_after_used:.3f} GiB")
         image.save("text_to_image_generation-stable_diffusion_3-result0.png")

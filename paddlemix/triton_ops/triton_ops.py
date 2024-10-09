@@ -862,6 +862,7 @@ def fused_adaLN_scale_residual(
         resi_out = paddle.empty_like(x)
         adaLN_out = paddle.empty_like(x)
         grid = ("M",)
+        # -1 means this value does not matter for triton compilation
         fused_adaLN_scale_residual_kernel[(op_name, grid, fused_adaLN_scale_residual_kernel_config)](
             x,
             mha_out,
@@ -1102,6 +1103,7 @@ def adaptive_layer_norm(x, scale, shift, weight=None, bias=None, epsilon=1e-05):
     if op_name not in OpProtoHolder.instance().op_proto_map.keys():
         y = paddle.empty_like(x)
         grid = ("M",)
+        # -1 means this value does not matter for triton compilation
         adaptive_layer_norm_kernel[(op_name, grid, adaptive_layer_norm_kernel_config)](
             x,
             y,
@@ -1290,6 +1292,7 @@ def rms_norm(x, weight=None, bias=None, epsilon=1e-05):
     if op_name not in OpProtoHolder.instance().op_proto_map.keys():
         y = paddle.empty_like(x)
         grid = ("((M+BLOCK_SIZE_M-1)/BLOCK_SIZE_M)",)
+        # -1 means this value does not matter for triton compilation
         rms_norm_kernel[(op_name, grid, rms_norm_kernel_config)](
             x,
             y,
@@ -1711,7 +1714,7 @@ def split_concat(x, y):
         out1 = paddle.empty(shape=[batch, seq_qkv + seq_eqkv, ouput_hidden], dtype=x.dtype)
         out2 = paddle.empty(shape=[batch, seq_qkv + seq_eqkv, ouput_hidden], dtype=x.dtype)
         grid = ("3", "batch", "seq_qkv + seq_eqkv")
-
+        # -1 means this value does not matter for triton compilation
         split_concat_kernel[(op_name, grid)](
             out0, out1, out2, x, y, -1, seq_qkv, seq_eqkv, ouput_hidden, BLOCK_SIZE=BLOCK_SIZE
         )
@@ -1825,7 +1828,7 @@ def triton_split_kernel(
 
     tl.store(write_ptr, read_data, mask=mask)
 
-
+# -1 means this value does not matter for triton compilation
 def triton_split(x, num_or_sections=[-1, -1], axis=1):
     assert len(x.shape) == 3
     output_batch = x.shape[0]

@@ -196,7 +196,7 @@ class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):  # SD3Lo
             if hasattr(self, "transformer") and self.transformer is not None
             else 128
         )
-        self.inference_optimize_cfg = os.getenv("INFERENCE_OPTIMIZE_CFGP") == "True"
+        self.inference_optimize_bp = os.getenv("INFERENCE_OPTIMIZE_BP") == "True"
 
     def _get_t5_prompt_embeds(
         self,
@@ -802,7 +802,7 @@ class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):  # SD3Lo
                 # broadcast to batch dimension in a way that's compatible with ONNX/Core ML
                 timestep = t.expand(latent_model_input.shape[0])
                 
-                if self.inference_optimize_cfg:
+                if self.inference_optimize_bp:
                     latent_input ,latent_model_input_ = paddle.split(latent_model_input,2,axis=0)
                     timestep_input ,timestep_ = paddle.split(timestep,2,axis=0)
                     prompt_embeds_input ,prompt_embeds_ = paddle.split(prompt_embeds,2,axis=0)
@@ -834,7 +834,7 @@ class StableDiffusion3Pipeline(DiffusionPipeline, FromSingleFileMixin):  # SD3Lo
                 else:
                     output = model_output[0]
                     
-                if self.inference_optimize_cfg:
+                if self.inference_optimize_bp:
                     noise_pred = paddle.concat([output, output], axis=0)
                     dist.all_gather(noise_pred,output)
                 else:
