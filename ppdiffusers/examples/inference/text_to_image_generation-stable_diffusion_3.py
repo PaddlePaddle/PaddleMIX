@@ -22,19 +22,19 @@ def parse_args():
         "--benchmark",
         type=(lambda x: str(x).lower() in ["true", "1", "yes"]),
         default=False,
-        help="if benchmark is set to True, measure inference performance",
+        help="if set to True, measure inference performance",
     )
     parser.add_argument(
         "--inference_optimize",
         type=(lambda x: str(x).lower() in ["true", "1", "yes"]),
         default=False,
-        help="If inference_optimize is set to True, all optimizations except Triton are enabled.",
+        help="If set to True, all optimizations except Triton are enabled.",
     )
     parser.add_argument(
         "--inference_optimize_bp",
         type=(lambda x: str(x).lower() in ["true", "1", "yes"]),
         default=False,
-        help="If inference_optimize_bp is set to True, batch Parallel is enabled and dual-GPU acceleration is used.",
+        help="If set to True, batch parallel is enabled in DIT and dual-GPU acceleration is used.",
     )
     parser.add_argument("--height", type=int, default=512, help="Height of the generated image.")
     parser.add_argument("--width", type=int, default=512, help="Width of the generated image.")
