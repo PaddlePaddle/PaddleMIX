@@ -511,6 +511,12 @@ def parse_args(input_args=None):
         ),
     )
     parser.add_argument("--local_rank", type=int, default=-1, help="For distributed training: local_rank")
+    parser.add_argument(
+        "--not_validation_final",
+        default=False,
+        action="store_true",
+        help="Flag to not validation when train finish in order to save memory.",
+    )
 
     if input_args is not None:
         args = parser.parse_args(input_args)
@@ -1583,48 +1589,50 @@ def main(args):
 
     accelerator.wait_for_everyone()
     if accelerator.is_main_process:
-        transformer = unwrap_model(transformer)
+        if not args.not_validation_final:
+            transformer = unwrap_model(transformer)
 
-        if args.train_text_encoder:
-            text_encoder_one = unwrap_model(text_encoder_one)
-            text_encoder_two = unwrap_model(text_encoder_two)
-            text_encoder_three = unwrap_model(text_encoder_three)
-            pipeline = StableDiffusion3Pipeline.from_pretrained(
-                args.pretrained_model_name_or_path,
-                transformer=transformer,
-                text_encoder=text_encoder_one,
-                text_encoder_2=text_encoder_two,
-                text_encoder_3=text_encoder_three,
-            )
-        else:
-            pipeline = StableDiffusion3Pipeline.from_pretrained(
-                args.pretrained_model_name_or_path, transformer=transformer
-            )
+            if args.train_text_encoder:
+                text_encoder_one = unwrap_model(text_encoder_one)
+                text_encoder_two = unwrap_model(text_encoder_two)
+                text_encoder_three = unwrap_model(text_encoder_three)
+                pipeline = StableDiffusion3Pipeline.from_pretrained(
+                    args.pretrained_model_name_or_path,
+                    transformer=transformer,
+                    text_encoder=text_encoder_one,
+                    text_encoder_2=text_encoder_two,
+                    text_encoder_3=text_encoder_three,
+                )
+            else:
+                pipeline = StableDiffusion3Pipeline.from_pretrained(
+                    args.pretrained_model_name_or_path, transformer=transformer
+                )
 
-        # save the pipeline
-        pipeline.save_pretrained(args.output_dir)
+            # save the pipeline
+            pipeline.save_pretrained(args.output_dir)
 
         # Final inference
         # Load previous pipeline
-        pipeline = StableDiffusion3Pipeline.from_pretrained(
-            args.output_dir,
-            revision=args.revision,
-            variant=args.variant,
-            paddle_dtype=weight_dtype,
-        )
-
-        # run inference
-        images = []
-        if args.validation_prompt and args.num_validation_images > 0:
-            pipeline_args = {"prompt": args.validation_prompt}
-            images = log_validation(
-                pipeline=pipeline,
-                args=args,
-                accelerator=accelerator,
-                pipeline_args=pipeline_args,
-                epoch=epoch,
-                is_final_validation=True,
+        # if not args.not_validation_final:
+            pipeline = StableDiffusion3Pipeline.from_pretrained(
+                args.output_dir,
+                revision=args.revision,
+                variant=args.variant,
+                paddle_dtype=weight_dtype,
             )
+            
+            # run inference
+            images = []
+            if args.validation_prompt and args.num_validation_images > 0:
+                pipeline_args = {"prompt": args.validation_prompt}
+                images = log_validation(
+                    pipeline=pipeline,
+                    args=args,
+                    accelerator=accelerator,
+                    pipeline_args=pipeline_args,
+                    epoch=epoch,
+                    is_final_validation=True,
+                )
 
     accelerator.end_training()
 
