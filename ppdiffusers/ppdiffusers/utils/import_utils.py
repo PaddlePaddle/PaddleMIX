@@ -375,6 +375,8 @@ def is_scipy_available():
 def is_librosa_available():
     return _librosa_available
 
+def is_npu_available():
+    return paddle.device.get_device().startswith("npu")
 
 def is_ppxformers_available():
     USE_PPXFORMERS = str2bool(os.getenv("USE_PPXFORMERS", True))
