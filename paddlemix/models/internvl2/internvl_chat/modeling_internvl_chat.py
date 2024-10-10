@@ -18,25 +18,25 @@
 # --------------------------------------------------------
 import warnings
 from typing import List, Optional, Tuple, Union
-import numpy as np
 
 import paddle
 from paddle import nn
 from paddle.nn import CrossEntropyLoss
-from ..conversation import get_conv_template
-from ..internlm2.modeling_internlm2 import InternLM2ForCausalLM
-from ..phi3.modeling_phi3 import Phi3ForCausalLM
-
-# from peft import LoraConfig, get_peft_model
 from paddlenlp.generation import GenerationConfig
 from paddlenlp.transformers import LlamaForCausalLM, Qwen2ForCausalLM
 from paddlenlp.transformers.model_outputs import CausalLMOutputWithPast
-from paddlemix.models.model_utils import MixPretrainedModel
-from paddlenlp.transformers.model_utils import PretrainedModel
+
+# from paddlenlp.transformers.model_utils import PretrainedModel
+from paddlemix.models.model_utils import MixPretrainedModel, NPUCrossEntropyLoss
+from paddlemix.utils.log import logger
+
+from ..conversation import get_conv_template
+from ..internlm2.modeling_internlm2 import InternLM2ForCausalLM
 from .configuration_internvl_chat import InternVLChatConfig
 from .modeling_intern_vit import InternVisionModel
 
-from paddlemix.utils.log import logger
+# from ..phi3.modeling_phi3 import Phi3ForCausalLM
+
 
 __all__ = [
     "InternVLChatModel",
@@ -45,9 +45,8 @@ __all__ = [
 
 class InternVLChatModel(MixPretrainedModel):
     config_class = InternVLChatConfig
-    main_input_name = 'pixel_values'
-    _no_split_modules = ['InternVisionModel', 'LlamaDecoderLayer', 'InternLM2DecoderLayer',
-                         'Phi3DecoderLayer', 'Qwen2DecoderLayer']
+    main_input_name = "pixel_values"
+    _no_split_modules = ["InternVisionModel", "LlamaDecoderLayer", "InternLM2DecoderLayer", "Qwen2DecoderLayer"]
     _supports_flash_attn_2 = True
 
     def __init__(self, config: InternVLChatConfig, vision_model=None, language_model=None):
@@ -58,12 +57,12 @@ class InternVLChatModel(MixPretrainedModel):
         self.patch_size = patch_size
         self.select_layer = config.select_layer
         self.template = config.template
-        self.num_image_token = int((image_size // patch_size) ** 2 * (config.downsample_ratio ** 2))
+        self.num_image_token = int((image_size // patch_size) ** 2 * (config.downsample_ratio**2))
         self.downsample_ratio = config.downsample_ratio
         self.ps_version = config.ps_version
 
-        logger.info(f'num_image_token: {self.num_image_token}')
-        logger.info(f'ps_version: {self.ps_version}')
+        logger.info(f"num_image_token: {self.num_image_token}")
+        logger.info(f"ps_version: {self.ps_version}")
         if vision_model is not None:
             self.vision_model = vision_model
         else:
@@ -71,16 +70,16 @@ class InternVLChatModel(MixPretrainedModel):
         if language_model is not None:
             self.language_model = language_model
         else:
-            if config.llm_config.architectures[0] == 'LlamaForCausalLM':
+            if config.llm_config.architectures[0] == "LlamaForCausalLM":
                 self.language_model = LlamaForCausalLM(config.llm_config)
-            elif config.llm_config.architectures[0] == 'InternLM2ForCausalLM':
-                self.language_model = InternLM2ForCausalLM(config.llm_config) # [2048, 92553]
-            elif config.llm_config.architectures[0] == 'Phi3ForCausalLM':
-                self.language_model = Phi3ForCausalLM(config.llm_config)
-            elif config.llm_config.architectures[0] == 'Qwen2ForCausalLM':
-                self.language_model = Qwen2ForCausalLM(config.llm_config) # [151655, 896]
+            elif config.llm_config.architectures[0] == "InternLM2ForCausalLM":
+                self.language_model = InternLM2ForCausalLM(config.llm_config)  # [2048, 92553]
+            # elif config.llm_config.architectures[0] == 'Phi3ForCausalLM':
+            #     self.language_model = Phi3ForCausalLM(config.llm_config)
+            elif config.llm_config.architectures[0] == "Qwen2ForCausalLM":
+                self.language_model = Qwen2ForCausalLM(config.llm_config)  # [151655, 896]
             else:
-                raise NotImplementedError(f'{config.llm_config.architectures[0]} is not implemented.')
+                raise NotImplementedError(f"{config.llm_config.architectures[0]} is not implemented.")
 
         vit_hidden_size = config.vision_config.hidden_size
         llm_hidden_size = config.llm_config.hidden_size
@@ -89,52 +88,22 @@ class InternVLChatModel(MixPretrainedModel):
             nn.LayerNorm(vit_hidden_size * int(1 / self.downsample_ratio) ** 2),
             nn.Linear(vit_hidden_size * int(1 / self.downsample_ratio) ** 2, llm_hidden_size),
             nn.GELU(),
-            nn.Linear(llm_hidden_size, llm_hidden_size)
+            nn.Linear(llm_hidden_size, llm_hidden_size),
         )
 
         self.img_context_token_id = None
         self.conv_template = get_conv_template(self.template)
         self.system_message = self.conv_template.system_message
-        # self.num_samples = 0
-
-        # if config.use_backbone_lora:
-        #     self.wrap_backbone_lora(r=config.use_backbone_lora, lora_alpha=2 * config.use_backbone_lora)
-
-        # if config.use_llm_lora:
-        #     self.wrap_llm_lora(r=config.use_llm_lora, lora_alpha=2 * config.use_llm_lora)
-
-    # def wrap_backbone_lora(self, target_modules=['attn.qkv', 'attn.proj', 'mlp.fc1', 'mlp.fc2'],
-    #                        r=128, lora_alpha=256, lora_dropout=0.05):
-    #     lora_config = LoraConfig(
-    #         r=r,
-    #         target_modules=target_modules,
-    #         lora_alpha=lora_alpha,
-    #         lora_dropout=lora_dropout,
-    #     )
-    #     self.vision_model = get_peft_model(self.vision_model, lora_config)
-    #     self.vision_model.print_trainable_parameters()
-
-    # def wrap_llm_lora(self, target_modules, r=128, lora_alpha=256, lora_dropout=0.05):
-    #     lora_config = LoraConfig(
-    #         r=r,
-    #         target_modules=target_modules,
-    #         lora_alpha=lora_alpha,
-    #         lora_dropout=lora_dropout,
-    #         task_type='CAUSAL_LM'
-    #     )
-    #     self.language_model = get_peft_model(self.language_model, lora_config)
-    #     self.language_model.enable_input_require_grads()
-    #     self.language_model.print_trainable_parameters()
 
     def forward(
         self,
-        pixel_values: paddle.Tensor, # [14, 3, 448, 448]
-        input_ids: paddle.Tensor = None, # [2, 1918]
-        attention_mask: Optional[paddle.Tensor] = None, # [2, 1918]
+        pixel_values: paddle.Tensor,  # [14, 3, 448, 448]
+        input_ids: paddle.Tensor = None,  # [2, 1918]
+        attention_mask: Optional[paddle.Tensor] = None,  # [2, 1918]
         position_ids: Optional[paddle.Tensor] = None,
-        image_flags: Optional[paddle.Tensor] = None, # [14]
+        image_flags: Optional[paddle.Tensor] = None,  # [14]
         past_key_values: Optional[List[paddle.Tensor]] = None,
-        labels: Optional[paddle.Tensor] = None, # [2, 1918]
+        labels: Optional[paddle.Tensor] = None,  # [2, 1918]
         use_cache: Optional[bool] = None,
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
@@ -145,14 +114,11 @@ class InternVLChatModel(MixPretrainedModel):
         image_flags = image_flags.squeeze(-1)
         input_embeds = self.language_model.get_input_embeddings()(input_ids).clone()
         # [2, 1918, 2048] -3972.55566406  bfloat16
-        #print('input_ids', input_ids.shape, input_ids.dtype, input_ids.sum().item()) # [2, 1916] int64 346392202
-        #print('input_embeds', input_embeds.shape, input_embeds.dtype, input_embeds.sum().item()) # [2, 1916] bfloat16 346392202
-        #print('pixel_values', pixel_values.shape, pixel_values.dtype, pixel_values.sum().item(), pixel_values.mean().item())
-        vit_embeds = self.extract_feature(pixel_values) # pixel_values float32 [14, 3, 448, 448] sum=891674.56250000 mean=0.10577939
-        #print('vit_embeds', vit_embeds.sum().item(), vit_embeds.dtype, vit_embeds.mean().item())
+        vit_embeds = self.extract_feature(
+            pixel_values
+        )  # pixel_values float32 [14, 3, 448, 448] sum=891674.56250000 mean=0.10577939
         # [14, 256, 2048] bfloat16 -85460.1875 -0.01165771484375
 
-        #print('vit_embeds', vit_embeds.sum().item(), vit_embeds.mean().item())
         # [14, 256, 2048] bfloat16 -87335.3984375 -0.01190185546875
         vit_embeds = vit_embeds[image_flags == 1]
         vit_batch_size = pixel_values.shape[0]
@@ -161,29 +127,31 @@ class InternVLChatModel(MixPretrainedModel):
         input_embeds = input_embeds.reshape([B * N, C])
 
         if paddle.distributed.get_rank() == 0:
-            logger.info(f'dynamic ViT batch size: {vit_batch_size}, images per sample: {vit_batch_size / B}, dynamic token length: {N}')
+            logger.info(
+                f"dynamic ViT batch size: {vit_batch_size}, images per sample: {vit_batch_size / B}, dynamic token length: {N}"
+            )
 
-        input_ids = input_ids.reshape([B * N]) # [3836] sum 346393658
-        selected = (input_ids == self.img_context_token_id) # [3836] sum 3584
-        #print('selected ', selected.shape, selected.sum().item())#[3832] 3584
+        input_ids = input_ids.reshape([B * N])  # [3836] sum 346393658
+        selected = input_ids == self.img_context_token_id  # [3836] sum 3584
         try:
             input_embeds[selected] = input_embeds[selected] * 0.0 + vit_embeds.reshape([-1, C])
             ignore_flag = False
         except Exception as e:
             vit_embeds = vit_embeds.reshape([-1, C])
-            logger.info(f'warning: {e}, input_embeds[selected].shape={input_embeds[selected].shape}, '
-                  f'vit_embeds.shape={vit_embeds.shape}')
+            logger.info(
+                f"warning: {e}, input_embeds[selected].shape={input_embeds[selected].shape}, "
+                f"vit_embeds.shape={vit_embeds.shape}"
+            )
             n_token = selected.sum()
             input_embeds[selected] = input_embeds[selected] * 0.0 + vit_embeds[:n_token]
             ignore_flag = True
 
         input_embeds = input_embeds.reshape([B, N, C])
         # [2, 1918, 2048] bfloat16 -87403.26562500
-        #print('input_embeds.sum()', input_embeds.dtype, input_embeds.shape, input_embeds.sum().item())
 
         outputs = self.language_model(
-            inputs_embeds=input_embeds, # [2, 1918, 2048]  -87403.26562500
-            attention_mask=attention_mask, # [2, 1918]  3836
+            inputs_embeds=input_embeds,  # [2, 1918, 2048]  -87403.26562500
+            attention_mask=attention_mask,  # [2, 1918]  3836
             position_ids=position_ids,
             past_key_values=past_key_values,
             use_cache=use_cache,
@@ -192,7 +160,6 @@ class InternVLChatModel(MixPretrainedModel):
             return_dict=True,
         )
         logits = outputs.logits
-        #print('logits.sum()', logits.shape, logits.dtype, logits.sum().item(), logits.mean().item())
         # [2, 1918, 92553] bfloat16 -35019332.0 -0.09863674640655518
 
         loss = None
@@ -201,16 +168,11 @@ class InternVLChatModel(MixPretrainedModel):
             shift_logits = logits[..., :-1, :]
             shift_labels = labels[..., 1:]
             # Flatten the tokens
-            loss_fct = CrossEntropyLoss()
+            loss_fct = NPUCrossEntropyLoss() if "npu" in paddle.get_device() else CrossEntropyLoss()
             shift_logits = shift_logits.reshape([-1, self.language_model.config.vocab_size])
             shift_labels = shift_labels.reshape([-1])
             # Enable model parallelism
-            #print('shift_logits.sum()', shift_logits.shape, shift_logits.sum().item()) # fp32 [3834, 92553] -34228768.0
-            #print('shift_labels.sum()', shift_labels.shape, shift_labels.sum().item()) # int64 [3834] 4330172
             loss = loss_fct(shift_logits, shift_labels)
-            # print('loss', loss.dtype, loss.item()) # 1.746330976486206
-            #print('loss', loss.item()) #1.7383328676223755 # torch llm npy+img npy
-            #print('loss', loss.item()) #1.7464321851730347 # torch llm npy  1.7464323043823242 logits.npy
             if ignore_flag:
                 loss = loss * 0.0
 
@@ -246,14 +208,12 @@ class InternVLChatModel(MixPretrainedModel):
     def extract_feature(self, pixel_values):
         if self.select_layer == -1:
             vit_embeds = self.vision_model(
-                pixel_values=pixel_values,
-                output_hidden_states=False,
-                return_dict=True).last_hidden_state
+                pixel_values=pixel_values, output_hidden_states=False, return_dict=True
+            ).last_hidden_state
         else:
             vit_embeds = self.vision_model(
-                pixel_values=pixel_values,
-                output_hidden_states=True,
-                return_dict=True).hidden_states[self.select_layer]
+                pixel_values=pixel_values, output_hidden_states=True, return_dict=True
+            ).hidden_states[self.select_layer]
         vit_embeds = vit_embeds[:, 1:, :]
 
         h = w = int(vit_embeds.shape[1] ** 0.5)
@@ -263,61 +223,81 @@ class InternVLChatModel(MixPretrainedModel):
         vit_embeds = self.mlp1(vit_embeds)
         return vit_embeds
 
-    def batch_chat(self, tokenizer, pixel_values, questions, generation_config, num_patches_list=None,
-                   history=None, return_history=False, IMG_START_TOKEN='<img>', IMG_END_TOKEN='</img>',
-                   IMG_CONTEXT_TOKEN='<IMG_CONTEXT>', verbose=False, image_counts=None):
+    def batch_chat(
+        self,
+        tokenizer,
+        pixel_values,
+        questions,
+        generation_config,
+        num_patches_list=None,
+        history=None,
+        return_history=False,
+        IMG_START_TOKEN="<img>",
+        IMG_END_TOKEN="</img>",
+        IMG_CONTEXT_TOKEN="<IMG_CONTEXT>",
+        verbose=False,
+        image_counts=None,
+    ):
         if history is not None or return_history:
-            logger.info('Now multi-turn chat is not supported in batch_chat.')
+            logger.info("Now multi-turn chat is not supported in batch_chat.")
             raise NotImplementedError
 
         if image_counts is not None:
             num_patches_list = image_counts
-            logger.info('Warning: `image_counts` is deprecated. Please use `num_patches_list` instead.')
+            logger.info("Warning: `image_counts` is deprecated. Please use `num_patches_list` instead.")
 
         img_context_token_id = tokenizer.convert_tokens_to_ids(IMG_CONTEXT_TOKEN)
         self.img_context_token_id = img_context_token_id
 
         if verbose and pixel_values is not None:
             image_bs = pixel_values.shape[0]
-            logger.info(f'dynamic ViT batch size: {image_bs}')
+            logger.info(f"dynamic ViT batch size: {image_bs}")
 
         queries = []
         for idx, num_patches in enumerate(num_patches_list):
             question = questions[idx]
-            if pixel_values is not None and '<image>' not in question:
-                question = '<image>\n' + question
+            if pixel_values is not None and "<image>" not in question:
+                question = "<image>\n" + question
             template = get_conv_template(self.template)
             template.append_message(template.roles[0], question)
             template.append_message(template.roles[1], None)
             query = template.get_prompt()
 
             image_tokens = IMG_START_TOKEN + IMG_CONTEXT_TOKEN * self.num_image_token * num_patches + IMG_END_TOKEN
-            query = query.replace('<image>', image_tokens, 1)
+            query = query.replace("<image>", image_tokens, 1)
             queries.append(query)
 
-        tokenizer.padding_side = 'left'
-        model_inputs = tokenizer(queries, return_tensors='pd', padding=True) # padding
-        input_ids = model_inputs['input_ids']
-        attention_mask = model_inputs['attention_mask']
+        tokenizer.padding_side = "left"
+        model_inputs = tokenizer(queries, return_tensors="pd", padding=True)  # padding
+        input_ids = model_inputs["input_ids"]
+        attention_mask = model_inputs["attention_mask"]
         eos_token_id = tokenizer.convert_tokens_to_ids(template.sep)
-        generation_config['eos_token_id'] = eos_token_id
+        generation_config["eos_token_id"] = eos_token_id
 
         generation_output = self.generate(
-            pixel_values=pixel_values,
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            **generation_config
+            pixel_values=pixel_values, input_ids=input_ids, attention_mask=attention_mask, **generation_config
         )
         responses = tokenizer.batch_decode(generation_output[0], skip_special_tokens=True)
         responses = [response.split(template.sep)[0].strip() for response in responses]
         return responses
 
-    def chat(self, tokenizer, pixel_values, question, generation_config, history=None, return_history=False,
-             num_patches_list=None, IMG_START_TOKEN='<img>', IMG_END_TOKEN='</img>', IMG_CONTEXT_TOKEN='<IMG_CONTEXT>',
-             verbose=False):
+    def chat(
+        self,
+        tokenizer,
+        pixel_values,
+        question,
+        generation_config,
+        history=None,
+        return_history=False,
+        num_patches_list=None,
+        IMG_START_TOKEN="<img>",
+        IMG_END_TOKEN="</img>",
+        IMG_CONTEXT_TOKEN="<IMG_CONTEXT>",
+        verbose=False,
+    ):
 
-        if history is None and pixel_values is not None and '<image>' not in question:
-            question = '<image>\n' + question
+        if history is None and pixel_values is not None and "<image>" not in question:
+            question = "<image>\n" + question
 
         if num_patches_list is None:
             num_patches_list = [pixel_values.shape[0]] if pixel_values is not None else []
@@ -340,22 +320,22 @@ class InternVLChatModel(MixPretrainedModel):
 
         if verbose and pixel_values is not None:
             image_bs = pixel_values.shape[0]
-            logger.info(f'dynamic ViT batch size: {image_bs}')
+            logger.info(f"dynamic ViT batch size: {image_bs}")
 
         for num_patches in num_patches_list:
             image_tokens = IMG_START_TOKEN + IMG_CONTEXT_TOKEN * self.num_image_token * num_patches + IMG_END_TOKEN
-            query = query.replace('<image>', image_tokens, 1)
+            query = query.replace("<image>", image_tokens, 1)
 
-        model_inputs = tokenizer(query, return_tensors='pd')
-        input_ids = model_inputs['input_ids']
-        attention_mask = model_inputs['attention_mask']
-        generation_config['eos_token_id'] = eos_token_id
+        model_inputs = tokenizer(query, return_tensors="pd")
+        input_ids = model_inputs["input_ids"]
+        attention_mask = model_inputs["attention_mask"]
+        generation_config["eos_token_id"] = eos_token_id
 
         generation_output = self.generate(
-            pixel_values=pixel_values, # [7, 3, 448, 448]
-            input_ids=input_ids, # [1, 1847]
-            attention_mask=attention_mask, # [1, 1847]
-            **generation_config # {'max_new_tokens': 1024, 'do_sample': False, 'eos_token_id': 92542}
+            pixel_values=pixel_values,  # [7, 3, 448, 448]
+            input_ids=input_ids,  # [1, 1847]
+            attention_mask=attention_mask,  # [1, 1847]
+            **generation_config,  # {'max_new_tokens': 1024, 'do_sample': False, 'eos_token_id': 92542}
         )
         response = tokenizer.batch_decode(generation_output[0], skip_special_tokens=True)[0]
         response = response.split(template.sep)[0].strip()
@@ -363,8 +343,8 @@ class InternVLChatModel(MixPretrainedModel):
         if return_history:
             return response, history
         else:
-            query_to_print = query.replace(IMG_CONTEXT_TOKEN, '')
-            query_to_print = query_to_print.replace(f'{IMG_START_TOKEN}{IMG_END_TOKEN}', '<image>')
+            query_to_print = query.replace(IMG_CONTEXT_TOKEN, "")
+            query_to_print = query_to_print.replace(f"{IMG_START_TOKEN}{IMG_END_TOKEN}", "<image>")
             if verbose:
                 logger.info(query_to_print, response)
             return response
@@ -393,14 +373,14 @@ class InternVLChatModel(MixPretrainedModel):
             # 1b qwen2: nn.Embedding(151655, 896, sparse=False)
             # 2b internlm2: nn.Embedding(92553, 2048, padding_idx=2, sparse=False)
 
-            B, N, C = input_embeds.shape # [1, 5432, 896]  [1, 1847, 2048]
-            input_embeds = input_embeds.reshape([B * N, C]) # [5432, 896]  [1847, 2048]
+            B, N, C = input_embeds.shape  # [1, 5432, 896]  [1, 1847, 2048]
+            input_embeds = input_embeds.reshape([B * N, C])  # [5432, 896]  [1847, 2048]
 
-            input_ids = input_ids.reshape([B * N]) # [5432]  [1847]
-            selected = (input_ids == self.img_context_token_id)
+            input_ids = input_ids.reshape([B * N])  # [5432]  [1847]
+            selected = input_ids == self.img_context_token_id
             assert selected.sum() != 0, "None after  selected = input_ids == self.img_context_token_id"
 
-            input_embeds[selected] = vit_embeds.reshape([-1, C]) # [7, 256, 896] -> [1792, 896]
+            input_embeds[selected] = vit_embeds.reshape([-1, C])  # [7, 256, 896] -> [1792, 896]
 
             input_embeds = input_embeds.reshape([B, N, C])
         else:

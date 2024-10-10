@@ -1,0 +1,3 @@
+hidden_states:1,1024,1536
+encoder_hidden_states:1,154,1536
+temb:1,1536

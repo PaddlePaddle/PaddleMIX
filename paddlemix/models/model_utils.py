@@ -27,7 +27,7 @@ from paddlemix.utils import device_guard, paddlemix_load
 from paddlemix.utils.env import MODEL_HOME
 from paddlemix.utils.log import logger
 
-__all__ = ["MixPretrainedModel"]
+__all__ = ["MixPretrainedModel", "NPUCrossEntropyLoss"]
 
 
 def resolve_cache_dir(pretrained_model_name_or_path: str, cache_dir: Optional[str] = None) -> str:
@@ -489,3 +489,26 @@ class MixPretrainedModel(PretrainedModel):
             )
 
         return missing_keys, unexpected_keys, mismatched_keys
+
+
+class NPUCrossEntropyLoss(paddle.nn.Layer):
+    """
+    Make cross_entropy_loss compatible with npu device
+    """
+    def __init__(self, **kwargs):
+        super().__init__()
+        self.reduction = kwargs.get('reduction', 'mean')
+        kwargs['reduction'] = 'none'
+        self.nll_loss = paddle.nn.NLLLoss(**kwargs)
+        self.log_softmax = paddle.nn.functional.log_softmax
+    
+    def forward(self, logits, labels):
+        loss = self.nll_loss(self.log_softmax(logits, axis=-1), labels)
+        if self.reduction == 'mean':
+            return loss.mean()
+        elif self.reduction == 'sum':
+            return loss.sum()
+        elif self.reduction == 'none':
+            return loss
+        else:
+            raise ValueError(f"Unexcepted reduction method: {self.reduction}")

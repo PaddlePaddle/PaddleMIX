@@ -1,0 +1,6 @@
+hidden_states:2,16,64,64
+encoder_hidden_states:2,154,4096
+pooled_projections:2,2048
+timestep:2
+joint_attention_kwargs:
+return_dict:
