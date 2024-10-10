@@ -139,6 +139,6 @@ if args.benchmark:
 
 if args.inference_optimize_bp:
     if rank_id == 0:
-        image.save("text_to_image_generation-stable_diffusion_3-result_parallel.png")
+        image.save("text_to_image_generation-stable_diffusion_3-result.png")
 else:
-    image.save("text_to_image_generation-stable_diffusion_3-result_single.png")
+    image.save("text_to_image_generation-stable_diffusion_3-result.png")
