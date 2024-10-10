@@ -82,9 +82,9 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         from .modelscope_st_unet_video2video import Vid2VidSTUNet
         from .paddleinfer_runtime import PaddleInferRuntimeModel
         from .prior_transformer import PriorTransformer
-        from .transformer_sd3 import SD3Transformer2DModel
         from .t5_film_transformer import T5FilmDecoder
         from .transformer_2d import Transformer2DModel
+        from .transformer_sd3 import SD3Transformer2DModel
         from .transformer_temporal import TransformerTemporalModel
         from .unet_1d import UNet1DModel
         from .unet_2d import UNet2DModel
