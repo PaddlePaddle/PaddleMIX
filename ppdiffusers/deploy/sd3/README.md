@@ -29,3 +29,28 @@ python  text_to_image_generation-stable_diffusion_3.py  --dtype float16 --height
 | Paddle Inference|    PyTorch   | Paddle 动态图 |
 | --------------- | ------------ | ------------ |
 |       1.2 s     |     1.78 s   |    4.202 s   |
+
+
+## Paddle Stable Diffusion 3 模型多卡推理： 
+### batch parallel 实现原理  
+- 由于SD3 MMDiT部分的输入batch为2，所以我们考虑在多卡并行的方案中，将batch为2的输入拆分到两张卡上进行计算，这样单卡的计算量就减少为原来的一半，降低了单卡所承载的浮点计算量。  
+计算完成后，我们再把两张卡的计算结果 聚合在一起，结果与单卡计算完全一致。
+### 开启多卡推理方法 
+- Paddle Inference 提供了SD3模型的多卡推理功能，用户可以通过设置 `--inference_optimize_bp 1` 来开启这一功能，  
+使用 `python -m paddle.distributed.launch --gpus 0,1` 指定使用哪些卡进行推理。
+高性能多卡推理指令：
+```shell
+# 执行多卡推理指令
+python -m paddle.distributed.launch --gpus 0,1 text_to_image_generation-stable_diffusion_3.py \
+--dtype float16 \
+--height 512 --width 512 \
+--num-inference-steps 50 \
+--inference_optimize 1 \
+--inference_optimize_bp 1 \
+--benchmark 1
+```
+## 在 NVIDIA A800-SXM4-80GB 上测试的性能如下：
+
+| Paddle batch parallel | Paddle Single Card |  PyTorch  | Paddle 动态图 |
+| --------------------- | ------------------ | --------- | ------------ |
+|          0.86 s       |        1.2 s       |   1.78 s  |    4.202 s   |
