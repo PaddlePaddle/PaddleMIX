@@ -14,4 +14,5 @@
 
 
 from ._lid import FastTextLIDModel
+from .inscaptagger import PPInsCapTagger
 
