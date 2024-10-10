@@ -19,10 +19,10 @@
 export USE_PPXFORMERS=False
 export FLAGS_set_to_1d=1
 # 1. export the model to static_model.
-python export_model.py --pretrained_model_name_or_path runwayml/stable-diffusion-v1-5 --controlnet_pretrained_model_name_or_path  lllyasviel/sd-controlnet-canny --output_path static_model/stable-diffusion-v1-5-canny python export_model.py --pretrained_model_name_or_path runwayml/stable-diffusion-v1-5 --controlnet_pretrained_model_name_or_path  lllyasviel/sd-controlnet-canny --output_path static_model/stable-diffusion-v1-5-canny --width 512 --height 512
+python export_model.py --pretrained_model_name_or_path runwayml/stable-diffusion-v1-5 --controlnet_pretrained_model_name_or_path  lllyasviel/sd-controlnet-canny --output_path static_model/stable-diffusion-v1-5-canny --width 512 --height 512
 
 # 2. tune the shapes of the model for tensorrt 
-python infer.py --model_dir static_model/stable-diffusion-v1-5-canny/ --scheduler "ddim" --backend paddle --device gpu --task_name all --width 512 --height 512 --inference_steps 50 --tune True --use_fp16 False
+python infer.py --model_dir static_model/stable-diffusion-v1-5-canny/ --scheduler "ddim" --backend paddle --device gpu --task_name all --width 512 --height 512 --inference_steps 5 --tune True --use_fp16 False
 
 # 3. convert the model to tensorrt
 python infer.py --model_dir static_model/stable-diffusion-v1-5-canny/ --scheduler "ddim" --backend paddle_tensorrt --device gpu --task_name all --width 512 --height 512 --inference_steps 50

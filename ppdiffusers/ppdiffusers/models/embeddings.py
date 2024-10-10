@@ -175,12 +175,12 @@ class PatchEmbed(nn.Layer):
         # NOTE, new add for unidiffusers!
         self.add_pos_embed = add_pos_embed
         if add_pos_embed:
-            self.pos_embed = get_2d_sincos_pos_embed(
+            pos_embed = get_2d_sincos_pos_embed(
                 embed_dim, grid_size, base_size=self.base_size, interpolation_scale=self.interpolation_scale
             )
             persistent = True if pos_embed_max_size else False
             self.register_buffer(
-                "pos_embed", paddle.to_tensor(self.pos_embed).cast("float32").unsqueeze(0), persistable=persistent
+                "pos_embed", paddle.to_tensor(pos_embed).cast("float32").unsqueeze(0), persistable=persistent
             )
 
     def cropped_pos_embed(self, height, width):
