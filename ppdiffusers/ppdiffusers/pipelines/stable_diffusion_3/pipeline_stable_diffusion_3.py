@@ -396,7 +396,6 @@ class StableDiffusion3Pipeline(DiffusionPipeline, SD3LoraLoaderMixin,  FromSingl
 
             prompt_embeds = paddle.concat([clip_prompt_embeds, t5_prompt_embed], axis=-2)
             pooled_prompt_embeds = paddle.concat([pooled_prompt_embed, pooled_prompt_2_embed], axis=-1)
-        breakpoint()
         if do_classifier_free_guidance and negative_prompt_embeds is None:
             negative_prompt = negative_prompt or ""
             negative_prompt_2 = negative_prompt_2 or negative_prompt
