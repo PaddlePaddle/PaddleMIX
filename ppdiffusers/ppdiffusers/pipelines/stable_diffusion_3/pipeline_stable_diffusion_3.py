@@ -396,7 +396,7 @@ class StableDiffusion3Pipeline(DiffusionPipeline, SD3LoraLoaderMixin,  FromSingl
 
             prompt_embeds = paddle.concat([clip_prompt_embeds, t5_prompt_embed], axis=-2)
             pooled_prompt_embeds = paddle.concat([pooled_prompt_embed, pooled_prompt_2_embed], axis=-1)
-
+        breakpoint()
         if do_classifier_free_guidance and negative_prompt_embeds is None:
             negative_prompt = negative_prompt or ""
             negative_prompt_2 = negative_prompt_2 or negative_prompt
@@ -801,8 +801,7 @@ class StableDiffusion3Pipeline(DiffusionPipeline, SD3LoraLoaderMixin,  FromSingl
                 latent_model_input = paddle.concat([latents] * 2) if self.do_classifier_free_guidance else latents
                 # broadcast to batch dimension in a way that's compatible with ONNX/Core ML
                 timestep = t.expand(latent_model_input.shape[0])
-                
-                if self.inference_optimize_bp:
+                if self.inference_optimize_bp and self.do_classifier_free_guidance:
                     latent_input ,latent_model_input_ = paddle.split(latent_model_input,2,axis=0)
                     timestep_input ,timestep_ = paddle.split(timestep,2,axis=0)
                     prompt_embeds_input ,prompt_embeds_ = paddle.split(prompt_embeds,2,axis=0)
