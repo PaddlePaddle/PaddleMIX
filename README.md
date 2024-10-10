@@ -48,29 +48,45 @@ PaddleMIX是基于飞桨的多模态大模型开发套件，聚合图像、文�
 https://github.com/PaddlePaddle/PaddleMIX/assets/29787866/8d32722a-e307-46cb-a8c0-be8acd93d2c8
 
 
-## 安装
-
-1. 环境依赖
+## 安装步骤
+### 1. 克隆PaddleMIX仓库
 ```
-pip install -r requirements.txt
+git clone https://github.com/PaddlePaddle/PaddleMIX
+cd PaddleMIX
 ```
 
+### 2. 创建虚拟环境
+```
+conda create -n paddlemix python=3.10 -y
+conda activate paddlemix
+```
+### 3. 安装PaddlePaddle
+#### 方法 1: 一键安装（推荐）
+- CUDA 11.x或12.3
+- PaddlePaddle 3.0.0b1
+```
+sh build_paddle_env.sh
+```
+
+#### 方法 2: 手动安装
 关于PaddlePaddle安装的详细教程请查看[Installation](https://www.paddlepaddle.org.cn/install/quick?docurl=/documentation/docs/zh/develop/install/pip/linux-pip.html)。
+
+
+### 4. 安装依赖
+
+#### 方法 1: 一键安装（推荐）
+
+运行以下命令来自动安装所有必要的依赖:
+```
+sh build_env.sh
+```
+
+#### 方法 2: 手动安装（请参考 build_env.sh）
 
 > 注：ppdiffusers部分模型需要依赖 CUDA 11.2 及以上版本，如果本地机器不符合要求，建议前往 [AI Studio](https://aistudio.baidu.com/index) 进行模型训练、推理任务。
 
 > 如果希望使用**bf16**训练推理，请使用支持**bf16**的GPU，如A100。
 
-2. 手动安装
-```
-git clone https://github.com/PaddlePaddle/PaddleMIX
-cd PaddleMIX
-pip install -e .
-
-#ppdiffusers 安装
-cd ppdiffusers
-pip install -e .
-```
 
 ## 教程
 
