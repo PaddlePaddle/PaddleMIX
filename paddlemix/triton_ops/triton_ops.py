@@ -1711,9 +1711,18 @@ def split_concat(x, y):
         out1 = paddle.empty(shape=[batch, seq_qkv + seq_eqkv, ouput_hidden], dtype=x.dtype)
         out2 = paddle.empty(shape=[batch, seq_qkv + seq_eqkv, ouput_hidden], dtype=x.dtype)
         grid = ("3", "batch", "seq_qkv + seq_eqkv")
-
+        # -1 means this value does not matter for triton compilation
         split_concat_kernel[(op_name, grid)](
-            out0, out1, out2, x, y, batch, seq_qkv, seq_eqkv, ouput_hidden, BLOCK_SIZE=BLOCK_SIZE
+            out0,
+            out1, 
+            out2, 
+            x, 
+            y,
+            -1, # batch,
+            seq_qkv, 
+            seq_eqkv, 
+            ouput_hidden, 
+            BLOCK_SIZE=BLOCK_SIZE
         )
 
     if in_dynamic_or_pir_mode():
