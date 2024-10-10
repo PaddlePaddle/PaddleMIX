@@ -88,6 +88,11 @@ git clone https://github.com/PaddlePaddle/PaddleMIX
 cd PaddleMIX/ppdiffusers
 python setup.py install
 ```
+### 设置代理
+```shell
+export HF_HUB_ENABLE_HF_TRANSFER=1   
+export HF_ENDPOINT=https://hf-mirror.com
+```
 
 ## 快速开始
 我们将以扩散模型的典型代表**Stable Diffusion**为例，带你快速了解PPDiffusers。

@@ -10,7 +10,13 @@
 - **python >= 3.10**
 - tiktoken
 > 注：tiktoken 要求python >= 3.8
-- paddlepaddle-gpu >= 2.6.1
+- **paddlepaddle-gpu 要求版本develop**
+```
+# 安装示例
+python -m pip install paddlepaddle-gpu==0.0.0.post118 -f https://www.paddlepaddle.org.cn/whl/linux/gpu/develop.html
+```
+
+
 - paddlenlp >= 3.0.0(默认开启flash_attn，推荐源码编译安装)
 
 > 注：
