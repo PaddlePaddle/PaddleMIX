@@ -329,10 +329,9 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
         encoder_hidden_states = self.context_embedder(encoder_hidden_states)
 
         if self.inference_optimize:
-            out = self.simplified_sd3(
+            hidden_states = self.simplified_sd3(
                 hidden_states=hidden_states, encoder_hidden_states=encoder_hidden_states, temb=temb
             )
-            hidden_states = out[1]
             encoder_hidden_states = None
         else:
             encoder_hidden_states, hidden_states = self.sd3_origin_transformer(
