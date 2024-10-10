@@ -28,7 +28,7 @@ try:
         from .modeling_qwen import *
         from .configuration_qwen import *
     else:
-        print(f"paddlenlp version {version} is not 3.x, skipping import.")
+        print(f"paddlenlp version {version} is not 3.x, skipping import Qwen2Model for llava-next.")
 
 except ImportError:
     print("paddlenlp is not installed.")

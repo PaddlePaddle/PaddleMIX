@@ -23,6 +23,7 @@ import paddle.amp.auto_cast as autocast
 from paddle.distributed import fleet
 from paddle.io import get_worker_info
 from paddlenlp.trainer import Trainer
+from paddlenlp.trainer.auto_trainer import AutoTrainer
 from paddlenlp.trainer.integrations import (
     INTEGRATION_TO_CALLBACK,
     TrainerCallback,
@@ -294,6 +295,20 @@ def create_qk_layernorm_hook(param, accumulation_steps):
 
     return __impl__
 
+class LatentDiffusionAutoTrainer(AutoTrainer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def _get_meshes_for_loader(self):
+        def _get_mesh(pp_idx=0):
+            return fleet.auto.get_mesh().get_mesh_with_dim("pp")[pp_idx]
+
+        return _get_mesh(0) # label_id is not label
+
+    def _wrap_for_dist_loader(self, train_dataloader):
+        dist_loader = super()._wrap_for_dist_loader(train_dataloader)
+        dist_loader._input_keys = ["latents", "label_id"]
+        return dist_loader
 
 class LatentDiffusionTrainer(Trainer):
     def __init__(self, **kwargs):

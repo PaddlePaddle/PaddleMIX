@@ -19,6 +19,7 @@
 # --------------------------------------------------------
 
 from typing import Optional, Tuple, Union
+import numpy as np
 
 import paddle
 import paddle.nn as nn
@@ -63,7 +64,7 @@ def drop_path(x, drop_prob: float = 0.0, training: bool = False, scale_by_keep: 
         return x
     keep_prob = 1 - drop_prob
     shape = (x.shape[0],) + (1,) * (x.ndim - 1)  # work with diff dim tensors, not just 2D ConvNets
-    random_tensor = paddle.bernoulli(paddle.full(shape, keep_prob, dtype=x.dtype))
+    random_tensor = paddle.bernoulli(paddle.full(shape, keep_prob, dtype='float32')).cast(x.dtype)
     if keep_prob > 0.0 and scale_by_keep:
         random_tensor = paddle.divide(random_tensor, paddle.to_tensor(keep_prob))
     return x * random_tensor
@@ -386,9 +387,9 @@ class InternVisionEncoderLayer(nn.Layer):
             hidden_states = hidden_states.cast(original_dtype)
             return hidden_states
         else:
-            hidden_states = hidden_states + self.drop_path1(self.attn(self.norm1(hidden_states.cast("bfloat16"))) * self.ls1)
-            hidden_states = hidden_states + self.drop_path2(self.mlp(self.norm2(hidden_states.cast("bfloat16"))) * self.ls2)
-            return hidden_states.cast("bfloat16")
+            hidden_states = hidden_states + self.drop_path1(self.attn(self.norm1(hidden_states)) * self.ls1)
+            hidden_states = hidden_states + self.drop_path2(self.mlp(self.norm2(hidden_states)) * self.ls2)
+            return hidden_states
 
 
 class InternVisionEncoder(nn.Layer):
@@ -405,7 +406,7 @@ class InternVisionEncoder(nn.Layer):
         super().__init__()
         self.config = config
         # stochastic depth decay rule
-        dpr = [x.item() for x in paddle.linspace(0, config.drop_path_rate, config.num_hidden_layers)]
+        dpr = [x.item() for x in np.linspace(0, config.drop_path_rate, config.num_hidden_layers)]
         self.layers = nn.LayerList([
             InternVisionEncoderLayer(config, dpr[idx]) for idx in range(config.num_hidden_layers)])
         self.gradient_checkpointing = True

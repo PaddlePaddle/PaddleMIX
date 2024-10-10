@@ -441,7 +441,7 @@ class TransformerBlock(nn.Layer):
         Args:
             x (paddle.Tensor): Input tensor.
             freqs_cis (paddle.Tensor): Precomputed cosine and sine frequencies.
-            mask (paddle.Tensor, optional): Masking tensor for attention.
+            adaln_input (paddle.Tensor, optional): Dit with adaptive layer norm, use it to calculate shift, scale, gate.
                 Defaults to None.
 
         Returns:
@@ -761,7 +761,7 @@ class DiT_Llama(ModelMixin, ConfigMixin, ConversionMixin):
         """
         Args:
             x: (N, T, patch_size**2 * C)
-            imgs: (N, H, W, C)
+            imgs: (N, C, H, W)
         """
         c = self.out_channels
         p = self.patch_size
