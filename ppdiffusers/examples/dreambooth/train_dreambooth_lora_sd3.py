@@ -304,6 +304,12 @@ def parse_args(input_args=None):
         action="store_true",
         help="Flag to add prior preservation loss.",
     )
+    parser.add_argument(
+        "--not_validation_final",
+        default=False,
+        action="store_true",
+        help="Flag to not validation when train finish in order to save memory.",
+    )
     parser.add_argument("--prior_loss_weight", type=float, default=1.0, help="The weight of prior preservation loss.")
     parser.add_argument(
         "--num_class_images",
@@ -1525,36 +1531,37 @@ def main(args):
             save_directory=args.output_dir, transformer_lora_layers=transformer_lora_layers
         )
 
-        pipeline = StableDiffusion3Pipeline.from_pretrained(
-            args.pretrained_model_name_or_path,
-            revision=args.revision,
-            variant=args.variant,
-            paddle_dtype=weight_dtype,
-        )
-
-        # Final inference
-        # Load previous pipeline
-        pipeline = StableDiffusion3Pipeline.from_pretrained(
-            args.pretrained_model_name_or_path,
-            revision=args.revision,
-            variant=args.variant,
-            paddle_dtype=weight_dtype,
-        )
-        # load attention processors
-        pipeline.load_lora_weights(args.output_dir)
-
-        # run inference
-        images = []
-        if args.validation_prompt and args.num_validation_images > 0:
-            pipeline_args = {"prompt": args.validation_prompt}
-            images = log_validation(
-                pipeline=pipeline,
-                args=args,
-                accelerator=accelerator,
-                pipeline_args=pipeline_args,
-                epoch=epoch,
-                is_final_validation=True,
+        if not args.not_validation_final:
+            pipeline = StableDiffusion3Pipeline.from_pretrained(
+                args.pretrained_model_name_or_path,
+                revision=args.revision,
+                variant=args.variant,
+                paddle_dtype=weight_dtype,
             )
+
+            # Final inference
+            # Load previous pipeline
+            pipeline = StableDiffusion3Pipeline.from_pretrained(
+                args.pretrained_model_name_or_path,
+                revision=args.revision,
+                variant=args.variant,
+                paddle_dtype=weight_dtype,
+            )
+            # load attention processors
+            pipeline.load_lora_weights(args.output_dir)
+
+            # run inference
+            images = []
+            if args.validation_prompt and args.num_validation_images > 0:
+                pipeline_args = {"prompt": args.validation_prompt}
+                images = log_validation(
+                    pipeline=pipeline,
+                    args=args,
+                    accelerator=accelerator,
+                    pipeline_args=pipeline_args,
+                    epoch=epoch,
+                    is_final_validation=True,
+                )
 
     accelerator.end_training()
 
