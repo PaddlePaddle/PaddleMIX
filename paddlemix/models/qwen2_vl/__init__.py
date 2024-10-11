@@ -18,5 +18,5 @@ from .modeling_qwen2_vl import (
     Qwen2VLModel,
     Qwen2VLPreTrainedModel,
 )
-
+from .bert_padding import *
 __all__ = ["Qwen2VLConfig", "Qwen2VLForConditionalGeneration", "Qwen2VLModel", "Qwen2VLPreTrainedModel"]
