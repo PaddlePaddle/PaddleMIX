@@ -121,7 +121,7 @@ LLaVA v1.5模型SFT阶段训练时，使用的指令微调数据集为[LLaVA-Ins
 
 ```bibtex
 @software{Lv_Instance_Capability_Tagger_2024,
-author = {Lv, Wenyu and Huang, Kui},
+author = {Lv, Wenyu and Huang, Kui and Zhao, Yian},
 license = {Apache-2.0},
 month = oct,
 title = {{Instance Capability Tagger}},
