@@ -145,6 +145,7 @@ sh build_env.sh
             <li><a href="paddlemix/examples/evaclip">EVA-CLIP</a></li>
             <li><a href="paddlemix/examples/llava">LLaVA</a></li>
             <li><a href="paddlemix/examples/llava">LLaVA-1.5</a></li>
+            <li><a href="paddlemix/examples/llava">LLaVA-1.6</a></li>
             <li><a href="paddlemix/examples/llava">LLaVA-NeXT</a></li>
             <li><a href="paddlemix/examples/qwen_vl">Qwen-VL</a></li>
             <li><a href="paddlemix/examples/qwen2_vl">Qwen2-VL</a></li>
@@ -169,6 +170,11 @@ sh build_env.sh
         <ul>
             <li><a href="paddlemix/examples/imagebind">ImageBind</a></li>
       </ul>
+      </ul>
+        <li><b>数据分析</b></li>
+      <ul>
+          <li><a href="./paddlemix/datacopilot/example/pp_inscaptagger/">PP-InsCapTagger</a></li>
+      </ul>
       </td>
       <td>
         <ul>
@@ -176,6 +182,7 @@ sh build_env.sh
           <li><b>文生图</b></li>
         <ul>
            <li><a href="ppdiffusers/examples/stable_diffusion">Stable Diffusion</a></li>
+           <li><a href="ppdiffusers/examples/dreambooth/README_sd3.md">Stable Diffusion 3 (SD3)</a></li>
             <li><a href="ppdiffusers/examples/controlnet">ControlNet</a></li>
             <li><a href="ppdiffusers/examples/t2i-adapter">T2I-Adapter</a></li>
             <li><a href="ppdiffusers/examples/text_to_image_laion400m">LDM</a></li>
@@ -196,11 +203,6 @@ sh build_env.sh
         <ul>
            <li><a href="ppdiffusers/ppdiffusers/pipelines/audioldm">AudioLDM</a></li>
            <li><a href="ppdiffusers/ppdiffusers/pipelines/audioldm2">AudioLDM2</a></li>
-        </ul>
-        </ul>
-          <li><b>数据分析</b></li>
-        <ul>
-           <li><a href="./paddlemix/datacopilot/example/pp_inscaptagger/">PP-InsCapTagger</a></li>
         </ul>
       </td>
     </tr>
