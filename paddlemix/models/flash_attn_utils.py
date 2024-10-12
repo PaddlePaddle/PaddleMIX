@@ -9,7 +9,7 @@ def is_flash_attn_available():
         q = paddle.rand((1, 4, 2, 8)).astype('bfloat16') 
         output = paddle.nn.functional.flash_attention.flash_attention(q, q, q, 0.9, False, False)
         return True
-    except ImportError:
+    except:
         return False
 
 HAS_FLASH_ATTN = is_flash_attn_available()
@@ -21,7 +21,7 @@ def has_flash_attn_func():
             from paddle.nn.functional.flash_attention import flash_attention as flash_attn_func
             from paddle.nn.functional.flash_attention import flash_attn_unpadded as flash_attn_varlen_func
             return flash_attn_func, flash_attn_varlen_func
-        except ImportError:
+        except:
             return None, None
     else:
         return None, None
