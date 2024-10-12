@@ -24,7 +24,7 @@ PaddleMIX是基于飞桨的多模态大模型开发套件，聚合图像、文�
 **🔥2024.10.11 发布PaddleMIX v2.1**
 * 支持[PaddleNLP 3.0 beta](https://github.com/PaddlePaddle/PaddleNLP/releases/tag/v3.0.0-beta0)版本，抢先体验其最新功能。
 * 新增[Qwen2-VL](./paddlemix/examples/qwen2_vl/)、[InternVL2](./paddlemix/examples/internvl2/)、[Stable Diffusion 3 (SD3)](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/examples/dreambooth/README_sd3.md)等前沿模型。
-* 发布自研多模数据能力标签模型[PP-InsCapTagger](./paddlemix/datacopilot/example/pp_inscaptagger/)；可用于数据的分析和过滤，试验案例表明在保持模型效果的条件下可减少50%的数据量，大幅提高训练效率。
+* DataCopilot发布自研多模数据能力标签模型[PP-InsCapTagger](./paddlemix/datacopilot/example/pp_inscaptagger/)；可用于数据的分析和过滤，试验案例表明在保持模型效果的条件下可减少50%的数据量，大幅提高训练效率。
 * 多模态大模型InternVL2、LLaVA、SD3、SDXL适配昇腾910B，提供国产计算芯片上的训推能力。
 
 **2024.09.11 更新**
@@ -196,6 +196,11 @@ sh build_env.sh
         <ul>
            <li><a href="ppdiffusers/ppdiffusers/pipelines/audioldm">AudioLDM</a></li>
            <li><a href="ppdiffusers/ppdiffusers/pipelines/audioldm2">AudioLDM2</a></li>
+        </ul>
+        </ul>
+          <li><b>数据分析</b></li>
+        <ul>
+           <li><a href="./paddlemix/datacopilot/example/pp_inscaptagger/">PP-InsCapTagger</a></li>
         </ul>
       </td>
     </tr>
