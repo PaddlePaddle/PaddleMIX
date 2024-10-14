@@ -71,6 +71,10 @@ import PIL
 import requests
 from paddle.vision import transforms
 from PIL import Image
+import os
+import time
+from functools import lru_cache
+import paddle.nn.functional as F
 
 OPENAI_CLIP_MEAN = [0.48145466, 0.4578275, 0.40821073]
 OPENAI_CLIP_STD = [0.26862954, 0.26130258, 0.27577711]
@@ -285,37 +289,6 @@ def make_batched_videos(videos) -> List[VideoInput]:
     raise ValueError(f"Could not make batched video from {videos}")
 
 
-def smart_resize(
-    height: int, width: int, factor: int = 28, min_pixels: int = 56 * 56, max_pixels: int = 14 * 14 * 4 * 1280
-):
-    """Rescales the image so that the following conditions are met:
-
-    1. Both dimensions (height and width) are divisible by 'factor'.
-
-    2. The total number of pixels is within the range ['min_pixels', 'max_pixels'].
-
-    3. The aspect ratio of the image is maintained as closely as possible.
-
-    """
-    if height < factor or width < factor:
-        raise ValueError(f"height:{height} or width:{width} must be larger than factor:{factor}")
-    elif max(height, width) / min(height, width) > 200:
-        raise ValueError(
-            f"absolute aspect ratio must be smaller than 200, got {max(height, width) / min(height, width)}"
-        )
-    h_bar = round(height / factor) * factor
-    w_bar = round(width / factor) * factor
-    if h_bar * w_bar > max_pixels:
-        beta = math.sqrt((height * width) / max_pixels)
-        h_bar = math.floor(height / beta / factor) * factor
-        w_bar = math.floor(width / beta / factor) * factor
-    elif h_bar * w_bar < min_pixels:
-        beta = math.sqrt(min_pixels / (height * width))
-        h_bar = math.ceil(height * beta / factor) * factor
-        w_bar = math.ceil(width * beta / factor) * factor
-    return h_bar, w_bar
-
-
 class Qwen2VLImageProcessor(BaseImageProcessor):
     r"""
     Constructs a Qwen2-VL image processor that dynamically resizes images based on the original images.
@@ -455,6 +428,7 @@ class Qwen2VLImageProcessor(BaseImageProcessor):
         processed_images = []
 
         for image in images:
+            
             if do_resize:
                 resized_height, resized_width = smart_resize(
                     height,
@@ -463,8 +437,9 @@ class Qwen2VLImageProcessor(BaseImageProcessor):
                     min_pixels=self.min_pixels,
                     max_pixels=self.max_pixels,
                 )
+                image = image.astype('uint8') #TODO : 需要手动加上，否则多除255 导致结果会出错
                 image = resize(
-                    image, size=(resized_height, resized_width), resample=resample, data_format=input_data_format
+                    image, size=(resized_height, resized_width), resample=resample, data_format=input_data_format,
                 )
 
             if do_rescale:
@@ -628,6 +603,7 @@ class Qwen2VLImageProcessor(BaseImageProcessor):
                 vision_grid_thws.append(video_grid_thw)
             pixel_values = np.array(pixel_values)
             vision_grid_thws = np.array(vision_grid_thws)
+
             data = {"pixel_values_videos": pixel_values, "video_grid_thw": vision_grid_thws}
 
         return BatchFeature(data=data, tensor_type=return_tensors)
@@ -660,6 +636,35 @@ def ceil_by_factor(number: int, factor: int) -> int:
 def floor_by_factor(number: int, factor: int) -> int:
     """Returns the largest integer less than or equal to 'number' that is divisible by 'factor'."""
     return math.floor(number / factor) * factor
+
+
+def smart_resize(
+    height: int, width: int, factor: int = IMAGE_FACTOR, min_pixels: int = MIN_PIXELS, max_pixels: int = MAX_PIXELS
+) -> tuple[int, int]:
+    """
+    Rescales the image so that the following conditions are met:
+
+    1. Both dimensions (height and width) are divisible by 'factor'.
+
+    2. The total number of pixels is within the range ['min_pixels', 'max_pixels'].
+
+    3. The aspect ratio of the image is maintained as closely as possible.
+    """
+    if max(height, width) / min(height, width) > MAX_RATIO:
+        raise ValueError(
+            f"absolute aspect ratio must be smaller than {MAX_RATIO}, got {max(height, width) / min(height, width)}"
+        )
+    h_bar = max(factor, round_by_factor(height, factor))
+    w_bar = max(factor, round_by_factor(width, factor))
+    if h_bar * w_bar > max_pixels:
+        beta = math.sqrt((height * width) / max_pixels)
+        h_bar = floor_by_factor(height / beta, factor)
+        w_bar = floor_by_factor(width / beta, factor)
+    elif h_bar * w_bar < min_pixels:
+        beta = math.sqrt(min_pixels / (height * width))
+        h_bar = ceil_by_factor(height * beta, factor)
+        w_bar = ceil_by_factor(width * beta, factor)
+    return h_bar, w_bar
 
 
 def fetch_image(ele: dict[str, str | Image.Image], size_factor: int = IMAGE_FACTOR) -> Image.Image:
@@ -707,119 +712,191 @@ def fetch_image(ele: dict[str, str | Image.Image], size_factor: int = IMAGE_FACT
     return image
 
 
-def read_video_decord(filename, pts_unit='sec', output_format='TCHW'):
-    # Use decord's VideoReader for video frames
-    vr = decord.VideoReader(filename)
-    video_frames = vr.get_batch(range(len(vr))).asnumpy()
+def smart_nframes(
+    ele: dict,
+    total_frames: int,
+    video_fps: int | float,
+) -> int:
+    """calculate the number of frames for video used for model inputs.
 
-    # Adjust the shape based on the desired output format
-    if output_format == 'TCHW':
-        video_frames = video_frames.transpose(0, 3, 1, 2)  # From NHWC to NCHW
+    Args:
+        ele (dict): a dict contains the configuration of video.
+            support either `fps` or `nframes`:
+                - nframes: the number of frames to extract for model inputs.
+                - fps: the fps to extract frames for model inputs.
+                    - min_frames: the minimum number of frames of the video, only used when fps is provided.
+                    - max_frames: the maximum number of frames of the video, only used when fps is provided.
+        total_frames (int): the original total number of frames of the video.
+        video_fps (int | float): the original fps of the video.
 
-    # Use decord's AudioReader for audio frames if audio exists
-    try:
-        ar = decord.AudioReader(filename)
-        audio_frames = ar.read_all().asnumpy()
-    except:  # Catch errors if no audio stream is found
-        audio_frames = None
+    Raises:
+        ValueError: nframes should in interval [FRAME_FACTOR, total_frames].
 
-    # Convert NumPy arrays to Paddle tensors
-    video_tensor = paddle.to_tensor(video_frames, dtype=paddle.float32)
-    audio_tensor = paddle.to_tensor(audio_frames, dtype=paddle.float32) if audio_frames is not None else None
+    Returns:
+        int: the number of frames for video used for model inputs.
+    """
+    assert not ("fps" in ele and "nframes" in ele), "Only accept either `fps` or `nframes`"
+    if "nframes" in ele:
+        nframes = round_by_factor(ele["nframes"], FRAME_FACTOR)
+    else:
+        fps = ele.get("fps", FPS)
+        min_frames = ceil_by_factor(ele.get("min_frames", FPS_MIN_FRAMES), FRAME_FACTOR)
+        max_frames = floor_by_factor(ele.get("max_frames", min(FPS_MAX_FRAMES, total_frames)), FRAME_FACTOR)
+        nframes = total_frames / video_fps * fps
+        nframes = min(max(nframes, min_frames), max_frames)
+        nframes = round_by_factor(nframes, FRAME_FACTOR)
+    if not (FRAME_FACTOR <= nframes and nframes <= total_frames):
+        raise ValueError(f"nframes should in interval [{FRAME_FACTOR}, {total_frames}], but got {nframes}.")
+    return nframes
 
-    # Construct video info
-    fps = vr.get_avg_fps()
-    info = {
-        'duration': len(vr) / fps if fps else None,
-        'fps': fps,
-        'total_frames': len(vr)
-    }
 
-    return video_tensor, audio_tensor, info
+def is_decord_available() -> bool:
+    import importlib.util
+    return importlib.util.find_spec("decord") is not None
 
+def _read_video_decord(
+    ele: dict,
+) -> paddle.Tensor:
+    import decord
+    video_path = ele["video"]
+    st = time.time()
+    vr = decord.VideoReader(video_path)
+    if 'video_start' in ele or 'video_end' in ele:
+        raise NotImplementedError("not support start_pts and end_pts in decord for now.")
+    total_frames, video_fps = len(vr), vr.get_avg_fps()
+    logger.info(f"decord:  {video_path=}, {total_frames=}, {video_fps=}, time={time.time() - st:.3f}s")
+    nframes = smart_nframes(ele, total_frames=total_frames, video_fps=video_fps)
+    idx = paddle.linspace(0, total_frames - 1, nframes).round().astype('int64').tolist()
+    video = vr.get_batch(idx).asnumpy()
+    video = paddle.to_tensor(video).transpose([0, 3, 1, 2])  # Convert to TCHW format
+    return video
 
-def fetch_video(ele: dict, size_factor: int = FRAME_FACTOR) -> paddle.Tensor | list[Image.Image]:
+VIDEO_READER_BACKENDS = {
+    "decord": _read_video_decord,
+    # "paddlevision": _read_video_paddlevision,
+    "paddlevision": None,
+}
+
+FORCE_QWENVL_VIDEO_READER = os.getenv("FORCE_QWENVL_VIDEO_READER", None)
+
+@lru_cache(maxsize=1)
+def get_video_reader_backend() -> str:
+    if FORCE_QWENVL_VIDEO_READER is not None:
+        video_reader_backend = FORCE_QWENVL_VIDEO_READER
+    elif is_decord_available():
+        video_reader_backend = "decord"
+    else:
+        video_reader_backend = "paddlevision"
+    # print(f"qwen-vl-utils using {video_reader_backend} to read video.", file=sys.stderr)
+    return video_reader_backend
+
+def custom_resize(video, size, interpolation='bicubic', antialias=True):
+    """
+    Custom resize function for PaddlePaddle to mimic PyTorch's functionality.
+    
+    Args:
+        video (paddle.Tensor): Input video tensor of shape [T, C, H, W]
+        size (list[int]): Target size [H, W]
+        interpolation (str): Interpolation method, default is 'bicubic'
+        antialias (bool): Whether to use anti-aliasing, default is True
+    
+    Returns:
+        paddle.Tensor: Resized video tensor
+    """
+    # 确保输入是4D张量 [T, C, H, W]
+    if video.ndim != 4:
+        raise ValueError(f"Expected 4D tensor, got {video.ndim}D tensor")
+    
+    # 转换为浮点类型
+    video = video.astype('float32')
+    
+    # 获取原始尺寸
+    T, C, H, W = video.shape
+    
+    # 设置插值模式
+    if interpolation == 'bicubic':
+        mode = 'bicubic'
+    elif interpolation == 'bilinear':
+        mode = 'bilinear'
+    elif interpolation == 'nearest':
+        mode = 'nearest'
+    else:
+        raise ValueError(f"Unsupported interpolation mode: {interpolation}")
+    
+    # 重塑张量以便于处理
+    video = video.reshape([-1, C, H, W])
+    
+    # 执行resize操作
+    if antialias and mode in ['bicubic', 'bilinear']:
+        # PaddlePaddle目前没有直接支持antialias的选项，我们可以通过先下采样再上采样来模拟
+        if H > size[0] or W > size[1]:
+            # 下采样
+            scale_factor = min(size[0]/H, size[1]/W, 1)
+            if scale_factor < 1:
+                video = F.interpolate(video, scale_factor=scale_factor, mode=mode, align_corners=False)
+        # 上采样到目标尺寸
+        video = F.interpolate(video, size=size, mode=mode, align_corners=False)
+    else:
+        video = F.interpolate(video, size=size, mode=mode, align_corners=False)
+    
+    # 恢复原始形状
+    video = video.reshape([T, C, size[0], size[1]])
+    
+    return video
+
+def gaussian_kernel_1d(size, sigma):
+    """生成1D高斯核"""
+    x = np.arange(-(size // 2), size // 2 + 1)
+    kernel = np.exp(-x**2 / (2 * sigma**2))
+    return kernel / kernel.sum()
+
+def fetch_video(ele: dict, image_factor: int = IMAGE_FACTOR) -> paddle.Tensor | list[Image.Image]:
     if isinstance(ele["video"], str):
-        # TODO: support http url
+        video_reader_backend = get_video_reader_backend()
 
-        video = ele["video"]
-        if video.startswith("file://"):
-            video = video[7:]
-
-        video, audio, info = read_video_decord(  # TODO
-            video,
-            #start_pts=ele.get("video_start", 0.0),
-            #end_pts=ele.get("video_end", None),
-            pts_unit="sec",
-            output_format="TCHW",
-        )
-
-        assert not ("fps" in ele and "nframes" in ele), "Only accept either `fps` or `nframes`"
-        if "nframes" in ele:
-            nframes = round_by_factor(ele["nframes"], size_factor)
-        else:
-            fps = ele.get("fps", FPS)
-            nframes = video.shape[0] / info["fps"] * fps
-            nframes = round_by_factor(nframes, size_factor)
-            if "min_frames" in ele:
-                min_frames = ele["min_frames"]
-                if nframes < min_frames:
-                    nframes = ceil_by_factor(min_frames, size_factor)
-            else:
-                min_frames = FPS_MIN_FRAMES
-                if nframes < min_frames:
-                    warnings.warn(f"nframes is less than DEFAULT_MIN_FRAMES {min_frames}, set to {nframes}.")
-                    nframes = ceil_by_factor(min_frames, size_factor)
-            if "max_frames" in ele:
-                max_frames = ele["max_frames"]
-                if nframes > max_frames:
-                    nframes = floor_by_factor(max_frames, size_factor)
-            else:
-                max_frames = FPS_MAX_FRAMES
-                if nframes > max_frames:
-                    warnings.warn(f"nframes is greater than DEFAULT_MAX_FRAMES {max_frames}, set to {nframes}.")
-                    nframes = floor_by_factor(max_frames, size_factor)
-
-        if not (size_factor <= nframes and nframes <= video.shape[0]):
-            raise ValueError(f"nframes should in interval [{size_factor}, {video.shape[0]}], but got {nframes}.")
-
-        idx = paddle.linspace(0, video.shape[0] - 1, nframes).round().cast('int64')
-        height, width = video.shape[2:]
-        video = video[idx]
+        video = VIDEO_READER_BACKENDS[video_reader_backend](ele)
+        nframes, _, height, width = video.shape
 
         min_pixels = ele.get("min_pixels", VIDEO_MIN_PIXELS)
         total_pixels = ele.get("total_pixels", VIDEO_TOTAL_PIXELS)
-        max_pixels = max(min(VIDEO_MAX_PIXELS, total_pixels / nframes * size_factor), min_pixels * 1.05)
+        max_pixels = max(min(VIDEO_MAX_PIXELS, total_pixels / nframes * FRAME_FACTOR), int(min_pixels * 1.05))
         max_pixels = ele.get("max_pixels", max_pixels)
         if "resized_height" in ele and "resized_width" in ele:
             resized_height, resized_width = smart_resize(
                 ele["resized_height"],
                 ele["resized_width"],
-                factor=size_factor,
+                factor=image_factor,
             )
         else:
             resized_height, resized_width = smart_resize(
                 height,
                 width,
-                factor=size_factor,
+                factor=image_factor,
                 min_pixels=min_pixels,
                 max_pixels=max_pixels,
             )
+        video = F.interpolate(
+            video.astype('float32'), 
+            size=[resized_height, resized_width], 
+            mode='bicubic',
+            align_corners=False,
+            data_format='NCHW'
+        )
 
-        bs = video.shape[0]
-        resized_video = []
-        for i in range(bs):
-            resized_img = transforms.functional.resize(video[i], [resized_height, resized_width], interpolation="bicubic").astype("float32")
-            resized_video.append(resized_img.unsqueeze(0))
-        video = paddle.concat(resized_video)
+        video = paddle.clip(video, 0, 255)
+
         return video
+
     else:
         assert isinstance(ele["video"], (list, tuple))
         process_info = ele.copy()
         process_info.pop("type", None)
         process_info.pop("video", None)
-        images = [fetch_image({"image": video_element, **process_info}) for video_element in ele["video"]]
-        nframes = ceil_by_factor(len(images), size_factor)
+        images = [
+            fetch_image({"image": video_element, **process_info}, size_factor=image_factor)
+            for video_element in ele["video"]
+        ]
+        nframes = ceil_by_factor(len(images), FRAME_FACTOR)
         if len(images) < nframes:
             images.extend([images[-1]] * (nframes - len(images)))
         return images
@@ -847,7 +924,6 @@ def process_vision_info(
     conversations: list[dict] | list[list[dict]],
 ) -> tuple[list[Image.Image] | None, list[paddle.Tensor | list[Image.Image]] | None]:
     vision_infos = extract_vision_info(conversations)
-    # Read images or videos
     image_inputs = []
     video_inputs = []
     for vision_info in vision_infos:

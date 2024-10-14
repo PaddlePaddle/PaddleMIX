@@ -39,7 +39,7 @@ messages = [
         "content": [
             {
                 "type": "image",
-                "image": "./image1.jpg",
+                "image": "paddlemix/demo_images/examples_image1.jpg",
             },
             {"type": "text", "text": "Describe this image."},
         ],
