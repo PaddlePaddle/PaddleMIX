@@ -1,44 +1,26 @@
 {
   "dvqa_train_200k": {
-    "root": "playground/data/dvqa/",
     "annotation": "playground/opensource_json/dvqa_train_200k.json",
-    "data_augment": false,
-    "repeat_time": 1,
-    "length": 200000
+    "repeat_time": 1
   },
   "chartqa_train_18k": {
-    "root": "playground/data/chartqa/",
     "annotation": "playground/opensource_json/chartqa_train_18k.json",
-    "data_augment": false,
-    "repeat_time": 1,
-    "length": 18317
+    "repeat_time": 1
   },
   "ai2d_train_12k": {
-    "root": "playground/data/ai2d/",
     "annotation": "playground/opensource_json/ai2d_train_12k.json",
-    "data_augment": false,
-    "repeat_time": 1,
-    "length": 12413
+    "repeat_time": 1
   },
   "docvqa_train_10k": {
-    "root": "playground/data/docvqa/",
     "annotation": "playground/opensource_json/docvqa_train_10k.json",
-    "data_augment": false,
-    "repeat_time": 1,
-    "length": 10211
+    "repeat_time": 1
   },
   "geoqa+": {
-    "root": "playground/data/geoqa+/",
     "annotation": "playground/opensource_json/geoqa+.json",
-    "data_augment": false,
-    "repeat_time": 1,
-    "length": 72318
+    "repeat_time": 1
   },
   "synthdog_en": {
-    "root": "playground/data/synthdog-en/",
     "annotation": "playground/opensource_json/synthdog_en.json",
-    "data_augment": false,
-    "repeat_time": 1,
-    "length": 29765
+    "repeat_time": 1
   }
 }
