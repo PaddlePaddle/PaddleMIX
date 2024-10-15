@@ -8,8 +8,6 @@
 
 ## 2 环境准备
 - **python >= 3.10**
-- tiktoken
-> 注：tiktoken 要求python >= 3.8
 - **paddlepaddle-gpu 要求版本develop**
 ```
 # 安装示例
@@ -23,7 +21,7 @@ python -m pip install paddlepaddle-gpu==0.0.0.post118 -f https://www.paddlepaddl
 * 请确保安装了以上依赖，否则无法运行。同时，需要安装 paddlemix/external_ops 下的自定义OP, `python setup.py install`。如果安装后仍然找不到算子，需要额外设置PYTHONPATH
 * 使用flash_attn 要求H或者A卡，开启后显存变化如下：2B模型: 49G -> 13G ｜ 7B模型: 61G -> 25G
 
-## 3 快速开始
+## 3 推理预测
 
 ### a. 单图预测
 ```bash
@@ -39,6 +37,17 @@ python paddlemix/examples/qwen2_vl/multi_image_infer.py
 ```bash
 python paddlemix/examples/qwen2_vl/video_infer.py
 ```
+
+## 4 模型微调
+
+数据集选择6个公开数据集，包括，详见`paddlemix/examples/qwen2_vl/configs/baseline_6data_330k.json`
+
+下载链接：
+
+```bash
+sh paddlemix/examples/qwen2_vl/shell/basline_2b_bs32_1e8.sh
+```
+
 
 ## 参考文献
 ```BibTeX
