@@ -120,6 +120,14 @@ LLaVA v1.5模型SFT阶段训练时，使用的指令微调数据集为[LLaVA-Ins
 <summary> bibtex </summary>
 
 ```bibtex
+
+@software{PaddleMIX_Authors_Paddle_Multimodal_Integration,
+author = {PaddleMIX Authors},
+license = {Apache-2.0},
+title = {{Paddle Multimodal Integration and eXploration}},
+url = {https://github.com/PaddlePaddle/PaddleMIX}
+}
+
 @software{Lv_Instance_Capability_Tagger_2024,
 author = {Lv, Wenyu and Huang, Kui and Zhao, Yian},
 license = {Apache-2.0},
