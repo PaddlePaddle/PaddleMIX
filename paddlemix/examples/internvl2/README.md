@@ -2,25 +2,23 @@
 
 ## 1. 模型介绍
 
-[InternVL2](https://internvl.github.io/blog/2024-07-02-InternVL-2.0/) InternVL 2.0，这是 InternVL 系列多模态大型语言模型的最新成员。InternVL 2.0 包含多种经过指令微调的模型，参数数量从 20 亿到 1080 亿不等。本仓库包含的是经过指令微调的 InternVL2-8B 模型。
-
-与当前最先进的开源多模态大型语言模型相比，InternVL 2.0 超越了大多数开源模型。在多种能力方面，它表现出与专有商业模型相媲美的竞争力，包括文档和图表理解、信息图表问答、场景文本理解和 OCR 任务、科学和数学问题解决以及文化理解和综合多模态能力。
-
+[InternVL2](https://internvl.github.io/blog/2024-07-02-InternVL-2.0/)是 InternVL 系列多模态大模型的最新成员。InternVL2 包含多个经过指令微调的模型，参数量从 1B 到 76B 不等。在开源模型中，InternVL2 在文档和图表理解、信息图表问答、场景文本理解和 OCR 任务、科学和数学问题解决等方面表现出色。
 
 ## 2 环境准备
 
-1） [安装PaddleNLP develop分支](https://github.com/PaddlePaddle/PaddleNLP)
+1）[安装PaddleNLP develop分支](https://github.com/PaddlePaddle/PaddleNLP?tab=readme-ov-file#%E5%AE%89%E8%A3%85)
 
-2）[安装 PaddleMix 环境依赖包](https://github.com/PaddlePaddle/PaddleMIX/tree/b4f97ff859e1964c839fc5fab94f7ba63b1e5959?tab=readme-ov-file#%E5%AE%89%E8%A3%85)
+2）[安装 PaddleMIX 环境依赖包](https://github.com/PaddlePaddle/PaddleMIX/tree/b4f97ff859e1964c839fc5fab94f7ba63b1e5959?tab=readme-ov-file#%E5%AE%89%E8%A3%85)
 
-## 3. 快速开始
-完成环境准备后，我们目前提供单轮对话方式使用：
+注意：Python版本最好为3.10及以上版本。
 
-## 3.1. 图片预测
+## 3. 模型推理预测
+
+### 3.1. 图片预测
 ```bash
 python paddlemix/examples/internvl2/chat_demo.py \
     --model_name_or_path "OpenGVLab/InternVL2-8B" \
-    --image_path 'path/to/image.jpg' \
+    --image_path 'paddlemix/demo_images/examples_image1.jpg' \
     --text "Please describe this image in detail."
 ```
 可配置参数说明：
@@ -28,11 +26,11 @@ python paddlemix/examples/internvl2/chat_demo.py \
   * `image_path`: 指定图片路径
   * `text`: 用户指令, 例如 "Please describe this image in detail."
 
-## 3.2. 视频预测
+### 3.2. 视频预测
 ```bash
 python paddlemix/examples/internvl2/chat_demo_video.py \
     --model_name_or_path "OpenGVLab/InternVL2-8B" \
-    --video_path 'path/to/video.mp4' \
+    --video_path 'paddlemix/demo_images/red-panda.mp4' \
     --text "Please describe this video in detail."
 ```
 可配置参数说明：
@@ -42,6 +40,25 @@ python paddlemix/examples/internvl2/chat_demo_video.py \
 
 
 ## 4 模型微调
+
+### 4.1 微调数据准备
+
+SFT数据集采用 InternVL2 官方公布的1.3M的SFT数据集，包括了`sharegpt4v`、`llava_instruct_150k_zh`、`dvqa`、`chartqa`、`ai2d`、`docvqa`、`geoqa+`、`synthdog_en`等。
+
+PaddleMIX团队整理后的下载链接为：
+```
+wget https://paddlenlp.bj.bcebos.com/datasets/paddlemix/playground.tar
+```
+
+PaddleMIX团队也提供了其中单独的`chartqa`数据集的下载链接，作为训练示例：
+```
+wget https://paddlenlp.bj.bcebos.com/datasets/paddlemix/playground/data/chartqa.tar
+wget https://paddlenlp.bj.bcebos.com/datasets/paddlemix/playground/opensource.tar
+```
+chartqa.tar需下载解压在playground/data/目录下，opensource.tar需下载解压在playground/目录下，opensource里是数据标注的jsonl文件。
+
+### 4.2 微调命令
+
 ```bash
 # 1B
 sh paddlemix/examples/internvl2/shell/internvl2.0/2nd_finetune/internvl2_1b_qwen2_0_5b_dynamic_res_2nd_finetune_full.sh
@@ -53,8 +70,27 @@ sh paddlemix/examples/internvl2/shell/internvl2.0/2nd_finetune/internvl2_2b_inte
 sh paddlemix/examples/internvl2/shell/internvl2.0/2nd_finetune/internvl2_8b_internlm2_7b_dynamic_res_2nd_finetune_full.sh
 ```
 
+### 4.3 微调后使用
+
+同按步骤3中的模型推理预测，只需将`model_name_or_path`参数修改为微调后的模型路径即可。
+
+```bash
+python paddlemix/examples/internvl2/chat_demo.py \
+    --model_name_or_path "your_checkpoints" \
+    --image_path 'paddlemix/demo_images/examples_image1.jpg' \
+    --text "Please describe this image in detail."
+```
+
+### 4.4 MiniMonkey 模型
+
+[MiniMonkey](https://github.com/Yuliang-Liu/Monkey/blob/main/project/mini_monkey/) 是基于 InternVL2 的专用于OCR文档理解的多模态大模型。
+具体使用请参照[minimonkey](../minimonkey/)
+
+
 ## 5 NPU硬件训练
-请参照[tools](../../tools/README.md)进行NPU硬件Paddle安装和环境变量设置，配置完成后可直接执行微调命令进行训练或预测。
+请参照[tools](../../tools/README.md)进行NPU硬件Paddle安装和环境变量设置。
+配置完成后可直接按步骤4中的微调命令进行训练。
+
 
 ### 参考文献
 ```BibTeX
