@@ -110,3 +110,32 @@ LLaVA v1.5模型SFT阶段训练时，使用的指令微调数据集为[LLaVA-Ins
 | llava-1.5-7b <br> (tag 50%/our) | 70.24 | 57.12 | 78.32 | 62.14 | 37.11 | 1476 <br> 338 |
 
 通过PP-InsCapTagger的打标和优化，50%数据集与原始数据集的训练效果基本持平，大大提高了模型训练效率。
+
+
+
+## 引用
+如果在你的工作中用到`PP-InsCapTagger`，请按照下面的方式引用：
+
+<details>
+<summary> bibtex </summary>
+
+```bibtex
+
+@software{PaddleMIX_Authors_Paddle_Multimodal_Integration,
+author = {PaddleMIX Authors},
+license = {Apache-2.0},
+title = {{Paddle Multimodal Integration and eXploration}},
+url = {https://github.com/PaddlePaddle/PaddleMIX}
+}
+
+@software{Lv_Instance_Capability_Tagger_2024,
+author = {Lv, Wenyu and Huang, Kui and Zhao, Yian},
+license = {Apache-2.0},
+month = oct,
+title = {{Instance Capability Tagger: Enhancing Multimodal Data Efficiency for Model Training}},
+url = {https://github.com/lyuwenyu/PP-InsCapTagger},
+version = {1.0},
+year = {2024}
+}
+```
+</details>
