@@ -48,7 +48,7 @@ class Blip2CaptionTask(AppTask):
         Construct the tokenizer for the predictor.
         """
         # build processor
-        tokenizer_class = AutoTokenizer.from_pretrained(self._text_model, use_fast=False)
+        tokenizer_class = AutoTokenizer.from_pretrained(self._text_model)
         image_processor = BlipImageProcessor.from_pretrained(os.path.join(model, "processor", "eval"))
         text_processor_class = BlipTextProcessor.from_pretrained(os.path.join(model, "processor", "eval"))
 
