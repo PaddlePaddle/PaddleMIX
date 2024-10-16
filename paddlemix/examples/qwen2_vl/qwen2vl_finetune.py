@@ -206,8 +206,14 @@ class LazySupervisedDataset(Dataset):
         self.max_image_size = max_image_size
         self.max_seq_length = max_seq_length
         logger.info("Formatting inputs...Skip in lazy mode")
+        if "annotation" in meta:
+            meta_anns = meta["annotation"]
+        elif "file_name" in meta:
+            meta_anns = meta["file_name"]
+        else:
+            raise ValueError("No annotation found in the meta file.")
 
-        with open(meta["annotation"], "r") as f:  # qwen2_vl 读的是json
+        with open(meta_anns, "r") as f:  # qwen2_vl 读的是json
             self.raw_data = json.load(f)
             if repeat_time < 1:
                 # If repeat_time is less than 1, select a portion of the data
@@ -220,7 +226,6 @@ class LazySupervisedDataset(Dataset):
         self.rng = np.random.default_rng(seed=random_seed)
         self.rng.shuffle(self.raw_data)
 
-        self.root = meta["root"]
         self.cached_data_dict = {}
         self.normalize_type = normalize_type
 
@@ -361,16 +366,13 @@ class LazySupervisedDataset(Dataset):
                 data_item = self.raw_data[i]
                 if "images" in data_item:
                     if type(data_item["images"]) == list:
-                        images = [self.root + item for item in data_item["images"]]
+                        images = [item for item in data_item["images"]]
                         print(f"Failed to load image: {images}, the dataset is: {self.ds_name}")
                     else:
-                        if data_item["images"].startswith("s3://"):
-                            data_path = self.root + data_item["images"]
-                        else:
-                            data_path = os.path.join(self.root, data_item["images"])
+                        data_path = data_item["images"]
                         print(f"Failed to load image: {data_path}, the dataset is: {self.ds_name}")
                 elif "video" in data_item:
-                    data_path = os.path.join(self.root, data_item["video"])
+                    data_path = data_item["video"]
                     print(f"Failed to load video: {data_path}, the dataset is: {self.ds_name}")
                 i = random.randint(0, len(self.raw_data) - 1)
         return ret
