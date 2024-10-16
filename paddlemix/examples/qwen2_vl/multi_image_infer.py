@@ -37,8 +37,8 @@ messages = [
     {
         "role": "user",
         "content": [
-            {"type": "image", "image": "./image1.jpg"},
-            {"type": "image", "image": "./image2.jpg"},
+            {"type": "image", "image": "paddlemix/demo_images/examples_image1.jpg"},
+            {"type": "image", "image": "paddlemix/demo_images/examples_image2.jpg"},
             {"type": "text", "text": "Identify the similarities between these images."},
         ],
     }

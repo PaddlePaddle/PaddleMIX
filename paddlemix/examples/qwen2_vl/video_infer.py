@@ -21,38 +21,14 @@ from paddlemix.processors.qwen2_vl_processing import (
     process_vision_info,
 )
 
-MODEL_NAME = "Qwen/Qwen2-VL-2B-Instruct"
+MODEL_NAME = "Qwen/Qwen2-VL-7B-Instruct"
 model = Qwen2VLForConditionalGeneration.from_pretrained(MODEL_NAME, dtype="bfloat16")
 
 image_processor = Qwen2VLImageProcessor.from_pretrained(MODEL_NAME)
 tokenizer = Qwen2Tokenizer.from_pretrained(MODEL_NAME)
-processor = Qwen2VLProcessor(image_processor, tokenizer)
-
-# min_pixels = 256*28*28 # 200704
-# max_pixels = 1280*28*28 # 1003520
-# processor = Qwen2VLProcessor(image_processor, tokenizer, min_pixels=min_pixels, max_pixels=max_pixels)
-
-
-# # Messages containing a images list as a video and a text query
-# messages = [
-#     {
-#         "role": "user",
-#         "content": [
-#             {
-#                 "type": "video",
-#                 "video": [
-#                     "file:///path/to/frame1.jpg",
-#                     "file:///path/to/frame2.jpg",
-#                     "file:///path/to/frame3.jpg",
-#                     "file:///path/to/frame4.jpg",
-#                 ],
-#                 "fps": 1.0,
-#             },
-#             {"type": "text", "text": "Describe this video."},
-#         ],
-#     }
-# ]
-
+min_pixels = 256*28*28 # 200704
+max_pixels = 1280*28*28 # 1003520
+processor = Qwen2VLProcessor(image_processor, tokenizer, min_pixels=min_pixels, max_pixels=max_pixels)
 
 # Messages containing a video and a text query
 messages = [
@@ -61,7 +37,7 @@ messages = [
         "content": [
             {
                 "type": "video",
-                "video": "./video1.mp4",
+                "video": "paddlemix/demo_images/red-panda.mp4",
                 "max_pixels": 360 * 420,
                 "fps": 1.0,
             },
@@ -70,14 +46,10 @@ messages = [
     }
 ]
 
-
-# Preparation for inference
 image_inputs, video_inputs = process_vision_info(messages)
-
 question = "Describe this video."
 video_pad_token = '<|vision_start|><|video_pad|><|vision_end|>'
 text = f'<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n{video_pad_token}{question}<|im_end|>\n<|im_start|>assistant\n'
-
 
 inputs = processor(
     text=[text],
@@ -86,9 +58,8 @@ inputs = processor(
     padding=True,
     return_tensors="pd",
 )
-
 # Inference: Generation of the output
 generated_ids = model.generate(**inputs, max_new_tokens=128)  # already trimmed in paddle
-print("generated_ids:\n", generated_ids)
+# print("generated_ids:\n", generated_ids)
 output_text = processor.batch_decode(generated_ids[0], skip_special_tokens=True, clean_up_tokenization_spaces=False)
 print("output_text:\n", output_text[0])

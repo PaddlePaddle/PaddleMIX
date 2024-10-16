@@ -267,10 +267,12 @@ class PatchEmbed(nn.Layer):
         self.proj = nn.Conv3D(in_channels, embed_dim, kernel_size=kernel_size, stride=kernel_size, bias_attr=False)
 
     def forward(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
+
         target_dtype = self.proj.weight.dtype
         hidden_states = hidden_states.reshape(
             [-1, self.in_channels, self.temporal_patch_size, self.patch_size, self.patch_size]
         )
+
         hidden_states = self.proj(hidden_states.to(dtype=target_dtype)).reshape([-1, self.embed_dim])
         return hidden_states
 
@@ -969,6 +971,7 @@ class Qwen2VisionTransformerPretrainedModel(Qwen2VLPreTrainedModel):
         return rotary_pos_emb
 
     def forward(self, hidden_states: paddle.Tensor, grid_thw: paddle.Tensor) -> paddle.Tensor:
+        
         hidden_states = self.patch_embed(hidden_states)
         rotary_pos_emb = self.rot_pos_emb(grid_thw)
 
