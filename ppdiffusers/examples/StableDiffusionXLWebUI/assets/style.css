@@ -1,0 +1,84 @@
+:root {
+  --title-font-size: clamp(1.5rem, 6vw, 3rem);
+  --subtitle-font-size: clamp(1rem, 2vw, 1.2rem);
+}
+
+/* h1 {
+  background: linear-gradient(to right, red, orange, yellow, green, pink, indigo, violet); 
+  -webkit-background-clip: text; 
+  -webkit-text-fill-color: transparent; font-size: 20px;
+}
+
+h2 {
+  background: linear-gradient(to right, red, orange, yellow, green, pink, indigo, violet); 
+  -webkit-background-clip: text; 
+  -webkit-text-fill-color: transparent; font-size: 15px;
+} */
+#multial_color {
+    background: linear-gradient(to right, red, orange, yellow, green, pink, indigo, violet); 
+    -webkit-background-clip: text; 
+    -webkit-text-fill-color: transparent;
+}
+#duplicate-button {
+  display: block;
+  margin: 1rem auto;
+  color: #fff;
+  background: #1565c0;
+  border-radius: 100vh;
+  padding: 0.5rem 1rem;
+}
+
+#component-0 {
+  max-width: 85%;
+  margin: 2rem auto;
+  padding: 2rem;
+}
+
+@media (max-width: 600px) {
+  #component-0 {
+    max-width: 100%;
+    padding: 0.5rem;
+  }
+}
+
+#title-container {
+  text-align: center;
+  padding: 2rem 0;
+}
+
+#title {
+  font-size: var(--title-font-size);
+  color: #333;
+  font-family: 'Helvetica Neue', sans-serif;
+  text-transform: uppercase;
+  background: transparent;
+}
+
+#title span {
+  background: linear-gradient(45deg, #4EACEF, #28b485);
+  background-clip: text;
+  color: transparent;
+}
+
+#subtitle {
+  text-align: center;
+  font-size: var(--subtitle-font-size);
+  margin-top: 1rem;
+}
+
+#btn {  
+    width: 200px; /* 设置你需要的宽度 */  
+    margin-left: auto;  
+    margin-right: auto;  
+    position: relative;   
+}
+#btn1 {
+    display: flex;  
+    justify-content: center; /* 水平居中 */  
+    align-items: center; /* 垂直居中 */ 
+}
+#btn2 {
+    display: flex;  
+    justify-content: center; /* 水平居中 */  
+    align-items: center; /* 垂直居中 */  
+}
