@@ -7,12 +7,13 @@
 
 ## 2 环境准备
 
-1） [安装PaddleNLP develop分支](https://github.com/PaddlePaddle/PaddleNLP)
+1）[安装PaddleNLP develop分支](https://github.com/PaddlePaddle/PaddleNLP?tab=readme-ov-file#%E5%AE%89%E8%A3%85)
 
-2）[安装 PaddleMix 环境依赖包](https://github.com/PaddlePaddle/PaddleMIX/tree/b4f97ff859e1964c839fc5fab94f7ba63b1e5959?tab=readme-ov-file#%E5%AE%89%E8%A3%85)
+2）[安装 PaddleMIX 环境依赖包](https://github.com/PaddlePaddle/PaddleMIX/tree/b4f97ff859e1964c839fc5fab94f7ba63b1e5959?tab=readme-ov-file#%E5%AE%89%E8%A3%85)
 
-## 3. 快速开始
-完成环境准备后，我们目前提供单轮对话方式使用：
+注意：Python版本最好为3.10及以上版本。
+
+## 3. 模型推理预测
 
 ## 3.1. 图片预测
 ```bash
@@ -27,6 +28,21 @@ python paddlemix/examples/minimonkey/chat_demo_minimonkey.py \
   * `text`: 用户指令, 例如 "Read the all text in the image."
 
 ## 4 模型微调
+
+SFT数据集采用 InternVL2 官方公布的1.3M的SFT数据集中的`llava_instruct_150k_zh`、`dvqa`、`chartqa`、`ai2d`、`docvqa`、`geoqa+`、`synthdog_en`共7个。
+
+PaddleMIX团队整理后的下载链接为：
+```
+wget https://paddlenlp.bj.bcebos.com/datasets/paddlemix/playground.tar
+```
+
+PaddleMIX团队也提供了其中单独的`chartqa`数据集的下载链接，作为训练示例：
+```
+wget https://paddlenlp.bj.bcebos.com/datasets/paddlemix/playground/data/chartqa.tar
+wget https://paddlenlp.bj.bcebos.com/datasets/paddlemix/playground/opensource.tar
+```
+chartqa.tar需下载解压在playground/data/目录下，opensource.tar需下载解压在playground/目录下，opensource里是数据标注的jsonl文件。
+
 ```bash
 sh paddlemix/examples/minimonkey/shell/internvl2.0/2nd_finetune/minimonkey_2b_internlm2_1_8b_dynamic_res_2nd_finetune_full.sh
 ```
