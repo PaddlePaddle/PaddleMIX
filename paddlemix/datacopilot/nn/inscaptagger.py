@@ -39,7 +39,7 @@ class PPInsCapTagger(object):
 
 
     def init_model(self, model_name_or_path, max_new_tokens, dtype):
-        tokenizer = AutoTokenizerMIX.from_pretrained(model_name_or_path, use_fast=False)
+        tokenizer = AutoTokenizerMIX.from_pretrained(model_name_or_path)
         model_config = AutoConfigMIX.from_pretrained(model_name_or_path)
         model = AutoModelMIX.from_pretrained(model_name_or_path, dtype=dtype)
         model.eval()
