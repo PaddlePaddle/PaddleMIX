@@ -20,6 +20,8 @@
 **PPDiffusers**是一款支持多种模态（如文本图像跨模态、图像、语音）扩散模型（Diffusion Model）训练和推理的国产化工具箱，依托于[**PaddlePaddle**](https://www.paddlepaddle.org.cn/)框架和[**PaddleNLP**](https://github.com/PaddlePaddle/PaddleNLP)自然语言处理开发库。
 
 ## News 📢
+* 🔥 **2024.10.18 发布 0.29.0 版本，新增图像生成模型Stable Diffusion 3 (SD3)，支持[DreamBooth训练](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/examples/dreambooth/README_sd3.md)及[高性能推理](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/deploy/sd3)；SD3、SDXL适配昇腾910B，提供国产计算芯片上的训推能力；DIT支持[高性能推理](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/examples/class_conditional_image_generation/DiT/README.md#23-paddle-inference-%E9%AB%98%E6%80%A7%E8%83%BD%E6%8E%A8%E7%90%86)，推理性能提升80%；支持PaddleNLP 3.0 beta版本。**
+
 * 🔥 **2024.07.15 发布 0.24.1 版本，新增[Open-Sora](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/Open-Sora)，支持模型训练和推理；全面支持Paddle 3.0。**
 
 * 🔥 **2024.04.17 发布 0.24.0 版本，支持[Sora相关技术](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/sora)，支持[DiT](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/class_conditional_image_generation/DiT)、[SiT](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/class_conditional_image_generation/DiT#exploring-flow-and-diffusion-based-generative-models-with-scalable-interpolant-transformers-sit)、[UViT](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/text_to_image_mscoco_uvit)训练推理，新增[NaViT](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/navit)、[MAGVIT-v2](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/video_tokenizer/magvit2)模型；
@@ -38,11 +40,6 @@ Stable Diffusion支持[BF16 O2训练](https://github.com/PaddlePaddle/PaddleMIX/
 [LoRA加载升级](#加载HF-LoRA权重)，支持加载SDXL的LoRA权重；
 [Controlnet](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/ppdiffusers/pipelines/controlnet)升级，支持ControlNetImg2Img、ControlNetInpaint、StableDiffusionXLControlNet等。**
 
-* 🔥 **2023.06.20 发布 0.16.1 版本，新增[T2I-Adapter](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/t2i-adapter)，支持训练与推理；ControlNet升级，支持[reference only推理](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/community#controlnet-reference-only)；新增[WebUIStableDiffusionPipeline](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/community#automatic1111-webui-stable-diffusion)，
-支持通过prompt的方式动态加载lora、textual_inversion权重；
-新增[StableDiffusionHiresFixPipeline](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/community#stable-diffusion-with-high-resolution-fixing)，支持高分辨率修复；
-新增关键点控制生成任务评价指标[COCOeval](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/scripts/cocoeval_keypoints_score)；
-新增多种模态扩散模型Pipeline，包括视频生成（[Text-to-Video-Synth](#文本视频多模)、[Text-to-Video-Zero](#文本视频多模)）、音频生成（[AudioLDM](#文本音频多模)、[Spectrogram Diffusion](#音频)）；新增文图生成模型[IF](#文本图像多模)。**
 
 
 
