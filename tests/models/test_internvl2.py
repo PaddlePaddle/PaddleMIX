@@ -12,16 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
 import unittest
 
 import paddle
+
 from paddlemix.models.internvl2.internlm2 import InternLM2Config, InternLM2Tokenizer
-from paddlemix.models.internvl2.internvl_chat import InternVisionConfig, InternVLChatModel, InternVLChatConfig
-from test_modeling_common import floats_tensor
+from paddlemix.models.internvl2.internvl_chat import (
+    InternVisionConfig,
+    InternVLChatConfig,
+    InternVLChatModel,
+)
+from tests.models.test_modeling_common import floats_tensor
 
 
 class InternVLChatModelTester:
@@ -30,7 +31,26 @@ class InternVLChatModelTester:
         self.model_name_or_path = "OpenGVLab/InternVL2-2B"
         self.tokenizer = InternLM2Tokenizer.from_pretrained(self.model_name_or_path)
         # TODO
-        self.tokenizer.added_tokens_encoder = {'<unk>': 0, '<s>': 1, '</s>': 2, '<|plugin|>': 92538, '<|interpreter|>': 92539, '<|action_end|>': 92540, '<|action_start|>': 92541, '<|im_end|>': 92542, '<|im_start|>': 92543, '<img>': 92544, '</img>': 92545, '<IMG_CONTEXT>': 92546, '<quad>': 92547, '</quad>': 92548, '<ref>': 92549, '</ref>': 92550, '<box>': 92551, '</box>': 92552}
+        self.tokenizer.added_tokens_encoder = {
+            "<unk>": 0,
+            "<s>": 1,
+            "</s>": 2,
+            "<|plugin|>": 92538,
+            "<|interpreter|>": 92539,
+            "<|action_end|>": 92540,
+            "<|action_start|>": 92541,
+            "<|im_end|>": 92542,
+            "<|im_start|>": 92543,
+            "<img>": 92544,
+            "</img>": 92545,
+            "<IMG_CONTEXT>": 92546,
+            "<quad>": 92547,
+            "</quad>": 92548,
+            "<ref>": 92549,
+            "</ref>": 92550,
+            "<box>": 92551,
+            "</box>": 92552,
+        }
         self.tokenizer.added_tokens_decoder = {v: k for k, v in self.tokenizer.added_tokens_encoder.items()}
 
     def get_config(self):
@@ -38,9 +58,7 @@ class InternVLChatModelTester:
         test_llm_config = {
             "_name_or_path": "internlm/internlm2_5-7b-chat",
             "add_cross_attention": False,
-            "architectures": [
-                "InternLM2ForCausalLM"
-            ],
+            "architectures": ["InternLM2ForCausalLM"],
             "attn_implementation": "flash_attention_2",
             "bad_words_ids": None,
             "begin_suppress_tokens": None,
@@ -60,18 +78,12 @@ class InternVLChatModelTester:
             "forced_eos_token_id": None,
             "hidden_act": "silu",
             "hidden_size": 4096,
-            "id2label": {
-                "0": "LABEL_0",
-                "1": "LABEL_1"
-            },
+            "id2label": {"0": "LABEL_0", "1": "LABEL_1"},
             "initializer_range": 0.02,
             "intermediate_size": 14336,
             "is_decoder": False,
             "is_encoder_decoder": False,
-            "label2id": {
-                "LABEL_0": 0,
-                "LABEL_1": 1
-            },
+            "label2id": {"LABEL_0": 0, "LABEL_1": 1},
             "length_penalty": 1.0,
             "max_length": 20,
             "max_position_embeddings": 32768,
@@ -97,10 +109,7 @@ class InternVLChatModelTester:
             "return_dict": True,
             "return_dict_in_generate": False,
             "rms_norm_eps": 1e-05,
-            "rope_scaling": {
-                "factor": 2.0,
-                "type": "dynamic"
-            },
+            "rope_scaling": {"factor": 2.0, "type": "dynamic"},
             "rope_theta": 1000000,
             "sep_token_id": None,
             "suppress_tokens": None,
@@ -121,9 +130,7 @@ class InternVLChatModelTester:
         }
 
         test_vision_config = {
-            "architectures": [
-                "InternVisionModel"
-            ],
+            "architectures": ["InternVisionModel"],
             "attention_dropout": 0.0,
             "drop_path_rate": 0.0,
             "dropout": 0.0,
@@ -175,7 +182,7 @@ class InternVLChatModelTester:
             result = model.chat(
                 tokenizer=self.tokenizer,
                 pixel_values=pixel_values,
-                question='Who are you?',
+                question="Who are you?",
                 generation_config=generation_config,
             )
 
