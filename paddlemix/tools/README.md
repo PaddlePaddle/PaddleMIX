@@ -3,13 +3,30 @@ PaddleMIX工具箱秉承了飞桨套件一站式体验、性能极致、生态�
 
 [[English](README_en.md)]
 
-##  🛠️ 支持模型列表 🛠️
-| Model | Inference |Pretrain | SFT | LoRA | Deploy | NPU training |
-| --- | --- | --- | --- | --- | --- | --- |
-| [qwen_vl](../examples/qwen_vl/) | ✅  | ❌  | ✅  | ✅  |  ✅ | ❌ |
-| [blip2](../examples/blip2/) | ✅  | ✅ | ✅  | ✅ | ✅  | ❌ |
-| [visualglm](../examples/visualglm/) | ✅ | ❌ | ✅ | ✅ | ❌ | ❌ |
-| [llava](../examples/llava/) | ✅  | ✅   | ✅  | ✅  | 🚧  | ✅ |
+##  🛠️ 多模态理解统一精调工具 🛠️
+
+| Model |  SFT | LoRA | Deploy | NPU training |
+| --- |  --- | --- | --- | --- | 
+| [YOLO-World](./YOLO-World/) | ❌  | ❌  | ❌ | ❌ |
+| [audioldm2](./audioldm2/) | ❌ | ❌ | ❌ | ❌ |
+| [blip2](./blip2/) | ✅  | ✅ |  ❌ | ❌ |
+| [clip](./clip) |❌ | ❌ | ❌ | ❌ |
+| [coca](./coca/) |  ❌ | ❌ | ❌ | ❌ |
+| [CogVLM && CogAgent](./cogvlm/) |❌ | ❌ | ❌ | ❌ |
+| [eva02](./eva02/)|   ✅  |  ❌   | ❌   | ❌ |
+| [evaclip](./evaclip/) | ❌ | ❌ |  ❌ | ❌ |
+| [groundingdino](./groundingdino/) |  🚧   | ❌  | ✅  | ❌ |
+| [imagebind](./imagebind/) |  ❌  | ❌ | ❌ | ❌ |
+| [InternLM-XComposer2](./internlm_xcomposer2/) | ✅ | ❌ | ❌ | ❌ |
+| [Internvl2](./internvl2/)| ✅ | ❌ | ❌ | ❌ |
+| [llava](./llava/)  | ✅  | ✅  | 🚧  | ✅ |
+| [llava-next](./llava_next_interleave/) | ❌ | ❌ | ❌ | ❌ |
+| [minigpt4](./minigpt4) | ✅   |  ❌  | ✅  | ❌ |
+| [minimonkey](./minimonkey/) | ✅ | ❌ | ❌ | ❌ |
+| [qwen2_vl](./qwen2_vl/)| ✅ | ❌ | ❌ | ❌ |
+| [qwen_vl](./qwen_vl/)  | ✅  | ✅  | ✅  | ❌ |
+| [sam](./sam/) | ❌ | ❌ | ✅  | ❌ |
+| [visualglm](./visualglm/) | ✅ | ✅ | ❌ | ❌ |
 
 * ✅: Supported
 * 🚧: In Progress
