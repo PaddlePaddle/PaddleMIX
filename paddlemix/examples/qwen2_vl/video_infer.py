@@ -24,10 +24,10 @@ from paddlemix.processors.qwen2_vl_processing import (
 MODEL_NAME = "Qwen/Qwen2-VL-7B-Instruct"
 model = Qwen2VLForConditionalGeneration.from_pretrained(MODEL_NAME, dtype="bfloat16")
 
-image_processor = Qwen2VLImageProcessor.from_pretrained(MODEL_NAME)
+image_processor = Qwen2VLImageProcessor()
 tokenizer = Qwen2Tokenizer.from_pretrained(MODEL_NAME)
-min_pixels = 256*28*28 # 200704
-max_pixels = 1280*28*28 # 1003520
+min_pixels = 256 * 28 * 28  # 200704
+max_pixels = 1280 * 28 * 28  # 1003520
 processor = Qwen2VLProcessor(image_processor, tokenizer, min_pixels=min_pixels, max_pixels=max_pixels)
 
 # Messages containing a video and a text query
@@ -48,8 +48,8 @@ messages = [
 
 image_inputs, video_inputs = process_vision_info(messages)
 question = "Describe this video."
-video_pad_token = '<|vision_start|><|video_pad|><|vision_end|>'
-text = f'<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n{video_pad_token}{question}<|im_end|>\n<|im_start|>assistant\n'
+video_pad_token = "<|vision_start|><|video_pad|><|vision_end|>"
+text = f"<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n{video_pad_token}{question}<|im_end|>\n<|im_start|>assistant\n"
 
 inputs = processor(
     text=[text],
