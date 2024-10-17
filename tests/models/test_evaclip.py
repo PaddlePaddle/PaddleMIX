@@ -36,8 +36,8 @@ from tests.testing_utils import slow
 CLIP_PRETRAINED_MODEL_ARCHIVE_LIST = ["paddlemix/EVA/EVA02-CLIP-L-14"]
 
 tracker = get_rng_state_tracker()
-# tracker.add("global_seed", 9987)
-# tracker.add("local_seed", 1025)
+tracker.add("global_seed", 6666)
+tracker.add("local_seed", 1025)
 
 
 class EVAVisionTransformerModelTester:
