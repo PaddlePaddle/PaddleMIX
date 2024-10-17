@@ -23,7 +23,6 @@ import paddle.amp.auto_cast as autocast
 from paddle.distributed import fleet
 from paddle.io import get_worker_info
 from paddlenlp.trainer import Trainer
-from paddlenlp.trainer.auto_trainer import AutoTrainer
 from paddlenlp.trainer.integrations import (
     INTEGRATION_TO_CALLBACK,
     TrainerCallback,

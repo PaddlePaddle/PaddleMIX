@@ -18,6 +18,7 @@ from .dit_llama import DiT_Llama
 from .respace import SpacedDiffusion, space_timesteps
 from .trainer import LatentDiffusionTrainer
 try:
+    from paddlenlp.trainer.auto_trainer import AutoTrainer
     from .trainer_auto import LatentDiffusionAutoTrainer
 except:
     print(f'please install paddlepaddle-gpu>=3.0.0b2 if using auto trainer')
