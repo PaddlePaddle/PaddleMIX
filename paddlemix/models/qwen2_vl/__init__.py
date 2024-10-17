@@ -12,11 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from .bert_padding import *
 from .configuration_qwen2_vl import Qwen2VLConfig
 from .modeling_qwen2_vl import (
     Qwen2VLForConditionalGeneration,
     Qwen2VLModel,
     Qwen2VLPreTrainedModel,
 )
-from .bert_padding import *
+from .template import *
+
 __all__ = ["Qwen2VLConfig", "Qwen2VLForConditionalGeneration", "Qwen2VLModel", "Qwen2VLPreTrainedModel"]
