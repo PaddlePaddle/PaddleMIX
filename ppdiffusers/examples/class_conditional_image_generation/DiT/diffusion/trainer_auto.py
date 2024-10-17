@@ -296,176 +296,20 @@ def create_qk_layernorm_hook(param, accumulation_steps):
     return __impl__
 
 
-class LatentDiffusionTrainer(Trainer):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        if use_tensorboard:
-            self.rank = paddle.distributed.get_rank()
-            if self.rank == 0:
-                self.writer = SummaryWriter("output/tensorboard/test")
-                self.logstep = 0
+class LatentDiffusionAutoTrainer(AutoTrainer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
-        self.benchmark_callback = BenchmarkCallback(
-            benchmark=self.args.benchmark,
-            profiler_options=self.args.profiler_options,
-        )
-        self.add_callback(self.benchmark_callback)
+    def _get_meshes_for_loader(self):
+        def _get_mesh(pp_idx=0):
+            return fleet.auto.get_mesh().get_mesh_with_dim("pp")[pp_idx]
 
-        self.use_ema = kwargs["model"].use_ema
-        if self.use_ema:
-            self.ema_callback = EmaCallback(kwargs["model"], decay=0.99)
-            self.add_callback(self.ema_callback)
+        return _get_mesh(0) # label_id is not label
 
-    def compute_loss(self, model, inputs, return_outputs=False):
-        loss = model(**inputs)
-        if use_tensorboard:
-            if self.rank == 0:
-                self.writer.add_scalar("train/loss", loss.item(), self.logstep)
-                self.logstep += 1
-        return loss
-
-    def create_optimizer_and_scheduler_for_debug(self, num_training_steps: int):
-        # default use paddlenlp.trainer.Trainer.create_optimizer_and_scheduler
-        self.lr_scheduler = get_scheduler(
-            name="constant",
-            learning_rate=self.args.learning_rate,
-            num_warmup_steps=self.args.warmup_steps * self.args.gradient_accumulation_steps,
-            num_training_steps=self.args.max_steps * self.args.gradient_accumulation_steps,
-        )
-
-        grad_clip = None
-        if self.args.max_grad_norm is not None and self.args.max_grad_norm > 0:
-            grad_clip = paddle.nn.ClipGradByGlobalNorm(self.args.max_grad_norm)
-
-        self.optimizer = paddle.optimizer.AdamW(
-            learning_rate=self.lr_scheduler,
-            parameters=self.model.transformer.parameters(),  # only dit training, vae freeze
-            beta1=self.args.adam_beta1,  # 0.9
-            beta2=self.args.adam_beta2,  # 0.999
-            weight_decay=self.args.weight_decay,  # 0.0
-            epsilon=self.args.adam_epsilon,  # 1e-8
-            grad_clip=grad_clip,
-            multi_precision=False,
-        )
-
-    def training_step_for_debug(self, model, inputs) -> paddle.Tensor:
-        # default use paddlenlp.trainer.Trainer.training_step
-        model = unwrap_model(model)
-        model.train()
-
-        with self.autocast_smart_context_manager():
-            loss = self.compute_loss(model, inputs)
-
-        if self.do_grad_scaling:
-            self.scaler.scale(loss).backward()
-        else:
-            loss.backward()
-
-        grad_norms = clip_grad_norm_(
-            self.model.transformer.parameters(), self.args.max_grad_norm, return_cliped_norm=False
-        )
-
-        if use_tensorboard:
-            if self.rank == 0:
-                self.writer.add_scalar("train/loss", loss.item(), self.logstep)
-                self.writer.add_scalar("train/grad_norm", grad_norms.item(), self.logstep)
-                self.logstep += 1
-        return loss.detach()
-
-    def get_train_dataloader(self):
-        if self.train_dataset is None:
-            raise ValueError("Trainer: training requires a train_dataset.")
-        # imagenet
-        train_sampler = paddle.io.DistributedBatchSampler(
-            self.train_dataset,
-            self.args.per_device_train_batch_size,
-            num_replicas=None,
-            rank=None,
-            shuffle=False,
-            drop_last=True,
-        )
-        train_dataloader = paddle.io.DataLoader(
-            self.train_dataset,
-            batch_sampler=train_sampler,
-            num_workers=self.args.dataloader_num_workers,
-            use_shared_memory=True,
-            worker_init_fn=worker_init_fn,
-        )
-        return train_dataloader
-
-    def _save_checkpoint(self, *args, **kwargs):
-        # start_t = time.time()
-        ret = super()._save_checkpoint(*args, **kwargs)
-        if paddle.distributed.is_initialized():
-            paddle.distributed.barrier()
-        # end_t = time.time()
-        # self.benchmark_callback.set_save_time(end_t - start_t)
-        return ret
-
-    def _wrap_model(self, model, training=True):
-        model = super()._wrap_model(model, training)
-
-        if self.args.tensor_parallel_degree > 1:
-            for p in model.parameters():
-                if hasattr(p, "qk_norm_in_tp") and p.trainable:
-                    hook = create_qk_layernorm_hook(p, accumulation_steps=self.args.gradient_accumulation_steps)
-                    p._register_backward_hook(hook)
-
-        return model
-
-    def _save(self, output_dir=None, state_dict=None, merge_tensor_parallel=False):
-        """
-            保存模型参数和训练状态。如果只保存训练状态，则不会保存模型参数。
-        如果merge_tensor_parallel为True，则将tensor parallel的参数合并到一个文件中。
-
-        Args:
-            output_dir (str, optional): 输出目录路径，默认为None，使用args.output_dir。
-            state_dict (dict, optional): 训练状态字典，默认为None，包括了模型参数和其他信息。
-            merge_tensor_parallel (bool, optional): 是否将tensor parallel的参数合并到一个文件中，默认为False。
-
-        Returns:
-            None.
-        """
-        if merge_tensor_parallel:
-            output_dir = output_dir if output_dir is not None else self.args.output_dir
-            os.makedirs(output_dir, exist_ok=True)
-            unwraped = unwrap_model(self.model)
-            logger.info(f"Saving merged checkpoint to {output_dir}")
-            unwraped.dit.save_pretrained(
-                output_dir,
-                merge_tensor_parallel=merge_tensor_parallel,
-                tensor_parallel_degree=self.args.tensor_parallel_degree,
-            )
-            assert not self.use_ema, "Not support ema for merge_tensor_parallel"
-        else:
-            if self.args.only_save_updated_model and state_dict is None:
-                state_dict = {}
-                for n, p in self.model.state_dict().items():
-                    if not p.stop_gradient:
-                        state_dict[n] = p
-            super()._save(output_dir=output_dir, state_dict=state_dict)
-
-    def save_model(self, output_dir=None, merge_tensor_parallel=False):
-        """save_model"""
-        output_dir = output_dir if output_dir is not None else self.args.output_dir
-        super().save_model(output_dir, merge_tensor_parallel)
-        if self.use_ema:
-            ema_state_dict = self.ema_callback.state_dict()
-            save_path = os.path.join(
-                output_dir, _add_variant(PADDLE_EMA_WEIGHTS_NAME, self.args.sharded_name_suffix())
-            )
-            logger.info(f"Saved EMA weight to {save_path}")
-            paddle.save(ema_state_dict, save_path)
-
-    def _load_from_checkpoint(self, resume_from_checkpoint=None):
-        super()._load_from_checkpoint(resume_from_checkpoint)
-        if self.use_ema and resume_from_checkpoint:
-            load_path = os.path.join(
-                resume_from_checkpoint, _add_variant(PADDLE_EMA_WEIGHTS_NAME, self.args.sharded_name_suffix())
-            )
-            logger.info(f"Loaded EMA weight from {load_path}")
-            state_dict = paddle.load(load_path)
-            self.ema_callback.set_state_dict(state_dict)
+    def _wrap_for_dist_loader(self, train_dataloader):
+        dist_loader = super()._wrap_for_dist_loader(train_dataloader)
+        dist_loader._input_keys = ["latents", "label_id"]
+        return dist_loader
 
 
 def clip_grad_norm_(
