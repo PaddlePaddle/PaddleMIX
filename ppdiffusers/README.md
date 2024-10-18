@@ -20,7 +20,7 @@
 **PPDiffusers**是一款支持多种模态（如文本图像跨模态、图像、语音）扩散模型（Diffusion Model）训练和推理的国产化工具箱，依托于[**PaddlePaddle**](https://www.paddlepaddle.org.cn/)框架和[**PaddleNLP**](https://github.com/PaddlePaddle/PaddleNLP)自然语言处理开发库。
 
 ## News 📢
-* 🔥 **2024.10.18 发布 0.29.0 版本，新增图像生成模型Stable Diffusion 3 (SD3)，支持[DreamBooth训练](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/examples/dreambooth/README_sd3.md)及[高性能推理](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/deploy/sd3)；SD3、SDXL适配昇腾910B，提供国产计算芯片上的训推能力；DIT支持[高性能推理](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/examples/class_conditional_image_generation/DiT/README.md#23-paddle-inference-%E9%AB%98%E6%80%A7%E8%83%BD%E6%8E%A8%E7%90%86)，推理性能提升80%；支持PaddleNLP 3.0 beta版本。**
+* 🔥 **2024.10.18 发布 0.29.0 版本，新增图像生成模型[Stable Diffusion 3 (SD3)](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/examples/text_to_image/README_sd3.md)，支持DreamBooth训练及高性能推理；SD3、SDXL适配昇腾910B，提供国产计算芯片上的训推能力；DIT支持[高性能推理](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/examples/class_conditional_image_generation/DiT/README.md#23-paddle-inference-%E9%AB%98%E6%80%A7%E8%83%BD%E6%8E%A8%E7%90%86)；支持PaddleNLP 3.0 beta版本。**
 
 * 🔥 **2024.07.15 发布 0.24.1 版本，新增[Open-Sora](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/Open-Sora)，支持模型训练和推理；全面支持Paddle 3.0。**
 
