@@ -68,19 +68,18 @@ conda activate paddlemix
 ```
 ### 3. 安装PaddlePaddle
 
-#### GPU / CPU 版本安装
+#### 方法 1: 一键安装（GPU/CPU推荐）
 
-##### 方法 1: 一键安装（推荐）
 - CUDA 11.x或12.3
 - PaddlePaddle 3.0.0b1
 ```
 sh build_paddle_env.sh
 ```
 
-##### 方法 2: 手动安装
+#### 方法 2: 手动安装
 关于PaddlePaddle安装的详细教程请查看[Installation](https://www.paddlepaddle.org.cn/install/quick?docurl=/documentation/docs/zh/develop/install/pip/linux-pip.html)。
 
-#### 昇腾版本安装
+#### 方法 3：昇腾环境安装
 
 当前 PaddleMIX 支持昇腾 910B 芯片（更多型号还在支持中，如果您有其他型号的相关需求，请提交issue告知我们），昇腾驱动版本为 23.0.3。考虑到环境差异性，我们推荐使用飞桨官方提供的标准镜像完成环境准备。
 
