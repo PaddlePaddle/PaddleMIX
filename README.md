@@ -67,15 +67,42 @@ conda create -n paddlemix python=3.10 -y
 conda activate paddlemix
 ```
 ### 3. 安装PaddlePaddle
-#### 方法 1: 一键安装（推荐）
+
+#### GPU / CPU 版本安装
+
+##### 方法 1: 一键安装（推荐）
 - CUDA 11.x或12.3
 - PaddlePaddle 3.0.0b1
 ```
 sh build_paddle_env.sh
 ```
 
-#### 方法 2: 手动安装
+##### 方法 2: 手动安装
 关于PaddlePaddle安装的详细教程请查看[Installation](https://www.paddlepaddle.org.cn/install/quick?docurl=/documentation/docs/zh/develop/install/pip/linux-pip.html)。
+
+#### 昇腾版本安装
+
+当前 PaddleMIX 支持昇腾 910B 芯片（更多型号还在支持中，如果您有其他型号的相关需求，请提交issue告知我们），昇腾驱动版本为 23.0.3。考虑到环境差异性，我们推荐使用飞桨官方提供的标准镜像完成环境准备。
+
+* 参考如下命令启动容器，ASCEND_RT_VISIBLE_DEVICES 指定可见的 NPU 卡号
+
+```shell
+docker run -it --name paddle-npu-dev -v $(pwd):/work \
+    --privileged --network=host --shm-size=128G -w=/work \
+    -v /usr/local/Ascend/driver:/usr/local/Ascend/driver \
+    -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi \
+    -v /usr/local/dcmi:/usr/local/dcmi \
+    -e ASCEND_RT_VISIBLE_DEVICES="0,1,2,3,4,5,6,7" \
+    registry.baidubce.com/device/paddle-npu:cann80T13-ubuntu20-$(uname -m)-gcc84-py39 /bin/bash
+```
+
+* 在容器内安装飞桨
+
+```shell
+# 注意需要先安装飞桨 cpu 版本
+python3.9 -m pip install paddlepaddle==3.0.0.dev20240520 -i https://www.paddlepaddle.org.cn/packages/nightly/cpu/
+python3.9 -m pip install paddle_custom_npu==3.0.0.dev20240719 -i https://www.paddlepaddle.org.cn/packages/nightly/npu/
+```
 
 
 ### 4. 安装依赖
