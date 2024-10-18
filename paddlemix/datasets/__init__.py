@@ -31,7 +31,7 @@ try:
     if version.startswith('3'):
         from .internvl_dataset import *
     else:
-        print(f"paddlenlp version {version} is not 3.x, skipping import.")
+        print(f"paddlenlp version {version} is not 3.x, skipping import internvl2 datasets.")
 
 except ImportError:
     print("paddlenlp is not installed.")

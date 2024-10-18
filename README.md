@@ -19,7 +19,13 @@ PaddleMIX是基于飞桨的多模态大模型开发套件，聚合图像、文�
 
 ## 最新进展
 
-📚《飞桨多模态大模型开发套件PaddleMIX 2.0 震撼发布》，图文音视频场景全覆盖，多模态高效助力产业创新。超大规模训练支持，覆盖图文预训练、文生图、跨模态视觉任务，覆盖金融、教育、电商、医疗等产业场景。8月8日（周四）20：00 带你直播了解多模态大模型最新架构，深度解析PaddleMIX高性能模型库，手把手演示LLaVA模型训推全流程。[报名链接](https://www.wjx.top/vm/wKqysjx.aspx?udsid=449688)  
+<!-- 📚《飞桨多模态大模型开发套件PaddleMIX 2.1 震撼发布》，图文音视频场景全覆盖，多模态高效助力产业创新。超大规模训练支持，覆盖图文预训练、文生图、跨模态视觉任务，覆盖金融、教育、电商、医疗等产业场景。8月8日（周四）20：00 带你直播了解多模态大模型最新架构，深度解析PaddleMIX高性能模型库，手把手演示LLaVA模型训推全流程。[报名链接](https://www.wjx.top/vm/wKqysjx.aspx?udsid=449688)   -->
+
+**🔥2024.10.11 发布PaddleMIX v2.1**
+* 支持[PaddleNLP 3.0 beta](https://github.com/PaddlePaddle/PaddleNLP/releases/tag/v3.0.0-beta0)版本，抢先体验其最新功能。
+* 新增[Qwen2-VL](./paddlemix/examples/qwen2_vl/)、[InternVL2](./paddlemix/examples/internvl2/)、[Stable Diffusion 3 (SD3)](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/examples/dreambooth/README_sd3.md)等前沿模型。
+* DataCopilot发布自研多模数据能力标签模型[PP-InsCapTagger](./paddlemix/datacopilot/example/pp_inscaptagger/)；可用于数据的分析和过滤，试验案例表明在保持模型效果的条件下可减少50%的数据量，大幅提高训练效率。
+* 多模态大模型InternVL2、LLaVA、SD3、SDXL适配昇腾910B，提供国产计算芯片上的训推能力。
 
 **2024.09.11 更新**
 * 新增Qwen2-VL、InternVL2、SD3等模型
@@ -48,29 +54,45 @@ PaddleMIX是基于飞桨的多模态大模型开发套件，聚合图像、文�
 https://github.com/PaddlePaddle/PaddleMIX/assets/29787866/8d32722a-e307-46cb-a8c0-be8acd93d2c8
 
 
-## 安装
-
-1. 环境依赖
+## 安装步骤
+### 1. 克隆PaddleMIX仓库
 ```
-pip install -r requirements.txt
+git clone https://github.com/PaddlePaddle/PaddleMIX
+cd PaddleMIX
 ```
 
+### 2. 创建虚拟环境
+```
+conda create -n paddlemix python=3.10 -y
+conda activate paddlemix
+```
+### 3. 安装PaddlePaddle
+#### 方法 1: 一键安装（推荐）
+- CUDA 11.x或12.3
+- PaddlePaddle 3.0.0b1
+```
+sh build_paddle_env.sh
+```
+
+#### 方法 2: 手动安装
 关于PaddlePaddle安装的详细教程请查看[Installation](https://www.paddlepaddle.org.cn/install/quick?docurl=/documentation/docs/zh/develop/install/pip/linux-pip.html)。
+
+
+### 4. 安装依赖
+
+#### 方法 1: 一键安装（推荐）
+
+运行以下命令来自动安装所有必要的依赖:
+```
+sh build_env.sh
+```
+
+#### 方法 2: 手动安装（请参考 build_env.sh）
 
 > 注：ppdiffusers部分模型需要依赖 CUDA 11.2 及以上版本，如果本地机器不符合要求，建议前往 [AI Studio](https://aistudio.baidu.com/index) 进行模型训练、推理任务。
 
 > 如果希望使用**bf16**训练推理，请使用支持**bf16**的GPU，如A100。
 
-2. 手动安装
-```
-git clone https://github.com/PaddlePaddle/PaddleMIX
-cd PaddleMIX
-pip install -e .
-
-#ppdiffusers 安装
-cd ppdiffusers
-pip install -e .
-```
 
 ## 教程
 
@@ -123,6 +145,7 @@ pip install -e .
             <li><a href="paddlemix/examples/evaclip">EVA-CLIP</a></li>
             <li><a href="paddlemix/examples/llava">LLaVA</a></li>
             <li><a href="paddlemix/examples/llava">LLaVA-1.5</a></li>
+            <li><a href="paddlemix/examples/llava">LLaVA-1.6</a></li>
             <li><a href="paddlemix/examples/llava">LLaVA-NeXT</a></li>
             <li><a href="paddlemix/examples/qwen_vl">Qwen-VL</a></li>
             <li><a href="paddlemix/examples/qwen2_vl">Qwen2-VL</a></li>
@@ -147,6 +170,11 @@ pip install -e .
         <ul>
             <li><a href="paddlemix/examples/imagebind">ImageBind</a></li>
       </ul>
+      </ul>
+        <li><b>数据分析</b></li>
+      <ul>
+          <li><a href="./paddlemix/datacopilot/example/pp_inscaptagger/">PP-InsCapTagger</a></li>
+      </ul>
       </td>
       <td>
         <ul>
@@ -154,6 +182,7 @@ pip install -e .
           <li><b>文生图</b></li>
         <ul>
            <li><a href="ppdiffusers/examples/stable_diffusion">Stable Diffusion</a></li>
+           <li><a href="ppdiffusers/examples/dreambooth/README_sd3.md">Stable Diffusion 3 (SD3)</a></li>
             <li><a href="ppdiffusers/examples/controlnet">ControlNet</a></li>
             <li><a href="ppdiffusers/examples/t2i-adapter">T2I-Adapter</a></li>
             <li><a href="ppdiffusers/examples/text_to_image_laion400m">LDM</a></li>

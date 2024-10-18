@@ -1,9 +1,9 @@
 {
-  "llava_instruct_150k_zh": {
-    "root": "playground/data/coco/",
-    "annotation": "playground/opensource/llava_instruct_150k_zh.jsonl",
+  "chartqa_train_18k": {
+    "root": "playground/data/chartqa/",
+    "annotation": "playground/opensource/chartqa_train_18k.jsonl",
     "data_augment": false,
     "repeat_time": 1,
-    "length": 157712
+    "length": 18317
   }
 }

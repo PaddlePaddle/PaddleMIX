@@ -47,12 +47,40 @@ https://github.com/PaddlePaddle/PaddleMIX/assets/29787866/8d32722a-e307-46cb-a8c
 
 
 
-## Installation
+## Installation 
+### 1. Clone the PaddleMIX repository
+```
+git clone https://github.com/PaddlePaddle/PaddleMIX
+cd PaddleMIX
+```
 
-1. Environment Dependencies
+### 2. Create a virtual environment
 ```
-pip install -r requirements.txt
+conda create -n paddlemix python=3.10 -y
+conda activate paddlemix
 ```
+### 3. Install PaddlePaddle
+#### Method 1: One-click installation (recommended)
+- CUDA 11.x or 12.3
+- PaddlePaddle 3.0.0b1
+```
+sh build_paddle_env.sh
+```
+
+#### Method 2: Manual installation
+For detailed instructions on installing PaddlePaddle, please refer to [Installation](https://www.paddlepaddle.org.cn/install/quick?docurl=/documentation/docs/zh/develop/install/pip/linux-pip.html).
+
+
+### 4. Install dependencies
+
+#### Method 1: One-click installation (recommended)
+
+Run the following command to automatically install all necessary dependencies:
+```
+sh build_env.sh
+```
+
+#### Method 2: Manual installation (Please refer to build_env.sh)
 
 Detailed [installation]((https://www.paddlepaddle.org.cn/install/quick?docurl=/documentation/docs/zh/develop/install/pip/linux-pip.html)) tutorials for PaddlePaddle
 
@@ -60,16 +88,6 @@ Detailed [installation]((https://www.paddlepaddle.org.cn/install/quick?docurl=/d
 
 > If you wish to train and infer using **bf16**, please use a GPU that supports **bf16**, such as the A100.
 
-2. Manual Installation
-```
-git clone https://github.com/PaddlePaddle/PaddleMIX
-cd PaddleMIX
-pip install -e .
-
-#ppdiffusers 安装
-cd ppdiffusers
-pip install -e .
-```
 
 ## Tutorial
 

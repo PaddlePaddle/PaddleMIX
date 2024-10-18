@@ -12,11 +12,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import os
 import inspect
 from typing import Any, Callable, Dict, List, Optional, Union
 
 import paddle
+import paddle.distributed as dist
 
 from ppdiffusers.transformers import (  # T5TokenizerFast,
     CLIPTextModelWithProjection,
@@ -195,6 +196,7 @@ class StableDiffusion3Pipeline(DiffusionPipeline, SD3LoraLoaderMixin,  FromSingl
             if hasattr(self, "transformer") and self.transformer is not None
             else 128
         )
+        self.inference_optimize_bp = os.getenv("INFERENCE_OPTIMIZE_BP") == "True"
 
     def _get_t5_prompt_embeds(
         self,
@@ -229,7 +231,6 @@ class StableDiffusion3Pipeline(DiffusionPipeline, SD3LoraLoaderMixin,  FromSingl
                 "The following part of your input was truncated because CLIP can only handle sequences up to"
                 f" {self.tokenizer_max_length} tokens: {removed_text}"
             )
-        # breakpoint()
         prompt_embeds = self.text_encoder_3(text_input_ids)[0]
 
         dtype = self.text_encoder_3.dtype
@@ -395,7 +396,6 @@ class StableDiffusion3Pipeline(DiffusionPipeline, SD3LoraLoaderMixin,  FromSingl
 
             prompt_embeds = paddle.concat([clip_prompt_embeds, t5_prompt_embed], axis=-2)
             pooled_prompt_embeds = paddle.concat([pooled_prompt_embed, pooled_prompt_2_embed], axis=-1)
-
         if do_classifier_free_guidance and negative_prompt_embeds is None:
             negative_prompt = negative_prompt or ""
             negative_prompt_2 = negative_prompt_2 or negative_prompt
@@ -707,7 +707,6 @@ class StableDiffusion3Pipeline(DiffusionPipeline, SD3LoraLoaderMixin,  FromSingl
                 The list of tensor inputs for the `callback_on_step_end` function. The tensors specified in the list
                 will be passed as `callback_kwargs` argument. You will only be able to include variables listed in the
                 `._callback_tensor_inputs` attribute of your pipeline class.
-
         Examples:
 
         Returns:
@@ -801,22 +800,47 @@ class StableDiffusion3Pipeline(DiffusionPipeline, SD3LoraLoaderMixin,  FromSingl
                 latent_model_input = paddle.concat([latents] * 2) if self.do_classifier_free_guidance else latents
                 # broadcast to batch dimension in a way that's compatible with ONNX/Core ML
                 timestep = t.expand(latent_model_input.shape[0])
+                if self.inference_optimize_bp and self.do_classifier_free_guidance:
+                    latent_input ,latent_model_input_ = paddle.split(latent_model_input,2,axis=0)
+                    timestep_input ,timestep_ = paddle.split(timestep,2,axis=0)
+                    prompt_embeds_input ,prompt_embeds_ = paddle.split(prompt_embeds,2,axis=0)
+                    pooled_prompt_embeds_input ,pooled_prompt_embeds_ = paddle.split(pooled_prompt_embeds,2,axis=0)
+                    
+                    dist.scatter(latent_input,[latent_input,latent_model_input_])
+                    dist.scatter(timestep_input,[timestep_input,timestep_])
+                    dist.scatter(prompt_embeds_input,[prompt_embeds_input,prompt_embeds_])
+                    dist.scatter(pooled_prompt_embeds_input,[pooled_prompt_embeds_input,pooled_prompt_embeds_])
 
+                else:
+                    latent_input = latent_model_input
+                    timestep_input = timestep
+                    prompt_embeds_input = prompt_embeds
+                    pooled_prompt_embeds_input = pooled_prompt_embeds
+                
                 model_output = self.transformer(
-                    hidden_states=latent_model_input,
-                    timestep=timestep,
-                    encoder_hidden_states=prompt_embeds,
-                    pooled_projections=pooled_prompt_embeds,
+                    hidden_states=latent_input,
+                    timestep=timestep_input,
+                    encoder_hidden_states=prompt_embeds_input,
+                    pooled_projections=pooled_prompt_embeds_input,
                     joint_attention_kwargs=self.joint_attention_kwargs,
                     return_dict=False,
                 )
-
                 if is_inference_mode(self.transformer):
                     # NOTE:(changwenbin,zhoukangkang)
                     # This is for paddle inference mode
-                    noise_pred = model_output
+                    output = model_output
                 else:
-                    noise_pred = model_output[0]
+                    output = model_output[0]
+                    
+                if self.inference_optimize_bp:
+                    tmp_shape = output.shape
+                    tmp_shape[0] *=2
+                    noise_pred = paddle.zeros(tmp_shape,dtype=output.dtype)
+                    dist.all_gather(noise_pred,output)
+                else:
+                    noise_pred = output
+
+
 
                 # perform guidance
                 if self.do_classifier_free_guidance:

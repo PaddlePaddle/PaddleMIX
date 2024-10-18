@@ -32,7 +32,7 @@ pip install paddlenlp==3.0.0b0
 # llava
 python paddlemix/examples/llava_next_interleave/run_siglip_encoder_predict.py  \
 --model-path "paddlemix/llava_next/llava-next-interleave-qwen-7b" \
---image-file "paddlemix/examples/llava_next_interleave/demo_images/twitter3.jpeg" "paddlemix/examples/llava_next_interleave/demo_images/twitter4.jpeg" \
+--image-file "paddlemix/demo_images/twitter3.jpeg" "paddlemix/demo_images/twitter4.jpeg" \
 ```
 可配置参数说明：
   * `model-path`: 指定llava系列的模型名字或权重路径 ，支持 

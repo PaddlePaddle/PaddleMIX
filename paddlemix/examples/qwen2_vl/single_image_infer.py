@@ -24,7 +24,7 @@ from paddlemix.processors.qwen2_vl_processing import (
 MODEL_NAME = "Qwen/Qwen2-VL-2B-Instruct"
 model = Qwen2VLForConditionalGeneration.from_pretrained(MODEL_NAME, dtype="bfloat16")
 
-image_processor = Qwen2VLImageProcessor.from_pretrained(MODEL_NAME)
+image_processor = Qwen2VLImageProcessor()
 tokenizer = Qwen2Tokenizer.from_pretrained(MODEL_NAME)
 processor = Qwen2VLProcessor(image_processor, tokenizer)
 
@@ -39,7 +39,7 @@ messages = [
         "content": [
             {
                 "type": "image",
-                "image": "./image1.jpg",
+                "image": "paddlemix/demo_images/examples_image1.jpg",
             },
             {"type": "text", "text": "Describe this image."},
         ],
@@ -50,8 +50,8 @@ messages = [
 image_inputs, video_inputs = process_vision_info(messages)
 
 question = "Describe this image."
-image_pad_token = '<|vision_start|><|image_pad|><|vision_end|>'
-text = f'<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n{image_pad_token}{question}<|im_end|>\n<|im_start|>assistant\n'
+image_pad_token = "<|vision_start|><|image_pad|><|vision_end|>"
+text = f"<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n{image_pad_token}{question}<|im_end|>\n<|im_start|>assistant\n"
 
 inputs = processor(
     text=[text],

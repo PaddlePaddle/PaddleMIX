@@ -62,10 +62,10 @@ def main():
                 "the `--output_dir` or add `--overwrite_output_dir` to train from scratch."
             )
 
-    if "npu" in training_args.device:
+    if "npu" in paddle.get_device():
         is_bfloat16_supported = True
     else:
-        is_bfloat16_supported = paddle.amp.is_bfloat16_supported():
+        is_bfloat16_supported = paddle.amp.is_bfloat16_supported()
 
     # Load model
     if training_args.fp16_opt_level == "O2":
