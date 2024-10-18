@@ -22,7 +22,7 @@ python paddlemix/examples/internvl2/chat_demo.py \
     --text "Please describe this image in detail."
 ```
 可配置参数说明：
-  * `model_name_or_path`: 指定 internvl2 的模型名字或权重路径以及tokenizer组件，默认 OpenGVLab/InternVL2-8B
+  * `model_name_or_path`: 指定 internvl2 的模型名字或权重路径以及tokenizer组件，默认 OpenGVLab/InternVL2-8B，也可选择 OpenGVLab/InternVL2-2B
   * `image_path`: 指定图片路径
   * `text`: 用户指令, 例如 "Please describe this image in detail."
 
@@ -34,7 +34,7 @@ python paddlemix/examples/internvl2/chat_demo_video.py \
     --text "Please describe this video in detail."
 ```
 可配置参数说明：
-  * `model_name_or_path`: 指定 internvl2 的模型名字或权重路径以及tokenizer组件，默认 OpenGVLab/InternVL2-8B
+  * `model_name_or_path`: 指定 internvl2 的模型名字或权重路径以及tokenizer组件，默认 OpenGVLab/InternVL2-8B，也可选择 OpenGVLab/InternVL2-2B
   * `video_path`: 指定视频路径
   * `text`: 用户指令, 例如 "Please describe this video in detail."
 
@@ -47,8 +47,11 @@ SFT数据集采用 InternVL2 官方公布的1.3M的SFT数据集，包括了`shar
 
 PaddleMIX团队整理后的下载链接为：
 ```
-wget https://paddlenlp.bj.bcebos.com/datasets/paddlemix/playground.tar
+wget https://paddlenlp.bj.bcebos.com/datasets/paddlemix/playground.tar # 50G
+wget https://paddlenlp.bj.bcebos.com/datasets/paddlemix/LLaVA/LLaVA-SFT.tar # 116G
 ```
+
+下载后可解压或软链接在 PaddleMIX/ 目录下。
 
 PaddleMIX团队也提供了其中单独的`chartqa`数据集的下载链接，作为训练示例：
 ```
@@ -58,6 +61,8 @@ wget https://paddlenlp.bj.bcebos.com/datasets/paddlemix/playground/opensource.ta
 chartqa.tar需下载解压在playground/data/目录下，opensource.tar需下载解压在playground/目录下，opensource里是数据标注的jsonl文件。
 
 ### 4.2 微调命令
+
+注意：此微调训练为全参数微调，冻结视觉编码器而放开LLM训练，2B模型微调训练的显存大小约为40G，8B模型微调训练的显存大小约为80G。
 
 ```bash
 # 1B
