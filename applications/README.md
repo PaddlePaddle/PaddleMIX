@@ -15,8 +15,11 @@
   <a href=#快速开始> 快速开始 </a>
 </h4>
 
+
+
 **PaddleMIX**应用示例基于paddlemix、ppdiffusers和paddlenlp开发，**简单易用**且**功能强大**。聚合业界**优质预训练模型**并提供**开箱即用**的开发体验，覆盖跨模态和多场景的模型库搭配，可满足开发者**灵活定制**的需求。
 
+<img src="https://github.com/user-attachments/assets/4c695140-bf4c-46db-bbb5-5dd8197be947" align="center" />
 
 ## 快速开始
 
@@ -67,6 +70,7 @@ PaddleMIX提供一键预测功能，无需训练，这里以开放世界检测�
 Appflow提供丰富的开箱即用工具集，覆盖跨模态多场景应用，提供产业级的效果与极致的推理性能。
 
 ![appflow](https://github.com/LokeZhou/PaddleMIX/assets/13300429/f80a7aa0-4cd5-4f86-90d6-2fc6da3eb42f)
+
 
 
 
