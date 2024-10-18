@@ -185,7 +185,7 @@ Detailed [installation]((https://www.paddlepaddle.org.cn/install/quick?docurl=/d
 
 For more information on additional model capabilities, please refer to the [Model Capability Matrix](./paddlemix/examples/README.md).
 
-For the list of models supported on Ascend 910B, please refer to [Ascend Model List](./docs/hardware_support/npu_model_list.md)
+For the list of models supported on Ascend 910B, please refer to [Ascend Model List](./docs/hardware_support/npu_model_list_en.md)
 
 ## LICENSE
 
