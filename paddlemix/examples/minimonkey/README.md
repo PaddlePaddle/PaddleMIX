@@ -29,12 +29,16 @@ python paddlemix/examples/minimonkey/chat_demo_minimonkey.py \
 
 ## 4 模型微调
 
-SFT数据集采用 InternVL2 官方公布的1.3M的SFT数据集中的`llava_instruct_150k_zh`、`dvqa`、`chartqa`、`ai2d`、`docvqa`、`geoqa+`、`synthdog_en`共7个。
+### 4.1 微调数据准备
+
+SFT数据集采用 InternVL2 官方公布的1.3M的SFT数据集中的`dvqa`、`chartqa`、`ai2d`、`docvqa`、`geoqa+`、`synthdog_en`共6个。
 
 PaddleMIX团队整理后的下载链接为：
 ```
-wget https://paddlenlp.bj.bcebos.com/datasets/paddlemix/playground.tar
+wget https://paddlenlp.bj.bcebos.com/datasets/paddlemix/playground.tar # 50G
 ```
+
+下载后可解压或软链接在 PaddleMIX/ 目录下。
 
 PaddleMIX团队也提供了其中单独的`chartqa`数据集的下载链接，作为训练示例：
 ```
@@ -42,6 +46,10 @@ wget https://paddlenlp.bj.bcebos.com/datasets/paddlemix/playground/data/chartqa.
 wget https://paddlenlp.bj.bcebos.com/datasets/paddlemix/playground/opensource.tar
 ```
 chartqa.tar需下载解压在playground/data/目录下，opensource.tar需下载解压在playground/目录下，opensource里是数据标注的jsonl文件。
+
+### 4.2 微调命令
+
+注意：此微调训练为全参数微调，冻结视觉编码器而放开LLM训练，2B模型微调训练的显存大小约为40G。
 
 ```bash
 sh paddlemix/examples/minimonkey/shell/internvl2.0/2nd_finetune/minimonkey_2b_internlm2_1_8b_dynamic_res_2nd_finetune_full.sh
