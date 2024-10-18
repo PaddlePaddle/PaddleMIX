@@ -52,6 +52,7 @@ python -m paddle.distributed.launch --gpus 0,1 text_to_image_generation-stable_d
 ```
 ## 在 NVIDIA A800-SXM4-80GB 上测试的性能如下：
 
-| Paddle batch parallel | Paddle Single Card |  PyTorch  | Paddle 动态图 |
-| --------------------- | ------------------ | --------- | ------------ |
-|          0.86 s       |        1.2 s       |   1.78 s  |    4.202 s   |
+
+| Paddle batch parallel | Paddle Single Card |  PyTorch  | TensorRT | Paddle 动态图 |
+| --------------------- | ------------------ | --------- | -------- | ------------ |
+|          0.86 s       |        1.2 s       |   1.78 s  |  1.16 s  |    4.202 s   |​⬤
