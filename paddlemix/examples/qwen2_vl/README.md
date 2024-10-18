@@ -44,14 +44,14 @@ SFT数据集选择6个公开的数据集，包括`dvqa`、`chartqa`、`ai2d`、`
 
 PaddleMIX团队整理后的下载链接为：
 ```
-wget https://paddlenlp.bj.bcebos.com/datasets/paddlemix/playground.tar
+wget https://paddlenlp.bj.bcebos.com/datasets/paddlemix/playground.tar # 50G
 wget https://paddlenlp.bj.bcebos.com/datasets/paddlemix/playground/opensource_json.tar
 ```
-opensource_json.tar需下载解压在playground/目录下，opensource里是数据标注的jsonl文件。
+opensource_json.tar需下载解压在playground/目录下，opensource_json 里是数据标注的json格式文件。
 
 ### 4.2 微调命令
 
-注意：此微调训练为冻结视觉编码器而放开LLM训练的，2B模型微调训练的显存大小约为30G，7B模型微调训练的显存大小约为75G。
+注意：此微调训练为全参数微调，冻结视觉编码器而放开LLM训练，2B模型微调训练的显存大小约为30G，7B模型微调训练的显存大小约为75G。
 
 ```bash
 # 2B

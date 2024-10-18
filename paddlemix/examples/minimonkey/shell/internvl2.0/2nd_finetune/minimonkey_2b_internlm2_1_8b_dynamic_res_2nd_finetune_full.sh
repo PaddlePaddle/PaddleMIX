@@ -11,7 +11,7 @@ export PYTHONPATH="${PYTHONPATH}:$(pwd)"
 export MASTER_PORT=34229
 export TF_CPP_MIN_LOG_LEVEL=3
 
-OUTPUT_DIR='work_dirs/minimonkey_2b_internlm2_1_8b_dynamic_res_2nd_finetune_full'
+OUTPUT_DIR='work_dirs/minimonkey-2B'
 
 if [ ! -d "$OUTPUT_DIR" ]; then
   mkdir -p "$OUTPUT_DIR"
@@ -35,7 +35,7 @@ ${TRAINING_PYTHON} --log_dir ${OUTPUT_DIR}/paddle_distributed_logs \
   --conv_style "internlm2-chat" \
   --output_dir ${OUTPUT_DIR} \
   --logging_dir ${OUTPUT_DIR}/logs \
-  --meta_path "paddlemix/examples/minimonkey/shell/data/minimonkey_finetune.json" \
+  --meta_path "paddlemix/examples/minimonkey/shell/data/minimonkey_finetune_chartqa.json" \
   --overwrite_output_dir True \
   --force_image_size 448 \
   --max_dynamic_patch 12 \
