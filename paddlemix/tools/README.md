@@ -3,7 +3,7 @@ PaddleMIX工具箱秉承了飞桨套件一站式体验、性能极致、生态�
 
 [[English](README_en.md)]
 
-##  🛠️ 多模态理解统一精调工具 🛠️
+##  🛠️ Unified Fine-tuning Tool for Multimodal Understanding 🛠️
 
 | Model |  SFT | LoRA | Deploy | NPU training |
 | --- |  --- | --- | --- | --- | 

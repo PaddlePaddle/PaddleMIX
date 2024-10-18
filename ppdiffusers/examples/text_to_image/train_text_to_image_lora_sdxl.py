@@ -566,16 +566,10 @@ def main(args):
 
     # Load the tokenizers
     tokenizer_one = AutoTokenizer.from_pretrained(
-        args.pretrained_model_name_or_path,
-        subfolder="tokenizer",
-        revision=args.revision,
-        use_fast=False,
+        args.pretrained_model_name_or_path, subfolder="tokenizer", revision=args.revision
     )
     tokenizer_two = AutoTokenizer.from_pretrained(
-        args.pretrained_model_name_or_path,
-        subfolder="tokenizer_2",
-        revision=args.revision,
-        use_fast=False,
+        args.pretrained_model_name_or_path, subfolder="tokenizer_2", revision=args.revision
     )
 
     # import correct text encoder classes
