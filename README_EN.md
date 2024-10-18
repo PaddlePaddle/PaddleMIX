@@ -47,7 +47,7 @@ https://github.com/PaddlePaddle/PaddleMIX/assets/29787866/8d32722a-e307-46cb-a8c
 
 
 
-## Installation 
+## Installation
 ### 1. Clone the PaddleMIX repository
 ```
 git clone https://github.com/PaddlePaddle/PaddleMIX
@@ -73,7 +73,7 @@ For detailed instructions on installing PaddlePaddle, please refer to [Installat
 
 ### 4. Install dependencies
 
-#### Method 1: One-click installation (recommended)
+#### Method 1: One-click installation (recommended on GPU / CPU)
 
 Run the following command to automatically install all necessary dependencies:
 ```
@@ -87,6 +87,29 @@ Detailed [installation]((https://www.paddlepaddle.org.cn/install/quick?docurl=/d
 > Note: parts of Some models in ppdiffusers require CUDA 11.2 or higher. If your local machine does not meet the requirements, it is recommended to go to [AI Studio](https://aistudio.baidu.com/index) for model training and inference tasks.
 
 > If you wish to train and infer using **bf16**, please use a GPU that supports **bf16**, such as the A100.
+
+#### Method 3: For Ascend 910B
+
+PaddleMIX currently supports the Ascend 910B chip (more chip types are still being supported. If you have related needs for other chip types, please submit a question and let us know). Our recommended driver version is 23.0.3. Considering the differences in environments, we recommend using docker image provided by PaddlePaddle to complete the environment preparation.
+
+* Refer to the following command to start the container, ASCEND_RT_VISIBLE_DEVICES specifies the visible NPU card number
+
+```shell
+docker run -it --name paddle-npu-dev -v $(pwd):/work \
+    --privileged --network=host --shm-size=128G -w=/work \
+    -v /usr/local/Ascend/driver:/usr/local/Ascend/driver \
+    -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi \
+    -v /usr/local/dcmi:/usr/local/dcmi \
+    -e ASCEND_RT_VISIBLE_DEVICES="0,1,2,3,4,5,6,7" \
+    registry.baidubce.com/device/paddle-npu:cann80T13-ubuntu20-$(uname -m)-gcc84-py39 /bin/bash
+```
+
+* Install PaddlePaddle in the container
+
+```shell
+python3.9 -m pip install paddlepaddle==3.0.0.dev20240520 -i https://www.paddlepaddle.org.cn/packages/nightly/cpu/
+python3.9 -m pip install paddle_custom_npu==3.0.0.dev20240719 -i https://www.paddlepaddle.org.cn/packages/nightly/npu/
+```
 
 
 ## Tutorial
@@ -184,6 +207,9 @@ Detailed [installation]((https://www.paddlepaddle.org.cn/install/quick?docurl=/d
 </table>
 
 For more information on additional model capabilities, please refer to the [Model Capability Matrix](./paddlemix/examples/README.md).
+
+For the list of models supported on Ascend 910B, please refer to [Ascend Model List](./docs/hardware_support/npu_model_list_en.md)
+
 ## LICENSE
 
 This repository is licensed under the [Apache 2.0 license](LICENSE)
