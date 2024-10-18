@@ -47,7 +47,7 @@ https://github.com/PaddlePaddle/PaddleMIX/assets/29787866/8d32722a-e307-46cb-a8c
 
 
 
-## Installation 
+## Installation
 ### 1. Clone the PaddleMIX repository
 ```
 git clone https://github.com/PaddlePaddle/PaddleMIX
@@ -184,6 +184,9 @@ Detailed [installation]((https://www.paddlepaddle.org.cn/install/quick?docurl=/d
 </table>
 
 For more information on additional model capabilities, please refer to the [Model Capability Matrix](./paddlemix/examples/README.md).
+
+For the list of models supported on Ascend 910B, please refer to [Ascend Model List](./docs/hardware_support/npu_model_list.md)
+
 ## LICENSE
 
 This repository is licensed under the [Apache 2.0 license](LICENSE)

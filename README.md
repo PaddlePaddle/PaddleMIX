@@ -210,6 +210,7 @@ sh build_env.sh
 </table>
 
 更多模型能力，可参考[模型能力矩阵](./paddlemix/examples/README.md)
+
 昇腾910B支持的模型列表，可参考[昇腾模型列表](./docs/hardware_support/npu_model_list.md)
 
 ## 社区交流
