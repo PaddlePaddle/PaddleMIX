@@ -111,7 +111,7 @@ class Blip2CaptionTask(AppTask):
     def _generate_tags(self, caption):
         lemma = nltk.wordnet.WordNetLemmatizer()
 
-        nltk.download(["punkt", "averaged_perceptron_tagger", "wordnet"])
+        nltk.download(["punkt","punkt_tab","averaged_perceptron_tagger","averaged_perceptron_tagger_eng","wordnet"])
         tags_list = [word for (word, pos) in nltk.pos_tag(nltk.word_tokenize(caption)) if pos[0] == "N"]
         tags_lemma = [lemma.lemmatize(w) for w in tags_list]
         tags = ",".join(map(str, tags_lemma))
