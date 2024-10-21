@@ -48,7 +48,7 @@ args = parse_args()
 
 if args.inference_optimize:
     os.environ["INFERENCE_OPTIMIZE"] = "True"
-    os.environ["INFERENCE_OPTIMIZE_TRITON"] = "False"
+    # os.environ["INFERENCE_OPTIMIZE_TRITON"] = "True"
 if args.inference_optimize_bp:
     os.environ["INFERENCE_OPTIMIZE_BP"] = "True"
 if args.dtype == "float32":
@@ -94,7 +94,7 @@ pipe.transformer = paddle.incubate.jit.inference(
     pipe.transformer,
     save_model_dir="./tmp/sd3_parallel",
     enable_new_ir=False,
-    cache_static_model=False,
+    cache_static_model=True,
     exp_enable_use_cutlass=True,
     delete_pass_lists=["add_norm_fuse_pass"],
 )
