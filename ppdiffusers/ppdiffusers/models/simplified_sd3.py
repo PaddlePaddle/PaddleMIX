@@ -15,6 +15,7 @@
 import paddle
 import paddle.nn.functional as F
 from paddle import nn
+
 import paddle.distributed as dist
 import paddle.distributed.fleet as fleet
 
