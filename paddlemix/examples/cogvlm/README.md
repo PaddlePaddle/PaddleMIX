@@ -31,6 +31,8 @@ CogAgent-18B在9个经典的跨模态基准测试中实现了最先进的全能�
 
 ## 3. 环境准备
 
+> 推荐显存：float16下推理，37G+显存；float32下推理，74G+显存
+
 1） [安装PaddleNLP](https://github.com/PaddlePaddle/PaddleNLP?tab=readme-ov-file#%E5%AE%89%E8%A3%85)
 
 2）[安装 PaddleMix 环境依赖包](https://github.com/PaddlePaddle/PaddleMIX/tree/b4f97ff859e1964c839fc5fab94f7ba63b1e5959?tab=readme-ov-file#%E5%AE%89%E8%A3%85)
@@ -39,9 +41,9 @@ CogAgent-18B在9个经典的跨模态基准测试中实现了最先进的全能�
 完成环境准备后，我们目前提供多轮对话方式使用：
 
 ```bash
-python paddlemix/examples/cogagent/chat_demo.py \
+python paddlemix/examples/cogvlm/chat_demo.py \
 --model_name_or_path "THUDM/cogagent-chat"
 ```
 
 可配置参数说明：
-  * `model_name_or_path`: 指定CogAgent的模型名字或权重路径以及tokenizer，默认 THUDM/cogagent-chat
+  * `model_name_or_path`: 指定CogAgent的模型名字或权重路径以及tokenizer，默认 THUDM/cogagent-chat,可选 THUDM/cogvlm-chat

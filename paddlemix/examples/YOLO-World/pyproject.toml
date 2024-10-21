@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools","wheel","paddlepaddle-gpu"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "yolo_world"
+version = "0.1.0" 
+description = "YOLO-World: Real-time Open Vocabulary Object Detection"
+keywords = ["object detection"]
+license = {text = "Apache License 2.0"}
+
+requires-python = ">= 3.8"
+
+dependencies = [
+    "wheel",
+    "paddlepaddle-gpu",
+    "tokenizers",
+    "numpy",
+    "opencv-python==4.6.0.66",
+    "supervision==0.18.0",
+    "openmim",
+]
+
+[tool.setuptools]
+package-dir = {"yolo_world" = "yolo_world"}
+include-package-data = false
+zip-safe = true
+
+[tool.setuptools.packages.find]
+include = ["yolo_world*"]
+exclude = ["third_party*"]

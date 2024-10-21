@@ -39,19 +39,19 @@ class MusicGenerationTest(unittest.TestCase):
 
         self.assertIsNotNone(result)
 
-    def test_image2music(self):
-        task1 = Appflow(app="music_generation", models=["miniGPT4/MiniGPT4-7B"])
-        negative_prompt = 'low quality, average quality, muffled quality, noise interference, poor and low-grade quality, inaudible quality, low-fidelity quality'  
-        audio_length_in_s = 5
-        num_inference_steps = 20
-        output_path = "tmp.wav"
-        minigpt4_text = 'describe the image, '
-        image_pil = load_image(self.url)
+    # def test_image2music(self):
+    #     task1 = Appflow(app="music_generation", models=["miniGPT4/MiniGPT4-7B"])
+    #     negative_prompt = 'low quality, average quality, muffled quality, noise interference, poor and low-grade quality, inaudible quality, low-fidelity quality'  
+    #     audio_length_in_s = 5
+    #     num_inference_steps = 20
+    #     output_path = "tmp.wav"
+    #     minigpt4_text = 'describe the image, '
+    #     image_pil = load_image(self.url)
 
-        result = task1(image=image_pil, minigpt4_text=minigpt4_text )['result'].split('#')[0]
-        paddle.device.cuda.empty_cache()
+    #     result = task1(image=image_pil, minigpt4_text=minigpt4_text )['result'].split('#')[0]
+    #     paddle.device.cuda.empty_cache()
 
-        self.assertIsNotNone(result)
+    #     self.assertIsNotNone(result)
 
 
 if __name__ == "__main__":

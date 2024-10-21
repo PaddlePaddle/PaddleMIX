@@ -16,7 +16,7 @@ import sys
 
 import paddle
 from paddlenlp.peft import LoRAConfig, LoRAModel
-from paddlenlp.trainer import PdArgumentParser, get_last_checkpoint
+from paddlenlp.trainer import get_last_checkpoint
 from paddlenlp.utils.log import logger
 
 from paddlemix import QWenVLTokenizer
@@ -27,6 +27,7 @@ from paddlemix.trainer import (
     GenerateArgument,
     ModelArgument,
     TrainingArguments,
+    PdMIXArgumentParser,
     freeze_params,
     get_trainer,
 )
@@ -34,7 +35,7 @@ from paddlemix.trainer import (
 
 def main():
     # Arguments
-    parser = PdArgumentParser((GenerateArgument, ModelArgument, DataArgument, TrainingArguments))
+    parser = PdMIXArgumentParser((GenerateArgument, ModelArgument, DataArgument, TrainingArguments))
     if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
         gen_args, model_args, data_args, training_args = parser.parse_json_file(json_file=os.path.abspath(sys.argv[1]))
     else:
@@ -61,11 +62,16 @@ def main():
                 "the `--output_dir` or add `--overwrite_output_dir` to train from scratch."
             )
 
+    if "npu" in paddle.get_device():
+        is_bfloat16_supported = True
+    else:
+        is_bfloat16_supported = paddle.amp.is_bfloat16_supported()
+
     # Load model
     if training_args.fp16_opt_level == "O2":
         if training_args.fp16:
             dtype = "float16"
-        elif training_args.bf16 and paddle.amp.is_bfloat16_supported():
+        elif training_args.bf16 and is_bfloat16_supported:
             dtype = "bfloat16"
         else:
             raise ValueError("Please specific dtype: --fp16 or --bf16")
@@ -105,11 +111,11 @@ def main():
     if isinstance(tokenizer, QWenVLTokenizer):
         tokenizer.pad_token_id = tokenizer.eod_id
 
-    # Load dataset
+    # Load datasets
     train_ds = None
     eval_ds = None
     if data_args.dataset is None:
-        raise ValueError(f"Please specific dataset config (got {data_args.dataset})")
+        raise ValueError(f"Please specific datasets config (got {data_args.dataset})")
     else:
         if "train" in data_args.dataset.keys():
             train_ds = MixDataset(data_args.dataset["train"])

@@ -166,7 +166,7 @@ def prepare_mask_and_masked_image(image, mask, height, width, return_image: bool
         mask[mask >= 0.5] = 1
         mask = paddle.to_tensor(mask)
 
-    masked_image = image * (mask < 0.5)
+    masked_image = image * (mask < 0.5).cast(image.dtype)
 
     # n.b. ensure backwards compatibility as old function does not return image
     if return_image:
@@ -1131,7 +1131,7 @@ class StableDiffusionInpaintPipeline(
         mask_condition = self.mask_processor.preprocess(mask_image, height=height, width=width)
 
         if masked_image_latents is None:
-            masked_image = init_image * (mask_condition < 0.5)
+            masked_image = init_image * (mask_condition < 0.5).astype(init_image.dtype)
         else:
             masked_image = masked_image_latents
 

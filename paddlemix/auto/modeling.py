@@ -28,9 +28,10 @@ from paddlenlp.utils.downloader import (
     url_file_exists,
 )
 from paddlenlp.utils.env import HF_CACHE_HOME as PPNLP_HF_CACHE_HOME
-from paddlenlp.utils.env import MODEL_HOME as PPNLP_MODEL_HOME
 from paddlenlp.utils.import_utils import import_module
 from paddlenlp.utils.log import logger
+
+from paddlemix.utils.env import MODEL_HOME as PPMIX_MODEL_HOME
 
 from .configuration import get_configurations
 
@@ -56,6 +57,8 @@ ASSIGN_MAPPING = {
     "qwen_vl": "QWenLMHeadModel",
     "sam": "SamModel",
     "visualglm": "VisualGLMForConditionalGeneration",
+    "llava_qwen": "LlavaQwenForCausalLM",
+    "internvl2": "InternVLChatModel",
 }
 
 
@@ -72,7 +75,8 @@ def resolve_cache_dir(from_hf_hub: bool, from_aistudio: bool, cache_dir: Optiona
         return None
     if from_hf_hub:
         return PPNLP_HF_CACHE_HOME
-    return PPNLP_MODEL_HOME
+
+    return PPMIX_MODEL_HOME
 
 
 def get_model_mapping():
@@ -177,6 +181,7 @@ class _MIXBaseAutoModelClass:
         from_aistudio = kwargs.get("from_aistudio", False)
         subfolder = kwargs.get("subfolder", "")
         cache_dir = resolve_cache_dir(from_hf_hub, from_aistudio, cache_dir)
+        kwargs["cache_dir"] = cache_dir
 
         if from_hf_hub:
             if hf_file_exists(repo_id=pretrained_model_name_or_path, filename=cls.model_config_file):
@@ -226,6 +231,7 @@ class _MIXBaseAutoModelClass:
                 [COMMUNITY_MODEL_PREFIX, pretrained_model_name_or_path, cls.legacy_model_config_file]
             )
             cache_dir = os.path.join(cache_dir, pretrained_model_name_or_path, subfolder)
+
             try:
                 if url_file_exists(standard_community_url):
                     resolved_vocab_file = get_path_from_url_with_filelock(standard_community_url, cache_dir)

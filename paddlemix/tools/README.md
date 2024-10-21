@@ -1,21 +1,39 @@
 ## 📦 PaddleMIX工具箱介绍 📦
 PaddleMIX工具箱秉承了飞桨套件一站式体验、性能极致、生态兼容的设计理念，旨在提供业界主流跨模态大模型全流程统一工具，帮助开发者低成本、低门槛、快速实现跨模态大模型定制化。
 
+[[English](README_en.md)]
 
-##  🛠️ 支持模型列表 🛠️
-| Model | Inference |Pretrain | SFT | LoRA | Deploy |
-| --- | --- | --- | --- | --- | --- |
-| [qwen_vl](../examples/qwen_vl/) | ✅  | ❌  | ✅  | ✅  |  ✅ |
-| [blip2](../examples/blip2/) | ✅  | ✅ | ✅  | ✅ | ✅  |
-| [visualglm](../examples/visualglm/) | ✅ | ❌ | ✅ | ✅ | ❌ |
-| [llava](../examples/llava/) | ✅  | ✅   | ✅  | ✅  | 🚧  |
+##  🛠️ Unified Fine-tuning Tool for Multimodal Understanding 🛠️
+
+| Model |  SFT | LoRA | Deploy | NPU training |
+| --- |  --- | --- | --- | --- | 
+| [YOLO-World](./YOLO-World/) | ❌  | ❌  | ❌ | ❌ |
+| [audioldm2](./audioldm2/) | ❌ | ❌ | ❌ | ❌ |
+| [blip2](./blip2/) | ✅  | ✅ |  ❌ | ❌ |
+| [clip](./clip) |❌ | ❌ | ❌ | ❌ |
+| [coca](./coca/) |  ❌ | ❌ | ❌ | ❌ |
+| [CogVLM && CogAgent](./cogvlm/) |❌ | ❌ | ❌ | ❌ |
+| [eva02](./eva02/)|   ✅  |  ❌   | ❌   | ❌ |
+| [evaclip](./evaclip/) | ❌ | ❌ |  ❌ | ❌ |
+| [groundingdino](./groundingdino/) |  🚧   | ❌  | ✅  | ❌ |
+| [imagebind](./imagebind/) |  ❌  | ❌ | ❌ | ❌ |
+| [InternLM-XComposer2](./internlm_xcomposer2/) | ✅ | ❌ | ❌ | ❌ |
+| [Internvl2](./internvl2/)| ✅ | ❌ | ❌ | ❌ |
+| [llava](./llava/)  | ✅  | ✅  | 🚧  | ✅ |
+| [llava-next](./llava_next_interleave/) | ❌ | ❌ | ❌ | ❌ |
+| [minigpt4](./minigpt4) | ✅   |  ❌  | ✅  | ❌ |
+| [minimonkey](./minimonkey/) | ✅ | ❌ | ❌ | ❌ |
+| [qwen2_vl](./qwen2_vl/)| ✅ | ❌ | ❌ | ❌ |
+| [qwen_vl](./qwen_vl/)  | ✅  | ✅  | ✅  | ❌ |
+| [sam](./sam/) | ❌ | ❌ | ✅  | ❌ |
+| [visualglm](./visualglm/) | ✅ | ✅ | ❌ | ❌ |
 
 * ✅: Supported
 * 🚧: In Progress
 * ❌: Not Supported
 
 注意：
-1. 开始前请先按照[环境依赖](../../README.md#环境依赖)安装环境，不同模型请参考 [examples](../examples/README.md) 下对应的模型目录安装依赖；
+1. 开始前请先按照[环境依赖](../../README.md#安装)安装环境，不同模型请参考 [examples](../examples/README.md) 下对应的模型目录安装依赖；
 2. 当前**tools**统一接口只支持部分模型的精调能力，其他模型及其他能力后续陆续上线。
 
 
@@ -72,6 +90,8 @@ PaddleMIX 精调支持多个主流跨模态大模型的SFT、LoRA等精调策略
     },  #数据集配置
 
     “mixtoken” : #是否使用mixtoken策略，默认False,
+
+    "device": #训练硬件，npu、gpu
 
     "output_dir":  #模型存储路径
 
@@ -158,23 +178,57 @@ PaddleMIX 精调支持多个主流跨模态大模型的SFT、LoRA等精调策略
 **全参精调：SFT**
 ```bash
 # 单卡Qwen-vl SFT启动命令参考
+export FLAGS_use_cuda_managed_memory=true #若显存不够，可设置环境变量
 python paddlemix/tools/supervised_finetune.py paddlemix/config/qwen_vl/sft_argument.json
 
 # 多卡Qwen-vl SFT启动命令参考
+export FLAGS_use_cuda_managed_memory=true #若显存不够，可设置环境变量
 python -u  -m paddle.distributed.launch --gpus "0,1,2,3" paddlemix/tools/supervised_finetune.py paddlemix/config/qwen_vl/sft_argument.json
+
+# 或者使用统一启动脚本
+sh paddlemix/tools/train.sh paddlemix/config/qwen_vl/sft_argument.json
 ```
 
 **LoRA**
 ```bash
 # 单卡Qwen-vl LoRA启动命令参考
 python  paddlemix/tools/supervised_finetune.py paddlemix/config/qwen_vl/lora_sft_argument.json
+
+# 多卡Qwen-vl LoRA启动命令参考
+python -u  -m paddle.distributed.launch --gpus "0,1,2,3" paddlemix/tools/supervised_finetune.py paddlemix/config/qwen_vl/lora_sft_argument.json
+
 ```
 
 注：使用lora训练后，需要合并lora参数，我们提供LoRA参数合并脚本，可以将LoRA参数合并到主干模型并保存相应的权重。命令如下：
 
 ```bash
-python paddlemix/paddlemix/tools/merge_lora_params.py \
+python paddlemix/tools/merge_lora_params.py \
 --model_name_or_path qwen-vl/qwen-vl-chat-7b \
 --lora_path output_qwen_vl\
 --merge_model_path qwen_vl_merge
 ```
+
+**NPU硬件训练**
+
+PaddleMIX支持在NPU硬件上进行训练：
+1. 请先参照[PaddleCustomDevice](https://github.com/PaddlePaddle/PaddleCustomDevice/blob/develop/backends/npu/README_cn.md)安装NPU硬件Paddle
+2. 在config配置文件中增加`device`字段指定设备：
+```json
+{
+    ...
+    "model_name_or_path": "paddlemix/llava/llava-v1.5-7b",
+    "device": "npu",
+    "output_dir": "./checkpoints/llava_sft_ckpts",
+    ...
+}
+```
+3. 启动训练前请设置如下环境变量用于性能加速和精度对齐
+```shell
+export FLAGS_use_stride_kernel=0
+export FLAGS_npu_storage_format=0 # 关闭私有格式
+export FLAGS_npu_jit_compile=0 # 关闭即时编译
+export FLAGS_npu_scale_aclnn=True # aclnn加速
+export FLAGS_npu_split_aclnn=True # aclnn加速
+export CUSTOM_DEVICE_BLACK_LIST=set_value,set_value_with_tensor # set_value加入黑名单
+```
+目前支持NPU训练的模型可以参考此[文档](../examples/README.md)

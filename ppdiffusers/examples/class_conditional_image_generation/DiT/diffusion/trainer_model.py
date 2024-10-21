@@ -20,6 +20,7 @@ import os
 import numpy as np
 import paddle
 import paddle.nn as nn
+from paddle.distributed import fleet
 from paddlenlp.utils.log import logger
 
 from ppdiffusers import AutoencoderKL, DDIMScheduler, is_ppxformers_available
@@ -36,6 +37,20 @@ def read_json(file):
     with open(file, "r", encoding="utf-8") as f:
         data = json.load(f)
     return data
+
+
+def is_model_parrallel():
+    """
+    check whether the current training is model parallel or not.
+    """
+    if paddle.distributed.get_world_size() > 1 and hasattr(fleet.fleet, "_hcg"):
+        hcg = fleet.get_hybrid_communicate_group()
+        if hcg.get_model_parallel_world_size() > 1:
+            return True
+        else:
+            return False
+    else:
+        return False
 
 
 def load_model(args, model, optimizer=None, ckpt_dir=""):
@@ -101,8 +116,8 @@ def load_model(args, model, optimizer=None, ckpt_dir=""):
             "qkv",
             "proj",
             "mlp",  # ParallelTimestepEmbedder
-            "q_norm",
-            "k_norm",
+            # "q_norm",
+            # "k_norm",
             # "attention_norm",
             # "ffn_norm",
         ]
@@ -117,7 +132,7 @@ def load_model(args, model, optimizer=None, ckpt_dir=""):
         row_list = []
         emb_list = []
 
-        mp_rank = args.mp_rank
+        mp_rank = args.mp_rank  #
         mp_size = max(args.tensor_parallel_degree, 1)
 
         def col_split_modeldict(model_dict):
@@ -171,6 +186,10 @@ def load_model(args, model, optimizer=None, ckpt_dir=""):
             #     exit()
 
         print("cast state_dict to default dtype:{}".format(paddle.get_default_dtype()))
+        for key, value in model_dict.items():
+            if "freqs_cos" in key or "freqs_sin" in key:
+                continue
+            model_dict[key] = paddle.cast(value, dtype=paddle.get_default_dtype())
         model.set_state_dict(model_dict)
         del model_dict
     else:
@@ -178,39 +197,94 @@ def load_model(args, model, optimizer=None, ckpt_dir=""):
         raise TypeError("`load` requires a valid value of `ckpt_dir`.")
 
 
+def build_mp_group(mp_degree):
+    if mp_degree <= 1:
+        return None, 0
+
+    world_size = paddle.distributed.get_world_size()
+    rank = paddle.distributed.get_rank()
+    assert world_size % mp_degree == 0
+    num_mp_group = world_size // mp_degree
+    my_group = None
+    local_rank = None
+    for i in range(num_mp_group):
+        ranks = list(range(i * mp_degree, (i + 1) * mp_degree))
+        mp_group = paddle.distributed.new_group(ranks)
+        if rank in ranks:
+            assert my_group is None
+            my_group = mp_group
+            local_rank = ranks.index(rank)
+    assert my_group is not None
+    return my_group, local_rank
+
+
 class DiTDiffusionModel(nn.Layer):
     def __init__(self, model_args, training_args):
         super().__init__()
         self.model_args = model_args
 
+        self.mp_degree = training_args.tensor_parallel_degree
+        self.mp_group, self.mp_rank = build_mp_group(self.mp_degree)
+
         # init vae
         vae_name_or_path = (
             model_args.vae_name_or_path
             if model_args.pretrained_model_name_or_path is None
-            else os.path.join(model_args.pretrained_model_name_or_path, "vqvae")
+            else os.path.join(model_args.pretrained_model_name_or_path, "vae")
         )
         self.vae = AutoencoderKL.from_pretrained(vae_name_or_path)
 
         # init DiT
         if model_args.pretrained_model_name_or_path is None:
             if model_args.config_file.startswith("config/LargeDiT_"):
-                self.transformer = DiT_Llama(**read_json(model_args.config_file))
+                self.transformer = DiT_Llama(**read_json(model_args.config_file),
+                                             transformer_engine_backend=training_args.transformer_engine_backend,
+                                             use_fp8=training_args.use_fp8)
             else:
-                self.transformer = DiT(**read_json(model_args.config_file))
+                self.transformer = DiT(**read_json(model_args.config_file),
+                                       transformer_engine_backend=training_args.transformer_engine_backend,
+                                       use_fp8=training_args.use_fp8)
             # Note: Initialize DiT in diffusion/dit.py
             logger.info("Init DiT model from scratch!")
         else:
-            if model_args.config_file.startswith("config/LargeDiT_"):
-                self.transformer = DiT_Llama.from_pretrained(
-                    model_args.pretrained_model_name_or_path, subfolder="transformer"
-                )
+            if is_model_parrallel():
+                if model_args.config_file.startswith("config/LargeDiT_"):
+                    self.transformer, dit_logging_info = DiT_Llama.from_pretrained(
+                        os.path.join(model_args.pretrained_model_name_or_path, "transformer"),
+                        ignore_mismatched_sizes=True,
+                        output_loading_info=True,
+                        tensor_parallel_degree=training_args.tensor_parallel_degree,
+                        transformer_engine_backend=training_args.transformer_engine_backend,
+                        use_fp8=training_args.use_fp8,
+                    )
+                else:
+                    self.transformer, dit_logging_info = DiT.from_pretrained(
+                        os.path.join(model_args.pretrained_model_name_or_path, "transformer"),
+                        ignore_mismatched_sizes=True,
+                        output_loading_info=True,
+                        tensor_parallel_degree=training_args.tensor_parallel_degree,
+                        transformer_engine_backend=training_args.transformer_engine_backend,
+                        use_fp8=training_args.use_fp8,
+                    )
+                if len(dit_logging_info["missing_keys"]) > 0:
+                    raise Exception(f"missing_keys: {dit_logging_info['missing_keys']}")
             else:
-                self.transformer = DiT.from_pretrained(
-                    model_args.pretrained_model_name_or_path, subfolder="transformer"
-                )
+                if model_args.config_file.startswith("config/LargeDiT_"):
+                    self.transformer = DiT_Llama.from_pretrained(
+                        os.path.join(model_args.pretrained_model_name_or_path, "transformer"),
+                        transformer_engine_backend=training_args.transformer_engine_backend,
+                        use_fp8=training_args.use_fp8,
+                    )
+                else:
+                    self.transformer = DiT.from_pretrained(
+                        os.path.join(model_args.pretrained_model_name_or_path, "transformer"),
+                        transformer_engine_backend=training_args.transformer_engine_backend,
+                        use_fp8=training_args.use_fp8,
+                    )
+
             logger.info(f"Init DiT model from {model_args.pretrained_model_name_or_path}!")
 
-        # load_model(training_args, self.transformer, ckpt_dir='DiTLLaMA_600M_256.pdparams')
+        # load_model(training_args, self.transformer, ckpt_dir='Large-DiT-3B-256/transformer/model_state.pdparams')
 
         # make sure unet in train mode, vae and text_encoder in eval mode
         freeze_params(self.vae.parameters())

@@ -17,9 +17,11 @@
 
 **PaddleMIX** application example is developed based on paddlemix, ppdiffusers, and Paddlenlp，which is **simple** and **easy** to use  and **powerful**. Aggregating industry high-quality pre trained models and providing out of the box development experience, covering cross modal and multi scenario model library matching, can meet the needs of developers flexible customization .
 
+<img src="https://github.com/user-attachments/assets/4c695140-bf4c-46db-bbb5-5dd8197be947" align="center" />
+
 
 ## Quick Start
-Please confirm if it has been installed first [PaddleMIX](../README.md/#安装) and [ppdiffusers](../README.md/#安装)
+Please confirm if it has been installed first [PaddleMIX](../README_EN.md/#installation) and [ppdiffusers](../README_EN.md/#installation)
 
 ### 1.requirements
 ```shell

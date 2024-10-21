@@ -154,7 +154,7 @@ def attention_fn(
     perm_3[-1] = -2
     perm_3[-2] = -1
     attention_scores = paddle.matmul(x=query_layer, y=x.transpose(perm=perm_3))
-    attention_scores = attention_scores + attention_mask
+    attention_scores = attention_scores + attention_mask.astype(attention_scores.dtype)
     attention_scores = paddle.nn.functional.softmax(x=attention_scores, axis=-1, dtype="float32").to(query_layer.dtype)
     if attention_dropout is not None:
         attention_scores = attention_dropout(attention_scores)
@@ -195,10 +195,13 @@ def rotate_half(x):
 
 
 def apply_rotary_pos_emb_index_bhs(q, k, cos, sin, position_id):
+    input_dtype = q.dtype
     cos, sin = paddle.nn.functional.embedding(x=position_id, weight=cos.squeeze(axis=1)).unsqueeze(
         axis=1
     ), paddle.nn.functional.embedding(x=position_id, weight=sin.squeeze(axis=1)).unsqueeze(axis=1)
     q, k = q * cos + rotate_half(q) * sin, k * cos + rotate_half(k) * sin
+    q = q.astype(input_dtype)
+    k = k.astype(input_dtype)
     return q, k
 
 
@@ -244,7 +247,6 @@ class VisionExpertAttention(paddle.nn.Layer):
         shape = list(hidden_states.shape)
         shape[-1] = shape[-1] * 3
         mixed_raw_layer = paddle.empty(shape=shape, dtype=hidden_states.dtype)
-        # todo: When hidden_states[vision_token_mask].shape is [0, d], pd will occur error in linear forward func.
         if hidden_states[vision_token_mask].shape[0] != 0:
             mixed_raw_layer[vision_token_mask] = self.vision_expert_query_key_value(hidden_states[vision_token_mask])
         if hidden_states[language_token_mask].shape[0] != 0:
@@ -389,17 +391,17 @@ class CogModelDecoderLayer(paddle.nn.Layer):
     ) -> Tuple[paddle.Tensor, Optional[Tuple[paddle.Tensor, paddle.Tensor]]]:
         residual = hidden_states
         hidden_states = self.input_layernorm(hidden_states)
-        if self.model_type == "cogagent":
-            past_key_value = past_key_value[:2] if past_key_value is not None else None
         hidden_states, self_attn_weights, present_key_value = self.self_attn(
             hidden_states=hidden_states,
             token_type_ids=token_type_ids,
             position_ids=position_ids,
             attention_mask=attention_mask,
-            past_key_value=past_key_value,
+            past_key_value=None if past_key_value is None else past_key_value[:2],
             output_attentions=output_attentions,
             use_cache=use_cache,
         )
+        data_type = hidden_states.dtype
+        residual = residual.astype(data_type)
         hidden_states = residual + hidden_states
         if self.model_type == "cogagent":
             cross_input = self.post_cross_attention_layernorm(hidden_states)
@@ -411,14 +413,18 @@ class CogModelDecoderLayer(paddle.nn.Layer):
                 output_attentions=output_attentions,
                 use_cache=use_cache,
             )
+            hidden_states = hidden_states.astype(data_type)
             hidden_states = hidden_states + attention_output
             mlp_input = self.post_attention_layernorm(hidden_states)
             mlp_output = self.mlp(mlp_input, token_type_ids=token_type_ids)
+            hidden_states = hidden_states.astype(data_type)
             hidden_states = mlp_output + hidden_states
         elif self.model_type == "cogvlm":
             residual = hidden_states
             hidden_states = self.post_attention_layernorm(hidden_states)
             hidden_states = self.mlp(hidden_states, token_type_ids=token_type_ids)
+            data_type = hidden_states.dtype
+            residual = residual.astype(data_type)
             hidden_states = residual + hidden_states
         else:
             raise ValueError("model_type in config must be cogagent or cogvlm, but got {}".format(self.model_type))
@@ -558,7 +564,7 @@ class CogModel(CogPreTrainedModel):
             if position_ids is None:
                 position_ids = build_position_ids(token_type_ids, attention_mask)
             input_ids = None
-
+        
         return self.llm_forward(
             input_ids=input_ids,
             encoder_outputs=encoder_outputs,

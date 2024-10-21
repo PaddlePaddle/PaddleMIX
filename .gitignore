@@ -25,6 +25,7 @@ __pycache__/
 /lib/
 /lib64/
 /output/
+/work_dirs/
 /inference_model/
 /output_inference/
 /parts/
@@ -72,5 +73,13 @@ coverage.xml
 # NPU meta folder
 kernel_meta/
 
+pretrained/
+playground/
+log/
+
 # MAC
 *.DS_Store
+
+.vscode/
+.benchmarks/
+.mypy_cache/

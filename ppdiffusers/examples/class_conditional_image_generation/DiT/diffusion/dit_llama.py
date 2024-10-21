@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from functools import partial
 from typing import Optional
 
 import paddle
@@ -21,6 +22,7 @@ import paddle.nn.initializer as initializer
 from paddle.distributed import fleet
 from paddle.nn.functional.flash_attention import flash_attention
 from paddle.utils import try_import
+from paddlenlp.transformers.conversion_utils import ConversionMixin
 
 from ppdiffusers.configuration_utils import ConfigMixin
 from ppdiffusers.models.modeling_utils import ModelMixin
@@ -32,6 +34,7 @@ from .dit import (
     modulate,
 )
 
+from .transformer_engine_utils import TransformerEngineHelper
 
 def rms_norm_fused(x_in, w, eps):
     fused_ln = try_import("fused_ln")
@@ -120,7 +123,7 @@ class Attention(nn.Layer):
             model_parallel_size = hcg.get_model_parallel_world_size()
         else:
             model_parallel_size = 1
-        self.n_local_heads = n_heads // model_parallel_size
+        self.n_local_heads = n_heads // model_parallel_size  #
         self.n_local_kv_heads = self.n_kv_heads // model_parallel_size
         self.n_rep = self.n_local_heads // self.n_local_kv_heads
         self.head_dim = dim // n_heads
@@ -144,8 +147,11 @@ class Attention(nn.Layer):
             self.wo = nn.Linear(n_heads * self.head_dim, dim, bias_attr=False)
 
         if qk_norm:
-            self.q_norm = nn.LayerNorm(self.n_local_heads * self.head_dim)
-            self.k_norm = nn.LayerNorm(self.n_local_kv_heads * self.head_dim)
+            self.q_norm = nn.LayerNorm(self.n_local_heads * self.head_dim)  #
+            self.k_norm = nn.LayerNorm(self.n_local_kv_heads * self.head_dim)  #
+            if is_model_parrallel():
+                setattr(self.q_norm.weight, "qk_norm_in_tp", True)
+                setattr(self.k_norm.weight, "qk_norm_in_tp", True)
         else:
             self.q_norm = self.k_norm = nn.Identity()
 
@@ -317,6 +323,47 @@ class FeedForward(nn.Layer):
         output = self.w2(xw1 * xw3)
         return output
 
+class FeedForwardWithNVTEBackend(nn.Layer):
+    def __init__(self, dim, hidden_dim, multiple_of=256, ffn_dim_multiplier=None):
+        """
+        Initialize the FeedForward module.
+
+        Args:
+            dim (int): Input dimension.
+            hidden_dim (int): Hidden dimension of the feedforward layer.
+            multiple_of (int): Value to ensure hidden dimension is a multiple
+                of this value.
+            ffn_dim_multiplier (float, optional): Custom multiplier for hidden
+                dimension. Defaults to None.
+
+        Attributes:
+            w1 (ColumnParallelLinear): Linear transformation for the first
+                layer.
+            w2 (RowParallelLinear): Linear transformation for the second layer.
+            w3 (ColumnParallelLinear): Linear transformation for the third
+                layer.
+
+        """
+        super().__init__()
+        te = TransformerEngineHelper.get_te()
+        hidden_dim = int(2 * hidden_dim / 3)
+        if ffn_dim_multiplier is not None:
+            hidden_dim = int(ffn_dim_multiplier * hidden_dim)
+        hidden_dim = int(multiple_of * ((hidden_dim + multiple_of - 1) // multiple_of))
+        if is_model_parrallel():
+            self.w1 = te.Linear(dim, hidden_dim, bias_attr=False, parallel_mode='column')
+            self.w2 = te.Linear(hidden_dim, dim, bias_attr=False, parallel_mode='row')
+            self.w3 = te.Linear(dim, hidden_dim, bias_attr=False, parallel_mode='column')
+        else:
+            self.w1 = te.Linear(dim, hidden_dim, bias_attr=False)
+            self.w2 = te.Linear(hidden_dim, dim, bias_attr=False)
+            self.w3 = te.Linear(dim, hidden_dim, bias_attr=False)
+
+    def forward(self, x):
+        xw1 = F.silu(self.w1(x))
+        xw3 = self.w3(x)
+        output = self.w2(xw1 * xw3)
+        return output
 
 class TransformerBlock(nn.Layer):
     def __init__(
@@ -394,7 +441,7 @@ class TransformerBlock(nn.Layer):
         Args:
             x (paddle.Tensor): Input tensor.
             freqs_cis (paddle.Tensor): Precomputed cosine and sine frequencies.
-            mask (paddle.Tensor, optional): Masking tensor for attention.
+            adaln_input (paddle.Tensor, optional): Dit with adaptive layer norm, use it to calculate shift, scale, gate.
                 Defaults to None.
 
         Returns:
@@ -413,6 +460,108 @@ class TransformerBlock(nn.Layer):
         else:
             h = x + self.attention(self.attention_norm(x), freqs_cis)
             out = h + self.feed_forward(self.ffn_norm(h))
+        return out
+
+class TransformerBlockWithNVTEBackend(nn.Layer):
+    def __init__(
+        self,
+        layer_id: int,
+        dim: int,
+        n_heads: int,
+        n_kv_heads: int,
+        multiple_of: int,
+        mlp_ratio: float,
+        ffn_dim_multiplier: float,
+        norm_eps: float,
+        qk_norm: bool,
+        fused_attn: bool,
+        use_fp8=False,
+    ) -> None:
+        """
+        Initialize a TransformerBlock.
+
+        Args:
+            layer_id (int): Identifier for the layer.
+            dim (int): Embedding dimension of the input features.
+            n_heads (int): Number of attention heads.
+            n_kv_heads (Optional[int]): Number of attention heads in key and
+                value features (if using GQA), or set to None for the same as
+                query.
+            multiple_of (int): Value to ensure hidden dimension is a multiple
+                of this value in the FeedForward block.
+            ffn_dim_multiplier (float, optional): Custom multiplier for hidden
+                dimension in the FeedForward block. Defaults to None.
+            norm_eps (float): A small value added to the norm layer
+                denominators to avoid division-by-zero.
+
+        Attributes:
+            n_heads (int): Number of attention heads.
+            dim (int): Dimension size of the model.
+            head_dim (int): Dimension size of each attention head.
+            attention (Attention): Attention module.
+            feed_forward (FeedForward): FeedForward module.
+            layer_id (int): Identifier for the layer.
+            attention_norm (RMSNorm): Layer normalization for attention output.
+            ffn_norm (RMSNorm): Layer normalization for feedforward output.
+            adaLN_modulation (nn.Sequential): A small network to generate
+                feature modulation factors.
+
+        """
+        super().__init__()
+        te = TransformerEngineHelper.get_te()
+        self.use_fp8 = use_fp8
+        self.dim = dim
+        self.head_dim = dim // n_heads
+        self.attention = te.MultiHeadAttention(dim, n_heads, attention_dropout=0.0, bias_attr=True, attn_mask_type='padding')
+
+        mlp_hidden_dim = int(dim * mlp_ratio)
+        self.feed_forward = FeedForwardWithNVTEBackend(
+            dim=dim, hidden_dim=mlp_hidden_dim, multiple_of=multiple_of, ffn_dim_multiplier=ffn_dim_multiplier
+        )
+        self.layer_id = layer_id
+        self.attention_norm = te.layer.rmsnorm.RMSNorm(dim, eps=norm_eps)
+        self.ffn_norm = te.layer.rmsnorm.RMSNorm(dim, eps=norm_eps)
+
+        if is_model_parrallel():
+            self.adaLN_modulation = nn.Sequential(
+                nn.Silu(),
+                te.Linear(min(dim, 1024), 6 * dim, bias_attr=True, parallel_mode='column', gather_output=True),
+            )
+        else:
+            self.adaLN_modulation = nn.Sequential(
+                nn.Silu(),
+                te.Linear(min(dim, 1024), 6 * dim),
+            )
+
+    def forward(self, x, freqs_cis, adaln_input=None):
+        """
+        Perform a forward pass through the TransformerBlock.
+
+        Args:
+            x (paddle.Tensor): Input tensor.
+            freqs_cis (paddle.Tensor): Precomputed cosine and sine frequencies.
+            mask (paddle.Tensor, optional): Masking tensor for attention.
+                Defaults to None.
+
+        Returns:
+            paddle.Tensor: Output tensor after applying attention and
+                feedforward layers.
+
+        """
+        with TransformerEngineHelper.fp8_autocast(
+            self.use_fp8, TransformerEngineHelper.get_fp8_group()
+        ):
+            if adaln_input is not None:
+                shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.adaLN_modulation(adaln_input).chunk(
+                    6, axis=1
+                )
+                h = x + gate_msa.unsqueeze(1) * self.attention(
+                    modulate(self.attention_norm(x), shift_msa, scale_msa), freqs_cis
+                )
+                out = h + gate_mlp.unsqueeze(1) * self.feed_forward(modulate(self.ffn_norm(h), shift_mlp, scale_mlp))
+            else:
+                h = x + self.attention(self.attention_norm(x), freqs_cis)
+                out = h + self.feed_forward(self.ffn_norm(h))
         return out
 
 
@@ -445,7 +594,7 @@ class ParallelFinalLayer(nn.Layer):
         return x
 
 
-class DiT_Llama(ModelMixin, ConfigMixin):
+class DiT_Llama(ModelMixin, ConfigMixin, ConversionMixin):
     """
     Diffusion model with a Transformer backbone.
     """
@@ -471,6 +620,8 @@ class DiT_Llama(ModelMixin, ConfigMixin):
         num_classes: int = 1000,
         learn_sigma: bool = True,
         qk_norm: bool = True,
+        transformer_engine_backend: bool = False,
+        use_fp8: bool = False,
     ):
         super().__init__()
         self.sample_size = sample_size
@@ -489,6 +640,8 @@ class DiT_Llama(ModelMixin, ConfigMixin):
         self.num_classes = num_classes
         self.learn_sigma = learn_sigma
         self.qk_norm = qk_norm
+        self.transformer_engine_backend = transformer_engine_backend
+        self.use_fp8 = use_fp8
 
         self.gradient_checkpointing = False
         self.fused_attn = True
@@ -508,23 +661,43 @@ class DiT_Llama(ModelMixin, ConfigMixin):
         self.y_embedder = ParallelLabelEmbedder(num_classes, min(dim, 1024), class_dropout_prob)
 
         # 2. Define transformers blocks
-        self.layers = nn.LayerList(
-            [
-                TransformerBlock(
-                    layer_id=idx,
-                    dim=dim,
-                    n_heads=num_attention_heads,
-                    n_kv_heads=n_kv_heads,
-                    multiple_of=multiple_of,
-                    mlp_ratio=mlp_ratio,
-                    ffn_dim_multiplier=ffn_dim_multiplier,
-                    norm_eps=norm_eps,
-                    qk_norm=qk_norm,
-                    fused_attn=self.fused_attn,
-                )
-                for idx in range(num_layers)
-            ]
-        )
+        if (transformer_engine_backend):
+            self.layers = nn.LayerList(
+                [
+                    TransformerBlockWithNVTEBackend(
+                        layer_id=idx,
+                        dim=dim,
+                        n_heads=num_attention_heads,
+                        n_kv_heads=n_kv_heads,
+                        multiple_of=multiple_of,
+                        mlp_ratio=mlp_ratio,
+                        ffn_dim_multiplier=ffn_dim_multiplier,
+                        norm_eps=norm_eps,
+                        qk_norm=qk_norm,
+                        fused_attn=self.fused_attn,
+                        use_fp8=use_fp8,
+                    )
+                    for idx in range(num_layers)
+                ]
+            )
+        else:
+            self.layers = nn.LayerList(
+                [
+                    TransformerBlock(
+                        layer_id=idx,
+                        dim=dim,
+                        n_heads=num_attention_heads,
+                        n_kv_heads=n_kv_heads,
+                        multiple_of=multiple_of,
+                        mlp_ratio=mlp_ratio,
+                        ffn_dim_multiplier=ffn_dim_multiplier,
+                        norm_eps=norm_eps,
+                        qk_norm=qk_norm,
+                        fused_attn=self.fused_attn,
+                    )
+                    for idx in range(num_layers)
+                ]
+            )
 
         # 3. Define output layers
         self.final_layer = ParallelFinalLayer(dim, patch_size, self.out_channels)
@@ -535,10 +708,19 @@ class DiT_Llama(ModelMixin, ConfigMixin):
     def initialize_weights(self):
         # Initialize transformer layers:
         def _basic_init(module):
+            if TransformerEngineHelper.is_installed():
+                TE_LINEAR = TransformerEngineHelper.get_te().Linear
+            else:
+                TE_LINEAR = type(None)
             if isinstance(
-                module, (nn.Linear, fleet.meta_parallel.ColumnParallelLinear, fleet.meta_parallel.RowParallelLinear)
+                module, (nn.Linear, fleet.meta_parallel.ColumnParallelLinear, fleet.meta_parallel.RowParallelLinear, TE_LINEAR)
             ):
-                initializer.XavierUniform()(module.weight)
+                if isinstance(module, (TE_LINEAR)):
+                    transpose_weight = paddle.transpose(module.weight, perm=[1,0])
+                    initializer.XavierUniform()(transpose_weight)
+                    module.weight.set_value(paddle.transpose(transpose_weight, perm=[1,0]))
+                else:
+                    initializer.XavierUniform()(module.weight)
                 if module.bias is not None:
                     initializer.Constant(value=0)(module.bias)
 
@@ -579,7 +761,7 @@ class DiT_Llama(ModelMixin, ConfigMixin):
         """
         Args:
             x: (N, T, patch_size**2 * C)
-            imgs: (N, H, W, C)
+            imgs: (N, C, H, W)
         """
         c = self.out_channels
         p = self.patch_size
@@ -648,9 +830,13 @@ class DiT_Llama(ModelMixin, ConfigMixin):
         adaln_input = t + y
 
         # 2. Blocks
+        recompute = (
+            TransformerEngineHelper.get_te_recompute_func() if self.transformer_engine_backend
+            else paddle.distributed.fleet.utils.recompute)
+
         for i, layer in enumerate(self.layers):
             if self.gradient_checkpointing:
-                x = paddle.distributed.fleet.utils.recompute(
+                x = recompute(
                     layer, x, self.freqs_cis[: x.shape[1]].cast(dtype), adaln_input, use_reentrant=False
                 )
             else:
@@ -664,3 +850,72 @@ class DiT_Llama(ModelMixin, ConfigMixin):
         hidden_states = self.final_layer(x, adaln_input)
         output = self.unpatchify(hidden_states)
         return output
+
+    @classmethod
+    def _get_tensor_parallel_mappings(
+        cls, config, is_split=True, tensor_parallel_degree=None, tensor_parallel_rank=None
+    ):
+        from paddlenlp.transformers.conversion_utils import split_or_merge_func
+
+        fn = split_or_merge_func(
+            is_split=is_split,
+            tensor_parallel_degree=tensor_parallel_degree
+            if tensor_parallel_degree
+            else max(fleet.get_hybrid_communicate_group().get_model_parallel_world_size(), 1),
+            tensor_parallel_rank=tensor_parallel_rank
+            if tensor_parallel_rank
+            else fleet.get_hybrid_communicate_group().get_model_parallel_rank(),
+            num_attention_heads=config["num_attention_heads"],
+        )
+
+        def get_tensor_parallel_split_mappings(num_layers):
+            final_actions = {}
+
+            base_actions = {}
+            # Column Linear
+            base_actions.update(
+                {
+                    "x_embedder.weight": partial(fn, is_column=True),
+                    "x_embedder.bias": partial(fn, is_column=True),
+                    # 'y_embedder.embedding_table.weight': partial(fn, is_column=True),
+                    "t_embedder.mlp.0.weight": partial(fn, is_column=True),
+                    "t_embedder.mlp.0.bias": partial(fn, is_column=True),
+                    "layers.0.feed_forward.w1.weight": partial(fn, is_column=True),
+                    "layers.0.feed_forward.w3.weight": partial(fn, is_column=True),
+                    "layers.0.attention.wq.weight": partial(fn, is_column=True),
+                    "layers.0.attention.wk.weight": partial(fn, is_column=True),
+                    "layers.0.attention.wv.weight": partial(fn, is_column=True),
+                    "layers.0.adaLN_modulation.1.weight": partial(fn, is_column=True),  #
+                    "layers.0.adaLN_modulation.1.bias": partial(fn, is_column=True),
+                    "final_layer.linear.weight": partial(fn, is_column=True),
+                    "final_layer.linear.bias": partial(fn, is_column=True),
+                    "final_layer.adaLN_modulation.1.weight": partial(fn, is_column=True),  #
+                    "final_layer.adaLN_modulation.1.bias": partial(fn, is_column=True),
+                    "layers.0.attention.q_norm.weight": partial(fn, is_column=True),
+                    "layers.0.attention.q_norm.bias": partial(fn, is_column=True),
+                    "layers.0.attention.k_norm.weight": partial(fn, is_column=True),
+                    "layers.0.attention.k_norm.bias": partial(fn, is_column=True),
+                }
+            )
+
+            # Row Linear
+            base_actions.update(
+                {
+                    "layers.0.feed_forward.w2.weight": partial(fn, is_column=False),
+                    "t_embedder.mlp.2.weight": partial(fn, is_column=False),
+                    # 't_embedder.mlp.2.bias': partial(fn, is_column=True),
+                    "layers.0.attention.wo.weight": partial(fn, is_column=False),
+                }
+            )
+
+            for key, action in base_actions.items():
+                if "layers.0." in key:
+                    for i in range(num_layers):
+                        final_actions[key.replace("layers.0.", f"layers.{i}.")] = action
+                else:
+                    final_actions[key] = action
+
+            return final_actions
+
+        mappings = get_tensor_parallel_split_mappings(config["num_layers"])  # depth
+        return mappings

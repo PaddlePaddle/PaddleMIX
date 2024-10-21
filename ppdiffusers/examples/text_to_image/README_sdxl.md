@@ -15,7 +15,7 @@
 为了确保你能成功运行最新版本的示例脚本，我们强烈推荐 **从源代码安装** 并保持安装是最新的，因为我们经常更新示例脚本并安装一些特定于示例的要求。为此，执行以下步骤在一个新的虚拟环境中：
 
 ```bash
-git clone https://github.com/PaddlePaddle/PaddleMIX
+git clone https://github.com/PaddlePaddle/PaddleMIX.git
 cd PaddleMIX/ppdiffusers
 pip install -e .
 ```
@@ -31,7 +31,7 @@ pip install -r requirements_sdxl.txt
 ```bash
 export MODEL_NAME="stabilityai/stable-diffusion-xl-base-1.0"
 export VAE_NAME="madebyollin/sdxl-vae-fp16-fix"
-export DATASET_NAME="lambdalabs/pokemon-blip-captions"
+export DATASET_NAME="lambdalabs/naruto-blip-captions"
 
 export HF_ENDPOINT=https://hf-mirror.com
 export FLAGS_conv_workspace_size_limit=4096
@@ -57,7 +57,7 @@ python -u train_text_to_image_sdxl.py \
 
 **注释**：
 
-* `train_text_to_image_sdxl.py` 脚本会预计算文本嵌入和VAE编码，并将它们保存在内存中。对于像 [`lambdalabs/pokemon-blip-captions`](https://hf.co/datasets/lambdalabs/pokemon-blip-captions) 这样的小数据集来说，这可能不是问题，但当脚本用于更大的数据集时，肯定会导致内存问题。对于这些情况，你可能会希望将这些预计算的表示序列化到磁盘上，并在微调过程中加载它们。有关更深入的讨论，请参阅 [这个 PR](https://github.com/huggingface/diffusers/pull/4505)。
+* `train_text_to_image_sdxl.py` 脚本会预计算文本嵌入和VAE编码，并将它们保存在内存中。对于像 [`lambdalabs/naruto-blip-captions`](https://hf.co/datasets/lambdalabs/naruto-blip-captions) 这样的小数据集来说，这可能不是问题，但当脚本用于更大的数据集时，肯定会导致内存问题。对于这些情况，你可能会希望将这些预计算的表示序列化到磁盘上，并在微调过程中加载它们。有关更深入的讨论，请参阅 [这个 PR](https://github.com/huggingface/diffusers/pull/4505)。
 * 训练脚本是计算密集型的，可能无法在消费级GPU上运行，比如 Tesla T4。
 * 上面显示的训练命令在训练周期之间执行中间质量验证，并将结果记录到 Weights and Biases。`--report_to`、`--validation_prompt` 和 `--validation_epochs` 是这里相关的 CLI 参数。
 * 众所周知，SDXL的VAE存在数值不稳定性问题。这就是为什么我们还暴露了一个 CLI 参数，即 `--pretrained_vae_model_name_or_path`，让你指定更好的VAE的位置（例如[这个](https://huggingface.co/madebyollin/sdxl-vae-fp16-fix)）。
@@ -110,6 +110,34 @@ for file_name in sorted(os.listdir(dir_name)):
     image.save("sdxl_train_pokemon_" + file_name + ".png")
 ```
 
+## NPU硬件训练推理
+
+1. 请先参照[PaddleCustomDevice](https://github.com/PaddlePaddle/PaddleCustomDevice/blob/develop/backends/npu/README_cn.md)安装NPU硬件Paddle
+2. 使用NPU进行sdxl微调训练和推理时参考如下命令设置相应的环境变量，训练和推理运行命令可直接参照上述微调训练和推理命令。
+```bash
+export FLAGS_npu_storage_format=0
+export FLAGS_use_stride_kernel=0
+```
+
+注意NPU训练暂不支持enable_xformers_memory_efficient_attention选项，启动命令如下:
+```bash
+python -u train_text_to_image_sdxl.py \
+  --pretrained_model_name_or_path=$MODEL_NAME \
+  --pretrained_vae_model_name_or_path=$VAE_NAME \
+  --dataset_name=$DATASET_NAME \
+  --resolution=512 --center_crop --random_flip \
+  --proportion_empty_prompts=0.2 \
+  --train_batch_size=1 \
+  --gradient_accumulation_steps=4 --gradient_checkpointing \
+  --max_train_steps=10000 \
+  --learning_rate=1e-06 --lr_scheduler="constant" --lr_warmup_steps=0 \
+  --mixed_precision="fp16" \
+  --report_to="wandb" \
+  --validation_prompt="a cute Sundar Pichai creature" --validation_epochs 5 \
+  --checkpointing_steps=5000 \
+  --output_dir="sdxl-pokemon-model"
+```
+
 
 ## Stable Diffusion XL (SDXL) LoRA 训练示例
 
@@ -127,14 +155,14 @@ Low-Rank Adaptation of Large Language Models 最初由 Microsoft 在 [LoRA: Low-
 
 ### 训练
 
-首先，你需要按照[安装部分](#安装依赖项)中解释的设置开发环境。确保设置了 `MODEL_NAME` 和 `DATASET_NAME` 环境变量，以及可选的 `VAE_NAME` 变量。这里，我们将使用 [Stable Diffusion XL 1.0-base](https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0) 和 [Pokemons 数据集](https://huggingface.co/datasets/lambdalabs/pokemon-blip-captions)。
+首先，你需要按照[安装部分](#安装依赖项)中解释的设置开发环境。确保设置了 `MODEL_NAME` 和 `DATASET_NAME` 环境变量，以及可选的 `VAE_NAME` 变量。这里，我们将使用 [Stable Diffusion XL 1.0-base](https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0) 和 [Pokemons 数据集](https://huggingface.co/datasets/lambdalabs/naruto-blip-captions)。
 
 **___注：通过在训练过程中定期生成样本图像来监控训练进度非常有用。[Weights and Biases](https://docs.wandb.ai/quickstart) 是一个很好的解决方案，可以轻松地在训练过程中查看生成的图像。你需要做的就是在训练前运行 `pip install wandb`，以自动记录图像。___**
 
 ```bash
 export MODEL_NAME="stabilityai/stable-diffusion-xl-base-1.0"
 export VAE_NAME="madebyollin/sdxl-vae-fp16-fix"
-export DATASET_NAME="lambdalabs/pokemon-blip-captions"
+export DATASET_NAME="lambdalabs/naruto-blip-captions"
 
 export HF_ENDPOINT=https://hf-mirror.com
 export FLAGS_conv_workspace_size_limit=4096
@@ -191,7 +219,7 @@ python -u train_text_to_image_lora_sdxl.py \
 
 ### 推理
 
-一旦你使用上面的命令训练了一个模型，推理可以简单地使用 `StableDiffusionXLPipeline` 在加载训练好的 LoRA 权重后进行。你需要传递 `output_dir` 来加载 LoRA 权重，在这个案例中，是 `sd-pokemon-model-lora-sdxl`。
+一旦你使用上面的命令训练了一个模型，推理可以简单地使用 `StableDiffusionXLPipeline` 在加载训练好的 LoRA 权重后进行。通过修改推理脚本中的model_path变量，可以传递需要加载的 LoRA 训练权重，在这个案例中，是 `sd-pokemon-model-lora-sdxl`。
 
 ```python
 from ppdiffusers import StableDiffusionXLPipeline
@@ -215,6 +243,8 @@ import os
 
 dir_name = "your-checkpoints-path/sd-pokemon-model-lora-sdxl/"
 for file_name in sorted(os.listdir(dir_name)):
+    if 'checkpoint' not in file_name:
+        continue
     print(file_name)
     model_path = os.path.join(dir_name, file_name)
     pipe = StableDiffusionXLPipeline.from_pretrained("stabilityai/stable-diffusion-xl-base-1.0", paddle_dtype=paddle.float16)
@@ -223,4 +253,14 @@ for file_name in sorted(os.listdir(dir_name)):
     prompt = "A pokemon with green eyes and red legs."
     image = pipe(prompt, num_inference_steps=30, guidance_scale=7.5).images[0]
     image.save("pokemon_" + file_name + ".png")
+```
+
+## NPU硬件训练
+1. 请先参照[PaddleCustomDevice](https://github.com/PaddlePaddle/PaddleCustomDevice/blob/develop/backends/npu/README_cn.md)安装NPU硬件Paddle
+2. 使用NPU进行LoRA训练和推理时参考如下命令设置相应的环境变量，训练和推理运行命令可直接参照上述LoRA训练和推理命令。
+```bash
+export FLAGS_npu_storage_format=0
+export FLAGS_use_stride_kernel=0
+export FLAGS_npu_scale_aclnn=True
+export FLAGS_allocator_strategy=auto_growth
 ```

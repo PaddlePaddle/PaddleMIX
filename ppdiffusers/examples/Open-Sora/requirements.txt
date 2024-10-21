@@ -1,0 +1,10 @@
+ftfy
+gdown
+pandas
+pyarrow
+pyav
+tqdm
+beartype
+pandarallel
+imageio
+imageio-ffmpeg

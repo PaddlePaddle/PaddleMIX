@@ -886,7 +886,7 @@ textenc_conversion_map = {x[0]: x[1] for x in textenc_conversion_lst}
 
 textenc_transformer_conversion_lst = [
     # (stable-diffusion, HF Diffusers)
-    ("resblocks.", "text_model.model.layers."),
+    ("resblocks.", "text_model.encoder.layers."),
     ("ln_1", "layer_norm1"),
     ("ln_2", "layer_norm2"),
     (".c_fc.", ".fc1."),
@@ -1011,11 +1011,12 @@ def convert_open_clip_checkpoint(
     else:
         d_model = 1024
 
-    text_model_dict["text_model.embeddings.position_ids"] = text_model.text_model.embeddings.get_buffer("position_ids")
+    # text_model_dict["text_model.embeddings.position_embedding.weight"] = text_model.text_model.embeddings.get_buffer("position_ids")
 
     for key in keys:
         if key in keys_to_ignore:
             continue
+
         if key[len(prefix) :] in textenc_conversion_map:
             if key.endswith("text_projection"):
                 value = checkpoint[key].T
@@ -1045,8 +1046,7 @@ def convert_open_clip_checkpoint(
 
     if not (hasattr(text_model, "embeddings") and hasattr(text_model.embeddings.position_ids)):
         text_model_dict.pop("text_model.embeddings.position_ids", None)
-
-    faster_set_state_dict(text_model, convert_diffusers_vae_unet_to_ppdiffusers(text_model, text_model))
+    faster_set_state_dict(text_model, convert_diffusers_vae_unet_to_ppdiffusers(text_model, text_model_dict))
 
     return text_model
 

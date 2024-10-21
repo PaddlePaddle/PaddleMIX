@@ -24,6 +24,23 @@ from .internlm_xcomposer2 import *
 from .llava import *
 from .minigpt4.configuration import *
 from .minigpt4.modeling import *
-from .qwen_vl import *
 from .visualglm.configuration import *
 from .visualglm.modeling import *
+from .qwen_vl import *
+
+
+import pkg_resources
+
+version = pkg_resources.get_distribution("paddlenlp").version   
+try:
+    if version.startswith('3'):
+        from .internvl2 import *
+        from .qwen2_vl import *
+
+    else:
+        print(f"paddlenlp version {version} is not 3.x, skipping import internvl2 and qwen2_vl.")
+
+except ImportError:
+    print("paddlenlp is not installed.")
+
+

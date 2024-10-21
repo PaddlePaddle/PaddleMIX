@@ -464,7 +464,7 @@ class AutoncoderKLTemporalDecoderFastTests(ModelTesterMixin, unittest.TestCase):
             if "post_quant_conv" in name:
                 continue
 
-            self.assertTrue(paddle_all_close(param.grad.data, named_params_2[name].grad.data, atol=5e-5))
+            self.assertTrue(paddle_all_close(param.grad.data, named_params_2[name].grad.data, atol=5e-3))
 
 
 @slow

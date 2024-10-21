@@ -25,7 +25,6 @@ from typing import Any, Dict, Iterable, Iterator, Mapping, Optional, Tuple, Unio
 import numpy as np
 import paddle
 import paddle.nn as nn
-from paddle.distributed import fleet
 
 try:
     from paddle.base.dygraph.base import param_guard
@@ -352,9 +351,44 @@ def to(self=None, device=None, dtype=None, blocking=None):
 
 nn.Layer.to = to
 
-from ..utils.import_utils import is_ppxformers_available
+from ..utils.import_utils import is_ppxformers_available, is_npu_available
 
-if is_ppxformers_available():
+if is_npu_available():
+    for lib in os.listdir(os.getenv("CUSTOM_DEVICE_ROOT")):
+        if lib.endswith(".so"):
+            paddle.utils.cpp_extension.extension_utils.load_op_meta_info_and_register_op(
+                lib
+            )
+    from paddle.base import core
+    def scaled_dot_product_attention_npu(query,
+                                         key,
+                                         value,
+                                         attn_mask=None,
+                                         dropout_p=0.0,
+                                         is_causal=False,
+                                         training=True,
+                                         name=None,
+                                         fixed_seed_offset=None,
+                                         return_softmax=False,
+                                         is_triangle_upper_mask=True,
+                                         ):
+        out = core.eager._run_custom_op(
+            "flash_attention_npu",
+            query,
+            key,
+            value,
+            fixed_seed_offset,
+            attn_mask,
+            dropout_p,
+            is_causal,
+            return_softmax,
+            not training,
+            is_triangle_upper_mask,
+        )[0]
+        return out
+    paddle.nn.functional.scaled_dot_product_attention_npu = scaled_dot_product_attention_npu
+
+if is_ppxformers_available() or is_npu_available():
     from paddle.incubate.nn.memory_efficient_attention import memory_efficient_attention
 
     try:
@@ -393,11 +427,15 @@ if is_ppxformers_available():
             attention_op = "cutlass"
             if is_support_flash_attention and query.dtype not in [paddle.float32]:
                 attention_op = "flash"
+            elif is_npu_available() and query.dtype not in [paddle.float32]:
+                attention_op = "flash_npu"
         else:
             if attention_op == "flash" and flash_attn_error is not None:
                 raise OSError(flash_attn_error)
 
-        if str2bool(os.getenv("FLAGS_cudnn_deterministic", "no")):
+        if str2bool(os.getenv("FLAGS_cudnn_deterministic", "no")) or str2bool(
+            os.getenv("FLAGS_sdpa_select_math", "no")
+        ):
             if attention_op == "flash":
                 if paddle.nn.functional.flash_attention._select_sdp(query.shape[3]) == "mem_efficient":
                     attention_op = "math"
@@ -428,7 +466,7 @@ if is_ppxformers_available():
             # (2) FLAG_USE_CUTLASS_V2 in yes, y, true, t, 1, use cutlass v2
             use_cutlass_v2 = attn_mask is not None or str2bool(os.getenv("FLAG_USE_CUTLASS_V2", "no"))
             if not use_cutlass_v2:
-                with requires_grad_and_without_random(query, key, value):
+                with requires_grad_and_without_random(query, key, value, stop_gradient=False):
                     output = memory_efficient_attention(
                         query,
                         key,
@@ -438,11 +476,6 @@ if is_ppxformers_available():
                         scale=scale,
                         training=True,
                     )  # make sure we use training=True
-                if query.shape[3] > 256:
-                    if paddle.distributed.get_world_size() > 1 and hasattr(fleet.fleet, "_hcg"):
-                        hcg = fleet.get_hybrid_communicate_group()
-                        mp_group = hcg.get_model_parallel_group()
-                        paddle.distributed.broadcast(output, src=mp_group.ranks[0], group=mp_group, sync_op=True)
             else:
                 assert (
                     variable_length_memory_efficient_attention is not None
@@ -467,7 +500,7 @@ if is_ppxformers_available():
                     pre_cache_length=0,
                 ).transpose([0, 2, 1, 3])
         elif attention_op == "flash":
-            with requires_grad_and_without_random(query, key, value):
+            with requires_grad_and_without_random(query, key, value, stop_gradient=False):
                 output = paddle.nn.functional.scaled_dot_product_attention(
                     query,
                     key,
@@ -477,12 +510,16 @@ if is_ppxformers_available():
                     is_causal=bool(is_causal),
                     training=training,
                 )
-            # hidden_dimension excel 256 will use mea
-            if query.shape[3] > 256:
-                if paddle.distributed.get_world_size() > 1 and hasattr(fleet.fleet, "_hcg"):
-                    hcg = fleet.get_hybrid_communicate_group()
-                    mp_group = hcg.get_model_parallel_group()
-                    paddle.distributed.broadcast(output, src=mp_group.ranks[0], group=mp_group, sync_op=True)
+        elif attention_op == "flash_npu":
+            output = paddle.nn.functional.scaled_dot_product_attention_npu(
+                query,
+                key,
+                value,
+                attn_mask=None if is_causal else attn_mask,
+                dropout_p=dropout_p if training else 0.0,
+                is_causal=bool(is_causal),
+                training=training,
+            )
         else:
             raise ValueError(
                 "ppxformers's attention_op shoulde be in ['auto', 'math', 'cutlass', `memory_efficient`, 'flash']."

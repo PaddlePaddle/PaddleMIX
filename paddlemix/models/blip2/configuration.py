@@ -292,7 +292,7 @@ class Blip2Config(PretrainedConfig):
             **kwargs,
         )
 
-    def to_dict(self):
+    def to_dict(self, saving_file=False):
         """
         Serializes this instance to a Python dictionary. Override the default [`~PretrainedConfig.to_dict`].
         Returns:
@@ -304,3 +304,4 @@ class Blip2Config(PretrainedConfig):
         output["text_config"] = self.text_config
         output["model_type"] = self.__class__.model_type
         return output
+

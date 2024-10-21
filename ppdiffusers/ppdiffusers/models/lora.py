@@ -304,6 +304,7 @@ class LoRACompatibleConv(nn.Conv2D):
         self.out_channels = self._out_channels
         self.kernel_size = self._kernel_size
         self.lora_layer = lora_layer
+        self.data_format = kwargs.get("data_format", "NCHW")
 
     def set_lora_layer(self, lora_layer: Optional[LoRAConv2dLayer]):
         self.lora_layer = lora_layer
@@ -365,11 +366,25 @@ class LoRACompatibleConv(nn.Conv2D):
             # make sure to the functional Conv2D function as otherwise torch.compile's graph will break
             # see: https://github.com/huggingface/diffusers/pull/4315
             return nn.functional.conv2d(
-                hidden_states, self.weight, self.bias, self._stride, self._padding, self._dilation, self._groups
+                hidden_states,
+                self.weight,
+                self.bias,
+                self._stride,
+                self._padding,
+                self._dilation,
+                self._groups,
+                data_format=self.data_format,
             )
         else:
             original_outputs = nn.functional.conv2d(
-                hidden_states, self.weight, self.bias, self._stride, self._padding, self._dilation, self._groups
+                hidden_states,
+                self.weight,
+                self.bias,
+                self._stride,
+                self._padding,
+                self._dilation,
+                self._groups,
+                data_format=self.data_format,
             )
             return original_outputs + (scale * self.lora_layer(hidden_states))
 

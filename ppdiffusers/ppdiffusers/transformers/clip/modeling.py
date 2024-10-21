@@ -20,6 +20,7 @@ from typing import Any, Optional, Tuple, Union
 import paddle
 import paddle.nn.functional as F
 from paddle import nn
+from paddle.framework import in_dynamic_mode
 from paddlenlp.transformers.activations import ACT2FN
 from paddlenlp.transformers.model_outputs import (
     BaseModelOutput,
@@ -279,7 +280,7 @@ class CLIPAttention(nn.Layer):
         src_len = key_states.shape[1]
         attn_weights = paddle.matmul(query_states, key_states, transpose_y=True)
 
-        if attn_weights.shape != [bsz * self.num_heads, tgt_len, src_len]:
+        if in_dynamic_mode() and attn_weights.shape != [bsz * self.num_heads, tgt_len, src_len]:
             raise ValueError(
                 f"Attention weights should be of size {[bsz * self.num_heads, tgt_len, src_len]}, but is"
                 f" {attn_weights.shape}"
@@ -287,7 +288,7 @@ class CLIPAttention(nn.Layer):
 
         # apply the causal_attention_mask first
         if causal_attention_mask is not None:
-            if causal_attention_mask.shape != [bsz, 1, tgt_len, src_len]:
+            if in_dynamic_mode() and causal_attention_mask.shape != [bsz, 1, tgt_len, src_len]:
                 raise ValueError(
                     f"Attention mask should be of size {[bsz, 1, tgt_len, src_len]}, but is"
                     f" {causal_attention_mask.shape}"
@@ -296,7 +297,7 @@ class CLIPAttention(nn.Layer):
             attn_weights = attn_weights.reshape([bsz * self.num_heads, tgt_len, src_len])
 
         if attention_mask is not None:
-            if attention_mask.shape != [bsz, 1, tgt_len, src_len]:
+            if in_dynamic_mode() and attention_mask.shape != [bsz, 1, tgt_len, src_len]:
                 raise ValueError(
                     f"Attention mask should be of size {[bsz, 1, tgt_len, src_len]}, but is {attention_mask.shape}"
                 )
@@ -319,7 +320,7 @@ class CLIPAttention(nn.Layer):
 
         attn_output = paddle.matmul(attn_probs, value_states)
 
-        if attn_output.shape != [bsz * self.num_heads, tgt_len, self.head_dim]:
+        if in_dynamic_mode() and attn_output.shape != [bsz * self.num_heads, tgt_len, self.head_dim]:
             raise ValueError(
                 f"`attn_output` should be of size {[bsz, self.num_heads, tgt_len, self.head_dim]}, but is"
                 f" {attn_output.shape}"

@@ -392,11 +392,11 @@ class ModelMixin(nn.Layer):
                 f" current loaded adapters are: {list(self.peft_config.keys())}"
             )
 
-        from peft.tuners.tuners_utils import BaseTunerLayer
+        from ppdiffusers.peft.tuners.tuners_utils import BaseTunerLayer
 
         _adapters_has_been_set = False
 
-        for _, module in self.named_sublayers(include_self=True)():
+        for _, module in self.named_sublayers(include_self=True):
             if isinstance(module, BaseTunerLayer):
                 if hasattr(module, "set_adapter"):
                     module.set_adapter(adapter_name)
@@ -427,9 +427,9 @@ class ModelMixin(nn.Layer):
         if not self._pp_peft_config_loaded:
             raise ValueError("No adapter loaded. Please load an adapter first.")
 
-        from peft.tuners.tuners_utils import BaseTunerLayer
+        from ppdiffusers.peft.tuners.tuners_utils import BaseTunerLayer
 
-        for _, module in self.named_sublayers(include_self=True)():
+        for _, module in self.named_sublayers(include_self=True):
             if isinstance(module, BaseTunerLayer):
                 if hasattr(module, "enable_adapters"):
                     module.enable_adapters(enabled=False)
@@ -450,9 +450,9 @@ class ModelMixin(nn.Layer):
         if not self._pp_peft_config_loaded:
             raise ValueError("No adapter loaded. Please load an adapter first.")
 
-        from peft.tuners.tuners_utils import BaseTunerLayer
+        from ppdiffusers.peft.tuners.tuners_utils import BaseTunerLayer
 
-        for _, module in self.named_sublayers(include_self=True)():
+        for _, module in self.named_sublayers(include_self=True):
             if isinstance(module, BaseTunerLayer):
                 if hasattr(module, "enable_adapters"):
                     module.enable_adapters(enabled=True)
@@ -472,9 +472,9 @@ class ModelMixin(nn.Layer):
         if not self._pp_peft_config_loaded:
             raise ValueError("No adapter loaded. Please load an adapter first.")
 
-        from peft.tuners.tuners_utils import BaseTunerLayer
+        from ppdiffusers.peft.tuners.tuners_utils import BaseTunerLayer
 
-        for _, module in self.named_sublayers(include_self=True)():
+        for _, module in self.named_sublayers(include_self=True):
             if isinstance(module, BaseTunerLayer):
                 return module.active_adapter
 
@@ -1051,6 +1051,10 @@ class ModelMixin(nn.Layer):
         return model
 
     @classmethod
+    def custom_modify_weight(cls, state_dict):
+        pass
+
+    @classmethod
     def _load_pretrained_model(
         cls,
         model: "ModelMixin",
@@ -1130,6 +1134,7 @@ class ModelMixin(nn.Layer):
                     error_msgs.append(
                         f"Error size mismatch, {key_name} receives a shape {loaded_shape}, but the expected shape is {model_shape}."
                     )
+                cls.custom_modify_weight(state_dict)
                 faster_set_state_dict(model_to_load, state_dict)
 
         missing_keys = sorted(list(set(expected_keys) - set(loaded_keys)))

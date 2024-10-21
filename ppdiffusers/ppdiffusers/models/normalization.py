@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 from typing import Dict, Optional, Tuple
 
 import paddle
@@ -55,10 +56,13 @@ class AdaLayerNormZero(nn.Layer):
         num_embeddings (`int`): The size of the embeddings dictionary.
     """
 
-    def __init__(self, embedding_dim: int, num_embeddings: int):
+    def __init__(self, embedding_dim: int, num_embeddings: Optional[int] = None):
         super().__init__()
 
-        self.emb = CombinedTimestepLabelEmbeddings(num_embeddings, embedding_dim)
+        if num_embeddings is not None:
+            self.emb = CombinedTimestepLabelEmbeddings(num_embeddings, embedding_dim)
+        else:
+            self.emb = None
 
         self.silu = nn.Silu()
         self.linear = nn.Linear(embedding_dim, 6 * embedding_dim)
@@ -68,11 +72,15 @@ class AdaLayerNormZero(nn.Layer):
     def forward(
         self,
         x: paddle.Tensor,
-        timestep: paddle.Tensor,
-        class_labels: paddle.Tensor,
+        timestep: Optional[paddle.Tensor] = None,
+        class_labels: Optional[paddle.Tensor] = None,
         hidden_dtype: Optional[paddle.dtype] = None,
+        emb: Optional[paddle.Tensor] = None,
     ) -> Tuple[paddle.Tensor, paddle.Tensor, paddle.Tensor, paddle.Tensor, paddle.Tensor]:
-        emb = self.linear(self.silu(self.emb(timestep, class_labels, hidden_dtype=hidden_dtype)))
+        # emb = self.linear(self.silu(self.emb(timestep, class_labels, hidden_dtype=hidden_dtype)))
+        if self.emb is not None:
+            emb = self.emb(timestep, class_labels, hidden_dtype=hidden_dtype)
+        emb = self.linear(self.silu(emb))
         shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = emb.chunk(6, axis=1)
         x = self.norm(x) * (1 + scale_msa[:, None]) + shift_msa[:, None]
         return x, gate_msa, shift_mlp, scale_mlp, gate_mlp
@@ -152,3 +160,67 @@ class AdaGroupNorm(nn.Layer):
         x = self.group_norm(x)
         x = x * (1 + scale) + shift
         return x
+
+
+class AdaLayerNormContinuous(nn.Layer):
+    def __init__(
+        self,
+        embedding_dim: int,
+        conditioning_embedding_dim: int,
+        # NOTE: It is a bit weird that the norm layer can be configured to have scale and shift parameters
+        # because the output is immediately scaled and shifted by the projected conditioning embeddings.
+        # Note that AdaLayerNorm does not let the norm layer have scale and shift parameters.
+        # However, this is how it was implemented in the original code, and it's rather likely you should
+        # set `elementwise_affine` to False.
+        elementwise_affine=True,
+        eps=1e-5,
+        bias=True,
+        norm_type="layer_norm",
+    ):
+        super().__init__()
+        self.silu = nn.Silu()
+        self.linear = nn.Linear(conditioning_embedding_dim, embedding_dim * 2, bias_attr=bias)
+        if norm_type == "layer_norm":
+            self.norm = nn.LayerNorm(embedding_dim, eps, weight_attr=elementwise_affine, bias_attr=bias)
+        elif norm_type == "rms_norm":
+            self.norm = RMSNorm(embedding_dim, eps, elementwise_affine)
+        else:
+            raise ValueError(f"unknown norm_type {norm_type}")
+
+    def forward(self, x: paddle.Tensor, conditioning_embedding: paddle.Tensor) -> paddle.Tensor:
+        # convert back to the original dtype in case `conditioning_embedding`` is upcasted to float32 (needed for hunyuanDiT)
+        emb = self.linear(self.silu(conditioning_embedding).cast(x.dtype))
+        scale, shift = paddle.chunk(emb, 2, axis=1)
+        if os.getenv("INFERENCE_OPTIMIZE_TRITON"):
+            # NOTE:(changwenbin,zhoukangkang)
+            # This is a fused faster op using Triton, only used in inference, not used in training.
+            import paddlemix
+
+            x = paddlemix.triton_ops.adaptive_layer_norm(x, scale, shift, self.norm.weight, self.norm.bias)
+        else:
+            x = self.norm(x) * (1 + scale)[:, None, :] + shift[:, None, :]
+        return x
+
+
+class RMSNorm(nn.Layer):
+    def __init__(self, dim, epsilon: float, elementwise_affine: bool = True):
+        super().__init__()
+        self.epsilon = epsilon
+        self.dim = dim
+        if elementwise_affine:
+            self.weight = paddle.create_parameter(
+                shape=[dim],
+                dtype=paddle.get_default_dtype(),
+                default_initializer=nn.initializer.Constant(1.0),
+            )
+        else:
+            self.weight = None
+
+    def forward(self, hidden_states):
+        paddle.incubate.nn.functional.fused_rms_norm(
+            x=hidden_states,
+            norm_weight=self.weight,
+            norm_bias=None,
+            epsilon=self.epsilon,
+            begin_norm_axis=2,
+        )
