@@ -15,7 +15,8 @@
 import paddle
 import paddle.nn.functional as F
 from paddle import nn
-
+import paddle.distributed as dist
+import paddle.distributed.fleet as fleet
 
 class SimplifiedSD3(nn.Layer):
     def __init__(self, num_layers: int, dim: int, num_attention_heads: int, attention_head_dim: int):
@@ -35,6 +36,10 @@ class SimplifiedSD3(nn.Layer):
         self.eqkv = nn.LayerList([nn.Linear(self.dim, self.dim * 3) for i in range(num_layers)])
         self.to_out_linear = nn.LayerList([nn.Linear(self.dim, self.dim) for i in range(num_layers)])
         self.to_add_out_linear = nn.LayerList([nn.Linear(self.dim, self.dim) for i in range(num_layers - 1)])
+
+        self.ffn = nn.LayerList([fleet.meta_parallel.ColumnParallelLinear(self.dim, 4 * self.dim, gather_output=False, has_bias=True) for i in range(num_layers)])
+        self.ffnc = nn.LayerList([fleet.meta_parallel.RowParallelLinear(self.dim * 4, self.dim, input_is_parallel=True, has_bias=True) for i in range(num_layers)])
+
         self.ffn1 = nn.LayerList([nn.Linear(self.dim, self.dim * 4) for i in range(num_layers)])
         self.ffn2 = nn.LayerList([nn.Linear(self.dim * 4, self.dim) for i in range(num_layers)])
         self.ffn1_context = nn.LayerList([nn.Linear(self.dim, self.dim * 4) for i in range(num_layers - 1)])
@@ -131,9 +136,9 @@ class SimplifiedSD3(nn.Layer):
             )
 
             # ffn1
-            ffn_output = self.ffn1[i](norm_hidden_states)
+            ffn_output = self.ffn[i](norm_hidden_states)
             ffn_output = F.gelu(ffn_output, approximate=True)
-            ffn_output = self.ffn2[i](ffn_output)
+            ffn_output = self.ffnc[i](ffn_output)
 
             if context_pre_only:
                 ffn_output = gate_mlp.unsqueeze(1) * ffn_output

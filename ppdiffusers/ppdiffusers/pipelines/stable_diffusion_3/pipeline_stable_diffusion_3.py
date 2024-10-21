@@ -800,22 +800,22 @@ class StableDiffusion3Pipeline(DiffusionPipeline, SD3LoraLoaderMixin,  FromSingl
                 latent_model_input = paddle.concat([latents] * 2) if self.do_classifier_free_guidance else latents
                 # broadcast to batch dimension in a way that's compatible with ONNX/Core ML
                 timestep = t.expand(latent_model_input.shape[0])
-                if self.inference_optimize_bp and self.do_classifier_free_guidance:
-                    latent_input ,latent_model_input_ = paddle.split(latent_model_input,2,axis=0)
-                    timestep_input ,timestep_ = paddle.split(timestep,2,axis=0)
-                    prompt_embeds_input ,prompt_embeds_ = paddle.split(prompt_embeds,2,axis=0)
-                    pooled_prompt_embeds_input ,pooled_prompt_embeds_ = paddle.split(pooled_prompt_embeds,2,axis=0)
+                # if self.inference_optimize_bp and self.do_classifier_free_guidance:
+                #     latent_input ,latent_model_input_ = paddle.split(latent_model_input,2,axis=0)
+                #     timestep_input ,timestep_ = paddle.split(timestep,2,axis=0)
+                #     prompt_embeds_input ,prompt_embeds_ = paddle.split(prompt_embeds,2,axis=0)
+                #     pooled_prompt_embeds_input ,pooled_prompt_embeds_ = paddle.split(pooled_prompt_embeds,2,axis=0)
                     
-                    dist.scatter(latent_input,[latent_input,latent_model_input_])
-                    dist.scatter(timestep_input,[timestep_input,timestep_])
-                    dist.scatter(prompt_embeds_input,[prompt_embeds_input,prompt_embeds_])
-                    dist.scatter(pooled_prompt_embeds_input,[pooled_prompt_embeds_input,pooled_prompt_embeds_])
+                #     dist.scatter(latent_input,[latent_input,latent_model_input_])
+                #     dist.scatter(timestep_input,[timestep_input,timestep_])
+                #     dist.scatter(prompt_embeds_input,[prompt_embeds_input,prompt_embeds_])
+                #     dist.scatter(pooled_prompt_embeds_input,[pooled_prompt_embeds_input,pooled_prompt_embeds_])
 
-                else:
-                    latent_input = latent_model_input
-                    timestep_input = timestep
-                    prompt_embeds_input = prompt_embeds
-                    pooled_prompt_embeds_input = pooled_prompt_embeds
+                # else:
+                latent_input = latent_model_input
+                timestep_input = timestep
+                prompt_embeds_input = prompt_embeds
+                pooled_prompt_embeds_input = pooled_prompt_embeds
                 
                 model_output = self.transformer(
                     hidden_states=latent_input,
@@ -832,13 +832,13 @@ class StableDiffusion3Pipeline(DiffusionPipeline, SD3LoraLoaderMixin,  FromSingl
                 else:
                     output = model_output[0]
                     
-                if self.inference_optimize_bp:
-                    tmp_shape = output.shape
-                    tmp_shape[0] *=2
-                    noise_pred = paddle.zeros(tmp_shape,dtype=output.dtype)
-                    dist.all_gather(noise_pred,output)
-                else:
-                    noise_pred = output
+                # if self.inference_optimize_bp:
+                #     tmp_shape = output.shape
+                #     tmp_shape[0] *=2
+                #     noise_pred = paddle.zeros(tmp_shape,dtype=output.dtype)
+                #     dist.all_gather(noise_pred,output)
+                # else:
+                noise_pred = output
 
 
 

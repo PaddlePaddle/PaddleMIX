@@ -48,7 +48,7 @@ args = parse_args()
 
 if args.inference_optimize:
     os.environ["INFERENCE_OPTIMIZE"] = "True"
-    os.environ["INFERENCE_OPTIMIZE_TRITON"] = "True"
+    # os.environ["INFERENCE_OPTIMIZE_TRITON"] = "True"
 if args.inference_optimize_bp:
     os.environ["INFERENCE_OPTIMIZE_BP"] = "True"
 if args.dtype == "float32":
@@ -76,6 +76,10 @@ if args.inference_optimize_bp:
     hcg = fleet.get_hybrid_communicate_group()
     mp_id = hcg.get_model_parallel_rank()
     rank_id = dist.get_rank()
+    if rank_id==0:
+        os.environ["TRITON_KERNEL_CACHE_DIR"]="./tmp/sd3_parallel/2_2"
+    elif rank_id==1:
+        os.environ["TRITON_KERNEL_CACHE_DIR"]="./tmp/sd3_parallel/2_3"
 
 import datetime
 from ppdiffusers import StableDiffusion3Pipeline
@@ -86,14 +90,14 @@ pipe = StableDiffusion3Pipeline.from_pretrained(
     paddle_dtype=inference_dtype,
 )
 
-pipe.transformer = paddle.incubate.jit.inference(
-    pipe.transformer,
-    save_model_dir="./tmp/sd3",
-    enable_new_ir=True,
-    cache_static_model=True,
-    exp_enable_use_cutlass=True,
-    delete_pass_lists=["add_norm_fuse_pass"],
-)
+# pipe.transformer = paddle.incubate.jit.inference(
+#     pipe.transformer,
+#     save_model_dir="./tmp/sd3_parallel",
+#     enable_new_ir=True,
+#     cache_static_model=False,
+#     exp_enable_use_cutlass=True,
+#     delete_pass_lists=["add_norm_fuse_pass"],
+# )
 
 generator = paddle.Generator().manual_seed(42)
 prompt = "A cat holding a sign that says hello world"

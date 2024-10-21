@@ -425,3 +425,30 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
                         ],
                         axis=-1,
                     )
+            from paddle.distributed.fleet.utils import recompute
+            import paddle.distributed as dist
+            import paddle.distributed.fleet as fleet
+            a,b = paddle.split(
+                state_dict[f"simplified_sd3.ffn1.{i}.weight"],
+                2,
+                axis=-1,
+            )
+            c,d = paddle.split(
+                state_dict[f"simplified_sd3.ffn1.{i}.bias"],
+                2,
+                axis=-1,
+            )
+            a1,b1 = paddle.split(
+                state_dict[f"simplified_sd3.ffn2.{i}.weight"],
+                2,
+                axis=0,
+            )
+            rank_id = dist.get_rank()
+            if rank_id==0:
+                state_dict[f"simplified_sd3.ffn.{i}.weight"] = a
+                state_dict[f"simplified_sd3.ffn.{i}.bias"] = c
+                state_dict[f"simplified_sd3.ffnc.{i}.weight"] = a1
+            elif rank_id==1:
+                state_dict[f"simplified_sd3.ffn.{i}.weight"] = b
+                state_dict[f"simplified_sd3.ffn.{i}.bias"] = d
+                state_dict[f"simplified_sd3.ffnc.{i}.weight"] = b1
