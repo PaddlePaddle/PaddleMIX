@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # uninstall ppdiffusers and install develop paddlemix
+pip install huggingface-hub==0.25.0  #20241018 升级到0.26后报错ImportError: cannot import name 'cached_download' from 'huggingface_hub' 
 python -m pip uninstall -y ppdiffusers
 cd ../ppdiffusers/
 python -m pip install -e .
