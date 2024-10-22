@@ -715,7 +715,7 @@ def fetch_image(ele: dict[str, Union[str, Image.Image]], size_factor: int = IMAG
 def smart_nframes(
     ele: dict,
     total_frames: int,
-    video_fps: int | float,
+    video_fps: Union[int, float],
 ) -> int:
     """calculate the number of frames for video used for model inputs.
 
@@ -850,7 +850,7 @@ def gaussian_kernel_1d(size, sigma):
     kernel = np.exp(-x**2 / (2 * sigma**2))
     return kernel / kernel.sum()
 
-def fetch_video(ele: dict, size_factor: int = FRAME_FACTOR) -> Union[paddle.Tensor, list[Image.Image]]:
+def fetch_video(ele: dict, image_factor: int = FRAME_FACTOR) -> Union[paddle.Tensor, list[Image.Image]]:
     if isinstance(ele["video"], str):
         video_reader_backend = get_video_reader_backend()
 
