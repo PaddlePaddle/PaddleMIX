@@ -18,7 +18,7 @@ PaddleMIX工具箱秉承了飞桨套件一站式体验、性能极致、生态�
 | [groundingdino](./groundingdino/) |  🚧   | ❌  | ✅  | ❌ |
 | [imagebind](./imagebind/) |  ❌  | ❌ | ❌ | ❌ |
 | [InternLM-XComposer2](./internlm_xcomposer2/) | ✅ | ❌ | ❌ | ❌ |
-| [Internvl2](./internvl2/)| ✅ | ❌ | ❌ | ❌ |
+| [Internvl2](./internvl2/)| ✅ | ❌ | ❌ | ✅ |
 | [llava](./llava/)  | ✅  | ✅  | 🚧  | ✅ |
 | [llava-next](./llava_next_interleave/) | ❌ | ❌ | ❌ | ❌ |
 | [minigpt4](./minigpt4) | ✅   |  ❌  | ✅  | ❌ |
