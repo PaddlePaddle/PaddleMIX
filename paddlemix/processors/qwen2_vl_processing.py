@@ -850,7 +850,7 @@ def gaussian_kernel_1d(size, sigma):
     kernel = np.exp(-x**2 / (2 * sigma**2))
     return kernel / kernel.sum()
 
-def fetch_video(ele: dict, image_factor: int = FRAME_FACTOR) -> Union[paddle.Tensor, list[Image.Image]]:
+def fetch_video(ele: dict, image_factor: int = IMAGE_FACTOR) -> Union[paddle.Tensor, list[Image.Image]]:
     if isinstance(ele["video"], str):
         video_reader_backend = get_video_reader_backend()
 
