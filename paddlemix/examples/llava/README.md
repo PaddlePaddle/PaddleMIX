@@ -104,8 +104,35 @@ python paddlemix/tools/supervised_finetune.py paddlemix/config/llava/v1_5/lora_s
 python paddlemix/tools/supervised_finetune.py paddlemix/config/llava/v1_5/sft_argument.json
 ```
 
-## 5 NPU硬件训练
-请参照[tools](../../tools/README.md)进行NPU硬件Paddle安装和环境变量设置，配置完成后可直接执行微调命令进行训练或预测。
+## 6 NPU硬件训练
+请参照[tools](../../tools/README.md)进行NPU硬件Paddle安装和环境变量设置。执行预测和训练前需要设置如下环境变量：
+```shell
+export ASCEND_RT_VISIBLE_DEVICES=8
+export FLAGS_npu_storage_format=0
+export FLAGS_use_stride_kernel=0
+export FLAGS_npu_jit_compile=0
+export FLAGS_npu_scale_aclnn=True
+export FLAGS_npu_split_aclnn=True
+export FLAGS_allocator_strategy=auto_growth
+export CUSTOM_DEVICE_BLACK_LIST=set_value,set_value_with_tensor
+```
+
+预测:
+```shell
+python paddlemix/examples/llava/run_predict_multiround.py \
+    --model-path "paddlemix/llava/llava-v1.6-7b" \
+    --image-file "https://bj.bcebos.com/v1/paddlenlp/models/community/GroundingDino/000000004505.jpg" \
+    --fp16
+```
+微调:
+```shell
+# llava lora微调
+python paddlemix/tools/supervised_finetune.py paddlemix/config/llava/v1_5/lora_sft_argument.json
+
+# llava full参数微调
+python paddlemix/tools/supervised_finetune.py paddlemix/config/llava/v1_5/sft_argument.json
+```
+
 
 ### 参考文献
 ```BibTeX
