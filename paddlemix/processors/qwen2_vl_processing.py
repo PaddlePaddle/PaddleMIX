@@ -667,7 +667,7 @@ def smart_resize(
     return h_bar, w_bar
 
 
-def fetch_image(ele: dict[str, str | Image.Image], size_factor: int = IMAGE_FACTOR) -> Image.Image:
+def fetch_image(ele: dict[str, Union[str, Image.Image]], size_factor: int = IMAGE_FACTOR) -> Image.Image:
     if "image" in ele:
         image = ele["image"]
     else:
@@ -715,7 +715,7 @@ def fetch_image(ele: dict[str, str | Image.Image], size_factor: int = IMAGE_FACT
 def smart_nframes(
     ele: dict,
     total_frames: int,
-    video_fps: int | float,
+    video_fps: Union[int, float],
 ) -> int:
     """calculate the number of frames for video used for model inputs.
 
@@ -850,7 +850,7 @@ def gaussian_kernel_1d(size, sigma):
     kernel = np.exp(-x**2 / (2 * sigma**2))
     return kernel / kernel.sum()
 
-def fetch_video(ele: dict, image_factor: int = IMAGE_FACTOR) -> paddle.Tensor | list[Image.Image]:
+def fetch_video(ele: dict, image_factor: int = IMAGE_FACTOR) -> Union[paddle.Tensor, list[Image.Image]]:
     if isinstance(ele["video"], str):
         video_reader_backend = get_video_reader_backend()
 
@@ -902,7 +902,7 @@ def fetch_video(ele: dict, image_factor: int = IMAGE_FACTOR) -> paddle.Tensor | 
         return images
 
 
-def extract_vision_info(conversations: list[dict] | list[list[dict]]) -> list[dict]:
+def extract_vision_info(conversations: Union[list[dict], list[list[dict]]]) -> list[dict]:
     vision_infos = []
     if isinstance(conversations[0], dict):
         conversations = [conversations]
@@ -921,8 +921,8 @@ def extract_vision_info(conversations: list[dict] | list[list[dict]]) -> list[di
 
 
 def process_vision_info(
-    conversations: list[dict] | list[list[dict]],
-) -> tuple[list[Image.Image] | None, list[paddle.Tensor | list[Image.Image]] | None]:
+    conversations: Union[list[dict], list[list[dict]]],
+) -> tuple[Union[list[Image.Image], None, list[Union[paddle.Tensor, list[Image.Image]]], None]]:
     vision_infos = extract_vision_info(conversations)
     image_inputs = []
     video_inputs = []
