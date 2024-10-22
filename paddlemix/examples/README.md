@@ -17,7 +17,7 @@ paddlemix `examples` 目录下提供模型的一站式体验，包括模型推�
 | [groundingdino](./groundingdino/) | ✅ | ❌  | 🚧   | ❌  | ✅  | ❌ |
 | [imagebind](./imagebind/) |   ✅  |  ❌   |  ❌  | ❌ | ❌ | ❌ |
 | [InternLM-XComposer2](./internlm_xcomposer2/) | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ |
-| [Internvl2](./internvl2/) | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ |
+| [Internvl2](./internvl2/) | ✅ | ❌ | ✅ | ❌ | ❌ | ✅ |
 | [llava](./llava/) | ✅  | ✅  | ✅  | ✅  | 🚧  | ✅ |
 | [llava-next](./llava_next_interleave/) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | [minigpt4](./minigpt4) | ✅ | ✅ | ✅   |  ❌  | ✅  | ❌ |
