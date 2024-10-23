@@ -105,6 +105,13 @@ def set_hybrid_parallel_seed(basic_seed, data_world_rank, mp_rank, pp_rank=0):
 
 def setdistenv(args):
     if dist.get_world_size() > 1:
+        if args.tensor_parallel_degree == -1:
+            args.tensor_parallel_degree = 1
+        if args.sharding_parallel_degree == -1:
+            args.sharding_parallel_degree = 1
+        if args.pipeline_parallel_degree == -1:
+            args.pipeline_parallel_degree = 1
+
         args.dp_degree = dist.get_world_size() // (
             args.tensor_parallel_degree * args.sharding_parallel_degree * args.pipeline_parallel_degree
         )

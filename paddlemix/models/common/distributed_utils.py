@@ -24,21 +24,23 @@ class AllGather(paddle.autograd.PyLayer):
 
     @staticmethod
     def forward(ctx, tensor, group=None):
-        if group is not None:
-            rank = group.rank
-            world_size = group.world_size
-        else:
-            rank = dist.get_rank()
+        if group is None:
             world_size = dist.get_world_size()
+        else:
+            world_size = group.world_size
         tensors_gather = [paddle.empty_like(x=tensor) for _ in range(world_size)]
-        paddle.distributed.all_gather(tensors_gather, tensor, group=group)
-        ctx.rank = rank
+        paddle.distributed.all_gather(tensors_gather, tensor, group=group)  #
+        ctx.group = group
         ctx.batch_size = tensor.shape[0]
         return paddle.concat(x=tensors_gather, axis=0)
 
     @staticmethod
     def backward(ctx, grad_output):
-        return grad_output[ctx.batch_size * ctx.rank : ctx.batch_size * (ctx.rank + 1)]
+        num_or_sections = grad_output.shape[0] // ctx.batch_size
+        grad_lst = paddle.split(grad_output, num_or_sections=num_or_sections)
+        grad = paddle.zeros_like(x=grad_lst[0])
+        dist.reduce_scatter(grad, grad_lst, group=ctx.group)
+        return grad
 
 
 allgather = AllGather.apply
