@@ -41,8 +41,8 @@ class SimplifiedSD3(nn.Layer):
         self.to_add_out_linear = nn.LayerList([nn.Linear(self.dim, self.dim) for i in range(num_layers - 1)])
 
         if model_parallel_size > 1:
-            self.ffn = nn.LayerList([fleet.meta_parallel.ColumnParallelLinear(self.dim, 4 * self.dim, gather_output=False, has_bias=True) for i in range(num_layers)])
-            self.ffnc = nn.LayerList([fleet.meta_parallel.RowParallelLinear(self.dim * 4, self.dim, input_is_parallel=True, has_bias=True) for i in range(num_layers)])
+            self.ffn1_mp = nn.LayerList([fleet.meta_parallel.ColumnParallelLinear(self.dim, 4 * self.dim, gather_output=False, has_bias=True) for i in range(num_layers)])
+            self.ffn2_mp = nn.LayerList([fleet.meta_parallel.RowParallelLinear(self.dim * 4, self.dim, input_is_parallel=True, has_bias=True) for i in range(num_layers)])
 
         self.ffn1 = nn.LayerList([nn.Linear(self.dim, self.dim * 4) for i in range(num_layers)])
         self.ffn2 = nn.LayerList([nn.Linear(self.dim * 4, self.dim) for i in range(num_layers)])
@@ -141,9 +141,9 @@ class SimplifiedSD3(nn.Layer):
 
             # ffn1
             if model_parallel_size > 1:
-                ffn_output = self.ffn[i](norm_hidden_states)
+                ffn_output = self.ffn1_mp[i](norm_hidden_states)
                 ffn_output = F.gelu(ffn_output, approximate=True)
-                ffn_output = self.ffnc[i](ffn_output)
+                ffn_output = self.ffn2_mp[i](ffn_output)
             else:
                 ffn_output = self.ffn1[i](norm_hidden_states)
                 ffn_output = F.gelu(ffn_output, approximate=True)

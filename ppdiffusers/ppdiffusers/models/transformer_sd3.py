@@ -434,12 +434,12 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
                 2,
                 axis=0,
             )
-            state_dict[f"simplified_sd3.ffnc.{i}.weight"] = tmpc[rank_id]
-            state_dict[f"simplified_sd3.ffnc.{i}.bias"] = state_dict[f"simplified_sd3.ffn2.{i}.bias"]
+            state_dict[f"simplified_sd3.ffn2_mp.{i}.weight"] = tmpc[rank_id]
+            state_dict[f"simplified_sd3.ffn2_mp.{i}.bias"] = state_dict[f"simplified_sd3.ffn2.{i}.bias"]
             for placeholder in ["weight", "bias"]:
                 tmp = paddle.split(
                     state_dict[f"simplified_sd3.ffn1.{i}.{placeholder}"],
                     2,
                     axis=-1,
                 )
-                state_dict[f"simplified_sd3.ffn.{i}.{placeholder}"] = tmp[rank_id]
+                state_dict[f"simplified_sd3.ffn1_mp.{i}.{placeholder}"] = tmp[rank_id]
