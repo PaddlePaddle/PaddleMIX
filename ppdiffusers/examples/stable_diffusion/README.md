@@ -19,27 +19,20 @@ Stable Diffusion 是一个基于 Latent Diffusion Models（潜在扩散模型，
 
 <div align="center">
 
-| model name | params | weight |
-|------------|:-------:|:------:|
-| `CompVis/stable-diffusion-v1-4` | 0.98B |TODO |
-| `runwayml/stable-diffusion-v1-5` | 0.98B |TODO |
+| model name | params | 
+|------------|:-------:|
+| `CompVis/stable-diffusion-v1-4` | 
+| `runwayml/stable-diffusion-v1-5` | 
 
 </div>
 
-- 当前页面仅支持上述基础模型的预训练，后续将陆续支持更多的Stable Diffusion模型。
-- 模型下载地址：TODO，后续将提供 AI Studio 上预训练模型下载地址。
-
-
 
 ## 2. 环境准备
-通过 `git clone` 命令拉取 PaddleMIX 源码，并安装必要的依赖库。请确保你的 PaddlePaddle 框架版本在 2.5.2 之后，PaddlePaddle 框架安装可参考 [飞桨官网-安装](https://www.paddlepaddle.org.cn/install/quick?docurl=/documentation/docs/zh/install/pip/linux-pip.html)。
+通过 `git clone` 命令拉取 PaddleMIX 源码，并安装必要的依赖库。
 
 ```bash
 # 克隆 PaddleMIX 仓库
 git clone https://github.com/PaddlePaddle/PaddleMIX
-
-# 安装2.5.2版本的paddlepaddle-gpu，当前我们选择了cuda11.7的版本，可以查看 https://www.paddlepaddle.org.cn/ 寻找自己适合的版本
-python -m pip install paddlepaddle-gpu==2.5.2.post117 -f https://www.paddlepaddle.org.cn/whl/linux/mkl/avx/stable.html
 
 # 进入stable diffusion目录
 cd PaddleMIX/ppdiffusers/examples/stable_diffusion
