@@ -32,7 +32,7 @@ Stable Diffusion 是一个基于 Latent Diffusion Models（潜在扩散模型，
 
 ```bash
 # 克隆 PaddleMIX 仓库
-git clone https://github.com/PaddlePaddle/PaddleMIX
+git clone https://github.com/PaddlePaddle/PaddleMIX.git
 
 # 进入stable diffusion目录
 cd PaddleMIX/ppdiffusers/examples/stable_diffusion
