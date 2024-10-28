@@ -15,6 +15,7 @@
 import paddle
 import paddle.nn.functional as F
 from paddle import nn
+from paddle.nn import LayerList as LayerList
 
 import paddle.distributed as dist
 import paddle.distributed.fleet as fleet
@@ -29,32 +30,32 @@ class SimplifiedSD3(nn.Layer):
         self.dim = dim
 
         self.silu = nn.Silu()
-        self.linear1 = nn.LayerList([nn.Linear(self.dim, 6 * self.dim) for i in range(num_layers)])
-        self.linear_context = nn.LayerList(
+        self.linear1 = LayerList([nn.Linear(self.dim, 6 * self.dim) for i in range(num_layers)])
+        self.linear_context = LayerList(
             [nn.Linear(self.dim, (6 if i < num_layers - 1 else 2) * self.dim) for i in range(num_layers)]
         )
         self.norm_last_context = nn.LayerNorm(self.dim, epsilon=1e-6, weight_attr=False, bias_attr=True)
 
         if model_parallel_size > 1:
-            self.qkv_mp = nn.LayerList([CPLinear(self.dim, 3 * self.dim, gather_output=False, has_bias=True) for i in range(num_layers)])
-            self.eqkv_mp = nn.LayerList([CPLinear(self.dim, 3 * self.dim, gather_output=False, has_bias=True) for i in range(num_layers)])
-            self.to_out_linear_mp = nn.LayerList([RPLinear(self.dim, self.dim, input_is_parallel=True, has_bias=True) for i in range(num_layers)])
-            self.to_add_out_linear_mp = nn.LayerList([RPLinear(self.dim, self.dim, input_is_parallel=True, has_bias=True) for i in range(num_layers)])
+            self.qkv_mp = LayerList([CPLinear(self.dim, 3 * self.dim, gather_output=False, has_bias=True) for i in range(num_layers)])
+            self.eqkv_mp = LayerList([CPLinear(self.dim, 3 * self.dim, gather_output=False, has_bias=True) for i in range(num_layers)])
+            self.to_out_linear_mp = LayerList([RPLinear(self.dim, self.dim, input_is_parallel=True, has_bias=True) for i in range(num_layers)])
+            self.to_add_out_linear_mp = LayerList([RPLinear(self.dim, self.dim, input_is_parallel=True, has_bias=True) for i in range(num_layers)])
             
-            self.ffn1_mp = nn.LayerList([CPLinear(self.dim, 4 * self.dim, gather_output=False, has_bias=True) for i in range(num_layers)])
-            self.ffn2_mp = nn.LayerList([RPLinear(self.dim * 4, self.dim, input_is_parallel=True, has_bias=True) for i in range(num_layers)])
-            self.ffn1_context_mp = nn.LayerList([CPLinear(self.dim, 4 * self.dim, gather_output=False, has_bias=True) for i in range(num_layers)])
-            self.ffn2_context_mp = nn.LayerList([RPLinear(self.dim * 4, self.dim, input_is_parallel=True, has_bias=True) for i in range(num_layers)])
+            self.ffn1_mp = LayerList([CPLinear(self.dim, 4 * self.dim, gather_output=False, has_bias=True) for i in range(num_layers)])
+            self.ffn2_mp = LayerList([RPLinear(self.dim * 4, self.dim, input_is_parallel=True, has_bias=True) for i in range(num_layers)])
+            self.ffn1_context_mp = LayerList([CPLinear(self.dim, 4 * self.dim, gather_output=False, has_bias=True) for i in range(num_layers)])
+            self.ffn2_context_mp = LayerList([RPLinear(self.dim * 4, self.dim, input_is_parallel=True, has_bias=True) for i in range(num_layers)])
         else:
-            self.qkv = nn.LayerList([nn.Linear(self.dim, self.dim * 3) for i in range(num_layers)])
-            self.eqkv = nn.LayerList([nn.Linear(self.dim, self.dim * 3) for i in range(num_layers)])
-            self.to_out_linear = nn.LayerList([nn.Linear(self.dim, self.dim) for i in range(num_layers)])
-            self.to_add_out_linear = nn.LayerList([nn.Linear(self.dim, self.dim) for i in range(num_layers)])
+            self.qkv = LayerList([nn.Linear(self.dim, self.dim * 3) for i in range(num_layers)])
+            self.eqkv = LayerList([nn.Linear(self.dim, self.dim * 3) for i in range(num_layers)])
+            self.to_out_linear = LayerList([nn.Linear(self.dim, self.dim) for i in range(num_layers)])
+            self.to_add_out_linear = LayerList([nn.Linear(self.dim, self.dim) for i in range(num_layers)])
             
-            self.ffn1 = nn.LayerList([nn.Linear(self.dim, self.dim * 4) for i in range(num_layers)])
-            self.ffn2 = nn.LayerList([nn.Linear(self.dim * 4, self.dim) for i in range(num_layers)])
-            self.ffn1_context = nn.LayerList([nn.Linear(self.dim, self.dim * 4) for i in range(num_layers - 1)])
-            self.ffn2_context = nn.LayerList([nn.Linear(self.dim * 4, self.dim) for i in range(num_layers - 1)])
+            self.ffn1 = LayerList([nn.Linear(self.dim, self.dim * 4) for i in range(num_layers)])
+            self.ffn2 = LayerList([nn.Linear(self.dim * 4, self.dim) for i in range(num_layers)])
+            self.ffn1_context = LayerList([nn.Linear(self.dim, self.dim * 4) for i in range(num_layers - 1)])
+            self.ffn2_context = LayerList([nn.Linear(self.dim * 4, self.dim) for i in range(num_layers - 1)])
 
 
     def forward(self, hidden_states, encoder_hidden_states, temb):
