@@ -18,8 +18,6 @@ from paddle import nn
 
 import paddle.distributed as dist
 import paddle.distributed.fleet as fleet
-# import paddle.distributed.fleet.meta_parallel as FMPLinear
-# import paddle.distributed.fleet.meta_parallel.RowParallelLinear as RPLinear
 from paddle.distributed.fleet.meta_parallel import RowParallelLinear as RPLinear
 from paddle.distributed.fleet.meta_parallel import ColumnParallelLinear as CPLinear
 model_parallel_size=2
@@ -134,14 +132,9 @@ class SimplifiedSD3(nn.Layer):
             q, k, v = paddlemix.triton_ops.split_concat(qkv, eqkv)
             bs = hidden_states.shape[0]
             hs = q.shape[2]
-            if model_parallel_size > 1:
-                q = q.reshape([bs, -1, hs//64, 64])
-                k = k.reshape([bs, -1, hs//64, 64])
-                v = v.reshape([bs, -1, hs//64, 64])
-            else:
-                q = q.reshape([bs, -1, 24, 64])
-                k = k.reshape([bs, -1, 24, 64])
-                v = v.reshape([bs, -1, 24, 64])
+            q = q.reshape([bs, -1, hs//64, 64])
+            k = k.reshape([bs, -1, hs//64, 64])
+            v = v.reshape([bs, -1, hs//64, 64])
 
             norm_hidden_states1 = F.scaled_dot_product_attention_(q, k, v, dropout_p=0.0, is_causal=False)
             norm_hidden_states1 = norm_hidden_states1.reshape([bs, -1, hs])
