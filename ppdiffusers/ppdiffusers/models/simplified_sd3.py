@@ -18,8 +18,10 @@ from paddle import nn
 
 import paddle.distributed as dist
 import paddle.distributed.fleet as fleet
-import paddle.distributed.fleet.meta_parallel as FMPLinear
+# import paddle.distributed.fleet.meta_parallel as FMPLinear
 # import paddle.distributed.fleet.meta_parallel.RowParallelLinear as RPLinear
+from paddle.distributed.fleet.meta_parallel import RowParallelLinear as RPLinear
+from paddle.distributed.fleet.meta_parallel import ColumnParallelLinear as CPLinear
 model_parallel_size=2
 
 class SimplifiedSD3(nn.Layer):
@@ -36,15 +38,15 @@ class SimplifiedSD3(nn.Layer):
         self.norm_last_context = nn.LayerNorm(self.dim, epsilon=1e-6, weight_attr=False, bias_attr=True)
 
         if model_parallel_size > 1:
-            self.qkv_mp = nn.LayerList([FMPLinear.ColumnParallelLinear(self.dim, 3 * self.dim, gather_output=False, has_bias=True) for i in range(num_layers)])
-            self.eqkv_mp = nn.LayerList([FMPLinear.ColumnParallelLinear(self.dim, 3 * self.dim, gather_output=False, has_bias=True) for i in range(num_layers)])
-            self.to_out_linear_mp = nn.LayerList([FMPLinear.RowParallelLinear(self.dim, self.dim, input_is_parallel=True, has_bias=True) for i in range(num_layers)])
-            self.to_add_out_linear_mp = nn.LayerList([FMPLinear.RowParallelLinear(self.dim, self.dim, input_is_parallel=True, has_bias=True) for i in range(num_layers)])
+            self.qkv_mp = nn.LayerList([CPLinear(self.dim, 3 * self.dim, gather_output=False, has_bias=True) for i in range(num_layers)])
+            self.eqkv_mp = nn.LayerList([CPLinear(self.dim, 3 * self.dim, gather_output=False, has_bias=True) for i in range(num_layers)])
+            self.to_out_linear_mp = nn.LayerList([RPLinear(self.dim, self.dim, input_is_parallel=True, has_bias=True) for i in range(num_layers)])
+            self.to_add_out_linear_mp = nn.LayerList([RPLinear(self.dim, self.dim, input_is_parallel=True, has_bias=True) for i in range(num_layers)])
             
-            self.ffn1_mp = nn.LayerList([FMPLinear.ColumnParallelLinear(self.dim, 4 * self.dim, gather_output=False, has_bias=True) for i in range(num_layers)])
-            self.ffn2_mp = nn.LayerList([FMPLinear.RowParallelLinear(self.dim * 4, self.dim, input_is_parallel=True, has_bias=True) for i in range(num_layers)])
-            self.ffn1_context_mp = nn.LayerList([FMPLinear.ColumnParallelLinear(self.dim, 4 * self.dim, gather_output=False, has_bias=True) for i in range(num_layers)])
-            self.ffn2_context_mp = nn.LayerList([FMPLinear.RowParallelLinear(self.dim * 4, self.dim, input_is_parallel=True, has_bias=True) for i in range(num_layers)])
+            self.ffn1_mp = nn.LayerList([CPLinear(self.dim, 4 * self.dim, gather_output=False, has_bias=True) for i in range(num_layers)])
+            self.ffn2_mp = nn.LayerList([RPLinear(self.dim * 4, self.dim, input_is_parallel=True, has_bias=True) for i in range(num_layers)])
+            self.ffn1_context_mp = nn.LayerList([CPLinear(self.dim, 4 * self.dim, gather_output=False, has_bias=True) for i in range(num_layers)])
+            self.ffn2_context_mp = nn.LayerList([RPLinear(self.dim * 4, self.dim, input_is_parallel=True, has_bias=True) for i in range(num_layers)])
         else:
             self.qkv = nn.LayerList([nn.Linear(self.dim, self.dim * 3) for i in range(num_layers)])
             self.eqkv = nn.LayerList([nn.Linear(self.dim, self.dim * 3) for i in range(num_layers)])
