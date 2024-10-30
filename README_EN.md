@@ -69,7 +69,7 @@ Multimodal understanding 🤝 integrates visual 👀 and linguistic 💬 process
 Multimodal generation ✍️ combines the creative power of text 💬 and visuals 👀. It includes various technologies ranging from text-to-image 🖼️ to text-to-video 🎥, featuring advanced models like Stable Diffusion 3 and Open-Sora. We provide practical applications for single-image generation, multi-image synthesis, and video generation in [ppdiffusers](ppdiffusers/README.md). These features cover areas such as artistic creation 🎨, animation production 📽️, and content generation 📝. With these technologies, creative generation from static images to dynamic videos can be applied in fields like education 📚, entertainment 🎮, advertising 📺, and more. We invite you to experience and explore these innovations!
 
 ### Example of featured applications (click the titles for a quick jump to the online experience):
-|                                                  [**ComfyUI Creative Workflow**](https://aistudio.baidu.com/community/app/106043)                                                  |                                                [**Art Style QR Code Model**](https://aistudio.baidu.com/community/app/1339)                                                |                                                  [**Mix Image Overlay**](https://aistudio.baidu.com/community/app/1340)                                                  |         
+|                                                  [**ComfyUI Creative Workflow**](https://aistudio.baidu.com/community/app/106043)                                                  |                                                [**Art Style QR Code Model**](https://aistudio.baidu.com/community/app/1339)                                                |                                                  [**Mix Image Overlay**](https://aistudio.baidu.com/community/app/1340)                                                  |
 | :--------------------------------------------------------------------------------------------------------------------------------------------: | :----------------------------------------------------------------------------------------------------------------------------------------------: | :--------------------------------------------------------------------------------------------------------------------------------------: |
 | <img src='https://github.com/PaddlePaddle/PaddleMIX/assets/35400185/36ba7261-1744-41a4-b1cb-c9e99f6931f2' width="300px"> | <img src='https://github.com/PaddlePaddle/Paddle/assets/22989727/ba091291-a1ee-49dc-a1af-fc501c62bfc8'  width="300px"> | <img src='https://github.com/PaddlePaddle/Paddle/assets/22989727/a71be5a0-b0f3-4aa8-bc20-740ea8ae6785'  width="300px"> |
 |                                                  [**Anime Text-to-Image**](https://aistudio.baidu.com/community/app/2/webUI?source=appCenter)                                                   |                                                     [**AI Art｜50+ Lora Style Overlays**](https://aistudio.baidu.com/community/app/2848/webUI?source=appCenter)                                                     |                                               [**ControlNet｜Partial Image Repainting**](https://aistudio.baidu.com/community/app/1981/webUI?source=appCenter)                                               |
@@ -170,8 +170,8 @@ docker run -it --name paddle-npu-dev -v $(pwd):/work \
 
 ```shell
 # Note: You need to install the CPU version of PaddlePaddle first. Currently, only Python 3.9 is supported.
-python3.9 -m pip install paddlepaddle==3.0.0.dev20240520 -i https://www.paddlepaddle.org.cn/packages/nightly/cpu/
-python3.9 -m pip install paddle_custom_npu==3.0.0.dev20240719 -i https://www.paddlepaddle.org.cn/packages/nightly/npu/
+python -m pip install --pre paddlepaddle -i https://www.paddlepaddle.org.cn/packages/nightly/cpu/
+python -m pip install --pre paddle-custom-npu -i https://www.paddlepaddle.org.cn/packages/nightly/npu/
 ```
 
 
@@ -343,6 +343,3 @@ This project is released under the [Apache 2.0 license](LICENSE).
 <div align="center">
     <img src="https://github.com/user-attachments/assets/ecf292da-9ac6-41cb-84b6-df726ef4522d" width="300" height="300" />
 </div>
-
-
-
