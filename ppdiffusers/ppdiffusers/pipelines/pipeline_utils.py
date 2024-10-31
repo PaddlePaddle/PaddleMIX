@@ -688,10 +688,10 @@ class DiffusionPipeline(ConfigMixin):
 
         paddle_dtype = kwargs.pop("paddle_dtype", None)
         if paddle_dtype is not None:
-            deprecate("paddle_dtype", "0.25.0", "")
+            deprecate("paddle_dtype", "0.35.0", "")
         paddle_device = kwargs.pop("paddle_device", None)
         if paddle_device is not None:
-            deprecate("paddle_device", "0.25.0", "")
+            deprecate("paddle_device", "0.35.0", "")
 
         dtype_kwarg = kwargs.pop("dtype", None)
         device_kwarg = kwargs.pop("device", None)

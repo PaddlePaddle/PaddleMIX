@@ -1,5 +1,5 @@
 numpy
-paddlenlp>=2.7.2
+paddlenlp>=3.0.0b2
 tensorboardX
 opencv-python
 Pillow
