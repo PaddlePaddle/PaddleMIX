@@ -34,12 +34,12 @@
 
 
 ## 📰 News
-**🔥PaddleMix Live Class on October 22, 2024**
+**🔥 Live Class on October 31, 2024，PaddleMIX release v2.1**
 
-- 🎉 The PaddleMIX Multimodal Model Suite Development Competition is now open for registration! Cash prizes and project certificates are waiting for you. On October 22 (Tuesday) at 19:00🔑, a senior Baidu R&D engineer will provide an in-depth explanation on how to enhance data quality using PaddleMIX multimodal models and the competition rules. Scan the [QR code](#community) to stay updated through the group announcements. [🚀 Registration Link:](https://competition.atomgit.com/competitionInfo?id=d65b849bc916bd42e1bc5f5ee2562efa)
+- 🎉 The PaddleMIX Multimodal Model Suite Development Competition release v2.1! Baidu's R&D engineers will provide a detailed explanation of the updated content, as well as the implementation details and case applications of the multi-modal data capability tagging model, PP-InsCapTagger, at 20:00 on Thursday, October 31st. Hurry up and scan the QR code on the poster below to register!
 
 <div align="center">
-<img src="https://github.com/user-attachments/assets/327a22f7-b115-44d7-a28e-a4f2f5ae9be5" width="200px" align="middle"></img>
+<img src="https://github.com/user-attachments/assets/a32745a1-34bb-4096-a367-664ae58e3565" width="500px" align="middle"></img>
 </div>
 
 ## 🌈 Introduction

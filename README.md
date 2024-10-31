@@ -34,16 +34,14 @@
 
 
 ## 📰新闻
-**🔥PaddleMix 2024.10.22日直播课**
+**🔥2024.10.31日 PaddleMIX 2.1版本发新直播**
 
-- 🎉飞桨多模态大模型套件PaddleMIX开发大赛启动报名啦！万元奖金与项目证书等你拿。10月22日（周二）19:00🔑，百度资深研发工程师将为您详细解读如何开展基于PaddleMIX的多模态大模型数据提质以及赛题规则，扫描[二维码](#社区交流)敬请关注群通知。[🚀报名入口：](https://competition.atomgit.com/competitionInfo?id=d65b849bc916bd42e1bc5f5ee2562efa)
+- 🎉飞桨多模态大模型套件PaddleMIX全新发布2.1版本！百度研发工程师将在 10月31日（周四）20：00，为您详细解读套件更新内容，以及多模态数据能力标签模型 PP-InsCapTagger 的实现细节和案例应用。赶快扫描下方海报二维码预约报名！
 <div align="center">
-<img src="https://github.com/user-attachments/assets/327a22f7-b115-44d7-a28e-a4f2f5ae9be5" width="200px" align="middle" ></src>
+<img src="https://github.com/user-attachments/assets/a32745a1-34bb-4096-a367-664ae58e3565" width="500px" align="middle" ></src>
 
 </div>
 
-
-<!-- 📚《飞桨多模态大模型开发套件PaddleMIX 2.1 震撼发布》，图文音视频场景全覆盖，多模态高效助力产业创新。超大规模训练支持，覆盖图文预训练、文生图、跨模态视觉任务，覆盖金融、教育、电商、医疗等产业场景。8月8日（周四）20：00 带你直播了解多模态大模型最新架构，深度解析PaddleMIX高性能模型库，手把手演示LLaVA模型训推全流程。[报名链接](https://www.wjx.top/vm/wKqysjx.aspx?udsid=449688)   -->
 
 ## 🌈简介
 
