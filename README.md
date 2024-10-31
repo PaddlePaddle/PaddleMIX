@@ -18,8 +18,8 @@
 ## 💌目录
 - [💌目录](#目录)
 - [📰新闻](#新闻)
-- [🌈简介](#简介)
 - [📣最新进展](#最新进展)
+- [🌈简介](#简介)
 - [✨主要特性](#主要特性)
     - [📱丰富的多模态功能](#丰富的多模态功能)
     - [🧩简洁的开发体验](#简洁的开发体验)
@@ -42,6 +42,38 @@
 
 </div>
 
+## 📣最新进展
+
+<!-- 📚《飞桨多模态大模型开发套件PaddleMIX 2.1 震撼发布》，图文音视频场景全覆盖，多模态高效助力产业创新。超大规模训练支持，覆盖图文预训练、文生图、跨模态视觉任务，覆盖金融、教育、电商、医疗等产业场景。8月8日（周四）20：00 带你直播了解多模态大模型最新架构，深度解析PaddleMIX高性能模型库，手把手演示LLaVA模型训推全流程。[报名链接](https://www.wjx.top/vm/wKqysjx.aspx?udsid=449688)   -->
+
+
+
+**🎉 2024.10.31 喜迎外部开发者的[创作教程页面](paddlemix_applications.md)更新**
+
+* 🌟 自9月6日发起大模型套件精品项目征集活动以来,我们收到了30个优质开发者项目,其中25个精品项目已通过平台评估并成功加精。
+
+* 🙏 衷心感谢各位开发者基于套件的精彩创作！🚀 诚挚邀请您也来分享您的创意 - 欢迎将教程发布到公开网页或[飞桨AI Studio](https://aistudio.baidu.com/aistudio/community/multimodal?from=singlemessage)社区！
+
+**🔥2024.10.11 发布PaddleMIX v2.1**
+* 支持[PaddleNLP 3.0 beta](https://github.com/PaddlePaddle/PaddleNLP/releases/tag/v3.0.0-beta0)版本，抢先体验其最新功能。
+* 新增[Qwen2-VL](./paddlemix/examples/qwen2_vl/)、[InternVL2](./paddlemix/examples/internvl2/)、[Stable Diffusion 3 (SD3)](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/examples/dreambooth/README_sd3.md)等前沿模型。
+* 发布自研多模数据能力标签模型[PP-InsCapTagger](./paddlemix/datacopilot/example/pp_inscaptagger/)；可用于数据的分析和过滤，试验案例表明在保持模型效果的条件下可减少50%的数据量，大幅提高训练效率。
+
+* 多模态大模型InternVL2、LLaVA、SD3、SDXL适配昇腾910B，提供国产计算芯片上的训推能力。
+
+
+**2024.07.25 发布PaddleMIX v2.0**
+* 多模态理解：新增LLaVA系列，Qwen-VL等；新增Auto模块统一SFT训练流程；新增mixtoken训练策略，SFT吞吐量提升5.6倍。
+* 多模态生成：发布[PPDiffusers 0.24.1](./ppdiffusers/README.md)版本，支持视频生成能力，文生图模型新增LCM。新增飞桨版peft，accelerate后端。提供基于飞桨开发的ComfyUI插件。
+* 多模态数据处理工具箱[DataCopilot](./paddlemix/datacopilot/)：支持自定义数据结构，数据转换，离线格式检查；支持基本的统计信息，数据可视化功能。
+
+**2023.10.7 发布 PaddleMIX v1.0**
+* 新增图文预训练模型分布式训练能力，BLIP-2支持千亿规模训练
+* 新增跨模态应用流水线[AppFlow](./applications/README.md)，一键支持自动标注，图像编辑，音生图等11种跨模态应用
+* [PPDiffusers](./ppdiffusers/README.md)发布 0.19.3 版本，新增SDXL及相关任务
+
+
+---
 
 <!-- 📚《飞桨多模态大模型开发套件PaddleMIX 2.1 震撼发布》，图文音视频场景全覆盖，多模态高效助力产业创新。超大规模训练支持，覆盖图文预训练、文生图、跨模态视觉任务，覆盖金融、教育、电商、医疗等产业场景。8月8日（周四）20：00 带你直播了解多模态大模型最新架构，深度解析PaddleMIX高性能模型库，手把手演示LLaVA模型训推全流程。[报名链接](https://www.wjx.top/vm/wKqysjx.aspx?udsid=449688)   -->
 
@@ -89,27 +121,7 @@ PaddleMIX工具链包括数据处理、模型开发、预训练、精调和推�
 
 
 
-## 📣最新进展
 
-<!-- 📚《飞桨多模态大模型开发套件PaddleMIX 2.1 震撼发布》，图文音视频场景全覆盖，多模态高效助力产业创新。超大规模训练支持，覆盖图文预训练、文生图、跨模态视觉任务，覆盖金融、教育、电商、医疗等产业场景。8月8日（周四）20：00 带你直播了解多模态大模型最新架构，深度解析PaddleMIX高性能模型库，手把手演示LLaVA模型训推全流程。[报名链接](https://www.wjx.top/vm/wKqysjx.aspx?udsid=449688)   -->
-
-**🔥2024.10.11 发布PaddleMIX v2.1**
-* 支持[PaddleNLP 3.0 beta](https://github.com/PaddlePaddle/PaddleNLP/releases/tag/v3.0.0-beta0)版本，抢先体验其最新功能。
-* 新增[Qwen2-VL](./paddlemix/examples/qwen2_vl/)、[InternVL2](./paddlemix/examples/internvl2/)、[Stable Diffusion 3 (SD3)](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/examples/dreambooth/README_sd3.md)等前沿模型。
-* 发布自研多模数据能力标签模型[PP-InsCapTagger](./paddlemix/datacopilot/example/pp_inscaptagger/)；可用于数据的分析和过滤，试验案例表明在保持模型效果的条件下可减少50%的数据量，大幅提高训练效率。
-
-* 多模态大模型InternVL2、LLaVA、SD3、SDXL适配昇腾910B，提供国产计算芯片上的训推能力。
-
-
-**2024.07.25 发布PaddleMIX v2.0**
-* 多模态理解：新增LLaVA系列，Qwen-VL等；新增Auto模块统一SFT训练流程；新增mixtoken训练策略，SFT吞吐量提升5.6倍。
-* 多模态生成：发布[PPDiffusers 0.24.1](./ppdiffusers/README.md)版本，支持视频生成能力，文生图模型新增LCM。新增飞桨版peft，accelerate后端。提供基于飞桨开发的ComfyUI插件。
-* 多模态数据处理工具箱[DataCopilot](./paddlemix/datacopilot/)：支持自定义数据结构，数据转换，离线格式检查；支持基本的统计信息，数据可视化功能。
-
-**2023.10.7 发布 PaddleMIX v1.0**
-* 新增图文预训练模型分布式训练能力，BLIP-2支持千亿规模训练
-* 新增跨模态应用流水线[AppFlow](./applications/README.md)，一键支持自动标注，图像编辑，音生图等11种跨模态应用
-* [PPDiffusers](./ppdiffusers/README.md)发布 0.19.3 版本，新增SDXL及相关任务
 
 ## ✨主要特性
 
@@ -202,6 +214,7 @@ sh build_env.sh
 **实操演练&范例**
 - [LLaVA模型：从训练到推理的全流程实践](https://aistudio.baidu.com/projectdetail/7917712)
 - [SDXL应用：打造专属奥运海报生成器](https://aistudio.baidu.com/projectdetail/8251202)
+- [飞桨PaddleMIX跨模态AI应用：项目分类汇总](./paddlemix_applications.md)
 
 **多硬件使用**
 - 昇腾910B支持的模型列表，可参考[昇腾模型列表](./docs/hardware_support/npu_model_list.md)
