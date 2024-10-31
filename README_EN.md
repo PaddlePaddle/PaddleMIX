@@ -198,7 +198,7 @@ sh build_env.sh
 - [SDXL Application: Create Your Own Olympic Poster Generator](https://aistudio.baidu.com/projectdetail/8251202)
 
 **Multi-Hardware Usage**
-- For a list of models supported by Ascend 910B, please refer to the [Ascend Model List](./docs/hardware_support/npu_model_list.md).
+- For the model list and usage supported by Ascend 910B, please refer to [Ascend Hardware Usage](./docs/hardware_support/ascend_usage.md)
 
 **Data Preparation & Fine-Tuning**
 - [Model Training and Fine-Tuning Techniques](paddlemix/tools/README.md)

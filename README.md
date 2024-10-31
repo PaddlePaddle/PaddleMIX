@@ -204,7 +204,7 @@ sh build_env.sh
 - [SDXL应用：打造专属奥运海报生成器](https://aistudio.baidu.com/projectdetail/8251202)
 
 **多硬件使用**
-- 昇腾910B支持的模型列表，可参考[昇腾模型列表](./docs/hardware_support/npu_model_list.md)
+- 昇腾910B支持的模型列表和使用方式，可以参考[昇腾硬件使用](./docs/hardware_support/ascend_usage.md)
 
 
 **数据准备&训练微调**
