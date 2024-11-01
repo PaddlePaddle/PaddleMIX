@@ -41,7 +41,7 @@ cd PaddleMIX/ppdiffusers/examples/stable_diffusion
 pip install -r requirements.txt
 ```
 
-> 注：本模型训练与推理需要依赖 CUDA 11.2 及以上版本，如果本地机器不符合要求，建议前往 [AI Studio](https://aistudio.baidu.com/index) 进行模型训练、推理任务。
+> 注：本模型训练与推理需要依赖 CUDA 11.2 及以上版本，如果本地机器不符合要求，建议前往 [AI Studio](https://aistudio.baidu.com/index) 进行模型训练、推理任务。推荐使用Linux系统，Windows系统未经过系统测试。
 
 ## 3. 数据准备
 
