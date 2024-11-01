@@ -21,7 +21,8 @@ import paddle.distributed as dist
 import paddle.distributed.fleet as fleet
 from paddle.distributed.fleet.meta_parallel import RowParallelLinear as RPLinear
 from paddle.distributed.fleet.meta_parallel import ColumnParallelLinear as CPLinear
-model_parallel_size=2
+hcg = fleet.get_hybrid_communicate_group()
+mp_degree = hcg.get_model_parallel_world_size()
 
 class SimplifiedSD3(nn.Layer):
     def __init__(self, num_layers: int, dim: int, num_attention_heads: int, attention_head_dim: int):
@@ -36,7 +37,7 @@ class SimplifiedSD3(nn.Layer):
         )
         self.norm_last_context = nn.LayerNorm(self.dim, epsilon=1e-6, weight_attr=False, bias_attr=True)
 
-        if model_parallel_size > 1:
+        if mp_degree > 1:
             self.qkv_mp = LayerList([CPLinear(self.dim, 3 * self.dim, gather_output=False, has_bias=True) for i in range(num_layers)])
             self.eqkv_mp = LayerList([CPLinear(self.dim, 3 * self.dim, gather_output=False, has_bias=True) for i in range(num_layers)])
             self.to_out_linear_mp = LayerList([RPLinear(self.dim, self.dim, input_is_parallel=True, has_bias=True) for i in range(num_layers)])
@@ -121,7 +122,7 @@ class SimplifiedSD3(nn.Layer):
                     epsilon=1e-06,
                 )
 
-            if model_parallel_size > 1:
+            if mp_degree > 1:
                 qkv = self.qkv_mp[i](norm_hidden_states)
                 eqkv = self.eqkv_mp[i](norm_encoder_hidden_states)
             
@@ -145,7 +146,7 @@ class SimplifiedSD3(nn.Layer):
             #     norm_hidden_states1, num_or_sections=[1024, 154], axis=1
             # )
 
-            if model_parallel_size > 1:
+            if mp_degree > 1:
                 attn_output = self.to_out_linear_mp[i](attn_output)
                 context_attn_output = self.to_add_out_linear_mp[i](context_attn_output)
             else:
@@ -157,7 +158,7 @@ class SimplifiedSD3(nn.Layer):
             )
 
             # ffn1
-            if model_parallel_size > 1:
+            if mp_degree > 1:
                 ffn_output = self.ffn1_mp[i](norm_hidden_states)
                 ffn_output = F.gelu(ffn_output, approximate=True)
                 ffn_output = self.ffn2_mp[i](ffn_output)
@@ -180,7 +181,7 @@ class SimplifiedSD3(nn.Layer):
                     encoder_hidden_states, context_attn_output, c_gate_msa, c_scale_mlp, c_shift_mlp, epsilon=1e-06
                 )
 
-                if model_parallel_size > 1:
+                if mp_degree > 1:
                     context_ffn_output = self.ffn1_context_mp[i](norm_encoder_hidden_states)
                     context_ffn_output = F.gelu(context_ffn_output, approximate=True)
                     context_ffn_output = self.ffn2_context_mp[i](context_ffn_output)

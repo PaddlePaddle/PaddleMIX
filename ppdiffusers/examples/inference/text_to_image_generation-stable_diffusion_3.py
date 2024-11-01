@@ -48,7 +48,7 @@ args = parse_args()
 
 if args.inference_optimize:
     os.environ["INFERENCE_OPTIMIZE"] = "True"
-    # os.environ["INFERENCE_OPTIMIZE_TRITON"] = "True"
+    os.environ["INFERENCE_OPTIMIZE_TRITON"] = "True"
 if args.inference_optimize_bp:
     os.environ["INFERENCE_OPTIMIZE_BP"] = "True"
 if args.dtype == "float32":
@@ -66,7 +66,7 @@ if args.inference_optimize_bp:
     import paddle.distributed.fleet as fleet
     strategy = fleet.DistributedStrategy()
     model_parallel_size = 2
-    data_parallel_size = 1
+    data_parallel_size = 2
     strategy.hybrid_configs = {
     "dp_degree": data_parallel_size,
     "mp_degree": model_parallel_size,
@@ -75,11 +75,21 @@ if args.inference_optimize_bp:
     fleet.init(is_collective=True, strategy=strategy)
     hcg = fleet.get_hybrid_communicate_group()
     mp_id = hcg.get_model_parallel_rank()
+    dp_id = hcg.get_data_parallel_rank()
     rank_id = dist.get_rank()
+    # mp_group = hcg.get_model_parallel_group()
+    # dp_group = hcg.get_data_parallel_group()
+    mp_degree = hcg.get_model_parallel_world_size()
+    dp_degree = hcg.get_data_parallel_world_size()
     if rank_id==0:
-        os.environ["TRITON_KERNEL_CACHE_DIR"]="./tmp/sd3_parallel/2_2"
+        os.environ["TRITON_KERNEL_CACHE_DIR"]="./tmp/sd3_parallel/0"
     elif rank_id==1:
-        os.environ["TRITON_KERNEL_CACHE_DIR"]="./tmp/sd3_parallel/2_3"
+        os.environ["TRITON_KERNEL_CACHE_DIR"]="./tmp/sd3_parallel/1"
+    elif rank_id==2:
+        os.environ["TRITON_KERNEL_CACHE_DIR"]="./tmp/sd3_parallel/2"
+    elif rank_id==3:
+        os.environ["TRITON_KERNEL_CACHE_DIR"]="./tmp/sd3_parallel/3"
+
 
 import datetime
 from ppdiffusers import StableDiffusion3Pipeline
@@ -92,7 +102,7 @@ pipe = StableDiffusion3Pipeline.from_pretrained(
 
 pipe.transformer = paddle.incubate.jit.inference(
     pipe.transformer,
-    save_model_dir="./tmp/TP_sd3_parallel",
+    save_model_dir="./tmp/1024_TP_sd3_parallel",
     enable_new_ir=False,
     cache_static_model=False,
     exp_enable_use_cutlass=True,

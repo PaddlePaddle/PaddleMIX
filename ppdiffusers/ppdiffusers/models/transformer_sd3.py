@@ -429,27 +429,31 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
             import paddle.distributed as dist
             import paddle.distributed.fleet as fleet
             rank_id = dist.get_rank()
-            for mp_name in ["ffn2","to_out_linear"]:
-                tmpc = paddle.split(state_dict[f"simplified_sd3.{mp_name}.{i}.weight"],2,axis=0)
-                state_dict[f"simplified_sd3.{mp_name}_mp.{i}.weight"] = tmpc[rank_id]
-                state_dict[f"simplified_sd3.{mp_name}_mp.{i}.bias"] = state_dict[f"simplified_sd3.{mp_name}.{i}.bias"]
-            if i<23:
-                tmpc = paddle.split(state_dict[f"simplified_sd3.to_add_out_linear.{i}.weight"],2,axis=0)
-                state_dict[f"simplified_sd3.to_add_out_linear_mp.{i}.weight"] = tmpc[rank_id]
-                state_dict[f"simplified_sd3.to_add_out_linear_mp.{i}.bias"] = state_dict[f"simplified_sd3.to_add_out_linear.{i}.bias"]
-                tmpf = paddle.split(state_dict[f"simplified_sd3.ffn2_context.{i}.weight"],2,axis=0)
-                state_dict[f"simplified_sd3.ffn2_context_mp.{i}.weight"] = tmpf[rank_id]
-                state_dict[f"simplified_sd3.ffn2_context_mp.{i}.bias"] = state_dict[f"simplified_sd3.ffn2_context.{i}.bias"]
+            hcg = fleet.get_hybrid_communicate_group()
+            mp_id = hcg.get_model_parallel_rank()
+            mp_degree = hcg.get_model_parallel_world_size()
+            if mp_degree > 1:
+                for mp_name in ["ffn2","to_out_linear"]:
+                    tmpc = paddle.split(state_dict[f"simplified_sd3.{mp_name}.{i}.weight"],2,axis=0)
+                    state_dict[f"simplified_sd3.{mp_name}_mp.{i}.weight"] = tmpc[mp_id]
+                    state_dict[f"simplified_sd3.{mp_name}_mp.{i}.bias"] = state_dict[f"simplified_sd3.{mp_name}.{i}.bias"]
+                if i<23:
+                    tmpc = paddle.split(state_dict[f"simplified_sd3.to_add_out_linear.{i}.weight"],2,axis=0)
+                    state_dict[f"simplified_sd3.to_add_out_linear_mp.{i}.weight"] = tmpc[mp_id]
+                    state_dict[f"simplified_sd3.to_add_out_linear_mp.{i}.bias"] = state_dict[f"simplified_sd3.to_add_out_linear.{i}.bias"]
+                    tmpf = paddle.split(state_dict[f"simplified_sd3.ffn2_context.{i}.weight"],2,axis=0)
+                    state_dict[f"simplified_sd3.ffn2_context_mp.{i}.weight"] = tmpf[mp_id]
+                    state_dict[f"simplified_sd3.ffn2_context_mp.{i}.bias"] = state_dict[f"simplified_sd3.ffn2_context.{i}.bias"]
+                    for placeholder in ["weight", "bias"]:
+                        tmpf1 = paddle.split(state_dict[f"simplified_sd3.ffn1_context.{i}.{placeholder}"],2,axis=-1)
+                        state_dict[f"simplified_sd3.ffn1_context_mp.{i}.{placeholder}"] = tmpf1[mp_id]
                 for placeholder in ["weight", "bias"]:
-                    tmpf1 = paddle.split(state_dict[f"simplified_sd3.ffn1_context.{i}.{placeholder}"],2,axis=-1)
-                    state_dict[f"simplified_sd3.ffn1_context_mp.{i}.{placeholder}"] = tmpf1[rank_id]
-            for placeholder in ["weight", "bias"]:
-                tmp = paddle.split(state_dict[f"simplified_sd3.ffn1.{i}.{placeholder}"],2,axis=-1)
-                state_dict[f"simplified_sd3.ffn1_mp.{i}.{placeholder}"] = tmp[rank_id]
-                for placeholder1 in ["", "e"]:
-                    tmpq = paddle.split(state_dict[f"simplified_sd3.{placeholder1}qkv.{i}.{placeholder}"],6,axis=-1)
-                    tmpqp = [
-                        paddle.concat([tmpq[0], tmpq[2],tmpq[4]],axis=-1),
-                        paddle.concat([tmpq[1], tmpq[3],tmpq[5]],axis=-1)
-                    ]
-                    state_dict[f"simplified_sd3.{placeholder1}qkv_mp.{i}.{placeholder}"] = tmpqp[rank_id]
+                    tmp = paddle.split(state_dict[f"simplified_sd3.ffn1.{i}.{placeholder}"],2,axis=-1)
+                    state_dict[f"simplified_sd3.ffn1_mp.{i}.{placeholder}"] = tmp[mp_id]
+                    for placeholder1 in ["", "e"]:
+                        tmpq = paddle.split(state_dict[f"simplified_sd3.{placeholder1}qkv.{i}.{placeholder}"],6,axis=-1)
+                        tmpqp = [
+                            paddle.concat([tmpq[0], tmpq[2],tmpq[4]],axis=-1),
+                            paddle.concat([tmpq[1], tmpq[3],tmpq[5]],axis=-1)
+                        ]
+                        state_dict[f"simplified_sd3.{placeholder1}qkv_mp.{i}.{placeholder}"] = tmpqp[mp_id]
