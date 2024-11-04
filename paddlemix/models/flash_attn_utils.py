@@ -6,6 +6,8 @@ logger = logging.get_logger(__name__)
 def is_flash_attn_available():
     try:
         import paddle
+        if "npu" in paddle.get_device(): # NOTE: flash attn has not been tested yet
+            return False
         q = paddle.rand((1, 4, 2, 8)).astype('bfloat16') 
         output = paddle.nn.functional.flash_attention.flash_attention(q, q, q, 0.9, False, False)
         return True
