@@ -29,6 +29,7 @@ class SimplifiedSD3(nn.Layer):
         super().__init__()
         self.num_layers = num_layers
         self.dim = dim
+        self.head_dim = 64
 
         self.silu = nn.Silu()
         self.linear1 = LayerList([nn.Linear(self.dim, 6 * self.dim) for i in range(num_layers)])
@@ -152,13 +153,13 @@ class SimplifiedSD3(nn.Layer):
 
             q, k, v = paddlemix.triton_ops.split_concat(qkv, eqkv)
             bs = hidden_states.shape[0]
-            head_nums = q.shape[2] // 64
-            q = q.reshape([bs, -1, head_nums, 64])
-            k = k.reshape([bs, -1, head_nums, 64])
-            v = v.reshape([bs, -1, head_nums, 64])
+            head_nums = q.shape[2] // self.head_dim
+            q = q.reshape([bs, -1, head_nums, self.head_dim])
+            k = k.reshape([bs, -1, head_nums, self.head_dim])
+            v = v.reshape([bs, -1, head_nums, self.head_dim])
 
             norm_hidden_states1 = F.scaled_dot_product_attention_(q, k, v, dropout_p=0.0, is_causal=False)
-            norm_hidden_states1 = norm_hidden_states1.reshape([bs, -1, head_nums * 64])
+            norm_hidden_states1 = norm_hidden_states1.reshape([bs, -1, head_nums * self.head_dim])
             attn_output, context_attn_output = paddle.split(norm_hidden_states1, num_or_sections=[seq1, seq2], axis=1)
 
             # attn_output, context_attn_output = paddlemix.triton_ops.triton_split(
