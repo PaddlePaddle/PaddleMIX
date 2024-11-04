@@ -14,11 +14,10 @@
 
 import ast
 import base64
-import copy
 import math
 import re
 from io import BytesIO
-from typing import Dict, Optional, Sequence
+from typing import Optional
 
 import cv2
 import paddle
@@ -28,18 +27,9 @@ from paddlenlp.generation import (
     StoppingCriteria,
     StoppingCriteriaList,
 )
-from paddlenlp.transformers import PretrainedTokenizer
 from PIL import Image
 
-import paddlemix.models.llava.conversation as conversation_lib
-
-from .constants import (
-    DEFAULT_IM_END_TOKEN,
-    DEFAULT_IM_START_TOKEN,
-    DEFAULT_IMAGE_TOKEN,
-    IGNORE_INDEX,
-    IMAGE_TOKEN_INDEX,
-)
+from .constants import IMAGE_TOKEN_INDEX
 
 __all__ = [
     "load_image",
@@ -50,6 +40,117 @@ __all__ = [
     "KeywordsStoppingCriteria",
     "get_stopping_criteria",
 ]
+
+
+def resize_and_center_crop(image, shortest_edge_length):
+    # Calculate new dimensions and resize
+    aspect_ratio = float(image.width) / float(image.height)
+    if aspect_ratio > 1:
+        new_width = int(shortest_edge_length * aspect_ratio)
+        new_height = shortest_edge_length
+    else:
+        new_width = shortest_edge_length
+        new_height = int(shortest_edge_length / aspect_ratio)
+    resized_image = image.resize((new_width, new_height), Image.ANTIALIAS)
+
+    # Calculate the position and perform the center crop
+    left = (new_width - shortest_edge_length) / 2
+    top = (new_height - shortest_edge_length) / 2
+    right = (new_width + shortest_edge_length) / 2
+    bottom = (new_height + shortest_edge_length) / 2
+    cropped_image = resized_image.crop((left, top, right, bottom))
+
+    return cropped_image
+
+
+def auto_pad_images(image, grid_params):
+    assert isinstance(image, Image.Image), "Input should be a Pillow Image"
+    assert len(grid_params) > 0, "Grid parameters should not be empty"
+
+    # Step 1: Calculate and find the closest aspect ratio
+    input_width, input_height = image.size
+    input_aspect_ratio = input_width / input_height
+    candidate_resolutions = [(w / h, w, h) for w in grid_params for h in grid_params]
+    closest_aspect_ratio = min(candidate_resolutions, key=lambda x: abs(input_aspect_ratio - x[0]))
+
+    candidate_resolutions = [(x[1], x[2]) for x in candidate_resolutions if abs(x[0] - closest_aspect_ratio[0]) < 1e-3]
+
+    target_resolution = min(candidate_resolutions, key=lambda res: abs(max(input_width, input_height) / max(res) - 1))
+
+    resize_width, resize_height = target_resolution
+    if input_width > input_height:
+        resize_height = int(resize_width / input_aspect_ratio)
+    else:
+        resize_width = int(resize_height * input_aspect_ratio)
+    resized_image = image.resize((resize_width, resize_height), Image.ANTIALIAS)
+
+    # Step 5: Pad the resized image if necessary to match the target resolution
+    pad_width = target_resolution[0] - resize_width
+    pad_height = target_resolution[1] - resize_height
+    padded_image = Image.new("RGB", target_resolution, color=(0, 0, 0))
+    padded_image.paste(resized_image, (pad_width // 2, pad_height // 2))
+
+    return padded_image
+
+
+def extract_patches(image, patch_size, overlap_ratio):
+    assert isinstance(image, Image.Image), "Input should be a Pillow Image"
+    assert patch_size > 0, "Patch size should be greater than 0"
+    assert 0 <= overlap_ratio < 1, "Overlap ratio should be between 0 and 1"
+
+    W, H = image.size
+    patches = []
+
+    stride = int(patch_size * (1 - overlap_ratio))
+
+    num_patches_y = (H - patch_size) // stride + 1
+    num_patches_x = (W - patch_size) // stride + 1
+
+    y_start = (H - (num_patches_y - 1) * stride - patch_size) // 2
+    x_start = (W - (num_patches_x - 1) * stride - patch_size) // 2
+
+    for y in range(y_start, y_start + num_patches_y * stride, stride):
+        for x in range(x_start, x_start + num_patches_x * stride, stride):
+            patch = image.crop((x, y, x + patch_size, y + patch_size))
+            patches.append(patch)
+
+    return patches
+
+
+def process_highres_image_crop_split(image, data_args, processor=None):
+    crop_resolution = data_args.image_crop_resolution
+    split_resolution = data_args.image_split_resolution
+    if processor is None:
+        processor = data_args.image_processor
+    image_crop = resize_and_center_crop(image, crop_resolution)
+    image_patches = extract_patches(image_crop, patch_size=split_resolution, overlap_ratio=0)
+    image_patches = [
+        processor.preprocess(image_patch, return_tensors="pd")["pixel_values"][0] for image_patch in image_patches
+    ]
+    return paddle.stack(image_patches, axis=0)
+
+
+def process_highres_image(image, processor, grid_pinpoints):
+    grid_params = [int(x) for x in grid_pinpoints.split(",")]
+    width_height = max(image.size)
+    fit_grid_params = [x for x in grid_params if x >= width_height]
+    if len(fit_grid_params) == 0:
+        select_size = max(grid_params)
+    else:
+        select_size = min(fit_grid_params)
+    # FIXME: always select the 448
+    select_size = max(grid_params)
+    image_padded = expand2square(image, tuple(int(x * 255) for x in processor.image_mean))
+
+    # FIXME: this seems to be a bug that it always resizes instead of padding
+    image_original_resize = image.resize((processor.size["shortest_edge"], processor.size["shortest_edge"]))
+    image_padded = image_padded.resize((select_size, select_size))
+    image_patches = extract_patches(image_padded, patch_size=processor.size["shortest_edge"], overlap_ratio=0)
+    image_patches = [image_original_resize] + image_patches
+    image_patches = [
+        processor.preprocess(image_patch, return_tensors="pd")["pixel_values"][0] for image_patch in image_patches
+    ]
+    return paddle.stack(image_patches, axis=0)
 
 
 def select_best_resolution(original_size, possible_resolutions):
@@ -156,13 +257,33 @@ def get_anyres_image_grid_shape(image_size, grid_pinpoints, patch_size):
 def process_anyres_image(image, processor, grid_pinpoints):
     """
     Process an image with variable resolutions.
+
     Args:
         image (PIL.Image.Image): The input image to be processed.
         processor: The image processor object.
         grid_pinpoints (str): A string representation of a list of possible resolutions.
+
     Returns:
-        paddle.Tensor: A tensor containing the processed image patches.
+        torch.Tensor: A tensor containing the processed image patches.
     """
+    # Convert grid_pinpoints from string to list
+    if isinstance(grid_pinpoints, str) and "x" in grid_pinpoints:
+        try:
+            patch_size = processor.size[0]
+        except:  # Exception as e:
+            patch_size = processor.size["shortest_edge"]
+        assert patch_size in [224, 336, 384, 448, 512], "patch_size should be in [224, 336, 384, 448, 512]"
+        # Use regex to extract the range from the input string
+        matches = re.findall(r"\((\d+)x(\d+)\)", grid_pinpoints)
+        range_start = tuple(map(int, matches[0]))
+        range_end = tuple(map(int, matches[-1]))
+        # Generate a matrix of tuples from (range_start[0], range_start[1]) to (range_end[0], range_end[1])
+        grid_pinpoints = [
+            (i, j) for i in range(range_start[0], range_end[0] + 1) for j in range(range_start[1], range_end[1] + 1)
+        ]
+        # Multiply all elements by patch_size
+        grid_pinpoints = [[dim * patch_size for dim in pair] for pair in grid_pinpoints]
+
     if type(grid_pinpoints) is list:
         possible_resolutions = grid_pinpoints
     else:
@@ -172,22 +293,22 @@ def process_anyres_image(image, processor, grid_pinpoints):
 
     patches = divide_to_patches(image_padded, processor.crop_size["height"])
 
-    image_original_resize = image.resize((processor.size["shortest_edge"], processor.size["shortest_edge"]))
+    # FIXME: this seems to be a bug that it resizes instead of pad.
+    # but to keep it consistent with previous, i will keep it as it is
+    # TODO: uncomment below to ablate with the padding
+    if isinstance(processor.size, dict):
+        shortest_edge = processor.size["shortest_edge"]
+    else:
+        shortest_edge = min(processor.size)
+    image_original_resize = image.resize((shortest_edge, shortest_edge))
+    # image_padded_square = expand2square(image, tuple(int(x*255) for x in processor.image_mean))
+    # image_original_resize = image_padded_square.resize((processor.size['shortest_edge'], processor.size['shortest_edge']))
 
     image_patches = [image_original_resize] + patches
     image_patches = [
         processor.preprocess(image_patch, return_tensors="pd")["pixel_values"][0] for image_patch in image_patches
     ]
     return paddle.stack(image_patches, axis=0)
-
-
-def get_model_name_from_path(model_path):
-    model_path = model_path.strip("/")
-    model_paths = model_path.split("/")
-    if model_paths[-1].startswith("checkpoint-"):
-        return model_paths[-2] + "_" + model_paths[-1]
-    else:
-        return model_paths[-1]
 
 
 def load_image_from_base64(image):
@@ -246,6 +367,33 @@ def expand2square(pil_img, background_color):
         return result
 
 
+def process_images(images, image_processor, model_cfg):
+    image_aspect_ratio = getattr(model_cfg, "image_aspect_ratio", None)
+    new_images = []
+    if image_aspect_ratio == "highres":
+        for image in images:
+            image = process_highres_image(image, image_processor, model_cfg.image_grid_pinpoints)
+            new_images.append(image)
+    elif image_aspect_ratio == "anyres" or "anyres_max" in image_aspect_ratio:
+        for image in images:
+            image = process_anyres_image(image, image_processor, model_cfg.image_grid_pinpoints)
+            new_images.append(image)
+    elif image_aspect_ratio == "crop_split":
+        for image in images:
+            image = process_highres_image_crop_split(image, model_cfg, image_processor)
+            new_images.append(image)
+    elif image_aspect_ratio == "pad":
+        for image in images:
+            image = expand2square(image, tuple(int(x * 255) for x in image_processor.image_mean))
+            image = image_processor.preprocess(image, return_tensors="pd")["pixel_values"][0]
+            new_images.append(image)
+    else:
+        return image_processor.preprocess(images, return_tensors="pd")["pixel_values"]
+    if all(x.shape == new_images[0].shape for x in new_images):
+        new_images = paddle.stack(new_images, axis=0)
+    return new_images
+
+
 def tokenizer_image_token(prompt, tokenizer, image_token_index=IMAGE_TOKEN_INDEX, return_tensors=None):
     prompt_chunks = [tokenizer(chunk).input_ids for chunk in prompt.split("<image>")]
 
@@ -264,6 +412,15 @@ def tokenizer_image_token(prompt, tokenizer, image_token_index=IMAGE_TOKEN_INDEX
             return paddle.to_tensor(data=input_ids, dtype="int64")
         raise ValueError(f"Unsupported tensor type: {return_tensors}")
     return input_ids
+
+
+def get_model_name_from_path(model_path):
+    model_path = model_path.strip("/")
+    model_paths = model_path.split("/")
+    if model_paths[-1].startswith("checkpoint-"):
+        return model_paths[-2] + "_" + model_paths[-1]
+    else:
+        return model_paths[-1]
 
 
 class KeywordsStoppingCriteria(StoppingCriteria):
@@ -309,192 +466,3 @@ def get_stopping_criteria(
         criteria.append(MaxLengthCriteria(max_length=max_length))
     criteria.extend(stopping_criteria)
     return criteria
-
-
-def preprocess_multimodal(
-    sources: Sequence[str],
-    mm_use_im_start_end: bool = False,
-) -> Dict:
-    for source in sources:
-        for sentence in source:
-            if DEFAULT_IMAGE_TOKEN in sentence["value"]:
-                sentence["value"] = sentence["value"].replace(DEFAULT_IMAGE_TOKEN, "").strip()
-                sentence["value"] = DEFAULT_IMAGE_TOKEN + "\n" + sentence["value"]
-                sentence["value"] = sentence["value"].strip()
-                if "mmtag" in conversation_lib.default_conversation.version:
-                    sentence["value"] = sentence["value"].replace(
-                        DEFAULT_IMAGE_TOKEN, "<Image>" + DEFAULT_IMAGE_TOKEN + "</Image>"
-                    )
-            replace_token = DEFAULT_IMAGE_TOKEN
-            if mm_use_im_start_end:
-                replace_token = DEFAULT_IM_START_TOKEN + replace_token + DEFAULT_IM_END_TOKEN
-            sentence["value"] = sentence["value"].replace(DEFAULT_IMAGE_TOKEN, replace_token)
-    return sources
-
-
-def preprocess_llama_2(sources, tokenizer: PretrainedTokenizer, has_image: bool = False) -> Dict:
-    conv = conversation_lib.default_conversation.copy()
-    roles = {"human": conv.roles[0], "gpt": conv.roles[1]}
-    conversations = []
-    for i, source in enumerate(sources):
-        if roles[source[0]["from"]] != conv.roles[0]:
-            source = source[1:]
-        conv.messages = []
-        for j, sentence in enumerate(source):
-            role = roles[sentence["from"]]
-            assert role == conv.roles[j % 2], f"{i}"
-            conv.append_message(role, sentence["value"])
-        conversations.append(conv.get_prompt())
-    if has_image:
-        input_ids = paddle.stack(
-            x=[tokenizer_image_token(prompt, tokenizer, return_tensors="pd") for prompt in conversations], axis=0
-        )
-    else:
-        input_ids = tokenizer(
-            conversations,
-            return_tensors="pd",
-            padding="longest",
-            max_length=tokenizer.model_max_length,
-            truncation=True,
-        ).input_ids
-    targets = input_ids.clone()
-    assert conv.sep_style == conversation_lib.SeparatorStyle.LLAMA_2
-    sep = "[/INST] "
-    for conversation, target in zip(conversations, targets):
-        total_len = int(target.not_equal(y=paddle.to_tensor(tokenizer.pad_token_id)).sum())
-        rounds = conversation.split(conv.sep2)
-        cur_len = 1
-        target[:cur_len] = IGNORE_INDEX
-        for i, rou in enumerate(rounds):
-            if rou == "":
-                break
-            parts = rou.split(sep)
-            if len(parts) != 2:
-                break
-            parts[0] += sep
-            if has_image:
-                round_len = len(tokenizer_image_token(rou, tokenizer))
-                instruction_len = len(tokenizer_image_token(parts[0], tokenizer)) - 2
-            else:
-                round_len = len(tokenizer(rou).input_ids)
-                instruction_len = len(tokenizer(parts[0]).input_ids) - 2
-            target[cur_len : cur_len + instruction_len] = IGNORE_INDEX
-            cur_len += round_len
-        target[cur_len:] = IGNORE_INDEX
-        if cur_len < tokenizer.model_max_length:
-            if cur_len != total_len:
-                target[:] = IGNORE_INDEX
-                print(f"WARNING: tokenization mismatch: {cur_len} vs. {total_len}. (ignored)")
-    return dict(input_ids=input_ids, labels=targets)
-
-
-def preprocess_v1(sources, tokenizer: PretrainedTokenizer, has_image: bool = False) -> Dict:
-    conv = conversation_lib.default_conversation.copy()
-    roles = {"human": conv.roles[0], "gpt": conv.roles[1]}
-    conversations = []
-
-    pattern_role_human = roles["human"]
-    match_role_human = [m.start() for m in re.finditer(pattern_role_human, sources)]
-
-    pattern_role_gpt = roles["gpt"]
-    match_role_gpt = [n.start() for n in re.finditer(pattern_role_gpt, sources)]
-
-    assert len(match_role_human) == len(match_role_gpt)
-    conv.messages = []
-    for i in range(len(match_role_human)):
-        human_start = match_role_human[i]
-        human_end = match_role_gpt[i]
-        gpt_start = human_end
-        gpt_end = match_role_human[i + 1] if i + 1 < len(match_role_human) else len(sources)
-        query = sources[human_start + len(roles["human"]) : human_end]
-        conv.append_message(conv.roles[0], query)
-        ans = sources[gpt_start + len(roles["gpt"]) : gpt_end]
-        conv.append_message(conv.roles[1], ans)
-    conversations.append(conv.get_prompt())
-
-    if has_image:
-        input_ids = paddle.stack(
-            x=[tokenizer_image_token(prompt, tokenizer, return_tensors="pd") for prompt in conversations], axis=0
-        )
-    else:
-        input_ids = tokenizer(
-            conversations,
-            return_tensors="pd",
-            padding="longest",
-            max_length=tokenizer.model_max_length,
-            truncation=True,
-        ).input_ids
-    targets = input_ids.clone()
-    assert conv.sep_style == conversation_lib.SeparatorStyle.TWO
-    sep = conv.sep + conv.roles[1] + ": "
-    new_targets = []  # FIXME: In npu device, the inplace modification does not take effect
-    for conversation, target in zip(conversations, targets):
-        total_len = int(target.not_equal(y=paddle.to_tensor(tokenizer.pad_token_id)).sum())
-        rounds = conversation.split(conv.sep2)
-        cur_len = 1
-        target[:cur_len] = IGNORE_INDEX
-        for i, rou in enumerate(rounds):
-            if rou == "":
-                break
-            parts = rou.split(sep)
-            if len(parts) != 2:
-                break
-            parts[0] += sep
-            if has_image:
-                round_len = len(tokenizer_image_token(rou, tokenizer))
-                instruction_len = len(tokenizer_image_token(parts[0], tokenizer)) - 2
-            else:
-                round_len = len(tokenizer(rou).input_ids)
-                instruction_len = len(tokenizer(parts[0]).input_ids) - 2
-            target[cur_len : cur_len + instruction_len] = IGNORE_INDEX
-            cur_len += round_len
-        target[cur_len:] = IGNORE_INDEX
-        if cur_len < tokenizer.model_max_length:
-            if cur_len != total_len:
-                target[:] = IGNORE_INDEX
-                print(f"WARNING: tokenization mismatch: {cur_len} vs. {total_len}. (ignored)")
-        new_targets.append(target)
-    new_targets = paddle.stack(new_targets, axis=0)
-    return dict(input_ids=input_ids, labels=new_targets)
-
-
-def preprocess_plain(sources: Sequence[str], tokenizer: PretrainedTokenizer) -> Dict:
-    conversations = []
-    for source in sources:
-        assert len(source) == 2
-        # assert DEFAULT_IMAGE_TOKEN in source[0]["value"]
-        source[0] = DEFAULT_IMAGE_TOKEN
-        conversation = source[0] + source[1] + conversation_lib.default_conversation.sep
-        conversations.append(conversation)
-    input_ids = [tokenizer_image_token(prompt, tokenizer, return_tensors="pd") for prompt in conversations]
-    targets = copy.deepcopy(input_ids)
-    for target, source in zip(targets, sources):
-        tokenized_len = len(tokenizer_image_token(source[0], tokenizer))
-        target[:tokenized_len] = IGNORE_INDEX
-    return dict(input_ids=input_ids, labels=targets)
-
-
-def get_conversation(
-    version: Sequence[str], sources: Sequence[str], tokenizer: PretrainedTokenizer, has_image: bool = False
-) -> Dict:
-    """
-        Given a list of sources, each is a conversation list. This transform:
-        1. Add signal '### ' at the beginning each sentence, with end signal '
-    ';
-        2. Concatenate conversations together;
-        3. Tokenize the concatenated conversation;
-        4. Make a deepcopy as the target. Mask human words with IGNORE_INDEX.
-    """
-    if version in conversation_lib.conv_templates:
-        conversation_lib.default_conversation = conversation_lib.conv_templates[version]
-    else:
-        conversation_lib.default_conversation = conversation_lib.conv_templates["vicuna_v1"]
-
-    if conversation_lib.default_conversation.sep_style == conversation_lib.SeparatorStyle.PLAIN:
-        return preprocess_plain(sources, tokenizer)
-    elif conversation_lib.default_conversation.sep_style == conversation_lib.SeparatorStyle.LLAMA_2:
-        return preprocess_llama_2(sources, tokenizer, has_image=has_image)
-    elif conversation_lib.default_conversation.version.startswith("v1"):
-        return preprocess_v1(sources, tokenizer, has_image=has_image)
-    else:
-        raise NotImplementedError

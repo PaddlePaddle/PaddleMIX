@@ -199,7 +199,6 @@ def main(args):
     no_need_passes = [
         "trt_prompt_tuning_embedding_eltwise_layernorm_fuse_pass",
         "add_support_int8_pass",
-        "auto_mixed_precision_pass",
     ]
     paddle_delete_passes = dict(  # noqa
         text_encoder=only_fp16_passes + no_need_passes if not args.use_fp16 else no_need_passes,

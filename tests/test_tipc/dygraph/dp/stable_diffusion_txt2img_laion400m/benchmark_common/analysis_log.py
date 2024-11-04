@@ -18,24 +18,73 @@ import json
 import os
 import re
 import sys
+from pdb import line_prefix
 
 import numpy as np
+from numpy import mean, var
+
+class TimeAnalyzer(object):
+    def __init__(self, filename, keyword=None, loss_keyword=None):
+        if filename is None:
+            raise Exception("Please specify the filename!")
+
+        if keyword is None:
+            raise Exception("Please specify the keyword!")
+
+        self.filename = filename
+        self.keyword = keyword
+        self.loss_keyword = loss_keyword
+
+    def get_ips(self):
+        ips_list = []
+        loss_value = None
+        with open(self.filename, "r") as f_object:
+            lines = f_object.read().splitlines()
+            for line in lines:
+                if self.keyword not in line:
+                    continue
+                try:
+                    result = None
+
+                    # Distill the string from a line.
+                    line = line.strip()
+                    line_words = line.split()
+                    for i in range(len(line_words) - 1):
+                        if line_words[i] == self.keyword:
+                            result = float(line_words[i + 1].replace(',', ''))
+                            ips_list.append(result)
+                        if line_words[i] == self.loss_keyword:
+                            # 剔除掉该值后面的逗号并保留5位小数点
+                            loss_value = line_words[i + 1].replace(',', '')  
+                            # 保留5位小数
+                            # loss_value = float("{:.5f}".format(float(loss_str_without_comma)))
+                            
+                    # Distil the result from the picked string.
+                except Exception as exc:
+                    print("line is: {}; failed".format(line_prefix))
+        if loss_value is None:
+            loss_value = -1
+        return mean(ips_list[4:]), loss_value
 
 
 def analyze(model_item, log_file, res_log_file, device_num, bs, fp_item):
-    with open(str(log_file), "r", encoding="utf8") as f:
-        data = f.readlines()
-    ips_lines = []
-    for eachline in data:
-        if "train_samples_per_second:" in eachline:
-            ips = float(eachline.split("train_samples_per_second: ")[1].split()[0].replace(',', ''))
-            print("----ips: ", ips)
-            ips_lines.append(ips)
-    print("----ips_lines: ", ips_lines)
-    ips = np.round(np.mean(ips_lines), 3)
+
+    analyzer = TimeAnalyzer(log_file, 'interval_samples_per_second:', None)
+    ips, convergence_value = analyzer.get_ips()
+    ips = round(ips, 3)
+    # with open(str(log_file), "r", encoding="utf8") as f:
+    #     data = f.readlines()
+    # ips_lines = []
+    # for eachline in data:
+    #     if "train_samples_per_second:" in eachline:
+    #         ips = float(eachline.split("train_samples_per_second: ")[1].split()[0].replace(',', ''))
+    #         print("----ips: ", ips)
+    #         ips_lines.append(ips)
+    # print("----ips_lines: ", ips_lines)
+    # ips = np.round(np.mean(ips_lines), 3)
     ngpus = int(re.findall("\d+", device_num)[-1])
     print("----ips: ", ips, "ngpus", ngpus)
-    # ips *= ngpus
+    ips *= ngpus
     run_mode = "DP"
 
     model_name = model_item + "_" + "bs" + str(bs) + "_" + fp_item + "_" + run_mode

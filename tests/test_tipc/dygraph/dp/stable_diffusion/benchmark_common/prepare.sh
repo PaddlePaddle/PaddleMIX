@@ -35,8 +35,8 @@ python -m pip install --upgrade pip -i https://mirror.baidu.com/pypi/simple
 python -m pip install einops -i https://mirror.baidu.com/pypi/simple
 python -m pip install -r ../requirements.txt
 python -m pip install --upgrade pybind11 regex sentencepiece tqdm visualdl attrdict easydict pyyaml paddlesde -i https://mirror.baidu.com/pypi/simple
-python -m pip install huggingface-hub==0.22.2 -i https://mirror.baidu.com/pypi/simple
 python -m pip install paddlenlp
+python -m pip install huggingface-hub==0.23.0
 
 # uninstall ppdiffusers and install develop paddlemix
 python -m pip uninstall -y ppdiffusers
