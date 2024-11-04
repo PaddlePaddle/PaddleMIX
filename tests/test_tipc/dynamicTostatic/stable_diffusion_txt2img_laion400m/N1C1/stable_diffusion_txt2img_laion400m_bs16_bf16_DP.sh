@@ -14,7 +14,7 @@
 
 model_item=stable_diffusion_txt2img_laion400m
 bs_item=16
-fp_item=fp32
+fp_item=bf16
 run_mode=DP
 device_num=N1C1
 max_iter=400
