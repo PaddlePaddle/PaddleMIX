@@ -11,9 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import os
 import argparse
+import os
+
 import paddle
+
+
 def parse_args():
     parser = argparse.ArgumentParser(
         description=" Use PaddleMIX to accelerate the Stable Diffusion3 image generation model."
@@ -40,6 +43,8 @@ def parse_args():
     parser.add_argument("--width", type=int, default=512, help="Width of the generated image.")
     parser.add_argument("--num-inference-steps", type=int, default=50, help="Number of inference steps.")
     parser.add_argument("--dtype", type=str, default="float32", help="Inference data types.")
+    parser.add_argument("--mp_size", type=int, default=1, help="Inference data types.")
+    parser.add_argument("--dp_size", type=int, default=1, help="Inference data types.")
 
     return parser.parse_args()
 
@@ -49,57 +54,39 @@ args = parse_args()
 if args.inference_optimize:
     os.environ["INFERENCE_OPTIMIZE"] = "True"
     os.environ["INFERENCE_OPTIMIZE_TRITON"] = "True"
-if args.inference_optimize_bp:
-    os.environ["INFERENCE_OPTIMIZE_BP"] = "True"
 if args.dtype == "float32":
     inference_dtype = paddle.float32
 elif args.dtype == "float16":
     inference_dtype = paddle.float16
 
 
-if args.inference_optimize_bp:
-    from paddle.distributed import fleet
-    from paddle.distributed.fleet.utils import recompute
-    import numpy as np
-    import random
-    import paddle.distributed as dist
-    import paddle.distributed.fleet as fleet
-    strategy = fleet.DistributedStrategy()
-    model_parallel_size = 2
-    data_parallel_size = 2
-    strategy.hybrid_configs = {
-    "dp_degree": data_parallel_size,
-    "mp_degree": model_parallel_size,
-    "pp_degree": 1
-    }
-    fleet.init(is_collective=True, strategy=strategy)
-    hcg = fleet.get_hybrid_communicate_group()
-    mp_id = hcg.get_model_parallel_rank()
-    dp_id = hcg.get_data_parallel_rank()
-    rank_id = dist.get_rank()
-    # mp_group = hcg.get_model_parallel_group()
-    # dp_group = hcg.get_data_parallel_group()
-    mp_degree = hcg.get_model_parallel_world_size()
-    dp_degree = hcg.get_data_parallel_world_size()
-    if rank_id==0:
-        os.environ["TRITON_KERNEL_CACHE_DIR"]="./tmp/sd3_parallel/0"
-    elif rank_id==1:
-        os.environ["TRITON_KERNEL_CACHE_DIR"]="./tmp/sd3_parallel/1"
-    elif rank_id==2:
-        os.environ["TRITON_KERNEL_CACHE_DIR"]="./tmp/sd3_parallel/2"
-    elif rank_id==3:
-        os.environ["TRITON_KERNEL_CACHE_DIR"]="./tmp/sd3_parallel/3"
+import paddle.distributed as dist
+import paddle.distributed.fleet as fleet
 
+strategy = fleet.DistributedStrategy()
+model_parallel_size = args.mp_size
+data_parallel_size = args.dp_size
+strategy.hybrid_configs = {"dp_degree": data_parallel_size, "mp_degree": model_parallel_size, "pp_degree": 1}
+fleet.init(is_collective=True, strategy=strategy)
+hcg = fleet.get_hybrid_communicate_group()
+mp_id = hcg.get_model_parallel_rank()
+dp_id = hcg.get_data_parallel_rank()
+rank_id = dist.get_rank()
+# mp_group = hcg.get_model_parallel_group()
+# dp_group = hcg.get_data_parallel_group()
+mp_degree = hcg.get_model_parallel_world_size()
+dp_degree = hcg.get_data_parallel_world_size()
+
+os.environ["TRITON_KERNEL_CACHE_DIR"] = f"./tmp/sd3_parallel/{rank_id}"
 
 import datetime
-from ppdiffusers import StableDiffusion3Pipeline
 
+from ppdiffusers import StableDiffusion3Pipeline
 
 pipe = StableDiffusion3Pipeline.from_pretrained(
     "stabilityai/stable-diffusion-3-medium-diffusers",
     paddle_dtype=inference_dtype,
 )
-
 pipe.transformer = paddle.incubate.jit.inference(
     pipe.transformer,
     save_model_dir="./tmp/1024_TP_sd3_parallel",
@@ -151,8 +138,7 @@ if args.benchmark:
     cuda_mem_after_used = paddle.device.cuda.max_memory_allocated() / (1024**3)
     print(f"Max used CUDA memory : {cuda_mem_after_used:.3f} GiB")
 
-if args.inference_optimize_bp:
-    if rank_id == 0:
+    if dp_degree > 1 or mp_degree > 1:
         image.save("text_to_image_generation-stable_diffusion_3-result.png")
 else:
     image.save("text_to_image_generation-stable_diffusion_3-result.png")

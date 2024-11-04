@@ -12,14 +12,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import os
 import inspect
 from typing import Any, Callable, Dict, List, Optional, Union
 
 import paddle
 import paddle.distributed as dist
 import paddle.distributed.fleet as fleet
-                    
+
 from ppdiffusers.transformers import (  # T5TokenizerFast,
     CLIPTextModelWithProjection,
     CLIPTokenizer,
@@ -121,7 +120,7 @@ def retrieve_timesteps(
     return timesteps, num_inference_steps
 
 
-class StableDiffusion3Pipeline(DiffusionPipeline, SD3LoraLoaderMixin,  FromSingleFileMixin):
+class StableDiffusion3Pipeline(DiffusionPipeline, SD3LoraLoaderMixin, FromSingleFileMixin):
 
     r"""
     Args:
@@ -800,29 +799,24 @@ class StableDiffusion3Pipeline(DiffusionPipeline, SD3LoraLoaderMixin,  FromSingl
                 latent_model_input = paddle.concat([latents] * 2) if self.do_classifier_free_guidance else latents
                 # broadcast to batch dimension in a way that's compatible with ONNX/Core ML
                 timestep = t.expand(latent_model_input.shape[0])
-                
+
                 hcg = fleet.get_hybrid_communicate_group()
                 dp_degree = hcg.get_data_parallel_world_size()
                 if dp_degree > 1 and self.do_classifier_free_guidance:
                     dp_id = hcg.get_data_parallel_rank()
                     dp_group = hcg.get_data_parallel_group()
-                    
-                    tmp_latent_input = paddle.split(latent_model_input,2,axis=0)
-                    tmp_timestep = paddle.split(timestep,2,axis=0)
-                    tmp_prompt_embeds = paddle.split(prompt_embeds,2,axis=0)
-                    tmp_pooled_prompt_embeds = paddle.split(pooled_prompt_embeds,2,axis=0)
-                    
-                    latent_input =tmp_latent_input[dp_id]
-                    timestep_input = tmp_timestep[dp_id]
-                    prompt_embeds_input = tmp_prompt_embeds[dp_id]
-                    pooled_prompt_embeds_input = tmp_pooled_prompt_embeds[dp_id]
-                    
+
+                    latent_input = paddle.split(latent_model_input, 2, axis=0)[dp_id]
+                    timestep_input = paddle.split(timestep, 2, axis=0)[dp_id]
+                    prompt_embeds_input = paddle.split(prompt_embeds, 2, axis=0)[dp_id]
+                    pooled_prompt_embeds_input = paddle.split(pooled_prompt_embeds, 2, axis=0)[dp_id]
+
                 else:
                     latent_input = latent_model_input
                     timestep_input = timestep
                     prompt_embeds_input = prompt_embeds
                     pooled_prompt_embeds_input = pooled_prompt_embeds
-                
+
                 model_output = self.transformer(
                     hidden_states=latent_input,
                     timestep=timestep_input,
@@ -840,13 +834,11 @@ class StableDiffusion3Pipeline(DiffusionPipeline, SD3LoraLoaderMixin,  FromSingl
 
                 if dp_degree > 1 and self.do_classifier_free_guidance:
                     tmp_shape = output.shape
-                    tmp_shape[0] *=2
-                    noise_pred = paddle.zeros(tmp_shape,dtype=output.dtype)
+                    tmp_shape[0] *= 2
+                    noise_pred = paddle.zeros(tmp_shape, dtype=output.dtype)
                     dist.all_gather(noise_pred, output, group=dp_group)
                 else:
                     noise_pred = output
-
-
 
                 # perform guidance
                 if self.do_classifier_free_guidance:

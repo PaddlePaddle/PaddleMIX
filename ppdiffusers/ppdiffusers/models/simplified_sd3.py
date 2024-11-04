@@ -13,16 +13,16 @@
 # limitations under the License.
 
 import paddle
+import paddle.distributed.fleet as fleet
 import paddle.nn.functional as F
 from paddle import nn
+from paddle.distributed.fleet.meta_parallel import ColumnParallelLinear as CPLinear
+from paddle.distributed.fleet.meta_parallel import RowParallelLinear as RPLinear
 from paddle.nn import LayerList as LayerList
 
-import paddle.distributed as dist
-import paddle.distributed.fleet as fleet
-from paddle.distributed.fleet.meta_parallel import RowParallelLinear as RPLinear
-from paddle.distributed.fleet.meta_parallel import ColumnParallelLinear as CPLinear
 hcg = fleet.get_hybrid_communicate_group()
 mp_degree = hcg.get_model_parallel_world_size()
+
 
 class SimplifiedSD3(nn.Layer):
     def __init__(self, num_layers: int, dim: int, num_attention_heads: int, attention_head_dim: int):
@@ -38,26 +38,46 @@ class SimplifiedSD3(nn.Layer):
         self.norm_last_context = nn.LayerNorm(self.dim, epsilon=1e-6, weight_attr=False, bias_attr=True)
 
         if mp_degree > 1:
-            self.qkv_mp = LayerList([CPLinear(self.dim, 3 * self.dim, gather_output=False, has_bias=True) for i in range(num_layers)])
-            self.eqkv_mp = LayerList([CPLinear(self.dim, 3 * self.dim, gather_output=False, has_bias=True) for i in range(num_layers)])
-            self.to_out_linear_mp = LayerList([RPLinear(self.dim, self.dim, input_is_parallel=True, has_bias=True) for i in range(num_layers)])
-            self.to_add_out_linear_mp = LayerList([RPLinear(self.dim, self.dim, input_is_parallel=True, has_bias=True) for i in range(num_layers)])
-            
-            self.ffn1_mp = LayerList([CPLinear(self.dim, 4 * self.dim, gather_output=False, has_bias=True) for i in range(num_layers)])
-            self.ffn2_mp = LayerList([RPLinear(self.dim * 4, self.dim, input_is_parallel=True, has_bias=True) for i in range(num_layers)])
-            self.ffn1_context_mp = LayerList([CPLinear(self.dim, 4 * self.dim, gather_output=False, has_bias=True) for i in range(num_layers)])
-            self.ffn2_context_mp = LayerList([RPLinear(self.dim * 4, self.dim, input_is_parallel=True, has_bias=True) for i in range(num_layers)])
+            self.qkv_mp = LayerList(
+                [CPLinear(self.dim, 3 * self.dim, gather_output=False, has_bias=True) for i in range(num_layers)]
+            )
+            self.eqkv_mp = LayerList(
+                [CPLinear(self.dim, 3 * self.dim, gather_output=False, has_bias=True) for i in range(num_layers)]
+            )
+            self.to_out_linear_mp = LayerList(
+                [RPLinear(self.dim, self.dim, input_is_parallel=True, has_bias=True) for i in range(num_layers)]
+            )
+            # When using Model Parallel, for the symmetry of GEMM, we change num_layers-1 here to num_layers, which has no effect on the results.
+            self.to_add_out_linear_mp = LayerList(
+                [RPLinear(self.dim, self.dim, input_is_parallel=True, has_bias=True) for i in range(num_layers)]
+            )
+
+            self.ffn1_mp = LayerList(
+                [CPLinear(self.dim, 4 * self.dim, gather_output=False, has_bias=True) for i in range(num_layers)]
+            )
+            self.ffn2_mp = LayerList(
+                [RPLinear(self.dim * 4, self.dim, input_is_parallel=True, has_bias=True) for i in range(num_layers)]
+            )
+            self.ffn1_context_mp = LayerList(
+                [CPLinear(self.dim, 4 * self.dim, gather_output=False, has_bias=True) for i in range(num_layers - 1)]
+            )
+            self.ffn2_context_mp = LayerList(
+                [
+                    RPLinear(self.dim * 4, self.dim, input_is_parallel=True, has_bias=True)
+                    for i in range(num_layers - 1)
+                ]
+            )
         else:
             self.qkv = LayerList([nn.Linear(self.dim, self.dim * 3) for i in range(num_layers)])
             self.eqkv = LayerList([nn.Linear(self.dim, self.dim * 3) for i in range(num_layers)])
             self.to_out_linear = LayerList([nn.Linear(self.dim, self.dim) for i in range(num_layers)])
+            # When using Model Parallel, for the symmetry of GEMM, we change num_layers-1 here to num_layers, which has no effect on the results.
             self.to_add_out_linear = LayerList([nn.Linear(self.dim, self.dim) for i in range(num_layers)])
-            
+
             self.ffn1 = LayerList([nn.Linear(self.dim, self.dim * 4) for i in range(num_layers)])
             self.ffn2 = LayerList([nn.Linear(self.dim * 4, self.dim) for i in range(num_layers)])
             self.ffn1_context = LayerList([nn.Linear(self.dim, self.dim * 4) for i in range(num_layers - 1)])
             self.ffn2_context = LayerList([nn.Linear(self.dim * 4, self.dim) for i in range(num_layers - 1)])
-
 
     def forward(self, hidden_states, encoder_hidden_states, temb):
         print("--------------------this is simplified_sd3------------------------")
@@ -125,21 +145,20 @@ class SimplifiedSD3(nn.Layer):
             if mp_degree > 1:
                 qkv = self.qkv_mp[i](norm_hidden_states)
                 eqkv = self.eqkv_mp[i](norm_encoder_hidden_states)
-            
+
             else:
                 qkv = self.qkv[i](norm_hidden_states)
                 eqkv = self.eqkv[i](norm_encoder_hidden_states)
 
-
             q, k, v = paddlemix.triton_ops.split_concat(qkv, eqkv)
             bs = hidden_states.shape[0]
-            hs = q.shape[2]
-            q = q.reshape([bs, -1, hs//64, 64])
-            k = k.reshape([bs, -1, hs//64, 64])
-            v = v.reshape([bs, -1, hs//64, 64])
+            head_nums = q.shape[2] // 64
+            q = q.reshape([bs, -1, head_nums, 64])
+            k = k.reshape([bs, -1, head_nums, 64])
+            v = v.reshape([bs, -1, head_nums, 64])
 
             norm_hidden_states1 = F.scaled_dot_product_attention_(q, k, v, dropout_p=0.0, is_causal=False)
-            norm_hidden_states1 = norm_hidden_states1.reshape([bs, -1, hs])
+            norm_hidden_states1 = norm_hidden_states1.reshape([bs, -1, head_nums * 64])
             attn_output, context_attn_output = paddle.split(norm_hidden_states1, num_or_sections=[seq1, seq2], axis=1)
 
             # attn_output, context_attn_output = paddlemix.triton_ops.triton_split(
@@ -194,4 +213,4 @@ class SimplifiedSD3(nn.Layer):
                 last_context_hidden_states = encoder_hidden_states
                 last_context_gate_mlp = c_gate_mlp
 
-        return  hidden_states
+        return hidden_states
