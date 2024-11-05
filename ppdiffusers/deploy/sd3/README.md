@@ -45,8 +45,9 @@ python  text_to_image_generation-stable_diffusion_3.py  --dtype float16 --height
 - Paddle Inference 提供了SD3模型的多卡推理功能，用户可以通过设置 `mp_size 2` 来开启Model Parallel，使用 `dp_size 2`来开启Data Parallel。
 使用 `python -m paddle.distributed.launch --gpus “0,1,2,3”` 指定使用哪些卡进行推理，其中`--gpus “0,1,2,3”`即为启用的GPU卡号。
 如果只需使用两卡推理，则只需指定两卡即可，如 `python -m paddle.distributed.launch --gpus “0,1”`。同时需要指定使用的并行方法及并行度，如 `mp_size 2` 或者 `dp_size 2`。
-注意，这里的`mp_size`需要设定为不大于输入的batch_size个，且`mp_size`和`dp_size`的和不能超过机器总卡数。
-高性能多卡推理指令：
+
+- 注意，这里的`mp_size`需要设定为不大于输入的batch_size个，且`mp_size`和`dp_size`的和不能超过机器总卡数。
+- 高性能多卡推理指令：
 ```shell
 # 执行多卡推理指令
 python -m paddle.distributed.launch --gpus "0,1,2,3" text_to_image_generation-stable_diffusion_3.py \
