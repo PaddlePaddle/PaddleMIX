@@ -94,17 +94,29 @@ def get_model_mapping():
             continue
 
         # 2. find the `*model*.py` file as the identifier of PretrainedModel class
-        for file_name in os.listdir(model_dir):
-            if "model" not in file_name:
-                continue
+        # for llava:
+        if model_name == 'llava':
+            for file_name in ['language_model.llava_llama','language_model.llava_qwen','multimodal_encoder.clip_model']:
+                model_module = import_module(f"paddlemix.models.{model_name}.{file_name}")
+                for key in dir(model_module):
+                    if key == "PretrainedModel" or key == "MixPretrainedModel":
+                        continue
+                    value = getattr(model_module, key)
+                    if inspect.isclass(value) and issubclass(value, PretrainedModel):
+                        mappings[model_name].append((value.__name__, value))
 
-            model_module = import_module(f"paddlemix.models.{model_name}.{file_name[:-3]}")
-            for key in dir(model_module):
-                if key == "PretrainedModel" or key == "MixPretrainedModel":
+        else:
+            for file_name in os.listdir(model_dir):
+                if "model" not in file_name:
                     continue
-                value = getattr(model_module, key)
-                if inspect.isclass(value) and issubclass(value, PretrainedModel):
-                    mappings[model_name].append((value.__name__, value))
+
+                model_module = import_module(f"paddlemix.models.{model_name}.{file_name[:-3]}")
+                for key in dir(model_module):
+                    if key == "PretrainedModel" or key == "MixPretrainedModel":
+                        continue
+                    value = getattr(model_module, key)
+                    if inspect.isclass(value) and issubclass(value, PretrainedModel):
+                        mappings[model_name].append((value.__name__, value))
 
     return mappings
 

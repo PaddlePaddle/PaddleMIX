@@ -48,16 +48,26 @@ def get_configurations() -> Dict[str, List[Type[PretrainedConfig]]]:
             continue
 
         # 2. find the `configuration.py` file as the identifier of PretrainedConfig class
-        for file_name in os.listdir(model_dir):
-            if "model" not in file_name and "configuration" not in file_name:
-                continue
+        # for llava:
+        if model_name == 'llava':
+            for file_name in ['language_model.llava_llama','language_model.llava_qwen','multimodal_encoder.clip_model']:
+                configuration_module = import_module(f"paddlemix.models.{model_name}.{file_name}")
 
-            configuration_module = import_module(f"paddlemix.models.{model_name}.{file_name[:-3]}")
+                for key in dir(configuration_module):
+                    value = getattr(configuration_module, key)
+                    if inspect.isclass(value) and issubclass(value, PretrainedConfig):
+                        mappings[model_name].append(value)
+        else:            
+            for file_name in os.listdir(model_dir):
+                if "model" not in file_name and "configuration" not in file_name:
+                    continue
 
-            for key in dir(configuration_module):
-                value = getattr(configuration_module, key)
-                if inspect.isclass(value) and issubclass(value, PretrainedConfig):
-                    mappings[model_name].append(value)
+                configuration_module = import_module(f"paddlemix.models.{model_name}.{file_name[:-3]}")
+
+                for key in dir(configuration_module):
+                    value = getattr(configuration_module, key)
+                    if inspect.isclass(value) and issubclass(value, PretrainedConfig):
+                        mappings[model_name].append(value)
 
     return mappings
 
