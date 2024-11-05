@@ -20,8 +20,7 @@ from paddle.distributed.fleet.meta_parallel import ColumnParallelLinear as CPLin
 from paddle.distributed.fleet.meta_parallel import RowParallelLinear as RPLinear
 from paddle.nn import LayerList as LayerList
 
-hcg = fleet.get_hybrid_communicate_group()
-mp_degree = hcg.get_model_parallel_world_size()
+mp_degree = fleet.get_hybrid_communicate_group().get_model_parallel_world_size()
 
 
 class SimplifiedSD3(nn.Layer):

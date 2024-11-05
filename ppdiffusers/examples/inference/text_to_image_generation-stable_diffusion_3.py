@@ -43,8 +43,12 @@ def parse_args():
     parser.add_argument("--width", type=int, default=512, help="Width of the generated image.")
     parser.add_argument("--num-inference-steps", type=int, default=50, help="Number of inference steps.")
     parser.add_argument("--dtype", type=str, default="float32", help="Inference data types.")
-    parser.add_argument("--mp_size", type=int, default=1, help="Inference data types.")
-    parser.add_argument("--dp_size", type=int, default=1, help="Inference data types.")
+    parser.add_argument(
+        "--mp_size", type=int, default=1, help="This size refers to the degree of parallelism using model parallel."
+    )
+    parser.add_argument(
+        "--dp_size", type=int, default=1, help="This size refers to the degree of parallelism using data parallel."
+    )
 
     return parser.parse_args()
 
@@ -72,8 +76,6 @@ hcg = fleet.get_hybrid_communicate_group()
 mp_id = hcg.get_model_parallel_rank()
 dp_id = hcg.get_data_parallel_rank()
 rank_id = dist.get_rank()
-# mp_group = hcg.get_model_parallel_group()
-# dp_group = hcg.get_data_parallel_group()
 mp_degree = hcg.get_model_parallel_world_size()
 dp_degree = hcg.get_data_parallel_world_size()
 
