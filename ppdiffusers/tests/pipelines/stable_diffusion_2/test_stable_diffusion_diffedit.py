@@ -264,7 +264,7 @@ class StableDiffusionDiffEditPipelineIntegrationTests(unittest.TestCase):
     def test_stable_diffusion_diffedit_full(self):
         generator = paddle.Generator().manual_seed(seed=0)
         pipe = StableDiffusionDiffEditPipeline.from_pretrained(
-            "stabilityai/stable-diffusion-2", safety_checker=None, paddle_dtype="float16"
+            "stabilityai/stable-diffusion-2", safety_checker=None, paddle_dtype=paddle.float16
         )
         pipe.scheduler = DDIMScheduler.from_config(pipe.scheduler.config)
         pipe.inverse_scheduler = DDIMInverseScheduler.from_config(pipe.scheduler.config)
@@ -299,7 +299,7 @@ class StableDiffusionDiffEditPipelineIntegrationTests(unittest.TestCase):
     def test_stable_diffusion_diffedit_dpm(self):
         generator = paddle.Generator().manual_seed(seed=0)
         pipe = StableDiffusionDiffEditPipeline.from_pretrained(
-            "stabilityai/stable-diffusion-2", safety_checker=None, torch_dtype="float16"
+            "stabilityai/stable-diffusion-2", safety_checker=None, paddle_dtype=paddle.float16
         )
         pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
         pipe.inverse_scheduler = DPMSolverMultistepInverseScheduler.from_config(pipe.scheduler.config)

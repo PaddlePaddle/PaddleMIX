@@ -17,11 +17,11 @@ bs_item=16
 fp_item=fp32
 run_mode=DP
 device_num=N1C1
-max_iter=20
+max_iter=400
 num_workers=4
 
 # get data
 bash ./test_tipc/dygraph/dp/${model_item}/benchmark_common/prepare.sh
 # run
-bash ./test_tipc/dygraph/dp/${model_item}/benchmark_common/run_benchmark.sh ${model_item} ${bs_item} ${fp_item} ${run_mode} ${device_num} ${max_epochs} ${num_workers} 2>&1;
+bash ./test_tipc/dygraph/dp/${model_item}/benchmark_common/run_benchmark.sh ${model_item} ${bs_item} ${fp_item} ${run_mode} ${device_num} ${max_iter} ${num_workers} 2>&1;
 

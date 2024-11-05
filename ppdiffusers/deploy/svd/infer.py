@@ -183,13 +183,11 @@ def main(args):
     no_need_passes = [
         "trt_prompt_tuning_embedding_eltwise_layernorm_fuse_pass",
         "add_support_int8_pass",
-        "auto_mixed_precision_pass",
         "trt_cross_multihead_matmul_fuse_pass",
         "trt_flash_multihead_matmul_fuse_pass",
         "preln_elementwise_groupnorm_act_pass",
         "elementwise_groupnorm_act_pass",
         "groupnorm_act_pass",
-        "auto_mixed_precision_pass",
         "conv_elementwise_add_fuse_pass",
     ]
     paddle_delete_passes = dict(  # noqa

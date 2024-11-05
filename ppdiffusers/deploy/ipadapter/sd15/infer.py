@@ -202,7 +202,6 @@ def main(args):
     no_need_passes = [
         "trt_prompt_tuning_embedding_eltwise_layernorm_fuse_pass",
         "add_support_int8_pass",
-        "auto_mixed_precision_pass",
         "elementwise_groupnorm_act_pass",
         "groupnorm_act_pass",
         "preln_elementwise_groupnorm_act_pass",

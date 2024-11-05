@@ -115,7 +115,7 @@ class CLIPConfig(PretrainedConfig):
 
         return cls.from_dict(config_dict, **kwargs)
 
-    def to_dict(self):
+    def to_dict(self, saving_file=False):
         """
         Serializes this instance to a Python dictionary. Override the default [`~PretrainedConfig.to_dict`].
 

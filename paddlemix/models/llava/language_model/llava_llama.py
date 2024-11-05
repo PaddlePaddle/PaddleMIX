@@ -19,22 +19,24 @@ import paddle
 import paddle.distributed.fleet.meta_parallel as mpu
 from paddle.autograd import PyLayer
 from paddle.distributed import fleet
-from paddlenlp.transformers import (
-    LlamaConfig,
-    LlamaForCausalLM,
-    LlamaModel
-)
+from paddlenlp.transformers import LlamaConfig, LlamaForCausalLM, LlamaModel
 from paddlenlp.transformers.llama.modeling import LlamaLMHead
 from paddlenlp.transformers.model_outputs import CausalLMOutputWithPast
 from paddlenlp.transformers.utils import get_scale_by_dtype
 
-from .base_model import LlavaMetaForCausalLM, LlavaMetaModel
-from .configuration import LlavaConfig
+from ..llava_arch import LlavaMetaForCausalLM, LlavaMetaModel
 
 __all__ = [
+    "LlavaConfig",
     "LlavaLlamaModel",
     "LlavaLlamaForCausalLM",
 ]
+
+
+class LlavaConfig(LlamaConfig):
+    model_type = "llava"
+    mm_patch_merge_type = "spatial_unpad"
+    use_cachekv_int8 = None
 
 
 class LlavaLlamaModel(LlavaMetaModel, LlamaModel):

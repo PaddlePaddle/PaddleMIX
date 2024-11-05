@@ -334,7 +334,8 @@ class UniDiffuserTextDecoder(ModelMixin, ConfigMixin, ModuleUtilsMixin):
                 logits[is_stopped] = -float(np.inf)
                 logits[is_stopped, 0] = 0
                 scores_sum = scores[:, None] + logits
-                seq_lengths[~is_stopped] += 1
+                is_stopped_tensor_int32 = paddle.cast(~is_stopped, dtype='int32')
+                seq_lengths += is_stopped_tensor_int32
                 scores_sum_average = scores_sum / seq_lengths[:, None].cast(scores_sum.dtype)
                 scores_sum_average, next_tokens = scores_sum_average.reshape([-1]).topk(beam_size, -1)
                 next_tokens_source = next_tokens // scores_sum.shape[1]

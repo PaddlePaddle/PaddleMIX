@@ -57,7 +57,6 @@ def rank0_print(*args):
             print(f"Rank {dist.get_rank()}: ", *args)
 
 
-
 class SigLipImageProcessor:
     def __init__(
         self,
@@ -539,7 +538,6 @@ class SigLipVisionModel(SigLipPreTrainedModel):
         super().__init__(config)
 
         self.vision_model = SigLipVisionTransformer(config)
-
 
     def get_input_embeddings(self) -> nn.Layer:
         return self.vision_model.embeddings.patch_embedding

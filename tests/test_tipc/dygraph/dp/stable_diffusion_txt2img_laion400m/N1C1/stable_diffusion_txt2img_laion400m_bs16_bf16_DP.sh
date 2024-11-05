@@ -1,4 +1,4 @@
-# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,12 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from paddlenlp.transformers import Qwen2Config
+model_item=stable_diffusion_txt2img_laion400m
+bs_item=16
+fp_item=bf16
+run_mode=DP
+device_num=N1C1
+max_iter=400
+num_workers=4
 
-__all__ = ["LlavaQwenConfig"]
+# get data
+bash ./test_tipc/dygraph/dp/${model_item}/benchmark_common/prepare.sh
+# run
+bash ./test_tipc/dygraph/dp/${model_item}/benchmark_common/run_benchmark.sh ${model_item} ${bs_item} ${fp_item} ${run_mode} ${device_num} ${max_iter} ${num_workers} 2>&1;
 
-    
-class LlavaQwenConfig(Qwen2Config):
-    model_type = "llava_qwen"
-    mm_patch_merge_type = "spatial_unpad"
-    use_cachekv_int8 = None

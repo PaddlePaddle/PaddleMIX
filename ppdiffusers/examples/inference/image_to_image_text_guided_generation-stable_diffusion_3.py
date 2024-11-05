@@ -20,6 +20,6 @@ pipe = StableDiffusion3Img2ImgPipeline.from_pretrained(model_id_or_path, paddle_
 url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/sketch-mountains-input.png"
 init_image = load_image(url).resize((512, 512))
 prompt = "cat wizard, gandalf, lord of the rings, detailed, fantasy, cute, adorable, Pixar, Disney, 8k"
-images = pipe(prompt=prompt, image=init_image, strength=0.95, guidance_scale=7.5).images[0]
+image = pipe(prompt=prompt, image=init_image, strength=0.95, guidance_scale=7.5).images[0]
 
 image.save("image_to_image_text_guided_generation-stable_diffusion_3-result.png")

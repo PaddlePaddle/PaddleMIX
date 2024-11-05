@@ -6,21 +6,34 @@ paddlemix `examples` 目录下提供模型的一站式体验，包括模型推�
 
 | Model | Inference |Pretrain | SFT | LoRA | Deploy | NPU training |
 | --- | --- | --- | --- | --- | --- | --- | 
-| [qwen_vl](./qwen_vl/) | ✅  | ❌  | ✅  | ✅  | ✅  | ❌ |
+| [YOLO-World](./YOLO-World/) | ✅  | ❌  | ❌  | ❌  | ❌ | ❌ |
+| [audioldm2](./audioldm2/) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | [blip2](./blip2/) | ✅  | ✅ | ✅  | ✅ |  ❌ | ❌ |
 | [clip](./clip) | ✅  | ✅ | ❌ | ❌ | ❌ | ❌ |
 | [coca](./coca/) |  ✅  | ✅ | ❌ | ❌ | ❌ | ❌ |
+| [CogVLM && CogAgent](./cogvlm/) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | [eva02](./eva02/)|    ✅  |  ✅  |  ✅  |  ❌   | ❌   | ❌ |
 | [evaclip](./evaclip/) | ✅ | ✅ | ❌ | ❌ |  ❌ | ❌ |
 | [groundingdino](./groundingdino/) | ✅ | ❌  | 🚧   | ❌  | ✅  | ❌ |
 | [imagebind](./imagebind/) |   ✅  |  ❌   |  ❌  | ❌ | ❌ | ❌ |
+| [InternLM-XComposer2](./internlm_xcomposer2/) | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ |
+| [Internvl2](./internvl2/) | ✅ | ❌ | ✅ | ❌ | ❌ | ✅ |
+| [llava](./llava/) | ✅  | ✅  | ✅  | ✅  | 🚧  | ✅ |
+| [llava-next](./llava_next_interleave/) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | [minigpt4](./minigpt4) | ✅ | ✅ | ✅   |  ❌  | ✅  | ❌ |
+| [minimonkey](./minimonkey/) | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ |
+| [qwen2_vl](./qwen2_vl/) | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ |
+| [qwen_vl](./qwen_vl/) | ✅  | ❌  | ✅  | ✅  | ✅  | ❌ |
 | [sam](./sam/) | ✅ | ❌ | ❌ | ❌ | ✅  | ❌ |
 | [visualglm](./visualglm/) | ✅ | ❌ | ✅ | ✅ | ❌ | ❌ |
-| [llava](./llava/) | ✅  | ✅  | ✅  | ✅  | 🚧  | ✅ |
-| [YOLO-World](./YOLO-World/) | ✅  | ❌  | ❌  | ❌  | ❌ | ❌ |
-| [CogVLM && CogAgent](./cogvlm/) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| [InternLM-XComposer2](./internlm_xcomposer2/) | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ |
+
+
+
+
+
+
+
+
 
 
 * ✅: Supported

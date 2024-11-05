@@ -353,7 +353,7 @@ class BaseProcessingMixin(object):
         else:
             return processor
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self, saving_file=False) -> Dict[str, Any]:
         """
         Serializes this instance to a Python dictionary.
 
