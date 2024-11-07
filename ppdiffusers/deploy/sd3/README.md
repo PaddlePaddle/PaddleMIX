@@ -11,9 +11,15 @@ python -c "import use_triton_in_paddle; use_triton_in_paddle.make_triton_compati
 # 安装develop版本的paddle，请根据自己的cuda版本选择对应的paddle版本，这里选择12.3的cuda版本
 python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu123/
 
+# 安装paddlemix库,使用集成在paddlemix库中的自定义算子。
+python -m pip install paddlemix
+
 # 指定 libCutlassGemmEpilogue.so 的路径
 # 详情请参考 https://github.com/PaddlePaddle/Paddle/blob/develop/paddle/phi/kernels/fusion/cutlass/gemm_epilogue/README.md
 export LD_LIBRARY_PATH=/your_dir/Paddle/paddle/phi/kernels/fusion/cutlass/gemm_epilogue/build:$LD_LIBRARY_PATH
+- 请注意，该项用于在静态图推理时利用Cutlass融合算子提升推理性能，但是并不是必须项。
+如果不使用Cutlass可以将`./text_to_image_generation-stable_diffusion_3.py`中的`exp_enable_use_cutlass`设为False。
+-
 ```
 
 高性能推理指令：
@@ -23,6 +29,8 @@ python  text_to_image_generation-stable_diffusion_3.py  --dtype float16 --height
 --num-inference-steps 50 --inference_optimize 1  \
 --benchmark 1
 ```
+注：--inference_optimize 1 用于开启推理优化，--benchmark 1 用于开启性能测试。
+
 
 - 在 NVIDIA A100-SXM4-40GB 上测试的性能如下：
 
@@ -60,6 +68,8 @@ python -m paddle.distributed.launch --gpus "0,1,2,3" text_to_image_generation-st
 --dp_size 2 \
 --benchmark 1
 ```
+注：--inference_optimize 1 用于开启推理优化，--benchmark 1 用于开启性能测试。
+
 ## 在 NVIDIA A800-SXM4-80GB 上测试的性能如下：
 
 | Paddle mp_size=2 & dp_size=2 |  Paddle mp_size=2   | Paddle dp_size=2 | Paddle Single Card | Paddle 动态图 |
