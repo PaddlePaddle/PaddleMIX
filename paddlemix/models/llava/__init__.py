@@ -12,27 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .clip_encoder import *
-from .siglip_encoder import *
-from .configuration import *
-from .clip_model import *
-from .mm_utils import *
-from .modeling import *
-from .tokenizer import *
-
 import pkg_resources
 
-version = pkg_resources.get_distribution("paddlenlp").version   
+from .language_model.llava_llama import *
+from .language_model.tokenizer import *
+from .mm_utils import *
+from .multimodal_encoder.clip_encoder import *
+from .multimodal_encoder.siglip_encoder import *
+from .multimodal_projector.builder import *
+
+version = pkg_resources.get_distribution("paddlenlp").version
 try:
-    if version.startswith('3'):
-        from .modeling_qwen import *
-        from .configuration_qwen import *
+    if version.startswith("3"):
+        from .language_model.llava_qwen import *
     else:
-        print(f"paddlenlp version {version} is not 3.x, skipping import Qwen2Model for llava-next.")
+        print(
+            f"paddlenlp version {version} is not 3.x, skipping import Qwen2Model for llava-next-interleave/llava_onevision/llava_critic."
+        )
 
 except ImportError:
     print("paddlenlp is not installed.")
-
-
-
-

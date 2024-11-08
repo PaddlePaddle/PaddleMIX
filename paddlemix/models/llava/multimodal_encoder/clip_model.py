@@ -1017,7 +1017,7 @@ class CLIPVisionTransformer(nn.Layer):
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
         target_dtype = self.conv1.weight.dtype
         pixel_values = self.conv1(pixel_values.cast(target_dtype))
-      
+
         # for to_static
         pixel_values_shape = paddle.shape(pixel_values)
 
@@ -1028,7 +1028,7 @@ class CLIPVisionTransformer(nn.Layer):
         embedding_output = paddle.concat(
             [self.class_embedding.unsqueeze([0, 1]).expand([pixel_values_shape[0], -1, -1]), pixel_values], axis=1
         )
-        
+
         hidden_states = embedding_output + self.positional_embedding.weight
         hidden_states = self.ln_pre(hidden_states)
 

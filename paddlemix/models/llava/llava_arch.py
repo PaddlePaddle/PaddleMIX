@@ -13,9 +13,12 @@
 # limitations under the License.
 
 
-import paddle
+import math
+import re
 
-from .clip_encoder import build_vision_tower
+import paddle
+import paddle.nn as nn
+
 from .constants import (
     DEFAULT_IM_END_TOKEN,
     DEFAULT_IM_START_TOKEN,
@@ -23,8 +26,9 @@ from .constants import (
     IGNORE_INDEX,
     IMAGE_TOKEN_INDEX,
 )
-from .mm_projector import build_vision_projector
 from .mm_utils import get_anyres_image_grid_shape
+from .multimodal_encoder.builder import build_vision_tower
+from .multimodal_projector.builder import build_vision_projector
 
 __all__ = ["LlavaMetaModel", "LlavaMetaForCausalLM"]
 
@@ -154,11 +158,25 @@ class LlavaMetaForCausalLM:
             image_features = self.encode_images(concat_images)
 
             split_sizes = [image.shape[0] for image in images]
-            image_features = paddle.split(image_features, split_sizes, axis=0)
+            encoded_image_features = self.encode_images(concat_images)
+            # image_features,all_faster_video_features = self.encode_multimodals(concat_images, video_idx_in_batch, split_sizes)
+
+            # This is a list, each element is [num_images, patch * patch, dim]
+            # rank_print(f"Concat images : {concat_images.shape}")
+            encoded_image_features = paddle.split(encoded_image_features, split_sizes)
+            image_features = []
+            for idx, image_feat in enumerate(encoded_image_features):
+                image_features.append(image_feat)
+            # image_features = self.encode_multimodals(concat_images, video_idx_in_batch, split_sizes)
+            # rank_print(f"Encoded image feats : {[x.shape for x in image_features]}")
+            # image_features = paddle.split(image_features, split_sizes, axis=0)
             mm_patch_merge_type = getattr(self.config, "mm_patch_merge_type", "flat")
             image_aspect_ratio = getattr(self.config, "image_aspect_ratio", "square")
+            # mm_newline_position = getattr(self.config, "mm_newline_position", "one_token")
+
             if mm_patch_merge_type == "flat":
-                image_features = [x.flatten(start_axis=0, stop_axis=1) for x in image_features]
+                image_features = [x.flatten(0, 1) for x in image_features]
+
             elif mm_patch_merge_type.startswith("spatial"):
                 new_image_features = []
                 for image_idx, image_feature in enumerate(image_features):
@@ -167,42 +185,88 @@ class LlavaMetaForCausalLM:
                         image_feature = image_feature[1:]
                         height = width = self.get_vision_tower().num_patches_per_side
                         assert height * width == base_image_feature.shape[0]
-                        if image_aspect_ratio == "anyres":
-                            num_patch_width, num_patch_height = get_anyres_image_grid_shape(
-                                image_sizes[image_idx],
-                                self.config.image_grid_pinpoints,
-                                self.get_vision_tower().config.image_size,
-                            )
 
-                            image_feature = paddle.reshape(
-                                image_feature, (num_patch_height, num_patch_width, height, width, -1)
+                        if "anyres_max" in image_aspect_ratio:
+                            matched_anyres_max_num_patches = re.match(r"anyres_max_(\d+)", image_aspect_ratio)
+                            if matched_anyres_max_num_patches:
+                                max_num_patches = int(matched_anyres_max_num_patches.group(1))
+
+                        if image_aspect_ratio == "anyres" or "anyres_max" in image_aspect_ratio:
+                            if hasattr(self.get_vision_tower(), "image_size"):
+                                vision_tower_image_size = self.get_vision_tower().image_size
+                            else:
+                                raise ValueError("vision_tower_image_size is not found in the vision tower.")
+                            try:
+                                num_patch_width, num_patch_height = get_anyres_image_grid_shape(
+                                    image_sizes[image_idx], self.config.image_grid_pinpoints, vision_tower_image_size
+                                )
+                            except Exception as e:
+                                print(f"Error: {e}")
+                                num_patch_width, num_patch_height = 2, 2
+                            image_feature = image_feature.reshape(
+                                [num_patch_height, num_patch_width, height, width, -1],
                             )
                         else:
-                            raise NotImplementedError
-                        if "unpad" in mm_patch_merge_type:
-                            image_feature = image_feature.transpose(perm=[4, 0, 2, 1, 3])
-                            image_feature = image_feature.flatten(start_axis=1, stop_axis=2).flatten(
-                                start_axis=2, stop_axis=3
-                            )
+                            image_feature = image_feature.reshape([2, 2, height, width, -1])
+
+                        if "maxpool2x2" in mm_patch_merge_type:
+                            image_feature = image_feature.transpose([4, 0, 2, 1, 3])
+                            image_feature = image_feature.flatten(1, 2).flatten(2, 3)
+                            image_feature = nn.functional.max_pool2d(image_feature, 2)
+                            image_feature = image_feature.flatten(1, 2).transpose([1, 0])
+
+                        elif (
+                            "unpad" in mm_patch_merge_type
+                            and "anyres_max" in image_aspect_ratio
+                            and matched_anyres_max_num_patches
+                        ):
+                            unit = image_feature.shape[2]
+                            image_feature = image_feature.transpose([4, 0, 2, 1, 3])
+                            image_feature = image_feature.flatten(1, 2).flatten(2, 3)
                             image_feature = unpad_image(image_feature, image_sizes[image_idx])
+                            c, h, w = image_feature.shape
+                            times = math.sqrt(h * w / (max_num_patches * unit**2))
+                            if times > 1.1:
+                                image_feature = image_feature[None]
+                                image_feature = nn.functional.interpolate(
+                                    image_feature, [int(h // times), int(w // times)], mode="bilinear"
+                                )[0]
+                            # self.qwen2
                             image_feature = paddle.concat(
-                                x=(
+                                (
                                     image_feature,
-                                    self.llama.image_newline[:, (None), (None)].expand(
-                                        shape=[*image_feature.shape[:-1], 1]
-                                    ).astype(image_feature.dtype),
+                                    self.qwen2.image_newline[:, None, None]
+                                    .expand([*image_feature.shape[:-1], 1])
+                                    .cast(image_feature.dtype),
                                 ),
                                 axis=-1,
                             )
-                            x = image_feature.flatten(start_axis=1, stop_axis=2)
-                            perm_12 = list(range(x.ndim))
-                            perm_12[0] = 1
-                            perm_12[1] = 0
-                            image_feature = x.transpose(perm=perm_12)
+                            image_feature = image_feature.flatten(1, 2).transpose(
+                                [1, 0]
+                            )  # [896, 54, 74] -> [896, 3996] -> [3996, 896]
+
+                        elif "unpad" in mm_patch_merge_type:
+                            image_feature = image_feature.transpose([4, 0, 2, 1, 3])
+                            image_feature = image_feature.flatten(1, 2).flatten(2, 3)
+                            image_feature = unpad_image(image_feature, image_sizes[image_idx])
+                            image_feature = paddle.concat(
+                                (
+                                    image_feature,
+                                    self.llama.image_newline[:, None, None]
+                                    .expand([*image_feature.shape[:-1], 1])
+                                    .cast(image_feature.dtype),
+                                ),
+                                axis=-1,
+                            )
+                            image_feature = image_feature.flatten(1, 2).transpose([1, 0])  #
                         else:
-                            image_feature = image_feature.transpose(perm=[0, 2, 1, 3, 4])
-                            image_feature = image_feature.flatten(start_axis=0, stop_axis=3)
-                        image_feature = paddle.concat(x=(base_image_feature, image_feature), axis=0)
+                            image_feature = image_feature.transpose([0, 2, 1, 3, 4])
+                            image_feature = image_feature.flatten(0, 3)
+                        if "nobase" in mm_patch_merge_type:
+                            pass
+                        else:
+                            image_feature = paddle.concat((base_image_feature, image_feature), axis=0)
+                        new_image_features.append(image_feature)
                     else:
                         image_feature = image_feature[0]
                         if "unpad" in mm_patch_merge_type:

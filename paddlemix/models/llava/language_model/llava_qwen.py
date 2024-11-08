@@ -12,29 +12,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import warnings
 from typing import List, Optional, Tuple, Union
 
 import paddle
-import paddle.distributed.fleet.meta_parallel as mpu
-from paddle.autograd import PyLayer
-from paddle.distributed import fleet
-from paddlenlp.transformers import (
-    Qwen2Config,
-    Qwen2ForCausalLM,
-    Qwen2Model,
-)
-from paddlenlp.transformers.llama.modeling import LlamaLMHead
+import paddle.nn as nn
+from paddlenlp.transformers import Qwen2Config, Qwen2ForCausalLM, Qwen2Model
 from paddlenlp.transformers.model_outputs import CausalLMOutputWithPast
-from paddlenlp.transformers.utils import get_scale_by_dtype
 
-from .base_model import LlavaMetaForCausalLM, LlavaMetaModel
-from .configuration_qwen import LlavaQwenConfig
+from ..llava_arch import LlavaMetaForCausalLM, LlavaMetaModel
 
 __all__ = [
+    "LlavaQwenConfig",
     "LlavaQwenModel",
     "LlavaQwenForCausalLM",
 ]
+
+
+class LlavaQwenConfig(Qwen2Config):
+    model_type = "llava_qwen"
+    mm_patch_merge_type = "spatial_unpad"
+    use_cachekv_int8 = None
 
 
 class LlavaQwenModel(LlavaMetaModel, Qwen2Model):
@@ -42,6 +39,34 @@ class LlavaQwenModel(LlavaMetaModel, Qwen2Model):
 
     def __init__(self, config: Qwen2Config):
         super(LlavaQwenModel, self).__init__(config)
+
+
+class Qwen2LMHead(nn.Layer):
+    def __init__(self, config, embedding_weights=None, transpose_y=False, tensor_parallel_output=1):
+        super(Qwen2LMHead, self).__init__()
+        self.config = config
+        vocab_size = config.vocab_size
+
+        self.transpose_y = transpose_y
+        if transpose_y:
+            # only for weight from embedding_weights
+            if embedding_weights is not None:
+                self.weight = embedding_weights
+            else:
+                self.weight = self.create_parameter(
+                    shape=[vocab_size, config.hidden_size],
+                    dtype=paddle.get_default_dtype(),
+                )
+        else:
+            # for weight from model init
+            self.weight = self.create_parameter(
+                shape=[config.hidden_size, vocab_size],
+                dtype=paddle.get_default_dtype(),
+            )
+
+    def forward(self, hidden_states, tensor_parallel_output=1):
+        logits = paddle.matmul(hidden_states, self.weight, transpose_y=self.transpose_y)
+        return logits
 
 
 class LlavaQwenForCausalLM(Qwen2ForCausalLM, LlavaMetaForCausalLM):
@@ -54,7 +79,11 @@ class LlavaQwenForCausalLM(Qwen2ForCausalLM, LlavaMetaForCausalLM):
         config.rope_scaling = None
         self.qwen2 = LlavaQwenModel(config)
 
-        # self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias_attr=False)
+        if config.tie_word_embeddings:
+            self.lm_head = Qwen2LMHead(config, embedding_weights=self.qwen2.embed_tokens.weight, transpose_y=True)
+            self.tie_weights()
+        else:
+            self.lm_head = Qwen2LMHead(config)
 
     def get_model(self):
         return self.qwen2

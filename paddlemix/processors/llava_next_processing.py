@@ -19,13 +19,13 @@ import paddle
 from ..models.llava.constants import IMAGE_TOKEN_INDEX
 from ..models.llava.mm_utils import (
     expand2square,
-    get_conversation,
     is_valid_video_filename,
     load_image,
     process_anyres_image,
     sample_frames,
     tokenizer_image_token,
 )
+from ..models.llava.train_utils import get_conversation
 from .base_processing import ProcessorMixin
 
 __all__ = ["LlavaNextProcessor"]

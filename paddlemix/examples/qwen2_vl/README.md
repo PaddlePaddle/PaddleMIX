@@ -13,11 +13,11 @@
 python -m pip install paddlepaddle-gpu==0.0.0.post118 -f https://www.paddlepaddle.org.cn/whl/linux/gpu/develop.html
 ```
 
-- paddlenlp >= 3.0.0(默认开启flash_attn，推荐源码编译安装)
+- **paddlenlp == 3.0.0b2**
 
 > 注：
 * 请确保安装了以上依赖，否则无法运行。同时，需要安装 paddlemix/external_ops 下的自定义OP, `python setup.py install`。如果安装后仍然找不到算子，需要额外设置PYTHONPATH
-* 使用flash_attn 要求A100/A800显卡或者H20显卡，开启后推理显存变化如下：2B模型: 49G -> 13G ｜ 7B模型: 61G -> 25G
+* (默认开启flash_attn)使用flash_attn 要求A100/A800显卡或者H20显卡
 
 ## 3 推理预测
 
