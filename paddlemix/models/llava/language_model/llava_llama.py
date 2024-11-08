@@ -19,7 +19,7 @@ import paddle
 import paddle.distributed.fleet.meta_parallel as mpu
 from paddle.autograd import PyLayer
 from paddle.distributed import fleet
-from paddlenlp.transformers import LlamaConfig, LlamaForCausalLM, LlamaModel
+from paddlenlp.transformers import AutoConfig, LlamaConfig, LlamaForCausalLM, LlamaModel
 from paddlenlp.transformers.llama.modeling import LlamaLMHead
 from paddlenlp.transformers.model_outputs import CausalLMOutputWithPast
 from paddlenlp.transformers.utils import get_scale_by_dtype
@@ -34,9 +34,10 @@ __all__ = [
 
 
 class LlavaConfig(LlamaConfig):
-    model_type = "llava"
+    model_type = "llava"  # "llava_llama"
     mm_patch_merge_type = "spatial_unpad"
     use_cachekv_int8 = None
+    mm_dense_connector_type = "none"
 
 
 class LlavaLlamaModel(LlavaMetaModel, LlamaModel):
@@ -237,3 +238,6 @@ class LlavaCriterion(paddle.nn.Layer):
                 loss = paddle.sum(masked_lm_loss * binary_sequence) / count
 
         return loss
+
+
+AutoConfig.register("llava", LlavaConfig)

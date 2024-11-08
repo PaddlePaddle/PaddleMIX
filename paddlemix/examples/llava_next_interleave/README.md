@@ -7,21 +7,26 @@
 LLaVA-NeXT-Interleave 可以在不同的多图像基准测试中取得与之前的 SoTA 相比领先的结果。（2）通过适当混合不同场景的数据，可以提高或保持之前单个任务的性能，保持了 LLaVA-NeXT 的单图像性能，并提高了视频任务的性能。
 
 
-本仓库提供paddle版本的llava-next-interleave-qwen-7b、llava-next-interleave-qwen-0.5b、llava-next-interleave-qwen-7b-dpo三个模型权重。
+**本仓库支持的模型权重:**
+
+| Model              |
+|--------------------|
+| lmms-lab/llava-next-interleave-qwen-0.5b  |
+| lmms-lab/llava-next-interleave-qwen-7b  |
+| lmms-lab/llava-next-interleave-qwen-7b-dpo  |
+
+注意：与huggingface权重同名，但权重为paddle框架的Tensor，使用`xxx.from_pretrained("lmms-lab/llava-next-interleave-qwen-0.5b")`即可自动下载该权重文件夹到缓存目录。
 
 
 ## 2 环境准备
-- **python >= 3.8**
-- <span style="color:red;">**paddlenlp >= 3.0**</span>
-```
-cd PaddleMIX/paddlemix/examples/llava_next_interleave
-pip install -r requirement.txt
 
-or 
+1）[安装PaddleNLP develop分支](https://github.com/PaddlePaddle/PaddleNLP?tab=readme-ov-file#%E5%AE%89%E8%A3%85)
 
-pip install paddlenlp==3.0.0b0
-```
+版本要求：paddlenlp>=3.0.0b2
 
+2）[安装 PaddleMIX 环境依赖包](https://github.com/PaddlePaddle/PaddleMIX/tree/b4f97ff859e1964c839fc5fab94f7ba63b1e5959?tab=readme-ov-file#%E5%AE%89%E8%A3%85)
+
+注意：Python版本最好为3.10及以上版本。
 
 
 ## 3 快速开始
@@ -30,16 +35,12 @@ pip install paddlenlp==3.0.0b0
 ### 多轮对话启动
 ```bash
 # llava
-python paddlemix/examples/llava_next_interleave/run_siglip_encoder_predict.py  \
---model-path "paddlemix/llava_next/llava-next-interleave-qwen-7b" \
+python paddlemix/examples/llava_next_interleave/run_predict_multiround.py  \
+--model-path "lmms-lab/llava-next-interleave-qwen-7b" \
 --image-file "paddlemix/demo_images/twitter3.jpeg" "paddlemix/demo_images/twitter4.jpeg" \
 ```
 可配置参数说明：
-  * `model-path`: 指定llava系列的模型名字或权重路径 ，支持 
-  - paddlemix/llava_next/llava-next-interleave-qwen-7b
-  - paddlemix/llava_next/llava-next-interleave-qwen-7b-dpo
-  - paddlemix/llava_next/llava-next-interleave-qwen-0.5b
-  - paddlemix/llava_next/llava-next-interleave-qwen-clip-encoder-7b
+  * `model-path`: 指定llava系列的模型名字或权重路径
   * `image-flie` :输入图片路径或url，默认None。
 
 
