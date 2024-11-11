@@ -179,6 +179,10 @@ class PreTrainingArguments(TrainingArguments):
         default=True,
         metadata={"help": ""},
     )
+    benchmark: bool = field(
+        default=False,
+        metadata={"help": "Whether or not run benchmark (True/False)."},
+    )
 
 
 class LazySupervisedDataset(Dataset):
