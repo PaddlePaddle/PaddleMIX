@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from paddlenlp.transformers import AutoTokenizer, LlamaTokenizer
+# from paddlenlp.transformers import AutoTokenizer
+from paddlenlp.transformers import LlamaTokenizer
 
 __all__ = ["LLavaTokenizer"]
 
@@ -45,4 +46,4 @@ class LLavaTokenizer(LlamaTokenizer):
         self.image_token_span = kwargs.get("image_token_span", None)
 
 
-AutoTokenizer.register("llava", LLavaTokenizer)
+# AutoTokenizer.register("llava", LLavaTokenizer)
