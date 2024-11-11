@@ -27,7 +27,7 @@ from paddlemix.models.llava.constants import (
 )
 from paddlemix.models.llava.conversation import conv_templates
 from paddlemix.models.llava.mm_utils import load_image,get_anyres_image_grid_shape
-from paddlemix.models.llava.base_model import unpad_image
+from paddlemix.models.llava.llava_arch import unpad_image
 from paddlemix.utils.log import logger
 
 
