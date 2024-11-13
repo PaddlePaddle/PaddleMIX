@@ -120,13 +120,13 @@ def main(args):
             use_cache=True,
         )
 
-    outputs = tokenizer.decode(output_ids[0][0]).strip().split("<|im_end|>")[0]
+    outputs = tokenizer.decode(output_ids[0][0]).strip().split("<|im_end|>")[0].split("</s>")[0]
     print("outputs:\n", outputs)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model-path", type=str, default="paddlemix/llava/llava-v1.5-7b")
+    parser.add_argument("--model-path", type=str, default="liuhaotian/llava-v1.6-vicuna-7b")
     parser.add_argument("--question", type=str, default="What is shown in this image?")
     parser.add_argument("--image-file", type=str, required=True)
     parser.add_argument("--conv-mode", type=str, default=None)

@@ -60,13 +60,13 @@ class LlavaProcessor(ProcessorMixin):
             image = load_image(image_path)
             if image_aspect_ratio == "pad":
                 image = expand2square(image, tuple(int(x * 255) for x in self.image_processor.image_mean))
-                image = self.image_processor(image, return_tensors="pd")["pixel_values"][0]
+                image = self.image_processor.preprocess(image, return_tensors="pd")["pixel_values"][0]
 
             elif image_aspect_ratio == "anyres":
                 image = process_anyres_image(image, self.image_processor, self.image_processor.image_grid_pinpoints)
 
             else:
-                image = self.image_processor(image, return_tensors="pd")["pixel_values"][0]
+                image = self.image_processor.preprocess(image, return_tensors="pd")["pixel_values"][0]
             images.append(image)
 
         if mode == "train":
