@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import datetime
+
+import paddle
 from paddlenlp.transformers import Qwen2Tokenizer
 
 from paddlemix.models.qwen2_vl.modeling_qwen2_vl import Qwen2VLForConditionalGeneration
@@ -21,7 +24,12 @@ from paddlemix.processors.qwen2_vl_processing import (
     process_vision_info,
 )
 
-MODEL_NAME = "Qwen/Qwen2-VL-2B-Instruct"
+benchmark = True
+warm_up = 3
+
+# MODEL_NAME = "Qwen/Qwen2-VL-2B-Instruct"
+MODEL_NAME = "Qwen/Qwen2-VL-7B-Instruct"
+
 model = Qwen2VLForConditionalGeneration.from_pretrained(MODEL_NAME, dtype="bfloat16")
 
 image_processor = Qwen2VLImageProcessor()
@@ -37,8 +45,14 @@ messages = [
     {
         "role": "user",
         "content": [
-            {"type": "image", "image": "paddlemix/demo_images/examples_image1.jpg"},
-            {"type": "image", "image": "paddlemix/demo_images/examples_image2.jpg"},
+            {
+                "type": "image",
+                "image": "/root/paddlejob/workspace/env_run/output/changwenbin/PaddleMIX/paddlemix/demo_images/examples_image1.jpg",
+            },
+            {
+                "type": "image",
+                "image": "/root/paddlejob/workspace/env_run/output/changwenbin/PaddleMIX/paddlemix/demo_images/examples_image2.jpg",
+            },
             {"type": "text", "text": "Identify the similarities between these images."},
         ],
     }
@@ -59,7 +73,44 @@ inputs = processor(
     return_tensors="pd",
 )
 
-# Inference: Generation of the output
-generated_ids = model.generate(**inputs, max_new_tokens=128)  # already trimmed in paddle
+
+if warm_up > 0:
+    for _ in range(warm_up):
+        # Inference: Generation of the output
+        generated_ids = model.generate(**inputs, max_new_tokens=128)  # already trimmed in paddle
+if benchmark:
+    repeat_times = 10
+    sumtime = 0.0
+    for i in range(repeat_times):
+        paddle.device.synchronize()
+        starttime = datetime.datetime.now()
+
+        # Inference: Generation of the output
+        generated_ids = model.generate(**inputs, max_new_tokens=128)  # already trimmed in paddle
+
+        paddle.device.synchronize()
+        endtime = datetime.datetime.now()
+
+        duringtime = endtime - starttime
+        duringtime = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
+        sumtime += duringtime
+        print(f"Multi {MODEL_NAME} end to end time : ", duringtime, "ms")
+
+        paddle.device.cuda.empty_cache()
+        inference_global_mem = paddle.device.cuda.memory_reserved() / (1024**3)
+        print(f"Inference used CUDA memory : {inference_global_mem:.3f} GiB")
+
+    print(f"Multi {MODEL_NAME} ave end to end time : ", sumtime / repeat_times, "ms")
+
+    paddle.device.cuda.empty_cache()
+    inference_global_mem = paddle.device.cuda.memory_reserved() / (1024**3)
+    print(f"Inference used CUDA memory : {inference_global_mem:.3f} GiB")
+    cuda_mem_after_used = paddle.device.cuda.max_memory_allocated() / (1024**3)
+    print(f"Max used CUDA memory : {cuda_mem_after_used:.3f} GiB")
+else:
+    # Inference: Generation of the output
+    generated_ids = model.generate(**inputs, max_new_tokens=128)  # already trimmed in paddle
+
+
 output_text = processor.batch_decode(generated_ids[0], skip_special_tokens=True, clean_up_tokenization_spaces=False)
 print("output_text:\n", output_text[0])
