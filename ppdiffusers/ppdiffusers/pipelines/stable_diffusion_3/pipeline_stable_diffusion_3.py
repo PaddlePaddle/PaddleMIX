@@ -802,7 +802,9 @@ class StableDiffusion3Pipeline(DiffusionPipeline, SD3LoraLoaderMixin, FromSingle
 
                 hcg = fleet.get_hybrid_communicate_group()
                 dp_degree = hcg.get_data_parallel_world_size()
-                if dp_degree > 1 and self.do_classifier_free_guidance:
+                enabled_cfg_dp = True if dp_degree > 1 and self.do_classifier_free_guidance else False
+
+                if enabled_cfg_dp:
                     dp_id = hcg.get_data_parallel_rank()
                     dp_group = hcg.get_data_parallel_group()
 
@@ -832,7 +834,7 @@ class StableDiffusion3Pipeline(DiffusionPipeline, SD3LoraLoaderMixin, FromSingle
                 else:
                     output = model_output[0]
 
-                if dp_degree > 1 and self.do_classifier_free_guidance:
+                if enabled_cfg_dp:
                     tmp_shape = output.shape
                     tmp_shape[0] *= 2
                     noise_pred = paddle.zeros(tmp_shape, dtype=output.dtype)
