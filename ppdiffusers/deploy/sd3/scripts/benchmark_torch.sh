@@ -12,15 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# attention raw
-python infer_dygraph_torch.py --scheduler "flow" --task_name all --attention_type raw --use_fp16 True --inference_steps 50 --height 1024 --width 1024 --benchmark_steps 10
+# sd3 do ot supprot attention raw
 
 # attention sdp
-python infer_dygraph_torch.py --scheduler "flow" --task_name all --attention_type sdp --use_fp16 True --inference_steps 50 --height 1024 --width 1024 --benchmark_steps 10
-
-
-# attention raw fp32
-python infer_dygraph_torch.py --scheduler "flow" --task_name all --attention_type raw --use_fp16 False --inference_steps 50 --height 1024 --width 1024 --benchmark_steps 10
+python infer_dygraph_torch.py --scheduler "flow" --task_name all --attention_type sdp --use_fp16 True --inference_steps 50 --height 1024 --width 1024 --benchmark_steps 10 --pretrained_model_name_or_path /root/paddlejob/workspace/env_run/output/zhangxu/benchmark/frame_benchmark/pytorch/dynamic/PaddleMIX/models/diffusers/stable-diffusion-3-medium-diffusers
 
 # attention sdp fp32
-python infer_dygraph_torch.py --scheduler "flow" --task_name all --attention_type sdp --use_fp16 False --inference_steps 50 --height 1024 --width 1024 --benchmark_steps 10
+python infer_dygraph_torch.py --scheduler "flow" --task_name all --attention_type sdp --use_fp16 False --inference_steps 50 --height 1024 --width 1024 --benchmark_steps 10 --pretrained_model_name_or_path /root/paddlejob/workspace/env_run/output/zhangxu/benchmark/frame_benchmark/pytorch/dynamic/PaddleMIX/models/diffusers/stable-diffusion-3-medium-diffusers

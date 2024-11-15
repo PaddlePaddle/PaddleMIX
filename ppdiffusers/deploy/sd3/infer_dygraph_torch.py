@@ -18,8 +18,8 @@ import time
 
 import torch
 
-torch.nn.functional.scaled_dot_product_attention_ = torch.nn.functional.scaled_dot_product_attention
-delattr(torch.nn.functional, "scaled_dot_product_attention")
+# torch.nn.functional.scaled_dot_product_attention_ = torch.nn.functional.scaled_dot_product_attention
+# delattr(torch.nn.functional, "scaled_dot_product_attention")
 
 import cv2
 import numpy as np
@@ -272,18 +272,18 @@ def main(args):
         args.attention_type = [args.attention_type]
 
     for attention_type in args.attention_type:
-        attn_prrocessor_cls = AttnProcessor if attention_type == "raw" else AttnProcessor2_0
-        if attention_type == "sdp":
-            torch.nn.functional.scaled_dot_product_attention = torch.nn.functional.scaled_dot_product_attention_
-        set_attn_processor(pipe.unet, attn_prrocessor_cls())
-        set_attn_processor(pipe.vae, attn_prrocessor_cls())
+        # attn_prrocessor_cls = AttnProcessor if attention_type == "raw" else AttnProcessor2_0
+        # if attention_type == "sdp":
+        #     torch.nn.functional.scaled_dot_product_attention = torch.nn.functional.scaled_dot_product_attention_
+        # set_attn_processor(pipe.transformer, attn_prrocessor_cls())
+        # set_attn_processor(pipe.vae, attn_prrocessor_cls())
 
-        if args.channels_last:
-            pipe.unet.to(memory_format=torch.channels_last)
+        # if args.channels_last:
+        #     pipe.transformer.to(memory_format=torch.channels_last)
 
-        if args.compile:
-            print("Run torch compile")
-            pipe.unet = torch.compile(pipe.unet, mode="reduce-overhead", fullgraph=True)
+        # if args.compile:
+        #     print("Run torch compile")
+        #     pipe.unet = torch.compile(pipe.transformer, mode="reduce-overhead", fullgraph=True)
 
         width = args.width
         height = args.height
