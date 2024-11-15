@@ -62,12 +62,6 @@ function _train(){
     export FLAG_FUSED_LINEAR=0
     export FLAGS_conv_workspace_size_limit=4096
 
-    # # 是否开启 ema
-    # export FLAG_USE_EMA=0
-    # # 是否开启 recompute
-    # export FLAG_RECOMPUTE=1
-    # # 是否开启 xformers
-    # export FLAG_XFORMERS=1
     export FLAGS_cudnn_deterministic=True
     env |grep FLAG
 
@@ -80,8 +74,6 @@ function _train(){
     ls;
     echo "------------"
 
-    # model_path=../ppdiffusers/examples/dreambooth/
-    # cd ${model_path}
 
     if [ ${model_item} = "stable_diffusion_3-dreambooth_ft" ];then
         train_cmd="

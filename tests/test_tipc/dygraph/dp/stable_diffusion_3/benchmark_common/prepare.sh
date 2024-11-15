@@ -1,4 +1,4 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -31,14 +31,6 @@ else
     echo "Directory dog already exists. Skipping download."
 fi
 
-# rm -rf stable-diffusion-3-medium-diffusers-paddle-init.tar.gz
-# rm -rf stable-diffusion-3-medium-diffusers-paddle-init
-# rm -rf dog.zip
-# rm -rf dog
-# wget https://bj.bcebos.com/paddlenlp/models/community/westfish/sd3_benchmark/stable-diffusion-3-medium-diffusers-paddle-init.tar.gz
-# tar -zxvf stable-diffusion-3-medium-diffusers-paddle-init.tar.gz
-# wget https://paddlenlp.bj.bcebos.com/models/community/westfish/develop-sdxl/dog.zip
-# unzip dog.zip
 
 RUN_SETUP=${RUN_SETUP:-"true"}
 if [ "$RUN_SETUP" = "true" ]; then
