@@ -45,10 +45,11 @@ if [ "$RUN_SETUP" = "true" ]; then
     echo "Running setup and installation steps..."
 
     export PYTHONPATH=$(dirname "$PWD"):$PYTHONPATH
-    python -m pip install --upgrade pip -i https://mirror.baidu.com/pypi/simple
-    python -m pip install einops -i https://mirror.baidu.com/pypi/simple
+    python -m pip install --upgrade pip
+    # python -m pip install paddlepaddle-gpu==3.0.0b2 -i https://www.paddlepaddle.org.cn/packages/stable/cu118/
+    python -m pip install einops
     python -m pip install -r ../requirements.txt
-    python -m pip install --upgrade pybind11 regex sentencepiece tqdm visualdl attrdict easydict pyyaml paddlesde -i https://mirror.baidu.com/pypi/simple
+    python -m pip install --upgrade pybind11 regex sentencepiece tqdm visualdl attrdict easydict pyyaml paddlesde
     python -m pip install paddlenlp==3.0.0b2
     python -m pip install huggingface-hub==0.23.0
 

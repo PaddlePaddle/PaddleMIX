@@ -100,7 +100,7 @@ function _train(){
             --lr_warmup_steps=0 \
             --max_train_steps=${max_iter} \
             --validation_prompt=A-photo-of-sks-dog-in-a-bucket \
-            --validation_epochs=20 \
+            --validation_epochs=100 \
             --num_validation_images 1 \
             --seed=0 \
             --checkpointing_steps=10000
@@ -123,7 +123,7 @@ function _train(){
             --lr_warmup_steps=0 \
             --max_train_steps=${max_iter} \
             --validation_prompt=A-photo-of-sks-dog-in-a-bucket \
-            --validation_epochs=20 \
+            --validation_epochs=100 \
             --num_validation_images 1 \
             --seed=0 \
             --checkpointing_steps=10000
@@ -146,8 +146,8 @@ function _train(){
     esac
 
     echo "train_cmd: ${train_cmd}  log_file: ${log_file}"
-    RUN_SETUP=${RUN_SETUP:-"true"}
-    if [ "$RUN_SETUP" = "true" ]; then
+    RUN_SLOW=${RUN_SLOW:-"true"}
+    if [ "$RUN_SLOW" = "true" ]; then
         timeout 30m ${train_cmd} > ${log_file} 2>&1
     else
         echo "fast mode, only run 3m"
