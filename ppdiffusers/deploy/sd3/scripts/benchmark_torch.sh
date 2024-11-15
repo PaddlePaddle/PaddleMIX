@@ -15,7 +15,7 @@
 # sd3 do ot supprot attention raw
 
 # attention sdp
-python infer_dygraph_torch.py --scheduler "flow" --task_name all --attention_type sdp --use_fp16 True --inference_steps 50 --height 1024 --width 1024 --benchmark_steps 10 --pretrained_model_name_or_path /root/paddlejob/workspace/env_run/output/zhangxu/benchmark/frame_benchmark/pytorch/dynamic/PaddleMIX/models/diffusers/stable-diffusion-3-medium-diffusers
+python infer_dygraph_torch.py --scheduler "flow" --task_name all --attention_type sdp --use_fp16 True --inference_steps 50 --height 1024 --width 1024 --benchmark_steps 10 
 
 # attention sdp fp32
-python infer_dygraph_torch.py --scheduler "flow" --task_name all --attention_type sdp --use_fp16 False --inference_steps 50 --height 1024 --width 1024 --benchmark_steps 10 --pretrained_model_name_or_path /root/paddlejob/workspace/env_run/output/zhangxu/benchmark/frame_benchmark/pytorch/dynamic/PaddleMIX/models/diffusers/stable-diffusion-3-medium-diffusers
+python infer_dygraph_torch.py --scheduler "flow" --task_name all --attention_type sdp --use_fp16 False --inference_steps 50 --height 1024 --width 1024 --benchmark_steps 10 
