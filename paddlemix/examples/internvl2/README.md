@@ -3,6 +3,22 @@
 ## 1. 模型介绍
 
 [InternVL2](https://internvl.github.io/blog/2024-07-02-InternVL-2.0/)是 InternVL 系列多模态大模型的最新成员。InternVL2 包含多个经过指令微调的模型，参数量从 1B 到 76B 不等。在开源模型中，InternVL2 在文档和图表理解、信息图表问答、场景文本理解和 OCR 任务、科学和数学问题解决等方面表现出色。
+[InternVL2-MPO](https://internvl.github.io/blog/2024-11-14-InternVL-2.0-MPO/)是混合偏好优化后的InternVL2模型，基于InternVL2在多个基准测试中表现出了改进的性能，特别是在多模态推理方面。
+
+
+**本仓库支持的模型权重:**
+
+| Model              |
+|--------------------|
+| OpenGVLab/InternVL2-1B  |
+| OpenGVLab/InternVL2-2B  |
+| OpenGVLab/InternVL2-8B  |
+| OpenGVLab/InternVL2-26B |
+| OpenGVLab/InternVL2-40B |
+| OpenGVLab/InternVL2-8B-MPO |
+
+注意：与huggingface权重同名，但权重为paddle框架的Tensor，使用`xxx.from_pretrained("OpenGVLab/InternVL2-2B")`即可自动下载该权重文件夹到缓存目录。
+
 
 ## 2 环境准备
 

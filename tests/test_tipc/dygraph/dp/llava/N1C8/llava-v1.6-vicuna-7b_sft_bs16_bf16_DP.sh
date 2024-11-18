@@ -12,16 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-model_item=qwen2_vl_sft
-model=qwen2_vl
-bs_item=1
+model=llava
+model_item=llava-v1.6-vicuna-7b
+bs_item=16
 fp_item=bf16
 run_mode=DP
 device_num=N1C8
 max_epochs=3
 num_workers=0
+train_stage=sft
 
 # get data
 bash tests/test_tipc/dygraph/dp/${model}/benchmark_common/prepare.sh
 # run
-bash tests/test_tipc/dygraph/dp/${model}/benchmark_common/run_benchmark.sh ${model_item} ${bs_item} ${fp_item} ${run_mode} ${device_num} ${max_epochs} ${num_workers} 2>&1;
+bash tests/test_tipc/dygraph/dp/${model}/benchmark_common/run_benchmark.sh ${model_item} ${bs_item} ${fp_item} ${run_mode} ${device_num} ${max_epochs} ${num_workers} ${train_stage} 2>&1;
