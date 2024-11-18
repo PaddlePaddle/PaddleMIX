@@ -13,7 +13,7 @@
 # limitations under the License.
 
 model=llava
-model_item=llava-v1.6-vicuna-7b
+model_item=vicuna-7b-v1.5
 bs_item=16
 fp_item=bf16
 run_mode=DP
@@ -23,6 +23,6 @@ num_workers=0
 train_stage=pretrain
 
 # get data
-bash tests/test_tipc/dygraph/dp/${model}/benchmark_common/prepare.sh
+bash ./test_tipc/dygraph/dp/${model}/benchmark_common/prepare.sh
 # run
-bash tests/test_tipc/dygraph/dp/${model}/benchmark_common/run_benchmark.sh ${model_item} ${bs_item} ${fp_item} ${run_mode} ${device_num} ${max_epochs} ${num_workers} ${train_stage} 2>&1;
+bash ./test_tipc/dygraph/dp/${model}/benchmark_common/run_benchmark.sh ${model_item} ${bs_item} ${fp_item} ${run_mode} ${device_num} ${max_epochs} ${num_workers} ${train_stage} 2>&1;

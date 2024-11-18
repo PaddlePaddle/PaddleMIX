@@ -20,9 +20,9 @@ run_mode=DP
 device_num=N1C8
 max_epochs=3
 num_workers=0
-train_stage=sft
+train_stage=lora_sft
 
 # get data
-bash tests/test_tipc/dygraph/dp/${model}/benchmark_common/prepare.sh
+bash ./test_tipc/dygraph/dp/${model}/benchmark_common/prepare.sh
 # run
-bash tests/test_tipc/dygraph/dp/${model}/benchmark_common/run_benchmark.sh ${model_item} ${bs_item} ${fp_item} ${run_mode} ${device_num} ${max_epochs} ${num_workers} ${train_stage} 2>&1;
+bash ./test_tipc/dygraph/dp/${model}/benchmark_common/run_benchmark.sh ${model_item} ${bs_item} ${fp_item} ${run_mode} ${device_num} ${max_epochs} ${num_workers} ${train_stage} 2>&1;

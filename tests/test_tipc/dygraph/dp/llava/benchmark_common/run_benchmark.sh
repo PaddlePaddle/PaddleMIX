@@ -35,7 +35,7 @@ function _set_params(){
     is_large_model=False           # (可选)普通模型默认为False，如果添加大模型且只取一条ips设置为True
 
     # 以下为通用执行命令，无特殊可不用修改
-    model_name=${model_item}_bs${base_batch_size}_${fp_item}_${run_mode}  # (必填) 且格式不要改动,与竞品名称对齐
+    model_name=${model_item}_${train_stage}_bs${base_batch_size}_${fp_item}_${run_mode}  # (必填) 与竞品名称对齐
     device=${CUDA_VISIBLE_DEVICES//,/ }
     arr=(${device})
     num_gpu_devices=${#arr[*]}
@@ -86,18 +86,20 @@ function _train(){
     export FLAG_FUSED_LINEAR=${FUSED}
 
     # add some flags
-    export FLAGS_eager_delete_tensor_gb=0.0
-    export FLAGS_fraction_of_gpu_memory_to_use=0.98
-    export FLAGS_conv_workspace_size_limit=4096
+    export FLAGS_use_cuda_managed_memory=true
+    export FLAGS_allocator_strategy=auto_growth
+    export FLAGS_embedding_deterministic=1
+    export FLAGS_cudnn_deterministic=1
+    export NVIDIA_TF32_OVERRIDE=0
     export http_proxy=agent.baidu.com:8188
     export https_proxy=agent.baidu.com:8188
 
     #训练阶段
     if [ ${train_stage} = "sft" ]; then
-        train_cmd="./paddlemix/tools/supervised_finetune.py \
-            --do_train \
-            --model_name_or_path "liuhaotian/${model_item}" \
-            --dataset '{"train":[{"name": "chatml_dataset", "data_files": "/root/.paddlemix/datasets/llava_bench_data/llava_train_part.json","chat_template":"/root/.paddlenlp/models/liuhaotian/llava-v1.6-vicuna-7b/chat_template.json"}]}' \
+        train_cmd="../paddlemix/tools/supervised_finetune.py \
+            --do_train true \
+            --model_name_or_path liuhaotian/${model_item} \
+            --dataset {\"train\":[{\"name\":\"chatml_dataset\",\"data_files\":\"./llava_bench_data/ScienceQA_val_500.json\",\"chat_template\":\"./llava_bench_data/chat_template.json\"}]} \
             --mixtoken false \
             --output_dir ./work_dirs/${model_item}_${train_stage}_benchmark \
             --overwrite_output_dir true \
@@ -109,9 +111,9 @@ function _train(){
             --num_train_epochs ${max_epochs} \
             --learning_rate 2e-05 \
             --warmup_ratio 0.03 \
-            --lr_scheduler_type "cosine" \
-            --evaluation_strategy "no" \
-            --save_strategy "no" \
+            --lr_scheduler_type cosine \
+            --evaluation_strategy no \
+            --save_strategy no \
             --max_length 2048 \
             ${use_fp16_cmd} \
             --do_eval false \
@@ -120,10 +122,10 @@ function _train(){
             "
     fi
     if [ ${train_stage} = "lora_sft" ]; then
-        train_cmd="./paddlemix/tools/supervised_finetune.py \
-            --do_train \
-            --model_name_or_path "liuhaotian/${model_item}" \
-            --dataset '{"train":[{"name": "chatml_dataset", "data_files": "/root/.paddlemix/datasets/llava_bench_data/llava_train_part.json","chat_template":"/root/.paddlenlp/models/liuhaotian/llava-v1.6-vicuna-7b/chat_template.json"}]}' \
+        train_cmd="../paddlemix/tools/supervised_finetune.py \
+            --do_train true \
+            --model_name_or_path liuhaotian/${model_item} \
+            --dataset {\"train\":[{\"name\":\"chatml_dataset\",\"data_files\":\"./llava_bench_data/ScienceQA_val_500.json\",\"chat_template\":\"./llava_bench_data/chat_template.json\"}]} \
             --mixtoken false \
             --output_dir ./work_dirs/${model_item}_${train_stage}_benchmark \
             --overwrite_output_dir true \
@@ -132,18 +134,18 @@ function _train(){
             --num_train_epochs ${max_epochs} \
             --recompute true \
             --gradient_accumulation_steps 1 \
-            --sharding "stage2" \
+            --sharding stage2 \
             --tensor_parallel_degree 1 \
             --sharding_parallel_degree 8 \
             --learning_rate 2e-04 \
             --mm_projector_lr 2e-5 \
             --weight_decay 0.0 \
             --warmup_ratio 0.03 \
-            --lr_scheduler_type "cosine" \
+            --lr_scheduler_type cosine \
             --logging_steps 1 \
             --save_steps 1000 \
-            --evaluation_strategy "no" \
-            --save_strategy "no" \
+            --evaluation_strategy no \
+            --save_strategy no \
             --max_length 2048 \
             --do_eval false \
             --disable_tqdm true \
@@ -155,17 +157,17 @@ function _train(){
             --lora_rank 128 \
             --lora_alpha 256 \
             --lora_dropout 0.0 \
-            --lora_target_modules '["llama.layer.*q_proj.*", "llama.layer.*k_proj.*", "llama.layer.*v_proj.*", "llama.layer.*gate_proj.*", "llama.layer.*up_proj.*", "llama.layer.*down_proj.*", "llama.layer.*o_proj.*"]' \
+            --lora_target_modules [\"llama.layer.*q_proj.*\",\"llama.layer.*k_proj.*\",\"llama.layer.*v_proj.*\",\"llama.layer.*gate_proj.*\",\"llama.layer.*up_proj.*\",\"llama.layer.*down_proj.*\",\"llama.layer.*o_proj.*\"] \
             --benchmark True
             "
     fi
     if [ ${train_stage} = "pretrain" ]; then
-        train_cmd="./paddlemix/examples/llava/pretrain.py \
-            --do_train \
-            --model_name_or_path "paddlemix/llava/${model_item}" \
-            --dataset '{"train":[{"name": "chatml_dataset", "data_files": "/root/.paddlemix/datasets/llava_bench_data/llava_train_part.json"}]}' \
-            --freeze_include '["*llama*", "*lm_head*"]' \
-            --freeze_exclude '["*llama.mm_projector*"]' \
+        train_cmd="../paddlemix/examples/llava/pretrain.py \
+            --do_train true \
+            --model_name_or_path paddlemix/llava/${model_item} \
+            --dataset {\"train\":[{\"name\":\"chatml_dataset\",\"data_files\":\"./llava_bench_data/ScienceQA_val_500.json\"}]} \
+            --freeze_include [\"*llama*\",\"*lm_head*\"] \
+            --freeze_exclude [\"*llama.mm_projector*\"] \
             --output_dir ./work_dirs/${model_item}_${train_stage}_benchmark \
             --overwrite_output_dir true \
             --per_device_train_batch_size ${base_batch_size} \
@@ -177,11 +179,11 @@ function _train(){
             --group_by_modality_length false \
             --learning_rate 1e-03 \
             --warmup_ratio 0.03 \
-            --lr_scheduler_type "cosine" \
+            --lr_scheduler_type cosine \
             --logging_steps 1 \
             --save_steps 1000 \
-            --evaluation_strategy "no" \
-            --save_strategy "no" \
+            --evaluation_strategy no \
+            --save_strategy no \
             --max_length 2048 \
             --do_eval false \
             --disable_tqdm true \
@@ -221,7 +223,7 @@ function _train(){
     fi
 }
 
-source ${BENCHMARK_ROOT}/scripts/run_model.sh   # 在该脚本中会对符合benchmark规范的log使用analysis.py 脚本进行性能数据解析;如果不联调只想要产出训练log可以注掉本行,提交时需打开
+# source ${BENCHMARK_ROOT}/scripts/run_model.sh   # 在该脚本中会对符合benchmark规范的log使用analysis.py 脚本进行性能数据解析;如果不联调只想要产出训练log可以注掉本行,提交时需打开
 _set_params $@
-#_train       # 如果只产出训练log,不解析,可取消注释
-_run     # 该函数在run_model.sh中,执行时会调用_train; 如果不联调只产出训练log可以注掉本行,提交时需打开
+_train       # 如果只产出训练log,不解析,可取消注释
+# _run     # 该函数在run_model.sh中,执行时会调用_train; 如果不联调只产出训练log可以注掉本行,提交时需打开

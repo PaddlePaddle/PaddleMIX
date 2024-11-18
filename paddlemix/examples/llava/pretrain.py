@@ -156,11 +156,11 @@ def main():
         if training_args.benchmark:
             total_effective_samples = total_samples * training_args.num_train_epochs
             effective_samples_per_second = total_effective_samples / train_result.metrics["train_runtime"]
-            mem_gpu = (
-                train_result.metrics["train_mem_gpu_peaked_delta"] + train_result.metrics["train_mem_gpu_alloc_delta"]
-            )
+            # mem_gpu = (
+            #     train_result.metrics["train_mem_gpu_peaked_delta"] + train_result.metrics["train_mem_gpu_alloc_delta"]
+            # )
             logger.info(f"Effective_samples_per_second: {effective_samples_per_second} ")
-            logger.info(f"train_mem_gpu_peaked: {int(mem_gpu/ (2**20))} MB")
+            # logger.info(f"train_mem_gpu_peaked: {int(mem_gpu/ (2**20))} MB")
             logger.info("Benchmark done.")
         else:
             trainer.save_model(merge_tensor_parallel=training_args.tensor_parallel_degree > 1)
