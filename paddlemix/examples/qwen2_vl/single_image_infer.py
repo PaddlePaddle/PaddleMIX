@@ -23,9 +23,29 @@ from paddlemix.processors.qwen2_vl_processing import (
     Qwen2VLProcessor,
     process_vision_info,
 )
+import argparse
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description=" Use PaddleMIX to accelerate the Stable Diffusion3 image generation model."
+    )
+    parser.add_argument(
+        "--benchmark",
+        type=(lambda x: str(x).lower() in ["true", "1", "yes"]),
+        default=False,
+        help="if set to True, measure inference performance",
+    )
+    parser.add_argument(
+        "--inference_optimize",
+        type=(lambda x: str(x).lower() in ["true", "1", "yes"]),
+        default=False,
+        help="If set to True, all optimizations except Triton are enabled.",
+    )
+    return parser.parse_args()
 
-benchmark = True
-warm_up = 3
+args = parse_args()
+
+
+
 
 MODEL_NAME = "Qwen/Qwen2-VL-2B-Instruct"
 # MODEL_NAME = "Qwen/Qwen2-VL-7B-Instruct"
@@ -68,11 +88,22 @@ inputs = processor(
     return_tensors="pd",
 )
 
-if warm_up > 0:
+# pipe.transformer = paddle.incubate.jit.inference(
+#     pipe.transformer,
+#     save_model_dir="./tmp/sd3",
+#     enable_new_ir=True,
+#     cache_static_model=True,
+#     # V100环境下，需设置exp_enable_use_cutlass=False,
+#     exp_enable_use_cutlass=True,
+#     delete_pass_lists=["add_norm_fuse_pass"],
+# )
+
+
+if args.benchmark:
+    warm_up = 3
     for _ in range(warm_up):
         # Inference: Generation of the output
         generated_ids = model.generate(**inputs, max_new_tokens=128)  # already trimmed in paddle
-if benchmark:
     repeat_times = 10
     sumtime = 0.0
     for i in range(repeat_times):
@@ -110,6 +141,7 @@ if benchmark:
     cuda_mem_after_used = paddle.device.cuda.max_memory_allocated() / (1024**3)
     print(f"Max used CUDA memory : {cuda_mem_after_used:.3f} GiB")
 else:
+    # breakpoint()
     # Inference: Generation of the output
     generated_ids = model.generate(**inputs, max_new_tokens=128)  # already trimmed in paddle
 

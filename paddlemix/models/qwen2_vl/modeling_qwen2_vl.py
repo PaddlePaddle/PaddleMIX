@@ -38,7 +38,7 @@ from ppdiffusers.utils import logging
 from ...activations import ACT2FN
 from .bert_padding import index_first_axis, pad_input, unpad_input
 from .configuration_qwen2_vl import Qwen2VLConfig, Qwen2VLVisionConfig
-
+from paddlemix.triton_ops.triton_ops import rms_norm
 logger = logging.get_logger(__name__)
 
 
@@ -282,7 +282,9 @@ class PatchEmbed(nn.Layer):
                 stride=self.proj._stride)
             hidden_states = hidden_states.to(target_dtype).reshape([-1, self.embed_dim])
         else:
-            hidden_states = self.proj(hidden_states.to(dtype=target_dtype)).reshape([-1, self.embed_dim])
+            # NOTE（changwenbin）: AttributeError: 'Variable' object has no attribute 'to'
+            # hidden_states = self.proj(hidden_states.to(dtype=target_dtype)).reshape([-1, self.embed_dim])
+            hidden_states = self.proj(paddle.cast(hidden_states,dtype=target_dtype)).reshape([-1, self.embed_dim])
         return hidden_states
 
 
@@ -485,6 +487,7 @@ class Qwen2RMSNorm(nn.Layer):
         if self.weight.dtype in [paddle.float16, paddle.bfloat16]:
             hidden_states = paddle.cast(hidden_states, self.weight.dtype)
         return hidden_states * self.weight
+        # hidden_states = rms_norm(hidden_states,weight=self.weight, epsilon=self.variance_epsilon)
 
 
 # Copied from transformers.models.qwen2.modeling_qwen2.Qwen2MLP
@@ -774,7 +777,7 @@ class Qwen2VLFlashAttention2(Qwen2VLAttention):
                 key_states,
                 value_states,
                 dropout,
-                causal=causal,  # no softmax_scale=
+                causal=True,  # no softmax_scale=
             )[0]
 
         return attn_output
@@ -834,7 +837,15 @@ class Qwen2VLDecoderLayer(nn.Layer):
         self.mlp = Qwen2MLP(config)
         self.input_layernorm = Qwen2RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.post_attention_layernorm = Qwen2RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-
+        self.config = config
+    # @paddle.incubate.jit.inference(
+    # enable_new_ir=False,
+    # cache_static_model=False,
+    # save_model_dir="/root/paddlejob/workspace/env_run/output/changwenbin/PaddleMIX/paddlemix/examples/qwen2_vl/tmp/qwen2vl_model_decoder",
+    # exp_enable_use_cutlass=False,
+    # skip_prune_program=True,
+    # # delete_pass_lists=["fc_fuse_pass"],
+    # )
     def forward(
         self,
         hidden_states: paddle.Tensor,
@@ -844,7 +855,7 @@ class Qwen2VLDecoderLayer(nn.Layer):
         output_attentions: Optional[bool] = False,
         use_cache: Optional[bool] = False,
         cache_position: Optional[paddle.Tensor] = None,
-        **kwargs,
+        # **kwargs,
     ):
         """
         Args:
@@ -867,7 +878,13 @@ class Qwen2VLDecoderLayer(nn.Layer):
 
         residual = hidden_states
 
+        # Note：(changwenbin) use triton_rmsnorm
         hidden_states = self.input_layernorm(hidden_states)
+        # print(self.input_layernorm.weight)
+        # print(self.input_layernorm.bias)
+        # exit(0)
+        # from paddlemix.triton_ops.triton_ops import rms_norm
+        # hidden_states = rms_norm(hidden_states,weight=self.input_layernorm.weight, epsilon=self.config.rms_norm_eps)
 
         # Self Attention
         hidden_states, self_attn_weights, present_key_value = self.self_attn(
@@ -978,7 +995,14 @@ class Qwen2VisionTransformerPretrainedModel(Qwen2VLPreTrainedModel):
         rotary_pos_emb_full = self.rotary_pos_emb(max_grid_size)
         rotary_pos_emb = rotary_pos_emb_full[pos_ids].flatten(start_axis=1)
         return rotary_pos_emb
-
+    
+    # @paddle.incubate.jit.inference(
+    # enable_new_ir=False,
+    # cache_static_model=False,
+    # save_model_dir="/root/paddlejob/workspace/env_run/output/changwenbin/PaddleMIX/paddlemix/examples/qwen2_vl/tmp/qwen2vl_vision",
+    # exp_enable_use_cutlass=False,
+    # # delete_pass_lists=["fc_fuse_pass"],
+    # )
     def forward(self, hidden_states: paddle.Tensor, grid_thw: paddle.Tensor) -> paddle.Tensor:
         
         hidden_states = self.patch_embed(hidden_states)
@@ -1042,7 +1066,15 @@ class Qwen2VLModel(Qwen2VLPreTrainedModel):
         # Convert bool attention_mask to float attention mask, which will be added to attention_scores later
         expanded_attn_mask = paddle.where(expanded_attn_mask, 0.0, paddle.finfo(dtype).min).astype(dtype)
         return expanded_attn_mask
-
+    @paddle.incubate.jit.inference(
+    enable_new_ir=True,
+    cache_static_model=False,
+    save_model_dir="/root/paddlejob/workspace/env_run/output/changwenbin/PaddleMIX/paddlemix/examples/qwen2_vl/tmp/qwen2vl_model",
+    exp_enable_use_cutlass=False,
+    # skip_prune_program=True,
+    switch_ir_optim=False,
+    # delete_pass_lists=["fc_fuse_pass"],
+    )
     def forward(
         self,
         input_ids: paddle.Tensor = None,
@@ -1454,7 +1486,10 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states  # fmt:skip
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
-
+        # import datetime
+        # paddle.device.synchronize()
+        # starttime_visual = datetime.datetime.now()
+        
         if inputs_embeds is None:
             inputs_embeds = self.model.embed_tokens(input_ids)
             if pixel_values is not None:
@@ -1471,7 +1506,16 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
                 inputs_embeds[video_mask] = video_embeds
             if attention_mask is not None:
                 attention_mask = attention_mask
+        # paddle.device.synchronize()
+        # endtime_visual = datetime.datetime.now()
 
+        # duringtime_visual = endtime_visual - starttime_visual
+        # duringtime_visual = duringtime_visual.seconds * 1000 + duringtime_visual.microseconds / 1000.0
+        # print("duringtime_visual",duringtime_visual)
+
+        # paddle.device.synchronize()
+        # starttime_text = datetime.datetime.now()
+        
         outputs = self.model(
             input_ids=None,
             position_ids=position_ids,
@@ -1483,6 +1527,13 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
         )
+        # paddle.device.synchronize()
+        # endtime_text = datetime.datetime.now()
+
+        # duringtime_text = endtime_text - starttime_text
+        # duringtime_text = duringtime_text.seconds * 1000 + duringtime_text.microseconds / 1000.0
+        # print("duringtime_text",duringtime_text)
+
 
         hidden_states = outputs[0]
         logits = self.lm_head(hidden_states)
@@ -1503,7 +1554,7 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
             loss = loss / label_sum
 
         if not return_dict:
-            output = (logits,) + outputs[1:]
+            output = (logits,) + tuple(outputs[1:])
             return (loss,) + output if loss is not None else output
             # return logits + 28 layers k and v
 
