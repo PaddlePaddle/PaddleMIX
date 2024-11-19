@@ -17,11 +17,11 @@
 # Test training benchmark for a model.
 # Usage：bash benchmark/run_benchmark.sh ${model_item} ${bs_item} ${fp_item} ${run_mode} ${device_num}
 function _set_params(){
-    model_item=${1:-"qwen2_vl"}   # (必选) 模型 item |fastscnn|segformer_b0| ocrnet_hrnetw48
+    model_item=${1:-"qwen2_vl_sft_2b"}   # (必选) 模型 item |fastscnn|segformer_b0| ocrnet_hrnetw48
     base_batch_size=${2:-"1"}       # (必选) 如果是静态图单进程，则表示每张卡上的BS，需在训练时*卡数
     fp_item=${3:-"bf16"}            # (必选) fp32|fp16|bf16
     run_mode=${4:-"DP"}             # (必选) MP模型并行|DP数据并行|PP流水线并行|混合并行DP1-MP1-PP1|DP1-MP4-PP1
-    device_num=${5:-"N1C1"}         # (必选) 使用的卡数量，N1C1|N1C8|N4C32 （4机32卡）
+    device_num=${5:-"N1C8"}         # (必选) 使用的卡数量，N1C1|N1C8|N4C32 （4机32卡）
     profiling=${PROFILING:-"false"}      # (必选) Profiling  开关，默认关闭，通过全局变量传递
  
     model_repo="PaddleMIX"          # (必选) 模型套件的名字
@@ -29,8 +29,8 @@ function _set_params(){
     skip_steps=2                  # (必选)解析日志，跳过模型前几个性能不稳定的step
     keyword="ips:"                 # (必选)解析日志，筛选出性能数据所在行的关键字
     convergence_key="loss:"        # (可选)解析日志，筛选出收敛数据所在行的关键字 如：convergence_key="loss:"
-    max_epochs=${6:-"3"}                 # （可选）需保证模型执行时间在5分钟内，需要修改代码提前中断的直接提PR 合入套件  或是max_epoch
-    num_workers=${7:-"2"}                # (可选)
+    max_epochs=${6:-"1"}                 # （可选）需保证模型执行时间在5分钟内，需要修改代码提前中断的直接提PR 合入套件  或是max_epoch
+    num_workers=${7:-"8"}                # (可选)
     is_large_model=False           # (可选)普通模型默认为False，如果添加大模型且只取一条ips设置为True
 
     # 以下为通用执行命令，无特殊可不用修改
@@ -58,6 +58,15 @@ function _train(){
             log_file=${train_log_file}
     fi
     rm -rf ./outputs
+
+    if [ ${model_item} = "qwen2_vl_sft_2b" ];then # 目前只支持2B和7B
+        use_model_args="--model_name_or_path Qwen/Qwen2-VL-2B-Instruct"
+        use_output_args="--output_dir work_dirs/qwen2_vl_sft_2b_bs32_1e8"
+    else
+        use_model_args="--model_name_or_path Qwen/Qwen2-VL-7B-Instruct"
+        use_output_args="--output_dir work_dirs/qwen2_vl_sft_7b_bs32_1e8"
+    fi
+
     # add some flags
     export FLAGS_eager_delete_tensor_gb=0.0
     export FLAGS_fraction_of_gpu_memory_to_use=0.98
@@ -65,9 +74,9 @@ function _train(){
     
     train_cmd="../paddlemix/examples/qwen2_vl/qwen2vl_finetune.py \
             --do_train \
-            --model_name_or_path "Qwen/Qwen2-VL-2B-Instruct" \
+            ${use_model_args} \
             --meta_path ../paddlemix/examples/qwen2_vl/configs/benchmark_chartqa_500.json \
-            --output_dir ./work_dirs/qwen2_vl_sft_benchmark \
+            ${use_output_args} \
             --logging_steps=1 \
             --num_train_epochs=${max_epochs} \
             --save_strategy no \
@@ -91,7 +100,7 @@ function _train(){
             --amp_master_grad=1 \
             --hybrid_parallel_topo_order="sharding_first" \
             --per_device_train_batch_size ${base_batch_size} \
-            --gradient_accumulation_steps 4 \
+            --gradient_accumulation_steps 1 \
             --benchmark True \
             "
 

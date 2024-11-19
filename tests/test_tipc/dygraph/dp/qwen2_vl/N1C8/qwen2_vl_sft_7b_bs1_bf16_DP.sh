@@ -12,14 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-model_item=qwen2_vl_sft
+model_item=qwen2_vl_sft_7b
 model=qwen2_vl
 bs_item=1
 fp_item=bf16
 run_mode=DP
 device_num=N1C8
-max_epochs=3
-num_workers=0
+max_epochs=1
+num_workers=8
 
 # get data
 bash tests/test_tipc/dygraph/dp/${model}/benchmark_common/prepare.sh
