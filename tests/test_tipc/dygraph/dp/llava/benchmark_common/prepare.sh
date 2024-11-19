@@ -19,7 +19,7 @@ wget https://paddlenlp.bj.bcebos.com/models/community/paddlemix/benchmark/llava_
 tar -xf llava_bench_data.tar
 mv llava_bench_data /root/.paddlemix/datasets/
 rm -rf llava_bench_data.tar
-ln -s /root/.paddlemix/datasets/llava_bench_data ../
+ln -s /root/.paddlemix/datasets/llava_bench_data ./
 
 export http_proxy=agent.baidu.com:8188
 export https_proxy=agent.baidu.com:8188
