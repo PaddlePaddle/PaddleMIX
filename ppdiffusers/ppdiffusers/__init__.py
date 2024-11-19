@@ -110,8 +110,10 @@ else:
         [
             "AsymmetricAutoencoderKL",
             "AutoencoderKL",
+            "AutoencoderKLCogVideoX",
             "AutoencoderKLTemporalDecoder",
             "AutoencoderTiny",
+            "CogVideoXTransformer3DModel",
             "ConsistencyDecoderVAE",
             "ControlNetModel",
             "Kandinsky3UNet",
@@ -179,6 +181,8 @@ else:
     _import_structure["schedulers"].extend(
         [
             "CMStochasticIterativeScheduler",
+            "CogVideoXDDIMScheduler",
+            "CogVideoXDPMScheduler",
             "DDIMInverseScheduler",
             "DDIMParallelScheduler",
             "DDIMScheduler",
@@ -263,6 +267,7 @@ else:
             "BlipDiffusionControlNetPipeline",
             "BlipDiffusionPipeline",
             "CLIPImageProjection",
+            "CogVideoXPipeline",
             "CycleDiffusionPipeline",
             "IFImg2ImgPipeline",
             "IFImg2ImgSuperResolutionPipeline",
@@ -481,9 +486,11 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         from .models import (  # new add
             AsymmetricAutoencoderKL,
             AutoencoderKL,
+            AutoencoderKLCogVideoX,
             AutoencoderKL_imgtovideo,
             AutoencoderKLTemporalDecoder,
             AutoencoderTiny,
+            CogVideoXTransformer3DModel,
             ConsistencyDecoderVAE,
             ControlNetModel,
             DiTLLaMA2DModel,
@@ -547,6 +554,8 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         )
         from .schedulers import (
             CMStochasticIterativeScheduler,
+            CogVideoXDDIMScheduler,
+            CogVideoXDPMScheduler,
             DDIMInverseScheduler,
             DDIMParallelScheduler,
             DDIMScheduler,
@@ -612,6 +621,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             AudioLDM2UNet2DConditionModel,
             AudioLDMPipeline,
             CLIPImageProjection,
+            CogVideoXPipeline,
             CycleDiffusionPipeline,
             IFImg2ImgPipeline,
             IFImg2ImgSuperResolutionPipeline,

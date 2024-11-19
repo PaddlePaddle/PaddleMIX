@@ -66,9 +66,9 @@ class GELU(nn.Layer):
         approximate (`str`, *optional*, defaults to `"none"`): If `"tanh"`, use tanh approximation.
     """
 
-    def __init__(self, dim_in: int, dim_out: int, approximate: str = "none"):
+    def __init__(self, dim_in: int, dim_out: int, approximate: str = "none", bias: bool = True):
         super().__init__()
-        self.proj = nn.Linear(dim_in, dim_out)
+        self.proj = nn.Linear(dim_in, dim_out, bias_attr=bias)
         self.approximate = approximate
 
     def gelu(self, gate: paddle.Tensor) -> paddle.Tensor:
