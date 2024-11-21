@@ -12,7 +12,7 @@ from paddlemix.processors.qwen2_vl_processing import (
 )
 
 class ServerConfig:
-    def __init__(self, host="0.0.0.0", port=8001, model_path="/root/paddlejob/workspace/env_run/luyao15/weights/Doc-Lark"):
+    def __init__(self, host="0.0.0.0", port=8001, model_path="Qwen/Qwen2-VL-2B-Instruct"):
         self.host = host
         self.port = port
         self.model_path = model_path
@@ -76,7 +76,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", default="0.0.0.0", help="Host to bind to")
     parser.add_argument("--port", type=int, default=8001, help="Port to bind to")
-    parser.add_argument("--model-path", default="/root/paddlejob/workspace/env_run/luyao15/weights/Doc-Lark",
+    parser.add_argument("--model-path", default="Qwen/Qwen2-VL-2B-Instruct",
                       help="Path to model weights")
     
     args = parser.parse_args()
