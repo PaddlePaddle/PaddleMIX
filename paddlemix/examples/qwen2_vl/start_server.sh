@@ -3,7 +3,7 @@ set -e
 
 HOST="0.0.0.0"
 PORT=8001
-MODEL_PATH="/root/paddlejob/workspace/env_run/luyao15/weights/Doc-Lark"
+MODEL_PATH="Qwen/Qwen2-VL-2B-Instruct"
 
 while [[ $# -gt 0 ]]; do
     case $1 in
