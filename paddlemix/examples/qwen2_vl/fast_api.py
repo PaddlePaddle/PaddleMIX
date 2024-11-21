@@ -18,7 +18,7 @@ class GenerateRequest(BaseModel):
 app = FastAPI()
 
 # Load model and processors globally
-MODEL_NAME = "/root/paddlejob/workspace/env_run/luyao15/weights/Doc-Lark"
+MODEL_NAME = "Qwen/Qwen2-VL-2B-Instruct"
 model = Qwen2VLForConditionalGeneration.from_pretrained(MODEL_NAME, dtype="bfloat16")
 image_processor = Qwen2VLImageProcessor()
 tokenizer = Qwen2Tokenizer.from_pretrained(MODEL_NAME)
