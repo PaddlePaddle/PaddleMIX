@@ -1,0 +1,74 @@
+import os
+import uvicorn
+from fastapi import FastAPI
+from pydantic import BaseModel
+from typing import List, Dict, Any, Optional
+from paddlenlp.transformers import Qwen2Tokenizer
+from paddlemix.models.qwen2_vl.modeling_qwen2_vl import Qwen2VLForConditionalGeneration
+from paddlemix.processors.qwen2_vl_processing import (
+    Qwen2VLImageProcessor, 
+    Qwen2VLProcessor,
+    process_vision_info
+)
+
+class GenerateRequest(BaseModel):
+    messages: List[Dict[str, Any]]
+    max_new_tokens: Optional[int] = 128
+
+app = FastAPI()
+
+# Load model and processors globally
+MODEL_NAME = "Qwen/Qwen2-VL-2B-Instruct"
+model = Qwen2VLForConditionalGeneration.from_pretrained(MODEL_NAME, dtype="bfloat16")
+image_processor = Qwen2VLImageProcessor()
+tokenizer = Qwen2Tokenizer.from_pretrained(MODEL_NAME)
+processor = Qwen2VLProcessor(image_processor, tokenizer)
+
+@app.post("/generate")
+async def generate(request: GenerateRequest):
+    try:
+        # Process vision inputs
+        image_inputs, video_inputs = process_vision_info(request.messages)
+        
+        # Prepare text input
+        question = request.messages[-1]["content"][-1]["text"]
+        image_pad_token = "<|vision_start|><|image_pad|><|vision_end|>"
+        text = f"<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n{image_pad_token}{question}<|im_end|>\n<|im_start|>assistant\n"
+        
+        # Process inputs
+        inputs = processor(
+            text=[text],
+            images=image_inputs,
+            videos=video_inputs,
+            padding=True,
+            return_tensors="pd"
+        )
+        
+        # Generate response
+        generated_ids = model.generate(**inputs, max_new_tokens=request.max_new_tokens)
+        output_text = processor.batch_decode(
+            generated_ids[0], 
+            skip_special_tokens=True, 
+            clean_up_tokenization_spaces=False
+        )
+        
+        return {
+            "error_code": 200,
+            "error_msg": "success",
+            "result": {
+                "response": {
+                    "role": "assistant",
+                    "utterance": output_text[0]
+                }
+            }
+        }
+        
+    except Exception as e:
+        return {
+            "error_code": 500,
+            "error_msg": str(e),
+            "result": None
+        }
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8001)
