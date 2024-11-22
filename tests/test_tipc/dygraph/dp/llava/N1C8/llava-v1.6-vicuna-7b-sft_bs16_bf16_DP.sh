@@ -15,7 +15,7 @@
 model=llava
 model_item=llava-v1.6-vicuna-7b-sft
 bs_item=16
-fp_item=bf16
+fp_item=bf16O2
 run_mode=DP
 device_num=N1C8
 max_epochs=3
