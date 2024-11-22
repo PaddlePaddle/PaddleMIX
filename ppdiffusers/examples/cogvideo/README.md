@@ -3,8 +3,8 @@
 ```shell
 python infer.py \
   --prompt "a bear is walking in a zoon" \
-  --model_path paddle_weights/THUDM/CogVideoX-2b/ \
+  --model_path THUDM/CogVideoX-2b/ \
   --generate_type "t2v" \
-  --dtype "bfloat16" \
+  --dtype "float16" \
   --seed 42
 ```

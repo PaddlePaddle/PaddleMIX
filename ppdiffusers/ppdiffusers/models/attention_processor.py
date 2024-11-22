@@ -2159,9 +2159,9 @@ class CogVideoXAttnProcessor2_0:
         # paddle needs input: [batch_size, seq_len, num_heads, head_dim]
         # torch needs input: [batch_size, num_heads, seq_len, head_dim]
         hidden_states = F.scaled_dot_product_attention(
-            query.transpose([0, 2, 1, 3]).cast('bfloat16'), 
-            key.transpose([0, 2, 1, 3]).cast('bfloat16'), 
-            value.transpose([0, 2, 1, 3]).cast('bfloat16'), 
+            query.transpose([0, 2, 1, 3]), 
+            key.transpose([0, 2, 1, 3]), 
+            value.transpose([0, 2, 1, 3]), 
             attn_mask=attention_mask, 
             dropout_p=0.0, 
             is_causal=False
