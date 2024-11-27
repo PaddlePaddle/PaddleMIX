@@ -46,15 +46,6 @@ from PIL import Image
 from tqdm.auto import trange
 
 
-def get_canny_image(image, args):
-    if isinstance(image, Image.Image):
-        image = np.array(image)
-    image = cv2.Canny(image, args.low_threshold, args.high_threshold)
-    image = image[:, :, None]
-    image = np.concatenate([image, image, image], axis=2)
-    canny_image = Image.fromarray(image)
-    return canny_image
-
 
 def strtobool(v):
     if isinstance(v, bool):
