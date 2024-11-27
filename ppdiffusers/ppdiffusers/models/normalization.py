@@ -32,17 +32,45 @@ class AdaLayerNorm(nn.Layer):
         num_embeddings (`int`): The size of the embeddings dictionary.
     """
 
-    def __init__(self, embedding_dim: int, num_embeddings: int):
+    def __init__(
+        self,
+        embedding_dim: int, 
+        num_embeddings: Optional[int] = None,
+        output_dim: Optional[int] = None,
+        norm_elementwise_affine: bool = False,
+        norm_eps: float = 1e-5,
+        chunk_dim: int = 0,
+    ):
         super().__init__()
-        self.emb = nn.Embedding(num_embeddings, embedding_dim)
-        self.silu = nn.Silu()
-        self.linear = nn.Linear(embedding_dim, embedding_dim * 2)
-        norm_elementwise_affine_kwargs = dict(weight_attr=False, bias_attr=False)
-        self.norm = nn.LayerNorm(embedding_dim, **norm_elementwise_affine_kwargs)
+        
+        self.chunk_dim = chunk_dim
+        output_dim = output_dim or embedding_dim * 2
 
-    def forward(self, x: paddle.Tensor, timestep: paddle.Tensor) -> paddle.Tensor:
-        emb = self.linear(self.silu(self.emb(timestep)))
-        scale, shift = paddle.chunk(emb, 2)
+        if num_embeddings is not None:
+            self.emb = nn.Embedding(num_embeddings, embedding_dim)
+        else:
+            self.emb = None
+
+        self.silu = nn.Silu()
+        self.linear = nn.Linear(embedding_dim, output_dim)
+        if norm_elementwise_affine:
+            norm_elementwise_affine_kwargs = dict(weight_attr=None, bias_attr=None)
+        else:
+            norm_elementwise_affine_kwargs = dict(weight_attr=False, bias_attr=False)
+        self.norm = nn.LayerNorm(output_dim // 2, epsilon=norm_eps, **norm_elementwise_affine_kwargs)
+
+    def forward(self, x: paddle.Tensor, timestep: Optional[paddle.Tensor] = None, temb: Optional[paddle.Tensor] = None) -> paddle.Tensor:
+        if self.emb is not None:
+            temb = self.emb(timestep)
+        temb = self.linear(self.silu(temb))
+        if self.chunk_dim == 1:
+            # This is a bit weird why we have the order of "shift, scale" here and "scale, shift" in the
+            # other if-branch. This branch is specific to CogVideoX for now.
+            shift, scale = paddle.chunk(temb, 2, axis=1)
+            shift = shift[:, None, :]
+            scale = scale[:, None, :]
+        else:
+            scale, shift = paddle.chunk(temb, 2)
         x = self.norm(x) * (1 + scale) + shift
         return x
 
@@ -224,3 +252,29 @@ class RMSNorm(nn.Layer):
             epsilon=self.epsilon,
             begin_norm_axis=2,
         )
+
+
+class CogVideoXLayerNormZero(paddle.nn.Layer):
+
+    def __init__(self, conditioning_dim: int, embedding_dim: int,
+        elementwise_affine: bool=True, eps: float=1e-05, bias: bool=True
+        ) ->None:
+        super().__init__()
+        self.silu = paddle.nn.Silu()
+        self.linear = paddle.nn.Linear(in_features=conditioning_dim,
+            out_features=6 * embedding_dim, bias_attr=bias)
+        self.norm = paddle.nn.LayerNorm(normalized_shape=embedding_dim,
+            epsilon=eps, weight_attr=elementwise_affine, bias_attr=
+            elementwise_affine)
+
+    def forward(self, hidden_states: paddle.Tensor, encoder_hidden_states:
+        paddle.Tensor, temb: paddle.Tensor) ->Tuple[paddle.Tensor, paddle.
+        Tensor]:
+        shift, scale, gate, enc_shift, enc_scale, enc_gate = self.linear(self
+            .silu(temb)).chunk(chunks=6, axis=1)
+        hidden_states = self.norm(hidden_states) * (1 + scale)[:, None, :
+            ] + shift[:, None, :]
+        encoder_hidden_states = self.norm(encoder_hidden_states) * (1 +
+            enc_scale)[:, None, :] + enc_shift[:, None, :]
+        return hidden_states, encoder_hidden_states, gate[:, None, :
+            ], enc_gate[:, None, :]
