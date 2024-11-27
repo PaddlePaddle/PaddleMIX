@@ -57,6 +57,8 @@ if is_paddle_available():
     _import_structure["modelscope_gaussion_sdedit"] = ["GaussianDiffusion_SDEdit"]
     _import_structure["modelscope_st_unet"] = ["STUNetModel"]
     _import_structure["modelscope_st_unet_video2video"] = ["Vid2VidSTUNet"]
+    # NOTE, new add
+    _import_structure["controlnet_sd3"] = ["SD3ControlNetModel", 'SD3MultiControlNetModel']
 
 
 if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
@@ -89,6 +91,8 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         from .transformer_2d import Transformer2DModel
         from .transformer_sd3 import SD3Transformer2DModel
         from .cogvideox_transformer_3d import CogVideoXTransformer3DModel
+        from .controlnet_sd3 import SD3ControlNetModel
+        from .controlnet_sd3 import SD3MultiControlNetModel
         from .transformer_temporal import TransformerTemporalModel
         from .unet_1d import UNet1DModel
         from .unet_2d import UNet2DModel

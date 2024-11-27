@@ -145,6 +145,9 @@ else:
             "GaussianDiffusion_SDEdit",
             "STUNetModel",
             "Vid2VidSTUNet",
+            # new add
+            "SD3ControlNetModel",
+            "SD3MultiControlNetModel",
         ]
     )
 
@@ -306,6 +309,8 @@ else:
             "SemanticStableDiffusionPipeline",
             "ShapEImg2ImgPipeline",
             "ShapEPipeline",
+            "StableDiffusion3ControlNetInpaintingPipeline",
+            "StableDiffusion3ControlNetPipeline",
             "StableDiffusion3Img2ImgPipeline",
             "StableDiffusion3Pipeline",
             "StableDiffusionAdapterPipeline",
@@ -505,6 +510,8 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             MultiAdapter,
             PaddleInferRuntimeModel,
             PriorTransformer,
+            SD3ControlNetModel,
+            SD3MultiControlNetModel,
             SD3Transformer2DModel,
             STUNetModel,
             T2IAdapter,
@@ -675,6 +682,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             SemanticStableDiffusionPipeline,
             ShapEImg2ImgPipeline,
             ShapEPipeline,
+            StableDiffusion3ControlNetPipeline,
             StableDiffusion3Img2ImgPipeline,
             StableDiffusion3Pipeline,
             StableDiffusionAdapterPipeline,
