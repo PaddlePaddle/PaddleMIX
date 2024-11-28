@@ -13,25 +13,26 @@
 # limitations under the License.
 
 # from paddlenlp.transformers import AutoTokenizer
-from paddlenlp.transformers import Qwen2Tokenizer
-from paddlemix.models.minicpm_v.tokenization_minicpmv_fast import MiniCPMVTokenizerFast
-from paddlemix.models.minicpm_v.modeling_minicpmv import MiniCPMV
 from PIL import Image
+
+from paddlemix.models.minicpm_v.modeling_minicpmv import MiniCPMV
+from paddlemix.models.minicpm_v.tokenization_minicpmv_fast import MiniCPMVTokenizerFast
+
 MODEL_NAME = "openbmb/MiniCPM-V-2_6"
 model = MiniCPMV.from_pretrained(MODEL_NAME, dtype="bfloat16")
 model = model.eval()
 tokenizer = MiniCPMVTokenizerFast.from_pretrained(MODEL_NAME)
-image = Image.open('paddlemix/demo_images/c89b9daf907cb47481e6a1f77.jpg').convert('RGB')
+image = Image.open("paddlemix/demo_images/minicpm_demo.jpg").convert("RGB")
 
-question = "识别图中所有文字，无需添加标点。"
+question = "识别图片中的手写文字。"
 
-msgs = [{'role': 'user', 'content': [image, question]}]
+msgs = [{"role": "user", "content": [image, question]}]
 
 res = model.chat(
     image=None,
     msgs=msgs,
     tokenizer=tokenizer,
-    max_new_tokens=2048, # 2048
+    max_new_tokens=2048,  # 2048
 )
 print(res)
 
@@ -48,4 +49,4 @@ res = model.chat(
 generated_text = ""
 for new_text in res:
     generated_text += new_text
-    print(new_text, flush=True, end='')
+    print(new_text, flush=True, end="")
