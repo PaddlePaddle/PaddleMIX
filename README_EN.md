@@ -34,17 +34,20 @@
 
 
 ## 📰 News
-**🔥 Live Class on October 31, 2024，PaddleMIX release v2.1**
+**🔥 PaddleMIX 2.1 Version Launch Livestream on October 31, 2024**
 
-- 🎉 The PaddleMIX Multimodal Model Suite Development Competition release v2.1! Baidu's R&D engineers will provide a detailed explanation of the updated content, as well as the implementation details and case applications of the multi-modal data capability tagging model, PP-InsCapTagger, at 20:00 on Thursday, October 31st. Hurry up and scan the QR code on the poster below to register!
-
-<div align="center">
-<img src="https://github.com/user-attachments/assets/a32745a1-34bb-4096-a367-664ae58e3565" width="500px" align="middle"></img>
-</div>
-
-
+- 🎉 The PaddleMIX multimodal large model toolkit releases version 2.1! On October 31 (Thursday) at 20:00, Baidu development engineers provided a detailed interpretation of the toolkit updates, as well as the implementation details and case applications of PP-InsCapTagger, the multimodal data capability labeling model.
 
 ## 📣 Latest Developments
+
+
+**🎉 2024.11.27 Added support for [Janus/JanusFlow](./paddlemix/examples/janus) inference**
+
+**🎉 2024.11.21 Added support for [MiniCPM-V-2_6](./paddlemix/examples/minicpm-v-2_6) inference**
+
+**🎉 2024.11.8 Support for [DenseConnector](./paddlemix/examples/llava_denseconnector) and [Aquila-VL-2B-llava-qwen](./paddlemix/examples/llava_onevision/) inference**
+
+**🎉 2024.11.1 Support for [LLaVA-OneVision](./paddlemix/examples/llava_onevision/) and [LLaVA-Critic](./paddlemix/examples/llava_critic/) inference**
 
 **🎉 2024.10.31 Welcome to the Update of External Developer's Creative [Tutorial Page](paddlemix_applications.md)**
 * 🌟 Since the launch of our Large Model Suite Premium Project Collection activity on September 6th, we have received 30 high-quality developer projects. Among them, 25 premium projects have successfully passed the platform evaluation and been featured.
@@ -225,6 +228,9 @@ sh build_env.sh
       <td>
         <b>Multimodal Generation</b>
       </td>
+      <td>
+        <b>Unified Multimodal Foundation Model</b>
+      </td>
     </tr>
     <tr valign="top">
       <td>
@@ -234,10 +240,13 @@ sh build_env.sh
         <ul>
             <li><a href="paddlemix/examples/clip">CLIP</a></li>
             <li><a href="paddlemix/examples/evaclip">EVA-CLIP</a></li>
-            <li><a href="paddlemix/examples/llava">LLaVA</a></li>
             <li><a href="paddlemix/examples/llava">LLaVA-1.5</a></li>
             <li><a href="paddlemix/examples/llava">LLaVA-1.6</a></li>
             <li><a href="paddlemix/examples/llava">LLaVA-NeXT</a></li>
+            <li><a href="paddlemix/examples/llava_onevision">LLaVA-onevision</a></li>
+            <li><a href="paddlemix/examples/llava_onevision">Aquila-VL-2B-llava-qwen</a></li>
+            <li><a href="paddlemix/examples/llava_critic">LLaVA-Critic</a></li>
+            <li><a href="paddlemix/examples/llava_denseconnector">LLaVA-DenseConnector</a></li>
             <li><a href="paddlemix/examples/qwen_vl">Qwen-VL</a></li>
             <li><a href="paddlemix/examples/qwen2_vl">Qwen2-VL</a></li>
             <li><a href="paddlemix/examples/internvl2">InternVL2</a></li>
@@ -294,6 +303,14 @@ sh build_env.sh
         <ul>
            <li><a href="ppdiffusers/ppdiffusers/pipelines/audioldm">AudioLDM</a></li>
            <li><a href="ppdiffusers/ppdiffusers/pipelines/audioldm2">AudioLDM2</a></li>
+        </ul>
+      </td>
+      <td>
+        <ul>
+        </ul>
+          <li><b>Unified Multimodal Model</b></li>
+        <ul>
+          <li><a href="paddlemix/examples/janus">Janus</a></li>
         </ul>
       </td>
     </tr>

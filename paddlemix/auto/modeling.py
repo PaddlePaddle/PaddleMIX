@@ -59,6 +59,8 @@ ASSIGN_MAPPING = {
     "visualglm": "VisualGLMForConditionalGeneration",
     "llava_qwen": "LlavaQwenForCausalLM",
     "internvl2": "InternVLChatModel",
+    "janus":"JanusMultiModalityCausalLM",
+    "janus_flow":"JanusFlowMultiModality",
 }
 
 

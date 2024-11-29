@@ -650,3 +650,22 @@ class VaeImageProcessorLDM3D(VaeImageProcessor):
             depth = self.binarize(depth)
 
         return rgb, depth
+
+
+def is_valid_image(image):
+    return isinstance(image, PIL.Image.Image) or isinstance(image, (np.ndarray, paddle.Tensor)) and image.ndim in (2, 3)
+
+
+def is_valid_image_imagelist(images):
+    # check if the image input is one of the supported formats for image and image list:
+    # it can be either one of below 3
+    # (1) a 4d pytorch tensor or numpy array,
+    # (2) a valid image: PIL.Image.Image, 2-d np.ndarray or torch.Tensor (grayscale image), 3-d np.ndarray or torch.Tensor
+    # (3) a list of valid image
+    if isinstance(images, (np.ndarray, paddle.Tensor)) and images.ndim == 4:
+        return True
+    elif is_valid_image(images):
+        return True
+    elif isinstance(images, list):
+        return all(is_valid_image(image) for image in images)
+    return False

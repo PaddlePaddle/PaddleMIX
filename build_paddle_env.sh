@@ -57,23 +57,23 @@ if command -v nvcc > /dev/null 2>&1; then
     case $cuda_version in
         "11.2")
             echo "安装CUDA 11.2版本的paddlepaddle..."
-            $PYTHON_CMD -m pip install paddlepaddle-gpu==3.0.0b1 -i https://www.paddlepaddle.org.cn/packages/stable/cu112/
+            $PYTHON_CMD -m pip install paddlepaddle-gpu==3.0.0b2 -i https://www.paddlepaddle.org.cn/packages/stable/cu112/
             ;;
         "11.6")
             echo "安装CUDA 11.6版本的paddlepaddle..."
-            $PYTHON_CMD -m pip install paddlepaddle-gpu==3.0.0b1 -i https://www.paddlepaddle.org.cn/packages/stable/cu116/
+            $PYTHON_CMD -m pip install paddlepaddle-gpu==3.0.0b2 -i https://www.paddlepaddle.org.cn/packages/stable/cu116/
             ;;
         "11.7")
             echo "安装CUDA 11.7版本的paddlepaddle..."
-            $PYTHON_CMD -m pip install paddlepaddle-gpu==3.0.0b1 -i https://www.paddlepaddle.org.cn/packages/stable/cu117/
+            $PYTHON_CMD -m pip install paddlepaddle-gpu==3.0.0b2 -i https://www.paddlepaddle.org.cn/packages/stable/cu117/
             ;;
         "11.8")
             echo "安装CUDA 11.8版本的paddlepaddle..."
-            $PYTHON_CMD -m pip install paddlepaddle-gpu==3.0.0b1 -i https://www.paddlepaddle.org.cn/packages/stable/cu118/
+            $PYTHON_CMD -m pip install paddlepaddle-gpu==3.0.0b2 -i https://www.paddlepaddle.org.cn/packages/stable/cu118/
             ;;
         "12.3")
             echo "安装CUDA 12.3版本的paddlepaddle..."
-            $PYTHON_CMD -m pip install paddlepaddle-gpu==3.0.0b1 -i https://www.paddlepaddle.org.cn/packages/stable/cu123/
+            $PYTHON_CMD -m pip install paddlepaddle-gpu==3.0.0b2 -i https://www.paddlepaddle.org.cn/packages/stable/cu123/
             ;;
         *)
             echo "警告: 不支持的CUDA版本 ($cuda_version)"
@@ -83,14 +83,14 @@ if command -v nvcc > /dev/null 2>&1; then
     esac
 else
     echo "未检测到CUDA。安装CPU版本的paddlepaddle..."
-    $PYTHON_CMD -m pip install paddlepaddle==3.0.0b1
+    $PYTHON_CMD -m pip install paddlepaddle==3.0.0b2
 fi
 
 # 验证安装
-echo "验证PaddlePaddle 3.0.0b1安装..."
+echo "验证PaddlePaddle 3.0.0b2安装..."
 if $PYTHON_CMD -c "import paddle; paddle.utils.run_check()"; then
-    echo "PaddlePaddle 3.0.0b1安装成功！"
+    echo "PaddlePaddle 3.0.0b2安装成功！"
 else
-    echo "PaddlePaddle 3.0.0b1安装验证失败，请检查安装日志"
+    echo "PaddlePaddle 3.0.0b2安装验证失败，请检查安装日志"
     exit 1
 fi

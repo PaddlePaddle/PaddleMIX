@@ -637,7 +637,7 @@ class SigLipVisionTower(nn.Layer):
             image_features = image_forward_outs.hidden_states[-1]
             assert image_features.shape[-2] == 729
 
-        return image_features
+        return image_features, image_forward_outs
 
     @property
     def dummy_feature(self):

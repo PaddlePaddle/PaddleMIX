@@ -30,3 +30,6 @@ from .sam_processing import *
 from .tokenizer import SimpleTokenizer, tokenize
 from .visualglm_image_processing import *
 from .visualglm_processing import *
+from .image_processing_minicpmv import *
+from .processing_minicpmv import *
+from .janus_processing import *

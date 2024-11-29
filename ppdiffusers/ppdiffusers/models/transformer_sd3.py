@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import os
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import paddle
 import paddle.nn as nn
@@ -249,8 +249,9 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
         hidden_states,
         encoder_hidden_states,
         temb,
+        block_controlnet_hidden_states: List = None,
     ):
-        for block in self.transformer_blocks:
+        for index_block, block in enumerate(self.transformer_blocks):
             if self.training and self.gradient_checkpointing and not use_old_recompute():
 
                 def create_custom_forward(module, return_dict=None):
@@ -274,6 +275,11 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
                 encoder_hidden_states, hidden_states = block(
                     hidden_states=hidden_states, encoder_hidden_states=encoder_hidden_states, temb=temb
                 )
+            
+            # controlnet residual
+            if block_controlnet_hidden_states is not None and block.context_pre_only is False:
+                interval_control = len(self.transformer_blocks) // len(block_controlnet_hidden_states)
+                hidden_states = hidden_states + block_controlnet_hidden_states[index_block // interval_control]
         return encoder_hidden_states, hidden_states
 
     def forward(
@@ -282,6 +288,7 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
         encoder_hidden_states: paddle.Tensor = None,
         pooled_projections: paddle.Tensor = None,
         timestep: paddle.Tensor = None,
+        block_controlnet_hidden_states: List = None,
         joint_attention_kwargs: Optional[Dict[str, Any]] = None,
         return_dict: bool = True,
     ) -> Union[paddle.Tensor, Transformer2DModelOutput]:
@@ -296,6 +303,8 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
                 from the embeddings of input conditions.
             timestep ( `paddle.Tensor`):
                 Used to indicate denoising step.
+            block_controlnet_hidden_states: (`list` of `paddle.Tensor`):
+                A list of tensors that if specified are added to the residuals of transformer blocks.
             joint_attention_kwargs (`dict`, *optional*):
                 A kwargs dictionary that if specified is passed along to the `AttentionProcessor` as defined under
                 `self.processor` in
@@ -335,7 +344,7 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
             encoder_hidden_states = None
         else:
             encoder_hidden_states, hidden_states = self.sd3_origin_transformer(
-                hidden_states=hidden_states, encoder_hidden_states=encoder_hidden_states, temb=temb
+                hidden_states=hidden_states, encoder_hidden_states=encoder_hidden_states, temb=temb, block_controlnet_hidden_states=block_controlnet_hidden_states
             )
 
         hidden_states = self.norm_out(hidden_states, temb)

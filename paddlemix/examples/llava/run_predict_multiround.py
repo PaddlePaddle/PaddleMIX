@@ -40,7 +40,7 @@ def main(args):
         is_bfloat16_supported = True
     else:
         is_bfloat16_supported = paddle.amp.is_bfloat16_supported()
-    if compute_dtype== "bfloat16" and not is_bfloat16_supported:
+    if compute_dtype == "bfloat16" and not is_bfloat16_supported:
         logger.warning("bfloat16 is not supported on your device,change to float32")
         compute_dtype = "float32"
 
@@ -50,7 +50,12 @@ def main(args):
     model = AutoModelMIX.from_pretrained(args.model_path, dtype=compute_dtype)
     model.eval()
 
-    processor, _ = AutoProcessorMIX.from_pretrained(args.model_path, eval="eval", max_length=args.max_new_tokens, image_aspect_ratio=model_config.image_aspect_ratio)
+    processor, _ = AutoProcessorMIX.from_pretrained(
+        args.model_path,
+        eval="eval",
+        max_length=args.max_new_tokens,
+        image_aspect_ratio=model_config.image_aspect_ratio,
+    )
 
     model.resize_token_embeddings(len(tokenizer))
     vision_tower = model.get_vision_tower()
@@ -113,7 +118,7 @@ def main(args):
         with paddle.no_grad():
             output_ids = model.generate(
                 input_ids=data_dict["input_ids"],
-                images=paddle.cast(data_dict["images"],compute_dtype),
+                images=paddle.cast(data_dict["images"], compute_dtype),
                 image_sizes=[image_size],
                 decode_strategy="sampling" if args.temperature > 0 else "greedy_search",
                 temperature=args.temperature,
@@ -130,7 +135,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model-path", type=str, default="paddlemix/llava/llava-v1.5-7b")
+    parser.add_argument("--model-path", type=str, default="liuhaotian/llava-v1.6-vicuna-7b")
     parser.add_argument("--image-file", type=str, required=True)
     parser.add_argument("--conv-mode", type=str, default=None)
     parser.add_argument("--temperature", type=float, default=0.2)

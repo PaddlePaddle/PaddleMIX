@@ -66,9 +66,9 @@ class GELU(nn.Layer):
         approximate (`str`, *optional*, defaults to `"none"`): If `"tanh"`, use tanh approximation.
     """
 
-    def __init__(self, dim_in: int, dim_out: int, approximate: str = "none"):
+    def __init__(self, dim_in: int, dim_out: int, approximate: str = "none", bias: bool=True):
         super().__init__()
-        self.proj = nn.Linear(dim_in, dim_out)
+        self.proj = nn.Linear(dim_in, dim_out, bias_attr=bias)
         self.approximate = approximate
 
     def gelu(self, gate: paddle.Tensor) -> paddle.Tensor:
@@ -89,11 +89,11 @@ class GEGLU(nn.Layer):
         dim_out (`int`): The number of channels in the output.
     """
 
-    def __init__(self, dim_in: int, dim_out: int):
+    def __init__(self, dim_in: int, dim_out: int, bias: bool=True):
         super().__init__()
         linear_cls = LoRACompatibleLinear if not USE_PEFT_BACKEND else nn.Linear
 
-        self.proj = linear_cls(dim_in, dim_out * 2)
+        self.proj = linear_cls(dim_in, dim_out * 2, bias_attr=bias)
 
     def gelu(self, gate: paddle.Tensor) -> paddle.Tensor:
         return F.gelu(gate)
@@ -114,9 +114,9 @@ class ApproximateGELU(nn.Layer):
         dim_out (`int`): The number of channels in the output.
     """
 
-    def __init__(self, dim_in: int, dim_out: int):
+    def __init__(self, dim_in: int, dim_out: int, bias: bool=True):
         super().__init__()
-        self.proj = nn.Linear(dim_in, dim_out)
+        self.proj = nn.Linear(dim_in, dim_out, bias_attr=bias)
 
     def forward(self, x: paddle.Tensor) -> paddle.Tensor:
         x = self.proj(x)
