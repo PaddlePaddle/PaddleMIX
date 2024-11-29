@@ -17,7 +17,7 @@
 function _set_params(){
     model_item=${1:-"qwen2_vl_sft_2b"}   # (必选) 模型 item |fastscnn|segformer_b0| ocrnet_hrnetw48
     base_batch_size=${2:-"1"}       # (必选) 如果是静态图单进程，则表示每张卡上的BS，需在训练时*卡数
-    fp_item=${3:-"bf16"}            # (必选) fp32|fp16|bf16
+    fp_item=${3:-"bf16O2"}            # (必选) fp32|fp16|bf16
     run_mode=${4:-"DP"}             # (必选) MP模型并行|DP数据并行|PP流水线并行|混合并行DP1-MP1-PP1|DP1-MP4-PP1
     device_num=${5:-"N1C8"}         # (必选) 使用的卡数量，N1C1|N1C8|N4C32 （4机32卡）
     profiling=${PROFILING:-"false"}      # (必选) Profiling  开关，默认关闭，通过全局变量传递
@@ -55,8 +55,8 @@ function _train(){
             add_options=""
             log_file=${train_log_file}
     fi
-    rm -rf ./outputs
 
+    #模型权重
     if [ ${model_item} = "qwen2_vl_sft_2b" ];then # 目前只支持2B和7B
         use_model_args="--model_name_or_path Qwen/Qwen2-VL-2B-Instruct"
         use_output_args="--output_dir work_dirs/qwen2_vl_sft_2b_bs32_1e8"
@@ -75,20 +75,22 @@ function _train(){
 
     FUSED=False
     if [ ${fp_item} = "fp16O2" ]; then
-        use_fp16_cmd="--fp16 True --fp16_opt_level O2"
+        use_fp16_cmd="--fp16 True --fp16_opt_level O2 --amp_master_grad=1"
         FUSED=True
     fi
     if [ ${fp_item} = "bf16O2" ]; then
-        use_fp16_cmd="--bf16 True --fp16_opt_level O2"
+        use_fp16_cmd="--bf16 True --fp16_opt_level O2 --amp_master_grad=1"
         FUSED=True
     fi
+
+    rm -rf ./outputs
 
     export FLAG_USE_EMA=0
     export FLAG_BENCHMARK=1
     export FLAG_RECOMPUTE=1
     export FLAG_XFORMERS=1
-    # use fused linear in amp o2 level
-    export FLAG_FUSED_LINEAR=${FUSED}
+    # # use fused linear in amp o2 level
+    # export FLAG_FUSED_LINEAR=${FUSED}
 
     # add some flags
     export FLAGS_use_cuda_managed_memory=true
@@ -123,7 +125,6 @@ function _train(){
             --pipeline_parallel_degree=1 \
             --sep_parallel_degree=1 \
             --sharding="stage2" \
-            --amp_master_grad=1 \
             --overwrite_output_dir True \
             --per_device_train_batch_size ${base_batch_size} \
             --gradient_accumulation_steps 1 \
