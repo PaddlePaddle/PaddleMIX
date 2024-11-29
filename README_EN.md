@@ -40,7 +40,10 @@
 
 ## 📣 Latest Developments
 
-**🎉 2024.11.8 Support for [MiniCPM-V-2_6](./paddlemix/examples/minicpm-v-2_6) inference**
+
+**🎉 2024.11.27 Added support for [Janus/JanusFlow](./paddlemix/examples/janus) inference**
+
+**🎉 2024.11.21 Added support for [MiniCPM-V-2_6](./paddlemix/examples/minicpm-v-2_6) inference**
 
 **🎉 2024.11.8 Support for [DenseConnector](./paddlemix/examples/llava_denseconnector) and [Aquila-VL-2B-llava-qwen](./paddlemix/examples/llava_onevision/) inference**
 
@@ -225,6 +228,9 @@ sh build_env.sh
       <td>
         <b>Multimodal Generation</b>
       </td>
+      <td>
+        <b>Unified Multimodal Foundation Model</b>
+      </td>
     </tr>
     <tr valign="top">
       <td>
@@ -234,10 +240,13 @@ sh build_env.sh
         <ul>
             <li><a href="paddlemix/examples/clip">CLIP</a></li>
             <li><a href="paddlemix/examples/evaclip">EVA-CLIP</a></li>
-            <li><a href="paddlemix/examples/llava">LLaVA</a></li>
             <li><a href="paddlemix/examples/llava">LLaVA-1.5</a></li>
             <li><a href="paddlemix/examples/llava">LLaVA-1.6</a></li>
             <li><a href="paddlemix/examples/llava">LLaVA-NeXT</a></li>
+            <li><a href="paddlemix/examples/llava_onevision">LLaVA-onevision</a></li>
+            <li><a href="paddlemix/examples/llava_onevision">Aquila-VL-2B-llava-qwen</a></li>
+            <li><a href="paddlemix/examples/llava_critic">LLaVA-Critic</a></li>
+            <li><a href="paddlemix/examples/llava_denseconnector">LLaVA-DenseConnector</a></li>
             <li><a href="paddlemix/examples/qwen_vl">Qwen-VL</a></li>
             <li><a href="paddlemix/examples/qwen2_vl">Qwen2-VL</a></li>
             <li><a href="paddlemix/examples/internvl2">InternVL2</a></li>
@@ -294,6 +303,14 @@ sh build_env.sh
         <ul>
            <li><a href="ppdiffusers/ppdiffusers/pipelines/audioldm">AudioLDM</a></li>
            <li><a href="ppdiffusers/ppdiffusers/pipelines/audioldm2">AudioLDM2</a></li>
+        </ul>
+      </td>
+      <td>
+        <ul>
+        </ul>
+          <li><b>Unified Multimodal Model</b></li>
+        <ul>
+          <li><a href="paddlemix/examples/janus">Janus</a></li>
         </ul>
       </td>
     </tr>

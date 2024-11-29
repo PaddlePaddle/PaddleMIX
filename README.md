@@ -44,7 +44,9 @@
 
 <!-- 📚《飞桨多模态大模型开发套件PaddleMIX 2.1 震撼发布》，图文音视频场景全覆盖，多模态高效助力产业创新。超大规模训练支持，覆盖图文预训练、文生图、跨模态视觉任务，覆盖金融、教育、电商、医疗等产业场景。8月8日（周四）20：00 带你直播了解多模态大模型最新架构，深度解析PaddleMIX高性能模型库，手把手演示LLaVA模型训推全流程。[报名链接](https://www.wjx.top/vm/wKqysjx.aspx?udsid=449688)   -->
 
-**🎉 2024.11.8 支持[MiniCPM-V-2_6](./paddlemix/examples/minicpm-v-2_6)推理**
+**🎉 2024.11.27 支持[Janus/JanusFlow](./paddlemix/examples/janus)推理**
+
+**🎉 2024.11.21 支持[MiniCPM-V-2_6](./paddlemix/examples/minicpm-v-2_6)推理**
 
 **🎉 2024.11.8 支持[DenseConnector](./paddlemix/examples/llava_denseconnector)和[Aquila-VL-2B-llava-qwen](./paddlemix/examples/llava_onevision/)推理**
 
@@ -237,6 +239,9 @@ sh build_env.sh
       <td>
         <b>多模态生成</b>
       </td>
+      <td>
+        <b>多模态大一统</b>
+      </td>
     </tr>
     <tr valign="top">
       <td>
@@ -246,10 +251,13 @@ sh build_env.sh
         <ul>
             <li><a href="paddlemix/examples/clip">CLIP</a></li>
             <li><a href="paddlemix/examples/evaclip">EVA-CLIP</a></li>
-            <li><a href="paddlemix/examples/llava">LLaVA</a></li>
             <li><a href="paddlemix/examples/llava">LLaVA-1.5</a></li>
             <li><a href="paddlemix/examples/llava">LLaVA-1.6</a></li>
             <li><a href="paddlemix/examples/llava">LLaVA-NeXT</a></li>
+            <li><a href="paddlemix/examples/llava_onevision">LLaVA-onevision</a></li>
+            <li><a href="paddlemix/examples/llava_onevision">Aquila-VL-2B-llava-qwen</a></li>
+            <li><a href="paddlemix/examples/llava_critic">LLaVA-Critic</a></li>
+            <li><a href="paddlemix/examples/llava_denseconnector">LLaVA-DenseConnector</a></li>
             <li><a href="paddlemix/examples/qwen_vl">Qwen-VL</a></li>
             <li><a href="paddlemix/examples/qwen2_vl">Qwen2-VL</a></li>
             <li><a href="paddlemix/examples/internvl2">InternVL2</a></li>
@@ -306,6 +314,14 @@ sh build_env.sh
         <ul>
            <li><a href="ppdiffusers/ppdiffusers/pipelines/audioldm">AudioLDM</a></li>
            <li><a href="ppdiffusers/ppdiffusers/pipelines/audioldm2">AudioLDM2</a></li>
+        </ul>
+      </td>
+      <td>
+        <ul>
+        </ul>
+          <li><b>统一多模态模型</b></li>
+        <ul>
+          <li><a href="paddlemix/examples/janus">Janus</a></li>
         </ul>
       </td>
     </tr>

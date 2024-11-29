@@ -19,7 +19,7 @@ from ..utils.import_utils import is_paddlenlp_available
 def text_encoder_lora_state_dict(text_encoder):
     deprecate(
         "text_encoder_load_state_dict in `models`",
-        "0.27.0",
+        "0.45.0",
         "`text_encoder_lora_state_dict` is deprecated and will be removed in 0.27.0. Make sure to retrieve the weights using `get_peft_model`. See https://huggingface.co/docs/peft/v0.6.2/en/quicktour#peftmodel for more information.",
     )
     state_dict = {}
@@ -45,7 +45,7 @@ if is_paddlenlp_available():
     def text_encoder_attn_modules(text_encoder):
         deprecate(
             "text_encoder_attn_modules in `models`",
-            "0.27.0",
+            "0.45.0",
             "`text_encoder_lora_state_dict` is deprecated and will be removed in 0.27.0. Make sure to retrieve the weights using `get_peft_model`. See https://huggingface.co/docs/peft/v0.6.2/en/quicktour#peftmodel for more information.",
         )
         from ppdiffusers.transformers import CLIPTextModel, CLIPTextModelWithProjection

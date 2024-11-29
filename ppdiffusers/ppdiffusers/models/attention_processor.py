@@ -372,7 +372,7 @@ class Attention(nn.Layer):
         if not USE_PEFT_BACKEND and hasattr(self, "processor") and _remove_lora and self.to_q.lora_layer is not None:
             deprecate(
                 "set_processor to offload LoRA",
-                "0.26.0",
+                "0.45.0",
                 "In detail, removing LoRA layers via calling `set_default_attn_processor` is deprecated. Please make sure to call `pipe.unload_lora_weights()` instead.",
             )
             # TODO(Patrick, Sayak) - this can be deprecated once PEFT LoRA integration is complete
@@ -1645,7 +1645,7 @@ class LoRAAttnProcessor(nn.Layer):
         self_cls_name = self.__class__.__name__
         deprecate(
             self_cls_name,
-            "0.26.0",
+            "0.45.0",
             (
                 f"Make sure use {self_cls_name[4:]} instead by setting"
                 "LoRA layers to `self.{to_q,to_k,to_v,to_out[0]}.lora_layer` respectively. This will be done automatically when using"
@@ -1724,7 +1724,7 @@ class LoRAXFormersAttnProcessor(nn.Layer):
         self_cls_name = self.__class__.__name__
         deprecate(
             self_cls_name,
-            "0.26.0",
+            "0.45.0",
             (
                 f"Make sure use {self_cls_name[4:]} instead by setting"
                 "LoRA layers to `self.{to_q,to_k,to_v,add_k_proj,add_v_proj,to_out[0]}.lora_layer` respectively. This will be done automatically when using"
@@ -1783,7 +1783,7 @@ class LoRAAttnAddedKVProcessor(nn.Layer):
         self_cls_name = self.__class__.__name__
         deprecate(
             self_cls_name,
-            "0.26.0",
+            "0.45.0",
             (
                 f"Make sure use {self_cls_name[4:]} instead by setting"
                 "LoRA layers to `self.{to_q,to_k,to_v,add_k_proj,add_v_proj,to_out[0]}.lora_layer` respectively. This will be done automatically when using"

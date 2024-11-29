@@ -416,6 +416,8 @@ class BaseTunerLayer(ABC):
         # Deactivate grads on the inactive adapter and activate grads on the active adapter
         for layer_name in self.adapter_layer_names:
             module_dict = getattr(self, layer_name)
+            if isinstance(module_dict, paddle.nn.ParameterDict):
+                module_dict = dict(module_dict)
             for key, layer in module_dict.items():
                 if key in adapter_names:
                     # Note: It is possible that not a single layer is called with requires_grad_(True) here. This may
