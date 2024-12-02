@@ -129,7 +129,7 @@ class MMDataset(object):
         func = partial(is_valid_schema, schema=schema, suppress_exceptions=suppress_exceptions)
         return self.filter(func, max_workers=max_workers, mode=mode, progress=progress, order=True)
 
-    def shuffle(self, seed: Optional[int]=None) -> 'MMDataset':
+    def shuffle(self, ) -> 'MMDataset':
         random.shuffle(self._items)
         return self
 
