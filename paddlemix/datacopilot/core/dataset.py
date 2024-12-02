@@ -81,7 +81,7 @@ class MMDataset(object):
         self._items.append(item)
         return self
     
-    def pop(self, index: int=-1) -> 'MMDataset':
+    def pop(self, index: int=-1) -> T:
         item = self._items.pop(index)
         return item
     
