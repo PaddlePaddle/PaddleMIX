@@ -22,7 +22,7 @@
 import math
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple, Union
-
+import nvtx
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
@@ -282,7 +282,9 @@ class PatchEmbed(nn.Layer):
                 stride=self.proj._stride)
             hidden_states = hidden_states.to(target_dtype).reshape([-1, self.embed_dim])
         else:
-            hidden_states = self.proj(hidden_states.to(dtype=target_dtype)).reshape([-1, self.embed_dim])
+            # NOTE（changwenbin）: AttributeError: 'Variable' object has no attribute 'to'
+            # hidden_states = self.proj(hidden_states.to(dtype=target_dtype)).reshape([-1, self.embed_dim])
+            hidden_states = self.proj(paddle.cast(hidden_states,dtype=target_dtype)).reshape([-1, self.embed_dim])
         return hidden_states
 
 
@@ -1393,6 +1395,45 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
 
         return model_kwargs
 
+    def vision_forward(
+        self,
+        input_ids: paddle.Tensor,
+        inputs_embeds: Optional[paddle.Tensor] = None,
+        attention_mask: Optional[paddle.Tensor] = None,
+        position_ids: Optional[paddle.Tensor] = None,
+        pixel_values: Optional[paddle.Tensor] = None,
+        pixel_values_videos: Optional[paddle.Tensor] = None,
+        image_grid_thw: Optional[paddle.Tensor] = None,
+        video_grid_thw: Optional[paddle.Tensor] = None,
+        rope_deltas: Optional[paddle.Tensor] = None,
+    ):
+        import nvtx
+        vision_forward_nvtx = nvtx.start_range(message="vision_forward", color="blue")
+
+        if inputs_embeds is None:
+            inputs_embeds = self.model.embed_tokens(input_ids)
+            # breakpoint()
+            if pixel_values is not None:
+                pixel_values = paddle.cast(pixel_values, paddle.get_default_dtype())
+                image_embeds = self.visual(pixel_values, grid_thw=image_grid_thw)
+                image_mask = input_ids == self.config.image_token_id
+                if self.training:
+                    inputs_embeds = inputs_embeds.clone()
+                inputs_embeds[image_mask] = image_embeds
+            if pixel_values_videos is not None:
+                pixel_values_videos = paddle.cast(pixel_values_videos, paddle.get_default_dtype())
+                video_embeds = self.visual(pixel_values_videos, grid_thw=video_grid_thw)
+                video_mask = input_ids == self.config.video_token_id
+                inputs_embeds[video_mask] = video_embeds
+            if attention_mask is not None:
+                attention_mask = attention_mask
+                        
+        paddle.device.synchronize()
+        nvtx.end_range(vision_forward_nvtx)
+        
+        
+        return inputs_embeds
+
     def forward(
         self,
         input_ids: paddle.Tensor = None,  # [1, 400] sum 49356255
@@ -1411,66 +1452,27 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
         video_grid_thw: Optional[paddle.Tensor] = None,
         rope_deltas: Optional[paddle.Tensor] = None,
     ):
-        """
-        Args:
-            labels (`paddle.Tensor` of shape `(batch_size, sequence_length)`, *optional*):
-                Labels for computing the masked language modeling loss. Indices should either be in `[0, ...,
-                config.vocab_size]` or -100 (see `input_ids` docstring). Tokens with indices set to `-100` are ignored
-                (masked), the loss is only computed for the tokens with labels in `[0, ..., config.vocab_size]`.
-
-        Returns:
-
-        Example:
-
-        ```python
-        >>> from PIL import Image
-        >>> import requests
-        >>> from transformers import AutoProcessor, Qwen2VLForConditionalGeneration
-
-        >>> model = Qwen2VLForConditionalGeneration.from_pretrained("Qwen/Qwen2-VL-7B-Instruct")
-        >>> processor = AutoProcessor.from_pretrained("Qwen/Qwen2-VL-7B-Instruct")
-
-        >>> messages = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "image"},
-                    {"type": "text", "text": "What is shown in this image?"},
-                ],
-            },
-        ]
-        >>> url = "https://www.ilankelman.org/stopsigns/australia.jpg"
-        >>> image = Image.open(requests.get(url, stream=True).raw)
-
-        >>> text = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-        >>> inputs = processor(text=[text], images=[image], vision_infos=[vision_infos])
-
-        >>> # Generate
-        >>> generate_ids = model.generate(inputs.input_ids, max_length=30)
-        >>> tokenizer.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
-        "The image shows a street scene with a red stop sign in the foreground. In the background, there is a large red gate with Chinese characters ..."
-        ```"""
-
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states  # fmt:skip
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
+
         if inputs_embeds is None:
             inputs_embeds = self.model.embed_tokens(input_ids)
-            if pixel_values is not None:
-                pixel_values = paddle.cast(pixel_values, paddle.get_default_dtype())
-                image_embeds = self.visual(pixel_values, grid_thw=image_grid_thw)
-                image_mask = input_ids == self.config.image_token_id
-                if self.training:
-                    inputs_embeds = inputs_embeds.clone()
-                inputs_embeds[image_mask] = image_embeds
-            if pixel_values_videos is not None:
-                pixel_values_videos = paddle.cast(pixel_values_videos, paddle.get_default_dtype())
-                video_embeds = self.visual(pixel_values_videos, grid_thw=video_grid_thw)
-                video_mask = input_ids == self.config.video_token_id
-                inputs_embeds[video_mask] = video_embeds
-            if attention_mask is not None:
-                attention_mask = attention_mask
+            # if pixel_values is not None:
+            #     pixel_values = paddle.cast(pixel_values, paddle.get_default_dtype())
+            #     image_embeds = self.visual(pixel_values, grid_thw=image_grid_thw)
+            #     image_mask = input_ids == self.config.image_token_id
+            #     if self.training:
+            #         inputs_embeds = inputs_embeds.clone()
+            #     inputs_embeds[image_mask] = image_embeds
+            # if pixel_values_videos is not None:
+            #     pixel_values_videos = paddle.cast(pixel_values_videos, paddle.get_default_dtype())
+            #     video_embeds = self.visual(pixel_values_videos, grid_thw=video_grid_thw)
+            #     video_mask = input_ids == self.config.video_token_id
+            #     inputs_embeds[video_mask] = video_embeds
+            # if attention_mask is not None:
+            #     attention_mask = attention_mask
 
         outputs = self.model(
             input_ids=None,
@@ -1503,7 +1505,9 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
             loss = loss / label_sum
 
         if not return_dict:
-            output = (logits,) + outputs[1:]
+            # output = (logits,) + outputs[1:]
+            # Note: (changwenbin) fix "can only concatenate tuple (not "list") to tuple"
+            output = (logits,) + tuple(outputs[1:])
             return (loss,) + output if loss is not None else output
             # return logits + 28 layers k and v
 
