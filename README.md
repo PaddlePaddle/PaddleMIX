@@ -182,7 +182,7 @@ docker run -it --name paddle-npu-dev -v $(pwd):/work \
     -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi \
     -v /usr/local/dcmi:/usr/local/dcmi \
     -e ASCEND_RT_VISIBLE_DEVICES="0,1,2,3,4,5,6,7" \
-    registry.baidubce.com/device/paddle-npu:cann80T13-ubuntu20-$(uname -m)-gcc84-py39 /bin/bash
+    ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-npu:cann80T13-ubuntu20-$(uname -m)-gcc84-py39 /bin/bash
 ```
 
 * 在容器内安装飞桨
