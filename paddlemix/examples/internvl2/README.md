@@ -20,17 +20,21 @@
 注意：与huggingface权重同名，但权重为paddle框架的Tensor，使用`xxx.from_pretrained("OpenGVLab/InternVL2-2B")`即可自动下载该权重文件夹到缓存目录。
 
 
-## 2 环境准备
-
-1）[安装PaddleNLP develop分支](https://github.com/PaddlePaddle/PaddleNLP?tab=readme-ov-file#%E5%AE%89%E8%A3%85)
-
-2）[安装 PaddleMIX 环境依赖包](https://github.com/PaddlePaddle/PaddleMIX/tree/b4f97ff859e1964c839fc5fab94f7ba63b1e5959?tab=readme-ov-file#%E5%AE%89%E8%A3%85)
-
-注意：Python版本最好为3.10及以上版本。
+## 2 环境准备(如符合则跳过)
+* 通过 `git clone` 命令拉取 PaddleMIX 源码，并安装必要的依赖库。
+* Python版本最好为3.10及以上版本。
+* PaddleNLP版本最好为3.0及以上。
+> 注：本模型训练与推理需要依赖 CUDA 11.2 及以上版本，如果本地机器不符合要求，建议前往 [AI Studio](https://aistudio.baidu.com/index) 进行模型训练、推理任务。推荐使用Linux系统，Windows系统未经过系统测试。
 
 ## 3. 模型推理预测
 
 ### 3.1. 图片预测
+<div style="width: 300px; height: 300px; margin: 0 auto; text-align: center;">
+    <img src="https://raw.githubusercontent.com/PaddlePaddle/PaddleMIX/develop/paddlemix/demo_images/examples_image1.jpg" 
+         alt="examples_image1" 
+         style="max-width: 100%; height: auto;"/>
+</div>
+
 ```bash
 python paddlemix/examples/internvl2/chat_demo.py \
     --model_name_or_path "OpenGVLab/InternVL2-8B" \
@@ -43,6 +47,13 @@ python paddlemix/examples/internvl2/chat_demo.py \
   * `text`: 用户指令, 例如 "Please describe this image in detail."
 
 ### 3.2. 视频预测
+
+<div style="display: flex; justify-content: center; align-items: center;">
+    <video width="300" height="300" controls>
+        <source src="https://raw.githubusercontent.com/PaddlePaddle/PaddleMIX/develop/paddlemix/demo_images/red-panda.mp4" type="video/mp4">
+    </video>
+</div>
+
 ```bash
 python paddlemix/examples/internvl2/chat_demo_video.py \
     --model_name_or_path "OpenGVLab/InternVL2-8B" \
@@ -59,34 +70,117 @@ python paddlemix/examples/internvl2/chat_demo_video.py \
 
 ### 4.1 微调数据准备
 
-SFT数据集采用 InternVL2 官方公布的1.3M的SFT数据集，包括了`sharegpt4v`、`llava_instruct_150k_zh`、`dvqa`、`chartqa`、`ai2d`、`docvqa`、`geoqa+`、`synthdog_en`等。
+#### 数据集下载
+SFT数据集采用 InternVL2 官方公布的1.3M的SFT数据集，总共包含约 120 万个完全开源的视觉指令调优样本。从宏观角度来看，在 ShareGPT-4V 的基础上，还整合了 LLaVA-ZH、DVQA、ChartQA、AI2D、DocVQA、GeoQA+ 和 SynthDoG-EN。大部分数据与 LLaVA-NeXT 保持一致。
 
 PaddleMIX团队整理后的下载链接为：
 ```
 wget https://paddlenlp.bj.bcebos.com/datasets/paddlemix/playground.tar # 50G
 wget https://paddlenlp.bj.bcebos.com/datasets/paddlemix/LLaVA/LLaVA-SFT.tar # 116G
 ```
-
 下载后可解压或软链接在 PaddleMIX/ 目录下。
 
-PaddleMIX团队也提供了其中单独的`chartqa`数据集的下载链接，作为训练示例：
+**PaddleMIX团队也提供了其中单独的`chartqa`数据集的下载链接，作为训练示例（入门推荐）：**
 ```
-wget https://paddlenlp.bj.bcebos.com/datasets/paddlemix/playground/data/chartqa.tar
-wget https://paddlenlp.bj.bcebos.com/datasets/paddlemix/playground/opensource.tar
+wget https://paddlenlp.bj.bcebos.com/datasets/paddlemix/playground/data/chartqa.tar # 1.1G
+wget https://paddlenlp.bj.bcebos.com/datasets/paddlemix/playground/opensource.tar # 5.2G
 ```
+
 chartqa.tar需下载解压在playground/data/目录下，opensource.tar需下载解压在playground/目录下，opensource里是数据标注的jsonl文件。
+
+----
+#### 数据集介绍
+数据集包含以下数据集：
+* AI2D：ai2d_images（由 InternLM-XComposer 提供）
+* ChartQA：ChartQA Dataset
+* COCO：train2017
+* DocVQA：train、val、test
+* DVQA：images
+* GQA：images
+* LLaVA-Pretrain：images
+* OCR-VQA：下载脚本。我们将所有文件保存为 `.jpg`
+* SAM：目前我们仅使用 000000~000050.tar。您可以从这里快速下载 9K 张图像。
+* TextVQA：trainvalimages
+* SynthDoG-EN：目前我们仅使用 00000~00004 parquet 文件，共 3 万张图像。我们提供了转换后的图像。
+* VisualGenome：part1、part2
+* WebData：images。仅供学术使用。
+* GeoQA+：images。我们已转换数据格式并重新发布。
+
+
+#### 数据集组织结构
+按照以下方式在 `playground/data` 中组织数据：
+
+```
+playground/
+├── opensource
+│   ├── ai2d_train_12k.jsonl
+│   ├── chartqa_train_18k.jsonl
+│   ├── docvqa_train_10k.jsonl
+│   ├── dvqa_train_200k.jsonl
+│   ├── geoqa+.jsonl
+│   ├── llava_instruct_150k_zh.jsonl
+│   ├── sharegpt4v_instruct_gpt4-vision_cap100k.jsonl
+│   ├── sharegpt4v_mix665k_cap23k_coco-ap9k_lcs3k_sam9k_div2k.jsonl
+│   └── synthdog_en.jsonl
+├── data
+│   ├── ai2d
+│   │   ├── abc_images
+│   │   └── images
+│   ├── chartqa
+│   │   ├── test
+│   │   ├── train
+│   │   └── val
+│   ├── coco
+│   │   └── train2017
+│   ├── docvqa
+│   │   ├── test
+│   │   ├── train
+│   │   └── val
+│   ├── dvqa
+│   │   └── images
+│   ├── gqa
+│   │   └── images
+│   ├── llava
+│   │   └── llava_pretrain
+│   │       └── images
+│   ├── ocr_vqa
+│   │   └── images
+│   ├── sam
+│   │   └── images
+│   ├── share_textvqa
+│   │   └── images
+│   ├── synthdog-en
+│   │   └── images
+│   ├── textvqa
+│   │   └── train_images
+│   ├── vg
+│   │   ├── VG_100K
+│   │   └── VG_100K_2
+│   ├── web-celebrity
+│   │   └── images
+│   ├── web-landmark
+│   │   └── images
+│   ├── wikiart
+│   │   └── images
+│   ├── geoqa+
+│   │   └── images
+```
 
 ### 4.2 微调命令
 
-注意：此微调训练为全参数微调，冻结视觉编码器而放开LLM训练，2B模型微调训练的显存大小约为40G，8B模型微调训练的显存大小约为80G。
+注意：此微调训练为全参数微调，冻结视觉编码器而放开LLM训练，1B V100 32G可跑。
+2B模型微调训练的显存大小约为40G，8B模型微调训练的显存大小约为80G。
 
 ```bash
+# 单卡
 # 1B
 sh paddlemix/examples/internvl2/shell/internvl2.0/2nd_finetune/internvl2_1b_qwen2_0_5b_dynamic_res_2nd_finetune_full.sh
 
+## 多卡
 # 2B
-sh paddlemix/examples/internvl2/shell/internvl2.0/2nd_finetune/internvl2_2b_internlm2_1_8b_dynamic_res_2nd_finetune_full.sh
+sh paddlemix/examples/internvl2/shell/internvl2.0/2nd_finetune/internvl2_2b_internlm2_1_8b_dynamic_res_2nd_finetune_full.sh 
 
+## 多卡
 # 8B
 sh paddlemix/examples/internvl2/shell/internvl2.0/2nd_finetune/internvl2_8b_internlm2_7b_dynamic_res_2nd_finetune_full.sh
 ```

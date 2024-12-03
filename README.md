@@ -169,32 +169,7 @@ sh build_paddle_env.sh
 #### 方法 2: 手动安装
 关于PaddlePaddle安装的详细教程请查看[Installation](https://www.paddlepaddle.org.cn/install/quick?docurl=/documentation/docs/zh/develop/install/pip/linux-pip.html)。
 
-### 4. 昇腾环境安装（可选）
-
-当前 PaddleMIX 支持昇腾 910B 芯片（更多型号还在支持中，如果您有其他型号的相关需求，请提交issue告知我们），昇腾驱动版本为 23.0.3。考虑到环境差异性，我们推荐使用飞桨官方提供的标准镜像完成环境准备。
-
-* 参考如下命令启动容器，ASCEND_RT_VISIBLE_DEVICES 指定可见的 NPU 卡号
-
-```shell
-docker run -it --name paddle-npu-dev -v $(pwd):/work \
-    --privileged --network=host --shm-size=128G -w=/work \
-    -v /usr/local/Ascend/driver:/usr/local/Ascend/driver \
-    -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi \
-    -v /usr/local/dcmi:/usr/local/dcmi \
-    -e ASCEND_RT_VISIBLE_DEVICES="0,1,2,3,4,5,6,7" \
-    registry.baidubce.com/device/paddle-npu:cann80T13-ubuntu20-$(uname -m)-gcc84-py39 /bin/bash
-```
-
-* 在容器内安装飞桨
-
-```shell
-# 注意需要先安装飞桨 cpu 版本，目前仅支持python3.9版本
-python -m pip install --pre paddlepaddle -i https://www.paddlepaddle.org.cn/packages/nightly/cpu/
-python -m pip install --pre paddle-custom-npu -i https://www.paddlepaddle.org.cn/packages/nightly/npu/
-```
-
-
-### 5. 安装依赖
+### 4. 安装依赖
 
 #### 方法 1: 一键安装（推荐）
 
@@ -203,15 +178,29 @@ python -m pip install --pre paddle-custom-npu -i https://www.paddlepaddle.org.cn
 sh build_env.sh
 ```
 
-#### 方法 2: 手动安装（请参考 build_env.sh）
-
+#### 方法 2: 手动安装
+```bash
+# 安装 PaddleMIX
+pip install -e .
+# 安装 ppdiffusers
+cd ppdiffusers
+pip install -e .
+cd ..
+```
+### 5. 安装自定义算子（可选）
+* 部分模型需要安装自定义算子（FastLayerNorm、FusedLayerNorm），例如EVA-CLIP、DIT_LLAMA等。
+* 非CUDA环境（例如昇腾环境）则跳过
+```bash
+cd paddlemix/external_ops
+python setup.py install
+```
 
 ## 🔥教程
 
 **快速开始**
-- [多模态理解：新手入门体验](paddlemix/examples/internvl2/README.md)
-- [多模态生成：零基础上手指南](ppdiffusers/examples/inference/README.md)
-- [跨模态任务流水线：端到端流程演示](applications/README.md/#快速开始)
+- [多模态理解：新手入门体验 [示例：InternVL2模型]](paddlemix/examples/internvl2/README.md)
+- [多模态生成：零基础上手指南 [示例：Stable Diffusion模型]](ppdiffusers/examples/inference/README.md)
+- [跨模态任务流水线：快速开始](applications/README.md/#快速开始)
 
 **实操演练&范例**
 - [LLaVA模型：从训练到推理的全流程实践](https://aistudio.baidu.com/projectdetail/7917712)

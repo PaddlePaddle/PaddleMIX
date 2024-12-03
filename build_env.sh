@@ -34,15 +34,3 @@ cd ..
 # 安装依赖包
 echo "安装依赖包..."
 pip install -r requirements.txt
-
-# 安装自定义算子，非CUDA环境（例如昇腾环境）则跳过
-if command -v nvcc > /dev/null 2>&1; then
-    echo "安装自定义算子..."
-    cd paddlemix/external_ops
-    python setup.py install
-    cd ../../
-else
-    echo "未检测到 CUDA。跳过自定义算子安装..."
-fi
-
-echo "安装完成!"
