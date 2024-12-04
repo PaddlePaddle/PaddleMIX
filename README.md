@@ -34,11 +34,16 @@
 
 
 ## 📰新闻
-**🔥2024.10.31日 PaddleMIX 2.1版本发新直播**
+**🔥2024.11.21日 - 2024.12.22日  PaddleMIX开发项目挑战**
 
-- 🎉飞桨多模态大模型套件PaddleMIX全新发布2.1版本！百度研发工程师已在 10月31日（周四）20：00，为大家详细解读了套件更新内容，以及多模态数据能力标签模型 PP-InsCapTagger 的实现细节和案例应用。
+- ✨「体验官招募」PaddleMIX开发项目挑战
+点击链接报名🔗：https://aistudio.baidu.com/activitydetail/1503019366
+🏆投稿至飞桨星河社区项目大厅，加精获得PaddleMIX体验官认证证书及京东卡激励
+欢迎大家投稿～
+<p align="center">
+<img src='https://github.com/user-attachments/assets/27e0bbe3-0ff8-49ef-bd39-81a31a2b288b'  width="25%">
+</p>
 
-</div>
 
 ## 📣最新进展
 

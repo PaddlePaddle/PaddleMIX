@@ -1,9 +1,24 @@
 # InternVL2 模型
 
+
+## 0. 多模态理解大模型介绍
+多模态理解大模型是一类能够同时处理和理解多种数据形式（如图像📸、文本📝、视频🎥等）的人工智能模型。这类模型通过深度学习技术，可以实现跨模态的信息理解、关联和生成！相比传统的单模态模型，多模态模型能够更全面地理解和分析复杂场景，在实际应用中具有更强的实用性和普适性。✨典型应用包括：图文理解、视觉问答、文档理解、场景描述等任务。随着技术的发展，多模态大模型在准确性、鲁棒性和通用性等方面都取得了显著进步，为人工智能的发展开辟了新的方向！🎯
+
+下面介绍 InternVL2，一个强大的开源多模态大语言模型（MLLM）。InternVL2 系列包含从适用于参数较小的1B模型到功能更强大的模型。凭借更大规模的语言模型，InternVL2-Pro 展现出卓越的多模态理解能力，在各种基准测试中可与商业闭源模型相媲美。🌈
+
+<div style="text-align: center; width: 100%;">
+    <img src="https://github.com/user-attachments/assets/772bad8a-c55e-4fbc-b148-fbcd7bd424cb" alt="InternVL2 Benchmark" style="width: 80%; height: auto;">
+</div>
+
 ## 1. 模型介绍
 
-[InternVL2](https://internvl.github.io/blog/2024-07-02-InternVL-2.0/)是 InternVL 系列多模态大模型的最新成员。InternVL2 包含多个经过指令微调的模型，参数量从 1B 到 76B 不等。在开源模型中，InternVL2 在文档和图表理解、信息图表问答、场景文本理解和 OCR 任务、科学和数学问题解决等方面表现出色。
+<div style="text-align: center; width: 100%;">
+    <img src="https://github.com/user-attachments/assets/78f3094c-85d9-4dbf-8fd6-5c1c6a90dbf5" alt="InternVL2 Architecture" style="width: 90%; height: auto;">
+</div>
+
+[InternVL2](https://internvl.github.io/blog/2024-07-02-InternVL-2.0/)是 InternVL 系列多模态理解大模型的最新成员。InternVL2 包含多个经过指令微调的模型，参数量从 1B 到 76B 不等。在开源模型中，InternVL2 在文档和图表理解、信息图表问答、场景文本理解和 OCR 任务、科学和数学问题解决等方面表现出色。
 [InternVL2-MPO](https://internvl.github.io/blog/2024-11-14-InternVL-2.0-MPO/)是混合偏好优化后的InternVL2模型，基于InternVL2在多个基准测试中表现出了改进的性能，特别是在多模态推理方面。
+
 
 
 **本仓库支持的模型权重:**
@@ -29,10 +44,9 @@
 ## 3. 模型推理预测
 
 ### 3.1. 图片预测
-<div style="width: 300px; height: 300px; margin: 0 auto; text-align: center;">
-    <img src="https://raw.githubusercontent.com/PaddlePaddle/PaddleMIX/develop/paddlemix/demo_images/examples_image1.jpg" 
-         alt="examples_image1" 
-         style="max-width: 100%; height: auto;"/>
+
+<div style="text-align: center; width: 100%;">
+    <img src="https://raw.githubusercontent.com/PaddlePaddle/PaddleMIX/develop/paddlemix/demo_images/examples_image1.jpg" alt="InternVL2 Benchmark" style="width: 50%; height: auto;">
 </div>
 
 ```bash
@@ -48,8 +62,10 @@ python paddlemix/examples/internvl2/chat_demo.py \
 
 ### 3.2. 视频预测
 
+
+
 <div style="display: flex; justify-content: center; align-items: center;">
-    <video width="300" height="300" controls>
+    <video style="width: 25%; height: auto;" >
         <source src="https://raw.githubusercontent.com/PaddlePaddle/PaddleMIX/develop/paddlemix/demo_images/red-panda.mp4" type="video/mp4">
     </video>
 </div>
