@@ -24,6 +24,22 @@ from paddlemix.processors.qwen2_vl_processing import (
     process_vision_info,
 )
 import argparse
+from paddlenlp.experimental.transformers.qwen2.modeling import Qwen2ForCausalLMBlockInferenceModel
+from paddlenlp.transformers import (
+    AutoConfig,
+    AutoInferenceModelForCausalLM,
+    AutoModelForCausalLM,
+    AutoTokenizer,
+    PretrainedModel,
+    PretrainedTokenizer,
+)
+from paddlenlp.generation import GenerationConfig
+from paddlenlp.trl import llm_utils
+import numpy as np
+
+from dataclasses import dataclass, field
+from paddlenlp.trainer import PdArgumentParser
+from paddlenlp.utils.log import logger
 
 
 # def parse_args():
@@ -48,10 +64,9 @@ import argparse
 
 
 
-
 MODEL_NAME = "Qwen/Qwen2-VL-2B-Instruct"
 # MODEL_NAME = "Qwen/Qwen2-VL-7B-Instruct"
-# vision_model = Qwen2VLForConditionalGeneration.from_pretrained(MODEL_NAME, dtype="bfloat16")
+model_vision = Qwen2VLForConditionalGeneration.from_pretrained(MODEL_NAME, dtype="bfloat16")
 
 image_processor = Qwen2VLImageProcessor()
 tokenizer = Qwen2Tokenizer.from_pretrained(MODEL_NAME)
@@ -81,45 +96,18 @@ question = "Describe this image."
 image_pad_token = "<|vision_start|><|image_pad|><|vision_end|>"
 text = f"<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n{image_pad_token}{question}<|im_end|>\n<|im_start|>assistant\n"
 
-inputs_vision = processor(
-    text=[text],
-    images=image_inputs,
-    videos=video_inputs,
-    padding=True,
-    return_tensors="pd",
-)
-
-vision_model = Qwen2VLForConditionalGeneration.from_pretrained(MODEL_NAME, dtype="bfloat16")
-
-
-from paddlenlp.experimental.transformers.qwen2.modeling import Qwen2ForCausalLMBlockInferenceModel
-from paddlenlp.transformers import (
-    AutoConfig,
-    AutoInferenceModelForCausalLM,
-    AutoModelForCausalLM,
-    AutoTokenizer,
-    PretrainedModel,
-    PretrainedTokenizer,
-)
-from paddlenlp.generation import GenerationConfig
-from paddlenlp.trl import llm_utils
-import numpy as np
-
-from dataclasses import dataclass, field
-from paddlenlp.trainer import PdArgumentParser
-from paddlenlp.utils.log import logger
 
 @dataclass
 class PredictorArgument:
     model_name_or_path: str = field(default=None, metadata={"help": "The directory of model."})
     model_prefix: str = field(default="model", metadata={"help": "the prefix name of static model"})
     src_length: int = field(default=1024, metadata={"help": "The max length of source text."})
-    min_length: int = field(default=128, metadata={"help": "the min length for decoding."})
+    min_length: int = field(default=1, metadata={"help": "the min length for decoding."})
     max_length: int = field(default=128, metadata={"help": "the max length for decoding."})
-    top_k: int = field(default=1, metadata={"help": "top_k parameter for generation"})
-    top_p: float = field(default=0.001, metadata={"help": "top_p parameter for generation"})
-    temperature: float = field(default=0.1, metadata={"help": "top_p parameter for generation"})
-    repetition_penalty: float = field(default=1.05, metadata={"help": "repetition penalty parameter for generation"})
+    top_k: int = field(default=0, metadata={"help": "top_k parameter for generation"})
+    top_p: float = field(default=0.7, metadata={"help": "top_p parameter for generation"})
+    temperature: float = field(default=0.95, metadata={"help": "top_p parameter for generation"})
+    repetition_penalty: float = field(default=1.0, metadata={"help": "repetition penalty parameter for generation"})
     device: str = field(default="gpu", metadata={"help": "Device"})
     dtype: str = field(default=None, metadata={"help": "Model dtype"})
     lora_path: str = field(default=None, metadata={"help": "The directory of LoRA parameters. Default to None"})
@@ -213,17 +201,11 @@ class ModelArgument:
     data_file: str = field(default=None, metadata={"help": "data file directory"})
     output_file: str = field(default="output.json", metadata={"help": "predict result file directory"})
 
-try:
-    generation_config = GenerationConfig.from_pretrained(arg_config.model_name_or_path)
-except:
-    logger.warning(
-        "Can't find generation config, so it will not use generation_config field in the model config"
-    )
-generation_config = None
-
 def init_model_inputs(arg_config: PredictorArgument):
 
+
     model_inputs = {}
+
 
     model_inputs["block_tables"] = paddle.full(
         shape=[arg_config.batch_size, (arg_config.total_max_length + arg_config.block_size - 1) // arg_config.block_size],
@@ -268,7 +250,7 @@ def init_model_inputs(arg_config: PredictorArgument):
     cachekv_dtype = config.dtype if arg_config.cachekv_int8_type is None else "uint8"
     model_inputs["cache_kvs"] = [paddle.zeros(shape, dtype=cachekv_dtype) for shape in cache_kvs_shape]
     model_inputs["block_tables"][:][:] = -1
-    seq_lens = [len(inputs_vision["input_ids"][0])]
+    seq_lens = [len(inputs["input_ids"][0])]
 
     max_block_nums = cache_kvs_shape[0][0]
     free_list = list(range(max_block_nums))
@@ -303,6 +285,7 @@ paddle.set_device(predictor_args.device)
 paddle.set_default_dtype(predictor_args.dtype)
 
 config = AutoConfig.from_pretrained(MODEL_NAME)
+generation_config = GenerationConfig.from_pretrained(MODEL_NAME)
 model = AutoInferenceModelForCausalLM.from_pretrained(
     MODEL_NAME,
     config=config,
@@ -315,7 +298,8 @@ model = AutoInferenceModelForCausalLM.from_pretrained(
 model.eval()
 
 
-if True:
+
+if False:
     print("Benchmarking {MODEL_NAME}...")
     # warm_up = 3
     # for _ in range(warm_up):
@@ -334,34 +318,43 @@ if True:
     import nvtx
     repeat_times = 10
     sumtime = 0.0
-
     for i in range(repeat_times):
-        # Inference: Generation of the output
-        inputs = init_model_inputs(arg_config=predictor_args)
-        inputs["input_ids"] = inputs_vision["input_ids"]
-        inputs["inputs_embeds"] = None
-
+        inputs = processor(
+            text=[text],
+            images=image_inputs,
+            videos=video_inputs,
+            padding=True,
+            return_tensors="pd",
+        )
+        model_inputs = init_model_inputs(arg_config=predictor_args)
 
         paddle.device.synchronize()
         starttime = datetime.datetime.now()
-
         vision_nvtx = nvtx.start_range(message="vision", color="green")
-        inputs_embeds = vision_model.vision_forward(**inputs_vision)
-        # inputs_embeds = paddle.load("/root/paddlejob/workspace/env_run/output/changwenbin/tmp_qwen2vl/PaddleMIX/paddlemix/examples/qwen2_vl/inputs_embeds.pd")
+        
+        inputs_embeds = model_vision.vision_forward(**inputs)
+        inputs.update(model_inputs)
         inputs["inputs_embeds"]=inputs_embeds
         
         paddle.device.synchronize()
         nvtx.end_range(vision_nvtx)
         
         llm_nvtx = nvtx.start_range(message="LLM", color="red")
+        
         generated_text = ""
         while inputs["not_need_stop"]:
-            generated_ids = model.generate(**inputs)
+            llm_token_nvtx = nvtx.start_range(message="token", color="blue")
+            
+            generated_ids = model.generate(**inputs)  # already trimmed in paddle
             inputs["input_ids"] = generated_ids
+            inputs["inputs_embeds"] = None
             new_text_piece = processor.batch_decode(generated_ids[0], skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
             if new_text_piece == "<|im_end|>":
                 continue
             generated_text += new_text_piece
+            
+            addle.device.synchronize()
+            nvtx.end_range(llm_token_nvtx)
             
         paddle.device.synchronize()
         nvtx.end_range(llm_nvtx)
@@ -369,7 +362,7 @@ if True:
         paddle.device.synchronize()
         endtime = datetime.datetime.now()
         print("Final output_text:\n", generated_text)
-        
+
         duringtime = endtime - starttime
         duringtime = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
         sumtime += duringtime
@@ -380,19 +373,28 @@ if True:
         print(f"Inference used CUDA memory : {inference_global_mem:.3f} GiB")
 
     print(f"Single {MODEL_NAME} ave end to end time : ", sumtime / repeat_times, "ms")
-            
-# else:
-#     # breakpoint()
-#     inputs_embeds = vision_model.vision_forward(**inputs_vision)
-#     inputs["inputs_embeds"]=inputs_embeds
-    
-#     generated_text = ""
-#     while inputs["not_need_stop"]:
-#         generated_ids = model.generate(**inputs)
-#         inputs["input_ids"] = generated_ids
-#         new_text_piece = processor.batch_decode(generated_ids[0], skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
-#         if new_text_piece == "<|im_end|>":
-#             continue
-#         generated_text += new_text_piece
-        
-print("Final output_text:\n", generated_text)
+
+else:
+    inputs = processor(
+        text=[text],
+        images=image_inputs,
+        videos=video_inputs,
+        padding=True,
+        return_tensors="pd",
+    )
+    model_inputs = init_model_inputs(arg_config=predictor_args)
+
+
+    inputs_embeds = model_vision.vision_forward(**inputs)
+    inputs.update(model_inputs)
+    inputs["inputs_embeds"]=inputs_embeds
+    generated_text = ""
+    while inputs["not_need_stop"]:
+        generated_ids = model.generate(**inputs, max_new_tokens=128)  # already trimmed in paddle
+        inputs["input_ids"] = generated_ids
+        inputs["inputs_embeds"] = None
+        new_text_piece = processor.batch_decode(generated_ids[0], skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
+        if new_text_piece == "<|im_end|>":
+            continue
+        generated_text += new_text_piece
+    print("Final output_text:\n", generated_text)
