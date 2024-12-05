@@ -277,14 +277,13 @@ class PatchEmbed(nn.Layer):
         if _IS_NPU:
             # NOTE: In npu device, conv3d only support fp16 or bf16 dtype.
             hidden_states = F.conv3d(
-                hidden_states.cast(paddle.bfloat16),
-                self.proj.weight.cast(paddle.bfloat16),
-                stride=self.proj._stride)
+                hidden_states.cast(paddle.bfloat16), self.proj.weight.cast(paddle.bfloat16), stride=self.proj._stride
+            )
             hidden_states = hidden_states.to(target_dtype).reshape([-1, self.embed_dim])
         else:
             # NOTE（changwenbin）: AttributeError: 'Variable' object has no attribute 'to'
             # hidden_states = self.proj(hidden_states.to(dtype=target_dtype)).reshape([-1, self.embed_dim])
-            hidden_states = self.proj(paddle.cast(hidden_states,dtype=target_dtype)).reshape([-1, self.embed_dim])
+            hidden_states = self.proj(paddle.cast(hidden_states, dtype=target_dtype)).reshape([-1, self.embed_dim])
         return hidden_states
 
 
@@ -610,10 +609,10 @@ class Qwen2VLAttention(nn.Layer):
         key_states = repeat_kv(key_states, self.num_key_value_groups)
         value_states = repeat_kv(value_states, self.num_key_value_groups)
 
-        query_states = query_states.astype("float32") 
+        query_states = query_states.astype("float32")
         key_states = key_states.astype("float32")
         value_states = value_states.astype("float32")
-        
+
         attn_weights = paddle.matmul(query_states, key_states.transpose([0, 1, 3, 2])) / math.sqrt(self.head_dim)
 
         if attention_mask is not None:
@@ -621,7 +620,7 @@ class Qwen2VLAttention(nn.Layer):
         attn_weights = nn.functional.softmax(attn_weights, axis=-1, dtype="float32")
 
         attn_output = paddle.matmul(attn_weights.cast(self.config.dtype), value_states.cast(self.config.dtype))
-        
+
         if attn_output.shape != [bsz, self.num_heads, q_len, self.head_dim]:
             raise ValueError(
                 f"`attn_output` should be of size {(bsz, q_len, self.num_heads, self.head_dim)}, but is"
@@ -871,7 +870,7 @@ class Qwen2VLDecoderLayer(nn.Layer):
         residual = hidden_states
 
         hidden_states = self.input_layernorm(hidden_states)
-        
+
         hidden_states, self_attn_weights, present_key_value = self.self_attn(
             hidden_states=hidden_states,
             attention_mask=attention_mask,
@@ -982,7 +981,7 @@ class Qwen2VisionTransformerPretrainedModel(Qwen2VLPreTrainedModel):
         return rotary_pos_emb
 
     def forward(self, hidden_states: paddle.Tensor, grid_thw: paddle.Tensor) -> paddle.Tensor:
-        
+
         hidden_states = self.patch_embed(hidden_states)
         rotary_pos_emb = self.rot_pos_emb(grid_thw)
 
@@ -1355,7 +1354,9 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
                 if _IS_NPU:
                     # NOTE: bool + id的混合索引赋值未生效，暂时绕过
                     bool_indices = (attention_mask[i] == 1).unsqueeze(0).tile([position_ids.shape[0], 1])
-                    position_ids[:, i] = paddle.index_put(position_ids[:, i], [bool_indices], llm_positions.reshape([-1]))
+                    position_ids[:, i] = paddle.index_put(
+                        position_ids[:, i], [bool_indices], llm_positions.reshape([-1])
+                    )
                 else:
                     position_ids[..., i, attention_mask[i] == 1] = llm_positions
                 mrope_position_deltas.append(llm_positions.max() + 1 - len(total_input_ids[i]))

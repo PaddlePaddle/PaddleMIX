@@ -34,15 +34,16 @@ python /root/paddlejob/workspace/env_run/output/changwenbin/tmp_qwen2vl/PaddleMI
 ```
 
 
+
 ## 参考文献
 ```BibTeX
 @article{Qwen2-VL,
   title={Qwen2-VL
-    },
+  },
   author={Qwen team
-    },
+  },
   year={
-        2024
-    }
+    2024
+  }
 }
 ```

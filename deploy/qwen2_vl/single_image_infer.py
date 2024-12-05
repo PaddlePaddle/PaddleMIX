@@ -12,19 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import datetime
-
-import paddle
-from paddlenlp.transformers import Qwen2Tokenizer
-
-from paddlemix.models.qwen2_vl.modeling_qwen2_vl import Qwen2VLForConditionalGeneration
-from paddlemix.processors.qwen2_vl_processing import (
-    Qwen2VLImageProcessor,
-    Qwen2VLProcessor,
-    process_vision_info,
-)
 import argparse
-from paddlenlp.experimental.transformers.qwen2.modeling import Qwen2ForCausalLMBlockInferenceModel
+import datetime
+from dataclasses import dataclass, field
+
+import numpy as np
+import paddle
+from paddlenlp.experimental.transformers.qwen2.modeling import (
+    Qwen2ForCausalLMBlockInferenceModel,
+)
+from paddlenlp.generation import GenerationConfig
+from paddlenlp.trainer import PdArgumentParser
 from paddlenlp.transformers import (
     AutoConfig,
     AutoInferenceModelForCausalLM,
@@ -32,14 +30,17 @@ from paddlenlp.transformers import (
     AutoTokenizer,
     PretrainedModel,
     PretrainedTokenizer,
+    Qwen2Tokenizer,
 )
-from paddlenlp.generation import GenerationConfig
 from paddlenlp.trl import llm_utils
-import numpy as np
-
-from dataclasses import dataclass, field
-from paddlenlp.trainer import PdArgumentParser
 from paddlenlp.utils.log import logger
+
+from paddlemix.models.qwen2_vl.modeling_qwen2_vl import Qwen2VLForConditionalGeneration
+from paddlemix.processors.qwen2_vl_processing import (
+    Qwen2VLImageProcessor,
+    Qwen2VLProcessor,
+    process_vision_info,
+)
 
 MODEL_NAME = "Qwen/Qwen2-VL-2B-Instruct"
 # MODEL_NAME = "Qwen/Qwen2-VL-7B-Instruct"
@@ -169,6 +170,7 @@ class PredictorArgument:
             self.src_length + self.max_length <= self.total_max_length
         ), "src_length + max_length should smaller than total_max_length."
 
+
 @dataclass
 class ModelArgument:
     model_type: str = field(
@@ -178,16 +180,18 @@ class ModelArgument:
     data_file: str = field(default=None, metadata={"help": "data file directory"})
     output_file: str = field(default="output.json", metadata={"help": "predict result file directory"})
 
+
 def init_model_inputs(arg_config: PredictorArgument):
     model_inputs = {}
     model_inputs["block_tables"] = paddle.full(
-        shape=[arg_config.batch_size, (arg_config.total_max_length + arg_config.block_size - 1) // arg_config.block_size],
+        shape=[
+            arg_config.batch_size,
+            (arg_config.total_max_length + arg_config.block_size - 1) // arg_config.block_size,
+        ],
         fill_value=-1,
         dtype="int32",
     )
-    model_inputs["top_p"] = paddle.full(
-        shape=[arg_config.batch_size, 1], fill_value=arg_config.top_p, dtype="float32"
-    )
+    model_inputs["top_p"] = paddle.full(shape=[arg_config.batch_size, 1], fill_value=arg_config.top_p, dtype="float32")
     model_inputs["temperature"] = paddle.full(
         shape=[arg_config.batch_size, 1], fill_value=arg_config.temperature, dtype="float32"
     )
@@ -197,28 +201,23 @@ def init_model_inputs(arg_config: PredictorArgument):
     model_inputs["penalty_score"] = paddle.full(
         shape=[arg_config.batch_size, 1], fill_value=arg_config.repetition_penalty, dtype="float32"
     )
-    model_inputs["frequency_score"] = paddle.full(
-        shape=[arg_config.batch_size, 1], fill_value=0.0, dtype="float32"
-    )
-    model_inputs["presence_score"] = paddle.full(
-        shape=[arg_config.batch_size, 1], fill_value=0.0, dtype="float32"
-    )
+    model_inputs["frequency_score"] = paddle.full(shape=[arg_config.batch_size, 1], fill_value=0.0, dtype="float32")
+    model_inputs["presence_score"] = paddle.full(shape=[arg_config.batch_size, 1], fill_value=0.0, dtype="float32")
     model_inputs["min_length"] = paddle.full(
         shape=[arg_config.batch_size, 1], fill_value=arg_config.min_length, dtype="int64"
     )
     model_inputs["max_length"] = paddle.full(
         shape=[arg_config.batch_size, 1], fill_value=arg_config.max_length, dtype="int64"
     )
-    
+
     cache_kvs_shape = model.get_cache_kvs_shape(model.config, arg_config.batch_size)
-    
-    head_dim =cache_kvs_shape[0][-1]
+
+    head_dim = cache_kvs_shape[0][-1]
     model_inputs["rope_emb"] = llm_utils.get_rotary_position_embedding(
         paddle.arange(arg_config.total_max_length).reshape((1, -1)), head_dim, config.rope_theta, config.rope_scaling
     )
     model_inputs["bad_tokens"] = paddle.to_tensor([-1], dtype="int64")
     model_inputs["is_block_step"] = paddle.full(shape=[arg_config.batch_size], fill_value=False, dtype="bool")
-    
 
     cachekv_dtype = config.dtype if arg_config.cachekv_int8_type is None else "uint8"
     model_inputs["cache_kvs"] = [paddle.zeros(shape, dtype=cachekv_dtype) for shape in cache_kvs_shape]
@@ -228,28 +227,23 @@ def init_model_inputs(arg_config: PredictorArgument):
     max_block_nums = cache_kvs_shape[0][0]
     free_list = list(range(max_block_nums))
     for i in range(arg_config.batch_size):
-        for j in range(
-            (seq_lens[i] + arg_config.max_length + arg_config.block_size - 1) // arg_config.block_size
-        ):
+        for j in range((seq_lens[i] + arg_config.max_length + arg_config.block_size - 1) // arg_config.block_size):
             used_block_id = free_list.pop()
             model_inputs["block_tables"][i, j] = used_block_id
     model_inputs["seq_lens_this_time"] = paddle.to_tensor(np.array(seq_lens).astype("int32").reshape(-1, 1))
     model_inputs["seq_lens_encoder"] = paddle.to_tensor(np.array(seq_lens).astype("int32").reshape(-1, 1))
-    model_inputs["seq_lens_decoder"] = paddle.full(
-        shape=[arg_config.batch_size, 1], fill_value=0, dtype="int32"
-    )
+    model_inputs["seq_lens_decoder"] = paddle.full(shape=[arg_config.batch_size, 1], fill_value=0, dtype="int32")
     model_inputs["step_idx"] = paddle.full(shape=[arg_config.batch_size, 1], fill_value=0, dtype="int64")
     model_inputs["not_need_stop"] = paddle.full(shape=[1], fill_value=True, dtype="bool")
-    model_inputs["stop_flags"] = paddle.full(
-        shape=[arg_config.batch_size, 1], fill_value=False, dtype="bool"
-    )
+    model_inputs["stop_flags"] = paddle.full(shape=[arg_config.batch_size, 1], fill_value=False, dtype="bool")
     model_inputs["stop_nums"] = paddle.full(shape=[1], fill_value=arg_config.batch_size, dtype="int64")
     model_inputs["pre_ids"] = paddle.full(
         shape=[arg_config.batch_size, arg_config.max_length], fill_value=-1, dtype="int64"
     )
     model_inputs["next_tokens"] = paddle.full(shape=[arg_config.batch_size, 1], fill_value=-1, dtype="int64")
-    
+
     return model_inputs
+
 
 parser = PdArgumentParser((PredictorArgument, ModelArgument))
 predictor_args, model_args = parser.parse_args_into_dataclasses()
@@ -271,7 +265,6 @@ model = AutoInferenceModelForCausalLM.from_pretrained(
 model.eval()
 
 
-
 if predictor_args.benchmark:
     print("Benchmarking {MODEL_NAME}...")
     warm_up = 3
@@ -287,18 +280,21 @@ if predictor_args.benchmark:
         model_inputs = init_model_inputs(arg_config=predictor_args)
         inputs_embeds = model_vision.vision_forward(**inputs)
         inputs.update(model_inputs)
-        inputs["inputs_embeds"]=inputs_embeds        
+        inputs["inputs_embeds"] = inputs_embeds
         generated_text = ""
-        while inputs["not_need_stop"]:            
+        while inputs["not_need_stop"]:
             generated_ids = model.generate(**inputs)  # already trimmed in paddle
             inputs["input_ids"] = generated_ids
             inputs["inputs_embeds"] = None
-            new_text_piece = processor.batch_decode(generated_ids[0], skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]            
+            new_text_piece = processor.batch_decode(
+                generated_ids[0], skip_special_tokens=True, clean_up_tokenization_spaces=False
+            )[0]
             if new_text_piece == "<|im_end|>":
                 continue
             generated_text += new_text_piece
         print("Final output_text:\n", generated_text)
     import nvtx
+
     repeat_times = 10
     sumtime = 0.0
     for i in range(repeat_times):
@@ -314,25 +310,27 @@ if predictor_args.benchmark:
         paddle.device.synchronize()
         starttime = datetime.datetime.now()
         vision_nvtx = nvtx.start_range(message="vision", color="green")
-        
+
         inputs_embeds = model_vision.vision_forward(**inputs)
 
         paddle.device.synchronize()
         nvtx.end_range(vision_nvtx)
-        
+
         inputs.update(model_inputs)
-        inputs["inputs_embeds"]=inputs_embeds
+        inputs["inputs_embeds"] = inputs_embeds
         llm_nvtx = nvtx.start_range(message="LLM", color="red")
-        
+
         generated_text = ""
         while inputs["not_need_stop"]:
             llm_token_nvtx = nvtx.start_range(message="token", color="yellow")
-            
+
             generated_ids = model.generate(**inputs)  # already trimmed in paddle
             inputs["input_ids"] = generated_ids
             inputs["inputs_embeds"] = None
-            new_text_piece = processor.batch_decode(generated_ids[0], skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]            
-            
+            new_text_piece = processor.batch_decode(
+                generated_ids[0], skip_special_tokens=True, clean_up_tokenization_spaces=False
+            )[0]
+
             paddle.device.synchronize()
             nvtx.end_range(llm_token_nvtx)
             if new_text_piece == "<|im_end|>":
@@ -340,7 +338,7 @@ if predictor_args.benchmark:
             generated_text += new_text_piece
         paddle.device.synchronize()
         nvtx.end_range(llm_nvtx)
-        
+
         paddle.device.synchronize()
         endtime = datetime.datetime.now()
         print("Final output_text:\n", generated_text)
@@ -367,13 +365,15 @@ else:
     model_inputs = init_model_inputs(arg_config=predictor_args)
     inputs_embeds = model_vision.vision_forward(**inputs)
     inputs.update(model_inputs)
-    inputs["inputs_embeds"]=inputs_embeds
+    inputs["inputs_embeds"] = inputs_embeds
     generated_text = ""
     while inputs["not_need_stop"]:
         generated_ids = model.generate(**inputs)  # already trimmed in paddle
         inputs["input_ids"] = generated_ids
         inputs["inputs_embeds"] = None
-        new_text_piece = processor.batch_decode(generated_ids[0], skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
+        new_text_piece = processor.batch_decode(
+            generated_ids[0], skip_special_tokens=True, clean_up_tokenization_spaces=False
+        )[0]
         if new_text_piece == "<|im_end|>":
             continue
         generated_text += new_text_piece
