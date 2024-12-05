@@ -29,6 +29,50 @@ IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD = (0.229, 0.224, 0.225)
 
 
+
+def check_dtype_compatibility():
+    """
+    检查当前环境下可用的数据类型
+    返回最优的可用数据类型
+    """
+    if not paddle.is_compiled_with_cuda():
+        print("CUDA not available, falling back to float32")
+        return paddle.float32
+
+    # 获取GPU计算能力
+    gpu_arch = paddle.device.cuda.get_device_capability()
+    if gpu_arch is None:
+        print("Unable to determine GPU architecture, falling back to float32")
+        return paddle.float32
+    
+    major, minor = gpu_arch
+    compute_capability = major + minor/10
+    print(f"GPU compute capability: {compute_capability}")
+    
+    try:
+        # 测试bfloat16兼容性
+        if compute_capability >= 8.0:  # Ampere及更新架构
+            test_tensor = paddle.zeros([2, 2], dtype='bfloat16')
+            test_op = paddle.matmul(test_tensor, test_tensor)
+            print("bfloat16 is supported and working")
+            return paddle.bfloat16
+    except Exception as e:
+        print(f"bfloat16 test failed: {str(e)}")
+
+    try:
+        # 测试float16兼容性
+        if compute_capability >= 5.3:  # Maxwell及更新架构
+            test_tensor = paddle.zeros([2, 2], dtype='float16')
+            test_op = paddle.matmul(test_tensor, test_tensor)
+            print("float16 is supported and working")
+            return paddle.float16
+    except Exception as e:
+        print(f"float16 test failed: {str(e)}")
+
+    print("Falling back to float32 due to compatibility issues")
+    return paddle.float32
+
+
 def build_transform(input_size):
     MEAN, STD = IMAGENET_MEAN, IMAGENET_STD
     transform = T.Compose(
@@ -51,88 +95,23 @@ def load_image(image_file, input_size=448, max_num=12):
     return pixel_values
 
 
-def load_tokenizer(model_size, model_path):
+def load_tokenizer(model_path):
+    import re
+
+    match = re.search(r"\d+B", model_path)
+    if match:
+        model_size = match.group()
+    else:
+        model_size = "2B"
+
     if model_size in ["1B"]:
         tokenizer = Qwen2Tokenizer.from_pretrained(model_path)
-        # TODO:
-        tokenizer.added_tokens_encoder = {
-            "<|endoftext|>": 151643,
-            "<|im_start|>": 151644,
-            "<|im_end|>": 151645,
-            "<img>": 151646,
-            "</img>": 151647,
-            "<IMG_CONTEXT>": 151648,
-            "<quad>": 151649,
-            "</quad>": 151650,
-            "<ref>": 151651,
-            "</ref>": 151652,
-            "<box>": 151653,
-            "</box>": 151654,
-        }
-        tokenizer.added_tokens_decoder = {v: k for k, v in tokenizer.added_tokens_encoder.items()}
-
     elif model_size in ["2B", "8B", "26B"]:
         tokenizer = InternLM2Tokenizer.from_pretrained(model_path)
-        # TODO:
-        tokenizer.added_tokens_encoder = {
-            "<unk>": 0,
-            "<s>": 1,
-            "</s>": 2,
-            "<|plugin|>": 92538,
-            "<|interpreter|>": 92539,
-            "<|action_end|>": 92540,
-            "<|action_start|>": 92541,
-            "<|im_end|>": 92542,
-            "<|im_start|>": 92543,
-            "<img>": 92544,
-            "</img>": 92545,
-            "<IMG_CONTEXT>": 92546,
-            "<quad>": 92547,
-            "</quad>": 92548,
-            "<ref>": 92549,
-            "</ref>": 92550,
-            "<box>": 92551,
-            "</box>": 92552,
-        }
-        tokenizer.added_tokens_decoder = {v: k for k, v in tokenizer.added_tokens_encoder.items()}
-
     elif model_size in ["40B"]:
         tokenizer = LlamaTokenizer.from_pretrained(model_path)
-        # TODO:
-        tokenizer.added_tokens_encoder = {
-            "<unk>": 0,
-            "<|startoftext|>": 1,
-            "<|endoftext|>": 2,
-            "<|im_start|>": 6,
-            "<|im_end|>": 7,
-            "<img>": 68,
-            "</img>": 70,
-            "<IMG_CONTEXT>": 64000,
-            "<quad>": 64001,
-            "</quad>": 64002,
-            "<ref>": 64003,
-            "</ref>": 64004,
-            "<box>": 64005,
-            "</box>": 64006,
-        }
-        tokenizer.added_tokens_decoder = {v: k for k, v in tokenizer.added_tokens_encoder.items()}
-
     elif model_size in ["76B"]:
         tokenizer = Llama3Tokenizer.from_pretrained(model_path)
-        # TODO:
-        tokenizer.added_tokens_encoder = {
-            "<img>": 128256,
-            "</img>": 128257,
-            "<IMG_CONTEXT>": 128258,
-            "<quad>": 128259,
-            "</quad>": 128260,
-            "<ref>": 128261,
-            "</ref>": 128262,
-            "<box>": 128263,
-            "</box>": 128264,
-        }
-        tokenizer.added_tokens_decoder = {v: k for k, v in tokenizer.added_tokens_encoder.items()}
-
     else:
         raise ValueError
 
@@ -141,7 +120,7 @@ def load_tokenizer(model_size, model_path):
 
 def main(args):
     if args.image_path is not None and args.image_path != "None":
-        pixel_values = load_image(args.image_path, max_num=12).to(paddle.bfloat16)
+        pixel_values = load_image(args.image_path, max_num=12).to(args.dtype)
         args.text = "<image>\n" + args.text
 
     else:
@@ -151,11 +130,11 @@ def main(args):
     MODEL_PATH = args.model_name_or_path
     model_size = MODEL_PATH.split("-")[-1]
     print(f"model size: {model_size}")
-    tokenizer = load_tokenizer(model_size, MODEL_PATH)
+    tokenizer = load_tokenizer(MODEL_PATH)
     print("tokenizer:\n", tokenizer)
     print("len(tokenizer): ", len(tokenizer))
 
-    model = InternVLChatModel.from_pretrained(MODEL_PATH).eval()
+    model = InternVLChatModel.from_pretrained(MODEL_PATH, dtype=args.dtype).eval()
 
     generation_config = dict(max_new_tokens=1024, do_sample=False)
 
@@ -176,5 +155,41 @@ if __name__ == "__main__":
     )
     parser.add_argument("--image_path", type=str, default=None)
     parser.add_argument("--text", type=str, default="Please describe the image shortly.", required=True)
+    parser.add_argument(
+        "--dtype",
+        type=str,
+        default="float16",
+        choices=["float32", "bfloat16", "float16"],
+        help="Model dtype"
+    )
     args = parser.parse_args()
+
+    if args.dtype == "bfloat16":
+        args.dtype = paddle.bfloat16
+    elif args.dtype == "float16":
+        args.dtype = paddle.float16
+    else:
+        args.dtype = paddle.float32
+        
+
+    # 检查环境支持的dtype并设置
+    available_dtype = check_dtype_compatibility()
+    
+    # 如果用户指定了dtype，尝试使用用户指定的类型
+    if args.dtype == "bfloat16":
+        desired_dtype = paddle.bfloat16
+    elif args.dtype == "float16":
+        desired_dtype = paddle.float16
+    else:
+        desired_dtype = paddle.float32
+
+    # 如果用户指定的dtype不可用，使用检测到的可用dtype
+    if desired_dtype != available_dtype:
+        print(f"Warning: Requested dtype {args.dtype} is not available, using {available_dtype}")
+        args.dtype = available_dtype
+    else:
+        args.dtype = desired_dtype
+
+    print(f"Using dtype: {args.dtype}")
+        
     main(args)

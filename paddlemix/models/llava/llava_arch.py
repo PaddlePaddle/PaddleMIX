@@ -29,6 +29,7 @@ from .constants import (
 from .mm_utils import get_anyres_image_grid_shape
 from .multimodal_encoder.builder import build_vision_tower
 from .multimodal_projector.builder import build_vision_projector
+from .multimodal_projector.dense_connector import dense_connector
 
 __all__ = ["LlavaMetaModel", "LlavaMetaForCausalLM"]
 
@@ -37,6 +38,7 @@ class LlavaMetaModel:
     def __init__(self, config):
         super(LlavaMetaModel, self).__init__(config)
         if hasattr(config, "mm_vision_tower"):
+            self.vision_tower_name = getattr(config, "mm_vision_tower").split("/")[-1]
             self.vision_tower = build_vision_tower(config, delay_load=True)
             self.mm_projector = build_vision_projector(config)
 
@@ -73,7 +75,11 @@ class LlavaMetaModel:
 
         self.config.use_mm_proj = True
         self.config.mm_projector_type = getattr(model_args, "mm_projector_type", "linear")
-        self.config.mm_hidden_size = vision_tower.hidden_size
+        self.config.mm_dense_connector_type = model_args.mm_dense_connector_type
+        if model_args.mm_dense_connector_type == "sci" or model_args.mm_dense_connector_type == "dci":
+            self.config.mm_hidden_size = vision_tower.hidden_size * 3
+        else:
+            self.config.mm_hidden_size = vision_tower.hidden_size
         self.config.mm_vision_select_layer = mm_vision_select_layer
         self.config.mm_vision_select_feature = mm_vision_select_feature
         self.config.mm_patch_merge_type = mm_patch_merge_type
@@ -132,8 +138,21 @@ class LlavaMetaForCausalLM:
     def get_vision_tower(self):
         return self.get_model().get_vision_tower()
 
+    def is_siglip(self):
+        if "siglip" in self.get_model().vision_tower_name.lower():
+            return True
+        return False
+
     def encode_images(self, images):
-        image_features = self.get_model().get_vision_tower()(images)
+        image_features, image_forward_outs = self.get_model().get_vision_tower()(images)
+
+        mm_dense_connector_type = self.get_model().config.get("mm_dense_connector_type", "none")
+        # dense connector
+        if mm_dense_connector_type in ["dci"]:
+            image_features = dense_connector(
+                image_features, image_forward_outs, self.is_siglip(), mm_dense_connector_type
+            )
+
         image_features = self.get_model().mm_projector(image_features)
         return image_features
 

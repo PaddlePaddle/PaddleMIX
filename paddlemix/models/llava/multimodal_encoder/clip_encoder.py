@@ -66,7 +66,7 @@ class CLIPVisionTower(paddle.nn.Layer):
             image_forward_outs = self.vision_tower(images, output_hidden_states=True)
             image_features = self.feature_select(image_forward_outs)
             image_features = paddle.cast(image_features, dtype=images.dtype)
-        return image_features
+        return image_features, image_forward_outs
 
     @property
     def dummy_feature(self):

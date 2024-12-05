@@ -161,15 +161,35 @@ def export_to_video(
         video_writer.write(img)
     return output_video_path
 
-
 def export_to_video_2(
-    video_frames: Union[List[np.ndarray], List[PIL.Image.Image]], output_video_path: str = None, fps: int = 8
-):
+    video_frames: Union[List[np.ndarray], List[PIL.Image.Image]], output_video_path: str = None, fps: int = 10
+) -> str:
     try:
         import imageio
-    except ImportError:
-        raise ImportError("Please install imageio to export video.run `pip install imageio`")
+    except:
+        raise ImportError("imageio is not found")
+
+    try:
+        imageio.plugins.ffmpeg.get_exe()
+    except AttributeError:
+        raise AttributeError(
+            (
+                "Found an existing imageio backend in your environment. Attempting to export video with imageio. \n"
+                "Unable to find a compatible ffmpeg installation in your environment to use with imageio. Please install via `pip install imageio-ffmpeg"
+            )
+        )
+
     if output_video_path is None:
         output_video_path = tempfile.NamedTemporaryFile(suffix=".mp4").name
 
-    imageio.mimsave(output_video_path, video_frames, fps=fps, codec="mpeg4")
+    if isinstance(video_frames[0], np.ndarray):
+        video_frames = [(frame * 255).astype(np.uint8) for frame in video_frames]
+
+    elif isinstance(video_frames[0], PIL.Image.Image):
+        video_frames = [np.array(frame) for frame in video_frames]
+
+    with imageio.get_writer(output_video_path, fps=fps) as writer:
+        for frame in video_frames:
+            writer.append_data(frame)
+
+    return output_video_path
