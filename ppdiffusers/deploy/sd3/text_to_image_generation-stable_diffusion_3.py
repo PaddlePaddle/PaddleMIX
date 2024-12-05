@@ -93,9 +93,9 @@ pipe = StableDiffusion3Pipeline.from_pretrained(
 
 pipe.transformer = paddle.incubate.jit.inference(
     pipe.transformer,
-    save_model_dir="./tmp/1024_TP_sd3_parallel",
-    enable_new_ir=False,
-    cache_static_model=False,
+    save_model_dir="./tmp/sd3",
+    enable_new_ir=True,
+    cache_static_model=True,
     exp_enable_use_cutlass=True,
     delete_pass_lists=["add_norm_fuse_pass"],
 )
