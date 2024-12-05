@@ -800,14 +800,13 @@ class StableDiffusion3Pipeline(DiffusionPipeline, SD3LoraLoaderMixin, FromSingle
                 # broadcast to batch dimension in a way that's compatible with ONNX/Core ML
                 timestep = t.expand(latent_model_input.shape[0])
 
-                hcg = fleet.get_hybrid_communicate_group()
-                dp_degree = hcg.get_data_parallel_world_size()
-                enabled_cfg_dp = dp_degree > 1 and self.do_classifier_free_guidance
+                enabled_cfg_dp = False
+                if self.transformer.inference_dp_size > 1:
+                    enabled_cfg_dp = True
+                    assert self.do_classifier_free_guidance, "do_classifier_free_guidance must be true"
 
                 if enabled_cfg_dp:
-                    dp_id = hcg.get_data_parallel_rank()
-                    dp_group = hcg.get_data_parallel_group()
-
+                    dp_id = self.transformer.dp_id
                     latent_input = paddle.split(latent_model_input, 2, axis=0)[dp_id]
                     timestep_input = paddle.split(timestep, 2, axis=0)[dp_id]
                     prompt_embeds_input = paddle.split(prompt_embeds, 2, axis=0)[dp_id]
@@ -838,7 +837,9 @@ class StableDiffusion3Pipeline(DiffusionPipeline, SD3LoraLoaderMixin, FromSingle
                     tmp_shape = output.shape
                     tmp_shape[0] *= 2
                     noise_pred = paddle.zeros(tmp_shape, dtype=output.dtype)
-                    dist.all_gather(noise_pred, output, group=dp_group)
+                    dist.all_gather(
+                        noise_pred, output, group=fleet.get_hybrid_communicate_group().get_data_parallel_group()
+                    )
                 else:
                     noise_pred = output
 
