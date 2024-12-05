@@ -1696,6 +1696,16 @@ def split_concat(x, y):
     assert x.shape[0] == y.shape[0]
     assert x.shape[2] == y.shape[2]
 
+    # baseline.
+    if os.getenv("INFERENCE_OPTIMIZE_TRITON") is None:
+        q,k,v = paddle.split(x, 3, axis=-1)
+        eq,ek,ev = paddle.split(y, 3, axis=-1)
+        q = paddle.concat([q,eq],axis=1)
+        k = paddle.concat([k,ek],axis=1)
+        v = paddle.concat([v,ev],axis=1)
+        return q,k,v
+
+
     batch = x.shape[0]
     seq_qkv = x.shape[1]
     hidd_x = x.shape[2]
