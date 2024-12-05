@@ -137,15 +137,8 @@ if args.benchmark:
         duringtime = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
         sumtime += duringtime
         print("SD3 end to end time : ", duringtime, "ms")
-        paddle.device.cuda.empty_cache()
-        inference_global_mem = paddle.device.cuda.memory_reserved() / (1024**3)
-        print(f"Inference used CUDA memory : {inference_global_mem:.3f} GiB")
 
     print("SD3 ave end to end time : ", sumtime / repeat_times, "ms")
-
-    paddle.device.cuda.empty_cache()
-    inference_global_mem = paddle.device.cuda.memory_reserved() / (1024**3)
-    print(f"Inference used CUDA memory : {inference_global_mem:.3f} GiB")
 
     cuda_mem_after_used = paddle.device.cuda.max_memory_allocated() / (1024**3)
     print(f"Max used CUDA memory : {cuda_mem_after_used:.3f} GiB")
