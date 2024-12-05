@@ -229,11 +229,11 @@ def apply_rotary_pos_emb_vision(tensor: paddle.Tensor, freqs: paddle.Tensor) -> 
     orig_dtype = tensor.dtype
 
     with paddle.amp.auto_cast(False):
-        tensor = tensor.astype(dtype="float32")
+        tensor = tensor.cast(dtype="float32")
         cos = freqs.cos()
         sin = freqs.sin()
-        cos = cos.unsqueeze(1).tile(repeat_times=[1, 1, 2]).unsqueeze(0).astype(dtype="float32")
-        sin = sin.unsqueeze(1).tile(repeat_times=[1, 1, 2]).unsqueeze(0).astype(dtype="float32")
+        cos = cos.unsqueeze(1).tile(repeat_times=[1, 1, 2]).unsqueeze(0).cast(dtype="float32")
+        sin = sin.unsqueeze(1).tile(repeat_times=[1, 1, 2]).unsqueeze(0).cast(dtype="float32")
         output = tensor * cos + rotate_half(tensor) * sin
     output = paddle.cast(output, orig_dtype)
     return output
@@ -282,7 +282,9 @@ class PatchEmbed(nn.Layer):
                 stride=self.proj._stride)
             hidden_states = hidden_states.to(target_dtype).reshape([-1, self.embed_dim])
         else:
-            hidden_states = self.proj(hidden_states.to(dtype=target_dtype)).reshape([-1, self.embed_dim])
+            # NOTE（changwenbin）: AttributeError: 'Variable' object has no attribute 'to'
+            # hidden_states = self.proj(hidden_states.to(dtype=target_dtype)).reshape([-1, self.embed_dim])
+            hidden_states = self.proj(paddle.cast(hidden_states,dtype=target_dtype)).reshape([-1, self.embed_dim])
         return hidden_states
 
 
@@ -373,9 +375,9 @@ class VisionFlashAttention2(nn.Layer):
         softmax_scale = self.head_dim**-0.5  # TODO: 需要手动加上
         attn_output = (
             flash_attn_varlen_func(  # flash_attn_unpadded
-                q.astype("bfloat16"),  # 不支持float32
-                k.astype("bfloat16"),
-                v.astype("bfloat16"),
+                q.cast("bfloat16"),  # 不支持float32
+                k.cast("bfloat16"),
+                v.cast("bfloat16"),
                 cu_seqlens,
                 cu_seqlens,
                 max_seqlen,
@@ -385,7 +387,7 @@ class VisionFlashAttention2(nn.Layer):
             .squeeze(0)
             .reshape([seq_length, -1])
         )
-        attn_output = attn_output.astype(paddle.float32)
+        attn_output = attn_output.cast(paddle.float32)
         attn_output = self.proj(attn_output)
         return attn_output
 
@@ -1393,6 +1395,33 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
 
         return model_kwargs
 
+    # NOTE（changwenbin）: Vision module added for high-performance inference
+    def vision_forward(
+        self,
+        input_ids: paddle.Tensor,
+        inputs_embeds: Optional[paddle.Tensor] = None,
+        attention_mask: Optional[paddle.Tensor] = None,
+        position_ids: Optional[paddle.Tensor] = None,
+        pixel_values: Optional[paddle.Tensor] = None,
+        pixel_values_videos: Optional[paddle.Tensor] = None,
+        image_grid_thw: Optional[paddle.Tensor] = None,
+        video_grid_thw: Optional[paddle.Tensor] = None,
+        rope_deltas: Optional[paddle.Tensor] = None,
+    ):
+        if inputs_embeds is None:
+            inputs_embeds = self.model.embed_tokens(input_ids)
+            if pixel_values is not None:
+                pixel_values = paddle.cast(pixel_values, paddle.get_default_dtype())
+                image_embeds = self.visual(pixel_values, grid_thw=image_grid_thw)
+                image_mask = input_ids == self.config.image_token_id
+                inputs_embeds[image_mask] = image_embeds
+            if pixel_values_videos is not None:
+                pixel_values_videos = paddle.cast(pixel_values_videos, paddle.get_default_dtype())
+                video_embeds = self.visual(pixel_values_videos, grid_thw=video_grid_thw)
+                video_mask = input_ids == self.config.video_token_id
+                inputs_embeds[video_mask] = video_embeds
+        return inputs_embeds
+
     def forward(
         self,
         input_ids: paddle.Tensor = None,  # [1, 400] sum 49356255
@@ -1503,7 +1532,9 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
             loss = loss / label_sum
 
         if not return_dict:
-            output = (logits,) + outputs[1:]
+            # output = (logits,) + outputs[1:]
+            # Note: (changwenbin) fix "can only concatenate tuple (not "list") to tuple"
+            output = (logits,) + tuple(outputs[1:])
             return (loss,) + output if loss is not None else output
             # return logits + 28 layers k and v
 
