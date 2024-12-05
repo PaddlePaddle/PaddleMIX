@@ -34,7 +34,15 @@
 
 
 ## 📰 News
-**🔥 PaddleMIX 2.1 Version Launch Livestream on October 31, 2024**
+**🔥PaddleMIX Development Project Challenge (November 21 - December 22, 2024)**
+
+- ✨"Experience Officer Recruitment" PaddleMIX Development Project Challenge
+Click the link to sign up 🔗: https://aistudio.baidu.com/activitydetail/1503019366
+🏆Submit to the PaddleGalaxy Community Project Hall - get certified as a PaddleMIX Experience Officer and receive JD.com gift cards as rewards
+Welcome your submissions!
+<p align="center">
+<img src='https://github.com/user-attachments/assets/27e0bbe3-0ff8-49ef-bd39-81a31a2b288b' width="25%">
+</p>
 
 - 🎉 The PaddleMIX multimodal large model toolkit releases version 2.1! On October 31 (Thursday) at 20:00, Baidu development engineers provided a detailed interpretation of the toolkit updates, as well as the implementation details and case applications of PP-InsCapTagger, the multimodal data capability labeling model.
 
@@ -131,76 +139,65 @@ The multimodal data processing toolbox, DataCopilot, accelerates model iteration
 
 
 ## 🔍 Installation
-### 1. Clone the PaddleMIX Repository
-
+### 1. Clone PaddleMIX Repository
 ```
 git clone https://github.com/PaddlePaddle/PaddleMIX
 cd PaddleMIX
 ```
 
-### 2. Create a Virtual Environment
-
+### 2. Create Virtual Environment
 ```
 conda create -n paddlemix python=3.10 -y
 conda activate paddlemix
 ```
+
 ### 3. Install PaddlePaddle
 
-#### Method 1: One-Click Installation (Recommended for GPU/CPU)
+#### Method 1: One-click Installation (Recommended for GPU/CPU)
 
 - CUDA 11.x or 12.3
 - PaddlePaddle 3.0.0b1
-
 ```
 sh build_paddle_env.sh
 ```
 
 #### Method 2: Manual Installation
-For detailed instructions on installing PaddlePaddle, please refer to the [Installation Guide](https://www.paddlepaddle.org.cn/install/quick?docurl=/documentation/docs/zh/develop/install/pip/linux-pip.html).
+For detailed PaddlePaddle installation instructions, please refer to [Installation](https://www.paddlepaddle.org.cn/install/quick?docurl=/documentation/docs/zh/develop/install/pip/linux-pip.html).
 
-### 4. Ascend Environment Installation (Optional)
+### 4. Install Dependencies
 
-Currently, PaddleMIX supports the Ascend 910B chip (more models are in progress; if you have other model requirements, please submit an issue to let us know). The Ascend driver version is 23.0.3. Considering the variability in environments, we recommend using the standard image provided by PaddlePaddle to prepare your environment.
-
-* Refer to the command below to start the container; `ASCEND_RT_VISIBLE_DEVICES` specifies the visible NPU card numbers.
-
-
-```shell
-docker run -it --name paddle-npu-dev -v $(pwd):/work \
-    --privileged --network=host --shm-size=128G -w=/work \
-    -v /usr/local/Ascend/driver:/usr/local/Ascend/driver \
-    -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi \
-    -v /usr/local/dcmi:/usr/local/dcmi \
-    -e ASCEND_RT_VISIBLE_DEVICES="0,1,2,3,4,5,6,7" \
-    registry.baidubce.com/device/paddle-npu:cann80T13-ubuntu20-$(uname -m)-gcc84-py39 /bin/bash
-```
-
-* Install PaddlePaddle inside the container
-
-```shell
-# Note: You need to install the CPU version of PaddlePaddle first. Currently, only Python 3.9 is supported.
-python -m pip install --pre paddlepaddle -i https://www.paddlepaddle.org.cn/packages/nightly/cpu/
-python -m pip install --pre paddle-custom-npu -i https://www.paddlepaddle.org.cn/packages/nightly/npu/
-```
-
-
-### 5. Install Dependencies
-
-#### Method 1: One-Click Installation (Recommended)
+#### Method 1: One-click Installation (Recommended)
 
 Run the following command to automatically install all necessary dependencies:
-
 ```
 sh build_env.sh
+```
+
+#### Method 2: Manual Installation
+```bash
+# Install PaddleMIX
+pip install -e .
+# Install ppdiffusers
+cd ppdiffusers
+pip install -e .
+cd ..
+```
+
+### 5. Install Custom Operators (Optional)
+* Some models require custom operators (FastLayerNorm, FusedLayerNorm), such as EVA-CLIP, DIT_LLAMA, etc.
+* Skip this step for non-CUDA environments (e.g., Ascend environments)
+```bash
+cd paddlemix/external_ops
+python setup.py install
 ```
 
 #### Method 2: Manual Installation (Please refer to build_env.sh)
 ## 🔥 Tutorials
 
 **Quick Start**
-- [Multimodal Understanding: Beginner's Experience](paddlemix/examples/internvl2/README.md)
-- [Multimodal Generation: Zero-Basics Getting Started Guide](ppdiffusers/examples/inference/README.md)
-- [Cross-Modal Task Pipeline: End-to-End Process Demonstration](applications/README.md/#quick-start)
+- [Multimodal Understanding: Beginner's Guide [Example: InternVL2 Model]](paddlemix/examples/internvl2/README.md)
+- [Multimodal Generation: Zero to Hero Guide [Example: Stable Diffusion Model]](ppdiffusers/examples/stable_diffusion/README.md)
+- [Cross-modal Task Pipeline: Getting Started](applications/README.md/#getting-started)
 
 **Hands-On Practice & Examples**
 - [LLaVA Model: Full Process Practice from Training to Inference](https://aistudio.baidu.com/projectdetail/7917712)
