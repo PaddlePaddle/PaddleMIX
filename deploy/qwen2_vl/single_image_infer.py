@@ -41,29 +41,6 @@ from dataclasses import dataclass, field
 from paddlenlp.trainer import PdArgumentParser
 from paddlenlp.utils.log import logger
 
-
-# def parse_args():
-#     parser = argparse.ArgumentParser(
-#         description=" Use PaddleMIX to accelerate the Stable Diffusion3 image generation model."
-#     )
-#     parser.add_argument(
-#         "--benchmark",
-#         type=(lambda x: str(x).lower() in ["true", "1", "yes"]),
-#         default=False,
-#         help="if set to True, measure inference performance",
-#     )
-#     parser.add_argument(
-#         "--inference_optimize",
-#         type=(lambda x: str(x).lower() in ["true", "1", "yes"]),
-#         default=False,
-#         help="If set to True, all optimizations except Triton are enabled.",
-#     )
-#     return parser.parse_args()
-
-# args = parse_args()
-
-
-
 MODEL_NAME = "Qwen/Qwen2-VL-2B-Instruct"
 # MODEL_NAME = "Qwen/Qwen2-VL-7B-Instruct"
 model_vision = Qwen2VLForConditionalGeneration.from_pretrained(MODEL_NAME, dtype="bfloat16")
@@ -82,7 +59,7 @@ messages = [
         "content": [
             {
                 "type": "image",
-                "image": "paddlemix/demo_images/examples_image1.jpg",
+                "image": "paddlemix/demo_images/examples_image2.jpg",
             },
             {"type": "text", "text": "Describe this image."},
         ],
@@ -102,7 +79,7 @@ class PredictorArgument:
     model_name_or_path: str = field(default=None, metadata={"help": "The directory of model."})
     model_prefix: str = field(default="model", metadata={"help": "the prefix name of static model"})
     src_length: int = field(default=1024, metadata={"help": "The max length of source text."})
-    min_length: int = field(default=1, metadata={"help": "the min length for decoding."})
+    min_length: int = field(default=128, metadata={"help": "the min length for decoding."})
     max_length: int = field(default=128, metadata={"help": "the max length for decoding."})
     top_k: int = field(default=0, metadata={"help": "top_k parameter for generation"})
     top_p: float = field(default=0.7, metadata={"help": "top_p parameter for generation"})
@@ -202,11 +179,7 @@ class ModelArgument:
     output_file: str = field(default="output.json", metadata={"help": "predict result file directory"})
 
 def init_model_inputs(arg_config: PredictorArgument):
-
-
     model_inputs = {}
-
-
     model_inputs["block_tables"] = paddle.full(
         shape=[arg_config.batch_size, (arg_config.total_max_length + arg_config.block_size - 1) // arg_config.block_size],
         fill_value=-1,
@@ -299,22 +272,32 @@ model.eval()
 
 
 
-if False:
+if predictor_args.benchmark:
     print("Benchmarking {MODEL_NAME}...")
-    # warm_up = 3
-    # for _ in range(warm_up):
-    #     # Inference: Generation of the output
-    #     inputs_embeds = vision_model.vision_forward(**inputs_vision)
-    #     inputs["inputs_embeds"]=inputs_embeds
-    #     generated_text = ""
-    #     while inputs["not_need_stop"]:
-    #         generated_ids = model.generate(**inputs)
-    #         inputs["input_ids"] = generated_ids
-    #         new_text_piece = processor.batch_decode(generated_ids[0], skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
-    #         if new_text_piece == "<|im_end|>":
-    #             continue
-    #         generated_text += new_text_piece
-    #     print("Final output_text:\n", generated_text)
+    warm_up = 3
+    for _ in range(warm_up):
+        # Inference: Generation of the output
+        inputs = processor(
+            text=[text],
+            images=image_inputs,
+            videos=video_inputs,
+            padding=True,
+            return_tensors="pd",
+        )
+        model_inputs = init_model_inputs(arg_config=predictor_args)
+        inputs_embeds = model_vision.vision_forward(**inputs)
+        inputs.update(model_inputs)
+        inputs["inputs_embeds"]=inputs_embeds        
+        generated_text = ""
+        while inputs["not_need_stop"]:            
+            generated_ids = model.generate(**inputs)  # already trimmed in paddle
+            inputs["input_ids"] = generated_ids
+            inputs["inputs_embeds"] = None
+            new_text_piece = processor.batch_decode(generated_ids[0], skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]            
+            if new_text_piece == "<|im_end|>":
+                continue
+            generated_text += new_text_piece
+        print("Final output_text:\n", generated_text)
     import nvtx
     repeat_times = 10
     sumtime = 0.0
@@ -333,29 +316,28 @@ if False:
         vision_nvtx = nvtx.start_range(message="vision", color="green")
         
         inputs_embeds = model_vision.vision_forward(**inputs)
-        inputs.update(model_inputs)
-        inputs["inputs_embeds"]=inputs_embeds
-        
+
         paddle.device.synchronize()
         nvtx.end_range(vision_nvtx)
         
+        inputs.update(model_inputs)
+        inputs["inputs_embeds"]=inputs_embeds
         llm_nvtx = nvtx.start_range(message="LLM", color="red")
         
         generated_text = ""
         while inputs["not_need_stop"]:
-            llm_token_nvtx = nvtx.start_range(message="token", color="blue")
+            llm_token_nvtx = nvtx.start_range(message="token", color="yellow")
             
             generated_ids = model.generate(**inputs)  # already trimmed in paddle
             inputs["input_ids"] = generated_ids
             inputs["inputs_embeds"] = None
-            new_text_piece = processor.batch_decode(generated_ids[0], skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
+            new_text_piece = processor.batch_decode(generated_ids[0], skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]            
+            
+            paddle.device.synchronize()
+            nvtx.end_range(llm_token_nvtx)
             if new_text_piece == "<|im_end|>":
                 continue
             generated_text += new_text_piece
-            
-            addle.device.synchronize()
-            nvtx.end_range(llm_token_nvtx)
-            
         paddle.device.synchronize()
         nvtx.end_range(llm_nvtx)
         
@@ -368,7 +350,7 @@ if False:
         sumtime += duringtime
         print(f"Single {MODEL_NAME} end to end time : ", duringtime, "ms")
 
-        paddle.device.cuda.empty_cache()
+        # paddle.device.cuda.empty_cache()
         inference_global_mem = paddle.device.cuda.memory_reserved() / (1024**3)
         print(f"Inference used CUDA memory : {inference_global_mem:.3f} GiB")
 
@@ -383,14 +365,12 @@ else:
         return_tensors="pd",
     )
     model_inputs = init_model_inputs(arg_config=predictor_args)
-
-
     inputs_embeds = model_vision.vision_forward(**inputs)
     inputs.update(model_inputs)
     inputs["inputs_embeds"]=inputs_embeds
     generated_text = ""
     while inputs["not_need_stop"]:
-        generated_ids = model.generate(**inputs, max_new_tokens=128)  # already trimmed in paddle
+        generated_ids = model.generate(**inputs)  # already trimmed in paddle
         inputs["input_ids"] = generated_ids
         inputs["inputs_embeds"] = None
         new_text_piece = processor.batch_decode(generated_ids[0], skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]

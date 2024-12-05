@@ -229,11 +229,11 @@ def apply_rotary_pos_emb_vision(tensor: paddle.Tensor, freqs: paddle.Tensor) -> 
     orig_dtype = tensor.dtype
 
     with paddle.amp.auto_cast(False):
-        tensor = tensor.astype(dtype="float32")
+        tensor = tensor.cast(dtype="float32")
         cos = freqs.cos()
         sin = freqs.sin()
-        cos = cos.unsqueeze(1).tile(repeat_times=[1, 1, 2]).unsqueeze(0).astype(dtype="float32")
-        sin = sin.unsqueeze(1).tile(repeat_times=[1, 1, 2]).unsqueeze(0).astype(dtype="float32")
+        cos = cos.unsqueeze(1).tile(repeat_times=[1, 1, 2]).unsqueeze(0).cast(dtype="float32")
+        sin = sin.unsqueeze(1).tile(repeat_times=[1, 1, 2]).unsqueeze(0).cast(dtype="float32")
         output = tensor * cos + rotate_half(tensor) * sin
     output = paddle.cast(output, orig_dtype)
     return output
@@ -375,9 +375,9 @@ class VisionFlashAttention2(nn.Layer):
         softmax_scale = self.head_dim**-0.5  # TODO: 需要手动加上
         attn_output = (
             flash_attn_varlen_func(  # flash_attn_unpadded
-                q.astype("bfloat16"),  # 不支持float32
-                k.astype("bfloat16"),
-                v.astype("bfloat16"),
+                q.cast("bfloat16"),  # 不支持float32
+                k.cast("bfloat16"),
+                v.cast("bfloat16"),
                 cu_seqlens,
                 cu_seqlens,
                 max_seqlen,
@@ -387,7 +387,7 @@ class VisionFlashAttention2(nn.Layer):
             .squeeze(0)
             .reshape([seq_length, -1])
         )
-        attn_output = attn_output.astype(paddle.float32)
+        attn_output = attn_output.cast(paddle.float32)
         attn_output = self.proj(attn_output)
         return attn_output
 
@@ -981,6 +981,13 @@ class Qwen2VisionTransformerPretrainedModel(Qwen2VLPreTrainedModel):
         rotary_pos_emb = rotary_pos_emb_full[pos_ids].flatten(start_axis=1)
         return rotary_pos_emb
 
+    # @paddle.incubate.jit.inference(
+    # enable_new_ir=False,
+    # cache_static_model=False,
+    # save_model_dir="/root/paddlejob/workspace/env_run/output/changwenbin/PaddleMIX/paddlemix/examples/qwen2_vl/tmp/qwen2vl_vision",
+    # exp_enable_use_cutlass=False,
+    # # delete_pass_lists=["fc_fuse_pass"],
+    # )
     def forward(self, hidden_states: paddle.Tensor, grid_thw: paddle.Tensor) -> paddle.Tensor:
         
         hidden_states = self.patch_embed(hidden_states)
@@ -1407,31 +1414,18 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
         video_grid_thw: Optional[paddle.Tensor] = None,
         rope_deltas: Optional[paddle.Tensor] = None,
     ):
-        import nvtx
-        vision_forward_nvtx = nvtx.start_range(message="vision_forward", color="blue")
-
         if inputs_embeds is None:
             inputs_embeds = self.model.embed_tokens(input_ids)
-            # breakpoint()
             if pixel_values is not None:
                 pixel_values = paddle.cast(pixel_values, paddle.get_default_dtype())
                 image_embeds = self.visual(pixel_values, grid_thw=image_grid_thw)
                 image_mask = input_ids == self.config.image_token_id
-                if self.training:
-                    inputs_embeds = inputs_embeds.clone()
                 inputs_embeds[image_mask] = image_embeds
             if pixel_values_videos is not None:
                 pixel_values_videos = paddle.cast(pixel_values_videos, paddle.get_default_dtype())
                 video_embeds = self.visual(pixel_values_videos, grid_thw=video_grid_thw)
                 video_mask = input_ids == self.config.video_token_id
                 inputs_embeds[video_mask] = video_embeds
-            if attention_mask is not None:
-                attention_mask = attention_mask
-                        
-        paddle.device.synchronize()
-        nvtx.end_range(vision_forward_nvtx)
-        
-        
         return inputs_embeds
 
     def forward(
@@ -1459,20 +1453,20 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
 
         if inputs_embeds is None:
             inputs_embeds = self.model.embed_tokens(input_ids)
-            # if pixel_values is not None:
-            #     pixel_values = paddle.cast(pixel_values, paddle.get_default_dtype())
-            #     image_embeds = self.visual(pixel_values, grid_thw=image_grid_thw)
-            #     image_mask = input_ids == self.config.image_token_id
-            #     if self.training:
-            #         inputs_embeds = inputs_embeds.clone()
-            #     inputs_embeds[image_mask] = image_embeds
-            # if pixel_values_videos is not None:
-            #     pixel_values_videos = paddle.cast(pixel_values_videos, paddle.get_default_dtype())
-            #     video_embeds = self.visual(pixel_values_videos, grid_thw=video_grid_thw)
-            #     video_mask = input_ids == self.config.video_token_id
-            #     inputs_embeds[video_mask] = video_embeds
-            # if attention_mask is not None:
-            #     attention_mask = attention_mask
+            if pixel_values is not None:
+                pixel_values = paddle.cast(pixel_values, paddle.get_default_dtype())
+                image_embeds = self.visual(pixel_values, grid_thw=image_grid_thw)
+                image_mask = input_ids == self.config.image_token_id
+                if self.training:
+                    inputs_embeds = inputs_embeds.clone()
+                inputs_embeds[image_mask] = image_embeds
+            if pixel_values_videos is not None:
+                pixel_values_videos = paddle.cast(pixel_values_videos, paddle.get_default_dtype())
+                video_embeds = self.visual(pixel_values_videos, grid_thw=video_grid_thw)
+                video_mask = input_ids == self.config.video_token_id
+                inputs_embeds[video_mask] = video_embeds
+            if attention_mask is not None:
+                attention_mask = attention_mask
 
         outputs = self.model(
             input_ids=None,
