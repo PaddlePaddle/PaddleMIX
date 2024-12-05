@@ -229,11 +229,11 @@ def apply_rotary_pos_emb_vision(tensor: paddle.Tensor, freqs: paddle.Tensor) -> 
     orig_dtype = tensor.dtype
 
     with paddle.amp.auto_cast(False):
-        tensor = tensor.cast(dtype="float32")
+        tensor = tensor.astype(dtype="float32")
         cos = freqs.cos()
         sin = freqs.sin()
-        cos = cos.unsqueeze(1).tile(repeat_times=[1, 1, 2]).unsqueeze(0).cast(dtype="float32")
-        sin = sin.unsqueeze(1).tile(repeat_times=[1, 1, 2]).unsqueeze(0).cast(dtype="float32")
+        cos = cos.unsqueeze(1).tile(repeat_times=[1, 1, 2]).unsqueeze(0).astype(dtype="float32")
+        sin = sin.unsqueeze(1).tile(repeat_times=[1, 1, 2]).unsqueeze(0).astype(dtype="float32")
         output = tensor * cos + rotate_half(tensor) * sin
     output = paddle.cast(output, orig_dtype)
     return output
@@ -374,9 +374,9 @@ class VisionFlashAttention2(nn.Layer):
         softmax_scale = self.head_dim**-0.5  # TODO: 需要手动加上
         attn_output = (
             flash_attn_varlen_func(  # flash_attn_unpadded
-                q.cast("bfloat16"),  # 不支持float32
-                k.cast("bfloat16"),
-                v.cast("bfloat16"),
+                q.astype("bfloat16"),  # 不支持float32
+                k.astype("bfloat16"),
+                v.astype("bfloat16"),
                 cu_seqlens,
                 cu_seqlens,
                 max_seqlen,
@@ -386,7 +386,7 @@ class VisionFlashAttention2(nn.Layer):
             .squeeze(0)
             .reshape([seq_length, -1])
         )
-        attn_output = attn_output.cast(paddle.float32)
+        attn_output = attn_output.astype(paddle.float32)
         attn_output = self.proj(attn_output)
         return attn_output
 
