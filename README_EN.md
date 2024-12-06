@@ -144,7 +144,7 @@ cd PaddleMIX
 conda create -n paddlemix python=3.10 -y
 conda activate paddlemix
 ```
-### 3. Install PaddlePaddle
+### 3. ‼️ Install PaddlePaddle
 
 #### Method 1: One-Click Installation (Recommended for GPU/CPU)
 
@@ -158,33 +158,7 @@ sh build_paddle_env.sh
 #### Method 2: Manual Installation
 For detailed instructions on installing PaddlePaddle, please refer to the [Installation Guide](https://www.paddlepaddle.org.cn/install/quick?docurl=/documentation/docs/zh/develop/install/pip/linux-pip.html).
 
-### 4. Ascend Environment Installation (Optional)
-
-Currently, PaddleMIX supports the Ascend 910B chip (more models are in progress; if you have other model requirements, please submit an issue to let us know). The Ascend driver version is 23.0.3. Considering the variability in environments, we recommend using the standard image provided by PaddlePaddle to prepare your environment.
-
-* Refer to the command below to start the container; `ASCEND_RT_VISIBLE_DEVICES` specifies the visible NPU card numbers.
-
-
-```shell
-docker run -it --name paddle-npu-dev -v $(pwd):/work \
-    --privileged --network=host --shm-size=128G -w=/work \
-    -v /usr/local/Ascend/driver:/usr/local/Ascend/driver \
-    -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi \
-    -v /usr/local/dcmi:/usr/local/dcmi \
-    -e ASCEND_RT_VISIBLE_DEVICES="0,1,2,3,4,5,6,7" \
-    registry.baidubce.com/device/paddle-npu:cann80T13-ubuntu20-$(uname -m)-gcc84-py39 /bin/bash
-```
-
-* Install PaddlePaddle inside the container
-
-```shell
-# Note: You need to install the CPU version of PaddlePaddle first. Currently, only Python 3.9 is supported.
-python -m pip install --pre paddlepaddle -i https://www.paddlepaddle.org.cn/packages/nightly/cpu/
-python -m pip install --pre paddle-custom-npu -i https://www.paddlepaddle.org.cn/packages/nightly/npu/
-```
-
-
-### 5. Install Dependencies
+### 4. ‼️ Install Dependencies
 
 #### Method 1: One-Click Installation (Recommended)
 
@@ -193,6 +167,29 @@ Run the following command to automatically install all necessary dependencies:
 ```
 sh build_env.sh
 ```
+
+
+### 5. ‼️ Verify Installation
+
+Run the following command to verify your installation:
+```bash
+sh check_env.sh
+```
+
+Recommended versions for environment and dependencies:
+- paddlepaddle: 3.0.0b2 or develop version
+- paddlenlp: 3.0.0b2
+- ppdiffusers: 0.29.0
+- huggingface_hub: 0.23.0
+
+### 6. Install Custom Operators (Optional)
+* Some models require custom operators (FastLayerNorm, FusedLayerNorm), such as EVA-CLIP, DIT_LLAMA, etc.
+* Skip this step for non-CUDA environments (e.g., Ascend NPU)
+```bash
+cd paddlemix/external_ops
+python setup.py install
+```
+
 
 #### Method 2: Manual Installation (Please refer to build_env.sh)
 ## 🔥 Tutorials
