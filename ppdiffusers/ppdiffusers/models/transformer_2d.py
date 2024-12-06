@@ -509,8 +509,8 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
         return Transformer2DModelOutput(sample=output)
 
     @classmethod
-    def custom_modify_weight(cls, state_dict):
-        if os.getenv("INFERENCE_OPTIMIZE") != "True":
+    def custom_modify_weight(cls, model_to_load, state_dict):
+        if not model_to_load.inference_optimize:
             return
         for i in range(28):
             map_from_my_dit = [
