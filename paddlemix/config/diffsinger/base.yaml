@@ -1,0 +1,94 @@
+# task
+task_cls: null
+
+#############
+# dataset
+#############
+sort_by_len: true
+raw_data_dir: null
+binary_data_dir: null
+binarizer_cls: null
+binarization_args:
+  shuffle: false
+  num_workers: 0
+
+audio_sample_rate: 44100
+hop_size: 512
+win_size: 2048
+fft_size: 2048  # Extra window size is filled with 0 paddings to match this parameter
+sampler_frame_count_grid: 6
+ds_workers: 4
+dataloader_prefetch_factor: 2
+
+#########
+# model
+#########
+hidden_size: 256
+dropout: 0.1
+use_pos_embed: true
+enc_layers: 4
+num_heads: 2
+enc_ffn_kernel_size: 9
+ffn_act: gelu
+use_spk_id: false
+
+###########
+# optimization
+###########
+optimizer_args:
+  optimizer_cls: torch.optim.AdamW
+  lr: 0.0004
+  beta1: 0.9
+  beta2: 0.98
+  weight_decay: 0
+lr_scheduler_args:
+  scheduler_cls: torch.optim.lr_scheduler.StepLR
+  step_size: 50000
+  gamma: 0.5
+clip_grad_norm: 1
+
+###########
+# train and eval
+###########
+num_ckpt_keep: 5
+accumulate_grad_batches: 1
+log_interval: 100
+num_sanity_val_steps: 1  # steps of validation at the beginning
+val_check_interval: 2000
+max_updates: 120000
+max_batch_frames: 32000
+max_batch_size: 100000
+max_val_batch_frames: 60000
+max_val_batch_size: 1
+pe: rmvpe #parselmouth
+pe_ckpt: 'checkpoints/rmvpe/model.pt'
+hnsep: vr
+hnsep_ckpt: 'checkpoints/vr/model.pt'
+f0_min: 65
+f0_max: 1100
+num_valid_plots: 10
+
+###########
+# pytorch lightning
+# Read https://lightning.ai/docs/pytorch/stable/common/trainer.html#trainer-class-api for possible values
+###########
+pl_trainer_accelerator: 'auto'
+pl_trainer_devices: [4,5,6,7] # 'auto'
+pl_trainer_precision: '16-mixed'
+pl_trainer_num_nodes: 1
+pl_trainer_strategy: 
+  name: auto
+  process_group_backend: nccl
+  find_unused_parameters: false
+nccl_p2p: true
+
+###########
+# finetune
+###########
+finetune_enabled: false
+finetune_ckpt_path: null
+finetune_ignored_params: []
+finetune_strict_shapes: true
+
+freezing_enabled: false
+frozen_params: []

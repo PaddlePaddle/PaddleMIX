@@ -12,12 +12,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import os
 import inspect
 from typing import Any, Callable, Dict, List, Optional, Union
 
 import paddle
 import paddle.distributed as dist
+import paddle.distributed.fleet as fleet
 
 from ppdiffusers.transformers import (  # T5TokenizerFast,
     CLIPTextModelWithProjection,
@@ -120,7 +120,7 @@ def retrieve_timesteps(
     return timesteps, num_inference_steps
 
 
-class StableDiffusion3Pipeline(DiffusionPipeline, SD3LoraLoaderMixin,  FromSingleFileMixin):
+class StableDiffusion3Pipeline(DiffusionPipeline, SD3LoraLoaderMixin, FromSingleFileMixin):
 
     r"""
     Args:
@@ -196,7 +196,6 @@ class StableDiffusion3Pipeline(DiffusionPipeline, SD3LoraLoaderMixin,  FromSingl
             if hasattr(self, "transformer") and self.transformer is not None
             else 128
         )
-        self.inference_optimize_bp = os.getenv("INFERENCE_OPTIMIZE_BP") == "True"
 
     def _get_t5_prompt_embeds(
         self,
@@ -800,23 +799,25 @@ class StableDiffusion3Pipeline(DiffusionPipeline, SD3LoraLoaderMixin,  FromSingl
                 latent_model_input = paddle.concat([latents] * 2) if self.do_classifier_free_guidance else latents
                 # broadcast to batch dimension in a way that's compatible with ONNX/Core ML
                 timestep = t.expand(latent_model_input.shape[0])
-                if self.inference_optimize_bp and self.do_classifier_free_guidance:
-                    latent_input ,latent_model_input_ = paddle.split(latent_model_input,2,axis=0)
-                    timestep_input ,timestep_ = paddle.split(timestep,2,axis=0)
-                    prompt_embeds_input ,prompt_embeds_ = paddle.split(prompt_embeds,2,axis=0)
-                    pooled_prompt_embeds_input ,pooled_prompt_embeds_ = paddle.split(pooled_prompt_embeds,2,axis=0)
-                    
-                    dist.scatter(latent_input,[latent_input,latent_model_input_])
-                    dist.scatter(timestep_input,[timestep_input,timestep_])
-                    dist.scatter(prompt_embeds_input,[prompt_embeds_input,prompt_embeds_])
-                    dist.scatter(pooled_prompt_embeds_input,[pooled_prompt_embeds_input,pooled_prompt_embeds_])
+
+                enabled_cfg_dp = False
+                if self.transformer.inference_dp_size > 1:
+                    enabled_cfg_dp = True
+                    assert self.do_classifier_free_guidance, "do_classifier_free_guidance must be true"
+
+                if enabled_cfg_dp:
+                    dp_id = self.transformer.dp_id
+                    latent_input = paddle.split(latent_model_input, 2, axis=0)[dp_id]
+                    timestep_input = paddle.split(timestep, 2, axis=0)[dp_id]
+                    prompt_embeds_input = paddle.split(prompt_embeds, 2, axis=0)[dp_id]
+                    pooled_prompt_embeds_input = paddle.split(pooled_prompt_embeds, 2, axis=0)[dp_id]
 
                 else:
                     latent_input = latent_model_input
                     timestep_input = timestep
                     prompt_embeds_input = prompt_embeds
                     pooled_prompt_embeds_input = pooled_prompt_embeds
-                
+
                 model_output = self.transformer(
                     hidden_states=latent_input,
                     timestep=timestep_input,
@@ -831,16 +832,16 @@ class StableDiffusion3Pipeline(DiffusionPipeline, SD3LoraLoaderMixin,  FromSingl
                     output = model_output
                 else:
                     output = model_output[0]
-                    
-                if self.inference_optimize_bp:
+
+                if enabled_cfg_dp:
                     tmp_shape = output.shape
-                    tmp_shape[0] *=2
-                    noise_pred = paddle.zeros(tmp_shape,dtype=output.dtype)
-                    dist.all_gather(noise_pred,output)
+                    tmp_shape[0] *= 2
+                    noise_pred = paddle.zeros(tmp_shape, dtype=output.dtype)
+                    dist.all_gather(
+                        noise_pred, output, group=fleet.get_hybrid_communicate_group().get_data_parallel_group()
+                    )
                 else:
                     noise_pred = output
-
-
 
                 # perform guidance
                 if self.do_classifier_free_guidance:

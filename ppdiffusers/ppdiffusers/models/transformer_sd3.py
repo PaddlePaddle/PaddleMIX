@@ -40,6 +40,8 @@ from .transformer_2d import Transformer2DModelOutput
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
+import paddle.distributed.fleet as fleet
+
 
 class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, FromOriginalModelMixin
     """
@@ -95,6 +97,21 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
         self.context_embedder = nn.Linear(self.config.joint_attention_dim, self.config.caption_projection_dim)
 
         self.inference_optimize = os.getenv("INFERENCE_OPTIMIZE") == "True"
+        self.inference_mp_size = int(os.getenv("INFERENCE_MP_SIZE", 1))
+        self.inference_dp_size = int(os.getenv("INFERENCE_DP_SIZE", 1))
+        self.mp_id = 0
+        self.dp_id = 0
+        if self.inference_mp_size > 1 or self.inference_dp_size > 1:
+            assert self.inference_dp_size in [1, 2]
+            hcg = fleet.get_hybrid_communicate_group()
+            self.mp_id = hcg.get_model_parallel_rank()
+            self.dp_id = hcg.get_data_parallel_rank()
+
+            mp_degree = hcg.get_model_parallel_world_size()
+            dp_degree = hcg.get_data_parallel_world_size()
+            assert mp_degree == self.inference_mp_size
+            assert dp_degree == self.inference_dp_size
+
         # `attention_head_dim` is doubled to account for the mixing.
         # It needs to crafted when we get the actual checkpoints.
         self.transformer_blocks = nn.LayerList(
@@ -116,6 +133,7 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
                 dim=self.inner_dim,
                 num_attention_heads=self.config.num_attention_heads,
                 attention_head_dim=self.inner_dim,
+                mp_degree=self.inference_mp_size,
             )
 
         self.norm_out = AdaLayerNormContinuous(self.inner_dim, self.inner_dim, elementwise_affine=False, eps=1e-6)
@@ -374,9 +392,9 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
         return Transformer2DModelOutput(sample=output)
 
     @classmethod
-    def custom_modify_weight(cls, state_dict):
+    def custom_modify_weight(cls, model_to_load, state_dict):
 
-        if os.getenv("INFERENCE_OPTIMIZE") != "True":
+        if not model_to_load.inference_optimize:
             return
 
         # NOTE:(changwenbin,zhoukangkang) SD3 num_layers is 24
@@ -434,3 +452,40 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
                         ],
                         axis=-1,
                     )
+
+            mp_degree = model_to_load.inference_mp_size
+            mp_id = model_to_load.mp_id
+
+            if mp_degree > 1:
+                if i < 23:
+                    tmp = paddle.split(state_dict[f"simplified_sd3.to_add_out_linear.{i}.weight"], mp_degree, axis=0)
+                    state_dict[f"simplified_sd3.to_add_out_linear_mp.{i}.weight"] = tmp[mp_id]
+                    state_dict[f"simplified_sd3.to_add_out_linear_mp.{i}.bias"] = state_dict[
+                        f"simplified_sd3.to_add_out_linear.{i}.bias"
+                    ]
+                    tmp = paddle.split(state_dict[f"simplified_sd3.ffn2_context.{i}.weight"], mp_degree, axis=0)
+                    state_dict[f"simplified_sd3.ffn2_context_mp.{i}.weight"] = tmp[mp_id]
+                    state_dict[f"simplified_sd3.ffn2_context_mp.{i}.bias"] = state_dict[
+                        f"simplified_sd3.ffn2_context.{i}.bias"
+                    ]
+                    for placeholder in ["weight", "bias"]:
+                        tmp = paddle.split(
+                            state_dict[f"simplified_sd3.ffn1_context.{i}.{placeholder}"], mp_degree, axis=-1
+                        )
+                        state_dict[f"simplified_sd3.ffn1_context_mp.{i}.{placeholder}"] = tmp[mp_id]
+                for placeholder in ["weight", "bias"]:
+                    tmp = paddle.split(state_dict[f"simplified_sd3.ffn1.{i}.{placeholder}"], mp_degree, axis=-1)
+                    state_dict[f"simplified_sd3.ffn1_mp.{i}.{placeholder}"] = tmp[mp_id]
+                    for placeholder1 in ["", "e"]:
+                        tmp = paddle.split(
+                            state_dict[f"simplified_sd3.{placeholder1}qkv.{i}.{placeholder}"], 3 * mp_degree, axis=-1
+                        )
+                        state_dict[f"simplified_sd3.{placeholder1}qkv_mp.{i}.{placeholder}"] = paddle.concat(
+                            [tmp[mp_id], tmp[1 * mp_degree + mp_id], tmp[2 * mp_degree + mp_id]], axis=-1
+                        )
+                for mp_name in ["ffn2", "to_out_linear"]:
+                    tmp = paddle.split(state_dict[f"simplified_sd3.{mp_name}.{i}.weight"], mp_degree, axis=0)
+                    state_dict[f"simplified_sd3.{mp_name}_mp.{i}.weight"] = tmp[mp_id]
+                    state_dict[f"simplified_sd3.{mp_name}_mp.{i}.bias"] = state_dict[
+                        f"simplified_sd3.{mp_name}.{i}.bias"
+                    ]
