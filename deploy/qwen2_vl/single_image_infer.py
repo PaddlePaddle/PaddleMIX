@@ -271,35 +271,10 @@ model.eval()
 if predictor_args.benchmark:
     print(f"Benchmarking {MODEL_NAME} ...")
     warm_up = 3
-    for _ in range(warm_up):
-        # Inference: Generation of the output
-        inputs = processor(
-            text=[text],
-            images=image_inputs,
-            videos=video_inputs,
-            padding=True,
-            return_tensors="pd",
-        )
-        model_inputs = init_model_inputs(arg_config=predictor_args)
-        inputs_embeds = model_vision.vision_forward(**inputs)
-        inputs.update(model_inputs)
-        inputs["inputs_embeds"] = inputs_embeds
-        generated_text = ""
-        while inputs["not_need_stop"]:
-            generated_ids = model.generate(**inputs)  # already trimmed in paddle
-            inputs["input_ids"] = generated_ids
-            inputs["inputs_embeds"] = None
-            new_text_piece = processor.batch_decode(
-                generated_ids[0], skip_special_tokens=True, clean_up_tokenization_spaces=False
-            )[0]
-            if new_text_piece == "<|im_end|>":
-                continue
-            generated_text += new_text_piece
-        print("Final output_text:\n", generated_text)
-
     repeat_times = 10
     sumtime = 0.0
-    for i in range(repeat_times):
+    times = repeat_times + warm_up
+    for i in range(times):
         inputs = processor(
             text=[text],
             images=image_inputs,
@@ -308,10 +283,9 @@ if predictor_args.benchmark:
             return_tensors="pd",
         )
         model_inputs = init_model_inputs(arg_config=predictor_args)
-
-        paddle.device.synchronize()
-        starttime = datetime.datetime.now()
-
+        if i > 2:
+            paddle.device.synchronize()
+            starttime = datetime.datetime.now()
         inputs_embeds = model_vision.vision_forward(**inputs)
         inputs.update(model_inputs)
         inputs["inputs_embeds"] = inputs_embeds
@@ -326,17 +300,17 @@ if predictor_args.benchmark:
             if new_text_piece == "<|im_end|>":
                 continue
             generated_text += new_text_piece
-
-        paddle.device.synchronize()
-        endtime = datetime.datetime.now()
-        print("Final output_text:\n", generated_text)
-
-        duringtime = endtime - starttime
-        duringtime = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
-        sumtime += duringtime
-        print(f"Single {MODEL_NAME} end to end time : ", duringtime, "ms")
-        inference_global_mem = paddle.device.cuda.memory_reserved() / (1024**3)
-        print(f"Inference used CUDA memory : {inference_global_mem:.3f} GiB")
+        if i > 2:
+            paddle.device.synchronize()
+            endtime = datetime.datetime.now()
+            print("Final output_text:\n", generated_text)
+        if i > 2:
+            duringtime = endtime - starttime
+            duringtime = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
+            sumtime += duringtime
+            print(f"Single {MODEL_NAME} end to end time : ", duringtime, "ms")
+            inference_global_mem = paddle.device.cuda.memory_reserved() / (1024**3)
+            print(f"Inference used CUDA memory : {inference_global_mem:.3f} GiB")
 
     print(f"Single {MODEL_NAME} ave end to end time : ", sumtime / repeat_times, "ms")
 
