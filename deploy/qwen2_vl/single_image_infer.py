@@ -162,6 +162,9 @@ class PredictorArgument:
     total_max_length: int = field(
         default=4096, metadata={"help": "Super parameter. Maximum sequence length(encoder+decoder)."}
     )
+    speculate_method:str = field(
+        default=None, metadata={"help": "--"}
+    )
 
     def __post_init__(self):
         if self.append_attn:
