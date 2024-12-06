@@ -85,9 +85,13 @@ class DataModuleFromConfig():
                 self.datasets[k] = WrappedDataset(self.datasets[k])
 
     def _train_dataloader(self):
+        batch_sampler = paddle.io.DistributedBatchSampler(
+            dataset=self.datasets['train'],
+            shuffle=True,
+            batch_size=self.batch_size
+        )
         return paddle.io.DataLoader(dataset=self.datasets['train'],
-            batch_size=self.batch_size, num_workers=self.num_workers,
-            shuffle=True, collate_fn=custom_collate)
+            num_workers=self.num_workers,batch_sampler=batch_sampler,collate_fn=custom_collate)
 
     def _val_dataloader(self):
         return paddle.io.DataLoader(dataset=self.datasets['validation'],
@@ -125,6 +129,10 @@ def main(main_args, args, config):
     log_every_n_steps = config["trainer"]["log_every_n_steps"]
     num_sanity_val_steps = config["trainer"]["num_sanity_val_steps"]
     
+    if world_size>1:
+        paddle.distributed.init_parallel_env()
+
+    
     #save_checkpint
     save_path = config["trainer"]["save_path"]
     if save_path is not None:
@@ -142,6 +150,11 @@ def main(main_args, args, config):
     
     model = load_vqgan_new(config, config['ckpt_path'])
     model.configure_optimizers(len(train_dataloader),world_size,max_epochs)
+    
+    if paddle.distributed.get_world_size() > 1:
+        model.encoder = paddle.DataParallel(model.encoder)
+        model.decoder = paddle.DataParallel(model.decoder)
+        model.loss.discriminator = paddle.DataParallel(model.loss.discriminator)
     
     
     model.on_train_start()
@@ -170,7 +183,8 @@ def main(main_args, args, config):
                     model.on_log(log_dict_disc)
                 
                 if save_checkpoint_steps is not None and global_step % save_checkpoint_steps == 0 :
-                    paddle.save(model.state_dict(),os.path.join(save_path,f"checkpoint_step_{global_step}.pdparams"))
+                    if paddle.distributed.get_rank() == 0:
+                        paddle.save(model.state_dict(),os.path.join(save_path,f"checkpoint_step_{global_step}.pdparams"))
 
                 
                 global_step += 1
@@ -182,7 +196,8 @@ def main(main_args, args, config):
             model.on_train_epoch_end(epoch)
         
             if save_checkpoint_epochs is not None and epoch % save_checkpoint_epochs == 0:
-                paddle.save(model.state_dict(),os.path.join(save_path,f"checkpoint_epoch_{epoch}.pdparams"))
+                if paddle.distributed.get_rank() == 0:
+                    paddle.save(model.state_dict(),os.path.join(save_path,f"checkpoint_epoch_{epoch}.pdparams"))
                         
             
     

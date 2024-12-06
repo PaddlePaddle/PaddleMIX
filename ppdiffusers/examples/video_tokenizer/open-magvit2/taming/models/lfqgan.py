@@ -285,7 +285,11 @@ class VQModel(paddle.nn.Layer):
         return
 
     def get_last_layer(self):
-        return self.decoder.conv_out.weight
+        if paddle.distributed.get_world_size() > 1:
+            return self.decoder._layers.conv_out.weight
+        else:
+            return self.decoder.conv_out.weight
+        
 
     def log_images(self, batch, **kwargs):
         log = dict()

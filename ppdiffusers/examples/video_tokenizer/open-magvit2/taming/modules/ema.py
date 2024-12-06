@@ -41,25 +41,33 @@ class LitEma(paddle.nn.Layer):
             m_param = dict(model.named_parameters())
             shadow_params = dict(self.named_buffers())
             for key in m_param:
+                if '_layers' in key:
+                    m_key = key.replace('_layers.', '')
+                else:
+                    m_key = key
                 if not m_param[key].stop_gradient:
-                    sname = self.m_name2s_name[key]
+                    sname = self.m_name2s_name[m_key]
                     shadow_params[sname] = shadow_params[sname].astype(dtype
                         =m_param[key].dtype)
                     shadow_params[sname].subtract_(y=paddle.to_tensor(
                         one_minus_decay * (shadow_params[sname] - m_param[
                         key])))
                 else:
-                    assert not key in self.m_name2s_name
+                    assert not m_key in self.m_name2s_name
 
     def copy_to(self, model):
         m_param = dict(model.named_parameters())
         shadow_params = dict(self.named_buffers())
    
         for key in m_param:
-            if not m_param[key].stop_gradient:
-                paddle.assign(x=shadow_params[self.m_name2s_name[key]],output=m_param[key])
+            if '_layers' in key:
+                m_key = key.replace('_layers.', '')
             else:
-                assert not key in self.m_name2s_name
+                m_key = key
+            if not m_param[key].stop_gradient:
+                paddle.assign(x=shadow_params[self.m_name2s_name[m_key]],output=m_param[key])
+            else:
+                assert not m_key in self.m_name2s_name
 
     def store(self, parameters):
         """
