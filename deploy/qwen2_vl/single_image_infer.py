@@ -108,11 +108,14 @@ class ModelArgument:
     output_file: str = field(default="output.json", metadata={"help": "predict result file directory"})
 
 
-def init_llm_model_inputs(input_embeds, arg_config: PredictorArgument):
-    assert len(input_embeds.shape) == 3
-    batch_size = input_embeds.shape[0]
-
+def init_llm_model_inputs(inputs_embeds, arg_config: PredictorArgument):
+    assert len(inputs_embeds.shape) == 3
+    batch_size = inputs_embeds.shape[0]
+    
     model_inputs = {}
+    model_inputs["input_ids"] = paddle.zeros(shape=[batch_size, arg_config.total_max_length], dtype="int64")
+    model_inputs["inputs_embeds"] = inputs_embeds
+    
 
     # I dislike write (arg_config.total_max_length + arg_config.block_size -1 ) // arg_config.block_size
     assert arg_config.total_max_length % arg_config.block_size == 0
@@ -156,7 +159,7 @@ def init_llm_model_inputs(input_embeds, arg_config: PredictorArgument):
         for j in range(0, arg_config.total_max_length // arg_config.block_size):
             model_inputs["block_tables"][i, j] = j
 
-    seq_lens = input_embeds.shape[1]
+    seq_lens = inputs_embeds.shape[1]
     model_inputs["seq_lens_this_time"] = paddle.to_tensor(np.array(seq_lens).astype("int32").reshape(-1, 1))
     model_inputs["seq_lens_encoder"] = paddle.to_tensor(np.array(seq_lens).astype("int32").reshape(-1, 1))
     model_inputs["seq_lens_decoder"] = paddle.full(shape=[batch_size, 1], fill_value=0, dtype="int32")
@@ -200,8 +203,6 @@ def run_model():
     )
     inputs_embeds = model_vision.vision_forward(**vision_model_inputs)
     llm_model_inputs = init_llm_model_inputs(inputs_embeds, arg_config=predictor_args)
-    llm_model_inputs["input_ids"] = paddle.zeros(shape=[1, 2000], dtype="int64")
-    llm_model_inputs["inputs_embeds"] = inputs_embeds
 
     generated_text = ""
     while llm_model_inputs["not_need_stop"]:
