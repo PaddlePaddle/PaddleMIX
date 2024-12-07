@@ -68,6 +68,8 @@ text = f"<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|
 
 @dataclass
 class PredictorArgument:
+    # 这些参数全部拷贝自 https://github.com/PaddlePaddle/PaddleNLP/blob/develop/llm/predict/predictor.py
+    # 为了给用户呈现最简洁的形式，这里忽略了注释，仅保留了必要的参数，了解这些参数的确切含义请用户参考上面的链接
     model_name_or_path: str = field(default=None, metadata={"help": "The directory of model."})
     src_length = 1024
     min_length = 2
