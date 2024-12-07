@@ -12,28 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import argparse
 import datetime
 from dataclasses import dataclass, field
 
 import numpy as np
 import paddle
-from paddlenlp.experimental.transformers.qwen2.modeling import (
-    Qwen2ForCausalLMBlockInferenceModel,
-)
 from paddlenlp.generation import GenerationConfig
 from paddlenlp.trainer import PdArgumentParser
 from paddlenlp.transformers import (
     AutoConfig,
     AutoInferenceModelForCausalLM,
-    AutoModelForCausalLM,
-    AutoTokenizer,
-    PretrainedModel,
-    PretrainedTokenizer,
     Qwen2Tokenizer,
 )
 from paddlenlp.trl import llm_utils
-from paddlenlp.utils.log import logger
 
 from paddlemix.models.qwen2_vl.modeling_qwen2_vl import Qwen2VLForConditionalGeneration
 from paddlemix.processors.qwen2_vl_processing import (
@@ -78,100 +69,31 @@ text = f"<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|
 @dataclass
 class PredictorArgument:
     model_name_or_path: str = field(default=None, metadata={"help": "The directory of model."})
-    model_prefix: str = field(default="model", metadata={"help": "the prefix name of static model"})
-    src_length: int = field(default=1024, metadata={"help": "The max length of source text."})
-    min_length: int = field(default=1, metadata={"help": "the min length for decoding."})
-    max_length: int = field(default=1024, metadata={"help": "the max length for decoding."})
-    top_k: int = field(default=0, metadata={"help": "top_k parameter for generation"})
-    top_p: float = field(default=0.7, metadata={"help": "top_p parameter for generation"})
-    temperature: float = field(default=0.95, metadata={"help": "top_p parameter for generation"})
-    repetition_penalty: float = field(default=1.0, metadata={"help": "repetition penalty parameter for generation"})
-    device: str = field(default="gpu", metadata={"help": "Device"})
+    src_length = 1024
+    min_length = 2
+    max_length = 200
+    top_k = 0
+    top_p = 0.0
+    temperature = 0.95
+    repetition_penalty = 1.0
     dtype: str = field(default=None, metadata={"help": "Model dtype"})
-    lora_path: str = field(default=None, metadata={"help": "The directory of LoRA parameters. Default to None"})
-    export_precache: bool = field(default=False, metadata={"help": "whether use prefix weight to do infer"})
-    prefix_path: str = field(
-        default=None, metadata={"help": "The directory of Prefix Tuning parameters. Default to None"}
-    )
-    decode_strategy: str = field(
-        default="sampling",
-        metadata={
-            "help": "the decoding strategy of generation, which should be one of ['sampling', 'greedy_search', 'beam_search']. Default to sampling"
-        },
-    )
-    use_flash_attention: bool = field(
-        default=False,
-        metadata={"help": "Whether to use flash attention"},
-    )
-
-    mode: str = field(
-        default="dynamic", metadata={"help": "the type of predictor, it should be one of [dynamic, static]"}
-    )
-    inference_model: bool = field(default=False, metadata={"help": "whether use InferenceModel to do generation"})
-    quant_type: str = field(
-        default="",
-        metadata={
-            "help": "Quantization type. Supported values: a8w8, a8w8c8, a8w8_fp8, a8w8c8_fp8, weight_only_int4, weight_only_int8"
-        },
-    )
-    avx_model: bool = field(
-        default=False, metadata={"help": "whether use AvxModel to do generation when using cpu inference"}
-    )
-    avx_type: str = field(
-        default=None,
-        metadata={
-            "help": "avx compute type. Supported values: fp16, bf16,fp16_int8\
-        fp16: first_token and next_token run in fp16\
-        fp16_int8 : first_token run in fp16, next token run in int8"
-        },
-    )
-    avx_cachekv_type: str = field(
-        default="fp16",
-        metadata={"help": "avx cachekv type. Supported values: fp16,int8"},
-    )
-    batch_size: int = field(default=1, metadata={"help": "The batch size of data."})
+    decode_strategy = "sampling"
+    mode = "dynamic"
+    inference_model = True
+    quant_type = ""
     benchmark: bool = field(
         default=False,
         metadata={
             "help": "If benchmark set as `True`, we will force model decode to max_length, which is helpful to compute throughput. "
         },
     )
-    use_fake_parameter: bool = field(default=False, metadata={"help": "use fake parameter, for ptq scales now."})
-    block_attn: bool = field(default=False, metadata={"help": "whether use block attention"})
-    block_size: int = field(default=64, metadata={"help": "the block size for cache_kvs."})
-    cachekv_int8_type: str = field(
-        default=None,
-        metadata={
-            "help": "If cachekv_int8_type set as `dynamic`, cache kv would be quantized to int8 dynamically. If cachekv_int8_type set as `static`, cache kv would be quantized to int8 Statically."
-        },
-    )
-
-    append_attn: bool = field(default=False, metadata={"help": "whether use append attention"})
-
-    chat_template: str = field(
-        default=None,
-        metadata={
-            "help": "the path of `chat_template.json` file to handle multi-rounds conversation. "
-            "If is None(do not set --chat_template argument), it will use the default `chat_template.json`;"
-            "If is equal with `model_name_or_path`, it will use the default loading; "
-            "If is directory, it will find the `chat_template.json` under the directory; If is file, it will load it."
-            "If is none string, it will not use chat_template.json."
-        },
-    )
-
-    total_max_length: int = field(
-        default=4096, metadata={"help": "Super parameter. Maximum sequence length(encoder+decoder)."}
-    )
-    speculate_method:str = field(
-        default=None, metadata={"help": "--"}
-    )
-
-    def __post_init__(self):
-        if self.append_attn:
-            self.block_attn = True
-        assert (
-            self.src_length + self.max_length <= self.total_max_length
-        ), "src_length + max_length should smaller than total_max_length."
+    use_fake_parameter = False
+    block_attn = True
+    block_size = 64
+    cachekv_int8_type = None
+    append_attn = True
+    total_max_length = 4096
+    speculate_method = None
 
 
 @dataclass
@@ -184,66 +106,64 @@ class ModelArgument:
     output_file: str = field(default="output.json", metadata={"help": "predict result file directory"})
 
 
-def init_model_inputs(arg_config: PredictorArgument):
+def init_llm_model_inputs(input_embeds, arg_config: PredictorArgument):
+    assert len(input_embeds.shape) == 3
+    batch_size = input_embeds.shape[0]
+
     model_inputs = {}
+
+    # I dislike write (arg_config.total_max_length + arg_config.block_size -1 ) // arg_config.block_size
+    assert arg_config.total_max_length % arg_config.block_size == 0
+
     model_inputs["block_tables"] = paddle.full(
         shape=[
-            arg_config.batch_size,
-            (arg_config.total_max_length + arg_config.block_size - 1) // arg_config.block_size,
+            batch_size,
+            arg_config.total_max_length // arg_config.block_size,
         ],
         fill_value=-1,
         dtype="int32",
     )
-    model_inputs["top_p"] = paddle.full(shape=[arg_config.batch_size, 1], fill_value=arg_config.top_p, dtype="float32")
+    model_inputs["top_p"] = paddle.full(shape=[batch_size, 1], fill_value=arg_config.top_p, dtype="float32")
     model_inputs["temperature"] = paddle.full(
-        shape=[arg_config.batch_size, 1], fill_value=arg_config.temperature, dtype="float32"
+        shape=[batch_size, 1], fill_value=arg_config.temperature, dtype="float32"
     )
     model_inputs["eos_token_id"] = paddle.to_tensor(
         np.array(llm_utils.get_eos_token_id(tokenizer, generation_config)).reshape(-1, 1).astype("int64")
     )
     model_inputs["penalty_score"] = paddle.full(
-        shape=[arg_config.batch_size, 1], fill_value=arg_config.repetition_penalty, dtype="float32"
+        shape=[batch_size, 1], fill_value=arg_config.repetition_penalty, dtype="float32"
     )
-    model_inputs["frequency_score"] = paddle.full(shape=[arg_config.batch_size, 1], fill_value=0.0, dtype="float32")
-    model_inputs["presence_score"] = paddle.full(shape=[arg_config.batch_size, 1], fill_value=0.0, dtype="float32")
-    model_inputs["min_length"] = paddle.full(
-        shape=[arg_config.batch_size, 1], fill_value=arg_config.min_length, dtype="int64"
-    )
-    model_inputs["max_length"] = paddle.full(
-        shape=[arg_config.batch_size, 1], fill_value=arg_config.max_length, dtype="int64"
-    )
+    model_inputs["frequency_score"] = paddle.full(shape=[batch_size, 1], fill_value=0.0, dtype="float32")
+    model_inputs["presence_score"] = paddle.full(shape=[batch_size, 1], fill_value=0.0, dtype="float32")
+    model_inputs["min_length"] = paddle.full(shape=[batch_size, 1], fill_value=arg_config.min_length, dtype="int64")
+    model_inputs["max_length"] = paddle.full(shape=[batch_size, 1], fill_value=arg_config.max_length, dtype="int64")
 
-    cache_kvs_shape = model.get_cache_kvs_shape(model.config, arg_config.batch_size)
+    cache_kvs_shape = model.get_cache_kvs_shape(model.config, batch_size)
 
     head_dim = cache_kvs_shape[0][-1]
     model_inputs["rope_emb"] = llm_utils.get_rotary_position_embedding(
         paddle.arange(arg_config.total_max_length).reshape((1, -1)), head_dim, config.rope_theta, config.rope_scaling
     )
     model_inputs["bad_tokens"] = paddle.to_tensor([-1], dtype="int64")
-    model_inputs["is_block_step"] = paddle.full(shape=[arg_config.batch_size], fill_value=False, dtype="bool")
+    model_inputs["is_block_step"] = paddle.full(shape=[batch_size], fill_value=False, dtype="bool")
 
     cachekv_dtype = config.dtype if arg_config.cachekv_int8_type is None else "uint8"
     model_inputs["cache_kvs"] = [paddle.zeros(shape, dtype=cachekv_dtype) for shape in cache_kvs_shape]
-    model_inputs["block_tables"][:][:] = -1
-    seq_lens = [len(inputs["input_ids"][0])]
 
-    max_block_nums = cache_kvs_shape[0][0]
-    free_list = list(range(max_block_nums))
-    for i in range(arg_config.batch_size):
-        for j in range((seq_lens[i] + arg_config.max_length + arg_config.block_size - 1) // arg_config.block_size):
-            used_block_id = free_list.pop()
-            model_inputs["block_tables"][i, j] = used_block_id
+    for i in range(batch_size):
+        for j in range(0, arg_config.total_max_length // arg_config.block_size):
+            model_inputs["block_tables"][i, j] = j
+
+    seq_lens = input_embeds.shape[1]
     model_inputs["seq_lens_this_time"] = paddle.to_tensor(np.array(seq_lens).astype("int32").reshape(-1, 1))
     model_inputs["seq_lens_encoder"] = paddle.to_tensor(np.array(seq_lens).astype("int32").reshape(-1, 1))
-    model_inputs["seq_lens_decoder"] = paddle.full(shape=[arg_config.batch_size, 1], fill_value=0, dtype="int32")
-    model_inputs["step_idx"] = paddle.full(shape=[arg_config.batch_size, 1], fill_value=0, dtype="int64")
+    model_inputs["seq_lens_decoder"] = paddle.full(shape=[batch_size, 1], fill_value=0, dtype="int32")
+    model_inputs["step_idx"] = paddle.full(shape=[batch_size, 1], fill_value=0, dtype="int64")
     model_inputs["not_need_stop"] = paddle.full(shape=[1], fill_value=True, dtype="bool")
-    model_inputs["stop_flags"] = paddle.full(shape=[arg_config.batch_size, 1], fill_value=False, dtype="bool")
-    model_inputs["stop_nums"] = paddle.full(shape=[1], fill_value=arg_config.batch_size, dtype="int64")
-    model_inputs["pre_ids"] = paddle.full(
-        shape=[arg_config.batch_size, arg_config.max_length], fill_value=-1, dtype="int64"
-    )
-    model_inputs["next_tokens"] = paddle.full(shape=[arg_config.batch_size, 1], fill_value=-1, dtype="int64")
+    model_inputs["stop_flags"] = paddle.full(shape=[batch_size, 1], fill_value=False, dtype="bool")
+    model_inputs["stop_nums"] = paddle.full(shape=[1], fill_value=batch_size, dtype="int64")
+    model_inputs["pre_ids"] = paddle.full(shape=[batch_size, arg_config.max_length], fill_value=-1, dtype="int64")
+    model_inputs["next_tokens"] = paddle.full(shape=[batch_size, 1], fill_value=-1, dtype="int64")
 
     return model_inputs
 
@@ -251,7 +171,6 @@ def init_model_inputs(arg_config: PredictorArgument):
 parser = PdArgumentParser((PredictorArgument, ModelArgument))
 predictor_args, model_args = parser.parse_args_into_dataclasses()
 
-paddle.set_device(predictor_args.device)
 paddle.set_default_dtype(predictor_args.dtype)
 
 config = AutoConfig.from_pretrained(MODEL_NAME)
@@ -268,6 +187,34 @@ model = AutoInferenceModelForCausalLM.from_pretrained(
 model.eval()
 
 
+def run_model():
+
+    vision_model_inputs = processor(
+        text=[text],
+        images=image_inputs,
+        videos=video_inputs,
+        padding=True,
+        return_tensors="pd",
+    )
+    inputs_embeds = model_vision.vision_forward(**vision_model_inputs)
+    llm_model_inputs = init_llm_model_inputs(inputs_embeds, arg_config=predictor_args)
+    llm_model_inputs["input_ids"] = paddle.zeros(shape=[1, 2000], dtype="int64")
+    llm_model_inputs["inputs_embeds"] = inputs_embeds
+
+    generated_text = ""
+    while llm_model_inputs["not_need_stop"]:
+        generated_ids = model.generate(**llm_model_inputs)  # already trimmed in paddle
+        llm_model_inputs["input_ids"] = generated_ids
+        llm_model_inputs["inputs_embeds"] = None
+        new_text_piece = processor.batch_decode(
+            generated_ids[0], skip_special_tokens=True, clean_up_tokenization_spaces=False
+        )[0]
+        if new_text_piece == "<|im_end|>":
+            break
+        generated_text += new_text_piece
+    return generated_text
+
+
 if predictor_args.benchmark:
     print(f"Benchmarking {MODEL_NAME} ...")
     warm_up = 3
@@ -275,35 +222,15 @@ if predictor_args.benchmark:
     sumtime = 0.0
     times = repeat_times + warm_up
     for i in range(times):
-        inputs = processor(
-            text=[text],
-            images=image_inputs,
-            videos=video_inputs,
-            padding=True,
-            return_tensors="pd",
-        )
-        model_inputs = init_model_inputs(arg_config=predictor_args)
         if i > 2:
             paddle.device.synchronize()
             starttime = datetime.datetime.now()
-        inputs_embeds = model_vision.vision_forward(**inputs)
-        inputs.update(model_inputs)
-        inputs["inputs_embeds"] = inputs_embeds
-        generated_text = ""
-        while inputs["not_need_stop"]:
-            generated_ids = model.generate(**inputs)  # already trimmed in paddle
-            inputs["input_ids"] = generated_ids
-            inputs["inputs_embeds"] = None
-            new_text_piece = processor.batch_decode(
-                generated_ids[0], skip_special_tokens=True, clean_up_tokenization_spaces=False
-            )[0]
-            if new_text_piece == "<|im_end|>":
-                continue
-            generated_text += new_text_piece
+        generated_text = run_model()
         if i > 2:
             paddle.device.synchronize()
             endtime = datetime.datetime.now()
             print("Final output_text:\n", generated_text)
+
         if i > 2:
             duringtime = endtime - starttime
             duringtime = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
@@ -315,26 +242,5 @@ if predictor_args.benchmark:
     print(f"Single {MODEL_NAME} ave end to end time : ", sumtime / repeat_times, "ms")
 
 else:
-    inputs = processor(
-        text=[text],
-        images=image_inputs,
-        videos=video_inputs,
-        padding=True,
-        return_tensors="pd",
-    )
-    model_inputs = init_model_inputs(arg_config=predictor_args)
-    inputs_embeds = model_vision.vision_forward(**inputs)
-    inputs.update(model_inputs)
-    inputs["inputs_embeds"] = inputs_embeds
-    generated_text = ""
-    while inputs["not_need_stop"]:
-        generated_ids = model.generate(**inputs)  # already trimmed in paddle
-        inputs["input_ids"] = generated_ids
-        inputs["inputs_embeds"] = None
-        new_text_piece = processor.batch_decode(
-            generated_ids[0], skip_special_tokens=True, clean_up_tokenization_spaces=False
-        )[0]
-        if new_text_piece == "<|im_end|>":
-            continue
-        generated_text += new_text_piece
+    generated_text = run_model()
     print("Final output_text:\n", generated_text)
