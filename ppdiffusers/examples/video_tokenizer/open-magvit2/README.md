@@ -1,4 +1,13 @@
 ## OPEN-MAGVIT2: An Open-source Project Toward Democratizing Auto-Regressive Visual Generation
+The Open-MAGVIT2 project produces an open-source replication of Google's MAGVIT-v2 tokenizer, a tokenizer with a super-large codebook, and achieves the state-of-the-art reconstruction performance (1.17 rFID) on ImageNet 256 x 256 .
+
+This project provides the implementation of PaddlePaddle, support training and infer for visual tokenizer、infer reconstruct.
+
+#### Installation
+#### GPU
+- **Env**: We have tested on `Python 3.10` and `CUDA 11.8` (other versions may also be fine).
+- **PaddlePaddle** `Paddle3.0b`
+- **Dependencies**: `pip install -r requirements.txt`
 
 
 #### Datasets
@@ -22,61 +31,48 @@ imagenet
 #### 🚀 Training Scripts
 * $128\times 128$ Tokenizer Training
 ```
-bash scripts/train_tokenizer/run_128_L.sh MASTER_ADDR MASTER_PORT NODE_RANK
+#single gpu
+python train_tokenizer.py --config configs/gpu/imagenet_lfqgan_128_L.yaml
+
+#multiple gpu
+python -u  -m paddle.distributed.launch --gpus "0,1,2,3" train_tokenizer.py  --config configs/gpu/imagenet_lfqgan_128_L.yaml
 ```
 
 * $256\times 256$ Tokenizer Training
 ```
-bash scripts/train_tokenizer/run_256_L.sh MASTER_ADDR MASTER_PORT NODE_RANK
+#single gpu
+python train_tokenizer.py --config configs/gpu/imagenet_lfqgan_256_L.yaml
+
+#multiple gpu
+python -u  -m paddle.distributed.launch --gpus "0,1,2,3" train_tokenizer.py  --config configs/gpu/imagenet_lfqgan_256_L.yaml
 ```
 
-#### 🚀 Evaluation Scripts
-* $128\times 128$ Tokenizer Evaluation
-```
-bash scripts/evaluation/evaluation_128.sh
+Some important parameter configuration instructions, please refer to  `configs/gpu/imagenet_lfqgan_2256_L.yaml`
 ```
 
-* $256\times 256$ Tokenizer Evaluation
-```
-bash scripts/evaluation/evaluation_256.sh
-```
+trainer:
+  precision: bfloat16  # float32 or bfloat16 
+  max_epochs: 1        # max epochs
+  max_steps: 10        # max steps
+  num_sanity_val_steps: 5      # sanity check
+  log_every_n_steps: 5         # log every n steps
+  save_checkpoint_steps:       # save checkpoint every n steps
+  save_checkpoint_epochs: 1    # save checkpoint every n epochs
+  save_path: "checkpoints"     # save checkpoint path
 
-#### 🍺 Performance and Models
+......
 
-**Tokenizer** 
-| Method | Token Type | #Tokens | Train Data | Codebook Size | rFID | PSNR  | Codebook Utilization | Checkpoint |
-|:------:|:----:|:-----:|:-----:|:-------------:|:----:|:----:|:---------------------:|:----:|
-|Open-MAGVIT2-20240617| 2D | 16 $\times$ 16 | 256 $\times$ 256 ImageNet | 262144 | 1.53 | 21.53 | 100% | - |
-|Open-MAGVIT2-20240617| 2D | 16 $\times$ 16 | 128 $\times$ 128 ImageNet | 262144 | 1.56 | 24.45 | 100% | - |
-|Open-MAGVIT2| 2D | 16 $\times$ 16 | 256 $\times$ 256 ImageNet | 262144 | **1.17** | **21.90** | **100%** | [IN256_Large](https://huggingface.co/TencentARC/Open-MAGVIT2/blob/main/imagenet_256_L.ckpt)|
-|Open-MAGVIT2| 2D | 16 $\times$ 16 | 128 $\times$ 128 ImageNet | 262144 | **1.18** | **25.08** | **100%** |[IN128_Large](https://huggingface.co/TencentARC/Open-MAGVIT2/blob/main/imagenet_128_L.ckpt)|
-|Open-MAGVIT2*| 2D | 32 $\times$ 32 | 128 $\times$ 128 ImageNet | 262144 | **0.34** | **26.19** | **100%** |above|
 
-(*) denotes that the results are from the direct inference using the model trained with $128 \times 128$ resolution without fine-tuning.
-
-### Stage II: Training of Auto-Regressive Models
-
-#### 🚀 Training Scripts
-Please see in scripts/train_autogressive/run.sh for different model configurations.
-```
-bash scripts/train_autogressive/run.sh MASTER_ADDR MASTER_PORT NODE_RANK
+ckpt_path: null  # to resume
 ```
 
-#### 🚀 Sample Scripts
-Please see in scripts/train_autogressive/run.sh for different sampling hyper-parameters for different scale of models.
-```
-bash scripts/evaluation/sample_npu.sh or scripts/evaluation/sample_gpu.sh Your_Total_Rank
-```
+#### 🚀 Infer Scripts
 
-#### 🍺 Performance and Models
-| Method | Params| #Tokens | FID | IS | Checkpoint |
-|:------:|:-----:|:-------:|:---:|:--:|:----------:|
-|Open-MAGVIT2| 343M | 16 $\times$ 16 | 3.08 | 258.26 | [AR_256_B](https://huggingface.co/TencentARC/Open-MAGVIT2/blob/main/AR_256_B.ckpt)|
-|Open-MAGVIT2| 804M | 16 $\times$ 16 | 2.51 | 271.70 | [AR_256_L](https://huggingface.co/TencentARC/Open-MAGVIT2/blob/main/AR_256_L.ckpt)|
-|Open-MAGVIT2| 1.5B | 16 $\times$ 16 | 2.33 | 271.77 | [AR_256_XL](https://huggingface.co/TencentARC/Open-MAGVIT2/blob/main/AR_256_XL.ckpt)|
-
-## ❤️ Acknowledgement
-We thank [Lijun Yu](https://me.lj-y.com/) for his encouraging discussions. We refer a lot from [VQGAN](https://github.com/CompVis/taming-transformers) and [MAGVIT](https://github.com/google-research/magvit). We also refer to [LlamaGen](https://github.com/FoundationVision/LlamaGen), [VAR](https://github.com/FoundationVision/VAR) and [RQVAE](https://github.com/kakaobrain/rq-vae-transformer). Thanks for their wonderful work.
+* $256\times 256$ reconstruct 
+```
+wget https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/imagenet_256_L.pdparams
+sh scripts/inference/reconstruct.sh
+```
 
 ## ✏️ Citation
 If you found the codebase and our work helpful, please cite it and give us a star :star:.
