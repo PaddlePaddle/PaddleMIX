@@ -223,7 +223,7 @@ def main():
             )
 
     # create dataset
-    tokenizer_class = AutoTokenizer.from_pretrained(model_args.text_model_name_or_path, use_fast=False)
+    tokenizer_class = AutoTokenizer.from_pretrained(model_args.text_model_name_or_path)
     image_processor = BlipImageProcessor.from_pretrained(
         os.path.join(model_args.model_name_or_path, "processor", "train")
     )
@@ -280,7 +280,6 @@ def setdistenv(args):
     args.tensor_parallel_degree = 1 if args.tensor_parallel_degree == -1 else args.tensor_parallel_degree
     args.pipeline_parallel_degree = 1 if args.pipeline_parallel_degree == -1 else args.pipeline_parallel_degree
     args.sharding_parallel_degree = 1 if args.sharding_parallel_degree == -1 else args.sharding_parallel_degree
-
 
     if args.tensor_parallel_degree * args.sharding_parallel_degree * args.pipeline_parallel_degree != 1:
         args.use_hybrid_parallel = True

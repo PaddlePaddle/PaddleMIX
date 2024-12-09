@@ -102,9 +102,9 @@ def load_real_time_tokens():
 
 def create_tokenizer(text_model_name_or_path):
     if "opt" in text_model_name_or_path:
-        tokenizer_class = AutoTokenizer.from_pretrained(text_model_name_or_path, use_fast=False)
+        tokenizer_class = AutoTokenizer.from_pretrained(text_model_name_or_path)
     elif "t5" in text_model_name_or_path:
-        tokenizer_class = T5Tokenizer.from_pretrained(text_model_name_or_path, use_fast=False)
+        tokenizer_class = T5Tokenizer.from_pretrained(text_model_name_or_path)
     elif "llama" in text_model_name_or_path:
         tokenizer_class = LlamaTokenizer.from_pretrained(text_model_name_or_path)
         tokenizer_class.pad_token = tokenizer_class.eos_token
