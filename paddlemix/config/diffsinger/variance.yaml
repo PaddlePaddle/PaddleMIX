@@ -1,0 +1,143 @@
+base_config:
+  - configs/base.yaml
+
+task_cls: training.variance_task.VarianceTask
+num_spk: 1
+speakers:
+  - opencpop
+spk_ids: []
+test_prefixes: [
+    '2044',
+    '2086',
+    '2092',
+    '2093',
+    '2100',
+]
+
+audio_sample_rate: 44100
+hop_size: 512            # Hop size.
+fft_size: 2048           # FFT size.
+win_size: 2048           # FFT size.
+midi_smooth_width: 0.06  # in seconds
+
+binarization_args:
+  shuffle: true
+  num_workers: 0
+  prefer_ds: false
+
+raw_data_dir: 'data/opencpop_variance/raw'
+binary_data_dir: 'data/opencpop_variance/binary'
+binarizer_cls: preprocessing.variance_binarizer.VarianceBinarizer
+dictionary: dictionaries/opencpop-extension.txt
+
+use_spk_id: false
+
+rel_pos: true
+hidden_size: 256
+
+predict_dur: true
+predict_pitch: true
+predict_energy: false
+predict_breathiness: false
+predict_voicing: false
+predict_tension: false
+
+dur_prediction_args:
+  arch: fs2
+  hidden_size: 512
+  dropout: 0.1
+  num_layers: 5
+  kernel_size: 3
+  log_offset: 1.0
+  loss_type: mse
+  lambda_pdur_loss: 0.3
+  lambda_wdur_loss: 1.0
+  lambda_sdur_loss: 3.0
+
+use_melody_encoder: false
+melody_encoder_args:
+  hidden_size: 128
+  enc_layers: 4
+use_glide_embed: false
+glide_types: [up, down]
+glide_embed_scale: 11.313708498984760  # sqrt(128)
+
+pitch_prediction_args:
+  pitd_norm_min: -8.0
+  pitd_norm_max: 8.0
+  pitd_clip_min: -12.0
+  pitd_clip_max: 12.0
+  repeat_bins: 64
+  backbone_type: 'wavenet'
+  backbone_args:
+    num_layers: 20
+    num_channels: 256
+    dilation_cycle_length: 5 
+
+energy_db_min: -96.0
+energy_db_max: -12.0
+energy_smooth_width: 0.12
+
+breathiness_db_min: -96.0
+breathiness_db_max: -20.0
+breathiness_smooth_width: 0.12
+voicing_db_min: -96.0
+voicing_db_max: -12.0
+voicing_smooth_width: 0.12
+
+tension_logit_min: -10.0
+tension_logit_max: 10.0
+tension_smooth_width: 0.12
+
+variances_prediction_args:
+  total_repeat_bins: 48
+  backbone_type: 'wavenet'
+  backbone_args:
+    num_layers: 10
+    num_channels: 192
+    dilation_cycle_length: 4
+
+lambda_dur_loss: 1.0
+lambda_pitch_loss: 1.0
+lambda_var_loss: 1.0
+
+diffusion_type: reflow  # ddpm
+time_scale_factor: 1000
+schedule_type: 'linear'
+K_step: 1000
+timesteps: 1000
+max_beta: 0.02
+main_loss_type: l2
+main_loss_log_norm: true
+sampling_algorithm: euler
+sampling_steps: 20
+diff_accelerator: ddim
+diff_speedup: 10
+
+# train and eval
+num_sanity_val_steps: 1
+optimizer_args:
+  lr: 0.0006
+lr_scheduler_args:
+  step_size: 10000
+  gamma: 0.75
+max_batch_frames: 80000
+max_batch_size: 48
+dataset_size_key: 'lengths'
+val_check_interval: 2000
+num_valid_plots: 10
+max_updates: 160000
+num_ckpt_keep: 5
+permanent_ckpt_start: 80000
+permanent_ckpt_interval: 10000
+
+finetune_enabled: false
+finetune_ckpt_path: null
+finetune_ignored_params:
+  - model.spk_embed
+  - model.fs2.txt_embed
+  - model.fs2.encoder.embed_tokens
+finetune_strict_shapes: true
+
+freezing_enabled: false
+frozen_params: []

@@ -1012,9 +1012,7 @@ class ModelMixin(nn.Layer):
                     "Tensor parallel is only supported for models that inherit from `ConversionMixin`."
                 )
             if len(resolved_model_files) > 1:
-                raise NotImplementedError(
-                    "Tensor parallel is not supported for multiple shards yet."
-                )
+                raise NotImplementedError("Tensor parallel is not supported for multiple shards yet.")
             tmp_state_dict = smart_load(resolved_model_files[0], return_numpy=True)
             tensor_parallel_split_mapping = cls.get_tensor_parallel_convert_actions(config, tmp_state_dict.keys())
         else:
@@ -1051,7 +1049,7 @@ class ModelMixin(nn.Layer):
         return model
 
     @classmethod
-    def custom_modify_weight(cls, state_dict):
+    def custom_modify_weight(cls, model_to_load, state_dict):
         pass
 
     @classmethod
@@ -1134,7 +1132,7 @@ class ModelMixin(nn.Layer):
                     error_msgs.append(
                         f"Error size mismatch, {key_name} receives a shape {loaded_shape}, but the expected shape is {model_shape}."
                     )
-                cls.custom_modify_weight(state_dict)
+                cls.custom_modify_weight(model_to_load, state_dict)
                 faster_set_state_dict(model_to_load, state_dict)
 
         missing_keys = sorted(list(set(expected_keys) - set(loaded_keys)))
