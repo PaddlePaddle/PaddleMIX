@@ -576,7 +576,7 @@ class Qwen2VLAttention(nn.Layer):
             key_states = self.k_proj(hidden_states)
             value_states = self.v_proj(hidden_states)
         except:
-            hidden_states = hidden_states.astype("bfloat16")
+            hidden_states = hidden_states.astype(self.config.dtype)
             query_states = self.q_proj(hidden_states)
             key_states = self.k_proj(hidden_states)
             value_states = self.v_proj(hidden_states)
@@ -608,17 +608,18 @@ class Qwen2VLAttention(nn.Layer):
         key_states = repeat_kv(key_states, self.num_key_value_groups)
         value_states = repeat_kv(value_states, self.num_key_value_groups)
 
+        query_states = query_states.astype("float32") 
+        key_states = key_states.astype("float32")
+        value_states = value_states.astype("float32")
+        
         attn_weights = paddle.matmul(query_states, key_states.transpose([0, 1, 3, 2])) / math.sqrt(self.head_dim)
 
-        if attention_mask is not None:  # no matter the length, we just slice it
-            causal_mask = attention_mask[:, :, :, : key_states.shape[-2]]
-            attn_weights = attn_weights + causal_mask
+        if attention_mask is not None:
+            attn_weights = attn_weights + attention_mask
+        attn_weights = nn.functional.softmax(attn_weights, axis=-1, dtype="float32")
 
-        # upcast attention to fp32
-        attn_weights = nn.functional.softmax(x=attn_weights, axis=-1, dtype="float32")
-        attn_weights = nn.functional.dropout(x=attn_weights, p=self.attention_dropout, training=self.training)
-        attn_output = paddle.matmul(attn_weights.cast("bfloat16"), value_states.cast("bfloat16"))  # TODO: hard code
-
+        attn_output = paddle.matmul(attn_weights.cast(self.config.dtype), value_states.cast(self.config.dtype))
+        
         if attn_output.shape != [bsz, self.num_heads, q_len, self.head_dim]:
             raise ValueError(
                 f"`attn_output` should be of size {(bsz, q_len, self.num_heads, self.head_dim)}, but is"
@@ -868,8 +869,7 @@ class Qwen2VLDecoderLayer(nn.Layer):
         residual = hidden_states
 
         hidden_states = self.input_layernorm(hidden_states)
-
-        # Self Attention
+        
         hidden_states, self_attn_weights, present_key_value = self.self_attn(
             hidden_states=hidden_states,
             attention_mask=attention_mask,

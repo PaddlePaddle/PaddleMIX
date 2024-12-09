@@ -22,6 +22,7 @@ if is_paddle_available():
     _import_structure["adapter"] = ["MultiAdapter", "T2IAdapter"]
     _import_structure["autoencoder_asym_kl"] = ["AsymmetricAutoencoderKL"]
     _import_structure["autoencoder_kl"] = ["AutoencoderKL"]
+    _import_structure["autoencoder_kl_cogvideox"] = ["AutoencoderKLCogVideoX"]
     _import_structure["autoencoder_kl_temporal_decoder"] = ["AutoencoderKLTemporalDecoder"]
     _import_structure["autoencoder_tiny"] = ["AutoencoderTiny"]
     _import_structure["consistency_decoder_vae"] = ["ConsistencyDecoderVAE"]
@@ -32,6 +33,7 @@ if is_paddle_available():
     _import_structure["t5_film_transformer"] = ["T5FilmDecoder"]
     _import_structure["transformer_2d"] = ["Transformer2DModel"]
     _import_structure["transformer_sd3"] = ["SD3Transformer2DModel"]
+    _import_structure["cogvideox_transformer_3d"] = ["CogVideoXTransformer3DModel"]
     _import_structure["transformer_temporal"] = ["TransformerTemporalModel"]
     _import_structure["unet_1d"] = ["UNet1DModel"]
     _import_structure["unet_2d"] = ["UNet2DModel"]
@@ -55,6 +57,8 @@ if is_paddle_available():
     _import_structure["modelscope_gaussion_sdedit"] = ["GaussianDiffusion_SDEdit"]
     _import_structure["modelscope_st_unet"] = ["STUNetModel"]
     _import_structure["modelscope_st_unet_video2video"] = ["Vid2VidSTUNet"]
+    # NOTE, new add
+    _import_structure["controlnet_sd3"] = ["SD3ControlNetModel", 'SD3MultiControlNetModel']
 
 
 if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
@@ -62,6 +66,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         from .adapter import MultiAdapter, T2IAdapter
         from .autoencoder_asym_kl import AsymmetricAutoencoderKL
         from .autoencoder_kl import AutoencoderKL
+        from .autoencoder_kl_cogvideox import AutoencoderKLCogVideoX
         from .autoencoder_kl_temporal_decoder import AutoencoderKLTemporalDecoder
         from .autoencoder_tiny import AutoencoderTiny
         from .consistency_decoder_vae import ConsistencyDecoderVAE
@@ -85,6 +90,9 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         from .t5_film_transformer import T5FilmDecoder
         from .transformer_2d import Transformer2DModel
         from .transformer_sd3 import SD3Transformer2DModel
+        from .cogvideox_transformer_3d import CogVideoXTransformer3DModel
+        from .controlnet_sd3 import SD3ControlNetModel
+        from .controlnet_sd3 import SD3MultiControlNetModel
         from .transformer_temporal import TransformerTemporalModel
         from .unet_1d import UNet1DModel
         from .unet_2d import UNet2DModel

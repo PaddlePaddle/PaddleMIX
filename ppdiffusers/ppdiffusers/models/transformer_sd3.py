@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import os
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import paddle
 import paddle.nn as nn
@@ -39,6 +39,8 @@ from .simplified_sd3 import SimplifiedSD3
 from .transformer_2d import Transformer2DModelOutput
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
+
+import paddle.distributed.fleet as fleet
 
 
 class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, FromOriginalModelMixin
@@ -95,6 +97,21 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
         self.context_embedder = nn.Linear(self.config.joint_attention_dim, self.config.caption_projection_dim)
 
         self.inference_optimize = os.getenv("INFERENCE_OPTIMIZE") == "True"
+        self.inference_mp_size = int(os.getenv("INFERENCE_MP_SIZE", 1))
+        self.inference_dp_size = int(os.getenv("INFERENCE_DP_SIZE", 1))
+        self.mp_id = 0
+        self.dp_id = 0
+        if self.inference_mp_size > 1 or self.inference_dp_size > 1:
+            assert self.inference_dp_size in [1, 2]
+            hcg = fleet.get_hybrid_communicate_group()
+            self.mp_id = hcg.get_model_parallel_rank()
+            self.dp_id = hcg.get_data_parallel_rank()
+
+            mp_degree = hcg.get_model_parallel_world_size()
+            dp_degree = hcg.get_data_parallel_world_size()
+            assert mp_degree == self.inference_mp_size
+            assert dp_degree == self.inference_dp_size
+
         # `attention_head_dim` is doubled to account for the mixing.
         # It needs to crafted when we get the actual checkpoints.
         self.transformer_blocks = nn.LayerList(
@@ -116,6 +133,7 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
                 dim=self.inner_dim,
                 num_attention_heads=self.config.num_attention_heads,
                 attention_head_dim=self.inner_dim,
+                mp_degree=self.inference_mp_size,
             )
 
         self.norm_out = AdaLayerNormContinuous(self.inner_dim, self.inner_dim, elementwise_affine=False, eps=1e-6)
@@ -249,8 +267,9 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
         hidden_states,
         encoder_hidden_states,
         temb,
+        block_controlnet_hidden_states: List = None,
     ):
-        for block in self.transformer_blocks:
+        for index_block, block in enumerate(self.transformer_blocks):
             if self.training and self.gradient_checkpointing and not use_old_recompute():
 
                 def create_custom_forward(module, return_dict=None):
@@ -274,6 +293,11 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
                 encoder_hidden_states, hidden_states = block(
                     hidden_states=hidden_states, encoder_hidden_states=encoder_hidden_states, temb=temb
                 )
+            
+            # controlnet residual
+            if block_controlnet_hidden_states is not None and block.context_pre_only is False:
+                interval_control = len(self.transformer_blocks) // len(block_controlnet_hidden_states)
+                hidden_states = hidden_states + block_controlnet_hidden_states[index_block // interval_control]
         return encoder_hidden_states, hidden_states
 
     def forward(
@@ -282,6 +306,7 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
         encoder_hidden_states: paddle.Tensor = None,
         pooled_projections: paddle.Tensor = None,
         timestep: paddle.Tensor = None,
+        block_controlnet_hidden_states: List = None,
         joint_attention_kwargs: Optional[Dict[str, Any]] = None,
         return_dict: bool = True,
     ) -> Union[paddle.Tensor, Transformer2DModelOutput]:
@@ -296,6 +321,8 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
                 from the embeddings of input conditions.
             timestep ( `paddle.Tensor`):
                 Used to indicate denoising step.
+            block_controlnet_hidden_states: (`list` of `paddle.Tensor`):
+                A list of tensors that if specified are added to the residuals of transformer blocks.
             joint_attention_kwargs (`dict`, *optional*):
                 A kwargs dictionary that if specified is passed along to the `AttentionProcessor` as defined under
                 `self.processor` in
@@ -335,7 +362,7 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
             encoder_hidden_states = None
         else:
             encoder_hidden_states, hidden_states = self.sd3_origin_transformer(
-                hidden_states=hidden_states, encoder_hidden_states=encoder_hidden_states, temb=temb
+                hidden_states=hidden_states, encoder_hidden_states=encoder_hidden_states, temb=temb, block_controlnet_hidden_states=block_controlnet_hidden_states
             )
 
         hidden_states = self.norm_out(hidden_states, temb)
@@ -365,9 +392,9 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
         return Transformer2DModelOutput(sample=output)
 
     @classmethod
-    def custom_modify_weight(cls, state_dict):
+    def custom_modify_weight(cls, model_to_load, state_dict):
 
-        if os.getenv("INFERENCE_OPTIMIZE") != "True":
+        if not model_to_load.inference_optimize:
             return
 
         # NOTE:(changwenbin,zhoukangkang) SD3 num_layers is 24
@@ -425,3 +452,40 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
                         ],
                         axis=-1,
                     )
+
+            mp_degree = model_to_load.inference_mp_size
+            mp_id = model_to_load.mp_id
+
+            if mp_degree > 1:
+                if i < 23:
+                    tmp = paddle.split(state_dict[f"simplified_sd3.to_add_out_linear.{i}.weight"], mp_degree, axis=0)
+                    state_dict[f"simplified_sd3.to_add_out_linear_mp.{i}.weight"] = tmp[mp_id]
+                    state_dict[f"simplified_sd3.to_add_out_linear_mp.{i}.bias"] = state_dict[
+                        f"simplified_sd3.to_add_out_linear.{i}.bias"
+                    ]
+                    tmp = paddle.split(state_dict[f"simplified_sd3.ffn2_context.{i}.weight"], mp_degree, axis=0)
+                    state_dict[f"simplified_sd3.ffn2_context_mp.{i}.weight"] = tmp[mp_id]
+                    state_dict[f"simplified_sd3.ffn2_context_mp.{i}.bias"] = state_dict[
+                        f"simplified_sd3.ffn2_context.{i}.bias"
+                    ]
+                    for placeholder in ["weight", "bias"]:
+                        tmp = paddle.split(
+                            state_dict[f"simplified_sd3.ffn1_context.{i}.{placeholder}"], mp_degree, axis=-1
+                        )
+                        state_dict[f"simplified_sd3.ffn1_context_mp.{i}.{placeholder}"] = tmp[mp_id]
+                for placeholder in ["weight", "bias"]:
+                    tmp = paddle.split(state_dict[f"simplified_sd3.ffn1.{i}.{placeholder}"], mp_degree, axis=-1)
+                    state_dict[f"simplified_sd3.ffn1_mp.{i}.{placeholder}"] = tmp[mp_id]
+                    for placeholder1 in ["", "e"]:
+                        tmp = paddle.split(
+                            state_dict[f"simplified_sd3.{placeholder1}qkv.{i}.{placeholder}"], 3 * mp_degree, axis=-1
+                        )
+                        state_dict[f"simplified_sd3.{placeholder1}qkv_mp.{i}.{placeholder}"] = paddle.concat(
+                            [tmp[mp_id], tmp[1 * mp_degree + mp_id], tmp[2 * mp_degree + mp_id]], axis=-1
+                        )
+                for mp_name in ["ffn2", "to_out_linear"]:
+                    tmp = paddle.split(state_dict[f"simplified_sd3.{mp_name}.{i}.weight"], mp_degree, axis=0)
+                    state_dict[f"simplified_sd3.{mp_name}_mp.{i}.weight"] = tmp[mp_id]
+                    state_dict[f"simplified_sd3.{mp_name}_mp.{i}.bias"] = state_dict[
+                        f"simplified_sd3.{mp_name}.{i}.bias"
+                    ]

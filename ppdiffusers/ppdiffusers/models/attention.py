@@ -641,20 +641,23 @@ class FeedForward(nn.Layer):
         dropout: float = 0.0,
         activation_fn: str = "geglu",
         final_dropout: bool = False,
+        inner_dim=None,
+        bias: bool = True,
     ):
         super().__init__()
-        inner_dim = int(dim * mult)
+        if inner_dim is None:
+            inner_dim = int(dim * mult)
         dim_out = dim_out if dim_out is not None else dim
         linear_cls = LoRACompatibleLinear if not USE_PEFT_BACKEND else nn.Linear
 
         if activation_fn == "gelu":
-            act_fn = GELU(dim, inner_dim)
+            act_fn = GELU(dim, inner_dim, bias=bias)
         if activation_fn == "gelu-approximate":
-            act_fn = GELU(dim, inner_dim, approximate="tanh")
+            act_fn = GELU(dim, inner_dim, approximate="tanh", bias=bias)
         elif activation_fn == "geglu":
-            act_fn = GEGLU(dim, inner_dim)
+            act_fn = GEGLU(dim, inner_dim, bias=bias)
         elif activation_fn == "geglu-approximate":
-            act_fn = ApproximateGELU(dim, inner_dim)
+            act_fn = ApproximateGELU(dim, inner_dim, bias=bias)
 
         self.net = nn.LayerList([])
         # project in
@@ -662,7 +665,7 @@ class FeedForward(nn.Layer):
         # project dropout
         self.net.append(nn.Dropout(dropout))
         # project out
-        self.net.append(linear_cls(inner_dim, dim_out))
+        self.net.append(linear_cls(inner_dim, dim_out, bias_attr=bias))
         # FF as used in Vision Transformer, MLP-Mixer, etc. have a final dropout
         if final_dropout:
             self.net.append(nn.Dropout(dropout))

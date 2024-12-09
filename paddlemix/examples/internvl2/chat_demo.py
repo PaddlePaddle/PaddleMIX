@@ -29,6 +29,50 @@ IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD = (0.229, 0.224, 0.225)
 
 
+
+def check_dtype_compatibility():
+    """
+    检查当前环境下可用的数据类型
+    返回最优的可用数据类型
+    """
+    if not paddle.is_compiled_with_cuda():
+        print("CUDA not available, falling back to float32")
+        return paddle.float32
+
+    # 获取GPU计算能力
+    gpu_arch = paddle.device.cuda.get_device_capability()
+    if gpu_arch is None:
+        print("Unable to determine GPU architecture, falling back to float32")
+        return paddle.float32
+    
+    major, minor = gpu_arch
+    compute_capability = major + minor/10
+    print(f"GPU compute capability: {compute_capability}")
+    
+    try:
+        # 测试bfloat16兼容性
+        if compute_capability >= 8.0:  # Ampere及更新架构
+            test_tensor = paddle.zeros([2, 2], dtype='bfloat16')
+            test_op = paddle.matmul(test_tensor, test_tensor)
+            print("bfloat16 is supported and working")
+            return paddle.bfloat16
+    except Exception as e:
+        print(f"bfloat16 test failed: {str(e)}")
+
+    try:
+        # 测试float16兼容性
+        if compute_capability >= 5.3:  # Maxwell及更新架构
+            test_tensor = paddle.zeros([2, 2], dtype='float16')
+            test_op = paddle.matmul(test_tensor, test_tensor)
+            print("float16 is supported and working")
+            return paddle.float16
+    except Exception as e:
+        print(f"float16 test failed: {str(e)}")
+
+    print("Falling back to float32 due to compatibility issues")
+    return paddle.float32
+
+
 def build_transform(input_size):
     MEAN, STD = IMAGENET_MEAN, IMAGENET_STD
     transform = T.Compose(
@@ -76,7 +120,7 @@ def load_tokenizer(model_path):
 
 def main(args):
     if args.image_path is not None and args.image_path != "None":
-        pixel_values = load_image(args.image_path, max_num=12).to(paddle.bfloat16)
+        pixel_values = load_image(args.image_path, max_num=12).to(args.dtype)
         args.text = "<image>\n" + args.text
 
     else:
@@ -90,7 +134,7 @@ def main(args):
     print("tokenizer:\n", tokenizer)
     print("len(tokenizer): ", len(tokenizer))
 
-    model = InternVLChatModel.from_pretrained(MODEL_PATH).eval()
+    model = InternVLChatModel.from_pretrained(MODEL_PATH, dtype=args.dtype).eval()
 
     generation_config = dict(max_new_tokens=1024, do_sample=False)
 
@@ -111,5 +155,41 @@ if __name__ == "__main__":
     )
     parser.add_argument("--image_path", type=str, default=None)
     parser.add_argument("--text", type=str, default="Please describe the image shortly.", required=True)
+    parser.add_argument(
+        "--dtype",
+        type=str,
+        default="float16",
+        choices=["float32", "bfloat16", "float16"],
+        help="Model dtype"
+    )
     args = parser.parse_args()
+
+    if args.dtype == "bfloat16":
+        args.dtype = paddle.bfloat16
+    elif args.dtype == "float16":
+        args.dtype = paddle.float16
+    else:
+        args.dtype = paddle.float32
+        
+
+    # 检查环境支持的dtype并设置
+    available_dtype = check_dtype_compatibility()
+    
+    # 如果用户指定了dtype，尝试使用用户指定的类型
+    if args.dtype == "bfloat16":
+        desired_dtype = paddle.bfloat16
+    elif args.dtype == "float16":
+        desired_dtype = paddle.float16
+    else:
+        desired_dtype = paddle.float32
+
+    # 如果用户指定的dtype不可用，使用检测到的可用dtype
+    if desired_dtype != available_dtype:
+        print(f"Warning: Requested dtype {args.dtype} is not available, using {available_dtype}")
+        args.dtype = available_dtype
+    else:
+        args.dtype = desired_dtype
+
+    print(f"Using dtype: {args.dtype}")
+        
     main(args)

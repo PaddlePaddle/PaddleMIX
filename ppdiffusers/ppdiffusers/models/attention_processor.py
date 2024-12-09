@@ -91,6 +91,7 @@ class Attention(nn.Layer):
         upcast_softmax: bool = False,
         cross_attention_norm: Optional[str] = None,
         cross_attention_norm_num_groups: int = 32,
+        qk_norm: Optional[str] = None,
         added_kv_proj_dim: Optional[int] = None,
         norm_num_groups: Optional[int] = None,
         spatial_norm_dim: Optional[int] = None,
@@ -148,6 +149,15 @@ class Attention(nn.Layer):
             self.spatial_norm = SpatialNorm(f_channels=query_dim, zq_channels=spatial_norm_dim)
         else:
             self.spatial_norm = None
+
+        if qk_norm is None:
+            self.norm_q = None
+            self.norm_k = None
+        elif qk_norm == "layer_norm":
+            self.norm_q = nn.LayerNorm(dim_head, epsilon=eps)
+            self.norm_k = nn.LayerNorm(dim_head, epsilon=eps)
+        else:
+            raise ValueError(f"unknown qk_norm: {qk_norm}. Should be None or 'layer_norm'")
 
         if cross_attention_norm is None:
             self.norm_cross = None
@@ -362,7 +372,7 @@ class Attention(nn.Layer):
         if not USE_PEFT_BACKEND and hasattr(self, "processor") and _remove_lora and self.to_q.lora_layer is not None:
             deprecate(
                 "set_processor to offload LoRA",
-                "0.26.0",
+                "0.45.0",
                 "In detail, removing LoRA layers via calling `set_default_attn_processor` is deprecated. Please make sure to call `pipe.unload_lora_weights()` instead.",
             )
             # TODO(Patrick, Sayak) - this can be deprecated once PEFT LoRA integration is complete
@@ -1635,7 +1645,7 @@ class LoRAAttnProcessor(nn.Layer):
         self_cls_name = self.__class__.__name__
         deprecate(
             self_cls_name,
-            "0.26.0",
+            "0.45.0",
             (
                 f"Make sure use {self_cls_name[4:]} instead by setting"
                 "LoRA layers to `self.{to_q,to_k,to_v,to_out[0]}.lora_layer` respectively. This will be done automatically when using"
@@ -1714,7 +1724,7 @@ class LoRAXFormersAttnProcessor(nn.Layer):
         self_cls_name = self.__class__.__name__
         deprecate(
             self_cls_name,
-            "0.26.0",
+            "0.45.0",
             (
                 f"Make sure use {self_cls_name[4:]} instead by setting"
                 "LoRA layers to `self.{to_q,to_k,to_v,add_k_proj,add_v_proj,to_out[0]}.lora_layer` respectively. This will be done automatically when using"
@@ -1773,7 +1783,7 @@ class LoRAAttnAddedKVProcessor(nn.Layer):
         self_cls_name = self.__class__.__name__
         deprecate(
             self_cls_name,
-            "0.26.0",
+            "0.45.0",
             (
                 f"Make sure use {self_cls_name[4:]} instead by setting"
                 "LoRA layers to `self.{to_q,to_k,to_v,add_k_proj,add_v_proj,to_out[0]}.lora_layer` respectively. This will be done automatically when using"
@@ -2089,6 +2099,156 @@ class Kandi3AttnProcessor:
         out = out.transpose([0, 2, 1, 3]).reshape([out.shape[0], out.shape[2], -1])
         out = attn.to_out[0](out)
         return out
+
+
+class CogVideoXAttnProcessor2_0:
+    r"""
+    Processor for implementing scaled dot-product attention for the CogVideoX model. It applies a rotary embedding on
+    query and key vectors, but does not include spatial normalization.
+    """
+
+    def __init__(self):
+        if not hasattr(F, "scaled_dot_product_attention"):
+            raise ImportError("CogVideoXAttnProcessor requires PyTorch 2.0, to use it, please upgrade PyTorch to 2.0.")
+
+    def __call__(
+        self,
+        attn: Attention,
+        hidden_states: paddle.Tensor,
+        encoder_hidden_states: paddle.Tensor,
+        attention_mask: Optional[paddle.Tensor] = None,
+        image_rotary_emb: Optional[paddle.Tensor] = None,
+    ) -> paddle.Tensor:
+        text_seq_length = encoder_hidden_states.shape[1]
+
+        hidden_states = paddle.concat([encoder_hidden_states, hidden_states], axis=1)
+
+        batch_size, sequence_length, _ = (
+            hidden_states.shape if encoder_hidden_states is None else encoder_hidden_states.shape
+        )
+
+        if attention_mask is not None:
+            attention_mask = attn.prepare_attention_mask(attention_mask, sequence_length, batch_size)
+            attention_mask = attention_mask.reshape([batch_size, attn.heads, -1, attention_mask.shape[-1]])
+
+        query = attn.to_q(hidden_states)
+        key = attn.to_k(hidden_states)
+        value = attn.to_v(hidden_states)
+
+        inner_dim = key.shape[-1]
+        head_dim = inner_dim // attn.heads
+
+        query = query.reshape([batch_size, -1, attn.heads, head_dim]).transpose([0, 2, 1, 3])
+        key = key.reshape([batch_size, -1, attn.heads, head_dim]).transpose([0, 2, 1, 3])
+        value = value.reshape([batch_size, -1, attn.heads, head_dim]).transpose([0, 2, 1, 3])
+
+        if attn.norm_q is not None:
+            query = attn.norm_q(query)
+        if attn.norm_k is not None:
+            key = attn.norm_k(key)
+
+        # Apply RoPE if needed
+        if image_rotary_emb is not None:
+            from .embeddings import apply_rotary_emb
+
+            query[:, :, text_seq_length:] = apply_rotary_emb(query[:, :, text_seq_length:], image_rotary_emb)
+            if not attn.is_cross_attention:
+                key[:, :, text_seq_length:] = apply_rotary_emb(key[:, :, text_seq_length:], image_rotary_emb)
+
+        # NOTE: There is diff between paddle's and torch's sdpa
+        # paddle needs input: [batch_size, seq_len, num_heads, head_dim]
+        # torch needs input: [batch_size, num_heads, seq_len, head_dim]
+        hidden_states = F.scaled_dot_product_attention(
+            query.transpose([0, 2, 1, 3]), 
+            key.transpose([0, 2, 1, 3]), 
+            value.transpose([0, 2, 1, 3]), 
+            attn_mask=attention_mask, 
+            dropout_p=0.0, 
+            is_causal=False
+        )
+
+        hidden_states = hidden_states.reshape([batch_size, -1, attn.heads * head_dim])
+
+        # linear proj
+        hidden_states = attn.to_out[0](hidden_states)
+        # dropout
+        hidden_states = attn.to_out[1](hidden_states)
+
+        encoder_hidden_states, hidden_states = hidden_states.split(
+            [text_seq_length, hidden_states.shape[1] - text_seq_length], axis=1
+        )
+        return hidden_states, encoder_hidden_states
+
+
+class FusedCogVideoXAttnProcessor2_0:
+    r"""
+    Processor for implementing scaled dot-product attention for the CogVideoX model. It applies a rotary embedding on
+    query and key vectors, but does not include spatial normalization.
+    """
+
+    def __init__(self):
+        if not hasattr(F, "scaled_dot_product_attention"):
+            raise ImportError("CogVideoXAttnProcessor requires PyTorch 2.0, to use it, please upgrade PyTorch to 2.0.")
+
+    def __call__(
+        self,
+        attn: Attention,
+        hidden_states: paddle.Tensor,
+        encoder_hidden_states: paddle.Tensor,
+        attention_mask: Optional[paddle.Tensor] = None,
+        image_rotary_emb: Optional[paddle.Tensor] = None,
+    ) -> paddle.Tensor:
+        text_seq_length = encoder_hidden_states.shape[1]
+
+        hidden_states = paddle.concat([encoder_hidden_states, hidden_states], axis=1)
+
+        batch_size, sequence_length, _ = (
+            hidden_states.shape if encoder_hidden_states is None else encoder_hidden_states.shape
+        )
+
+        if attention_mask is not None:
+            attention_mask = attn.prepare_attention_mask(attention_mask, sequence_length, batch_size)
+            attention_mask = attention_mask.reshape([batch_size, attn.heads, -1, attention_mask.shape[-1]])
+
+        qkv = attn.to_qkv(hidden_states)
+        split_size = qkv.shape[-1] // 3
+        query, key, value = paddle.split(qkv, split_size, axis=-1)
+
+        inner_dim = key.shape[-1]
+        head_dim = inner_dim // attn.heads
+
+        query = query.reshape([batch_size, -1, attn.heads, head_dim]).premute([0, 2, 1, 3])
+        key = key.reshape([batch_size, -1, attn.heads, head_dim]).premute([0, 2, 1, 3])
+        value = value.reshape([batch_size, -1, attn.heads, head_dim]).premute([0, 2, 1, 3])
+
+        if attn.norm_q is not None:
+            query = attn.norm_q(query)
+        if attn.norm_k is not None:
+            key = attn.norm_k(key)
+
+        # Apply RoPE if needed
+        if image_rotary_emb is not None:
+            from .embeddings import apply_rotary_emb
+
+            query[:, :, text_seq_length:] = apply_rotary_emb(query[:, :, text_seq_length:], image_rotary_emb)
+            if not attn.is_cross_attention:
+                key[:, :, text_seq_length:] = apply_rotary_emb(key[:, :, text_seq_length:], image_rotary_emb)
+
+        hidden_states = F.scaled_dot_product_attention(
+            query, key, value, attn_mask=attention_mask, dropout_p=0.0, is_causal=False
+        )
+
+        hidden_states = hidden_states.premute([0, 2, 1, 3]).reshape([batch_size, -1, attn.heads * head_dim])
+
+        # linear proj
+        hidden_states = attn.to_out[0](hidden_states)
+        # dropout
+        hidden_states = attn.to_out[1](hidden_states)
+
+        encoder_hidden_states, hidden_states = hidden_states.split(
+            [text_seq_length, hidden_states.shape[1] - text_seq_length], axis=1
+        )
+        return hidden_states, encoder_hidden_states
 
 
 LoRAAttnProcessor2_5 = LoRAXFormersAttnProcessor

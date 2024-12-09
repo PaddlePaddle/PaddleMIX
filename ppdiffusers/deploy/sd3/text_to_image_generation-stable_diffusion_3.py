@@ -11,9 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import os
 import argparse
+import os
+
 import paddle
+
+
 def parse_args():
     parser = argparse.ArgumentParser(
         description=" Use PaddleMIX to accelerate the Stable Diffusion3 image generation model."
@@ -30,16 +33,17 @@ def parse_args():
         default=False,
         help="If set to True, all optimizations except Triton are enabled.",
     )
-    parser.add_argument(
-        "--inference_optimize_bp",
-        type=(lambda x: str(x).lower() in ["true", "1", "yes"]),
-        default=False,
-        help="If set to True, batch parallel is enabled in DIT and dual-GPU acceleration is used.",
-    )
+
     parser.add_argument("--height", type=int, default=512, help="Height of the generated image.")
     parser.add_argument("--width", type=int, default=512, help="Width of the generated image.")
     parser.add_argument("--num-inference-steps", type=int, default=50, help="Number of inference steps.")
     parser.add_argument("--dtype", type=str, default="float32", help="Inference data types.")
+    parser.add_argument(
+        "--mp_size", type=int, default=1, help="This size refers to the degree of parallelism using model parallel."
+    )
+    parser.add_argument(
+        "--dp_size", type=int, default=1, help="This size refers to the degree of parallelism using data parallel."
+    )
 
     return parser.parse_args()
 
@@ -49,37 +53,38 @@ args = parse_args()
 if args.inference_optimize:
     os.environ["INFERENCE_OPTIMIZE"] = "True"
     os.environ["INFERENCE_OPTIMIZE_TRITON"] = "True"
-if args.inference_optimize_bp:
-    os.environ["INFERENCE_OPTIMIZE_BP"] = "True"
+    os.environ["INFERENCE_MP_SIZE"] = str(args.mp_size)
+    os.environ["INFERENCE_DP_SIZE"] = str(args.dp_size)
 if args.dtype == "float32":
     inference_dtype = paddle.float32
 elif args.dtype == "float16":
     inference_dtype = paddle.float16
 
 
-if args.inference_optimize_bp:
-    from paddle.distributed import fleet
-    from paddle.distributed.fleet.utils import recompute
-    import numpy as np
-    import random
-    import paddle.distributed as dist
-    import paddle.distributed.fleet as fleet
+import paddle.distributed as dist
+import paddle.distributed.fleet as fleet
+
+if args.mp_size > 1 or args.dp_size > 1:
     strategy = fleet.DistributedStrategy()
-    model_parallel_size = 2
-    data_parallel_size = 1
-    strategy.hybrid_configs = {
-    "dp_degree": data_parallel_size,
-    "mp_degree": model_parallel_size,
-    "pp_degree": 1
-    }
+    model_parallel_size = args.mp_size
+    data_parallel_size = args.dp_size
+    strategy.hybrid_configs = {"dp_degree": data_parallel_size, "mp_degree": model_parallel_size, "pp_degree": 1}
     fleet.init(is_collective=True, strategy=strategy)
     hcg = fleet.get_hybrid_communicate_group()
     mp_id = hcg.get_model_parallel_rank()
+    dp_id = hcg.get_data_parallel_rank()
     rank_id = dist.get_rank()
+    mp_degree = hcg.get_model_parallel_world_size()
+    dp_degree = hcg.get_data_parallel_world_size()
+    assert mp_degree == args.mp_size
+    assert dp_degree == args.dp_size
+
+    # this is for triton kernel cache for dynamic graph
+    # os.environ["TRITON_KERNEL_CACHE_DIR"] = f"./tmp/sd3_parallel/{rank_id}"
 
 import datetime
-from ppdiffusers import StableDiffusion3Pipeline
 
+from ppdiffusers import StableDiffusion3Pipeline
 
 pipe = StableDiffusion3Pipeline.from_pretrained(
     "stabilityai/stable-diffusion-3-medium-diffusers",
@@ -91,7 +96,6 @@ pipe.transformer = paddle.incubate.jit.inference(
     save_model_dir="./tmp/sd3",
     enable_new_ir=True,
     cache_static_model=True,
-    # V100环境下，需设置exp_enable_use_cutlass=False,
     exp_enable_use_cutlass=True,
     delete_pass_lists=["add_norm_fuse_pass"],
 )
@@ -135,11 +139,11 @@ if args.benchmark:
         print("SD3 end to end time : ", duringtime, "ms")
 
     print("SD3 ave end to end time : ", sumtime / repeat_times, "ms")
+
     cuda_mem_after_used = paddle.device.cuda.max_memory_allocated() / (1024**3)
     print(f"Max used CUDA memory : {cuda_mem_after_used:.3f} GiB")
 
-if args.inference_optimize_bp:
-    if rank_id == 0:
-        image.save("text_to_image_generation-stable_diffusion_3-result.png")
-else:
+
+rank_id = dist.get_rank()
+if rank_id == 0:
     image.save("text_to_image_generation-stable_diffusion_3-result.png")

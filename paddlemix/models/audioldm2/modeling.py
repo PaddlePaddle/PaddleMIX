@@ -64,6 +64,7 @@ class AudioLDM2Model(AudioLDM2PretrainedModel):
         ], 'currently only supporting "eps" and "x0" and "v"'
         self.parameterization = config.parameterization
         self.device_name = config.device
+
         self.clip_denoised = False
         self.log_every_t = config.log_every_t
         self.first_stage_key = config.first_stage_key
@@ -524,7 +525,7 @@ class AudioLDM2Model(AudioLDM2PretrainedModel):
 
         intermediate = None
         if ddim and not use_plms:
-            ddim_sampler = DDIMSampler(self, device=self.device)
+            ddim_sampler = DDIMSampler(self, device=self.device_name)
             samples, intermediates = ddim_sampler.sample(
                 ddim_steps,
                 batch_size,
