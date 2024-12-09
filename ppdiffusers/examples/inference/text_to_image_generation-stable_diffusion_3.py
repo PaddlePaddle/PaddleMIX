@@ -13,7 +13,9 @@
 # limitations under the License.
 
 import paddle
+
 from ppdiffusers import StableDiffusion3Pipeline
+
 pipe = StableDiffusion3Pipeline.from_pretrained(
     "stabilityai/stable-diffusion-3-medium-diffusers", paddle_dtype=paddle.float16
 )

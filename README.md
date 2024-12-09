@@ -204,7 +204,7 @@ python setup.py install
 
 **快速开始**
 - [多模态理解：新手入门体验 [示例：InternVL2模型]](paddlemix/examples/internvl2/README.md)
-- [多模态生成：零基础上手指南 [示例：Stable Diffusion模型]](ppdiffusers/examples/inference/README.md)
+- [多模态生成：零基础上手指南 [示例：Stable Diffusion模型]](ppdiffusers/examples/stable_diffusion/README.md)
 - [跨模态任务流水线：快速开始](applications/README.md/#快速开始)
 
 **实操演练&范例**
