@@ -34,17 +34,24 @@
 
 
 ## 📰新闻
-**🔥2024.10.31日 PaddleMIX 2.1版本发新直播**
+**🔥2024.11.21日 - 2024.12.22日  PaddleMIX开发项目挑战**
 
-- 🎉飞桨多模态大模型套件PaddleMIX全新发布2.1版本！百度研发工程师已在 10月31日（周四）20：00，为大家详细解读了套件更新内容，以及多模态数据能力标签模型 PP-InsCapTagger 的实现细节和案例应用。
+- ✨「体验官招募」PaddleMIX开发项目挑战
+点击链接报名🔗：https://aistudio.baidu.com/activitydetail/1503019366
+🏆投稿至飞桨星河社区项目大厅，加精获得PaddleMIX体验官认证证书及京东卡激励
+欢迎大家投稿～
+<p align="center">
+<img src='https://github.com/user-attachments/assets/27e0bbe3-0ff8-49ef-bd39-81a31a2b288b'  width="25%">
+</p>
 
-</div>
 
 ## 📣最新进展
 
 <!-- 📚《飞桨多模态大模型开发套件PaddleMIX 2.1 震撼发布》，图文音视频场景全覆盖，多模态高效助力产业创新。超大规模训练支持，覆盖图文预训练、文生图、跨模态视觉任务，覆盖金融、教育、电商、医疗等产业场景。8月8日（周四）20：00 带你直播了解多模态大模型最新架构，深度解析PaddleMIX高性能模型库，手把手演示LLaVA模型训推全流程。[报名链接](https://www.wjx.top/vm/wKqysjx.aspx?udsid=449688)   -->
 
-**🎉 2024.11.8 支持[MiniCPM-V-2_6](./paddlemix/examples/minicpm-v-2_6)推理**
+**🎉 2024.11.27 支持[Janus/JanusFlow](./paddlemix/examples/janus)推理**
+
+**🎉 2024.11.21 支持[MiniCPM-V-2_6](./paddlemix/examples/minicpm-v-2_6)推理**
 
 **🎉 2024.11.8 支持[DenseConnector](./paddlemix/examples/llava_denseconnector)和[Aquila-VL-2B-llava-qwen](./paddlemix/examples/llava_onevision/)推理**
 
@@ -167,32 +174,7 @@ sh build_paddle_env.sh
 #### 方法 2: 手动安装
 关于PaddlePaddle安装的详细教程请查看[Installation](https://www.paddlepaddle.org.cn/install/quick?docurl=/documentation/docs/zh/develop/install/pip/linux-pip.html)。
 
-### 4. 昇腾环境安装（可选）
-
-当前 PaddleMIX 支持昇腾 910B 芯片（更多型号还在支持中，如果您有其他型号的相关需求，请提交issue告知我们），昇腾驱动版本为 23.0.3。考虑到环境差异性，我们推荐使用飞桨官方提供的标准镜像完成环境准备。
-
-* 参考如下命令启动容器，ASCEND_RT_VISIBLE_DEVICES 指定可见的 NPU 卡号
-
-```shell
-docker run -it --name paddle-npu-dev -v $(pwd):/work \
-    --privileged --network=host --shm-size=128G -w=/work \
-    -v /usr/local/Ascend/driver:/usr/local/Ascend/driver \
-    -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi \
-    -v /usr/local/dcmi:/usr/local/dcmi \
-    -e ASCEND_RT_VISIBLE_DEVICES="0,1,2,3,4,5,6,7" \
-    registry.baidubce.com/device/paddle-npu:cann80T13-ubuntu20-$(uname -m)-gcc84-py39 /bin/bash
-```
-
-* 在容器内安装飞桨
-
-```shell
-# 注意需要先安装飞桨 cpu 版本，目前仅支持python3.9版本
-python -m pip install --pre paddlepaddle -i https://www.paddlepaddle.org.cn/packages/nightly/cpu/
-python -m pip install --pre paddle-custom-npu -i https://www.paddlepaddle.org.cn/packages/nightly/npu/
-```
-
-
-### 5. 安装依赖
+### 4. 安装依赖
 
 #### 方法 1: 一键安装（推荐）
 
@@ -201,15 +183,29 @@ python -m pip install --pre paddle-custom-npu -i https://www.paddlepaddle.org.cn
 sh build_env.sh
 ```
 
-#### 方法 2: 手动安装（请参考 build_env.sh）
-
+#### 方法 2: 手动安装
+```bash
+# 安装 PaddleMIX
+pip install -e .
+# 安装 ppdiffusers
+cd ppdiffusers
+pip install -e .
+cd ..
+```
+### 5. 安装自定义算子（可选）
+* 部分模型需要安装自定义算子（FastLayerNorm、FusedLayerNorm），例如EVA-CLIP、DIT_LLAMA等。
+* 非CUDA环境（例如昇腾环境）则跳过
+```bash
+cd paddlemix/external_ops
+python setup.py install
+```
 
 ## 🔥教程
 
 **快速开始**
-- [多模态理解：新手入门体验](paddlemix/examples/internvl2/README.md)
-- [多模态生成：零基础上手指南](ppdiffusers/examples/inference/README.md)
-- [跨模态任务流水线：端到端流程演示](applications/README.md/#快速开始)
+- [多模态理解：新手入门体验 [示例：InternVL2模型]](paddlemix/examples/internvl2/README.md)
+- [多模态生成：零基础上手指南 [示例：Stable Diffusion模型]](ppdiffusers/examples/stable_diffusion/README.md)
+- [跨模态任务流水线：快速开始](applications/README.md/#快速开始)
 
 **实操演练&范例**
 - [LLaVA模型：从训练到推理的全流程实践](https://aistudio.baidu.com/projectdetail/7917712)
@@ -237,6 +233,9 @@ sh build_env.sh
       <td>
         <b>多模态生成</b>
       </td>
+      <td>
+        <b>多模态大一统</b>
+      </td>
     </tr>
     <tr valign="top">
       <td>
@@ -246,10 +245,13 @@ sh build_env.sh
         <ul>
             <li><a href="paddlemix/examples/clip">CLIP</a></li>
             <li><a href="paddlemix/examples/evaclip">EVA-CLIP</a></li>
-            <li><a href="paddlemix/examples/llava">LLaVA</a></li>
             <li><a href="paddlemix/examples/llava">LLaVA-1.5</a></li>
             <li><a href="paddlemix/examples/llava">LLaVA-1.6</a></li>
             <li><a href="paddlemix/examples/llava">LLaVA-NeXT</a></li>
+            <li><a href="paddlemix/examples/llava_onevision">LLaVA-onevision</a></li>
+            <li><a href="paddlemix/examples/llava_onevision">Aquila-VL-2B-llava-qwen</a></li>
+            <li><a href="paddlemix/examples/llava_critic">LLaVA-Critic</a></li>
+            <li><a href="paddlemix/examples/llava_denseconnector">LLaVA-DenseConnector</a></li>
             <li><a href="paddlemix/examples/qwen_vl">Qwen-VL</a></li>
             <li><a href="paddlemix/examples/qwen2_vl">Qwen2-VL</a></li>
             <li><a href="paddlemix/examples/internvl2">InternVL2</a></li>
@@ -306,6 +308,14 @@ sh build_env.sh
         <ul>
            <li><a href="ppdiffusers/ppdiffusers/pipelines/audioldm">AudioLDM</a></li>
            <li><a href="ppdiffusers/ppdiffusers/pipelines/audioldm2">AudioLDM2</a></li>
+        </ul>
+      </td>
+      <td>
+        <ul>
+        </ul>
+          <li><b>统一多模态模型</b></li>
+        <ul>
+          <li><a href="paddlemix/examples/janus">Janus</a></li>
         </ul>
       </td>
     </tr>

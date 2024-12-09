@@ -28,7 +28,8 @@ from .visualglm.configuration import *
 from .visualglm.modeling import *
 from .qwen_vl import *
 from .minicpm_v import *
-
+from .janus import *
+from .diffsinger import *
 
 import pkg_resources
 

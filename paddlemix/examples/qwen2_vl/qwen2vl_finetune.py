@@ -20,7 +20,7 @@ import random
 import sys
 import traceback
 from dataclasses import dataclass, field
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 
 import numpy as np
 import paddle
@@ -31,6 +31,7 @@ from paddlenlp.trainer import PdArgumentParser, TrainingArguments, set_seed
 from paddlenlp.trainer.trainer import Trainer
 from paddlenlp.trainer.trainer_utils import get_last_checkpoint
 from paddlenlp.transformers import Qwen2Tokenizer
+from paddlenlp.peft import LoRAConfig, LoRAModel
 from PIL import Image, ImageFile, PngImagePlugin, UnidentifiedImageError
 
 from paddlemix.datasets.internvl_dataset import ConcatDataset, WeightedConcatDataset
@@ -125,7 +126,31 @@ class ModelArguments(ProcessorArguments):
         default=0.0,
         metadata={"help": "Set the drop path rate for the ViT model. Default is 0."},
     )
-
+    lora: Optional[bool] = field(
+        default=False,
+        metadata={"help": "Whether or not to use lora to train model."},
+    )    
+    lora_path: Optional[str] = field(
+        default=None, 
+        metadata={"help": "Initialize lora state dict."}
+    )
+    lora_rank: Optional[int] = field(
+        default=128,
+        metadata={"help": "Set the value of rank in lora. Default is 128."},
+    )
+    lora_alpha: Optional[int] = field(
+        default=256,
+        metadata={"help": "Set the value of alpha in lora. Default is 256."},
+    )
+    lora_dropout: Optional[float] = field(
+        default=0.0,
+        metadata={"help": "Set the value of dropout in lora. Default is 0.0."},
+    )
+    lora_target_modules: Optional[str] = field(
+        default=None, 
+        metadata={"help": "Lora target modules."}
+    )
+    
 
 @dataclass
 class DataTrainingArguments:
@@ -528,6 +553,26 @@ def main():
         model.lm_head = model.lm_head.eval()
         _freeze_params(model.model)
         _freeze_params(model.lm_head)
+        
+    
+    # lora
+    if model_args.lora:
+        if model_args.lora_path is None:
+            target_modules = model_args.lora_target_modules.split(",")
+            lora_config = LoRAConfig(
+                target_modules=target_modules,
+                r=model_args.lora_rank,
+                lora_alpha=model_args.lora_alpha,
+                lora_dropout=model_args.lora_dropout,
+                merge_weights=False,
+                tensor_parallel_degree=training_args.tensor_parallel_degree,
+                dtype=dtype,
+            )
+            model = LoRAModel(model, lora_config)
+        else:
+            model = LoRAModel.from_pretrained(model=model, lora_path=model_args.lora_path)
+        model.mark_only_lora_as_trainable()
+        model.print_trainable_parameters()
 
     print_trainable_params(model)
 

@@ -31,6 +31,7 @@ from ..utils import (
 _dummy_objects = {}
 _import_structure = {
     "controlnet": [],
+    "controlnet_sd3": [],
     "latent_diffusion": [],
     "stable_diffusion": [],
     "stable_diffusion_xl": [],
@@ -100,6 +101,7 @@ else:
         "AudioLDM2UNet2DConditionModel",
     ]
     _import_structure["blip_diffusion"] = ["BlipDiffusionPipeline"]
+    _import_structure["cogvideo"] = ["CogVideoXPipeline"]
     _import_structure["controlnet"].extend(
         [
             "BlipDiffusionControlNetPipeline",
@@ -112,6 +114,12 @@ else:
             "PaddleInferStableDiffusionControlNetPipeline",
         ]
     )
+    _import_structure["controlnet_sd3"].extend(
+        [
+            "StableDiffusion3ControlNetPipeline",
+            "StableDiffusion3ControlNetInpaintingPipeline",
+        ]
+    ) 
     _import_structure["deepfloyd_if"] = [
         "IFImg2ImgPipeline",
         "IFImg2ImgSuperResolutionPipeline",
@@ -368,6 +376,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             AudioLDM2UNet2DConditionModel,
         )
         from .blip_diffusion import BlipDiffusionPipeline
+        from .cogvideo import CogVideoXPipeline
         from .controlnet import (
             BlipDiffusionControlNetPipeline,
             PaddleInferStableDiffusionControlNetPipeline,
@@ -378,6 +387,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             StableDiffusionXLControlNetInpaintPipeline,
             StableDiffusionXLControlNetPipeline,
         )
+        from .controlnet_sd3 import StableDiffusion3ControlNetInpaintingPipeline, StableDiffusion3ControlNetPipeline
         from .deepfloyd_if import (
             IFImg2ImgPipeline,
             IFImg2ImgSuperResolutionPipeline,

@@ -1,6 +1,4 @@
-#!/usr/bin/env bash
-
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,7 +17,7 @@
 function _set_params(){
     model_item=${1:-"qwen2_vl_sft_2b"}   # (必选) 模型 item |fastscnn|segformer_b0| ocrnet_hrnetw48
     base_batch_size=${2:-"1"}       # (必选) 如果是静态图单进程，则表示每张卡上的BS，需在训练时*卡数
-    fp_item=${3:-"bf16"}            # (必选) fp32|fp16|bf16
+    fp_item=${3:-"bf16O2"}            # (必选) fp32|fp16|bf16
     run_mode=${4:-"DP"}             # (必选) MP模型并行|DP数据并行|PP流水线并行|混合并行DP1-MP1-PP1|DP1-MP4-PP1
     device_num=${5:-"N1C8"}         # (必选) 使用的卡数量，N1C1|N1C8|N4C32 （4机32卡）
     profiling=${PROFILING:-"false"}      # (必选) Profiling  开关，默认关闭，通过全局变量传递
@@ -57,8 +55,8 @@ function _train(){
             add_options=""
             log_file=${train_log_file}
     fi
-    rm -rf ./outputs
 
+    #模型权重
     if [ ${model_item} = "qwen2_vl_sft_2b" ];then # 目前只支持2B和7B
         use_model_args="--model_name_or_path Qwen/Qwen2-VL-2B-Instruct"
         use_output_args="--output_dir work_dirs/qwen2_vl_sft_2b_bs32_1e8"
@@ -67,11 +65,43 @@ function _train(){
         use_output_args="--output_dir work_dirs/qwen2_vl_sft_7b_bs32_1e8"
     fi
 
+    #训练精度
+    if [ ${fp_item} = "fp16O1" ]; then
+        use_fp16_cmd="--fp16 True --fp16_opt_level O1"
+    fi
+    if [ ${fp_item} = "bf16O1" ]; then
+        use_fp16_cmd="--bf16 True --fp16_opt_level O1"
+    fi
+
+    FUSED=False
+    if [ ${fp_item} = "fp16O2" ]; then
+        use_fp16_cmd="--fp16 True --fp16_opt_level O2 --amp_master_grad=1"
+        FUSED=True
+    fi
+    if [ ${fp_item} = "bf16O2" ]; then
+        use_fp16_cmd="--bf16 True --fp16_opt_level O2 --amp_master_grad=1"
+        FUSED=True
+    fi
+
+    rm -rf ./outputs
+
+    export FLAG_USE_EMA=0
+    export FLAG_BENCHMARK=1
+    export FLAG_RECOMPUTE=1
+    export FLAG_XFORMERS=1
+    # # use fused linear in amp o2 level
+    # export FLAG_FUSED_LINEAR=${FUSED}
+
     # add some flags
-    export FLAGS_eager_delete_tensor_gb=0.0
-    export FLAGS_fraction_of_gpu_memory_to_use=0.98
-    export FLAGS_conv_workspace_size_limit=4096
+    export FLAGS_use_cuda_managed_memory=true
+    export FLAGS_allocator_strategy=auto_growth
+    export FLAGS_embedding_deterministic=1
+    export FLAGS_cudnn_deterministic=1
+    export NVIDIA_TF32_OVERRIDE=0
+    export http_proxy=agent.baidu.com:8188
+    export https_proxy=agent.baidu.com:8188
     
+    #训练阶段
     train_cmd="../paddlemix/examples/qwen2_vl/qwen2vl_finetune.py \
             --do_train \
             ${use_model_args} \
@@ -80,9 +110,7 @@ function _train(){
             --logging_steps=1 \
             --num_train_epochs=${max_epochs} \
             --save_strategy no \
-            --bf16 True \
-            --fp16 False \
-            --fp16_opt_level "O2" \
+            ${use_fp16_cmd} \
             --freeze_vit True \
             --learning_rate 1e-8 \
             --warmup_ratio 0.1 \
@@ -96,9 +124,8 @@ function _train(){
             --sharding_parallel_degree=8 \
             --pipeline_parallel_degree=1 \
             --sep_parallel_degree=1 \
-            --sharding="stage1" \
-            --amp_master_grad=1 \
-            --hybrid_parallel_topo_order="sharding_first" \
+            --sharding="stage2" \
+            --overwrite_output_dir True \
             --per_device_train_batch_size ${base_batch_size} \
             --gradient_accumulation_steps 1 \
             --benchmark True \
@@ -134,7 +161,7 @@ function _train(){
     fi
 }
 
-source ${BENCHMARK_ROOT}/scripts/run_model.sh   # 在该脚本中会对符合benchmark规范的log使用analysis.py 脚本进行性能数据解析;如果不联调只想要产出训练log可以注掉本行,提交时需打开
+# source ${BENCHMARK_ROOT}/scripts/run_model.sh   # 在该脚本中会对符合benchmark规范的log使用analysis.py 脚本进行性能数据解析;如果不联调只想要产出训练log可以注掉本行,提交时需打开
 _set_params $@
-#_train       # 如果只产出训练log,不解析,可取消注释
-_run     # 该函数在run_model.sh中,执行时会调用_train; 如果不联调只产出训练log可以注掉本行,提交时需打开
+_train       # 如果只产出训练log,不解析,可取消注释
+#_run     # 该函数在run_model.sh中,执行时会调用_train; 如果不联调只产出训练log可以注掉本行,提交时需打开

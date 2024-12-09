@@ -19,7 +19,7 @@
 function _set_params(){
     model_item=${1:-"llava-v1.6-vicuna-7b-sft"}   # (必选) 模型 item |llava-v1.6-vicuna-7b-sft|llava-v1.6-vicuna-13b-sft|llava-v1.6-vicuna-7b-pretrain|llava-v1.6-vicuna-7b-lora_sft|llava-v1.6-vicuna-13b-pretrain|llava-v1.6-vicuna-13b-lora_sft
     base_batch_size=${2:-"1"}       # (必选) 如果是静态图单进程，则表示每张卡上的BS，需在训练时*卡数
-    fp_item=${3:-"bf16"}            # (必选) fp32|fp16|bf16
+    fp_item=${3:-"bf16O2"}            # (必选) fp32|fp16|bf16
     run_mode=${4:-"DP"}             # (必选) MP模型并行|DP数据并行|PP流水线并行|混合并行DP1-MP1-PP1|DP1-MP4-PP1
     device_num=${5:-"N1C1"}         # (必选) 使用的卡数量，N1C1|N1C8|N4C32 （4机32卡）
     profiling=${PROFILING:-"false"}      # (必选) Profiling  开关，默认关闭，通过全局变量传递
@@ -96,11 +96,11 @@ function _train(){
 
     FUSED=False
     if [ ${fp_item} = "fp16O2" ]; then
-        use_fp16_cmd="--fp16 True --fp16_opt_level O2"
+        use_fp16_cmd="--fp16 True --fp16_opt_level O2 --amp_master_grad=1"
         FUSED=True
     fi
     if [ ${fp_item} = "bf16O2" ]; then
-        use_fp16_cmd="--bf16 True --fp16_opt_level O2"
+        use_fp16_cmd="--bf16 True --fp16_opt_level O2 --amp_master_grad=1"
         FUSED=True
     fi
     rm -rf ./work_dirs/${model_item}_benchmark
@@ -110,7 +110,7 @@ function _train(){
     export FLAG_RECOMPUTE=1
     export FLAG_XFORMERS=1
     # use fused linear in amp o2 level
-    export FLAG_FUSED_LINEAR=${FUSED}
+    # export FLAG_FUSED_LINEAR=${FUSED}
 
     # add some flags
     export FLAGS_use_cuda_managed_memory=true
@@ -148,85 +148,100 @@ function _train(){
             --tensor_parallel_degree=1 \
             --sharding_parallel_degree=8 \
             --sharding="stage2" \
+            --skip_memory_metrics false \
             --benchmark true
             "
     fi
     if [ ${train_stage} = "lora_sft" ]; then
-        train_cmd="../paddlemix/tools/supervised_finetune.py \
-            --do_train true \
-            --model_name_or_path liuhaotian/${model_path} \
-            --dataset {\"train\":[{\"name\":\"chatml_dataset\",\"data_files\":\"./llava_bench_data/ScienceQA_val_500.json\",\"chat_template\":\"./llava_bench_data/chat_template.json\"}]} \
-            --mixtoken false \
-            --output_dir ./work_dirs/${model_item}_benchmark \
-            --overwrite_output_dir true \
-            --per_device_train_batch_size ${base_batch_size} \
-            ${use_fp16_cmd} \
-            --num_train_epochs ${max_epochs} \
-            --recompute true \
-            --gradient_accumulation_steps 1 \
-            --sharding stage2 \
-            --tensor_parallel_degree 1 \
-            --sharding_parallel_degree 8 \
-            --learning_rate 2e-04 \
-            --mm_projector_lr 2e-5 \
-            --weight_decay 0.0 \
-            --warmup_ratio 0.03 \
-            --lr_scheduler_type cosine \
-            --logging_steps 1 \
-            --save_steps 1000 \
-            --evaluation_strategy no \
-            --save_strategy no \
-            --max_length 2048 \
-            --do_eval false \
-            --disable_tqdm true \
-            --load_best_model_at_end false \
-            --eval_with_do_generation false \
-            --skip_memory_metrics false \
-            --save_total_limit 1 \
-            --lora true \
-            --lora_rank 128 \
-            --lora_alpha 256 \
-            --lora_dropout 0.0 \
-            --lora_target_modules [\"llama.layer.*q_proj.*\",\"llama.layer.*k_proj.*\",\"llama.layer.*v_proj.*\",\"llama.layer.*gate_proj.*\",\"llama.layer.*up_proj.*\",\"llama.layer.*down_proj.*\",\"llama.layer.*o_proj.*\"] \
-            --tensor_parallel_degree=1 \
-            --sharding_parallel_degree=8 \
-            --sharding="stage2" \
-            --benchmark true
-            "
+        if [ ${model_item} = "llava-v1.6-vicuna-7b-lora_sft" ]; then
+            train_config="../paddlemix/config/llava/v1_6/lora_sft_7b_argument_benchmark.json"
+        fi
+        if [ ${model_item} = "llava-v1.6-vicuna-13b-lora_sft" ]; then
+            train_config="../paddlemix/config/llava/v1_6/lora_sft_13b_argument_benchmark.json"
+        fi
+        train_cmd="../paddlemix/tools/supervised_finetune.py ${train_config}"
     fi
+        # train_cmd="../paddlemix/tools/supervised_finetune.py \
+        #     --do_train true \
+        #     --model_name_or_path liuhaotian/${model_path} \
+        #     --dataset {\"train\":[{\"name\":\"chatml_dataset\",\"data_files\":\"./llava_bench_data/ScienceQA_val_500.json\",\"chat_template\":\"./llava_bench_data/chat_template.json\"}]} \
+        #     --mixtoken false \
+        #     --output_dir ./work_dirs/${model_item}_benchmark \
+        #     --overwrite_output_dir true \
+        #     --per_device_train_batch_size ${base_batch_size} \
+        #     ${use_fp16_cmd} \
+        #     --num_train_epochs ${max_epochs} \
+        #     --recompute true \
+        #     --gradient_accumulation_steps 1 \
+        #     --sharding stage2 \
+        #     --tensor_parallel_degree 1 \
+        #     --sharding_parallel_degree 8 \
+        #     --learning_rate 2e-04 \
+        #     --mm_projector_lr 2e-5 \
+        #     --weight_decay 0.0 \
+        #     --warmup_ratio 0.03 \
+        #     --lr_scheduler_type cosine \
+        #     --logging_steps 1 \
+        #     --save_steps 1000 \
+        #     --evaluation_strategy no \
+        #     --save_strategy no \
+        #     --max_length 2048 \
+        #     --do_eval false \
+        #     --disable_tqdm true \
+        #     --load_best_model_at_end false \
+        #     --eval_with_do_generation false \
+        #     --skip_memory_metrics false \
+        #     --save_total_limit 1 \
+        #     --lora true \
+        #     --lora_rank 128 \
+        #     --lora_alpha 256 \
+        #     --lora_dropout 0.0 \
+        #     --tensor_parallel_degree=1 \
+        #     --sharding_parallel_degree=8 \
+        #     --sharding="stage2" \
+        #     --benchmark true
+        #     "
+    # fi
     if [ ${train_stage} = "pretrain" ]; then
-        train_cmd="../paddlemix/examples/llava/pretrain.py \
-            --do_train true \
-            --model_name_or_path paddlemix/llava/${model_path} \
-            --dataset {\"train\":[{\"name\":\"chatml_dataset\",\"data_files\":\"./llava_bench_data/ScienceQA_val_500.json\"}]} \
-            --freeze_include [\"*llama*\",\"*lm_head*\"] \
-            --freeze_exclude [\"*llama.mm_projector*\"] \
-            --output_dir ./work_dirs/${model_item}_benchmark \
-            --overwrite_output_dir true \
-            --per_device_train_batch_size ${base_batch_size} \
-            ${use_fp16_cmd} \
-            --num_train_epochs ${max_epochs} \
-            --mixtoken false \
-            --recompute true \
-            --gradient_accumulation_steps 1 \
-            --group_by_modality_length false \
-            --learning_rate 1e-03 \
-            --warmup_ratio 0.03 \
-            --lr_scheduler_type cosine \
-            --logging_steps 1 \
-            --save_steps 1000 \
-            --evaluation_strategy no \
-            --save_strategy no \
-            --max_length 2048 \
-            --do_eval false \
-            --disable_tqdm true \
-            --save_total_limit 1 \
-            --tensor_parallel_degree=1 \
-            --sharding_parallel_degree=8 \
-            --sharding="stage2" \
-            --benchmark true
-            "
+        if [ ${model_item} = "llava-v1.6-vicuna-7b-pretrain" ]; then
+            train_config="../paddlemix/config/llava/pretrain_7b_benchmark.json"
+        fi
+        if [ ${model_item} = "llava-v1.6-vicuna-13b-pretrain" ]; then
+            train_config="../paddlemix/config/llava/pretrain_13b_benchmark.json"
+        fi
+        train_cmd="../paddlemix/examples/llava/pretrain.py ${train_config}"
     fi
+        # train_cmd="../paddlemix/examples/llava/pretrain.py \
+        #     --do_train true \
+        #     --model_name_or_path paddlemix/llava/${model_path} \
+        #     --dataset {\"train\":[{\"name\":\"chatml_dataset\",\"data_files\":\"./llava_bench_data/ScienceQA_val_500.json\"}]} \
+        #     --output_dir ./work_dirs/${model_item}_benchmark \
+        #     --overwrite_output_dir true \
+        #     --per_device_train_batch_size ${base_batch_size} \
+        #     ${use_fp16_cmd} \
+        #     --num_train_epochs ${max_epochs} \
+        #     --mixtoken false \
+        #     --recompute true \
+        #     --gradient_accumulation_steps 1 \
+        #     --group_by_modality_length false \
+        #     --learning_rate 1e-03 \
+        #     --warmup_ratio 0.03 \
+        #     --lr_scheduler_type cosine \
+        #     --logging_steps 1 \
+        #     --save_steps 1000 \
+        #     --evaluation_strategy no \
+        #     --save_strategy no \
+        #     --max_length 2048 \
+        #     --do_eval false \
+        #     --disable_tqdm true \
+        #     --save_total_limit 1 \
+        #     --tensor_parallel_degree=1 \
+        #     --sharding_parallel_degree=8 \
+        #     --sharding="stage2" \
+        #     --skip_memory_metrics false \
+        #     --benchmark true
+        #     "
+    # fi
 
 
     # 以下为通用执行命令，无特殊可不用修改
@@ -246,6 +261,17 @@ function _train(){
     
     echo "train_cmd: ${train_cmd}  log_file: ${log_file}"
     timeout 30m ${train_cmd} > ${log_file} 2>&1
+
+    # if [ ${train_stage} = "sft" ]; then
+    #     timeout 30m ${train_cmd} > ${log_file} 2>&1
+    # fi
+    # if [ ${train_stage} = "lora_sft" ]; then
+    #     timeout 30m ${train_cmd} --lora_target_modules ["llama.layer.*q_proj.*","llama.layer.*k_proj.*","llama.layer.*v_proj.*","llama.layer.*gate_proj.*","llama.layer.*up_proj.*","llama.layer.*down_proj.*","llama.layer.*o_proj.*"] > ${log_file} 2>&1
+    # fi
+    # if [ ${train_stage} = "pretrain" ]; then
+    #     timeout 30m ${train_cmd} --freeze_include '*llama*','*lm_head*' --freeze_exclude '*llama.mm_projector*' > ${log_file} 2>&1
+    # fi
+
     if [ $? -ne 0 ];then
         echo -e "${model_name}, FAIL"
     else
