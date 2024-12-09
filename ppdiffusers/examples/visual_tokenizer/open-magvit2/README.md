@@ -14,7 +14,7 @@ This project provides the implementation of PaddlePaddle, support training and i
 
 We use Imagenet2012 as our dataset.
 ```
-imagenet
+data
 └── train/
     ├── n01440764
         ├── n01440764_10026.JPEG
@@ -26,9 +26,23 @@ imagenet
     ├── ...
 ```
 
+#### Directory structure
+```
+visual_tokenizer
+└── data
+    └── train/
+    └── val/
+└── open-magvit2 
+    └── train_tokenizer.py
+    ├── ...
+
+```
+
+
+
 ### Stage I: Training of Visual Tokenizer
 <!-- * `Stage I Tokenizer Training`: -->
-#### 🚀 Training Scripts
+####  Training Scripts
 * $128\times 128$ Tokenizer Training
 ```
 #single gpu
@@ -66,7 +80,7 @@ trainer:
 ckpt_path: null  # to resume
 ```
 
-#### 🚀 Infer Scripts
+####  Infer Scripts
 
 * $256\times 256$ reconstruct 
 ```

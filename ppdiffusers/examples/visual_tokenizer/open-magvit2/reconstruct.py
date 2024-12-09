@@ -69,6 +69,7 @@ def main(args):
         os.makedirs(visualize_original, exist_ok=True)
     if not os.path.exists(visualize_rec):
         os.makedirs(visualize_rec, exist_ok=True)
+    configs.data['init_args'].pop("train")
     dataset = instantiate_from_config(configs.data)
     dataset.prepare_data()
     dataset.setup()
@@ -81,7 +82,6 @@ def main(args):
             count += tuple(images.shape)[0]
             if model.use_ema:
                 with model.ema_scope():
-                    print("input image:",images.abs().mean())
                     reconstructed_images, _, _ = model(images)
             image = images[0]
             reconstructed_image = reconstructed_images[0]
