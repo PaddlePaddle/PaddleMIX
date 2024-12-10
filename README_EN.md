@@ -151,7 +151,7 @@ conda create -n paddlemix python=3.10 -y
 conda activate paddlemix
 ```
 
-### 3. Install PaddlePaddle
+### 3. ‼️ Install PaddlePaddle
 
 #### Method 1: One-click Installation (Recommended for GPU/CPU)
 
@@ -162,17 +162,14 @@ sh build_paddle_env.sh
 ```
 
 #### Method 2: Manual Installation
-For detailed PaddlePaddle installation instructions, please refer to [Installation](https://www.paddlepaddle.org.cn/install/quick?docurl=/documentation/docs/zh/develop/install/pip/linux-pip.html).
+For detailed instructions on installing PaddlePaddle, please refer to the [Installation Guide](https://www.paddlepaddle.org.cn/install/quick?docurl=/documentation/docs/zh/develop/install/pip/linux-pip.html).
 
-### 4. Install Dependencies
+### 4. ‼️ Install Dependencies
 
-#### Method 1: One-click Installation (Recommended)
-
-Run the following command to automatically install all necessary dependencies:
+#### Method 1: One-Click Installation (Recommended)
 ```
 sh build_env.sh
 ```
-
 #### Method 2: Manual Installation
 ```bash
 # Install PaddleMIX
@@ -181,15 +178,30 @@ pip install -e .
 cd ppdiffusers
 pip install -e .
 cd ..
+
+### 5. ‼️ Verify Installation
+
+Run the following command to verify your installation:
+```bash
+sh check_env.sh
 ```
 
-### 5. Install Custom Operators (Optional)
+Recommended versions for environment and dependencies:
+- paddlepaddle: 3.0.0b2 or develop version
+- paddlenlp: 3.0.0b2
+- ppdiffusers: 0.29.0
+- huggingface_hub: 0.23.0
+
+### 6. Install Custom Operators (Optional)
 * Some models require custom operators (FastLayerNorm, FusedLayerNorm), such as EVA-CLIP, DIT_LLAMA, etc.
-* Skip this step for non-CUDA environments (e.g., Ascend environments)
-```bash
+* Skip this step for non-CUDA environments (e.g., Ascend NPU)
+* ```bash
 cd paddlemix/external_ops
 python setup.py install
 ```
+
+
+
 
 #### Method 2: Manual Installation (Please refer to build_env.sh)
 ## 🔥 Tutorials

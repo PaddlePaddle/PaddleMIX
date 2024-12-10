@@ -196,7 +196,7 @@ class ModelArguments:
     """
 
     model_name_or_path: str = field(
-        default="audioldm2-full",
+        default="haoheliu/audioldm2-full",
         metadata={"help": "Path to pretrained model or model identifier"},
     )
     save_path: str = field(
