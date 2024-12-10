@@ -68,8 +68,11 @@ text = f"<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|
 
 @dataclass
 class PredictorArgument:
-    # 这些参数全部拷贝自 https://github.com/PaddlePaddle/PaddleNLP/blob/develop/llm/predict/predictor.py
-    # 为了给用户呈现最简洁的形式，这里忽略了注释，仅保留了必要的参数，了解这些参数的确切含义请用户参考上面的链接
+    # NOTE: (zhoukangkang、changwenbin)
+    # These parameters are all copied from https://github.com/PaddlePaddle/PaddleNLP/blob/develop/llm/predict/predictor.py
+    # For simplicity and ease of use, only the necessary parameters are retained here.
+    # If you want to know the exact meaning of these parameters, please refer to the link above.
+
     model_name_or_path: str = field(default=None, metadata={"help": "The directory of model."})
     src_length = 1024
     min_length = 2
@@ -111,11 +114,10 @@ class ModelArgument:
 def init_llm_model_inputs(inputs_embeds, arg_config: PredictorArgument):
     assert len(inputs_embeds.shape) == 3
     batch_size = inputs_embeds.shape[0]
-    
+
     model_inputs = {}
     model_inputs["input_ids"] = paddle.zeros(shape=[batch_size, arg_config.total_max_length], dtype="int64")
     model_inputs["inputs_embeds"] = inputs_embeds
-    
 
     # I dislike write (arg_config.total_max_length + arg_config.block_size -1 ) // arg_config.block_size
     assert arg_config.total_max_length % arg_config.block_size == 0
