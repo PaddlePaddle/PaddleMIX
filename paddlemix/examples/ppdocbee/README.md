@@ -21,13 +21,7 @@ python -m pip install paddlepaddle-gpu==0.0.0.post118 -f https://www.paddlepaddl
 
 
 ## 3. 在线体验
-
-<p align="center">
-<video width="80%" height="auto" controls>
-  <source src="https://github.com/user-attachments/assets/8e74c364-6d65-4930-b873-6fd5df263d9a" type="video/mp4">
-  您的浏览器不支持视频标签
-</video>
-</p>
+https://github.com/user-attachments/assets/8e74c364-6d65-4930-b873-6fd5df263d9a
 
 
 我们提供了在线体验环境，您可以通过[AI Studio](https://aistudio.baidu.com/application/detail/60135)快速体验 PP-DocBee 的功能。
