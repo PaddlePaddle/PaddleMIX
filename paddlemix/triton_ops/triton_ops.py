@@ -123,7 +123,6 @@ class KernelInterface:
                     or type(ele) == paddle.base.framework.Parameter
                     or type(ele) == paddle.base.framework.Variable
                     or type(ele) == paddle.base.libpaddle.pir.Value
-
                 ):
                     dtypes.append(ele.dtype)
                 elif i in self.constexprs:
