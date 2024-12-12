@@ -9,9 +9,9 @@ PP-DocBee 是一款专注于文档理解的多模态大模型，在中文文档�
 
 ## 2. 环境要求
 - **python >= 3.10**
-- **paddlepaddle-gpu 要求版本develop**
+- **paddlepaddle-gpu 要求3.0.0b2或版本develop**
 ```
-# 安装示例
+# develop版安装示例
 python -m pip install paddlepaddle-gpu==0.0.0.post118 -f https://www.paddlepaddle.org.cn/whl/linux/gpu/develop.html
 ```
 
@@ -20,11 +20,29 @@ python -m pip install paddlepaddle-gpu==0.0.0.post118 -f https://www.paddlepaddl
 > 注：(默认开启flash_attn)使用flash_attn 要求A100/A800显卡或者H20显卡。V100请用float16推理。
 
 
-## 3. 在线体验
+## 3. 在线体验和部署
+
+### 3.1 在线体验
 https://github.com/user-attachments/assets/8e74c364-6d65-4930-b873-6fd5df263d9a
 
-
 我们提供了在线体验环境，您可以通过[AI Studio](https://aistudio.baidu.com/application/detail/60135)快速体验 PP-DocBee 的功能。
+
+### 3.2 本地gradio部署
+```bash
+# 安装gradio
+pip install gradio==5.6.0
+# 运行gradio
+python paddlemix/examples/ppdocbee/app.py
+```
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/f6961b29-c168-4e61-b005-032f010dc2ee" width="90%" alt="示例图片"/>
+</p>
+
+### 3.3 OpenAI服务部署
+我们提供了基于OpenAI服务部署的代码，您可以通过阅读[服务部署文档](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/paddlemix/examples/qwen2_vl/README_SERVER.md)快速搭建服务。
+
+
 
 ## 4. 使用指南
 
