@@ -86,7 +86,11 @@ def main(args):
                 start = time.time()
             with paddle.no_grad():
                 generated_ids = model.generate(
-                    **inputs, max_new_tokens=args.max_new_tokens, temperature=args.temperature
+                    **inputs,
+                    max_new_tokens=args.max_new_tokens,
+                    temperature=args.temperature,
+                    top_p=0.001,
+                    top_k=1,
                 )  # already trimmed in paddle
                 output_text = processor.batch_decode(
                     generated_ids[0], skip_special_tokens=True, clean_up_tokenization_spaces=False
@@ -101,23 +105,28 @@ def main(args):
         print("output_text:\n", output_text)
 
     else:
-        # Inference: Generation of the output
-        generated_ids = model.generate(
-            **inputs, max_new_tokens=args.max_new_tokens, temperature=args.temperature
-        )  # already trimmed in paddle
-        output_text = processor.batch_decode(
-            generated_ids[0], skip_special_tokens=True, clean_up_tokenization_spaces=False
-        )
+        with paddle.no_grad():
+            # Inference: Generation of the output
+            generated_ids = model.generate(
+                **inputs,
+                max_new_tokens=args.max_new_tokens,
+                temperature=args.temperature,
+                top_p=0.001,
+                top_k=1,
+            )  # already trimmed in paddle
+            output_text = processor.batch_decode(
+                generated_ids[0], skip_special_tokens=True, clean_up_tokenization_spaces=False
+            )
         print("output_text:\n", output_text)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model_path", type=str, default="Qwen/Qwen2-VL-2B-Instruct")
-    parser.add_argument("--question", type=str, default="Describe this image.")
-    parser.add_argument("--image_file", type=str, default="paddlemix/demo_images/examples_image1.jpg")
-    parser.add_argument("--temperature", type=float, default=0.01)
-    parser.add_argument("--max_new_tokens", type=int, default=128)
+    parser.add_argument("--model_path", type=str, default="PaddleMIX/PPDocBee-2B-1129")
+    parser.add_argument("--question", type=str, default="识别这份表格的内容")
+    parser.add_argument("--image_file", type=str, default="paddlemix/demo_images/medal_table.png")
+    parser.add_argument("--temperature", type=float, default=0.1)
+    parser.add_argument("--max_new_tokens", type=int, default=2048)
     parser.add_argument("--fp16", action="store_true")
     parser.add_argument("--benchmark", action="store_true")
     args = parser.parse_args()
