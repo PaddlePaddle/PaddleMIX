@@ -1224,8 +1224,12 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
     def get_decoder(self):
         return self.model
 
+    @staticmethod
     def get_rope_index(
-        self,
+        spatial_merge_size,
+        image_token_id,
+        video_token_id,
+        vision_start_token_id,
         input_ids: paddle.Tensor,
         image_grid_thw: Optional[paddle.Tensor] = None,
         video_grid_thw: Optional[paddle.Tensor] = None,
@@ -1275,10 +1279,10 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
             position_ids (`paddle.Tensor` of shape `(3, batch_size, sequence_length)`)
             mrope_position_deltas (`paddle.Tensor` of shape `(batch_size)`)
         """
-        spatial_merge_size = self.config.vision_config.spatial_merge_size
-        image_token_id = self.config.image_token_id
-        video_token_id = self.config.video_token_id
-        vision_start_token_id = self.config.vision_start_token_id
+        # spatial_merge_size = self.config.vision_config.spatial_merge_size
+        # image_token_id = self.config.image_token_id
+        # video_token_id = self.config.video_token_id
+        # vision_start_token_id = self.config.vision_start_token_id
         mrope_position_deltas = []
         if image_grid_thw is not None or video_grid_thw is not None:
             total_input_ids = input_ids
@@ -1502,6 +1506,11 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
             if attention_mask is not None:
                 attention_mask = attention_mask
 
+        # breakpoint()
+        # x = paddle.load("/root/tmp/my.pdparams")
+        # print(x)
+        # print(x-inputs_embeds)
+        # breakpoint()
         outputs = self.model(
             input_ids=None,
             position_ids=position_ids,
@@ -1582,6 +1591,10 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
         if attention_mask is not None and position_ids is None:
             if cache_position is None or (cache_position is not None and cache_position[0] == 0):
                 position_ids, rope_deltas = self.get_rope_index(
+                    self.config.vision_config.spatial_merge_size,
+                    self.config.image_token_id,
+                    self.config.video_token_id,
+                    self.config.vision_start_token_id,
                     input_ids, image_grid_thw, video_grid_thw, attention_mask
                 )
                 self.rope_deltas = rope_deltas

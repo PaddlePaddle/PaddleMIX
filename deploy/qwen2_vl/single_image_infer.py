@@ -26,7 +26,7 @@ from paddlenlp.transformers import (
 )
 from paddlenlp.trl import llm_utils
 
-from paddlemix.models.qwen2_vl.modeling_qwen2_vl import Qwen2VLForConditionalGeneration
+from paddlemix.models.qwen2_vl.modeling_qwen2_vl import Qwen2VLForConditionalGeneration,Qwen2RotaryEmbedding
 from paddlemix.processors.qwen2_vl_processing import (
     Qwen2VLImageProcessor,
     Qwen2VLProcessor,
@@ -51,7 +51,7 @@ messages = [
         "content": [
             {
                 "type": "image",
-                "image": "paddlemix/demo_images/examples_image2.jpg",
+                "image": "paddlemix/demo_images/examples_image1.jpg",
             },
             {"type": "text", "text": "Describe this image."},
         ],
@@ -75,8 +75,8 @@ class PredictorArgument:
 
     model_name_or_path: str = field(default=None, metadata={"help": "The directory of model."})
     src_length = 1024
-    min_length = 128
-    max_length = 128
+    min_length = 2
+    max_length = 200
     top_k = 0
     top_p = 0.0
     temperature = 0.95
@@ -147,10 +147,10 @@ def init_llm_model_inputs(inputs_embeds, arg_config: PredictorArgument):
 
     cache_kvs_shape = model.get_cache_kvs_shape(model.config, batch_size)
 
-    head_dim = cache_kvs_shape[0][-1]
-    model_inputs["rope_emb"] = llm_utils.get_rotary_position_embedding(
-        paddle.arange(arg_config.total_max_length).reshape((1, -1)), head_dim, config.rope_theta, config.rope_scaling
-    )
+    # head_dim = cache_kvs_shape[0][-1]
+    # model_inputs["rope_emb"] = llm_utils.get_rotary_position_embedding(
+    #     paddle.arange(arg_config.total_max_length).reshape((1, -1)), head_dim, config.rope_theta, config.rope_scaling
+    # )
     model_inputs["bad_tokens"] = paddle.to_tensor([-1], dtype="int64")
     model_inputs["is_block_step"] = paddle.full(shape=[batch_size], fill_value=False, dtype="bool")
 
@@ -205,8 +205,40 @@ def run_model():
         padding=True,
         return_tensors="pd",
     )
+    
     inputs_embeds = model_vision.vision_forward(**vision_model_inputs)
+    position_ids, _  = model_vision.get_rope_index(
+                    config.vision_config["spatial_merge_size"],
+                    config.image_token_id,
+                    config.video_token_id,
+                    config.vision_start_token_id,
+                    vision_model_inputs.get("input_ids"),
+                    vision_model_inputs.get("image_grid_thw"),
+                    vision_model_inputs.get("video_grid_thw", None),
+                    vision_model_inputs.get("attention_mask"),
+                )
+    position_start = position_ids[0][0][-1].item()
+    position_end = 4096-position_ids.shape[-1]+position_start
+    position_value = paddle.arange(position_start,position_end).reshape([1,1,-1]).expand([position_ids.shape[0],1,-1])
+    position_ids = paddle.concat([position_ids,position_value],axis=-1)
+    
+    head_dim = config.hidden_size // config.num_attention_heads
+    qwen2_Embedding = Qwen2RotaryEmbedding(head_dim, 4096, config.rope_theta)
+    cos = qwen2_Embedding.cos_cached
+    sin = qwen2_Embedding.sin_cached
+    
+    # 拷贝自
+    cos = cos[position_ids]
+    sin = sin[position_ids]
+    mrope_section = config.rope_scaling["mrope_section"] * 2
+    cos = paddle.concat(x=[m[i % 3] for i, m in enumerate(cos.split(mrope_section, axis=-1))], axis=-1)
+    sin = paddle.concat(x=[m[i % 3] for i, m in enumerate(sin.split(mrope_section, axis=-1))], axis=-1)
+    
+    rotary_embs = paddle.stack([cos, sin], axis=0)
+    rotary_embs = rotary_embs.reshape([rotary_embs.shape[0],1,rotary_embs.shape[2],1,rotary_embs.shape[-1]])
+    
     llm_model_inputs = init_llm_model_inputs(inputs_embeds, arg_config=predictor_args)
+    llm_model_inputs["rope_emb"]= rotary_embs
 
     generated_text = ""
     while llm_model_inputs["not_need_stop"]:
