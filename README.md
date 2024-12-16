@@ -347,7 +347,7 @@ python setup.py install
         </ul>
           <li><b>数据处理工具箱</b></li>
         <ul>
-          <li><a href="paddlemix/examples/janus">DataCopilot</a></li>
+          <li><a href="./paddlemix/datacopilot">DataCopilot</a></li>
         </ul>
         </ul>
           <li><b>数据分析模型</b></li>
