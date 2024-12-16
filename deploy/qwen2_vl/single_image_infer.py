@@ -75,8 +75,8 @@ class PredictorArgument:
 
     model_name_or_path: str = field(default=None, metadata={"help": "The directory of model."})
     src_length = 1024
-    min_length = 2
-    max_length = 200
+    min_length = 128
+    max_length = 128
     top_k = 0
     top_p = 0.0
     temperature = 0.95
@@ -181,6 +181,8 @@ predictor_args, model_args = parser.parse_args_into_dataclasses()
 paddle.set_default_dtype(predictor_args.dtype)
 
 config = AutoConfig.from_pretrained(MODEL_NAME)
+# NOTE: (changwenbin) This is for using the inference optimization of paddlenlp qwen2.
+config.model_type = "qwen2"
 generation_config = GenerationConfig.from_pretrained(MODEL_NAME)
 model = AutoInferenceModelForCausalLM.from_pretrained(
     MODEL_NAME,
