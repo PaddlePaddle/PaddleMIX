@@ -252,7 +252,7 @@ python setup.py install
         <b>多模态大一统</b>
       </td>
       <td>
-        <b>数据处理</b>
+        <b>多模态数据</b>
       </td>
     </tr>
     <tr valign="top">
