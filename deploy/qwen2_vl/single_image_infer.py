@@ -181,7 +181,7 @@ def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: Predic
     model_inputs["bad_tokens"] = paddle.to_tensor([-1], dtype="int64")
     model_inputs["is_block_step"] = paddle.full(shape=[batch_size], fill_value=False, dtype="bool")
     
-    cache_kvs_shape = model.get_cache_kvs_shape(model.config, batch_size)
+    cache_kvs_shape = fast_llm_model.get_cache_kvs_shape(fast_llm_model.config, batch_size)
     cachekv_dtype = config.dtype if arg_config.cachekv_int8_type is None else "uint8"
     model_inputs["cache_kvs"] = [paddle.zeros(shape, dtype=cachekv_dtype) for shape in cache_kvs_shape]
 
@@ -212,7 +212,7 @@ config = AutoConfig.from_pretrained(MODEL_NAME)
 # NOTE: (changwenbin) This is for using the inference optimization of paddlenlp qwen2.
 config.model_type = "qwen2"
 generation_config = GenerationConfig.from_pretrained(MODEL_NAME)
-model = AutoInferenceModelForCausalLM.from_pretrained(
+fast_llm_model = AutoInferenceModelForCausalLM.from_pretrained(
     MODEL_NAME,
     config=config,
     predictor_args=predictor_args,
@@ -221,7 +221,7 @@ model = AutoInferenceModelForCausalLM.from_pretrained(
     tensor_parallel_degree=1,
     tensor_parallel_rank=0,
 )
-model.eval()
+fast_llm_model.eval()
 
 
 def run_model():
@@ -237,7 +237,7 @@ def run_model():
     llm_model_inputs = init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config=predictor_args)
     generated_text = ""
     while llm_model_inputs["not_need_stop"]:
-        generated_ids = model.generate(**llm_model_inputs)  # already trimmed in paddle
+        generated_ids = fast_llm_model.generate(**llm_model_inputs)  # already trimmed in paddle
         llm_model_inputs["input_ids"] = generated_ids
         llm_model_inputs["inputs_embeds"] = None
         new_text_piece = processor.batch_decode(
