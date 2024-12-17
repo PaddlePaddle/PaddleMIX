@@ -14,22 +14,23 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
+import logging
 import os
 import sys
-import paddle.distributed as dist
-import paddle
-import paddlenlp
-from paddlemix.datasets.got_dataset import make_supervised_data_module
-from paddlemix.models.GOT.GOT_ocr_2_0 import GOTQwenForCausalLM
-from paddlenlp.trainer.trainer_utils import get_last_checkpoint
+from dataclasses import dataclass, field
+from typing import Optional
 
-from paddlemix.models.GOT.utils.utils import smart_tokenizer_and_embedding_resize
+import paddle
+import paddle.distributed as dist
 from paddlenlp.trainer import PdArgumentParser, TrainingArguments, set_seed
 from paddlenlp.trainer.trainer import Trainer
-from dataclasses import dataclass, field
-from typing import Dict, Optional
+from paddlenlp.trainer.trainer_utils import get_last_checkpoint
 from paddlenlp.transformers import QWenTokenizer
-import logging
+
+from paddlemix.datasets.got_dataset import make_supervised_data_module
+from paddlemix.models.GOT.GOT_ocr_2_0 import GOTQwenForCausalLM
+from paddlemix.models.GOT.utils.utils import smart_tokenizer_and_embedding_resize
+
 logger = logging.getLogger(__name__)
 
 
@@ -57,8 +58,8 @@ class ModelArguments:
     vision_tower: Optional[str] = field(default="openai/clip-vit-large-patch14")
     freeze_vision_tower: bool = field(default=False)
     freeze_lm_model: bool = field(default=False)
-    pretrained_stage1_model: Optional[str] = field(default=None) # mlp &/ vision tower
-    vision_select_layer: Optional[int] = field(default=-1)   # default to the last layer
+    pretrained_stage1_model: Optional[str] = field(default=None)  # mlp &/ vision tower
+    vision_select_layer: Optional[int] = field(default=-1)  # default to the last layer
     use_im_start_end: bool = field(default=False)
 
 
@@ -71,14 +72,14 @@ class DataArguments:
     )
     sep_image_conv_front: bool = False
     image_token_len: int = 256
-    image_aspect_ratio: str = 'square'
-    conversation_version: str = 'mpt'
+    image_aspect_ratio: str = "square"
+    conversation_version: str = "mpt"
     box_limit: int = 0
     max_seq_length: int = 8192
 
 
 @dataclass
-class TrainingArguments(paddlenlp.trainer.TrainingArguments):
+class GOTTrainingArguments(TrainingArguments):
     cache_dir: Optional[str] = field(default=None)
     optim: str = field(default="adamw_torch")
     remove_unused_columns: bool = field(default=False)
@@ -87,10 +88,7 @@ class TrainingArguments(paddlenlp.trainer.TrainingArguments):
     with_box: bool = field(default=False)
     model_max_length: int = field(
         default=512,
-        metadata={
-            "help":
-            "Maximum sequence length. Sequences will be right padded (and possibly truncated)."
-        },
+        metadata={"help": "Maximum sequence length. Sequences will be right padded (and possibly truncated)."},
     )
     lora_enable: bool = False
     lora_r: int = 8
@@ -101,9 +99,7 @@ class TrainingArguments(paddlenlp.trainer.TrainingArguments):
 
 
 def train():
-    # parser = transformers.HfArgumentParser((ModelArguments, DataArguments, TrainingArguments))
-    # model_args, data_args, training_args = parser.parse_args_into_dataclasses()
-    parser = PdArgumentParser((ModelArguments, DataArguments, TrainingArguments))
+    parser = PdArgumentParser((ModelArguments, DataArguments, GOTTrainingArguments))
     if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
         # If we pass only one argument to the script, and it's the path to a json file,
         # let's parse it to get our arguments.
@@ -147,19 +143,17 @@ def train():
     print(f"Loading Tokenizer: {tokenizer_path}")
 
     tokenizer = QWenTokenizer.from_pretrained(
-        model_args.model_name_or_path,
-        padding_side="right",
-        model_max_length=training_args.model_max_length)
+        model_args.model_name_or_path, padding_side="right", model_max_length=training_args.model_max_length
+    )
     print("tokenizer", tokenizer)
-    print("len(tokenizer)", len(tokenizer))
-    print("tokenizer.added_tokens_encoder", tokenizer.added_tokens_encoder)
-    print("tokenizer.added_tokens_decoder", tokenizer.added_tokens_decoder)
+    # print("len(tokenizer)", len(tokenizer))
+    # print("tokenizer.added_tokens_encoder", tokenizer.added_tokens_encoder)
+    # print("tokenizer.added_tokens_decoder", tokenizer.added_tokens_decoder)
 
-    model = GOTQwenForCausalLM.from_pretrained(
-        model_args.model_name_or_path, dtype=dtype)
+    model = GOTQwenForCausalLM.from_pretrained(model_args.model_name_or_path, dtype=dtype)
 
     smart_tokenizer_and_embedding_resize(
-        special_tokens_dict=dict(pad_token='<|endoftext|>'),
+        special_tokens_dict=dict(pad_token="<|endoftext|>"),
         tokenizer=tokenizer,
         model=model,
     )
@@ -174,16 +168,15 @@ def train():
     )
 
     model.initialize_vision_tokenizer(
-        tokenizer=tokenizer, 
-        freeze_lm_model=model_args.freeze_lm_model, 
+        tokenizer=tokenizer,
+        freeze_lm_model=model_args.freeze_lm_model,
         pretrained_stage1_model=model_args.pretrained_stage1_model,
     )
 
     # 'image_processor_high
-    # data_args.image_token_len = vision_tower_dict['image_token_len']
     data_args.image_token_len = 256
-    data_args.image_processor = vision_tower_dict['image_processor']
-    data_args.image_processor_high = vision_tower_dict['image_processor_high']
+    data_args.image_processor = vision_tower_dict["image_processor"]
+    data_args.image_processor_high = vision_tower_dict["image_processor_high"]
     data_args.use_im_start_end = model_args.use_im_start_end
 
     def _freeze_params(module):
@@ -199,11 +192,9 @@ def train():
     if model_args.freeze_vision_tower:
         _freeze_params(model.qwen2.vision_tower_high)
 
-    # params_grad = [p.numel() for n, p in model.named_parameters() if p.requires_grad]
-    # print(f"Number of Mapping Trainable Parameters: {sum(params_grad) / (1 << 20):.2f} M")
     print_trainable_params(model)
-    # trainable params: 464959488 || all params: 560528640 || trainable%: 82.9502
-
+    # trainable params: 464959488 || all params: 560528640 || trainable%: 82.9502 # stage3
+    # trainable params: 560528640 || all params: 560528640 || trainable%: 100 # stage2
     params_grad = [p.numel() for n, p in model.named_parameters() if not p.stop_gradient]
     print(f"Number of Mapping Trainable Parameters: {sum(params_grad) / (1 << 20):.2f} M")
 
@@ -217,13 +208,9 @@ def train():
     set_seed(training_args.seed)
 
     data_module = make_supervised_data_module(
-        interleave=training_args.interleave, 
-        with_box=training_args.with_box, 
-        tokenizer=tokenizer, 
-        data_args=data_args
+        interleave=training_args.interleave, with_box=training_args.with_box, tokenizer=tokenizer, data_args=data_args
     )
 
-    #trainer = GOTTrainer(
     trainer = Trainer(
         model=model,
         args=training_args,

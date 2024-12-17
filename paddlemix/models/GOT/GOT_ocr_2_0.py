@@ -12,29 +12,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import dataclasses
+from enum import Enum, auto
 from io import BytesIO
 from typing import List, Optional
 
 import paddle
 import paddle.nn as nn
 import requests
-from paddlenlp.generation.stopping_criteria import (
-    StoppingCriteriaList,
-)
+from paddle.vision import transforms
+from paddlenlp.generation.stopping_criteria import StoppingCriteriaList
 from paddlenlp.transformers import Qwen2Config, Qwen2ForCausalLM, Qwen2Model
 from paddlenlp.transformers.model_outputs import CausalLMOutputWithPast
 from PIL import Image
+
+from ...processors.got_process import BlipImageEvalProcessor
+from .got_vision_b import build_GOT_vit_b
 
 DEFAULT_IMAGE_TOKEN = "<image>"
 DEFAULT_IMAGE_PATCH_TOKEN = "<imgpad>"
 DEFAULT_IM_START_TOKEN = "<img>"
 DEFAULT_IM_END_TOKEN = "</img>"
-
-import dataclasses
-from enum import Enum, auto
-from paddle.vision import transforms
-from ...processors.got_process import BlipImageEvalProcessor
-from .got_vision_b import build_GOT_vit_b
 
 
 class Qwen2LMHead(nn.Layer):
@@ -263,11 +261,9 @@ class GOTQwenModel(Qwen2Model):
         if vision_tower_high is not None and (input_ids.shape[1] != 1 or self.training) and images is not None:
             use_im_start_end = getattr(self.config, "use_im_start_end", -1)
 
-            # vision_select_layer = getattr(self.config, "vision_select_layer", -1)
             im_patch_token = getattr(self.config, "im_patch_token", -1)
             im_start_token = getattr(self.config, "im_start_token", -1)
             im_end_token = getattr(self.config, "im_end_token", -1)
-            # freeze_vision_tower = getattr(self.config, "freeze_vision_tower", False)
 
             im_patch_token = 151859
             im_start_token = 151857
@@ -300,7 +296,6 @@ class GOTQwenModel(Qwen2Model):
                     image_features.append(image_feature)
 
             dummy_image_features_2 = paddle.zeros([256, 1024], dtype=inputs_embeds.dtype)
-            # dummy_image_features_2 = self.mm_projector_vary(dummy_image_features_2)
             dummy_image_features = dummy_image_features_2
             use_im_start_end = True
             new_input_embeds = []
@@ -339,11 +334,11 @@ class GOTQwenModel(Qwen2Model):
 
         return super().forward(
             input_ids=None,
-            attention_mask=attention_mask,  # [1, 1, 1, 800]
+            attention_mask=attention_mask,  #
             past_key_values=past_key_values,  # None
             inputs_embeds=inputs_embeds,  # [1, 800, 1024]
             use_cache=use_cache,  # True
-            position_ids=position_ids,  # [1, 1, 1, 800]
+            position_ids=position_ids,  #
             output_attentions=output_attentions,  # False
             output_hidden_states=output_hidden_states,  # False
             return_dict=return_dict,  # False
@@ -358,7 +353,6 @@ class GOTQwenForCausalLM(Qwen2ForCausalLM):
         self.qwen2 = GOTQwenModel(config)
 
         self.vocab_size = config.vocab_size
-        # self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias_attr=False)
 
         if config.tie_word_embeddings:
             self.lm_head = Qwen2LMHead(config, embedding_weights=self.qwen2.embed_tokens.weight, transpose_y=True)
@@ -416,14 +410,14 @@ class GOTQwenForCausalLM(Qwen2ForCausalLM):
             shift_logits = logits[..., :-1, :]
             shift_labels = labels[..., 1:]
             # Flatten the tokens
-            #loss_fct = nn.CrossEntropyLoss()
+            # loss_fct = nn.CrossEntropyLoss()
             loss_fct = nn.CrossEntropyLoss(reduction="sum")
             shift_logits = shift_logits.reshape([-1, self.config.vocab_size])
             shift_labels = shift_labels.reshape([-1])
             # Enable model parallelism
 
             loss = loss_fct(shift_logits, shift_labels)
-            label_sum = paddle.sum(shift_labels != -100) #.cast("float32")
+            label_sum = paddle.sum(shift_labels != -100)  # .cast("float32")
             loss = loss / label_sum
 
         if not return_dict:
@@ -441,48 +435,14 @@ class GOTQwenForCausalLM(Qwen2ForCausalLM):
     def prepare_inputs_for_generation(
         self, input_ids, past_key_values=None, attention_mask=None, inputs_embeds=None, **kwargs
     ):
-        # input_ids [1, 287], past_key_values=None, attention_mask [1, 287], inputs_embeds=None
-        # kwargs ['images', 'use_cache', 'cache_position']
-        # [1, 3, 1024, 1024], True, [0,,,,286]
-
-        # input_ids [1, 288], past_key_values len(past_key_values)=24, attention_mask [1, 288], inputs_embeds=None
-        # kwargs ['images', 'use_cache', 'cache_position']
-        # [1, 3, 1024, 1024], True, [287]
-
         batch_size, seq_length = input_ids.shape
         attention_mask = paddle.ones((batch_size, seq_length), dtype=paddle.bool)
 
         # Omit tokens covered by past_key_values
         if past_key_values is not None:
-            # if isinstance(past_key_values, Cache): ###
-            #     cache_length = past_key_values.get_seq_length()
-            #     past_length = past_key_values.seen_tokens
-            #     max_cache_length = past_key_values.get_max_length()
-            # else:
             past_length = past_key_values[0][0].shape[1]  # [1, 800, 16, 64]
-            # max_cache_length = None
-            # cache_length = past_length
-
-            # Keep only the unprocessed tokens:
-            # 1 - If the length of the attention_mask exceeds the length of input_ids, then we are in a setting where
-            # some of the inputs are exclusively passed as part of the cache (e.g. when passing input_embeds as
-            # input)
-            # if attention_mask is not None and attention_mask.shape[1] > input_ids.shape[1]:
-            #     input_ids = input_ids[:, -(attention_mask.shape[1] - past_length) :]
-            # # 2 - If the past_length is smaller than input_ids', then input_ids holds all input tokens. We can discard
-            # # input_ids based on the past_length.
-            # el
             if past_length < input_ids.shape[1]:
                 input_ids = input_ids[:, past_length:]
-            # 3 - Otherwise (past_length >= input_ids.shape[1]), let's assume input_ids only has unprocessed tokens.
-
-            # # If we are about to go beyond the maximum cache length, we need to crop the input attention mask.
-            # if (
-            #     max_cache_length is not None
-            #     and attention_mask is not None
-            #     and cache_length + input_ids.shape[1] > max_cache_length
-            # ):
-            #     attention_mask = attention_mask[:, -max_cache_length:]
 
         position_ids = kwargs.get("position_ids", None)
         if attention_mask is not None and position_ids is None:
@@ -612,17 +572,10 @@ class GOTQwenForCausalLM(Qwen2ForCausalLM):
         conv.append_message(conv.roles[1], None)
         prompt = conv.get_prompt()
 
-        if print_prompt:
-            print("prompt", prompt)
-
         inputs = tokenizer([prompt])
 
         image_tensor_1 = image_processor_high(image)
-
         input_ids = paddle.to_tensor(inputs.input_ids)
-
-        # print('input_ids', input_ids.shape, input_ids.sum().item(), input_ids)
-        # [1, 287]
 
         stop_str = conv.sep if conv.sep_style != SeparatorStyle.TWO else conv.sep2
         keywords = [stop_str]
@@ -637,11 +590,8 @@ class GOTQwenForCausalLM(Qwen2ForCausalLM):
             max_new_tokens=4096,
             stopping_criteria=stopping_criteria,  # list of stopping criteria
         )[0]
-        # print('output_ids:\n', output_ids.shape, output_ids.sum().item(), output_ids)
 
-        # outputs = tokenizer.decode(output_ids[0, input_ids.shape[1]:]).strip()
         outputs = tokenizer.decode(output_ids[0]).strip()
-        # print('outputs', outputs)
 
         if outputs.endswith(stop_str):
             outputs = outputs[: -len(stop_str)]
@@ -663,7 +613,6 @@ class GOTQwenForCausalLM(Qwen2ForCausalLM):
                 elif ratio_diff == best_ratio_diff:
                     if area > 0.5 * image_size * image_size * ratio[0] * ratio[1]:
                         best_ratio = ratio
-            # print(f'width: {width}, height: {height}, best_ratio: {best_ratio}')
             return best_ratio
 
         orig_width, orig_height = image.size
@@ -677,7 +626,6 @@ class GOTQwenForCausalLM(Qwen2ForCausalLM):
             for j in range(1, n + 1)
             if i * j <= max_num and i * j >= min_num
         )
-        # print(target_ratios)
         target_ratios = sorted(target_ratios, key=lambda x: x[0] * x[1])
 
         # find the closest aspect ratio to the target
@@ -685,7 +633,6 @@ class GOTQwenForCausalLM(Qwen2ForCausalLM):
             aspect_ratio, target_ratios, orig_width, orig_height, image_size
         )
 
-        # print(target_aspect_ratio)
         # calculate the target width and height
         target_width = image_size * target_aspect_ratio[0]
         target_height = image_size * target_aspect_ratio[1]
@@ -732,21 +679,12 @@ class GOTQwenForCausalLM(Qwen2ForCausalLM):
 
         image_list = []
 
-        # if len(image_file_list)>1:
-        #     multi_page = True
-
         if multi_page:
             qs = "OCR with format across multi pages: "
-            # only for png files
-            # import glob
-            # from natsort import natsorted
-            # patches = glob.glob(image_file + '/*png')
             patches = image_file
-            # patches = natsorted(patches)
             sub_images = []
             for sub_image in patches:
                 sub_images.append(self.load_image(sub_image))
-
             ll = len(patches)
 
         else:
@@ -797,13 +735,9 @@ class GOTQwenForCausalLM(Qwen2ForCausalLM):
         conv.append_message(conv.roles[1], None)
         prompt = conv.get_prompt()
 
-        if print_prompt:
-            print(prompt)
-
         inputs = tokenizer([prompt])
 
         input_ids = paddle.to_tensor(inputs.input_ids)
-        # print('input_ids', input_ids.shape, input_ids.sum().item(), input_ids)
 
         stop_str = conv.sep if conv.sep_style != SeparatorStyle.TWO else conv.sep2
         keywords = [stop_str]
@@ -819,7 +753,6 @@ class GOTQwenForCausalLM(Qwen2ForCausalLM):
             stopping_criteria=stopping_criteria,
         )[0]
 
-        # outputs = tokenizer.decode(output_ids[0, input_ids.shape[1]:]).strip()
         outputs = tokenizer.decode(output_ids[0]).strip()
 
         if outputs.endswith(stop_str):
