@@ -33,3 +33,4 @@ from .visualglm_processing import *
 from .image_processing_minicpmv import *
 from .processing_minicpmv import *
 from .janus_processing import *
+from .got_process import *
