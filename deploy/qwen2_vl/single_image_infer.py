@@ -40,6 +40,10 @@ MODEL_NAME = "Qwen/Qwen2-VL-2B-Instruct"
 # MODEL_NAME = "Qwen/Qwen2-VL-7B-Instruct"
 vl_model = Qwen2VLForConditionalGeneration.from_pretrained(MODEL_NAME, dtype="bfloat16")
 
+# NOTE: (zhoukangkang、changwenbin) Because we only use the visual model here, in order to reduce video memory, we delete the language model.
+del vl_model.model
+paddle.device.cuda.empty_cache()
+
 image_processor = Qwen2VLImageProcessor()
 tokenizer = Qwen2Tokenizer.from_pretrained(MODEL_NAME)
 processor = Qwen2VLProcessor(image_processor, tokenizer)
@@ -214,6 +218,8 @@ fast_llm_model = AutoInferenceModelForCausalLM.from_pretrained(
     tensor_parallel_rank=0,
 )
 fast_llm_model.eval()
+
+vl_model.model = fast_llm_model
 
 
 def run_model():
