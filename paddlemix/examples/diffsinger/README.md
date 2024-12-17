@@ -19,7 +19,17 @@
    ```
 
 ## 4. 快速开始
-完成环境准备后，下载权重至`PaddleMIX/paddlemix/examples/diffsinger/openvpi`，然后运行以下脚本：
+1）完成环境准备后，下载权重至`PaddleMIX/paddlemix/examples/diffsinger/openvpi`
+```bash
+cd paddlemix/examples/diffsinger/
+
+wget https://paddlenlp.bj.bcebos.com/models/community/paddlemix/openvpi.tar
+
+tar -xvf openvpi.tar 
+
+```
+
+然后运行以下脚本：
 
 ```bash
 bash run_predict.sh
