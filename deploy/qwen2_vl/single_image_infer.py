@@ -111,6 +111,7 @@ class ModelArgument:
         metadata={"help": "the type of the model, which can be one of ['gpt-3', 'ernie-3.5-se', 'llama-img2txt']"},
     )
 
+
 def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: PredictorArgument):
     assert len(inputs_embeds.shape) == 3
     batch_size = inputs_embeds.shape[0]
@@ -122,14 +123,6 @@ def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: Predic
     # I dislike write (arg_config.total_max_length + arg_config.block_size -1 ) // arg_config.block_size
     assert arg_config.total_max_length % arg_config.block_size == 0
 
-    model_inputs["block_tables"] = paddle.full(
-        shape=[
-            batch_size,
-            arg_config.total_max_length // arg_config.block_size,
-        ],
-        fill_value=-1,
-        dtype="int32",
-    )
     model_inputs["top_p"] = paddle.full(shape=[batch_size, 1], fill_value=arg_config.top_p, dtype="float32")
     model_inputs["temperature"] = paddle.full(
         shape=[batch_size, 1], fill_value=arg_config.temperature, dtype="float32"
@@ -180,14 +173,13 @@ def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: Predic
 
     model_inputs["bad_tokens"] = paddle.to_tensor([-1], dtype="int64")
     model_inputs["is_block_step"] = paddle.full(shape=[batch_size], fill_value=False, dtype="bool")
-    
+
     cache_kvs_shape = fast_llm_model.get_cache_kvs_shape(fast_llm_model.config, batch_size)
     cachekv_dtype = config.dtype if arg_config.cachekv_int8_type is None else "uint8"
     model_inputs["cache_kvs"] = [paddle.zeros(shape, dtype=cachekv_dtype) for shape in cache_kvs_shape]
 
-    for i in range(batch_size):
-        for j in range(0, arg_config.total_max_length // arg_config.block_size):
-            model_inputs["block_tables"][i, j] = j
+    block_nums = arg_config.total_max_length // arg_config.block_size
+    model_inputs["block_tables"] = paddle.arange(block_nums, dtype="int32").tile([batch_size, 1])
 
     seq_lens = inputs_embeds.shape[1]
     model_inputs["seq_lens_this_time"] = paddle.to_tensor(np.array(seq_lens).astype("int32").reshape(-1, 1))
