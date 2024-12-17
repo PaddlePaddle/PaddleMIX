@@ -24,8 +24,7 @@ from paddle.nn import MultiHeadAttention as MultiheadAttention
 from paddle.nn import ReLU
 from paddle.nn import Silu as SiLU
 
-sys.path.append("/mnt/data2/pengfeiyue/code/Paddle_test/DiffSinger_paddle")
-import utils
+import paddlemix.models.diffsinger.utils as utils
 
 
 class NormalInitEmbedding(paddle.nn.Embedding):
