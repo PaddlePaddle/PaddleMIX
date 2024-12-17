@@ -198,7 +198,6 @@ class Block(paddle.nn.Layer):
 
     def forward(self, x: paddle.Tensor) -> paddle.Tensor:
         shortcut = x
-        # import pdb; pdb.set_trace()
         x = self.norm1(x)
         # Window partition
         if self.window_size > 0:
@@ -443,7 +442,6 @@ def _build_GOT_vision(
     prompt_embed_dim = 256
     image_size = 1024
     vit_patch_size = 16
-    # image_embedding_size = image_size // vit_patch_size
     image_encoder = ImageEncoderViT(
         depth=encoder_depth,
         embed_dim=encoder_embed_dim,

@@ -13,12 +13,16 @@
 # limitations under the License.
 
 import argparse
+
 import paddle
 from paddlenlp.transformers import QWenTokenizer
+
 from paddlemix.models.GOT.GOT_ocr_2_0 import GOTQwenForCausalLM
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--model_name_or_path", type=str, default="stepfun-ai/GOT-OCR2_0", help="pretrained ckpt and tokenizer")
+parser.add_argument(
+    "--model_name_or_path", type=str, default="stepfun-ai/GOT-OCR2_0", help="pretrained ckpt and tokenizer"
+)
 parser.add_argument("--image_file", type=str, default="paddlemix/demo_images/hospital.jpeg")
 parser.add_argument("--multi_crop", action="store_true")
 parser.add_argument("--ocr_type", type=str, default="plain", choices=["ocr", "format"])
@@ -38,41 +42,9 @@ image_file = args.image_file
 with paddle.no_grad():
     if args.multi_crop:
         # multi-crop OCR:
-        res = model.chat_crop(
-            tokenizer, image_file, ocr_type=args.ocr_type, render=args.render, save_render_file="./demo.html"
-        )
+        res = model.chat_crop(tokenizer, image_file, ocr_type=args.ocr_type)
     else:
         # plain texts OCR
         # format texts OCR
-        # fine-grained OCR
-        # render the formatted OCR results
-        res = model.chat(
-            tokenizer,
-            image_file,
-            ocr_type=args.ocr_type,
-            ocr_box=args.box,
-            ocr_color=args.color,
-            render=args.render,
-            save_render_file="./demo.html",
-        )
-
-    # plain texts OCR
-    # res = model.chat(tokenizer, image_file, ocr_type='ocr')
-
-    # format texts OCR:
-    # res = model.chat(tokenizer, image_file, ocr_type='format')
-
-    # fine-grained OCR:
-    # res = model.chat(tokenizer, image_file, ocr_type='ocr', ocr_box='')
-    # res = model.chat(tokenizer, image_file, ocr_type='format', ocr_box='')
-    # res = model.chat(tokenizer, image_file, ocr_type='ocr', ocr_color='')
-    # res = model.chat(tokenizer, image_file, ocr_type='format', ocr_color='')
-
-    # multi-crop OCR:
-    # res = model.chat_crop(tokenizer, image_file, ocr_type='ocr')
-    # res = model.chat_crop(tokenizer, image_file, ocr_type='format')
-
-    # render the formatted OCR results:
-    # res = model.chat(tokenizer, image_file, ocr_type='format', render=True, save_render_file = './demo.html')
-
-    print(res)
+        res = model.chat(tokenizer, image_file, ocr_type=args.ocr_type)
+    print("output:\n", res)

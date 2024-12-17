@@ -77,25 +77,6 @@ class Conversation:
             return ret
         else:
             raise ValueError(f"Invalid style: {self.sep_style}")
-        # if self.sep_style == SeparatorStyle.MPT:
-        #     if self.system:
-        #         ret = self.system + self.sep
-        #     else:
-        #         ret = ''
-        #     for role, message in self.messages:
-        #         if message:
-        #             if type(message) is tuple:
-        #                 message, _, _ = message
-        #             ret += role + message + self.sep
-        #             # if 'user' in role:
-        #             #     ret += role + message + self.sep + "\n"
-        #             # else:
-        #             #     ret += role + message + self.sep
-        #         else:
-        #             ret += role
-        #     return ret
-        # else:
-        #     raise ValueError(f"Invalid style: {self.sep_style}")
 
     def append_message(self, role, message):
         self.messages.append([role, message])
