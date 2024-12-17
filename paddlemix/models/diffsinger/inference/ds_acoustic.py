@@ -20,7 +20,6 @@ from typing import Dict
 
 import numpy as np
 
-# import paddle_aux
 import paddle
 import tqdm
 

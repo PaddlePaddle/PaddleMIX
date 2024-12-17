@@ -18,7 +18,7 @@ import math
 import sys
 
 import paddle
-import paddle_aux
+from paddlemix.models.diffsinger.utils import paddle_aux
 from paddle.nn import GELU, LayerNorm
 from paddle.nn import MultiHeadAttention as MultiheadAttention
 from paddle.nn import ReLU

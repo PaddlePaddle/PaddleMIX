@@ -14,20 +14,18 @@
 
 from __future__ import annotations
 
-import sys
+import sys, os
 from collections import deque
 from functools import partial
 from typing import List, Tuple
 
 import numpy as np
 
-# import paddle_aux
 import paddle
 from tqdm import tqdm
 
-sys.path.append("/mnt/data2/pengfeiyue/code/Paddle_test/DiffSinger_paddle")
-from modules.backbones import build_backbone
-from utils.hparams import hparams
+from paddlemix.models.diffsinger.modules.backbones import build_backbone
+from paddlemix.models.diffsinger.utils.hparams import hparams
 
 
 def extract(a, t, x_shape):

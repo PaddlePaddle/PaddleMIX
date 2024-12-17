@@ -27,9 +27,6 @@ from paddlemix.models.diffsinger.basics.base_module import CategorizedModule
 from paddlemix.models.diffsinger.utils import paddle_aux
 from paddlemix.models.diffsinger.utils.hparams import hparams
 
-# import paddle_aux
-
-
 def tensors_to_scalars(metrics):
     new_metrics = {}
     for k, v in metrics.items():
