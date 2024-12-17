@@ -35,6 +35,19 @@ python deploy/qwen2_vl/single_image_infer.py \
     --benchmark 1
 ```
 
+- 在 NVIDIA A100-SXM4-80GB 上测试的性能如下：
+
+
+- Qwen2-VL-2B-Instruct
+| Paddle Inference|    PyTorch   | Paddle 动态图 |
+| --------------- | ------------ | ------------ |
+|      1.44 s     |     2.35 s   |    6.339 s   |
+
+
+- Qwen2-VL-7B-Instruct
+| Paddle Inference|    PyTorch   | Paddle 动态图 |
+| --------------- | ------------ | ------------ |
+|      1.73 s     |      4.4s    |    6.339 s   |
 
 
 ## 参考文献
