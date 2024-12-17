@@ -40,7 +40,8 @@ MODEL_NAME = "Qwen/Qwen2-VL-2B-Instruct"
 # MODEL_NAME = "Qwen/Qwen2-VL-7B-Instruct"
 vl_model = Qwen2VLForConditionalGeneration.from_pretrained(MODEL_NAME, dtype="bfloat16")
 
-# NOTE: (zhoukangkang、changwenbin) Because we only use the visual model here, in order to reduce video memory, we delete the language model.
+# NOTE: (zhoukangkang、changwenbin) Because we only use the visual model here, 
+# in order to reduce video memory,we delete the language model.
 del vl_model.model
 paddle.device.cuda.empty_cache()
 
@@ -164,7 +165,8 @@ def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: Predic
     cos = qwen2_Embedding.cos_cached
     sin = qwen2_Embedding.sin_cached
 
-    # NOTE: (zhoukangkang、changwenbin) Copied from PaddleMIX/paddlemix/models/qwen2_vl/modeling_qwen2_vl.py, for calculating M-ROPE.
+    # NOTE: (zhoukangkang、changwenbin) Copied from PaddleMIX/paddlemix/models/qwen2_vl/modeling_qwen2_vl.py, 
+    # for calculating M-ROPE.
     cos = cos[position_ids]
     sin = sin[position_ids]
     mrope_section = config.rope_scaling["mrope_section"] * 2
