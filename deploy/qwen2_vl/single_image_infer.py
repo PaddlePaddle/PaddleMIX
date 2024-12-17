@@ -110,9 +110,6 @@ class ModelArgument:
         default=None,
         metadata={"help": "the type of the model, which can be one of ['gpt-3', 'ernie-3.5-se', 'llama-img2txt']"},
     )
-    data_file: str = field(default=None, metadata={"help": "data file directory"})
-    output_file: str = field(default="output.json", metadata={"help": "predict result file directory"})
-
 
 def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: PredictorArgument):
     assert len(inputs_embeds.shape) == 3
