@@ -1416,12 +1416,12 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
         if inputs_embeds is None:
             inputs_embeds = self.model.embed_tokens(input_ids)
             if pixel_values is not None:
-                pixel_values = paddle.cast(pixel_values, paddle.get_default_dtype())
+                pixel_values = paddle.cast(pixel_values, paddle.bfloat16)
                 image_embeds = self.visual(pixel_values, grid_thw=image_grid_thw)
                 image_mask = input_ids == self.config.image_token_id
                 inputs_embeds[image_mask] = image_embeds
             if pixel_values_videos is not None:
-                pixel_values_videos = paddle.cast(pixel_values_videos, paddle.get_default_dtype())
+                pixel_values_videos = paddle.cast(pixel_values_videos, paddle.bfloat16)
                 video_embeds = self.visual(pixel_values_videos, grid_thw=video_grid_thw)
                 video_mask = input_ids == self.config.video_token_id
                 inputs_embeds[video_mask] = video_embeds
@@ -1505,12 +1505,6 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
                 inputs_embeds[video_mask] = video_embeds
             if attention_mask is not None:
                 attention_mask = attention_mask
-
-        # breakpoint()
-        # x = paddle.load("/root/tmp/my.pdparams")
-        # print(x)
-        # print(x-inputs_embeds)
-        # breakpoint()
         outputs = self.model(
             input_ids=None,
             position_ids=position_ids,
@@ -1595,7 +1589,10 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
                     self.config.image_token_id,
                     self.config.video_token_id,
                     self.config.vision_start_token_id,
-                    input_ids, image_grid_thw, video_grid_thw, attention_mask
+                    input_ids,
+                    image_grid_thw,
+                    video_grid_thw,
+                    attention_mask,
                 )
                 self.rope_deltas = rope_deltas
             else:
