@@ -38,7 +38,7 @@ from paddlemix.processors.qwen2_vl_processing import (
 
 MODEL_NAME = "Qwen/Qwen2-VL-2B-Instruct"
 # MODEL_NAME = "Qwen/Qwen2-VL-7B-Instruct"
-model_vision = Qwen2VLForConditionalGeneration.from_pretrained(MODEL_NAME, dtype="bfloat16")
+vl_model = Qwen2VLForConditionalGeneration.from_pretrained(MODEL_NAME, dtype="bfloat16")
 
 image_processor = Qwen2VLImageProcessor()
 tokenizer = Qwen2Tokenizer.from_pretrained(MODEL_NAME)
@@ -150,7 +150,7 @@ def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: Predic
 
     cache_kvs_shape = model.get_cache_kvs_shape(model.config, batch_size)
 
-    position_ids, _ = model_vision.get_rope_index(
+    position_ids, _ = vl_model.get_rope_index(
         config.vision_config["spatial_merge_size"],
         config.image_token_id,
         config.video_token_id,
@@ -237,7 +237,7 @@ def run_model():
         padding=True,
         return_tensors="pd",
     )
-    inputs_embeds = model_vision.vision_forward(**vision_model_inputs)
+    inputs_embeds = vl_model.vision_forward(**vision_model_inputs)
     llm_model_inputs = init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config=predictor_args)
     generated_text = ""
     while llm_model_inputs["not_need_stop"]:

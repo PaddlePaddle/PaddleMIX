@@ -23,7 +23,9 @@ export PYTHONPATH=/your_path/PaddleNLP:$PYTHONPATH
 * 请确保安装了以上依赖，否则无法运行。同时，需要安装 paddlemix/external_ops 下的自定义OP, `python setup.py install`。如果安装后仍然找不到算子，需要额外设置PYTHONPATH
 * (默认开启flash_attn)使用flash_attn 要求A100/A800显卡或者H20显卡
 
-## 3 推理预测
+## 3 高性能推理
+# 在Qwen2-vl的推理优化中，我们在视觉模型部分继续使用paddlemix中的模型组网；
+  但是在语言模型部分，我们调用Paddlenlp中高性能的qwen2语言模型，以得到高性能的Qwen2-vl推理版本。
 
 ### a. 文本&单张图像输入高性能推理
 ```bash
