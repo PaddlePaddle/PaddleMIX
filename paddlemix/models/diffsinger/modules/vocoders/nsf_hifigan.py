@@ -14,10 +14,9 @@
 
 import pathlib
 import sys
-
 import paddle
-import paddle_aux
 
+from paddlemix.models.diffsinger.utils import paddle_aux
 from paddlemix.models.diffsinger.basics.base_vocoder import BaseVocoder
 from paddlemix.models.diffsinger.modules.nsf_hifigan.models import load_model
 from paddlemix.models.diffsinger.modules.vocoders.registry import register_vocoder
