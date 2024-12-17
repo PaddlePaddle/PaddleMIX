@@ -38,7 +38,7 @@ from paddlemix.processors.qwen2_vl_processing import (
 
 MODEL_NAME = "Qwen/Qwen2-VL-2B-Instruct"
 # MODEL_NAME = "Qwen/Qwen2-VL-7B-Instruct"
-vl_model = Qwen2VLForConditionalGeneration.from_pretrained(MODEL_NAME, dtype="bfloat16")
+model_vision = Qwen2VLForConditionalGeneration.from_pretrained(MODEL_NAME, dtype="bfloat16")
 
 image_processor = Qwen2VLImageProcessor()
 tokenizer = Qwen2Tokenizer.from_pretrained(MODEL_NAME)
@@ -148,9 +148,7 @@ def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: Predic
     model_inputs["min_length"] = paddle.full(shape=[batch_size, 1], fill_value=arg_config.min_length, dtype="int64")
     model_inputs["max_length"] = paddle.full(shape=[batch_size, 1], fill_value=arg_config.max_length, dtype="int64")
 
-    cache_kvs_shape = model.get_cache_kvs_shape(model.config, batch_size)
-
-    position_ids, _ = vl_model.get_rope_index(
+    position_ids, _ = model_vision.get_rope_index(
         config.vision_config["spatial_merge_size"],
         config.image_token_id,
         config.video_token_id,
@@ -185,7 +183,8 @@ def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: Predic
 
     model_inputs["bad_tokens"] = paddle.to_tensor([-1], dtype="int64")
     model_inputs["is_block_step"] = paddle.full(shape=[batch_size], fill_value=False, dtype="bool")
-
+    
+    cache_kvs_shape = model.get_cache_kvs_shape(model.config, batch_size)
     cachekv_dtype = config.dtype if arg_config.cachekv_int8_type is None else "uint8"
     model_inputs["cache_kvs"] = [paddle.zeros(shape, dtype=cachekv_dtype) for shape in cache_kvs_shape]
 
@@ -237,7 +236,7 @@ def run_model():
         padding=True,
         return_tensors="pd",
     )
-    inputs_embeds = vl_model.vision_forward(**vision_model_inputs)
+    inputs_embeds = model_vision.vision_forward(**vision_model_inputs)
     llm_model_inputs = init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config=predictor_args)
     generated_text = ""
     while llm_model_inputs["not_need_stop"]:
