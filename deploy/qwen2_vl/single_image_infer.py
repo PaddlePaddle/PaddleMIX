@@ -40,7 +40,7 @@ MODEL_NAME = "Qwen/Qwen2-VL-2B-Instruct"
 # MODEL_NAME = "Qwen/Qwen2-VL-7B-Instruct"
 vl_model = Qwen2VLForConditionalGeneration.from_pretrained(MODEL_NAME, dtype="bfloat16")
 
-# NOTE: (zhoukangkang、changwenbin) Because we only use the visual model here, 
+# NOTE: (zhoukangkang、changwenbin) Because we only use the visual model here,
 # in order to reduce video memory,we delete the language model.
 del vl_model.model
 paddle.device.cuda.empty_cache()
@@ -165,7 +165,7 @@ def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: Predic
     cos = qwen2_Embedding.cos_cached
     sin = qwen2_Embedding.sin_cached
 
-    # NOTE: (zhoukangkang、changwenbin) Copied from PaddleMIX/paddlemix/models/qwen2_vl/modeling_qwen2_vl.py, 
+    # NOTE: (zhoukangkang、changwenbin) Copied from PaddleMIX/paddlemix/models/qwen2_vl/modeling_qwen2_vl.py,
     # for calculating M-ROPE.
     cos = cos[position_ids]
     sin = sin[position_ids]
@@ -205,8 +205,8 @@ parser = PdArgumentParser((PredictorArgument, ModelArgument))
 predictor_args, model_args = parser.parse_args_into_dataclasses()
 
 paddle.set_default_dtype(predictor_args.dtype)
-
 config = AutoConfig.from_pretrained(MODEL_NAME)
+
 # NOTE: (changwenbin) This is for using the inference optimization of paddlenlp qwen2.
 config.model_type = "qwen2"
 generation_config = GenerationConfig.from_pretrained(MODEL_NAME)

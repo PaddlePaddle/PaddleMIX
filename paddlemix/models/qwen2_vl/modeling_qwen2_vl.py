@@ -1414,16 +1414,18 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
         rope_deltas: Optional[paddle.Tensor] = None,
     ):
         if inputs_embeds is None:
-            # NOTE: (zhoukangkang、changwenbin) In the high-performance reasoning of Qwen2-vl, 
+            # NOTE: (zhoukangkang、changwenbin) In the high-performance reasoning of Qwen2-vl,
             # in order to reduce video memory, the qwen2 embed_tokens method in Paddlenlp is reused here.
             from paddlenlp.experimental.transformers.qwen2.modeling import (
                 Qwen2VLForConditionalGenerationBlockInferenceModel,
             )
+
             assert isinstance(
                 self.model, Qwen2VLForConditionalGenerationBlockInferenceModel
             ), "model is not an instance of Qwen2VLForConditionalGenerationBlockInferenceModel"
+
             inputs_embeds = self.model.qwen2.embed_tokens(input_ids)
-            
+
             if pixel_values is not None:
                 pixel_values = paddle.cast(pixel_values, paddle.bfloat16)
                 image_embeds = self.visual(pixel_values, grid_thw=image_grid_thw)
