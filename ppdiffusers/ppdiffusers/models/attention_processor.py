@@ -109,6 +109,7 @@ class Attention(nn.Layer):
         super().__init__()
         self.inner_dim = dim_head * heads
         self.inner_dim = out_dim if out_dim is not None else dim_head * heads
+        self.is_cross_attention = cross_attention_dim is not None
         self.cross_attention_dim = cross_attention_dim if cross_attention_dim is not None else query_dim
         self.upcast_attention = upcast_attention
         self.upcast_softmax = upcast_softmax
@@ -372,7 +373,7 @@ class Attention(nn.Layer):
         if not USE_PEFT_BACKEND and hasattr(self, "processor") and _remove_lora and self.to_q.lora_layer is not None:
             deprecate(
                 "set_processor to offload LoRA",
-                "0.45.0",
+                "0.26.0",
                 "In detail, removing LoRA layers via calling `set_default_attn_processor` is deprecated. Please make sure to call `pipe.unload_lora_weights()` instead.",
             )
             # TODO(Patrick, Sayak) - this can be deprecated once PEFT LoRA integration is complete
@@ -916,6 +917,7 @@ class AttnAddedKVProcessor:
 
         return hidden_states
 
+
 class JointAttnProcessor2_5:
     """Attention processor used typically in processing the SD3-like self-attention projections."""
 
@@ -941,7 +943,9 @@ class JointAttnProcessor2_5:
         context_input_ndim = encoder_hidden_states.ndim
         if context_input_ndim == 4:
             batch_size, channel, height, width = encoder_hidden_states.shape
-            encoder_hidden_states = encoder_hidden_states.reshape([batch_size, channel, height * width]).transpose([0, 2, 1])
+            encoder_hidden_states = encoder_hidden_states.reshape([batch_size, channel, height * width]).transpose(
+                [0, 2, 1]
+            )
 
         batch_size = encoder_hidden_states.shape[0]
 
@@ -988,7 +992,9 @@ class JointAttnProcessor2_5:
         if input_ndim == 4:
             hidden_states = hidden_states.transpose([0, 1, 3, 2]).reshape([batch_size, channel, height, width])
         if context_input_ndim == 4:
-            encoder_hidden_states = encoder_hidden_states.transpose([0, 1, 3, 2]).reshape([batch_size, channel, height, width])
+            encoder_hidden_states = encoder_hidden_states.transpose([0, 1, 3, 2]).reshape(
+                [batch_size, channel, height, width]
+            )
 
         return hidden_states, encoder_hidden_states
 
@@ -1019,7 +1025,9 @@ class FusedJointAttnProcessor2_5:
         context_input_ndim = encoder_hidden_states.ndim
         if context_input_ndim == 4:
             batch_size, channel, height, width = encoder_hidden_states.shape
-            encoder_hidden_states = encoder_hidden_states.reshape([batch_size, channel, height * width]).transpose([0, 2, 1])
+            encoder_hidden_states = encoder_hidden_states.reshape([batch_size, channel, height * width]).transpose(
+                [0, 2, 1]
+            )
 
         batch_size = encoder_hidden_states.shape[0]
 
@@ -1070,9 +1078,12 @@ class FusedJointAttnProcessor2_5:
         if input_ndim == 4:
             hidden_states = hidden_states.transpose([0, 1, 3, 2]).reshape([batch_size, channel, height, width])
         if context_input_ndim == 4:
-            encoder_hidden_states = encoder_hidden_states.transpose([0, 1, 3, 2]).reshape([batch_size, channel, height, width])
+            encoder_hidden_states = encoder_hidden_states.transpose([0, 1, 3, 2]).reshape(
+                [batch_size, channel, height, width]
+            )
 
         return hidden_states, encoder_hidden_states
+
 
 class XFormersAttnAddedKVProcessor:
     r"""
@@ -1645,7 +1656,7 @@ class LoRAAttnProcessor(nn.Layer):
         self_cls_name = self.__class__.__name__
         deprecate(
             self_cls_name,
-            "0.45.0",
+            "0.26.0",
             (
                 f"Make sure use {self_cls_name[4:]} instead by setting"
                 "LoRA layers to `self.{to_q,to_k,to_v,to_out[0]}.lora_layer` respectively. This will be done automatically when using"
@@ -1724,7 +1735,7 @@ class LoRAXFormersAttnProcessor(nn.Layer):
         self_cls_name = self.__class__.__name__
         deprecate(
             self_cls_name,
-            "0.45.0",
+            "0.26.0",
             (
                 f"Make sure use {self_cls_name[4:]} instead by setting"
                 "LoRA layers to `self.{to_q,to_k,to_v,add_k_proj,add_v_proj,to_out[0]}.lora_layer` respectively. This will be done automatically when using"
@@ -1783,7 +1794,7 @@ class LoRAAttnAddedKVProcessor(nn.Layer):
         self_cls_name = self.__class__.__name__
         deprecate(
             self_cls_name,
-            "0.45.0",
+            "0.26.0",
             (
                 f"Make sure use {self_cls_name[4:]} instead by setting"
                 "LoRA layers to `self.{to_q,to_k,to_v,add_k_proj,add_v_proj,to_out[0]}.lora_layer` respectively. This will be done automatically when using"
@@ -2158,13 +2169,13 @@ class CogVideoXAttnProcessor2_0:
         # NOTE: There is diff between paddle's and torch's sdpa
         # paddle needs input: [batch_size, seq_len, num_heads, head_dim]
         # torch needs input: [batch_size, num_heads, seq_len, head_dim]
-        hidden_states = F.scaled_dot_product_attention(
-            query.transpose([0, 2, 1, 3]), 
-            key.transpose([0, 2, 1, 3]), 
-            value.transpose([0, 2, 1, 3]), 
-            attn_mask=attention_mask, 
-            dropout_p=0.0, 
-            is_causal=False
+        hidden_states = F.scaled_dot_product_attention_(
+            query.transpose([0, 2, 1, 3]),
+            key.transpose([0, 2, 1, 3]),
+            value.transpose([0, 2, 1, 3]),
+            attn_mask=attention_mask,
+            dropout_p=0.0,
+            is_causal=False,
         )
 
         hidden_states = hidden_states.reshape([batch_size, -1, attn.heads * head_dim])
@@ -2177,6 +2188,7 @@ class CogVideoXAttnProcessor2_0:
         encoder_hidden_states, hidden_states = hidden_states.split(
             [text_seq_length, hidden_states.shape[1] - text_seq_length], axis=1
         )
+
         return hidden_states, encoder_hidden_states
 
 
