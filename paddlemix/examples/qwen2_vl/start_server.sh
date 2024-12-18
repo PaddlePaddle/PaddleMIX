@@ -1,8 +1,8 @@
 #!/bin/bash
 set -e
 
-HOST="0.0.0.0"
-PORT=8001
+HOST="localhost"
+PORT=8080
 MODEL_PATH="Qwen/Qwen2-VL-2B-Instruct"
 
 while [[ $# -gt 0 ]]; do

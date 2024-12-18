@@ -15,7 +15,7 @@
 import sys
 
 import paddle
-import paddle_aux
+from paddlemix.models.diffsinger.utils import paddle_aux
 
 from paddlemix.models.diffsinger.utils import filter_kwargs
 

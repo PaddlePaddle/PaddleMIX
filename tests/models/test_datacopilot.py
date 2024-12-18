@@ -114,7 +114,7 @@ def test_h5(dataset: MMDataset):
         NUM = 3
         NAME = 'test'
 
-        dataset = dataset[:3] + dataset.shuffle(seed=0)
+        dataset = dataset[:3] + dataset.shuffle()
         assert len(dataset) == 3 + 4, ''
 
         dataset.export_h5(

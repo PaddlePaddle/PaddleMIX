@@ -87,7 +87,7 @@ python setup.py install
 ```
 ### 设置代理
 ```shell
-export HF_HUB_ENABLE_HF_TRANSFER=1   
+export HF_HUB_ENABLE_HF_TRANSFER=1
 export HF_ENDPOINT=https://hf-mirror.com
 ```
 
@@ -1015,14 +1015,15 @@ imageio.mimsave("text_to_video_generation-zero-result-panda.mp4", result, fps=4)
 import paddle
 import scipy
 
-from ppdiffusers import AudioLDMPipeline
+from ppdiffusers import AudioLDM2Pipeline
 
-pipe = AudioLDMPipeline.from_pretrained("cvssp/audioldm", paddle_dtype=paddle.float16)
+pipe = AudioLDM2Pipeline.from_pretrained("cvssp/audioldm2", paddle_dtype=paddle.float16)
 
-prompt = "Techno music with a strong, upbeat tempo and high melodic riffs"
-audio = pipe(prompt, num_inference_steps=10, audio_length_in_s=5.0).audios[0]
+prompt = "Musical constellations twinkling in the night sky, forming a cosmic melody."
+negative_prompt = "Low quality."
+audio = pipe(prompt, negative_prompt=negative_prompt, num_inference_steps=200, audio_length_in_s=10).audios[0]
 
-output_path = "text_to_audio_generation-audio_ldm-techno.wav"
+output_path = f"{prompt}.wav"
 # save the audio sample as a .wav file
 scipy.io.wavfile.write(output_path, rate=16000, data=audio)
 ```
@@ -1032,7 +1033,7 @@ scipy.io.wavfile.write(output_path, rate=16000, data=audio)
   <tbody>
    <tr>
       <td align = "center">
-      <a href="https://paddlenlp.bj.bcebos.com/models/community/westfish/develop_ppdiffusers_data/techno.wav" rel="nofollow">
+      <a href="https://paddlenlp.bj.bcebos.com/models/community/paddlemix/ppdiffusers/AudioLDM2-Music.wav" rel="nofollow">
             <img align="center" src="https://user-images.githubusercontent.com/20476674/209344877-edbf1c24-f08d-4e3b-88a4-a27e1fd0a858.png" width="200 style="max-width: 100%;"></a><br>
       </td>
     </tr>
@@ -1040,6 +1041,10 @@ scipy.io.wavfile.write(output_path, rate=16000, data=audio)
 </div>
 </details>
 
+可以使用以下代码转换[huggingface](https://huggingface.co/docs/diffusers/api/pipelines/audioldm2)的模型，一键在paddle中使用
+```python
+pipe = AudioLDM2Pipeline.from_pretrained("cvssp/audioldm2-music", from_hf_hub=True, from_diffusers=True).save_pretrained("cvssp/audioldm2-music")
+```
 ### 图像
 
 <details><summary>&emsp;无条件图像生成（Unconditional Image Generation）</summary>

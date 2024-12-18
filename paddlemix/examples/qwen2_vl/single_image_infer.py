@@ -94,7 +94,10 @@ def main(args):
             if i > 10:
                 total += time.time() - start
         print("s/it: ", total / 10)
-        print(f"\nGPU memory usage: {paddle.device.cuda.max_memory_reserved() / 1024 ** 3:.2f} GB")
+        print(f"\nGPU memory_allocated: {paddle.device.cuda.memory_allocated() / 1024 ** 3:.2f} GB")
+        print(f"\nGPU max_memory_allocated: {paddle.device.cuda.max_memory_allocated() / 1024 ** 3:.2f} GB")
+        print(f"\nGPU memory_reserved: {paddle.device.cuda.memory_reserved() / 1024 ** 3:.2f} GB")
+        print(f"\nGPU max_memory_reserved: {paddle.device.cuda.max_memory_reserved() / 1024 ** 3:.2f} GB")
         print("output_text:\n", output_text)
 
     else:
