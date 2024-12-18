@@ -56,7 +56,7 @@ python paddlemix/MULLM_WebUI/scripts/convert_dataset.py \
 ![超参数设置](./fig/train_2.jpg)
 
 
-3）LoRA参数设置与模型训练
+3) LoRA参数设置与模型训练
 ![模型训练](./fig/train_3.jpg)
 
 #### 3.2.3 模型推理
