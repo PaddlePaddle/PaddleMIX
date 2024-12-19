@@ -13,9 +13,9 @@
 # limitations under the License.
 
 import paddle
-from modules.backbones.lynxnet import LYNXNet
-from modules.backbones.wavenet import WaveNet
-from utils import filter_kwargs
+from paddlemix.models.diffsinger.modules.backbones.lynxnet import LYNXNet
+from paddlemix.models.diffsinger.modules.backbones.wavenet import WaveNet
+from paddlemix.models.diffsinger.utils import filter_kwargs
 
 BACKBONES = {"wavenet": WaveNet, "lynxnet": LYNXNet}
 

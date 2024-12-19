@@ -15,7 +15,7 @@
 import sys
 
 import paddle
-import paddle_aux
+from paddlemix.models.diffsinger.utils import paddle_aux
 
 from paddlemix.models.diffsinger.modules.commons.common_layers import SinusoidalPosEmb
 from paddlemix.models.diffsinger.utils.hparams import hparams

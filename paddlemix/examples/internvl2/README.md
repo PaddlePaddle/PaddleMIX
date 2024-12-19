@@ -26,8 +26,12 @@
 | Model              |
 |--------------------|
 | OpenGVLab/InternVL2-1B  |
+| OpenGVLab/InternVL2_5-1B  |
 | OpenGVLab/InternVL2-2B  |
+| OpenGVLab/InternVL2_5-2B  |
+| OpenGVLab/InternVL2_5-4B  |
 | OpenGVLab/InternVL2-8B  |
+| OpenGVLab/InternVL2_5-8B  |
 | OpenGVLab/InternVL2-26B |
 | OpenGVLab/InternVL2-40B |
 | OpenGVLab/InternVL2-8B-MPO |

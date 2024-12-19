@@ -99,12 +99,14 @@ def load_tokenizer(model_path):
     import re
 
     match = re.search(r"\d+B", model_path)
+    model2_5 = "InternVL2_5" in model_path 
     if match:
         model_size = match.group()
     else:
         model_size = "2B"
-
-    if model_size in ["1B"]:
+    if model2_5 and model_size in ["1B", "4B"]:
+        tokenizer = Qwen2Tokenizer.from_pretrained(model_path)
+    elif model_size in ["1B"]:
         tokenizer = Qwen2Tokenizer.from_pretrained(model_path)
     elif model_size in ["2B", "8B", "26B"]:
         tokenizer = InternLM2Tokenizer.from_pretrained(model_path)
@@ -135,8 +137,7 @@ def main(args):
     print("len(tokenizer): ", len(tokenizer))
 
     model = InternVLChatModel.from_pretrained(MODEL_PATH, dtype=args.dtype).eval()
-
-    generation_config = dict(max_new_tokens=1024, do_sample=False)
+    generation_config = dict(max_new_tokens=1024, do_sample=False, top_p=0.01)
 
     with paddle.no_grad():
         response, history = model.chat(

@@ -1,0 +1,6 @@
+{
+  "synthdog_en": {
+    "images": "synthdog_en/",
+    "annotations": "synthdog_en/synthdog_en_29765_ocr.json"
+  }
+}
