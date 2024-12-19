@@ -21,6 +21,10 @@ class PPInfinityDocData(object):
 
     def __init__(self, llm_obj):
         self.llm = llm_obj
+        
+        
+    def generate_chart(self, file_path, llm=None):
+        pass
 
     def generate_doc(self, image_layout_info: str, llm=None):
         template = '''
@@ -66,7 +70,7 @@ class PPInfinityDocData(object):
                 ```
                 请生成至少5个中文指令和回答。你需要通过JSON格式提供生成内容，请确保输出中包含```json ```，可以参考下面的样例组织你的输出：{template}，如果文档中的内容全部为英文，则在生成的结果中添加一个键值对："language":"en"。
                 '''
-                assistant_reply = llm.get_output([system, question])
+                assistant_reply = llm.predict(system+question)
                 
             except Exception as e:
                 print(f'{e}')

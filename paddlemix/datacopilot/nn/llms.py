@@ -16,7 +16,6 @@
 import time
 import random
 import requests
-import erniebot
 
 class ErnieEval(object):
     """
@@ -42,6 +41,7 @@ class ErnieEval(object):
         self.config = config
     
     def predict(self, prompts, temperature=0.001):
+        import erniebot
         chat_completion = erniebot.ChatCompletion.create(
             _config_=self.config,
             model=self.model_name,
@@ -51,75 +51,3 @@ class ErnieEval(object):
         res = chat_completion.get_result()
         return res
 
-class PaddleGPT4o:
-    def __init__(self, ):
-        pass
-
-    def get_output(self, prompts, ):
-        while True:
-            rst = self.get_result(
-                text=prompts,
-                max_tokens=2048,
-                temperature=0.9,
-                topp=0,
-                penalty_score=1,
-            )
-            if len(rst) > 1:
-                break
-            time.sleep(1)
-        return rst
-
-    def gen_session_id(self, prefix="1"):
-        # 生成新Session ID
-        return str(prefix) + "session_id_time_%f_rand_%f" % (time.time(), random.random())
-
-    def request_gpt4(self, json_data):    
-        response = requests.request("POST", "http://10.88.94.144:8900/generate", json=json_data).json()
-        return response
-    
-    def get_result(self, text, max_tokens, temperature, topp, penalty_score, history=None):
-        request_data = {
-            "context": [
-                {
-                    "role": "system",
-                    "utterance": [{
-                        "type": "text",
-                        "text": text[0],
-                        },
-                    ],
-                },
-                {
-                    "role": "user", 
-                    "utterance": [{
-                        "type": "text",
-                        "text": text[1],
-                        },
-                    ],
-                }
-            ],
-            "top_p": topp,
-            "temperature": temperature,
-            "penalty_score": penalty_score,
-            "frequency_score": 0,
-            "presence_score": 0,
-            "min_dec_len": 2,
-            "max_dec_len": max_tokens,
-        }
-    
-        SUCCESS = False
-        session_id = self.gen_session_id()
-
-        try:
-            rst = self.request_gpt4(request_data)
-            if 'result' in rst:
-                if 'response' in rst['result']:
-                    if 'utterance' in rst['result']['response']:
-                        SUCCESS = True
-            result = rst['result']['response']['utterance']
-        
-        except Exception as e:
-            print("error:", e, "session_id:", session_id)
-        if SUCCESS:
-            return result
-        else:
-            return ""

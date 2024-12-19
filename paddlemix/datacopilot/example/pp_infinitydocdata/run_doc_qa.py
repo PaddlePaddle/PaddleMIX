@@ -17,7 +17,7 @@ from pathlib import Path
 from functools import partial
 
 from paddlemix.datacopilot.core import MMDataset
-from paddlemix.datacopilot.nn.llms import PaddleGPT4o
+from paddlemix.datacopilot.nn.llms import ErnieEval
 from paddlemix.datacopilot.nn.layout_parsing import PaddleXLayoutParser
 from paddlemix.datacopilot.ops.generate.pp_infinity_doc import PPInfinityDocData
 
@@ -38,7 +38,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    generator = PPInfinityDocData(llm=PaddleGPT4o())
+    generator = PPInfinityDocData(llm=ErnieEval())
     layout_parser = PaddleXLayoutParser(gpu_id=args.gpu_id)
     
     paths = list(sorted(Path(args.root).glob('*.jpg')))
