@@ -34,8 +34,7 @@ GRADIO_SERVER_PORT=8260 python paddlemix/MULLM_WebUI/run_web.py
 ### 3.2 使用教程
 #### 3.2.1 新增数据集
 
-* 下载 [Pokemon](https://huggingface.co/datasets/llamafactory/pokemon-gpt4o-captions/tree/main) 数据集。
-
+* 下载 [Pokemon](https://huggingface.co/datasets/llamafactory/pokemon-gpt4o-captions/tree/main) 数据集。Pokemon-gpt4o-captions 是一个基于精灵宝可梦的中英双语视觉问答数据集，其问答结果由gpt4o生成。其中中文问答数据共计833条，数据集大小80.8M。
 * 放置中文数据集文件到 `./data/pokemon_gpt4o_zh/pokemon_gpt4o_zh.parquet`
 
 * 运行转换数据集脚本
@@ -45,7 +44,7 @@ python paddlemix/MULLM_WebUI/scripts/convert_dataset.py \
     --dataset_dir pokemon_gpt4o_zh \
     --file_name ./data/pokemon_gpt4o_zh/pokemon_gpt4o_zh.parquet
 ```
-
+> 注：目前MULLM WebUI只支持单卡微调，为了达到更佳的训练效果，建议自己构建数据集或者按照[qwen2_vl ](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/paddlemix/examples/qwen2_vl)样例中提供的脚本进行微调。
 #### 3.2.2 模型微调
 1) 模型选择
 
