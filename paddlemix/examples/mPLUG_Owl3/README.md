@@ -34,7 +34,7 @@ python -m pip install paddlenlp==3.0.0b3
 ### 推理
 ```bash
 # 图片理解
-CUDA_VISIBLE_DEVICES=0 python paddlemix/examples/mPLUG_Owl3/run_inference.py
+CUDA_VISIBLE_DEVICES=0 python paddlemix/examples/mPLUG_Owl3/run_inference.py --dtype "bfloat16"
 ```
 
 
