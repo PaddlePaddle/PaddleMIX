@@ -22,7 +22,6 @@ import paddle
 from decord import VideoReader
 from moviepy.editor import ImageSequenceClip
 from PIL import Image
-from safetensors.torch import load_file
 
 from ppdiffusers import (
     CogVideoXDDIMScheduler,
@@ -142,16 +141,6 @@ def parse_args():
     )
     args = parser.parse_args()
     return args
-
-
-def load_tensor(tensor_path):
-    if os.path.splitext(tensor_path)[1] == ".bin" or os.path.splitext(tensor_path)[1] == ".pt":
-        return paddle.load(path=str(tensor_path))
-    elif os.path.splitext(tensor_path)[1] == ".safetensors":
-        return load_file(tensor_path)
-    else:
-        print("without supported tensors")
-        os._exit()
 
 
 if __name__ == "__main__":
