@@ -15,8 +15,10 @@ import os
 import sys
 
 import paddle
-from paddlenlp.trainer import PdArgumentParser, get_last_checkpoint
+from paddlenlp.peft import LoRAConfig, LoRAModel
+from paddlenlp.trainer import get_last_checkpoint
 from paddlenlp.utils.log import logger
+
 from paddlemix.models.llava.language_model.llava_llama import (
     LlavaConfig,
     LlavaLlamaForCausalLM,
@@ -31,14 +33,14 @@ from paddlemix.trainer import (
     GenerateArgument,
     ModelArgument,
     TrainingArguments,
+    PdMIXArgumentParser,
     freeze_params,
     get_trainer,
 )
 
-
 def main():
     # Arguments
-    parser = PdArgumentParser((GenerateArgument, ModelArgument, DataArgument, TrainingArguments))
+    parser = PdMIXArgumentParser((GenerateArgument, ModelArgument, DataArgument, TrainingArguments))
     if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
         gen_args, model_args, data_args, training_args = parser.parse_json_file(json_file=os.path.abspath(sys.argv[1]))
     else:
@@ -65,17 +67,21 @@ def main():
                 "the `--output_dir` or add `--overwrite_output_dir` to train from scratch."
             )
 
+    if "npu" in paddle.get_device():
+        is_bfloat16_supported = True
+    else:
+        is_bfloat16_supported = paddle.amp.is_bfloat16_supported()
+
     # Load model
     if training_args.fp16_opt_level == "O2":
         if training_args.fp16:
             dtype = "float16"
-        elif training_args.bf16 and paddle.amp.is_bfloat16_supported():
+        elif training_args.bf16 and is_bfloat16_supported:
             dtype = "bfloat16"
         else:
             raise ValueError("Please specific dtype: --fp16 or --bf16")
     else:
         dtype = "float32"
-
     tokenizer = LLavaTokenizer.from_pretrained(model_args.model_name_or_path)
     
     # Load model config
@@ -114,11 +120,11 @@ def main():
             mod='eval'
             )
 
-    # Load dataset
+    # Load datasets
     train_ds = None
     eval_ds = None
     if data_args.dataset is None:
-        raise ValueError(f"Please specific dataset config (got {data_args.dataset})")
+        raise ValueError(f"Please specific datasets config (got {data_args.dataset})")
     else:
         if "train" in data_args.dataset.keys():
             train_ds = MixDataset(data_args.dataset["train"])
@@ -128,19 +134,32 @@ def main():
     total_samples = len(train_ds) if train_ds is not None else 0
 
     if data_args.mixtoken:
-        if (
-            model.base_model_prefix not in ["qwen", "visualglm", "llava"]
-            and training_args.pipeline_parallel_degree < 1
-        ):
-            raise NotImplementedError("MIXToke data stream is only implemented for QWen-VL Visualglm llava so far.")
-        if model.base_model_prefix == "llava":
-            tokenizer.image_token_span = model.llama.vision_tower.num_patches
-            logger.info("tokenizer image span: {}".format(tokenizer.image_token_span))
+        tokenizer.image_token_span = model.llama.vision_tower.num_patches
+        logger.info("tokenizer image span: {}".format(tokenizer.image_token_span))
         mixtoken_dataset = MIXTokenMapDataset
         logger.info("Creating MIXToken Data Stream. This may take a few minutes.")
         train_ds = mixtoken_dataset(
             train_ds, max_length=data_args.max_length, processor=train_processor, tokenizer=tokenizer
         )
+
+    # lora
+    if model_args.lora:
+        if model_args.lora_path is None:
+            target_modules = model_args.lora_target_modules
+            lora_config = LoRAConfig(
+                target_modules=target_modules,
+                r=model_args.lora_rank,
+                lora_alpha=model_args.lora_alpha,
+                lora_dropout=model_args.lora_dropout,
+                merge_weights=False,
+                tensor_parallel_degree=training_args.tensor_parallel_degree,
+                dtype=dtype,
+            )
+            model = LoRAModel(model, lora_config)
+        else:
+            model = LoRAModel.from_pretrained(model=model, lora_path=model_args.lora_path)
+        model.mark_only_lora_as_trainable()
+        model.print_trainable_parameters()
 
     # get Trainer
     trainer = get_trainer(
@@ -164,6 +183,19 @@ def main():
             checkpoint = last_checkpoint
         train_result = trainer.train(resume_from_checkpoint=checkpoint)
         if training_args.benchmark:
+            def get_paddle_memory_info():
+                """get_memory_info"""
+                divisor = 2**30
+                return (
+                    paddle.device.cuda.memory_allocated() / divisor,
+                    paddle.device.cuda.max_memory_allocated() / divisor,
+                    paddle.device.cuda.memory_reserved() / divisor,
+                    paddle.device.cuda.max_memory_reserved() / divisor,
+                )
+            memory_allocated, max_memory_allocated, memory_reserved, max_memory_reserved = get_paddle_memory_info()
+
+            logger.info(f'memory_allocated:{memory_allocated}GB, max_memory_allocated: {max_memory_allocated}GB, memory_reserved:{memory_reserved}GB, max_memory_reserved: {max_memory_reserved}GB \n')
+   
             total_effective_samples = total_samples * training_args.num_train_epochs
             effective_samples_per_second = total_effective_samples / train_result.metrics["train_runtime"]
             mem_gpu = (
