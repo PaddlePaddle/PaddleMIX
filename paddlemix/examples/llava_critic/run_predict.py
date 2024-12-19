@@ -29,46 +29,6 @@ from paddlemix.models.llava.multimodal_encoder.siglip_encoder import (
 from paddlemix.models.llava.train_utils import tokenizer_image_token
 from paddlemix.utils.log import logger
 
-pretrained = "lmms-lab/llava-critic-7b"
-# pretrained = "lmms-lab/llava-onevision-qwen2-7b-chat"
-
-model = LlavaQwenForCausalLM.from_pretrained(pretrained, dtype=paddle.bfloat16).eval()
-tokenizer = Qwen2Tokenizer.from_pretrained(pretrained)
-image_processor = SigLipImageProcessor()
-
-image = Image.open("paddlemix/demo_images/critic_img_seven.png")
-image_tensor = process_images([image], image_processor, model.config)
-image_tensor = [_image.cast(paddle.bfloat16) for _image in image_tensor]
-
-conv_template = "qwen_1_5"  # Make sure you use correct chat template for different models
-
-# pairwise ranking
-critic_prompt = "Given an image and a corresponding question, please serve as an unbiased and fair judge to evaluate the quality of the answers provided by a Large Multimodal Model (LMM). Determine which answer is better and explain your reasoning with specific details. Your task is provided as follows:\nQuestion: [What this image presents?]\nThe first response: [The image is a black and white sketch of a line that appears to be in the shape of a cross. The line is a simple and straightforward representation of the cross shape, with two straight lines intersecting at a point.]\nThe second response: [This is a handwritten number seven.]\nASSISTANT:\n"
-
-# pointwise scoring
-# critic_prompt = "Given an image and a corresponding question, please serve as an unbiased and fair judge to evaluate the quality of answer answers provided by a Large Multimodal Model (LMM). Score the response out of 100 and explain your reasoning with specific details. Your task is provided as follows:\nQuestion: [What this image presents?]\nThe LMM response: [This is a handwritten number seven.]\nASSISTANT:\n "
-
-question = DEFAULT_IMAGE_TOKEN + "\n" + critic_prompt
-conv = copy.deepcopy(conv_templates[conv_template])
-conv.append_message(conv.roles[0], question)
-conv.append_message(conv.roles[1], None)
-prompt_question = conv.get_prompt()
-
-input_ids = tokenizer_image_token(prompt_question, tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pd").unsqueeze(0)
-image_sizes = [image.size]
-
-cont = model.generate(
-    input_ids,
-    images=image_tensor,
-    image_sizes=image_sizes,
-    do_sample=False,
-    temperature=0,
-    max_new_tokens=4096,
-)
-text_outputs = tokenizer.batch_decode(cont[0], skip_special_tokens=True)
-print("output:\n", text_outputs[0])
-
-
 def main(args):
     compute_dtype = "float16" if args.fp16 else "bfloat16"
     if "npu" in paddle.get_device():
@@ -82,23 +42,15 @@ def main(args):
     logger.info(f"compute_dtype: {compute_dtype}")
 
     model = LlavaQwenForCausalLM.from_pretrained(args.model_path, dtype=compute_dtype).eval()
-    tokenizer = Qwen2Tokenizer.from_pretrained(pretrained)
+    tokenizer = Qwen2Tokenizer.from_pretrained(args.model_path)
     image_processor = SigLipImageProcessor()
 
     image = Image.open(args.image_file)
     image_tensor = process_images([image], image_processor, model.config)
-    image_tensor = [_image.cast(paddle.bfloat16) for _image in image_tensor]
+    image_tensor = [_image.cast(compute_dtype) for _image in image_tensor]
 
-    conv_template = args.conv_mode  # Make sure you use correct chat template for different models
-
-    # pairwise ranking
-    critic_prompt = args.critic_prompt
-
-    # pointwise scoring
-    # critic_prompt = "Given an image and a corresponding question, please serve as an unbiased and fair judge to evaluate the quality of answer answers provided by a Large Multimodal Model (LMM). Score the response out of 100 and explain your reasoning with specific details. Your task is provided as follows:\nQuestion: [What this image presents?]\nThe LMM response: [This is a handwritten number seven.]\nASSISTANT:\n "
-
-    question = DEFAULT_IMAGE_TOKEN + "\n" + critic_prompt
-    conv = copy.deepcopy(conv_templates[conv_template])
+    question = DEFAULT_IMAGE_TOKEN + "\n" + args.critic_prompt
+    conv = copy.deepcopy(conv_templates[args.conv_mode])
     conv.append_message(conv.roles[0], question)
     conv.append_message(conv.roles[1], None)
     prompt_question = conv.get_prompt()

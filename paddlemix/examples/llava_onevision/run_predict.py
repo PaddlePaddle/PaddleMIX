@@ -50,12 +50,8 @@ def main(args):
     image_tensor = process_images([image], image_processor, model.config)
     image_tensor = [_image.cast(compute_dtype) for _image in image_tensor]
 
-    conv_template = args.conv_mode  # Make sure you use correct chat template for different models
-
-    prompt = args.prompt
-
-    question = DEFAULT_IMAGE_TOKEN + "\n" + prompt
-    conv = copy.deepcopy(conv_templates[conv_template])
+    question = DEFAULT_IMAGE_TOKEN + "\n" + args.prompt
+    conv = copy.deepcopy(conv_templates[args.conv_mode])
     conv.append_message(conv.roles[0], question)
     conv.append_message(conv.roles[1], None)
     prompt_question = conv.get_prompt()
