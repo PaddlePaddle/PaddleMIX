@@ -16,7 +16,40 @@
 import time
 import random
 import requests
+import erniebot
 
+class ErnieEval(object):
+    """
+    ErnieEval class for evaluating Ernie model.
+    """
+    def __init__(self, 
+                model_name="ernie-speed-128k", 
+                access_token="", 
+                ak="", sk="", 
+                api_type="aistudio", 
+                max_retries=1):
+        super().__init__()
+        config = {
+            "api_type": api_type,
+            "max_retries": max_retries,
+        }
+        if access_token:
+            config["access_token"] = access_token
+        else:
+            config["ak"] = ak
+            config["sk"] = sk
+        self.model_name = model_name
+        self.config = config
+    
+    def predict(self, prompts, temperature=0.001):
+        chat_completion = erniebot.ChatCompletion.create(
+            _config_=self.config,
+            model=self.model_name,
+            messages=[{"role": "user", "content": prompts}],
+            temperature=float(temperature),
+        )
+        res = chat_completion.get_result()
+        return res
 
 class PaddleGPT4o:
     def __init__(self, ):
