@@ -7,6 +7,8 @@
 
 本仓库提供该模型的Paddle实现，并提供了推理代码。
 
+<iframe width="854" height="480" src="" title="demo video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+
 ## 2. 快速开始
 
 ### 获取权重
