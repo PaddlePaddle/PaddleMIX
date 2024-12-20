@@ -196,7 +196,7 @@ def train():
     # trainable params: 464959488 || all params: 560528640 || trainable%: 82.9502 # stage3
     # trainable params: 560528640 || all params: 560528640 || trainable%: 100 # stage2
     params_grad = [p.numel() for n, p in model.named_parameters() if not p.stop_gradient]
-    print(f"Number of Mapping Trainable Parameters: {sum(params_grad) / (1 << 20):.2f} M")
+    print(f"Number of Mapping Trainable Parameters: {int(sum(params_grad)) / (1 << 20):.2f} M")
 
     # print trainable parameters
     if dist.get_rank() == 0:

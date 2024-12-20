@@ -31,9 +31,10 @@ parser.add_argument(
     type=str,
     default="A stunning princess from kabul in red, white traditional clothing, blue eyes, brown hair",
 )
+parser.add_argument("--dtype", type=str, default="float16")
 args = parser.parse_args()
 
-vl_gpt = JanusMultiModalityCausalLM.from_pretrained(args.model_path)
+vl_gpt = JanusMultiModalityCausalLM.from_pretrained(args.model_path, dtype=args.dtype)
 tokenizer = LlamaTokenizerFast.from_pretrained(args.model_path)
 image_processer = JanusImageProcessor.from_pretrained(args.model_path)
 vl_chat_processor: JanusVLChatProcessor = JanusVLChatProcessor(image_processer, tokenizer)
