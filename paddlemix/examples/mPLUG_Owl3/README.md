@@ -37,6 +37,7 @@ python -m pip install paddlenlp==3.0.0b3
 CUDA_VISIBLE_DEVICES=0 python paddlemix/examples/mPLUG_Owl3/run_inference.py --dtype "bfloat16"
 ```
 
+注意：mPLUG-Owl3-7B 模型不支持在V100上推理，请使用A100进行推理，推理显存约需20G。
 
 ### 参考文献
 ```BibTeX
