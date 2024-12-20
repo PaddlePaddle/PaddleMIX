@@ -1279,6 +1279,10 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
             position_ids (`paddle.Tensor` of shape `(3, batch_size, sequence_length)`)
             mrope_position_deltas (`paddle.Tensor` of shape `(batch_size)`)
         """
+        # spatial_merge_size = self.config.vision_config.spatial_merge_size
+        # image_token_id = self.config.image_token_id
+        # video_token_id = self.config.video_token_id
+        # vision_start_token_id = self.config.vision_start_token_id
         mrope_position_deltas = []
         if image_grid_thw is not None or video_grid_thw is not None:
             total_input_ids = input_ids
