@@ -507,6 +507,7 @@ class GOTQwenForCausalLM(Qwen2ForCausalLM):
         print_prompt=False,
         gradio_input=False,
         stream_flag=False,
+        dtype="bfloat16",
     ):
 
         image_processor_high = GOTImageEvalProcessor(image_size=1024)
@@ -583,7 +584,7 @@ class GOTQwenForCausalLM(Qwen2ForCausalLM):
 
         output_ids = self.generate(
             input_ids,
-            images=[image_tensor_1.unsqueeze(0).cast(paddle.bfloat16)],
+            images=[image_tensor_1.unsqueeze(0).to(dtype)],
             do_sample=False,
             num_beams=1,
             no_repeat_ngram_size=20,
@@ -667,6 +668,7 @@ class GOTQwenForCausalLM(Qwen2ForCausalLM):
         print_prompt=False,
         gradio_input=False,
         stream_flag=False,
+        dtype="bfloat16",
     ):
         # Model
         multi_page = False
@@ -745,7 +747,7 @@ class GOTQwenForCausalLM(Qwen2ForCausalLM):
 
         output_ids = self.generate(
             input_ids,
-            images=[image_list.cast(paddle.bfloat16)],
+            images=[image_list.to(dtype)],
             do_sample=False,
             num_beams=1,
             # no_repeat_ngram_size = 20,

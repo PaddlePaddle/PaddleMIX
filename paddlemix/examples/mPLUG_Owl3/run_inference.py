@@ -12,17 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import paddle
+import argparse
+
 from paddlenlp.transformers import Qwen2Tokenizer
 from PIL import Image
 
 from paddlemix.models.mPLUGOwl3.configuration_mplugowl3 import mPLUGOwl3Config
 from paddlemix.models.mPLUGOwl3.modeling_mplugowl3 import mPLUGOwl3Model
 
+parser = argparse.ArgumentParser()
+parser.add_argument("--dtype", type=str, default="bfloat16")
+args = parser.parse_args()
+
+
 model_path = "mPLUG/mPLUG-Owl3-7B-241101"
 
 config = mPLUGOwl3Config.from_pretrained(model_path)
-model = mPLUGOwl3Model.from_pretrained(model_path, dtype=paddle.bfloat16).eval()
+model = mPLUGOwl3Model.from_pretrained(model_path, dtype=args.dtype).eval()
 tokenizer = Qwen2Tokenizer.from_pretrained(model_path)
 processor = model.init_processor(tokenizer)
 
@@ -32,7 +38,7 @@ image = Image.open("paddlemix/demo_images/examples_image1.jpg").convert("RGB")
 messages = [{"role": "user", "content": """<|image|>Describe this image."""}, {"role": "assistant", "content": ""}]
 
 inputs = processor(messages, images=[image], videos=None)
-inputs["pixel_values"] = inputs["pixel_values"].cast(paddle.bfloat16)
+inputs["pixel_values"] = inputs["pixel_values"].cast(args.dtype)
 
 inputs.update(
     {

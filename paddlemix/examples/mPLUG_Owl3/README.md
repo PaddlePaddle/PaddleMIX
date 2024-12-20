@@ -2,6 +2,9 @@
 
 ## 1. 模型介绍
 
+mPLUG-Owl3 是由阿里巴巴推出的一个通用的多模态大语言模型，旨在有效地处理长图像序列。该模型通过在语言模型中引入创新的超注意力块，实现了高效的视频和图像理解。超注意力块并行地执行交叉注意力和自注意力，并根据文本语义自适应地选择和提取视觉特征。这使得 mPLUG-Owl3 能够在保持高执行效率的同时，处理超长视觉序列输入。
+
+
 **本仓库支持的模型权重:**
 
 | Model              |
@@ -13,20 +16,28 @@
 
 ## 2 环境准备
 
-1）[安装 PaddleMIX 环境依赖包](https://github.com/PaddlePaddle/PaddleMIX/tree/develop?tab=readme-ov-file#%E5%AE%89%E8%A3%85)
+- **python >= 3.10**
+- **paddlepaddle-gpu 要求3.0.0b2版本或develop版本**
+```
+# 安装示例
+python -m pip install paddlepaddle-gpu==3.0.0b2 -i https://www.paddlepaddle.org.cn/packages/stable/cu118/
+```
 
-2）pip install pillow tqdm paddlenlp==3.0.0b2
-
-注意：Python版本最好为3.10及以上版本。
+- **paddlenlp == 3.0.0b3**
+```
+# 安装示例
+python -m pip install paddlenlp==3.0.0b3
+```
 
 ## 3 快速开始
 
 ### 推理
 ```bash
 # 图片理解
-CUDA_VISIBLE_DEVICES=0 python paddlemix/examples/mPLUG_Owl3/run_inference.py \
+CUDA_VISIBLE_DEVICES=0 python paddlemix/examples/mPLUG_Owl3/run_inference.py --dtype "bfloat16"
 ```
 
+注意：mPLUG-Owl3-7B 模型不支持在V100上推理，请使用A100进行推理，推理显存约需20G。
 
 ### 参考文献
 ```BibTeX
