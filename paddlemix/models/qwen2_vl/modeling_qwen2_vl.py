@@ -142,7 +142,7 @@ class Qwen2RotaryEmbedding(nn.Layer):
         self.base = base
         # [dim / 2]
         self.inv_freq = 1.0 / (self.base ** (paddle.cast(paddle.arange(0, self.dim, 2), dtype="float32") / self.dim))
-        self._set_cos_sin_cache(seq_len=max_position_embeddings) 
+        self._set_cos_sin_cache(seq_len=max_position_embeddings)
 
     def _set_cos_sin_cache(self, seq_len):
         self.max_seq_len_cached = seq_len
