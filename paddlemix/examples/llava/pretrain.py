@@ -17,14 +17,8 @@ import sys
 import paddle
 from paddlenlp.trainer import PdArgumentParser, get_last_checkpoint
 from paddlenlp.utils.log import logger
-from paddlemix.models.llava.language_model.llava_llama import (
-    LlavaConfig,
-    LlavaLlamaForCausalLM,
-)
-from paddlemix.models.llava.language_model.tokenizer import LLavaTokenizer
-from paddlemix.processors import LlavaProcessor
-from paddlenlp.transformers import CLIPImageProcessor
 
+from paddlemix.auto import AutoConfigMIX, AutoModelMIX, AutoProcessorMIX
 from paddlemix.datasets import MixDataset, MIXTokenMapDataset
 from paddlemix.trainer import (
     DataArgument,
@@ -76,14 +70,12 @@ def main():
     else:
         dtype = "float32"
 
-    tokenizer = LLavaTokenizer.from_pretrained(model_args.model_name_or_path)
-    
     # Load model config
-    model_config = LlavaConfig.from_pretrained(model_args.model_name_or_path, dtype=dtype)  # freeze_mm_mlp_adapter
+    model_config = AutoConfigMIX.from_pretrained(model_args.model_name_or_path, dtype=dtype)
     model_config.use_flash_attention = model_args.use_flash_attention
 
     # Load model
-    model = LlavaLlamaForCausalLM.from_pretrained(
+    model = AutoModelMIX.from_pretrained(
         model_args.model_name_or_path,
         config=model_config,
         dtype=dtype,
@@ -93,26 +85,24 @@ def main():
     if model_args.freeze_include or model_args.freeze_exclude:
         freeze_params(model, include=model_args.freeze_include, exclude=model_args.freeze_exclude)
 
-    #load processor
-    name_or_path = (os.path.join(model_args.model_name_or_path, "processor", "train"))
-    image_processor = CLIPImageProcessor.from_pretrained(name_or_path)
-    train_processor = LlavaProcessor(
-        image_processor, 
-        tokenizer,
-        max_length=data_args.max_length, 
-        image_aspect_ratio=model_config.image_aspect_ratio,
-        mod='train'
-        )
+    # Load processor
+    train_processor, tokenizer = AutoProcessorMIX.from_pretrained(
+        model_args.model_name_or_path,
+        text_model_name_or_path=model_args.text_model_name_or_path,
+        train="train",
+        max_length=data_args.max_length,
+        version=model_config.version,
+        image_aspect_ratio=model_config.get("image_aspect_ratio", "square"),
+    )
     if training_args.do_eval:
-        name_or_path = (os.path.join(model_args.model_name_or_path, "processor", "eval"))
-        image_processor = CLIPImageProcessor.from_pretrained(name_or_path)
-        eval_processor = LlavaProcessor(
-            image_processor, 
-            tokenizer,
-            max_length=data_args.max_length, 
-            image_aspect_ratio=model_config.image_aspect_ratio,
-            mod='eval'
-            )
+        eval_processor, _ = AutoProcessorMIX.from_pretrained(
+            model_args.model_name_or_path,
+            text_model_name_or_path=model_args.text_model_name_or_path,
+            eval="eval",
+            max_length=data_args.max_length,
+            version=model_config.version,
+            image_aspect_ratio=model_config.get("image_aspect_ratio", "square"),
+        )
 
     # Load dataset
     train_ds = None
@@ -164,6 +154,18 @@ def main():
             checkpoint = last_checkpoint
         train_result = trainer.train(resume_from_checkpoint=checkpoint)
         if training_args.benchmark:
+            def get_paddle_memory_info():
+                """get_memory_info"""
+                divisor = 2**30
+                return (
+                    paddle.device.cuda.memory_allocated() / divisor,
+                    paddle.device.cuda.max_memory_allocated() / divisor,
+                    paddle.device.cuda.memory_reserved() / divisor,
+                    paddle.device.cuda.max_memory_reserved() / divisor,
+                )
+            memory_allocated, max_memory_allocated, memory_reserved, max_memory_reserved = get_paddle_memory_info()
+
+            logger.info(f'memory_allocated:{memory_allocated}GB, max_memory_allocated: {max_memory_allocated}GB, memory_reserved:{memory_reserved}GB, max_memory_reserved: {max_memory_reserved}GB \n')
             total_effective_samples = total_samples * training_args.num_train_epochs
             effective_samples_per_second = total_effective_samples / train_result.metrics["train_runtime"]
             mem_gpu = (

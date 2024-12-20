@@ -18,6 +18,15 @@ import os
 
 import yaml
 from paddlenlp.transformers import AutoTokenizer
+#fix paddlenlp 3.0b3 auto
+from paddlemix.models.llava.language_model.tokenizer import LLavaTokenizer
+from paddlemix.models.llava.language_model.llava_llama import LlavaConfig
+try:
+    AutoTokenizer.register(LlavaConfig, LLavaTokenizer)
+    print('LLavaTokenizer register success!!!!')
+except:
+    pass
+
 from paddlenlp.utils.import_utils import import_module
 from paddlenlp.utils.log import logger
 
@@ -44,7 +53,7 @@ class AutoTokenizerMIX(AutoTokenizer):
             cls._name_mapping[key] = value
 
     @classmethod
-    def _get_tokenizer_class_from_config(cls, pretrained_model_name_or_path, config_file_path):
+    def _get_tokenizer_class_from_config(cls, pretrained_model_name_or_path, config_file_path, use_fast=None):
         cls._update_name_mapping()
         with io.open(config_file_path, encoding="utf-8") as f:
             init_kwargs = json.load(f)
@@ -63,9 +72,9 @@ class AutoTokenizerMIX(AutoTokenizer):
                     import_class = import_module(f"paddlemix.models.{class_name}")
 
             tokenizer_class = getattr(import_class, init_class)
-            # if use_fast:
-            #     fast_tokenizer_class = cls._get_fast_tokenizer_class(init_class, class_name)
-            #     tokenizer_class = fast_tokenizer_class if fast_tokenizer_class else tokenizer_class
+            if use_fast:
+                fast_tokenizer_class = cls._get_fast_tokenizer_class(init_class, class_name)
+                tokenizer_class = fast_tokenizer_class if fast_tokenizer_class else tokenizer_class
             return tokenizer_class
         # If no `init_class`, we use pattern recognition to recognize the tokenizer class.
         else:
@@ -80,8 +89,8 @@ class AutoTokenizerMIX(AutoTokenizer):
                         import_class = import_module(f"paddlemix.models.{class_name}.tokenizer")
                     tokenizer_class = getattr(import_class, init_class)
 
-                    # if use_fast:
-                    #     fast_tokenizer_class = cls._get_fast_tokenizer_class(init_class, class_name)
-                    #     tokenizer_class = fast_tokenizer_class if fast_tokenizer_class else tokenizer_class
+                    if use_fast:
+                        fast_tokenizer_class = cls._get_fast_tokenizer_class(init_class, class_name)
+                        tokenizer_class = fast_tokenizer_class if fast_tokenizer_class else tokenizer_class
                     break
             return tokenizer_class
