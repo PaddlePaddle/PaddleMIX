@@ -18,14 +18,13 @@ import math
 import sys
 
 import paddle
-import paddle_aux
+from paddlemix.models.diffsinger.utils import paddle_aux
 from paddle.nn import GELU, LayerNorm
 from paddle.nn import MultiHeadAttention as MultiheadAttention
 from paddle.nn import ReLU
 from paddle.nn import Silu as SiLU
 
-sys.path.append("/mnt/data2/pengfeiyue/code/Paddle_test/DiffSinger_paddle")
-import utils
+import paddlemix.models.diffsinger.utils as utils
 
 
 class NormalInitEmbedding(paddle.nn.Embedding):

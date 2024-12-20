@@ -12,4 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-CUDA_VISIBLE_DEVICES=4 python run_predict.py --proj ./samples/00_我多想说再见啊.ds --exp openvpi/diffsinger_xxx
+python run_predict.py --proj ./samples/00_我多想说再见啊.ds --exp openvpi/opencpop

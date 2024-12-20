@@ -21,7 +21,7 @@ from functools import partial
 from typing import List, Sequence, Union, Optional, Callable, Any
 
 from .schema import is_valid_schema, SCHEMA, T
-from ..misc import parallel_map, ParallelMode, freeze_rng_state
+from ..misc import parallel_map, ParallelMode
 
 
 
@@ -73,6 +73,18 @@ class MMDataset(object):
         self._items.extend(other._items)
         return self
 
+    def extend(self, other: 'MMDataset') -> 'MMDataset':
+        self += other
+        return self
+    
+    def append(self, item: T) -> 'MMDataset':
+        self._items.append(item)
+        return self
+    
+    def pop(self, index: int=-1) -> T:
+        item = self._items.pop(index)
+        return item
+    
     def sort(self, key: Callable[[T], Any], reverse: bool=False) -> 'MMDataset':
         return MMDataset(sorted(self.items, key=key, reverse=reverse))
 
@@ -117,9 +129,8 @@ class MMDataset(object):
         func = partial(is_valid_schema, schema=schema, suppress_exceptions=suppress_exceptions)
         return self.filter(func, max_workers=max_workers, mode=mode, progress=progress, order=True)
 
-    def shuffle(self, seed: Optional[int]=None) -> 'MMDataset':
-        with freeze_rng_state(seed):
-            random.shuffle(self._items)
+    def shuffle(self, ) -> 'MMDataset':
+        random.shuffle(self._items)
         return self
 
     def sample(self, k: int) -> 'MMDataset':

@@ -10,7 +10,7 @@
 ## 环境要求
 
 - Python 3.8+
-- PaddlePaddle develop(0.0.0)【commit号: f41f081861203441adf3f235bfa854c6fd312d1d】
+- PaddlePaddle 3.0.0b2或develop(0.0.0)【commit号: f41f081861203441adf3f235bfa854c6fd312d1d】
 - PaddleNLP（3.0.0b2)
 
 ## 配置参数
@@ -35,51 +35,70 @@ sh paddlemix/examples/qwen2_vl/start_server.sh  --host 127.0.0.1 --port 8080 --m
 
 ## API 接口
 
-POST `/generate`
+POST `/v1/chat/completions`
 
-请求体格式：
-```json
-{
-  "messages": [...],
-  "max_new_tokens": 128(默认)
-}
-```
-
-返回格式：
-```json
-{
-  "error_code": 200,
-  "error_msg": "success",
-  "result": {
-    "response": {
-      "role": "assistant",
-      "utterance": "生成的文本"
-    }
-  }
-}
 ```
 
 参考调用脚本：
 ```python
-import requests
+import base64
+from openai import OpenAI
 
-data = {
-    "messages": [
+# 初始化OpenAI客户端
+client = OpenAI(
+    api_key='xxxxxxxxx',
+    base_url='http://10.67.188.11:8080/v1/chat/completions' 
+)
+
+
+#图片转base64函数
+def encode_image(image_path):
+  with open(image_path, "rb") as image_file:
+    return base64.b64encode(image_file.read()).decode('utf-8')
+
+#输入图片路径
+image_path = "paddlemix/demo_images/examples_image1.jpg"
+ 
+#原图片转base64
+base64_image = encode_image(image_path)
+
+#提交信息至GPT4o
+response = client.chat.completions.create(
+    model="pp-docbee",#选择模型
+    messages=[
+        {
+            "role": "system",
+            "content": "You are a helpful assistant."
+        },
         {
             "role": "user",
-            "content": [
-                {
-                    "type": "image",
-                    "image": "paddlemix/demo_images/examples_image1.jpg",
-                },
-                {"type": "text", "text": "Describe this image."}
-            ]
+            "content":[
+            {
+          "type": "text",
+          "text": "Describe this image."
+        },
+                    {
+          "type": "image_url",
+          "image_url":{
+            "url": f"data:image/jpeg;base64,{base64_image}"
+          }
+        },
+        ]
         }
     ],
-    "max_new_tokens": 128
-}
+    stream=True,
+)
+# 流式响应
+reply = ""
+for res in response:
+    content = res.choices[0].delta.content
+    if content:
+        reply += content
+        print(content)
 
-response = requests.post("http://0.0.0.0:8001/generate", json=data)
-print(response.json())
-# {'error_code': 200, 'error_msg': 'success', 'result': {'response': {'role': 'assistant', 'utterance': 'A red panda is sitting on a wooden box.'}}}
+print('reply:',reply)
+
+# # 非流式响应
+# content = response.choices[0].message.content
+# print('Reply:', content)
 ```

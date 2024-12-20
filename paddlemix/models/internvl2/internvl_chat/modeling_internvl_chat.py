@@ -295,7 +295,6 @@ class InternVLChatModel(MixPretrainedModel):
         IMG_CONTEXT_TOKEN="<IMG_CONTEXT>",
         verbose=False,
     ):
-
         if history is None and pixel_values is not None and "<image>" not in question:
             question = "<image>\n" + question
 
@@ -330,7 +329,6 @@ class InternVLChatModel(MixPretrainedModel):
         input_ids = model_inputs["input_ids"]
         attention_mask = model_inputs["attention_mask"]
         generation_config["eos_token_id"] = eos_token_id
-
         generation_output = self.generate(
             pixel_values=pixel_values,  # [7, 3, 448, 448]
             input_ids=input_ids,  # [1, 1847]
@@ -361,7 +359,6 @@ class InternVLChatModel(MixPretrainedModel):
         return_dict: Optional[bool] = None,
         **generate_kwargs,
     ) -> paddle.Tensor:
-
         assert self.img_context_token_id is not None
         if pixel_values is not None:
             if visual_features is not None:
@@ -386,14 +383,30 @@ class InternVLChatModel(MixPretrainedModel):
         else:
             input_embeds = self.language_model.get_input_embeddings()(input_ids)
 
-        outputs = self.language_model.generate(
-            inputs_embeds=input_embeds,
-            attention_mask=attention_mask,
-            generation_config=generation_config,
-            output_hidden_states=output_hidden_states,
-            return_dict=return_dict,
-            use_cache=True,
-            **generate_kwargs,
-        )
+        ###  must add position_ids, paddlenlp bug
+        if isinstance(self.language_model, Qwen2ForCausalLM):
+            batch_size, seq_length = attention_mask.shape
+            position_ids = paddle.arange(seq_length).expand((batch_size, seq_length))
+            outputs = self.language_model.generate(
+                position_ids=position_ids,
+                inputs_embeds=input_embeds,
+                attention_mask=attention_mask,
+                generation_config=generation_config,
+                output_hidden_states=output_hidden_states,
+                return_dict=return_dict,
+                use_cache=True,
+                **generate_kwargs,
+            )
+        ###
+        else:
+            outputs = self.language_model.generate(
+                inputs_embeds=input_embeds,
+                attention_mask=attention_mask,
+                generation_config=generation_config,
+                output_hidden_states=output_hidden_states,
+                return_dict=return_dict,
+                use_cache=True,
+                **generate_kwargs,
+            )
 
         return outputs

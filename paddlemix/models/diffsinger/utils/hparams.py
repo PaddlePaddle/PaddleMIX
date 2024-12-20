@@ -61,7 +61,7 @@ def set_hparams(config="", exp_name="", hparams_str="", print_hparams=True, glob
     args_work_dir = ""
     if args.exp_name != "":
         args.work_dir = args.exp_name
-        args_work_dir = os.path.join("checkpoint", args.work_dir)
+        args_work_dir = args.exp_name
 
     config_chains = []
     loaded_config = set()
@@ -136,6 +136,8 @@ def set_hparams(config="", exp_name="", hparams_str="", print_hparams=True, glob
         hparams["exp_name"] = args.exp_name
     if hparams_.get("exp_name") is None:
         hparams_["exp_name"] = args.exp_name
+    
+    hparams["vocoder_ckpt"] = os.path.join(os.path.dirname(args.exp_name), hparams_["vocoder_ckpt"])
 
     # @rank_zero_only
     def print_out_hparams():
@@ -149,5 +151,6 @@ def set_hparams(config="", exp_name="", hparams_str="", print_hparams=True, glob
             global_print_hparams = False
 
     print_out_hparams()
+
 
     return hparams_

@@ -775,9 +775,7 @@ class SigLIPVisionTransformer(paddle.nn.Layer):
         return tuple(outputs)
 
     def forward_features(self, x: paddle.Tensor) -> paddle.Tensor:
-        x = paddle.cast(x, dtype=paddle.bfloat16)
         x = self.patch_embed(x)
-        # import pdb;pdb.set_trace()
         x = self._pos_embed(x)
         x = self.patch_drop(x)
         x = self.norm_pre(x)
