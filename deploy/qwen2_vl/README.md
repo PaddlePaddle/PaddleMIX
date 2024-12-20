@@ -2,7 +2,8 @@
 
 ## 1. 模型介绍
 
-[Qwen2-VL](https: //qwenlm.github.io/blog/qwen2-vl/) 是大规模视觉语言模型。可以以图像、文本、检测框、视频作为输入，并以文本和检测框作为输出。本仓库提供paddle版本的`Qwen2-VL-2B-Instruct`和`Qwen2-VL-7B-Instruct`模型。
+[Qwen2-VL
+](https: //qwenlm.github.io/blog/qwen2-vl/) 是大规模视觉语言模型。可以以图像、文本、检测框、视频作为输入，并以文本和检测框作为输出。本仓库提供paddle版本的`Qwen2-VL-2B-Instruct`和`Qwen2-VL-7B-Instruct`模型。
 
 ## 2 环境准备
 - **python >= 3.10**
@@ -11,12 +12,15 @@
 # 安装示例
 python -m pip install paddlepaddle-gpu==0.0.0.post118 -f https: //www.paddlepaddle.org.cn/whl/linux/gpu/develop.html
 ```
-- **paddlenlp develop**
+- **paddlenlp
 ```
 # 安装示例
-git clone https://github.com/PaddlePaddle/PaddleNLP.git
-export PYTHONPATH=/your_path/PaddleNLP:$PYTHONPATH
-# This needs to be updated after paddlenlp PR is merged
+git submodule update --init --recursive
+cd PaddleNLP
+git reset --hard e91c2d3d634b12769c30aa419ddf931c20b7ca9f
+pip install -e .
+cd csrc
+python setup_cuda.py install
 ```
 
 > 注：
@@ -41,24 +45,10 @@ python deploy/qwen2_vl/single_image_infer.py \
 - Qwen2-VL-2B-Instruct
 | Paddle Inference|    PyTorch   | Paddle 动态图 |
 | --------------- | ------------ | ------------ |
-|      1.44 s     |     2.35 s   |    6.339 s   |
+|      1.44 s     |     2.35 s   |    5.215 s   |
 
 
 - Qwen2-VL-7B-Instruct
 | Paddle Inference|    PyTorch   | Paddle 动态图 |
 | --------------- | ------------ | ------------ |
 |      1.73 s     |      4.4s    |    6.339 s   |
-
-
-## 参考文献
-```BibTeX
-@article{Qwen2-VL,
-  title={Qwen2-VL
-  },
-  author={Qwen team
-  },
-  year={
-    2024
-  }
-}
-```
