@@ -116,15 +116,15 @@ class JanusMultiModalityCausalLM(JanusMultiModalityPreTrainedModel):
         """
 
         Args:
-            input_ids (torch.LongTensor): [b, T]
-            pixel_values (torch.FloatTensor):   [b, n_images, 3, h, w]
-            images_seq_mask (torch.BoolTensor): [b, T]
-            images_emb_mask (torch.BoolTensor): [b, n_images, n_image_tokens]
+            input_ids (paddle.Tensor): [b, T]
+            pixel_values (paddle.Tensor):   [b, n_images, 3, h, w]
+            images_seq_mask (paddle.Tensor): [b, T]
+            images_emb_mask (paddle.Tensor): [b, n_images, n_image_tokens]
 
-            assert torch.sum(images_seq_mask) == torch.sum(images_emb_mask)
+            assert paddle.sum(images_seq_mask) == paddle.sum(images_emb_mask)
 
         Returns:
-            input_embeds (torch.Tensor): [b, T, D]
+            input_embeds (paddle.Tensor): [b, T, D]
         """
         bs, n = tuple(pixel_values.shape)[0:2]
         images = rearrange(pixel_values, "b n c h w -> (b n) c h w")
@@ -182,15 +182,15 @@ class JanusFlowMultiModalityCausalLM(JanusFlowMultiModalityPreTrainedModel):
         """
 
         Args:
-            input_ids (torch.LongTensor): [b, T]
-            pixel_values (torch.FloatTensor):   [b, n_images, 3, h, w]
-            images_seq_mask (torch.BoolTensor): [b, T]
-            images_emb_mask (torch.BoolTensor): [b, n_images, n_image_tokens]
+            input_ids (paddle.Tensor): [b, T]
+            pixel_values (paddle.Tensor):   [b, n_images, 3, h, w]
+            images_seq_mask (paddle.Tensor): [b, T]
+            images_emb_mask (paddle.Tensor): [b, n_images, n_image_tokens]
 
-            assert torch.sum(images_seq_mask) == torch.sum(images_emb_mask)
+            assert paddle.sum(images_seq_mask) == paddle.sum(images_emb_mask)
 
         Returns:
-            input_embeds (torch.Tensor): [b, T, D]
+            input_embeds (paddle.Tensor): [b, T, D]
         """
         bs, n = tuple(pixel_values.shape)[0:2]
         images = rearrange(pixel_values, "b n c h w -> (b n) c h w")
