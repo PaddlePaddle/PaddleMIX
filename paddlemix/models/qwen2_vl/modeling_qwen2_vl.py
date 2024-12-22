@@ -277,12 +277,13 @@ class PatchEmbed(nn.Layer):
         if _IS_NPU:
             # NOTE: In npu device, conv3d only support fp16 or bf16 dtype.
             hidden_states = F.conv3d(
-                hidden_states.cast(paddle.bfloat16),
-                self.proj.weight.cast(paddle.bfloat16),
-                stride=self.proj._stride)
+                hidden_states.cast(paddle.bfloat16), self.proj.weight.cast(paddle.bfloat16), stride=self.proj._stride
+            )
             hidden_states = hidden_states.to(target_dtype).reshape([-1, self.embed_dim])
         else:
-            hidden_states = self.proj(hidden_states.to(dtype=target_dtype)).reshape([-1, self.embed_dim])
+            # NOTE（changwenbin）: AttributeError: 'Variable' object has no attribute 'to'.
+            # hidden_states = self.proj(hidden_states.to(dtype=target_dtype)).reshape([-1, self.embed_dim])
+            hidden_states = self.proj(paddle.cast(hidden_states, dtype=target_dtype)).reshape([-1, self.embed_dim])
         return hidden_states
 
 
@@ -608,10 +609,10 @@ class Qwen2VLAttention(nn.Layer):
         key_states = repeat_kv(key_states, self.num_key_value_groups)
         value_states = repeat_kv(value_states, self.num_key_value_groups)
 
-        query_states = query_states.astype("float32") 
+        query_states = query_states.astype("float32")
         key_states = key_states.astype("float32")
         value_states = value_states.astype("float32")
-        
+
         attn_weights = paddle.matmul(query_states, key_states.transpose([0, 1, 3, 2])) / math.sqrt(self.head_dim)
 
         if attention_mask is not None:
@@ -619,7 +620,7 @@ class Qwen2VLAttention(nn.Layer):
         attn_weights = nn.functional.softmax(attn_weights, axis=-1, dtype="float32")
 
         attn_output = paddle.matmul(attn_weights.cast(self.config.dtype), value_states.cast(self.config.dtype))
-        
+
         if attn_output.shape != [bsz, self.num_heads, q_len, self.head_dim]:
             raise ValueError(
                 f"`attn_output` should be of size {(bsz, q_len, self.num_heads, self.head_dim)}, but is"
@@ -869,7 +870,7 @@ class Qwen2VLDecoderLayer(nn.Layer):
         residual = hidden_states
 
         hidden_states = self.input_layernorm(hidden_states)
-        
+
         hidden_states, self_attn_weights, present_key_value = self.self_attn(
             hidden_states=hidden_states,
             attention_mask=attention_mask,
@@ -980,7 +981,7 @@ class Qwen2VisionTransformerPretrainedModel(Qwen2VLPreTrainedModel):
         return rotary_pos_emb
 
     def forward(self, hidden_states: paddle.Tensor, grid_thw: paddle.Tensor) -> paddle.Tensor:
-        
+
         hidden_states = self.patch_embed(hidden_states)
         rotary_pos_emb = self.rot_pos_emb(grid_thw)
 
@@ -1223,8 +1224,12 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
     def get_decoder(self):
         return self.model
 
+    @staticmethod
     def get_rope_index(
-        self,
+        spatial_merge_size,
+        image_token_id,
+        video_token_id,
+        vision_start_token_id,
         input_ids: paddle.Tensor,
         image_grid_thw: Optional[paddle.Tensor] = None,
         video_grid_thw: Optional[paddle.Tensor] = None,
@@ -1274,10 +1279,6 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
             position_ids (`paddle.Tensor` of shape `(3, batch_size, sequence_length)`)
             mrope_position_deltas (`paddle.Tensor` of shape `(batch_size)`)
         """
-        spatial_merge_size = self.config.vision_config.spatial_merge_size
-        image_token_id = self.config.image_token_id
-        video_token_id = self.config.video_token_id
-        vision_start_token_id = self.config.vision_start_token_id
         mrope_position_deltas = []
         if image_grid_thw is not None or video_grid_thw is not None:
             total_input_ids = input_ids
@@ -1353,7 +1354,9 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
                 if _IS_NPU:
                     # NOTE: bool + id的混合索引赋值未生效，暂时绕过
                     bool_indices = (attention_mask[i] == 1).unsqueeze(0).tile([position_ids.shape[0], 1])
-                    position_ids[:, i] = paddle.index_put(position_ids[:, i], [bool_indices], llm_positions.reshape([-1]))
+                    position_ids[:, i] = paddle.index_put(
+                        position_ids[:, i], [bool_indices], llm_positions.reshape([-1])
+                    )
                 else:
                     position_ids[..., i, attention_mask[i] == 1] = llm_positions
                 mrope_position_deltas.append(llm_positions.max() + 1 - len(total_input_ids[i]))
@@ -1392,6 +1395,44 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
             model_kwargs["rope_deltas"] = outputs.rope_deltas
 
         return model_kwargs
+
+    # NOTE（changwenbin）: Vision module added for high-performance inference.
+    def vision_forward(
+        self,
+        input_ids: paddle.Tensor,
+        inputs_embeds: Optional[paddle.Tensor] = None,
+        attention_mask: Optional[paddle.Tensor] = None,
+        position_ids: Optional[paddle.Tensor] = None,
+        pixel_values: Optional[paddle.Tensor] = None,
+        pixel_values_videos: Optional[paddle.Tensor] = None,
+        image_grid_thw: Optional[paddle.Tensor] = None,
+        video_grid_thw: Optional[paddle.Tensor] = None,
+        rope_deltas: Optional[paddle.Tensor] = None,
+    ):
+        if inputs_embeds is None:
+            # NOTE: (zhoukangkang、changwenbin) In the high-performance reasoning of Qwen2-vl,
+            # in order to reduce video memory, the qwen2 embed_tokens method in Paddlenlp is reused here.
+            from paddlenlp.experimental.transformers.qwen2.modeling import (
+                Qwen2VLForConditionalGenerationBlockInferenceModel,
+            )
+
+            assert isinstance(
+                self.model, Qwen2VLForConditionalGenerationBlockInferenceModel
+            ), "model is not an instance of Qwen2VLForConditionalGenerationBlockInferenceModel"
+
+            inputs_embeds = self.model.qwen2.embed_tokens(input_ids)
+
+            if pixel_values is not None:
+                pixel_values = paddle.cast(pixel_values, paddle.bfloat16)
+                image_embeds = self.visual(pixel_values, grid_thw=image_grid_thw)
+                image_mask = input_ids == self.config.image_token_id
+                inputs_embeds[image_mask] = image_embeds
+            if pixel_values_videos is not None:
+                pixel_values_videos = paddle.cast(pixel_values_videos, paddle.bfloat16)
+                video_embeds = self.visual(pixel_values_videos, grid_thw=video_grid_thw)
+                video_mask = input_ids == self.config.video_token_id
+                inputs_embeds[video_mask] = video_embeds
+        return inputs_embeds
 
     def forward(
         self,
@@ -1471,7 +1512,6 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
                 inputs_embeds[video_mask] = video_embeds
             if attention_mask is not None:
                 attention_mask = attention_mask
-
         outputs = self.model(
             input_ids=None,
             position_ids=position_ids,
@@ -1503,7 +1543,9 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
             loss = loss / label_sum
 
         if not return_dict:
-            output = (logits,) + outputs[1:]
+            # output = (logits,) + outputs[1:]
+            # Note: (changwenbin) fix "can only concatenate tuple (not "list") to tuple".
+            output = (logits,) + tuple(outputs[1:])
             return (loss,) + output if loss is not None else output
             # return logits + 28 layers k and v
 
@@ -1550,7 +1592,14 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
         if attention_mask is not None and position_ids is None:
             if cache_position is None or (cache_position is not None and cache_position[0] == 0):
                 position_ids, rope_deltas = self.get_rope_index(
-                    input_ids, image_grid_thw, video_grid_thw, attention_mask
+                    self.config.vision_config.spatial_merge_size,
+                    self.config.image_token_id,
+                    self.config.video_token_id,
+                    self.config.vision_start_token_id,
+                    input_ids,
+                    image_grid_thw,
+                    video_grid_thw,
+                    attention_mask,
                 )
                 self.rope_deltas = rope_deltas
             else:
