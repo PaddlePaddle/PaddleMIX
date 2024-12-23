@@ -706,7 +706,7 @@ class Qwen2VLFlashAttention2(Qwen2VLAttention):
             query_states,
             key_states,
             value_states,
-            attention_mask,  # batch infer必须用上，如果不是batch infer, attention_mask可以是None, 也可以是全1传进来
+            None,  # attention_mask,  # TODO: batch infer时不能是None；如果不是batch infer, attention_mask可以是None, 也可以是全1传进来
             q_len
             # dropout=0.0 if not self.training else self.attention_dropout,
             # causal=self.is_causal,
