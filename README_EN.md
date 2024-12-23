@@ -34,17 +34,22 @@
 
 
 ## 📰 News
+
 **🔥PaddleMIX Development Project Challenge (November 21 - December 22, 2024)**
 
-- ✨"Experience Officer Recruitment" PaddleMIX Development Project Challenge
-Click the link to sign up 🔗: https://aistudio.baidu.com/activitydetail/1503019366
-🏆Submit to the PaddleGalaxy Community Project Hall - get certified as a PaddleMIX Experience Officer and receive JD.com gift cards as rewards
-Welcome your submissions!
+**🔥2024.11.21 - 2024.12.22 PaddleMIX Development Project Challenge (Ended)**
+
+- ✨「Experience Officer Recruitment」PaddleMIX Development Project Challenge
+Click the link to register 🔗: [https://aistudio.baidu.com/activitydetail/1503019366](https://aistudio.baidu.com/activitydetail/1503019366)
+🏆 Submit to the PaddlePaddle Galaxy Community Project Hall to be featured and receive a PaddleMIX Experience Officer certification certificate and JD.com card incentives.
+Everyone is welcome to submit～
+
+<details>
+<summary>Click to view the event poster</summary>
 <p align="center">
 <img src='https://github.com/user-attachments/assets/27e0bbe3-0ff8-49ef-bd39-81a31a2b288b' width="25%">
 </p>
-
-- 🎉 The PaddleMIX multimodal large model toolkit releases version 2.1! On October 31 (Thursday) at 20:00, Baidu development engineers provided a detailed interpretation of the toolkit updates, as well as the implementation details and case applications of PP-InsCapTagger, the multimodal data capability labeling model.
+</details>
 
 ## 📣 Latest Developments
 
@@ -63,6 +68,9 @@ Welcome your submissions!
 
 * 🙏 We sincerely thank all developers for their wonderful creations based on our suite! 🚀 We cordially invite you to share your creativity as well - welcome to publish your tutorials on public web pages or in the [PaddlePaddle AI Studio](https://aistudio.baidu.com/aistudio/community/multimodal?from=singlemessage) community!
 
+<details>
+<summary>Click to expand more</summary>
+
 **🔥 PaddleMIX v2.1 Released on 2024.10.11**
 * Supports the [PaddleNLP 3.0 beta](https://github.com/PaddlePaddle/PaddleNLP/releases/tag/v3.0.0-beta0) version, allowing early access to its latest features.
 * Added cutting-edge models like [Qwen2-VL](./paddlemix/examples/qwen2_vl/), [InternVL2](./paddlemix/examples/internvl2/), and [Stable Diffusion 3 (SD3)](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/examples/dreambooth/README_sd3.md).
@@ -80,6 +88,9 @@ Welcome your submissions!
 * Added distributed training capabilities for vision-language pre-training models, and BLIP-2 now supports trillion-scale training.
 * Introduced the cross-modal application pipeline [AppFlow](./applications/README.md), which supports 11 cross-modal applications such as automatic annotation, image editing, and audio-to-image with one click.
 * [PPDiffusers](./ppdiffusers/README.md) released version 0.19.3, adding SDXL and related tasks.
+</details>
+
+
 ---
 
 ## 🌈 Introduction

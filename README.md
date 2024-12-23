@@ -34,20 +34,23 @@
 
 
 ## 📰新闻
-**🔥2024.11.21日 - 2024.12.22日  PaddleMIX开发项目挑战**
+**🔥2024.11.21日 - 2024.12.22日  PaddleMIX开发项目挑战（已结束）**
 
 - ✨「体验官招募」PaddleMIX开发项目挑战
 点击链接报名🔗：https://aistudio.baidu.com/activitydetail/1503019366
 🏆投稿至飞桨星河社区项目大厅，加精获得PaddleMIX体验官认证证书及京东卡激励
 欢迎大家投稿～
+<details>
+<summary>点击展开活动海报</summary>
 <p align="center">
 <img src='https://github.com/user-attachments/assets/27e0bbe3-0ff8-49ef-bd39-81a31a2b288b'  width="25%">
 </p>
-
+</details>
 
 ## 📣最新进展
 
 <!-- 📚《飞桨多模态大模型开发套件PaddleMIX 2.1 震撼发布》，图文音视频场景全覆盖，多模态高效助力产业创新。超大规模训练支持，覆盖图文预训练、文生图、跨模态视觉任务，覆盖金融、教育、电商、医疗等产业场景。8月8日（周四）20：00 带你直播了解多模态大模型最新架构，深度解析PaddleMIX高性能模型库，手把手演示LLaVA模型训推全流程。[报名链接](https://www.wjx.top/vm/wKqysjx.aspx?udsid=449688)   -->
+
 
 **🎉 2024.12.17 支持[GOT-OCR2_0](./paddlemix/examples/GOT_OCR_2_0)推理和训练**
 
@@ -67,6 +70,9 @@
 
 * 🙏 衷心感谢各位开发者基于套件的精彩创作！🚀 诚挚邀请您也来分享您的创意 - 欢迎将教程发布到公开网页或[飞桨AI Studio](https://aistudio.baidu.com/aistudio/community/multimodal?from=singlemessage)社区！
 
+<details>
+<summary>点击展开更多</summary>
+
 **🔥2024.10.11 发布PaddleMIX v2.1**
 * 支持[PaddleNLP 3.0 beta](https://github.com/PaddlePaddle/PaddleNLP/releases/tag/v3.0.0-beta0)版本，抢先体验其最新功能。
 * 新增[Qwen2-VL](./paddlemix/examples/qwen2_vl/)、[InternVL2](./paddlemix/examples/internvl2/)、[Stable Diffusion 3 (SD3)](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/examples/dreambooth/README_sd3.md)等前沿模型。
@@ -85,6 +91,7 @@
 * 新增跨模态应用流水线[AppFlow](./applications/README.md)，一键支持自动标注，图像编辑，音生图等11种跨模态应用
 * [PPDiffusers](./ppdiffusers/README.md)发布 0.19.3 版本，新增SDXL及相关任务
 
+</details>
 
 ---
 
