@@ -31,27 +31,49 @@ processor = Qwen2VLProcessor(image_processor, tokenizer)
 # max_pixels = 1280*28*28 # 1003520
 # processor = Qwen2VLProcessor(image_processor, tokenizer, min_pixels=min_pixels, max_pixels=max_pixels)
 
-
-messages = [
+messages2 = [
     {
         "role": "user",
         "content": [
-            {"type": "image", "image": "paddlemix/demo_images/examples_image1.jpg"},
-            {"type": "image", "image": "paddlemix/demo_images/examples_image2.jpg"},
-            {"type": "text", "text": "Identify the similarities between these images."},
+            {
+                "type": "image",
+                "image": "paddlemix/demo_images/twitter3.jpeg",
+            },
+            {"type": "text", "text": "Describe this image."},
         ],
     }
 ]
 
+messages3 = [
+    {
+        "role": "user",
+        "content": [
+            {
+                "type": "image",
+                "image": "paddlemix/demo_images/examples_image2.jpg",
+            },
+            {"type": "text", "text": "What is the animal in this image?"},
+        ],
+    }
+]
+
+messages = [messages2, messages3]
+
 # Preparation for inference
 image_inputs, video_inputs = process_vision_info(messages)
 
-question = "Identify the similarities between these images."
-image_pad_tokens = "<|vision_start|><|image_pad|><|vision_end|>" * len(image_inputs)
-text = f"<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n{image_pad_tokens}{question}<|im_end|>\n<|im_start|>assistant\n"
+image_pad_token = "<|vision_start|><|image_pad|><|vision_end|>"
+
+question2 = messages2[0]["content"][1]["text"]
+text2 = f"<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n{image_pad_token}{question2}<|im_end|>\n<|im_start|>assistant\n"
+
+question3 = messages3[0]["content"][1]["text"]
+text3 = f"<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n{image_pad_token}{question3}<|im_end|>\n<|im_start|>assistant\n"
+
+text = [text2, text3]
 
 inputs = processor(
-    text=[text],
+    text=text,
     images=image_inputs,
     videos=video_inputs,
     padding=True,
@@ -59,6 +81,6 @@ inputs = processor(
 )
 
 # Inference: Generation of the output
-generated_ids = model.generate(**inputs, max_new_tokens=128)  # already trimmed in paddle
+generated_ids = model.generate(**inputs, max_new_tokens=1024)  # already trimmed in paddle
 output_text = processor.batch_decode(generated_ids[0], skip_special_tokens=True, clean_up_tokenization_spaces=False)
-print("output_text:\n", output_text[0])
+print("output_text:\n", output_text)  # list

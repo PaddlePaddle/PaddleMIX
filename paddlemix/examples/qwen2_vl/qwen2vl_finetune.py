@@ -20,21 +20,21 @@ import random
 import sys
 import traceback
 from dataclasses import dataclass, field
-from typing import Dict, Optional, List
+from typing import Dict, Optional
 
 import numpy as np
 import paddle
 import paddle.distributed as dist
 from paddle.io import Dataset
 from paddlenlp.data import DataCollatorForSeq2Seq
+from paddlenlp.peft import LoRAConfig, LoRAModel
 from paddlenlp.trainer import PdArgumentParser, TrainingArguments, set_seed
 from paddlenlp.trainer.trainer import Trainer
 from paddlenlp.trainer.trainer_utils import get_last_checkpoint
-from paddlenlp.transformers import Qwen2Tokenizer
-from paddlenlp.peft import LoRAConfig, LoRAModel
 from PIL import Image, ImageFile, PngImagePlugin, UnidentifiedImageError
 
 from paddlemix.datasets.internvl_dataset import ConcatDataset, WeightedConcatDataset
+from paddlemix.models.qwen2_vl import MIXQwen2Tokenizer
 from paddlemix.models.qwen2_vl.modeling_qwen2_vl import Qwen2VLForConditionalGeneration
 from paddlemix.models.qwen2_vl.supervised import _encode_supervised_example
 from paddlemix.models.qwen2_vl.template import TEMPLATES
@@ -129,11 +129,8 @@ class ModelArguments(ProcessorArguments):
     lora: Optional[bool] = field(
         default=False,
         metadata={"help": "Whether or not to use lora to train model."},
-    )    
-    lora_path: Optional[str] = field(
-        default=None, 
-        metadata={"help": "Initialize lora state dict."}
     )
+    lora_path: Optional[str] = field(default=None, metadata={"help": "Initialize lora state dict."})
     lora_rank: Optional[int] = field(
         default=128,
         metadata={"help": "Set the value of rank in lora. Default is 128."},
@@ -146,11 +143,8 @@ class ModelArguments(ProcessorArguments):
         default=0.0,
         metadata={"help": "Set the value of dropout in lora. Default is 0.0."},
     )
-    lora_target_modules: Optional[str] = field(
-        default=None, 
-        metadata={"help": "Lora target modules."}
-    )
-    
+    lora_target_modules: Optional[str] = field(default=None, metadata={"help": "Lora target modules."})
+
 
 @dataclass
 class DataTrainingArguments:
@@ -522,7 +516,7 @@ def main():
     MODEL_NAME = model_args.model_name_or_path
     model = Qwen2VLForConditionalGeneration.from_pretrained(MODEL_NAME, dtype=dtype)
     image_processor = Qwen2VLImageProcessor.from_pretrained(MODEL_NAME)
-    tokenizer = Qwen2Tokenizer.from_pretrained(MODEL_NAME)
+    tokenizer = MIXQwen2Tokenizer.from_pretrained(MODEL_NAME)
     processor = Qwen2VLProcessor(image_processor, tokenizer)
 
     tokenizer.tokenizer_path = tokenizer_path
@@ -553,8 +547,7 @@ def main():
         model.lm_head = model.lm_head.eval()
         _freeze_params(model.model)
         _freeze_params(model.lm_head)
-        
-    
+
     # lora
     if model_args.lora:
         if model_args.lora_path is None:
