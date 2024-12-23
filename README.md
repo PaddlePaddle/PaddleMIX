@@ -49,6 +49,10 @@
 
 <!-- 📚《飞桨多模态大模型开发套件PaddleMIX 2.1 震撼发布》，图文音视频场景全覆盖，多模态高效助力产业创新。超大规模训练支持，覆盖图文预训练、文生图、跨模态视觉任务，覆盖金融、教育、电商、医疗等产业场景。8月8日（周四）20：00 带你直播了解多模态大模型最新架构，深度解析PaddleMIX高性能模型库，手把手演示LLaVA模型训推全流程。[报名链接](https://www.wjx.top/vm/wKqysjx.aspx?udsid=449688)   -->
 
+**🎉 2024.12.17 支持[GOT-OCR2_0](./paddlemix/examples/GOT_OCR_2_0)推理和训练**
+
+**🎉 2024.12.17 支持[InternVL2_5(1B、2B、4B、8B)](./paddlemix/examples/internvl2)推理**
+
 **🎉 2024.11.27 支持[Janus/JanusFlow](./paddlemix/examples/janus)推理**
 
 **🎉 2024.11.21 支持[MiniCPM-V-2_6](./paddlemix/examples/minicpm-v-2_6)推理**
@@ -299,10 +303,18 @@ python setup.py install
           <li><b>文生图</b></li>
         <ul>
            <li><a href="ppdiffusers/examples/stable_diffusion">Stable Diffusion</a></li>
+           <li><a href="ppdiffusers/ppdiffusers/pipelines/stable_diffusion_xl">SDXL</a></li>
            <li><a href="ppdiffusers/examples/dreambooth/README_sd3.md">Stable Diffusion 3 (SD3)</a></li>
             <li><a href="ppdiffusers/examples/controlnet">ControlNet</a></li>
             <li><a href="ppdiffusers/examples/t2i-adapter">T2I-Adapter</a></li>
             <li><a href="ppdiffusers/examples/text_to_image_laion400m">LDM</a></li>
+            <li><a href="ppdiffusers/ppdiffusers/pipelines/consistency_models">Consistency Models</a></li>
+            <li><a href="ppdiffusers/ppdiffusers/pipelines/deepfloyd_if">DeepFloyd IF</a></li>
+            <li><a href="ppdiffusers/ppdiffusers/pipelines/shap_e">Shap-E</a></li>
+            <li><a href="ppdiffusers/examples/kandinsky2_2">Kandinsky-2</a></li>
+            <li><a href="ppdiffusers/ppdiffusers/pipelines/wuerstchen">Würstchen</a></li>
+            <li><a href="ppdiffusers/ppdiffusers/pipelines/hotshot_xl">Hotshot-XL</a></li>
+            <li><a href="ppdiffusers/ppdiffusers/pipelines/latent_consistency_models">LCMs</a></li>
             <li><a href="ppdiffusers/ppdiffusers/pipelines/unidiffuser">Unidiffuser</a></li>
             <li><a href="ppdiffusers/examples/class_conditional_image_generation/DiT">DiT</a></li>
             <li><a href="ppdiffusers/examples/HunyuanDiT">HunyuanDiT</a></li>
@@ -310,10 +322,13 @@ python setup.py install
         </ul>
           <li><b>文生视频</b></li>
         <ul>
-           <li><a href="ppdiffusers/examples/lvdm">LVDM</a></li>
+           <li><a href="ppdiffusers/examples/text_to_video_lvdm">LVDM</a></li>
            <li><a href="ppdiffusers/examples/stable_video_diffusion">SVD</a></li>
            <li><a href="ppdiffusers/examples/AnimateAnyone">AnimateAnyone</a></li>
            <li><a href="ppdiffusers/examples/Open-Sora">OpenSora</a></li>
+           <li><a href="ppdiffusers/ppdiffusers/pipelines/animatediff">AnimateDiff</a></li>
+           <li><a href="ppdiffusers/ppdiffusers/pipelines/text_to_video_synthesis">zeroscope_v2_XL</a></li>
+           <li><a href="ppdiffusers/examples/cogvideo">CogVideoX</a></li>
         </ul>
         </ul>
           <li><b>音频生成</b></li>

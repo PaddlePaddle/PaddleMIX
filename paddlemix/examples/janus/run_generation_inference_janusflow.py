@@ -33,10 +33,11 @@ parser.add_argument(
     default="A stunning princess from kabul in red, white traditional clothing, blue eyes, brown hair",
 )
 parser.add_argument("--inference_step", type=int, default=30)
+parser.add_argument("--dtype", type=str, default="float16")
 
 args = parser.parse_args()
 
-vl_gpt = JanusFlowMultiModalityCausalLM.from_pretrained(args.model_path)
+vl_gpt = JanusFlowMultiModalityCausalLM.from_pretrained(args.model_path, dtype=args.dtype)
 tokenizer = LlamaTokenizerFast.from_pretrained(args.model_path)
 image_processer = JanusImageProcessor.from_pretrained(args.model_path)
 vl_chat_processor: JanusVLChatProcessor = JanusVLChatProcessor(image_processer, tokenizer)
@@ -57,6 +58,7 @@ prompt = sft_format + vl_chat_processor.image_start_tag
 
 @paddle.no_grad()
 def generate(
+    args,
     vl_gpt,
     vl_chat_processor,
     tokenizer,
@@ -70,9 +72,9 @@ def generate(
     tokens[batch_size:, 1:] = vl_chat_processor.pad_id
     inputs_embeds = vl_gpt.language_model.get_input_embeddings()(tokens)
     inputs_embeds = inputs_embeds[:, :-1, :]
-    z = paddle.randn(shape=(batch_size, 4, 48, 48), dtype="bfloat16")
+    z = paddle.randn(shape=(batch_size, 4, 48, 48), dtype=args.dtype)
     dt = 1.0 / num_inference_steps
-    dt = paddle.zeros_like(x=z, dtype="bfloat16") + dt
+    dt = paddle.zeros_like(x=z, dtype=args.dtype) + dt
     attention_mask = paddle.ones(shape=(2 * batch_size, tuple(inputs_embeds.shape)[1] + 577))
     attention_mask[batch_size:, 1 : tuple(inputs_embeds.shape)[1]] = 0
     attention_mask = attention_mask.astype(dtype="int32")
@@ -125,4 +127,4 @@ def generate(
         PIL.Image.fromarray(images[i]).save(save_path)
 
 
-generate(vl_gpt, vl_chat_processor, tokenizer, prompt, num_inference_steps=args.inference_step)
+generate(args, vl_gpt, vl_chat_processor, tokenizer, prompt, num_inference_steps=args.inference_step)

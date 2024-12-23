@@ -30,28 +30,32 @@ Janus/JanusFlow 将视觉编码器解耦为理解和生成编码器，同时仍�
 ## 3 快速开始
 
 ### 推理
+> 注：在V100上运行以下代码需要指定dtype="float16"
 ```bash
 # Janus understanding
 python paddlemix/examples/janus/run_understanding_inference.py \
     --model_path="deepseek-ai/Janus-1.3B" \
     --image_file="paddlemix/demo_images/examples_image1.jpg" \
     --question="What is shown in this image?" \
+    --dtype="bfloat16"
 
 # Janus generation
 python paddlemix/examples/janus/run_generation_inference.py \
     --model_path="deepseek-ai/Janus-1.3B" \
-    --prompt="A stunning princess from kabul in red, white traditional clothing, blue eyes, brown hair"
+    --prompt="A stunning princess from kabul in red, white traditional clothing, blue eyes, brown hair" \
+    --dtype="bfloat16"
 
 # JanusFlow generation
 python paddlemix/examples/janus/run_generation_inference_janusflow.py \
     --model_path="deepseek-ai/JanusFlow-1.3B" \
     --inference_step=30 \
-    --prompt="A stunning princess from kabul in red, white traditional clothing, blue eyes, brown hair"
+    --prompt="A stunning princess from kabul in red, white traditional clothing, blue eyes, brown hair" \
+    --dtype="bfloat16"
 
 # Janus interactivechat
 python paddlemix/examples/janus/run_interactivechat.py \
     --model_path="deepseek-ai/Janus-1.3B" \
-
+    --dtype="bfloat16"
 ```
 
 ### 效果展示

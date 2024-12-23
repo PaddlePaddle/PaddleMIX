@@ -48,6 +48,7 @@ Welcome your submissions!
 
 ## 📣 Latest Developments
 
+**🎉 2024.12.17 Support for [InternVL2_5 (1B, 2B, 4B, 8B)](./paddlemix/examples/internvl2) inference**
 
 **🎉 2024.11.27 Added support for [Janus/JanusFlow](./paddlemix/examples/janus) inference**
 

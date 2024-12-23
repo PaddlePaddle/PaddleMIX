@@ -16,7 +16,7 @@ import sys
 from typing import Optional
 
 import paddle
-import paddle_aux
+from paddlemix.models.diffsinger.utils import paddle_aux
 
 
 class ConvNeXtBlock(paddle.nn.Layer):

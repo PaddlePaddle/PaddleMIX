@@ -11,24 +11,23 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import os
 import paddle
 from paddlenlp.generation import TextStreamer
-from paddlemix.auto import (
-    AutoConfigMIX,
-    AutoModelMIX,
-    AutoProcessorMIX,
-    AutoTokenizerMIX,
+from paddlemix.models.llava.language_model.llava_llama import (
+    LlavaConfig,
+    LlavaLlamaForCausalLM,
 )
+from paddlemix.models.llava.language_model.tokenizer import LLavaTokenizer
+from paddlemix.processors import LlavaProcessor
 from paddlemix.models.llava.constants import (
     DEFAULT_IM_END_TOKEN,
     DEFAULT_IM_START_TOKEN,
     DEFAULT_IMAGE_TOKEN,
 )
 from paddlemix.models.llava.conversation import conv_templates
-from paddlemix.models.llava.mm_utils import get_model_name_from_path, load_image
-from paddlemix.utils.log import logger
-
+from paddlemix.models.llava.mm_utils import load_image
+from paddlenlp.transformers import CLIPImageProcessor
 
 class PPInsCapTagger(object):
     def __init__(self, model_name_or_path, max_new_tokens = 4096, dtype='float16') -> None:
@@ -39,11 +38,19 @@ class PPInsCapTagger(object):
 
 
     def init_model(self, model_name_or_path, max_new_tokens, dtype):
-        tokenizer = AutoTokenizerMIX.from_pretrained(model_name_or_path)
-        model_config = AutoConfigMIX.from_pretrained(model_name_or_path)
-        model = AutoModelMIX.from_pretrained(model_name_or_path, dtype=dtype)
+        tokenizer = LLavaTokenizer.from_pretrained(model_name_or_path)
+        model_config = LlavaConfig.from_pretrained(model_name_or_path)
+        model = LlavaLlamaForCausalLM.from_pretrained(model_name_or_path, dtype=dtype)
         model.eval()
-        processor, _ = AutoProcessorMIX.from_pretrained(model_name_or_path, eval="eval", max_length=max_new_tokens, image_aspect_ratio=model_config.image_aspect_ratio)
+        name_or_path = (os.path.join(model_name_or_path, "processor", "eval"))
+        image_processor = CLIPImageProcessor.from_pretrained(name_or_path)
+        processor = LlavaProcessor(
+            image_processor, 
+            tokenizer,
+            max_length=max_new_tokens, 
+            image_aspect_ratio=model_config.image_aspect_ratio
+            )
+        
         model.resize_token_embeddings(len(tokenizer))
         vision_tower = model.get_vision_tower()
 

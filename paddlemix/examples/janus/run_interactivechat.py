@@ -28,9 +28,10 @@ from paddlemix.processors import JanusImageProcessor, JanusVLChatProcessor
 # Specify the path to the model
 parser = argparse.ArgumentParser()
 parser.add_argument("--model_path", type=str, default="deepseek-ai/Janus-1.3B")
+parser.add_argument("--dtype", type=str, default="float16")
 args = parser.parse_args()
 
-vl_gpt = JanusMultiModalityCausalLM.from_pretrained(args.model_path)
+vl_gpt = JanusMultiModalityCausalLM.from_pretrained(args.model_path, dtype=args.dtype)
 tokenizer = LlamaTokenizerFast.from_pretrained(args.model_path)
 image_processer = JanusImageProcessor.from_pretrained(args.model_path)
 vl_chat_processor: JanusVLChatProcessor = JanusVLChatProcessor(image_processer, tokenizer)
@@ -114,10 +115,11 @@ def generate(
         inputs_embeds = img_embeds.unsqueeze(axis=1)
 
     dec = mmgpt.gen_vision_model.decode_code(
-        generated_tokens.to(dtype="int32"), shape=[parallel_size, 8, img_size // patch_size, img_size // patch_size]
+        generated_tokens.astype(dtype="int32"),
+        shape=[parallel_size, 8, img_size // patch_size, img_size // patch_size],
     )
 
-    dec = dec.to("float32").cpu().numpy().transpose(0, 2, 3, 1)
+    dec = dec.astype("float32").cpu().numpy().transpose(0, 2, 3, 1)
 
     dec = np.clip((dec + 1) / 2 * 255, 0, 255)
 
