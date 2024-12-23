@@ -66,9 +66,11 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--model_path", type=str, default="deepseek-ai/Janus-1.3B")
 parser.add_argument("--image_file", type=str, required=True)
 parser.add_argument("--question", type=str, default="What is shown in this image?")
+parser.add_argument("--dtype", type=str, default="float16")
+
 args = parser.parse_args()
 
-vl_gpt = JanusMultiModalityCausalLM.from_pretrained(args.model_path)
+vl_gpt = JanusMultiModalityCausalLM.from_pretrained(args.model_path, dtype=args.dtype)
 tokenizer = LlamaTokenizerFast.from_pretrained(args.model_path)
 image_processer = JanusImageProcessor.from_pretrained(args.model_path)
 vl_chat_processor: JanusVLChatProcessor = JanusVLChatProcessor(image_processer, tokenizer)
@@ -84,12 +86,12 @@ conversation = [
 
 pil_images = load_pil_images(conversation)
 prepare_inputs = vl_chat_processor(conversations=conversation, images=pil_images, force_batchify=True)
+device = prepare_inputs["pixel_values"].place
+prepare_inputs.to(device, dtype=args.dtype)
 
 inputs_embeds = vl_gpt.prepare_inputs_embeds(**prepare_inputs)
-
 bs, seq_len = prepare_inputs.attention_mask.shape
 position_ids = paddle.arange(seq_len, dtype=paddle.int64).reshape([1, -1])
-
 outputs = vl_gpt.language_model.generate(
     input_ids=prepare_inputs["input_ids"],
     inputs_embeds=inputs_embeds,
