@@ -21,6 +21,14 @@ from collections import defaultdict
 from typing import Dict, List, Type
 
 from paddlenlp.transformers import AutoConfig
+#fix paddlenlp 3.0b3 auto
+from paddlemix.models.llava.language_model.llava_llama import LlavaConfig
+try:
+    AutoConfig.register("llava", LlavaConfig)
+    print('LlavaConfig register success!!!!!')
+except:
+    pass
+
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
 from paddlenlp.transformers.model_utils import PretrainedModel
 from paddlenlp.utils.import_utils import import_module

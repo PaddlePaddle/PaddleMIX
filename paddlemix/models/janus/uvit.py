@@ -234,8 +234,8 @@ class Upsample2D(paddle.nn.Layer):
         if self.use_conv_transpose:
             return self.conv(hidden_states)
         dtype = hidden_states.dtype
-        if dtype == "bfloat16":
-            hidden_states = hidden_states.to("float32")
+        if dtype == paddle.bfloat16:
+            hidden_states = hidden_states.astype("float32")
         if tuple(hidden_states.shape)[0] >= 64:
             hidden_states = hidden_states.contiguous()
         if self.interpolate:
@@ -245,8 +245,8 @@ class Upsample2D(paddle.nn.Layer):
                 )
             else:
                 hidden_states = paddle.nn.functional.interpolate(x=hidden_states, size=output_size, mode="nearest")
-        if dtype == "bfloat16":
-            hidden_states = hidden_states.to(dtype)
+        if dtype == paddle.bfloat16:
+            hidden_states = hidden_states.astype(dtype)
         if self.use_conv:
             if self.name == "conv":
                 hidden_states = self.conv(hidden_states)
