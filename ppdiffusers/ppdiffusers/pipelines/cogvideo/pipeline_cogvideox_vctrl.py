@@ -1,5 +1,4 @@
-# Copyright 2024 The CogVideoX team, Tsinghua University & ZhipuAI and The HuggingFace Team.
-# All rights reserved.
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,74 +14,58 @@
 
 import inspect
 import math
+from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import paddle
+import paddlenlp
 
-from ppdiffusers.transformers import T5EncoderModel, T5Tokenizer
+from ppdiffusers import CogVideoXTransformer3DVCtrlModel, VCtrlModel
+from ppdiffusers.callbacks import MultiPipelineCallbacks, PipelineCallback
+from ppdiffusers.image_processor import PipelineImageInput, VaeImageProcessor
+from ppdiffusers.models import AutoencoderKLCogVideoX
+from ppdiffusers.models.embeddings import get_3d_rotary_pos_embed
+from ppdiffusers.pipelines.pipeline_utils import DiffusionPipeline
+from ppdiffusers.schedulers import CogVideoXDDIMScheduler, CogVideoXDPMScheduler
+from ppdiffusers.utils import BaseOutput, logging
+from ppdiffusers.utils.paddle_utils import randn_tensor
+from ppdiffusers.video_processor import VideoProcessor
 
-from ...callbacks import MultiPipelineCallbacks, PipelineCallback
-from ...models import AutoencoderKLCogVideoX, CogVideoXTransformer3DModel
-from ...models.embeddings import get_3d_rotary_pos_embed
-from ...schedulers import CogVideoXDDIMScheduler, CogVideoXDPMScheduler
-from ...utils import logging, replace_example_docstring
-from ...utils.paddle_utils import randn_tensor
-from ...video_processor import VideoProcessor
-from ..pipeline_utils import DiffusionPipeline
-from .pipeline_output import CogVideoXPipelineOutput
-
-logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
-
-
-EXAMPLE_DOC_STRING = """
-    Examples:
-        ```python
-        >>> import paddle
-        >>> from diffusers import CogVideoXPipeline
-        >>> from diffusers.utils import export_to_video
-
-        >>> # Models: "THUDM/CogVideoX-2b" or "THUDM/CogVideoX-5b"
-        >>> pipe = CogVideoXPipeline.from_pretrained("THUDM/CogVideoX-2b", paddle_dtype=paddle.float16)
-        >>> prompt = (
-        ...     "A panda, dressed in a small, red jacket and a tiny hat, sits on a wooden stool in a serene bamboo forest. "
-        ...     "The panda's fluffy paws strum a miniature acoustic guitar, producing soft, melodic tunes. Nearby, a few other "
-        ...     "pandas gather, watching curiously and some clapping in rhythm. Sunlight filters through the tall bamboo, "
-        ...     "casting a gentle glow on the scene. The panda's face is expressive, showing concentration and joy as it plays. "
-        ...     "The background includes a small, flowing stream and vibrant green foliage, enhancing the peaceful and magical "
-        ...     "atmosphere of this unique musical performance."
-        ... )
-        >>> video = pipe(prompt=prompt, guidance_scale=6, num_inference_steps=50).frames[0]
-        >>> export_to_video(video, "output.mp4", fps=8)
-        ```
-"""
+logger = logging.get_logger(__name__)
 
 
-# Similar to diffusers.pipelines.hunyuandit.pipeline_hunyuandit.get_resize_crop_region_for_grid
+def tensor2vid(video: paddle.Tensor, processor, output_type="np"):
+    batch_size, channels, num_frames, height, width = tuple(video.shape)
+    outputs = []
+    for batch_idx in range(batch_size):
+        batch_vid = video[batch_idx].transpose(perm=[1, 0, 2, 3])
+        batch_output = processor.postprocess(batch_vid, output_type)
+        outputs.append(batch_output)
+    return outputs
+
+
 def get_resize_crop_region_for_grid(src, tgt_width, tgt_height):
     tw = tgt_width
     th = tgt_height
     h, w = src
     r = h / w
-    if r > (th / tw):
+    if r > th / tw:
         resize_height = th
         resize_width = int(round(th / h * w))
     else:
         resize_width = tw
         resize_height = int(round(tw / w * h))
-
     crop_top = int(round((th - resize_height) / 2.0))
     crop_left = int(round((tw - resize_width) / 2.0))
-
     return (crop_top, crop_left), (crop_top + resize_height, crop_left + resize_width)
 
 
-# Copied from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.retrieve_timesteps
 def retrieve_timesteps(
     scheduler,
     num_inference_steps: Optional[int] = None,
     timesteps: Optional[List[int]] = None,
     sigmas: Optional[List[float]] = None,
-    **kwargs,
+    **kwargs
 ):
     """
     Calls the scheduler's `set_timesteps` method and retrieves timesteps from the scheduler after the call. Handles
@@ -94,6 +77,7 @@ def retrieve_timesteps(
         num_inference_steps (`int`):
             The number of diffusion steps used when generating samples with a pre-trained model. If used, `timesteps`
             must be `None`.
+
         timesteps (`List[int]`, *optional*):
             Custom timesteps used to override the timestep spacing strategy of the scheduler. If `timesteps` is passed,
             `num_inference_steps` and `sigmas` must be `None`.
@@ -111,8 +95,7 @@ def retrieve_timesteps(
         accepts_timesteps = "timesteps" in set(inspect.signature(scheduler.set_timesteps).parameters.keys())
         if not accepts_timesteps:
             raise ValueError(
-                f"The current scheduler class {scheduler.__class__}'s `set_timesteps` does not support custom"
-                f" timestep schedules. Please check whether you are using the correct scheduler."
+                f"The current scheduler class {scheduler.__class__}'s `set_timesteps` does not support custom timestep schedules. Please check whether you are using the correct scheduler."
             )
         scheduler.set_timesteps(timesteps=timesteps, **kwargs)
         timesteps = scheduler.timesteps
@@ -121,8 +104,7 @@ def retrieve_timesteps(
         accept_sigmas = "sigmas" in set(inspect.signature(scheduler.set_timesteps).parameters.keys())
         if not accept_sigmas:
             raise ValueError(
-                f"The current scheduler class {scheduler.__class__}'s `set_timesteps` does not support custom"
-                f" sigmas schedules. Please check whether you are using the correct scheduler."
+                f"The current scheduler class {scheduler.__class__}'s `set_timesteps` does not support custom sigmas schedules. Please check whether you are using the correct scheduler."
             )
         scheduler.set_timesteps(sigmas=sigmas, **kwargs)
         timesteps = scheduler.timesteps
@@ -133,9 +115,24 @@ def retrieve_timesteps(
     return timesteps, num_inference_steps
 
 
-class CogVideoXPipeline(DiffusionPipeline):
-    r"""
-    Pipeline for text-to-video generation using CogVideoX.
+@dataclass
+class CogVideoXPipelineOutput(BaseOutput):
+    """
+    Output class for CogVideo pipelines.
+
+    Args:
+        frames (`paddle.Tensor`, `np.ndarray`, or List[List[PIL.Image.Image]]):
+            List of video outputs - It can be a nested list of length `batch_size,` with each sub-list containing
+            denoised PIL image sequences of length `num_frames.` It can also be a NumPy array or Paddle tensor of shape
+            `(batch_size, num_frames, channels, height, width)`.
+    """
+
+    frames: paddle.Tensor
+
+
+class CogVideoXVCtrlPipeline(DiffusionPipeline):
+    """
+    Pipeline for text-to-video generation using CogVideoX with VCTRL.
 
     This model inherits from [`DiffusionPipeline`]. Check the superclass documentation for the generic methods the
     library implements for all the pipelines (such as downloading or saving, running on a particular device, etc.)
@@ -158,34 +155,37 @@ class CogVideoXPipeline(DiffusionPipeline):
 
     _optional_components = []
     model_cpu_offload_seq = "text_encoder->transformer->vae"
-
-    _callback_tensor_inputs = [
-        "latents",
-        "prompt_embeds",
-        "negative_prompt_embeds",
-    ]
+    _callback_tensor_inputs = ["latents", "prompt_embeds", "negative_prompt_embeds"]
 
     def __init__(
         self,
-        tokenizer: T5Tokenizer,
-        text_encoder: T5EncoderModel,
+        tokenizer: paddlenlp.transformers.T5Tokenizer,
+        text_encoder: paddlenlp.transformers.T5EncoderModel,
         vae: AutoencoderKLCogVideoX,
-        transformer: CogVideoXTransformer3DModel,
+        transformer: CogVideoXTransformer3DVCtrlModel,
         scheduler: Union[CogVideoXDDIMScheduler, CogVideoXDPMScheduler],
+        vctrl: VCtrlModel,
     ):
         super().__init__()
-
         self.register_modules(
-            tokenizer=tokenizer, text_encoder=text_encoder, vae=vae, transformer=transformer, scheduler=scheduler
+            tokenizer=tokenizer,
+            text_encoder=text_encoder,
+            vae=vae,
+            transformer=transformer,
+            scheduler=scheduler,
+            vctrl=vctrl,
         )
+
         self.vae_scale_factor_spatial = (
             2 ** (len(self.vae.config.block_out_channels) - 1) if hasattr(self, "vae") and self.vae is not None else 8
         )
         self.vae_scale_factor_temporal = (
             self.vae.config.temporal_compression_ratio if hasattr(self, "vae") and self.vae is not None else 4
         )
-
         self.video_processor = VideoProcessor(vae_scale_factor=self.vae_scale_factor_spatial)
+        self.vctrl_image_processor = VaeImageProcessor(
+            vae_scale_factor=self.vae_scale_factor_spatial, do_convert_rgb=True, do_normalize=True
+        )
 
     def _get_t5_prompt_embeds(
         self,
@@ -195,10 +195,8 @@ class CogVideoXPipeline(DiffusionPipeline):
         dtype: Optional[paddle.dtype] = None,
     ):
         dtype = dtype or self.text_encoder.dtype
-
         prompt = [prompt] if isinstance(prompt, str) else prompt
         batch_size = len(prompt)
-
         text_inputs = self.tokenizer(
             prompt,
             padding="max_length",
@@ -209,25 +207,19 @@ class CogVideoXPipeline(DiffusionPipeline):
         )
         text_input_ids = text_inputs.input_ids
         untruncated_ids = self.tokenizer(prompt, padding="longest", return_tensors="pd").input_ids
-
         if (
-            untruncated_ids.shape[-1] >= text_input_ids.shape[-1]
-            and not paddle.equal_all(text_input_ids, untruncated_ids).item()
+            tuple(untruncated_ids.shape)[-1] >= tuple(text_input_ids.shape)[-1]
+            and not paddle.equal_all(x=text_input_ids, y=untruncated_ids).item()
         ):
             removed_text = self.tokenizer.batch_decode(untruncated_ids[:, max_sequence_length - 1 : -1])
             logger.warning(
-                "The following part of your input was truncated because `max_sequence_length` is set to "
-                f" {max_sequence_length} tokens: {removed_text}"
+                f"The following part of your input was truncated because `max_sequence_length` is set to  {max_sequence_length} tokens: {removed_text}"
             )
-
         prompt_embeds = self.text_encoder(text_input_ids)[0]
-        prompt_embeds = prompt_embeds.cast(dtype)
-
-        # duplicate text embeddings for each generation per prompt, using mps friendly method
-        _, seq_len, _ = prompt_embeds.shape
-        prompt_embeds = prompt_embeds.tile([1, num_videos_per_prompt, 1])
+        prompt_embeds = prompt_embeds.to(dtype=dtype)
+        _, seq_len, _ = tuple(prompt_embeds.shape)
+        prompt_embeds = prompt_embeds.tile(repeat_times=[1, num_videos_per_prompt, 1])
         prompt_embeds = prompt_embeds.reshape([batch_size * num_videos_per_prompt, seq_len, -1])
-
         return prompt_embeds
 
     def encode_prompt(
@@ -241,7 +233,7 @@ class CogVideoXPipeline(DiffusionPipeline):
         max_sequence_length: int = 226,
         dtype: Optional[paddle.dtype] = None,
     ):
-        r"""
+        """
         Encodes the prompt into text encoder hidden states.
 
         Args:
@@ -254,7 +246,7 @@ class CogVideoXPipeline(DiffusionPipeline):
             do_classifier_free_guidance (`bool`, *optional*, defaults to `True`):
                 Whether to use classifier free guidance or not.
             num_videos_per_prompt (`int`, *optional*, defaults to 1):
-                Number of videos that should be generated per prompt. paddle device to place the resulting embeddings on
+                Number of videos that should be generated per prompt.
             prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt weighting. If not
                 provided, text embeddings will be generated from `prompt` input argument.
@@ -262,6 +254,7 @@ class CogVideoXPipeline(DiffusionPipeline):
                 Pre-generated negative text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt
                 weighting. If not provided, negative_prompt_embeds will be generated from `negative_prompt` input
                 argument.
+
             dtype: (`paddle.dtype`, *optional*):
                 paddle dtype
         """
@@ -270,8 +263,7 @@ class CogVideoXPipeline(DiffusionPipeline):
         if prompt is not None:
             batch_size = len(prompt)
         else:
-            batch_size = prompt_embeds.shape[0]
-
+            batch_size = tuple(prompt_embeds.shape)[0]
         if prompt_embeds is None:
             prompt_embeds = self._get_t5_prompt_embeds(
                 prompt=prompt,
@@ -279,30 +271,23 @@ class CogVideoXPipeline(DiffusionPipeline):
                 max_sequence_length=max_sequence_length,
                 dtype=dtype,
             )
-
         if do_classifier_free_guidance and negative_prompt_embeds is None:
             negative_prompt = negative_prompt or ""
             negative_prompt = batch_size * [negative_prompt] if isinstance(negative_prompt, str) else negative_prompt
-
             if prompt is not None and type(prompt) is not type(negative_prompt):
                 raise TypeError(
-                    f"`negative_prompt` should be the same type to `prompt`, but got {type(negative_prompt)} !="
-                    f" {type(prompt)}."
+                    f"`negative_prompt` should be the same type to `prompt`, but got {type(negative_prompt)} != {type(prompt)}."
                 )
             elif batch_size != len(negative_prompt):
                 raise ValueError(
-                    f"`negative_prompt`: {negative_prompt} has batch size {len(negative_prompt)}, but `prompt`:"
-                    f" {prompt} has batch size {batch_size}. Please make sure that passed `negative_prompt` matches"
-                    " the batch size of `prompt`."
+                    f"`negative_prompt`: {negative_prompt} has batch size {len(negative_prompt)}, but `prompt`: {prompt} has batch size {batch_size}. Please make sure that passed `negative_prompt` matches the batch size of `prompt`."
                 )
-
             negative_prompt_embeds = self._get_t5_prompt_embeds(
                 prompt=negative_prompt,
                 num_videos_per_prompt=num_videos_per_prompt,
                 max_sequence_length=max_sequence_length,
                 dtype=dtype,
             )
-
         return prompt_embeds, negative_prompt_embeds
 
     def prepare_latents(
@@ -317,45 +302,30 @@ class CogVideoXPipeline(DiffusionPipeline):
         )
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
-                f"You have passed a list of generators of length {len(generator)}, but requested an effective batch"
-                f" size of {batch_size}. Make sure the batch size matches the length of the generators."
+                f"You have passed a list of generators of length {len(generator)}, but requested an effective batch size of {batch_size}. Make sure the batch size matches the length of the generators."
             )
-
         if latents is None:
             latents = randn_tensor(shape, generator=generator, dtype=dtype)
-        else:
-            latents = latents
 
-        # scale the initial noise by the standard deviation required by the scheduler
         latents = latents * self.scheduler.init_noise_sigma
         return latents
 
     def decode_latents(self, latents: paddle.Tensor) -> paddle.Tensor:
-        latents = latents.transpose([0, 2, 1, 3, 4])  # [batch_size, num_channels, num_frames, height, width]
+        latents = latents.transpose(perm=[0, 2, 1, 3, 4])
         latents = 1 / self.vae.config.scaling_factor * latents
-
         frames = self.vae.decode(latents).sample
         return frames
 
-    # Copied from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_extra_step_kwargs
     def prepare_extra_step_kwargs(self, generator, eta):
-        # prepare extra kwargs for the scheduler step, since not all schedulers have the same signature
-        # eta (η) is only used with the DDIMScheduler, it will be ignored for other schedulers.
-        # eta corresponds to η in DDIM paper: https://arxiv.org/abs/2010.02502
-        # and should be between [0, 1]
-
         accepts_eta = "eta" in set(inspect.signature(self.scheduler.step).parameters.keys())
         extra_step_kwargs = {}
         if accepts_eta:
             extra_step_kwargs["eta"] = eta
-
-        # check if the scheduler accepts generator
         accepts_generator = "generator" in set(inspect.signature(self.scheduler.step).parameters.keys())
         if accepts_generator:
             extra_step_kwargs["generator"] = generator
         return extra_step_kwargs
 
-    # Copied from diffusers.pipelines.latte.pipeline_latte.LattePipeline.check_inputs
     def check_inputs(
         self,
         prompt,
@@ -368,7 +338,6 @@ class CogVideoXPipeline(DiffusionPipeline):
     ):
         if height % 8 != 0 or width % 8 != 0:
             raise ValueError(f"`height` and `width` have to be divisible by 8 but are {height} and {width}.")
-
         if callback_on_step_end_tensor_inputs is not None and not all(
             k in self._callback_tensor_inputs for k in callback_on_step_end_tensor_inputs
         ):
@@ -377,8 +346,7 @@ class CogVideoXPipeline(DiffusionPipeline):
             )
         if prompt is not None and prompt_embeds is not None:
             raise ValueError(
-                f"Cannot forward both `prompt`: {prompt} and `prompt_embeds`: {prompt_embeds}. Please make sure to"
-                " only forward one of the two."
+                f"Cannot forward both `prompt`: {prompt} and `prompt_embeds`: {prompt_embeds}. Please make sure to only forward one of the two."
             )
         elif prompt is None and prompt_embeds is None:
             raise ValueError(
@@ -386,34 +354,27 @@ class CogVideoXPipeline(DiffusionPipeline):
             )
         elif prompt is not None and (not isinstance(prompt, str) and not isinstance(prompt, list)):
             raise ValueError(f"`prompt` has to be of type `str` or `list` but is {type(prompt)}")
-
         if prompt is not None and negative_prompt_embeds is not None:
             raise ValueError(
-                f"Cannot forward both `prompt`: {prompt} and `negative_prompt_embeds`:"
-                f" {negative_prompt_embeds}. Please make sure to only forward one of the two."
+                f"Cannot forward both `prompt`: {prompt} and `negative_prompt_embeds`: {negative_prompt_embeds}. Please make sure to only forward one of the two."
             )
-
         if negative_prompt is not None and negative_prompt_embeds is not None:
             raise ValueError(
-                f"Cannot forward both `negative_prompt`: {negative_prompt} and `negative_prompt_embeds`:"
-                f" {negative_prompt_embeds}. Please make sure to only forward one of the two."
+                f"Cannot forward both `negative_prompt`: {negative_prompt} and `negative_prompt_embeds`: {negative_prompt_embeds}. Please make sure to only forward one of the two."
             )
-
         if prompt_embeds is not None and negative_prompt_embeds is not None:
-            if prompt_embeds.shape != negative_prompt_embeds.shape:
+            if tuple(prompt_embeds.shape) != tuple(negative_prompt_embeds.shape):
                 raise ValueError(
-                    "`prompt_embeds` and `negative_prompt_embeds` must have the same shape when passed directly, but"
-                    f" got: `prompt_embeds` {prompt_embeds.shape} != `negative_prompt_embeds`"
-                    f" {negative_prompt_embeds.shape}."
+                    f"`prompt_embeds` and `negative_prompt_embeds` must have the same shape when passed directly, but got: `prompt_embeds` {tuple(prompt_embeds.shape)} != `negative_prompt_embeds` {tuple(negative_prompt_embeds.shape)}."
                 )
 
     def fuse_qkv_projections(self) -> None:
-        r"""Enables fused QKV projections."""
+        """Enables fused QKV projections."""
         self.fusing_transformer = True
         self.transformer.fuse_qkv_projections()
 
     def unfuse_qkv_projections(self) -> None:
-        r"""Disable QKV projection fusion if enabled."""
+        """Disable QKV projection fusion if enabled."""
         if not self.fusing_transformer:
             logger.warning("The Transformer was not initially fused for QKV projections. Doing nothing.")
         else:
@@ -421,16 +382,12 @@ class CogVideoXPipeline(DiffusionPipeline):
             self.fusing_transformer = False
 
     def _prepare_rotary_positional_embeddings(
-        self,
-        height: int,
-        width: int,
-        num_frames: int,
+        self, height: int, width: int, num_frames: int
     ) -> Tuple[paddle.Tensor, paddle.Tensor]:
         grid_height = height // (self.vae_scale_factor_spatial * self.transformer.config.patch_size)
         grid_width = width // (self.vae_scale_factor_spatial * self.transformer.config.patch_size)
         base_size_width = 720 // (self.vae_scale_factor_spatial * self.transformer.config.patch_size)
         base_size_height = 480 // (self.vae_scale_factor_spatial * self.transformer.config.patch_size)
-
         grid_crops_coords = get_resize_crop_region_for_grid(
             (grid_height, grid_width), base_size_width, base_size_height
         )
@@ -439,10 +396,45 @@ class CogVideoXPipeline(DiffusionPipeline):
             crops_coords=grid_crops_coords,
             grid_size=(grid_height, grid_width),
             temporal_size=num_frames,
-            use_real=True,
         )
 
         return freqs_cos, freqs_sin
+
+    def _prepare_v_ctrl_rotary_positional_embeddings(
+        self, height: int, width: int, num_frames: int
+    ) -> Tuple[paddle.Tensor, paddle.Tensor]:
+        grid_height = height // (self.vae_scale_factor_spatial * self.vctrl.config.patch_size)
+        grid_width = width // (self.vae_scale_factor_spatial * self.vctrl.config.patch_size)
+        base_size_width = 720 // (self.vae_scale_factor_spatial * self.vctrl.config.patch_size)
+        base_size_height = 480 // (self.vae_scale_factor_spatial * self.vctrl.config.patch_size)
+        grid_crops_coords = get_resize_crop_region_for_grid(
+            (grid_height, grid_width), base_size_width, base_size_height
+        )
+        freqs_cos, freqs_sin = get_3d_rotary_pos_embed(
+            embed_dim=self.vctrl.config.attention_head_dim,
+            crops_coords=grid_crops_coords,
+            grid_size=(grid_height, grid_width),
+            temporal_size=num_frames,
+        )
+
+        return freqs_cos, freqs_sin
+
+    def prepare_v_cond_frames(self, image, width, height, dtype):
+        image = self.vctrl_image_processor.preprocess(image, height=height, width=width)
+        control_images = image.unsqueeze(axis=0).to(dtype)
+        batch_size, num_frames, channels, height, width = tuple(control_images.shape)
+        conditioning_frames = control_images
+        conditioning_frames = conditioning_frames.transpose(perm=[0, 2, 1, 3, 4])
+        return conditioning_frames
+
+    def prepare_v_cond_video(
+        self, conditioning_frames: paddle.Tensor, num_frames: int, conditioning_frame_indices: int, dtype: paddle.dtype
+    ) -> Tuple[paddle.Tensor, paddle.Tensor]:
+        assert tuple(conditioning_frames.shape)[2] >= len(conditioning_frame_indices)
+        batch_size, channels, _, height, width = tuple(conditioning_frames.shape)
+        vctrl_cond = paddle.zeros(shape=(batch_size, channels, num_frames, height, width), dtype=dtype)
+        vctrl_cond[:, :, conditioning_frame_indices] = conditioning_frames[:, :, conditioning_frame_indices]
+        return vctrl_cond
 
     @property
     def guidance_scale(self):
@@ -457,7 +449,6 @@ class CogVideoXPipeline(DiffusionPipeline):
         return self._interrupt
 
     @paddle.no_grad()
-    @replace_example_docstring(EXAMPLE_DOC_STRING)
     def __call__(
         self,
         prompt: Optional[Union[str, List[str]]] = None,
@@ -482,6 +473,12 @@ class CogVideoXPipeline(DiffusionPipeline):
         ] = None,
         callback_on_step_end_tensor_inputs: List[str] = ["latents"],
         max_sequence_length: int = 226,
+        conditioning_frames: Optional[List[PipelineImageInput]] = None,
+        conditioning_frame_indices: List[int] = [0],
+        conditioning_scale: Union[float, List[float]] = 1.0,
+        task: Optional[str] = None,
+        conditioning_masks: Optional[List[PipelineImageInput]] = None,
+        vctrl_layout_type: str = "even",
     ) -> Union[CogVideoXPipelineOutput, Tuple]:
         """
         Function invoked when calling the pipeline for generation.
@@ -519,16 +516,16 @@ class CogVideoXPipeline(DiffusionPipeline):
             num_videos_per_prompt (`int`, *optional*, defaults to 1):
                 The number of videos to generate per prompt.
             generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
-                One or a list of [paddle generator(s)](https://pypaddle.org/docs/stable/generated/paddle.Generator.html)
+                One or a list of [paddle generator(s)](https://pytorch.org/docs/stable/generated/paddle.Generator.html)
                 to make generation deterministic.
-            latents (`paddle.float32`, *optional*):
+            latents (`paddle.FloatTensor`, *optional*):
                 Pre-generated noisy latents, sampled from a Gaussian distribution, to be used as inputs for image
                 generation. Can be used to tweak the same generation with different prompts. If not provided, a latents
                 tensor will ge generated by sampling using the supplied random `generator`.
-            prompt_embeds (`paddle.float32`, *optional*):
+            prompt_embeds (`paddle.FloatTensor`, *optional*):
                 Pre-generated text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt weighting. If not
                 provided, text embeddings will be generated from `prompt` input argument.
-            negative_prompt_embeds (`paddle.float32`, *optional*):
+            negative_prompt_embeds (`paddle.FloatTensor`, *optional*):
                 Pre-generated negative text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt
                 weighting. If not provided, negative_prompt_embeds will be generated from `negative_prompt` input
                 argument.
@@ -558,20 +555,15 @@ class CogVideoXPipeline(DiffusionPipeline):
             [`~pipelines.cogvideo.pipeline_cogvideox.CogVideoXPipelineOutput`] if `return_dict` is True, otherwise a
             `tuple`. When returning a tuple, the first element is a list with the generated images.
         """
-
         if num_frames > 49:
             raise ValueError(
                 "The number of frames must be less than 49 for now due to static positional embeddings. This will be updated in the future to remove this limitation."
             )
-
         if isinstance(callback_on_step_end, (PipelineCallback, MultiPipelineCallbacks)):
             callback_on_step_end_tensor_inputs = callback_on_step_end.tensor_inputs
-
         height = height or self.transformer.config.sample_size * self.vae_scale_factor_spatial
         width = width or self.transformer.config.sample_size * self.vae_scale_factor_spatial
         num_videos_per_prompt = 1
-
-        # 1. Check inputs. Raise error if not correct
         self.check_inputs(
             prompt,
             height,
@@ -583,21 +575,14 @@ class CogVideoXPipeline(DiffusionPipeline):
         )
         self._guidance_scale = guidance_scale
         self._interrupt = False
-
-        # 2. Default call parameters
         if prompt is not None and isinstance(prompt, str):
             batch_size = 1
         elif prompt is not None and isinstance(prompt, list):
             batch_size = len(prompt)
         else:
-            batch_size = prompt_embeds.shape[0]
+            batch_size = tuple(prompt_embeds.shape)[0]
 
-        # here `guidance_scale` is defined analog to the guidance weight `w` of equation (2)
-        # of the Imagen paper: https://arxiv.org/pdf/2205.11487.pdf . `guidance_scale = 1`
-        # corresponds to doing no classifier free guidance.
         do_classifier_free_guidance = guidance_scale > 1.0
-
-        # 3. Encode input prompt
         prompt_embeds, negative_prompt_embeds = self.encode_prompt(
             prompt,
             negative_prompt,
@@ -607,14 +592,12 @@ class CogVideoXPipeline(DiffusionPipeline):
             negative_prompt_embeds=negative_prompt_embeds,
             max_sequence_length=max_sequence_length,
         )
-        if do_classifier_free_guidance:
-            prompt_embeds = paddle.concat([negative_prompt_embeds, prompt_embeds], axis=0)
 
-        # 4. Prepare timesteps
+        if do_classifier_free_guidance:
+            prompt_embeds = paddle.concat(x=[negative_prompt_embeds, prompt_embeds], axis=0)
+
         timesteps, num_inference_steps = retrieve_timesteps(self.scheduler, num_inference_steps, timesteps)
         self._num_timesteps = len(timesteps)
-
-        # 5. Prepare latents.
         latent_channels = self.transformer.config.in_channels
         latents = self.prepare_latents(
             batch_size * num_videos_per_prompt,
@@ -627,52 +610,97 @@ class CogVideoXPipeline(DiffusionPipeline):
             latents,
         )
 
-        # 6. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
-        extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
+        if isinstance(self.vctrl, VCtrlModel):
+            v_cond_frames = self.prepare_v_cond_frames(conditioning_frames, width, height, self.vctrl.dtype)
+            v_cond = self.prepare_v_cond_video(v_cond_frames, num_frames, conditioning_frame_indices, self.vctrl.dtype)
+            v_cond = self.vae.encode(v_cond).latent_dist.sample()
 
-        # 7. Create rotary embeds if required
+            (cond_batch_size, cond_channels, cond_frames, cond_height, cond_width) = tuple(v_cond.shape)
+
+            def map_frame_latent(indices):
+                latent_indices = []
+                visited = set()
+                for indice in indices:
+                    if indice == 0:
+                        value = 0
+                    else:
+                        value = (indice - 1) // 4 + 1
+                    if value not in visited:
+                        latent_indices.append(value)
+                return latent_indices
+
+            if task == "mask":
+                assert conditioning_masks is not None, "conditioning_masks must be provided when task is mask"
+                v_cond_mask = self.prepare_v_cond_frames(conditioning_masks, width, height, self.vctrl.dtype)
+                v_cond_mask = self.prepare_v_cond_video(
+                    v_cond_mask, num_frames, conditioning_frame_indices, self.vctrl.dtype
+                )
+                v_cond_mask = self.vae.encode(v_cond_mask).latent_dist.sample()
+                v_cond_mask = v_cond_mask.mean(axis=1, keepdim=True)
+            else:
+                v_cond_mask = paddle.zeros(
+                    shape=(cond_batch_size, 1, cond_frames, cond_height, cond_width), dtype=v_cond.dtype
+                )
+                v_cond_mask[:, :, map_frame_latent(conditioning_frame_indices)] = 1
+            v_cond = paddle.concat(x=[v_cond, v_cond_mask], axis=1)
+            v_cond = v_cond.transpose(perm=[0, 2, 1, 3, 4])
+            assert (
+                tuple(v_cond.shape)[3:] == tuple(latents.shape)[3:]
+                and tuple(v_cond.shape)[1] == tuple(latents.shape)[1]
+            )
+        else:
+            assert False
+        extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
         image_rotary_emb = (
-            self._prepare_rotary_positional_embeddings(height, width, latents.size(1))
+            self._prepare_rotary_positional_embeddings(height, width, latents.shape[1])
             if self.transformer.config.use_rotary_positional_embeddings
             else None
         )
-
-        # 8. Denoising loop
+        v_cond_rotary_emb = (
+            self._prepare_v_ctrl_rotary_positional_embeddings(height, width, v_cond.shape[1])
+            if self.vctrl.config.use_rotary_positional_embeddings
+            else None
+        )
         num_warmup_steps = max(len(timesteps) - num_inference_steps * self.scheduler.order, 0)
-
         with self.progress_bar(total=num_inference_steps) as progress_bar:
-            # for DPM-solver++
             old_pred_original_sample = None
             for i, t in enumerate(timesteps):
                 if self.interrupt:
                     continue
-
-                latent_model_input = paddle.concat([latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = paddle.concat(x=[latents] * 2) if do_classifier_free_guidance else latents
                 latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
+                timestep = t.expand(shape=tuple(latent_model_input.shape)[0])
+                control_model_input = latent_model_input
 
-                # broadcast to batch dimension in a way that's compatible with ONNX/Core ML
-                timestep = t.expand(latent_model_input.shape[0])
+                vctrl_block_samples = self.vctrl(
+                    control_model_input,
+                    timestep,
+                    v_cond=v_cond,
+                    v_cond_scale=conditioning_scale,
+                    image_rotary_emb=v_cond_rotary_emb,
+                    return_dict=False,
+                )
 
-                # predict noise model_output
                 noise_pred = self.transformer(
                     hidden_states=latent_model_input,
                     encoder_hidden_states=prompt_embeds,
                     timestep=timestep,
+                    block_vctrl_residuals=vctrl_block_samples,
+                    vctrl_layout_type=vctrl_layout_type,
                     image_rotary_emb=image_rotary_emb,
                     return_dict=False,
-                )[0]
-                noise_pred = noise_pred.cast("float32")
+                )
 
-                # perform guidance
+                noise_pred = noise_pred.astype(dtype="float32")
+
                 if use_dynamic_cfg:
                     self._guidance_scale = 1 + guidance_scale * (
                         (1 - math.cos(math.pi * ((num_inference_steps - t.item()) / num_inference_steps) ** 5.0)) / 2
                     )
                 if do_classifier_free_guidance:
-                    noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
+                    noise_pred_uncond, noise_pred_text = noise_pred.chunk(chunks=2)
                     noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_text - noise_pred_uncond)
 
-                # compute the previous noisy sample x_t -> x_t-1
                 if not isinstance(self.scheduler, CogVideoXDPMScheduler):
                     latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs, return_dict=False)[0]
                 else:
@@ -685,20 +713,19 @@ class CogVideoXPipeline(DiffusionPipeline):
                         **extra_step_kwargs,
                         return_dict=False,
                     )
-                latents = latents.cast(prompt_embeds.dtype)
 
-                # call the callback, if provided
+                latents = latents.to(prompt_embeds.dtype)
+
                 if callback_on_step_end is not None:
                     callback_kwargs = {}
                     for k in callback_on_step_end_tensor_inputs:
                         callback_kwargs[k] = locals()[k]
                     callback_outputs = callback_on_step_end(self, i, t, callback_kwargs)
-
                     latents = callback_outputs.pop("latents", latents)
                     prompt_embeds = callback_outputs.pop("prompt_embeds", prompt_embeds)
                     negative_prompt_embeds = callback_outputs.pop("negative_prompt_embeds", negative_prompt_embeds)
 
-                if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
+                if i == len(timesteps) - 1 or i + 1 > num_warmup_steps and (i + 1) % self.scheduler.order == 0:
                     progress_bar.update()
 
         if not output_type == "latent":
@@ -706,11 +733,7 @@ class CogVideoXPipeline(DiffusionPipeline):
             video = self.video_processor.postprocess_video(video=video, output_type=output_type)
         else:
             video = latents
-
-        # Offload all models
         self.maybe_free_model_hooks()
-
         if not return_dict:
             return (video,)
-
         return CogVideoXPipelineOutput(frames=video)
