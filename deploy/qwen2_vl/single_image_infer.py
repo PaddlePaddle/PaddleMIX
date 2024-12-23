@@ -19,13 +19,10 @@ import numpy as np
 import paddle
 from paddlenlp.generation import GenerationConfig
 from paddlenlp.trainer import PdArgumentParser
-from paddlenlp.transformers import (
-    AutoConfig,
-    AutoInferenceModelForCausalLM,
-    Qwen2Tokenizer,
-)
+from paddlenlp.transformers import AutoConfig, AutoInferenceModelForCausalLM
 from paddlenlp.trl import llm_utils
 
+from paddlemix.models.qwen2_vl import MIXQwen2Tokenizer
 from paddlemix.models.qwen2_vl.modeling_qwen2_vl import (
     Qwen2RotaryEmbedding,
     Qwen2VLForConditionalGeneration,
@@ -37,7 +34,6 @@ from paddlemix.processors.qwen2_vl_processing import (
 )
 
 MODEL_NAME = "Qwen/Qwen2-VL-2B-Instruct"
-# MODEL_NAME = "Qwen/Qwen2-VL-7B-Instruct"
 vl_model = Qwen2VLForConditionalGeneration.from_pretrained(MODEL_NAME, dtype="bfloat16")
 
 # NOTE: (zhoukangkang、changwenbin) Because we only use the visual model here,
@@ -46,7 +42,7 @@ del vl_model.model
 paddle.device.cuda.empty_cache()
 
 image_processor = Qwen2VLImageProcessor()
-tokenizer = Qwen2Tokenizer.from_pretrained(MODEL_NAME)
+tokenizer = MIXQwen2Tokenizer.from_pretrained(MODEL_NAME)
 processor = Qwen2VLProcessor(image_processor, tokenizer)
 
 # min_pixels = 256*28*28 # 200704

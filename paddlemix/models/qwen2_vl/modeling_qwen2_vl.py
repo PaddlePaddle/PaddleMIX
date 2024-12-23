@@ -49,8 +49,8 @@ _IS_NPU = "npu" in paddle.get_device()
 def _get_unpad_data(attention_mask):
     seqlens_in_batch = attention_mask.sum(axis=-1, dtype="int32")
     indices = paddle.nonzero(attention_mask.flatten(), as_tuple=False).flatten()
-    max_seqlen_in_batch = seqlens_in_batch.max().item()
-    cu_seqlens = F.pad(paddle.cumsum(seqlens_in_batch, axis=0), (1, 0))
+    max_seqlen_in_batch = seqlens_in_batch.max().item()  # [2, 1, 1323]
+    cu_seqlens = F.pad(paddle.cumsum(seqlens_in_batch, axis=0), (1, 0), data_format="NCL")
     return (
         indices,
         cu_seqlens,
@@ -618,7 +618,7 @@ class Qwen2VLAttention(nn.Layer):
         if attention_mask is not None:
             attn_weights = attn_weights + attention_mask
         attn_weights = nn.functional.softmax(attn_weights, axis=-1, dtype="float32")
-
+        attn_weights = nn.functional.dropout(x=attn_weights, p=self.attention_dropout, training=self.training)
         attn_output = paddle.matmul(attn_weights.cast(self.config.dtype), value_states.cast(self.config.dtype))
 
         if attn_output.shape != [bsz, self.num_heads, q_len, self.head_dim]:
@@ -706,7 +706,7 @@ class Qwen2VLFlashAttention2(Qwen2VLAttention):
             query_states,
             key_states,
             value_states,
-            None,
+            None,  # attention_mask,  # TODO: batch infer时不能是None；如果不是batch infer, attention_mask可以是None, 也可以是全1传进来
             q_len
             # dropout=0.0 if not self.training else self.attention_dropout,
             # causal=self.is_causal,
@@ -746,13 +746,11 @@ class Qwen2VLFlashAttention2(Qwen2VLAttention):
         head_dim = query_states.shape[-1]
         softmax_scale = head_dim**-0.5  # TODO: 需要手动加上
 
-        if attention_mask is not None:
-            batch_size = query_states.shape[0]  # [2, 3383, 16, 128]
-
+        if attention_mask is not None:  # attention_mask.shape # [2, 1, 1323, 1323]
+            batch_size = query_states.shape[0]  # [2, 1323, 12, 128]
             query_states, key_states, value_states, indices_q, cu_seq_lens, max_seq_lens = self._unpad_input(
                 query_states, key_states, value_states, attention_mask, query_length
             )
-
             cu_seqlens_q, cu_seqlens_k = cu_seq_lens
             max_seqlen_in_batch_q, max_seqlen_in_batch_k = max_seq_lens
 
@@ -782,9 +780,11 @@ class Qwen2VLFlashAttention2(Qwen2VLAttention):
         return attn_output
 
     def _unpad_input(self, query_layer, key_layer, value_layer, attention_mask, query_length):
+        # Note: This function was named _upad_input() in torch transformers/modeling_flash_attention_utils.py
         indices_k, cu_seqlens_k, max_seqlen_in_batch_k = _get_unpad_data(attention_mask)
         batch_size, kv_seq_len, num_key_value_heads, head_dim = key_layer.shape
 
+        # TODO：cuda error
         key_layer = index_first_axis(
             key_layer.reshape([batch_size * kv_seq_len, num_key_value_heads, head_dim]), indices_k
         )
@@ -832,7 +832,9 @@ class Qwen2VLDecoderLayer(nn.Layer):
                 f"Sliding Window Attention is enabled but not implemented for `{config.attn_implementation}`; "
                 "unexpected results may be encountered."
             )
+        # TODO: batch infer 时使用 Qwen2VLFlashAttention2待修复
         self.self_attn = create_attention_module(config, "qwen2vl", layer_idx=layer_idx)
+        # self.self_attn = Qwen2VLAttention(config, layer_idx)
         self.mlp = Qwen2MLP(config)
         self.input_layernorm = Qwen2RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.post_attention_layernorm = Qwen2RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
@@ -871,6 +873,7 @@ class Qwen2VLDecoderLayer(nn.Layer):
 
         hidden_states = self.input_layernorm(hidden_states)
 
+        # Self Attention
         hidden_states, self_attn_weights, present_key_value = self.self_attn(
             hidden_states=hidden_states,
             attention_mask=attention_mask,
@@ -1204,8 +1207,6 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
         # Initialize weights and apply final processing
         # self.post_init()
 
-        self.rope_deltas = 0  # TODO: hard code
-
     def get_input_embeddings(self):
         return self.model.embed_tokens
 
@@ -1285,8 +1286,9 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
             position_ids = paddle.ones([3, input_ids.shape[0], input_ids.shape[1]], dtype=input_ids.dtype)
             image_index, video_index = 0, 0
             for i, input_ids in enumerate(total_input_ids):
+                # TODO: CUDA error in some paddle version
                 if attention_mask is not None:
-                    input_ids = input_ids[attention_mask[i] == 1]
+                    input_ids = paddle.to_tensor(input_ids.cpu()[attention_mask[i].cpu() == 1])
                 image_nums, video_nums = 0, 0
                 vision_start_indices = paddle.nonzero(input_ids == vision_start_token_id).squeeze(1)
                 vision_tokens = input_ids[vision_start_indices + 1]
@@ -1494,7 +1496,8 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
 
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states  # fmt:skip
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        # Note：始终为True
+        return_dict = True  # return_dict if return_dict is not None else self.config.use_return_dict
 
         if inputs_embeds is None:
             inputs_embeds = self.model.embed_tokens(input_ids)
@@ -1512,6 +1515,7 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
                 inputs_embeds[video_mask] = video_embeds
             if attention_mask is not None:
                 attention_mask = attention_mask
+
         outputs = self.model(
             input_ids=None,
             position_ids=position_ids,
@@ -1586,8 +1590,6 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
             input_ids = input_ids[:, -1].unsqueeze(-1)
 
         rope_deltas = kwargs.get("rope_deltas", None)
-        rope_deltas = self.rope_deltas if self.rope_deltas != 0 else rope_deltas
-        # TODO: hard code, need to be fixed
 
         if attention_mask is not None and position_ids is None:
             if cache_position is None or (cache_position is not None and cache_position[0] == 0):
@@ -1601,7 +1603,6 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
                     video_grid_thw,
                     attention_mask,
                 )
-                self.rope_deltas = rope_deltas
             else:
                 batch_size, seq_length = input_ids.shape
                 delta = (
@@ -1621,30 +1622,6 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
             model_inputs = {"inputs_embeds": inputs_embeds}
         else:
             model_inputs = {"input_ids": input_ids}
-
-        # past_key_values: DynamicCache() # torch always be DynamicCache
-        # if isinstance(past_key_values, StaticCache) and attention_mask.ndim == 2:
-        if False and attention_mask.ndim == 2:
-            if inputs_embeds is not None:
-                batch_size, sequence_length = tuple(inputs_embeds.shape)
-                device = inputs_embeds.place
-            else:
-                batch_size, sequence_length = tuple(input_ids.shape)
-                device = input_ids.place
-
-            dtype = self.lm_head.weight.dtype
-            min_dtype = paddle.finfo(dtype=dtype).min
-
-            attention_mask = _prepare_4d_causal_attention_mask_with_cache_position(
-                attention_mask,
-                sequence_length=sequence_length,
-                target_length=past_key_values.get_max_length(),
-                dtype=dtype,
-                device=device,
-                min_dtype=min_dtype,
-                cache_position=cache_position,
-                batch_size=batch_size,
-            )
 
         model_inputs.update(
             {
