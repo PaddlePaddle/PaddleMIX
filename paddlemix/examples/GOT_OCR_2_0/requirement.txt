@@ -1,0 +1,3 @@
+megfile
+natsort
+paddlenlp==3.0.0b3

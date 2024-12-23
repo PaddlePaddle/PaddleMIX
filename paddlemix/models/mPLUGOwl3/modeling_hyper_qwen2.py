@@ -354,7 +354,7 @@ class HyperQwen2SdpaAttention(HyperQwen2Attention):
             key_states = self.k_proj(hidden_states)
             value_states = self.v_proj(hidden_states)
         except:
-            hidden_states = hidden_states.astype("bfloat16")
+            hidden_states = hidden_states.astype(self.q_proj.weight.dtype)
             query_states = self.q_proj(hidden_states)
             key_states = self.k_proj(hidden_states)
             value_states = self.v_proj(hidden_states)
@@ -386,7 +386,7 @@ class HyperQwen2SdpaAttention(HyperQwen2Attention):
         try:
             image_embeds = self.v_kv_proj(image_embeds)
         except:
-            image_embeds = self.v_kv_proj(image_embeds.astype("bfloat16"))
+            image_embeds = self.v_kv_proj(image_embeds.astype(self.v_kv_proj.weight.dtype))
         image_start = 0
         context_layer = []
         for bi, media_starts in enumerate(media_offset):
@@ -516,7 +516,7 @@ class HyperQwen2SdpaAttention(HyperQwen2Attention):
             key_states = self.k_proj(hidden_states)
             value_states = self.v_proj(hidden_states)
         except:
-            hidden_states = hidden_states.astype("bfloat16")
+            hidden_states = hidden_states.astype(self.q_proj.weight.dtyp)
             query_states = self.q_proj(hidden_states)
             key_states = self.k_proj(hidden_states)
             value_states = self.v_proj(hidden_states)
@@ -629,7 +629,7 @@ class HyperQwen2DecoderLayer(nn.Layer):
 
         # Self Attention
         hidden_states, self_attn_weights, present_key_value = self.self_attn(  # -704. 2080. (48128., 240.)
-            hidden_states=hidden_states.cast(paddle.bfloat16),  # [1, 74, 3584] sum -704.
+            hidden_states=hidden_states.cast(self.mlp.gate_proj.weight.dtype),  # [1, 74, 3584] sum -704.
             attention_mask=attention_mask,
             position_ids=position_ids,
             past_key_value=past_key_value,
@@ -643,7 +643,7 @@ class HyperQwen2DecoderLayer(nn.Layer):
         residual = hidden_states
         hidden_states = self.post_attention_layernorm(hidden_states)
         try:
-            hidden_states = self.mlp(hidden_states.cast(paddle.bfloat16))
+            hidden_states = self.mlp(hidden_states.cast(self.mlp.gate_proj.weight.dtype))
         except:
             hidden_states = self.mlp(hidden_states)
         hidden_states = residual + hidden_states
@@ -926,7 +926,7 @@ class HyperQwen2ForCausalLM(Qwen2PreTrainedModel):
         try:
             logits = self.lm_head(hidden_states)
         except:
-            logits = self.lm_head(hidden_states.cast(paddle.bfloat16))
+            logits = self.lm_head(hidden_states.cast(self.lm_head.weight.dtype))
         logits = logits.cast(paddle.float32)  # sum -5314405 mean -0.47356287
 
         loss = None
