@@ -29,12 +29,14 @@ parser.add_argument("--ocr_type", type=str, default="plain", choices=["ocr", "fo
 parser.add_argument("--box", type=str, default="")
 parser.add_argument("--color", type=str, default="")
 parser.add_argument("--render", action="store_true")
+parser.add_argument("--dtype", type=str, default="bfloat16")
+
 args = parser.parse_args()
 model_name_or_path = args.model_name_or_path
 
 tokenizer = QWenTokenizer.from_pretrained(model_name_or_path)
 model = GOTQwenForCausalLM.from_pretrained(
-    model_name_or_path, dtype=paddle.bfloat16, pad_token_id=tokenizer.eos_token_id
+    model_name_or_path, dtype=args.dtype, pad_token_id=tokenizer.eos_token_id
 ).eval()
 
 # input test image
@@ -42,9 +44,9 @@ image_file = args.image_file
 with paddle.no_grad():
     if args.multi_crop:
         # multi-crop OCR:
-        res = model.chat_crop(tokenizer, image_file, ocr_type=args.ocr_type)
+        res = model.chat_crop(tokenizer, image_file, ocr_type=args.ocr_type, dtype=args.dtype)
     else:
         # plain texts OCR
         # format texts OCR
-        res = model.chat(tokenizer, image_file, ocr_type=args.ocr_type)
+        res = model.chat(tokenizer, image_file, ocr_type=args.ocr_type, dtype=args.dtype)
     print("output:\n", res)

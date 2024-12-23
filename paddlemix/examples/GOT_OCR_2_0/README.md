@@ -15,18 +15,27 @@
 
 ## 2. 环境要求
 - **python >= 3.10**
-- **paddlepaddle-gpu 要求3.0.0b2或版本develop**
+- **paddlepaddle-gpu 要求3.0.0b2版本或develop版本**
 ```
-# develop版安装示例
-python -m pip install paddlepaddle-gpu==0.0.0.post118 -f https://www.paddlepaddle.org.cn/whl/linux/gpu/develop.html
+# 安装示例
+python -m pip install paddlepaddle-gpu==3.0.0b2 -i https://www.paddlepaddle.org.cn/packages/stable/cu118/
 ```
 
-- **paddlenlp == 3.0.0b2**
+- **paddlenlp == 3.0.0b3**
+- **paddlenlp要求是3.0.0b3版本**
+```
+# 安装示例
+python -m pip install paddlenlp==3.0.0b3
+```
 
-> 注：(默认开启flash_attn)使用flash_attn 要求A100/A800显卡或者H20显卡。V100请用float16推理。
-
+- **其他环境要求**
+```
+pip install -r requirements.txt
+```
 
 ## 3 推理预测
+
+注意：GOT-OCR2.0 模型推理显存约需4G，不支持数据类型为"float16"进行推理。
 
 ### 3.1. plain texts OCR:
 ```bash
@@ -34,6 +43,7 @@ python paddlemix/examples/GOT_OCR_2_0/got_ocr2_0_infer.py \
   --model_name_or_path stepfun-ai/GOT-OCR2_0 \
   --image_file paddlemix/demo_images/hospital.jpeg \
   --ocr_type ocr \
+  --dtype "bfloat16" \
 ```
 
 ### 3.2. format texts OCR:
@@ -42,6 +52,7 @@ python paddlemix/examples/GOT_OCR_2_0/got_ocr2_0_infer.py \
   --model_name_or_path stepfun-ai/GOT-OCR2_0 \
   --image_file paddlemix/demo_images/hospital.jpeg \
   --ocr_type format \
+  --dtype "bfloat16" \
 ```
 
 ### 3.3. multi_crop plain texts OCR:
@@ -51,6 +62,7 @@ python paddlemix/examples/GOT_OCR_2_0/got_ocr2_0_infer.py \
   --image_file paddlemix/demo_images/hospital.jpeg \
   --ocr_type ocr \
   --multi_crop \
+  --dtype "bfloat16" \
 ```
 
 ## 4 训练
@@ -76,6 +88,15 @@ sh paddlemix/examples/GOT_OCR_2_0/run_train.sh
 ```
 
 注意：默认训练方式是stage2全参数微调，训练显存约10GB每卡。也可通过设置```--freeze_vision_tower True```冻结vision encoder后微调。
+
+### 训完后推理
+
+```bash
+python paddlemix/examples/GOT_OCR_2_0/got_ocr2_0_infer.py \
+  --model_name_or_path work_dirs/got_ocr_20/ \
+  --image_file paddlemix/demo_images/hospital.jpeg \
+  --ocr_type ocr \
+```
 
 
 ## 参考文献
