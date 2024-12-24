@@ -14,13 +14,12 @@
 
 python infer_cogvideox_t2v_vctrl_cli.py \
   --pretrained_model_name_or_path "paddlemix/cogvideox-5b-vctrl" \
-  --vctrl_path "vctrl_5b_t2v_mask.pdparams" \
+  --vctrl_path "vctrl_canny_5b.pdparams" \
   --vctrl_config "vctrl_configs/cogvideox_5b_vctrl_config.json" \
   --control_video_path "guide_values_1.mp4" \
-  --control_mask_video_path 'mask_values_1.mp4' \
-  --output_dir "infer_outputs/mask2video" \
+  --output_dir "infer_outputs/canny2video" \
   --prompt "" \
-  --task "mask" \
+  --task "canny" \
   --width 720 \
   --height 480 \
   --max_frame 49 \
