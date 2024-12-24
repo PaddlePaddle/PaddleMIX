@@ -201,13 +201,13 @@ parser = PdArgumentParser((PredictorArgument, ModelArgument))
 predictor_args, model_args = parser.parse_args_into_dataclasses()
 
 paddle.set_default_dtype(predictor_args.dtype)
-config = AutoConfig.from_pretrained(MODEL_NAME)
+config = AutoConfig.from_pretrained(predictor_args.model_name_or_path)
 
 # NOTE: (changwenbin) This is for using the inference optimization of paddlenlp qwen2.
 config.model_type = "qwen2"
-generation_config = GenerationConfig.from_pretrained(MODEL_NAME)
+generation_config = GenerationConfig.from_pretrained(predictor_args.model_name_or_path)
 fast_llm_model = AutoInferenceModelForCausalLM.from_pretrained(
-    MODEL_NAME,
+    predictor_args.model_name_or_path,
     config=config,
     predictor_args=predictor_args,
     model_args=model_args,
@@ -246,7 +246,7 @@ def run_model():
 
 
 if predictor_args.benchmark:
-    print(f"Benchmarking {MODEL_NAME} ...")
+    print(f"Benchmarking {predictor_args.model_name_or_path} ...")
     warm_up = 3
     repeat_times = 10
     sumtime = 0.0
@@ -265,11 +265,11 @@ if predictor_args.benchmark:
             duringtime = endtime - starttime
             duringtime = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
             sumtime += duringtime
-            print(f"Single {MODEL_NAME} end to end time : ", duringtime, "ms")
+            print(f"Single {predictor_args.model_name_or_path} end to end time : ", duringtime, "ms")
             inference_global_mem = paddle.device.cuda.memory_reserved() / (1024**3)
             print(f"Inference used CUDA memory : {inference_global_mem:.3f} GiB")
 
-    print(f"Single {MODEL_NAME} ave end to end time : ", sumtime / repeat_times, "ms")
+    print(f"Single {predictor_args.model_name_or_path} ave end to end time : ", sumtime / repeat_times, "ms")
 
 else:
     generated_text = run_model()

@@ -24,13 +24,13 @@ PaddleMIX团队基于`Qwen2-VL-2B-Instruct`设计了专门针对文档理解类�
 ## 2 环境准备
 - **python >= 3.10**
 - **paddlepaddle-gpu 要求是develop版本**
-```
+```bash
 # 安装示例
 python -m pip install paddlepaddle-gpu==0.0.0.post118 -f https://www.paddlepaddle.org.cn/whl/linux/gpu/develop.html
 ```
 
 - **paddlenlp == 3.0.0b3**
-```
+```bash
 # 安装示例
 python -m pip install paddlenlp==3.0.0b3
 ```
@@ -110,6 +110,18 @@ sh paddlemix/examples/qwen2_vl/shell/basline_7b_lora_bs32_1e8.sh
 ```bash
 python paddlemix/examples/qwen2_vl/single_image_infer.py
 ```
+
+### 5 高性能推理优化
+
+[Paddle高性能推理优化后](../../../deploy/qwen2_vl/)，测试结果如下：
+
+- 在 NVIDIA A100-SXM4-80GB 上测试的单图端到端速度性能如下：
+
+| model                  | Paddle Inference|    PyTorch   | Paddle 动态图 |
+| ---------------------- | --------------- | ------------ | ------------ |
+| Qwen2-VL-2B-Instruct   |      1.44 s     |     2.35 s   |    5.215 s   |
+| Qwen2-VL-7B-Instruct   |      1.73 s     |      4.4s    |    6.339 s   |
+
 
 
 ## 参考文献
