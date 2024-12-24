@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-python infer_cogvideox_5b_i2v_vctrl_cli.py \
+python infer_cogvideox_i2v_vctrl_cli.py \
   --pretrained_model_name_or_path "paddlemix/cogvideox-5b-i2v-vctrl" \
   --vctrl_path "vctrl_5b_i2v_mask.pdparams" \
   --vctrl_config "vctrl_configs/cogvideox_5b_i2v_vctrl_config.json" \
