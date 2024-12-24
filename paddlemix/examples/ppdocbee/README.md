@@ -54,7 +54,6 @@ python paddlemix/examples/ppdocbee/app.py
 我们提供了基于OpenAI服务部署的代码，您可以通过阅读[服务部署文档](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/paddlemix/examples/qwen2_vl/README_SERVER.md)快速搭建服务。
 
 
-
 ## 4. 使用指南
 
 ### 4.1 模型推理
@@ -66,7 +65,7 @@ python paddlemix/examples/ppdocbee/app.py
 </p>
 
 ```bash
-python paddlemix/examples/ppdocbee/single_image_infer.py \
+python paddlemix/examples/ppdocbee/ppdocbee_infer.py \
   --model_path "PaddleMIX/PPDocBee-2B-1129" \
   --image_file "paddlemix/demo_images/medal_table.png" \
   --question "识别这份表格的内容"
@@ -93,16 +92,29 @@ python paddlemix/examples/ppdocbee/single_image_infer.py \
 | 15 | 牙买加（JAM） | 5 | 4 | 2 | 11 |
 ```
 
-### 4.2 微调数据准备
+### 4.2 模型微调
 
-SFT数据集，包括了众多文档类指令微调数据集，例如：`dvqa`、`chartqa`、`ai2d`、`docvqa`、`geoqa+`、`synthdog_en`、`LLaVA-OneVision`系列以及内部合成数据集，部分数据集详见`paddlemix/examples/ppdocbee/configs/ppdocbee_public_dataset.json`，内部合成数据集暂时不对外开放。
+### 4.2.1 小型示例数据集
+
+PaddleMIX团队整理了`chartqa`数据集作为小型的示例数据集，下载链接为：
+
+```bash
+wget https://paddlenlp.bj.bcebos.com/models/community/paddlemix/benchmark/playground.tar # 1.0G
+```
+playground/目录下包括了图片目录`data/chartqa/`和标注目录`opensource_json/`，详见`paddlemix/examples/ppdocbee/configs/demo_chartqa_500.json`。
+
+
+### 4.2.2 大型公开数据集
+
+PP-DocBee模型的SFT训练数据集，包括了众多文档类的指令微调数据集，例如：`dvqa`、`chartqa`、`ai2d`、`docvqa`、`geoqa+`、`synthdog_en`、`LLaVA-OneVision`系列以及内部合成数据集，部分公开数据集详见`paddlemix/examples/ppdocbee/configs/ppdocbee_public_dataset.json`，内部合成数据集暂时不对外开放。
 
 PaddleMIX团队整理后的下载链接为：
-```
+```bash
 wget https://paddlenlp.bj.bcebos.com/datasets/paddlemix/playground.tar # 50G
 wget https://paddlenlp.bj.bcebos.com/datasets/paddlemix/playground/opensource_json.tar
 ```
-opensource_json.tar需下载解压在playground/目录下，opensource_json 里是数据标注的json格式文件。
+
+注意：若先下载了示例数据集的`playground.tar`解压了，此处需删除后，再下载公开数据集的`playground.tar`并解压，opensource_json.tar需下载解压在playground/目录下，opensource_json 里是数据标注的json格式文件。
 
 PaddleMIX团队整理后的`LLaVA-OneVision`系列数据集待开放下载链接，请关注后续更新。
 
@@ -118,6 +130,20 @@ sh paddlemix/examples/ppdocbee/shell/ppdocbee_sft.sh
 # 2B lora
 sh paddlemix/examples/ppdocbee/shell/ppdocbee_lora.sh
 ```
+
+注意：默认是公开数据集训练的配置，若需使用示例数据集，请在`ppdocbee_sft.sh`或`ppdocbee_lora.sh`中修改`--meta_path`为`paddlemix/examples/ppdocbee/configs/demo_chartqa_500.json`。
+
+### 4.4 微调后使用
+
+只需将`paddlemix/examples/ppdocbee/ppdocbee_infer.py`中的`--model_path`参数修改为微调后的模型路径即可。
+
+```bash
+python paddlemix/examples/ppdocbee/ppdocbee_infer.py \
+  --model_path "your_trained_model_path" \
+  --image_file "paddlemix/demo_images/medal_table.png" \
+  --question "识别这份表格的内容"
+```
+
 
 ## 5. 性能评测
 
@@ -147,3 +173,9 @@ Qwen2-VL-2B       | 2.21B   | 89.2       |  73.5        |  64.1       | 79.7  
 2.[ChineseOCRBench](https://huggingface.co/datasets/SWHL/ChineseOCRBench)是3410张图像和3410条问答数据，均来自ReCTS和ESTVQA数据集。
 
 3.内部中文场景评估集包括了财报、法律法规、理工科论文、说明书、文科论文、合同、研报等场景，暂时未有计划公开。
+
+
+## 参考文献
+```BibTeX
+
+```
