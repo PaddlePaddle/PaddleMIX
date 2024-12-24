@@ -36,6 +36,7 @@ TRAINING_MODEL_RESUME="None"
 TRAINER_INSTANCES='127.0.0.1'
 MASTER='127.0.0.1:8080'
 
+# meta_path="paddlemix/examples/ppdocbee/configs/demo_chartqa_500.json"
 meta_path="paddlemix/examples/ppdocbee/configs/ppdocbee_public_dataset.json"
 
 TRAINING_PYTHON="python -m paddle.distributed.launch --master ${MASTER} --nnodes 1 --nproc_per_node ${GPUS} --rank 0 --ips ${TRAINER_INSTANCES} --run_mode=collective"
