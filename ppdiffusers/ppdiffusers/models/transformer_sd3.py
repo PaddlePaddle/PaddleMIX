@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import os
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import paddle
 import paddle.nn as nn
@@ -77,6 +77,10 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
         pooled_projection_dim: int = 2048,
         out_channels: int = 16,
         pos_embed_max_size: int = 96,
+        dual_attention_layers: Tuple[
+            int, ...
+        ] = (),  # () for sd3.0; (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12) for sd3.5
+        qk_norm: Optional[str] = None,
     ):
         super().__init__()
         default_out_channels = in_channels
@@ -121,6 +125,8 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
                     num_attention_heads=self.config.num_attention_heads,
                     attention_head_dim=self.inner_dim,
                     context_pre_only=i == num_layers - 1,
+                    qk_norm=qk_norm,
+                    use_dual_attention=True if i in dual_attention_layers else False,
                 )
                 for i in range(self.config.num_layers)
             ]

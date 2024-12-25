@@ -2,18 +2,21 @@
 
 ## 1. 模型介绍
 
-[Qwen2-VL
-](https: //qwenlm.github.io/blog/qwen2-vl/) 是大规模视觉语言模型。可以以图像、文本、检测框、视频作为输入，并以文本和检测框作为输出。本仓库提供paddle版本的`Qwen2-VL-2B-Instruct`和`Qwen2-VL-7B-Instruct`模型。
+[Qwen2-VL](https://qwenlm.github.io/blog/qwen2-vl/) 是 Qwen 团队推出的一个专注于视觉与语言（Vision-Language, VL）任务的多模态大模型。它旨在通过结合图像和文本信息，提供强大的跨模态理解能力，可以处理涉及图像描述、视觉问答（VQA）、图文检索等多种任务。Qwen2-VL通过引入创新性的技术如 Naive Dynamic Resolution 和 M-RoPE，以及深入探讨大型多模态模型的潜力，显著地提高了多模态内容的视觉理解能力。
 
 ## 2 环境准备
+
 - **python >= 3.10**
-- **paddlepaddle-gpu 要求版本develop**
-```
+- **paddlepaddle-gpu 要求是develop版本**
+```bash
 # 安装示例
-python -m pip install paddlepaddle-gpu==0.0.0.post118 -f https: //www.paddlepaddle.org.cn/whl/linux/gpu/develop.html
+python -m pip install paddlepaddle-gpu==0.0.0.post118 -f https://www.paddlepaddle.org.cn/whl/linux/gpu/develop.html
 ```
-- **paddlenlp
-```
+
+- **paddlenlp 需要特定版本**
+
+在PaddleMIX/代码目录下执行以下命令安装特定版本的paddlenlp：
+```bash
 # 安装示例
 git submodule update --init --recursive
 cd PaddleNLP
@@ -28,27 +31,20 @@ python setup_cuda.py install
 * (默认开启flash_attn)使用flash_attn 要求A100/A800显卡或者H20显卡
 
 ## 3 高性能推理
-# 在Qwen2-vl的推理优化中，我们在视觉模型部分继续使用paddlemix中的模型组网；
-  但是在语言模型部分，我们调用Paddlenlp中高性能的qwen2语言模型，以得到高性能的Qwen2-vl推理版本。
 
-### a. 文本&单张图像输入高性能推理
+在Qwen2-VL的高性能推理优化中，**视觉模型部分继续使用PaddleMIX中的模型组网；但是语言模型部分调用PaddleNLP中高性能的Qwen2语言模型**，以得到高性能的Qwen2-VL推理版本。
+
+### 3.1. 文本&单张图像输入高性能推理
 ```bash
 python deploy/qwen2_vl/single_image_infer.py \
     --model_name_or_path Qwen/Qwen2-VL-2B-Instruct \
     --dtype bfloat16 \
-    --benchmark 1
+    --benchmark True \
 ```
 
-- 在 NVIDIA A100-SXM4-80GB 上测试的性能如下：
+- 在 NVIDIA A100-SXM4-80GB 上测试的单图端到端速度性能如下：
 
-
-- Qwen2-VL-2B-Instruct
-| Paddle Inference|    PyTorch   | Paddle 动态图 |
-| --------------- | ------------ | ------------ |
-|      1.44 s     |     2.35 s   |    5.215 s   |
-
-
-- Qwen2-VL-7B-Instruct
-| Paddle Inference|    PyTorch   | Paddle 动态图 |
-| --------------- | ------------ | ------------ |
-|      1.73 s     |      4.4s    |    6.339 s   |
+| model                  | Paddle Inference|    PyTorch   | Paddle 动态图 |
+| ---------------------- | --------------- | ------------ | ------------ |
+| Qwen2-VL-2B-Instruct   |      1.44 s     |     2.35 s   |    5.215 s   |
+| Qwen2-VL-7B-Instruct   |      1.73 s     |      4.4s    |    6.339 s   |

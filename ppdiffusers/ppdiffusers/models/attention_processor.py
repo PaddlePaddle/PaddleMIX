@@ -84,6 +84,7 @@ class Attention(nn.Layer):
         query_dim: int,
         cross_attention_dim: Optional[int] = None,
         heads: int = 8,
+        kv_heads: Optional[int] = None,
         dim_head: int = 64,
         dropout: float = 0.0,
         bias: bool = False,
@@ -105,10 +106,16 @@ class Attention(nn.Layer):
         processor: Optional["AttnProcessor"] = None,
         out_dim: int = None,
         context_pre_only=None,
+        elementwise_affine: bool = True,
     ):
         super().__init__()
+
+        # To prevent circular import.
+        from .normalization import  RMSNorm, FP32LayerNorm, LpNorm
+
         self.inner_dim = dim_head * heads
         self.inner_dim = out_dim if out_dim is not None else dim_head * heads
+        self.is_cross_attention = cross_attention_dim is not None
         self.cross_attention_dim = cross_attention_dim if cross_attention_dim is not None else query_dim
         self.upcast_attention = upcast_attention
         self.upcast_softmax = upcast_softmax
@@ -154,10 +161,25 @@ class Attention(nn.Layer):
             self.norm_q = None
             self.norm_k = None
         elif qk_norm == "layer_norm":
-            self.norm_q = nn.LayerNorm(dim_head, epsilon=eps)
-            self.norm_k = nn.LayerNorm(dim_head, epsilon=eps)
+            norm_elementwise_affine_kwargs = dict(weight_attr=elementwise_affine, bias_attr=elementwise_affine)
+            self.norm_q = nn.LayerNorm(dim_head, epsilon=eps, **norm_elementwise_affine_kwargs)
+            self.norm_k = nn.LayerNorm(dim_head, epsilon=eps, **norm_elementwise_affine_kwargs)
+        elif qk_norm == "fp32_layer_norm":
+            norm_elementwise_affine_kwargs = dict(weight_attr=False, bias_attr=False)
+            self.norm_q = FP32LayerNorm(dim_head, epsilon=eps, **norm_elementwise_affine_kwargs)
+            self.norm_k = FP32LayerNorm(dim_head, epsilon=eps, **norm_elementwise_affine_kwargs)
+        elif qk_norm == "layer_norm_across_heads":
+            # Lumina applys qk norm across all heads
+            self.norm_q = nn.LayerNorm(dim_head * heads, epsilon=eps)
+            self.norm_k = nn.LayerNorm(dim_head * kv_heads, epsilon=eps)
+        elif qk_norm == "rms_norm":
+            self.norm_q = RMSNorm(dim_head, epsilon=eps)
+            self.norm_k = RMSNorm(dim_head, epsilon=eps)
+        elif qk_norm == "l2":
+            self.norm_q = LpNorm(p=2, dim=-1, epsilon=eps)
+            self.norm_k = LpNorm(p=2, dim=-1, epsilon=eps)
         else:
-            raise ValueError(f"unknown qk_norm: {qk_norm}. Should be None or 'layer_norm'")
+            raise ValueError(f"unknown qk_norm: {qk_norm}. Should be None,'layer_norm','fp32_layer_norm','rms_norm'")
 
         if cross_attention_norm is None:
             self.norm_cross = None
@@ -209,6 +231,22 @@ class Attention(nn.Layer):
 
         if self.context_pre_only is not None and not self.context_pre_only:
             self.to_add_out = nn.Linear(self.inner_dim, self.out_dim, bias_attr=out_bias)
+
+        if qk_norm is not None and added_kv_proj_dim is not None:
+            if qk_norm == "fp32_layer_norm":
+                self.norm_added_q = FP32LayerNorm(dim_head, elementwise_affine=False, bias=False, eps=eps)
+                self.norm_added_k = FP32LayerNorm(dim_head, elementwise_affine=False, bias=False, eps=eps)
+            elif qk_norm == "rms_norm":
+                self.norm_added_q = RMSNorm(dim_head, epsilon=eps)
+                self.norm_added_k = RMSNorm(dim_head, epsilon=eps)
+            else:
+                raise ValueError(
+                    f"unknown qk_norm: {qk_norm}. Should be one of `None,'layer_norm','fp32_layer_norm','rms_norm'`"
+                )
+        else:
+            self.norm_added_q = None
+            self.norm_added_k = None
+
         # set attention processor
         # We use the AttnProcessor2_5 by default when paddle 2.5 is used which uses
         # paddle.nn.functional.scaled_dot_product_attention_ for native Flash/memory_efficient_attention
@@ -916,6 +954,7 @@ class AttnAddedKVProcessor:
 
         return hidden_states
 
+
 class JointAttnProcessor2_5:
     """Attention processor used typically in processing the SD3-like self-attention projections."""
 
@@ -934,31 +973,12 @@ class JointAttnProcessor2_5:
     ) -> paddle.Tensor:
         residual = hidden_states
 
-        input_ndim = hidden_states.ndim
-        if input_ndim == 4:
-            batch_size, channel, height, width = hidden_states.shape
-            hidden_states = hidden_states.reshape([batch_size, channel, height * width]).transpose([0, 2, 1])
-        context_input_ndim = encoder_hidden_states.ndim
-        if context_input_ndim == 4:
-            batch_size, channel, height, width = encoder_hidden_states.shape
-            encoder_hidden_states = encoder_hidden_states.reshape([batch_size, channel, height * width]).transpose([0, 2, 1])
-
-        batch_size = encoder_hidden_states.shape[0]
+        batch_size = hidden_states.shape[0]
 
         # `sample` projections.
         query = attn.to_q(hidden_states)
         key = attn.to_k(hidden_states)
         value = attn.to_v(hidden_states)
-
-        # `context` projections.
-        encoder_hidden_states_query_proj = attn.add_q_proj(encoder_hidden_states)
-        encoder_hidden_states_key_proj = attn.add_k_proj(encoder_hidden_states)
-        encoder_hidden_states_value_proj = attn.add_v_proj(encoder_hidden_states)
-
-        # attention
-        query = paddle.concat([query, encoder_hidden_states_query_proj], axis=1)
-        key = paddle.concat([key, encoder_hidden_states_key_proj], axis=1)
-        value = paddle.concat([value, encoder_hidden_states_value_proj], axis=1)
 
         inner_dim = key.shape[-1]
         head_dim = inner_dim // attn.heads
@@ -966,31 +986,54 @@ class JointAttnProcessor2_5:
         key = key.reshape([batch_size, -1, attn.heads, head_dim])
         value = value.reshape([batch_size, -1, attn.heads, head_dim])
 
+        if attn.norm_q is not None:
+            query = attn.norm_q(query, begin_norm_axis=3)
+        if attn.norm_k is not None:
+            key = attn.norm_k(key, begin_norm_axis=3)
+
+        # `context` projections.
+        if encoder_hidden_states is not None:
+            encoder_hidden_states_query_proj = attn.add_q_proj(encoder_hidden_states)
+            encoder_hidden_states_key_proj = attn.add_k_proj(encoder_hidden_states)
+            encoder_hidden_states_value_proj = attn.add_v_proj(encoder_hidden_states)
+
+            encoder_hidden_states_query_proj = encoder_hidden_states_query_proj.reshape([batch_size, -1, attn.heads, head_dim])
+            encoder_hidden_states_key_proj = encoder_hidden_states_key_proj.reshape([batch_size, -1, attn.heads, head_dim])
+            encoder_hidden_states_value_proj = encoder_hidden_states_value_proj.reshape([batch_size, -1, attn.heads, head_dim])
+
+            if attn.norm_added_q is not None:
+                encoder_hidden_states_query_proj = attn.norm_added_q(encoder_hidden_states_query_proj, begin_norm_axis=3)
+            if attn.norm_added_k is not None:
+                encoder_hidden_states_key_proj = attn.norm_added_k(encoder_hidden_states_key_proj, begin_norm_axis=3)
+
+            query = paddle.concat([query, encoder_hidden_states_query_proj], axis=1)
+            key = paddle.concat([key, encoder_hidden_states_key_proj], axis=1)
+            value = paddle.concat([value, encoder_hidden_states_value_proj], axis=1)
+
         hidden_states = hidden_states = F.scaled_dot_product_attention_(
             query, key, value, dropout_p=0.0, is_causal=False
         )
         hidden_states = hidden_states.reshape([batch_size, -1, attn.heads * head_dim])
         hidden_states = hidden_states.astype(query.dtype)
 
-        # Split the attention outputs.
-        hidden_states, encoder_hidden_states = (
-            hidden_states[:, : residual.shape[1]],
-            hidden_states[:, residual.shape[1] :],
-        )
+        if encoder_hidden_states is not None:
+            # Split the attention outputs.
+            hidden_states, encoder_hidden_states = (
+                hidden_states[:, : residual.shape[1]],
+                hidden_states[:, residual.shape[1] :],
+            )
+            if not attn.context_pre_only:
+                encoder_hidden_states = attn.to_add_out(encoder_hidden_states)
 
         # linear proj
         hidden_states = attn.to_out[0](hidden_states)
         # dropout
         hidden_states = attn.to_out[1](hidden_states)
-        if not attn.context_pre_only:
-            encoder_hidden_states = attn.to_add_out(encoder_hidden_states)
 
-        if input_ndim == 4:
-            hidden_states = hidden_states.transpose([0, 1, 3, 2]).reshape([batch_size, channel, height, width])
-        if context_input_ndim == 4:
-            encoder_hidden_states = encoder_hidden_states.transpose([0, 1, 3, 2]).reshape([batch_size, channel, height, width])
-
-        return hidden_states, encoder_hidden_states
+        if encoder_hidden_states is not None:
+            return hidden_states, encoder_hidden_states
+        else:
+            return hidden_states
 
 
 class FusedJointAttnProcessor2_5:
@@ -1019,7 +1062,9 @@ class FusedJointAttnProcessor2_5:
         context_input_ndim = encoder_hidden_states.ndim
         if context_input_ndim == 4:
             batch_size, channel, height, width = encoder_hidden_states.shape
-            encoder_hidden_states = encoder_hidden_states.reshape([batch_size, channel, height * width]).transpose([0, 2, 1])
+            encoder_hidden_states = encoder_hidden_states.reshape([batch_size, channel, height * width]).transpose(
+                [0, 2, 1]
+            )
 
         batch_size = encoder_hidden_states.shape[0]
 
@@ -1070,9 +1115,12 @@ class FusedJointAttnProcessor2_5:
         if input_ndim == 4:
             hidden_states = hidden_states.transpose([0, 1, 3, 2]).reshape([batch_size, channel, height, width])
         if context_input_ndim == 4:
-            encoder_hidden_states = encoder_hidden_states.transpose([0, 1, 3, 2]).reshape([batch_size, channel, height, width])
+            encoder_hidden_states = encoder_hidden_states.transpose([0, 1, 3, 2]).reshape(
+                [batch_size, channel, height, width]
+            )
 
         return hidden_states, encoder_hidden_states
+
 
 class XFormersAttnAddedKVProcessor:
     r"""
@@ -2158,13 +2206,13 @@ class CogVideoXAttnProcessor2_0:
         # NOTE: There is diff between paddle's and torch's sdpa
         # paddle needs input: [batch_size, seq_len, num_heads, head_dim]
         # torch needs input: [batch_size, num_heads, seq_len, head_dim]
-        hidden_states = F.scaled_dot_product_attention(
-            query.transpose([0, 2, 1, 3]), 
-            key.transpose([0, 2, 1, 3]), 
-            value.transpose([0, 2, 1, 3]), 
-            attn_mask=attention_mask, 
-            dropout_p=0.0, 
-            is_causal=False
+        hidden_states = F.scaled_dot_product_attention_(
+            query.transpose([0, 2, 1, 3]),
+            key.transpose([0, 2, 1, 3]),
+            value.transpose([0, 2, 1, 3]),
+            attn_mask=attention_mask,
+            dropout_p=0.0,
+            is_causal=False,
         )
 
         hidden_states = hidden_states.reshape([batch_size, -1, attn.heads * head_dim])
@@ -2177,6 +2225,7 @@ class CogVideoXAttnProcessor2_0:
         encoder_hidden_states, hidden_states = hidden_states.split(
             [text_seq_length, hidden_states.shape[1] - text_seq_length], axis=1
         )
+
         return hidden_states, encoder_hidden_states
 
 

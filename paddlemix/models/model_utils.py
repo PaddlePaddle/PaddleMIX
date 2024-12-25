@@ -21,13 +21,19 @@ from typing import List, Optional, Tuple
 import numpy as np
 import paddle
 from paddlenlp.transformers import PretrainedModel
+from paddlenlp.transformers.tokenizer_utils import PretrainedTokenizer
+from paddlenlp.transformers.tokenizer_utils_base import AddedToken, TextInput
 from tqdm.auto import tqdm
 
 from paddlemix.utils import device_guard, paddlemix_load
 from paddlemix.utils.env import MODEL_HOME
 from paddlemix.utils.log import logger
 
-__all__ = ["MixPretrainedModel", "NPUCrossEntropyLoss"]
+__all__ = [
+    "MixPretrainedModel",
+    "MIXPretrainedTokenizer",
+    "NPUCrossEntropyLoss",
+]
 
 
 def resolve_cache_dir(pretrained_model_name_or_path: str, cache_dir: Optional[str] = None) -> str:
@@ -491,24 +497,114 @@ class MixPretrainedModel(PretrainedModel):
         return missing_keys, unexpected_keys, mismatched_keys
 
 
+class MIXPretrainedTokenizer(PretrainedTokenizer):
+    """
+    The base class for all pretrained models used in PaddleMIX.
+
+    The most difference between `PretrainedTokenizer` and `MIXPretrainedTokenizer` is that
+    `MIXPretrainedTokenizer` tokenize has '/n' same as PyTorch. The other methods are the same as class
+    `paddlenlp.transformers.tokenizer_utils.PretrainedTokenizer`.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super(MIXPretrainedTokenizer, self).__init__(*args, **kwargs)
+
+    def tokenize(self, text: TextInput, **kwargs) -> List[str]:
+        """
+        Converts a string in a sequence of tokens, using the tokenizer.
+
+        Split in words for word-based vocabulary or sub-words for sub-word-based vocabularies
+        (BPE/SentencePieces/WordPieces). Takes care of added tokens.
+
+        Args:
+            text (`str`):
+                The sequence to be encoded.
+            **kwargs (additional keyword arguments):
+                Passed along to the model-specific `prepare_for_tokenization` preprocessing method.
+
+        Returns:
+            `List[str]`: The list of tokens.
+        """
+
+        split_special_tokens = kwargs.pop("split_special_tokens", self.split_special_tokens)
+
+        # Simple mapping string => AddedToken for special tokens with specific tokenization behaviors
+        all_special_tokens_extended = dict(
+            (str(t), t) for t in self.all_special_tokens_extended if isinstance(t, AddedToken)
+        )
+
+        text, kwargs = self.prepare_for_tokenization(text, **kwargs)
+
+        # TODO: should this be in the base class?
+        if hasattr(self, "do_lower_case") and self.do_lower_case:
+            # convert non-special tokens to lowercase
+            escaped_special_toks = [
+                re.escape(s_tok) for s_tok in (self.unique_no_split_tokens + self.all_special_tokens)
+            ]
+            pattern = r"(" + r"|".join(escaped_special_toks) + r")|" + r"(.+?)"
+            text = re.sub(pattern, lambda m: m.groups()[0] or m.groups()[1].lower(), text)
+
+        if split_special_tokens:
+            no_split_token = []
+            tokens = [text]
+        else:
+            no_split_token = set(self.unique_no_split_tokens)  # don't split on any of the added tokens
+            # "This is something<special_token_1>  else"
+            tokens = self.tokens_trie.split(text)
+
+        # ["This is something", "<special_token_1>", "  else"]
+        for i, token in enumerate(tokens):
+            if token in no_split_token:
+                tok_extended = all_special_tokens_extended.get(token, None)
+                left = tokens[i - 1] if i > 0 else None
+                right = tokens[i + 1] if i < len(tokens) - 1 else None
+                if isinstance(tok_extended, AddedToken):
+                    if tok_extended.rstrip and right:
+                        # A bit counter-intuitive but we strip the left of the string
+                        # since tok_extended.rstrip means the special token is eating all white spaces on its right
+                        tokens[i + 1] = right.lstrip()
+                    # Strip white spaces on the left
+                    if tok_extended.lstrip and left:
+                        tokens[i - 1] = left.rstrip()  # Opposite here
+                # else:
+                #     # We strip left and right by default
+                #     if right:
+                #         tokens[i + 1] = right.lstrip()
+                #     if left:
+                #         tokens[i - 1] = left.rstrip()
+        # ["This is something", "<special_token_1>", "else"]
+        tokenized_text = []
+        for token in tokens:
+            # Need to skip eventual empty (fully stripped) tokens
+            if not token:
+                continue
+            if token in no_split_token:
+                tokenized_text.append(token)
+            else:
+                tokenized_text.extend(self._tokenize(token))
+        # ["This", " is", " something", "<special_token_1>", "else"]
+        return tokenized_text
+
+
 class NPUCrossEntropyLoss(paddle.nn.Layer):
     """
     Make cross_entropy_loss compatible with npu device
     """
+
     def __init__(self, **kwargs):
         super().__init__()
-        self.reduction = kwargs.get('reduction', 'mean')
-        kwargs['reduction'] = 'none'
+        self.reduction = kwargs.get("reduction", "mean")
+        kwargs["reduction"] = "none"
         self.nll_loss = paddle.nn.NLLLoss(**kwargs)
         self.log_softmax = paddle.nn.functional.log_softmax
-    
+
     def forward(self, logits, labels):
         loss = self.nll_loss(self.log_softmax(logits, axis=-1), labels)
-        if self.reduction == 'mean':
+        if self.reduction == "mean":
             return loss.mean()
-        elif self.reduction == 'sum':
+        elif self.reduction == "sum":
             return loss.sum()
-        elif self.reduction == 'none':
+        elif self.reduction == "none":
             return loss
         else:
             raise ValueError(f"Unexcepted reduction method: {self.reduction}")

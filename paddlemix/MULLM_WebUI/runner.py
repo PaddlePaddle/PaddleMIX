@@ -22,8 +22,8 @@ import paddle
 from paddlenlp.data import DataCollatorForSeq2Seq
 from paddlenlp.peft import LoRAConfig, LoRAModel
 from paddlenlp.trainer.trainer import TRAINING_ARGS_NAME, IntervalStrategy, Trainer
-from paddlenlp.transformers import Qwen2Tokenizer
 
+from ..models.qwen2_vl import MIXQwen2Tokenizer
 from ..models.qwen2_vl.modeling_qwen2_vl import Qwen2VLForConditionalGeneration
 from ..processors.qwen2_vl_processing import Qwen2VLImageProcessor, Qwen2VLProcessor
 from .common import DEFAULT_CONFIG_DIR, get_dataset, get_save_dir
@@ -245,7 +245,7 @@ class Runner:
         checkpoint_path = get("top.checkpoint_path")
         finetuning_type = get("top.finetuning_type")
 
-        tokenizer = Qwen2Tokenizer.from_pretrained(model_path)
+        tokenizer = MIXQwen2Tokenizer.from_pretrained(model_path)
         args = self._parse_train_args(data)
         model_args, data_args, training_args, finetuning_args, generating_args = get_train_args(args)
 

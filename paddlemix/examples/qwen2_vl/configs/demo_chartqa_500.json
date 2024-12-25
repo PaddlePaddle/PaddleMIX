@@ -1,0 +1,6 @@
+{
+  "chartqa_train_500": {
+    "annotation": "playground/opensource_json/chartqa_train_500.json",
+    "repeat_time": 1
+  }
+}
