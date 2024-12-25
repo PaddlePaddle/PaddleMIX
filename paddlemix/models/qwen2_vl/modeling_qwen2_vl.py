@@ -274,16 +274,9 @@ class PatchEmbed(nn.Layer):
             [-1, self.in_channels, self.temporal_patch_size, self.patch_size, self.patch_size]
         )
 
-        if _IS_NPU:
-            # NOTE: In npu device, conv3d only support fp16 or bf16 dtype.
-            hidden_states = F.conv3d(
-                hidden_states.cast(paddle.bfloat16), self.proj.weight.cast(paddle.bfloat16), stride=self.proj._stride
-            )
-            hidden_states = hidden_states.to(target_dtype).reshape([-1, self.embed_dim])
-        else:
-            # NOTE（changwenbin）: AttributeError: 'Variable' object has no attribute 'to'.
-            # hidden_states = self.proj(hidden_states.to(dtype=target_dtype)).reshape([-1, self.embed_dim])
-            hidden_states = self.proj(paddle.cast(hidden_states, dtype=target_dtype)).reshape([-1, self.embed_dim])
+        # NOTE（changwenbin）: AttributeError: 'Variable' object has no attribute 'to'.
+        # hidden_states = self.proj(hidden_states.to(dtype=target_dtype)).reshape([-1, self.embed_dim])
+        hidden_states = self.proj(paddle.cast(hidden_states, dtype=target_dtype)).reshape([-1, self.embed_dim])
         return hidden_states
 
 
@@ -369,23 +362,34 @@ class VisionFlashAttention2(nn.Layer):
         q, k, v = qkv.unbind(axis=0)
         q = apply_rotary_pos_emb_vision(q.unsqueeze(axis=0), rotary_pos_emb).squeeze(axis=0)
         k = apply_rotary_pos_emb_vision(k.unsqueeze(axis=0), rotary_pos_emb).squeeze(axis=0)
-        max_seqlen = (cu_seqlens[1:] - cu_seqlens[:-1]).max().item()
 
-        softmax_scale = self.head_dim**-0.5  # TODO: 需要手动加上
-        attn_output = (
-            flash_attn_varlen_func(  # flash_attn_unpadded
+        if _IS_NPU:
+            attn_output = paddle.nn.functional.flash_attention_npu(  # TODO: flash_attn_unpadded
                 q.astype("bfloat16"),  # 不支持float32
                 k.astype("bfloat16"),
                 v.astype("bfloat16"),
-                cu_seqlens,
-                cu_seqlens,
-                max_seqlen,
-                max_seqlen,
-                scale=softmax_scale,  # TODO: 需要手动加上
-            )[0]
-            .squeeze(0)
-            .reshape([seq_length, -1])
-        )
+                is_varlen=True,
+                batch_size=1,
+                seq_length=seq_length,
+            ).reshape([seq_length, -1])
+        else:
+            max_seqlen = (cu_seqlens[1:] - cu_seqlens[:-1]).max().item()
+
+            softmax_scale = self.head_dim**-0.5  # TODO: 需要手动加上
+            attn_output = (
+                flash_attn_varlen_func(  # flash_attn_unpadded
+                    q.astype("bfloat16"),  # 不支持float32
+                    k.astype("bfloat16"),
+                    v.astype("bfloat16"),
+                    cu_seqlens,
+                    cu_seqlens,
+                    max_seqlen,
+                    max_seqlen,
+                    scale=softmax_scale,  # TODO: 需要手动加上
+                )[0]
+                .squeeze(0)
+                .reshape([seq_length, -1])
+            )
         attn_output = attn_output.astype(paddle.float32)
         attn_output = self.proj(attn_output)
         return attn_output
@@ -743,39 +747,62 @@ class Qwen2VLFlashAttention2(Qwen2VLAttention):
         # Contains at least one padding token in the sequence
         causal = self.is_causal and query_length != 1
 
-        head_dim = query_states.shape[-1]
-        softmax_scale = head_dim**-0.5  # TODO: 需要手动加上
-
-        if attention_mask is not None:  # attention_mask.shape # [2, 1, 1323, 1323]
-            batch_size = query_states.shape[0]  # [2, 1323, 12, 128]
-            query_states, key_states, value_states, indices_q, cu_seq_lens, max_seq_lens = self._unpad_input(
-                query_states, key_states, value_states, attention_mask, query_length
-            )
-            cu_seqlens_q, cu_seqlens_k = cu_seq_lens
-            max_seqlen_in_batch_q, max_seqlen_in_batch_k = max_seq_lens
-
-            attn_output_unpad = flash_attn_varlen_func(  # TODO: flash_attn_unpadded
-                query_states,  # [5998, 16, 128]
-                key_states,  # [5998, 8, 128]
-                value_states,  # [5998, 8, 128]
-                cu_seqlens_q=cu_seqlens_q,
-                cu_seqlens_k=cu_seqlens_k,
-                max_seqlen_q=max_seqlen_in_batch_q,
-                max_seqlen_k=max_seqlen_in_batch_k,
-                scale=softmax_scale,  # not softmax_scale=
-                dropout=dropout,
-                causal=causal,
-            )[0]
-
-            attn_output = pad_input(attn_output_unpad, indices_q, batch_size, query_length)
+        if _IS_NPU:
+            if attention_mask is not None:
+                attn_output = paddle.nn.functional.flash_attention_npu(  # TODO: flash_attn_unpadded
+                    query_states,  # [5998, 16, 128]
+                    key_states,  # [5998, 8, 128]
+                    value_states,  # [5998, 8, 128]
+                    attn_mask=attention_mask,
+                    dropout=dropout,
+                    causal=causal,
+                    is_varlen=True,
+                )
+            else:
+                dtype = query_states.dtype
+                attn_output = paddle.nn.functional.flash_attention_npu(  # TODO: flash_attn_unpadded
+                    query_states.astype("bfloat16"),  # [5998, 16, 128]
+                    key_states.astype("bfloat16"),  # [5998, 8, 128]
+                    value_states.astype("bfloat16"),  # [5998, 8, 128]
+                    attn_mask=attention_mask,
+                    dropout=dropout,
+                    causal=causal,
+                )
+                attn_output = attn_output.astype(dtype)
         else:
-            attn_output = flash_attn_func(
-                query_states,
-                key_states,
-                value_states,
-                dropout,
-                causal=causal,  # no softmax_scale=
-            )[0]
+            head_dim = query_states.shape[-1]
+            softmax_scale = head_dim**-0.5  # TODO: 需要手动加上
+
+            if attention_mask is not None:  # attention_mask.shape # [2, 1, 1323, 1323]
+                batch_size = query_states.shape[0]  # [2, 1323, 12, 128]
+                query_states, key_states, value_states, indices_q, cu_seq_lens, max_seq_lens = self._unpad_input(
+                    query_states, key_states, value_states, attention_mask, query_length
+                )
+                cu_seqlens_q, cu_seqlens_k = cu_seq_lens
+                max_seqlen_in_batch_q, max_seqlen_in_batch_k = max_seq_lens
+
+                attn_output_unpad = flash_attn_varlen_func(  # TODO: flash_attn_unpadded
+                    query_states,  # [5998, 16, 128]
+                    key_states,  # [5998, 8, 128]
+                    value_states,  # [5998, 8, 128]
+                    cu_seqlens_q=cu_seqlens_q,
+                    cu_seqlens_k=cu_seqlens_k,
+                    max_seqlen_q=max_seqlen_in_batch_q,
+                    max_seqlen_k=max_seqlen_in_batch_k,
+                    scale=softmax_scale,  # not softmax_scale=
+                    dropout=dropout,
+                    causal=causal,
+                )[0]
+
+                attn_output = pad_input(attn_output_unpad, indices_q, batch_size, query_length)
+            else:
+                attn_output = flash_attn_func(
+                    query_states,
+                    key_states,
+                    value_states,
+                    dropout,
+                    causal=causal,  # no softmax_scale=
+                )[0]
 
         return attn_output
 
@@ -1538,11 +1565,14 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
             shift_logits = logits[..., :-1, :]  # [1, 395, 151936]
             shift_labels = labels[..., 1:]  # [1, 395]
             # Flatten the tokens
-            # loss_fct = nn.CrossEntropyLoss()
-            loss_fct = nn.CrossEntropyLoss(reduction="sum")
             shift_logits = shift_logits.reshape([-1, self.config.vocab_size])
             shift_labels = shift_labels.reshape([-1])
-            loss = loss_fct(shift_logits, shift_labels)
+            if _IS_NPU:
+                tmp = F.log_softmax(shift_logits, axis=1)
+                loss = F.nll_loss(tmp, shift_labels, reduction="sum")
+            else:
+                loss_fct = nn.CrossEntropyLoss(reduction="sum")
+                loss = loss_fct(shift_logits, shift_labels)
             label_sum = paddle.sum(shift_labels != -100).cast("float32")
             loss = loss / label_sum
 
