@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-model_item=qwen2_vl_sft_2b
+model_item=qwen2_vl_sft_7b
 model=qwen2_vl
 bs_item=1
 fp_item=bf16O2

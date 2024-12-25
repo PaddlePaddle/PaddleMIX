@@ -14,6 +14,7 @@
 
 from .bert_padding import *
 from .configuration_qwen2_vl import Qwen2VLConfig
+from .mix_qwen2_tokenizer import MIXQwen2Tokenizer
 from .modeling_qwen2_vl import (
     Qwen2VLForConditionalGeneration,
     Qwen2VLModel,
@@ -21,4 +22,10 @@ from .modeling_qwen2_vl import (
 )
 from .template import *
 
-__all__ = ["Qwen2VLConfig", "Qwen2VLForConditionalGeneration", "Qwen2VLModel", "Qwen2VLPreTrainedModel"]
+__all__ = [
+    "Qwen2VLConfig",
+    "Qwen2VLForConditionalGeneration",
+    "Qwen2VLModel",
+    "Qwen2VLPreTrainedModel",
+    "MIXQwen2Tokenizer",
+]

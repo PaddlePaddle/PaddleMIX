@@ -15,8 +15,8 @@
 import argparse
 
 import paddle
-from paddlenlp.transformers import Qwen2Tokenizer
 
+from paddlemix.models.qwen2_vl import MIXQwen2Tokenizer
 from paddlemix.models.qwen2_vl.modeling_qwen2_vl import Qwen2VLForConditionalGeneration
 from paddlemix.processors.qwen2_vl_processing import (
     Qwen2VLImageProcessor,
@@ -40,7 +40,7 @@ def main(args):
     model = Qwen2VLForConditionalGeneration.from_pretrained(args.model_path, dtype="bfloat16")
 
     image_processor = Qwen2VLImageProcessor()
-    tokenizer = Qwen2Tokenizer.from_pretrained(args.model_path)
+    tokenizer = MIXQwen2Tokenizer.from_pretrained(args.model_path)
     processor = Qwen2VLProcessor(image_processor, tokenizer)
 
     # min_pixels = 256*28*28 # 200704
