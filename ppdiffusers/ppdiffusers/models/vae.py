@@ -83,6 +83,7 @@ class Encoder(nn.Layer):
         norm_num_groups: int = 32,
         act_fn: str = "silu",
         double_z: bool = True,
+        mid_block_add_attention=True,
     ):
         super().__init__()
         self.layers_per_block = layers_per_block
@@ -130,6 +131,7 @@ class Encoder(nn.Layer):
             attention_head_dim=block_out_channels[-1],
             resnet_groups=norm_num_groups,
             temb_channels=None,
+            add_attention=mid_block_add_attention,
         )
 
         # out
@@ -212,6 +214,7 @@ class Decoder(nn.Layer):
         norm_num_groups: int = 32,
         act_fn: str = "silu",
         norm_type: str = "group",  # group, spatial
+        mid_block_add_attention=True,
     ):
         super().__init__()
         self.layers_per_block = layers_per_block
@@ -239,6 +242,7 @@ class Decoder(nn.Layer):
             attention_head_dim=block_out_channels[-1],
             resnet_groups=norm_num_groups,
             temb_channels=temb_channels,
+            add_attention=mid_block_add_attention,
         )
 
         # up

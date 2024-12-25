@@ -12,8 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from paddlenlp.transformers import Qwen2Tokenizer
-
+from paddlemix.models.qwen2_vl import MIXQwen2Tokenizer
 from paddlemix.models.qwen2_vl.modeling_qwen2_vl import Qwen2VLForConditionalGeneration
 from paddlemix.processors.qwen2_vl_processing import (
     Qwen2VLImageProcessor,
@@ -25,7 +24,7 @@ MODEL_NAME = "Qwen/Qwen2-VL-2B-Instruct"
 model = Qwen2VLForConditionalGeneration.from_pretrained(MODEL_NAME, dtype="bfloat16")
 
 image_processor = Qwen2VLImageProcessor()
-tokenizer = Qwen2Tokenizer.from_pretrained(MODEL_NAME)
+tokenizer = MIXQwen2Tokenizer.from_pretrained(MODEL_NAME)
 processor = Qwen2VLProcessor(image_processor, tokenizer)
 
 # min_pixels = 256*28*28 # 200704

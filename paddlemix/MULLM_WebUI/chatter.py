@@ -20,9 +20,9 @@ import gradio as gr
 import paddle
 from paddlenlp.generation import TextIteratorStreamer
 from paddlenlp.peft import LoRAModel
-from paddlenlp.transformers import Qwen2Tokenizer
 from paddlenlp.utils.import_utils import import_module
 
+from ..models.qwen2_vl import MIXQwen2Tokenizer
 from ..processors.qwen2_vl_processing import (
     Qwen2VLImageProcessor,
     Qwen2VLProcessor,
@@ -211,7 +211,7 @@ class WebChatModel:
 
     def get_processor(self, model_path):
         image_processor = Qwen2VLImageProcessor()
-        tokenizer = Qwen2Tokenizer.from_pretrained(model_path)
+        tokenizer = MIXQwen2Tokenizer.from_pretrained(model_path)
         # processor = Qwen2VLProcessor(image_processor, tokenizer,min_pixels=self.min_pixels, max_pixels=self.max_pixels)
         processor = Qwen2VLProcessor(image_processor, tokenizer)
         self.tokenizer = tokenizer
