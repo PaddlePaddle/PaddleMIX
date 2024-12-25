@@ -789,8 +789,6 @@ LossBreakdown = namedtuple(
     "LossBreakdown",
     [
         "recon_loss",
-        "lfq_aux_loss",
-        "quantizer_loss_breakdown",
         "perceptual_loss",
         "adversarial_gen_loss",
         "adaptive_adversarial_weight",
@@ -1071,16 +1069,11 @@ class VideoTokenizer(paddle.nn.Layer):
     def device(self):
         return self.zero.place
 
-    @classmethod
-    def init_and_load_from(cls, path, strict=True):
+    def load_weight(self, path):
         path = Path(path)
         assert path.exists()
         pkg = paddle.load(path=str(path))
-        assert "config" in pkg, "model configs were not found in this saved checkpoint"
-        config = pickle.loads(pkg["config"])
-        tokenizer = cls(**config)
-        tokenizer.load(path, strict=strict)
-        return tokenizer
+        self.set_state_dict(state_dict=pkg)
 
     def get_param(self, model):
         return [p for n, p in model.named_parameters()]
@@ -1095,7 +1088,7 @@ class VideoTokenizer(paddle.nn.Layer):
         param.extend(self.get_param(self.decoder_layers))
         param.extend(self.get_param(self.encoder_cond_in))
         param.extend(self.get_param(self.decoder_cond_in))
-        param.extend(self.get_param(self.quantizers))
+        # param.extend(self.get_param(self.quantizers))
         return param
 
     def discr_parameters(self):
@@ -1233,18 +1226,9 @@ class VideoTokenizer(paddle.nn.Layer):
 
         x = self.encode(video, cond=cond, video_contains_first_frame=video_contains_first_frame)
 
-        if self.use_fsq:
-            quantized, codes = self.quantizers(x)
-            aux_losses = self.zero
-            quantizer_loss_breakdown = None
-        else:
-            (quantized, codes, aux_losses), quantizer_loss_breakdown = self.quantizers(x, return_loss_breakdown=True)
-        if return_codes and not return_recon:
-            return codes
-
-        recon_video = self.decode(quantized, cond=cond, video_contains_first_frame=video_contains_first_frame)
+        recon_video = self.decode(x, cond=cond, video_contains_first_frame=video_contains_first_frame)
         if return_codes:
-            return codes, recon_video
+            return recon_video
         if not (return_loss or return_discr_loss or return_recon_loss_only):
             return recon_video
 
@@ -1346,9 +1330,15 @@ class VideoTokenizer(paddle.nn.Layer):
                     multiscale_adaptive_weight = norm_grad_wrt_perceptual_loss / norm_grad_wrt_gen_loss.clip(min=1e-05)
                     multiscale_adaptive_weight.clip_(max=1000.0)
                 multiscale_gen_adaptive_weights.append(multiscale_adaptive_weight)
+        # total_loss = (
+        #     recon_loss
+        #     + aux_losses * self.quantizer_aux_loss_weight
+        #     + perceptual_loss * self.perceptual_loss_weight
+        #     + gen_loss * adaptive_weight * adversarial_loss_weight
+        # )
+
         total_loss = (
             recon_loss
-            + aux_losses * self.quantizer_aux_loss_weight
             + perceptual_loss * self.perceptual_loss_weight
             + gen_loss * adaptive_weight * adversarial_loss_weight
         )
@@ -1360,8 +1350,6 @@ class VideoTokenizer(paddle.nn.Layer):
             total_loss = total_loss + weighted_multiscale_gen_losses * multiscale_adversarial_loss_weight
         loss_breakdown = LossBreakdown(
             recon_loss,
-            aux_losses,
-            quantizer_loss_breakdown,
             perceptual_loss,
             gen_loss,
             adaptive_weight,
