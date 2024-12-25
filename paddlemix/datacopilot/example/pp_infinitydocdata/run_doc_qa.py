@@ -35,20 +35,35 @@ if __name__ == '__main__':
     parser.add_argument('--gpu_id', type=int, default=0, )
     parser.add_argument('--num_gpus', type=int, default=1, )
     parser.add_argument('--processes_per_gpu', type=int, default=1, )
+    parser.add_argument('--access_token', type=str, required=True, )
+    parser.add_argument('--ernie_model_name', type=str, default='ernie-4.0', )
 
     args = parser.parse_args()
 
-    generator = PPInfinityDocData(llm=ErnieEval())
+    generator = PPInfinityDocData(
+        ErnieEval(
+            model_name=args.ernie_model_name, 
+            access_token=args.access_token,
+            api_type="aistudio", 
+            max_retries=1
+        ))
     layout_parser = PaddleXLayoutParser(gpu_id=args.gpu_id)
-    
-    paths = list(sorted(Path(args.root).glob('*.jpg')))
+    image_extensions = ['*.png', '*.jpg', '*.jpeg']
 
-    layouts = layout_parser.process_images(paths, num_gpus=args.num_gpus, processes_per_gpu=args.processes_per_gpu)
+    paths = []
+    for ext in image_extensions:
+        paths.extend(list(sorted(Path(args.root).glob(ext))))
+    paths = [str(path) for path in paths]
+
+    ##ngpu
+    # layouts = layout_parser.process_images(paths, num_gpus=args.num_gpus, processes_per_gpu=args.processes_per_gpu)
+    
+    layouts = [layout_parser.process_image(path) for path in paths]
     items = [dict(image=path, layout=layout) for path, layout in zip(paths, layouts) if layout]
 
     (
         MMDataset(items)
-        .map(partial(generate_for_single_image, generator=generator))
+        .map(partial(generate_for_single_image, generator=generator), max_workers=1)
         .nonempty()
         .export_json(args.output_json_path)
     )

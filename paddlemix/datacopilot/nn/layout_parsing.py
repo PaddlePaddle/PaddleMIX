@@ -47,12 +47,13 @@ class PaddleXLayoutParser(object):
         except Exception as e:
             print(f"{e}")
 
-    def _process_images(self, gpu_id, image_paths):
+    def _process_images(self, gpu_id, image_paths, q):
         pipeline = self.new_pipeline(gpu_id=gpu_id)
-        return [self.process_image(path, pipeline=pipeline) for path in image_paths]
+        q.put([self.process_image(path, pipeline=pipeline) for path in image_paths])
 
     def process_images(self, image_paths, num_gpus=1, processes_per_gpu=1):
         # 将图片文件分配到每个GPU和进程
+        q=multiprocessing.Queue()
         chunk_size = len(image_paths) // (num_gpus * processes_per_gpu)
         chunks = [image_paths[i:i + chunk_size] for i in range(0, len(image_paths), chunk_size)]
 
@@ -62,7 +63,7 @@ class PaddleXLayoutParser(object):
             for _ in range(processes_per_gpu):
                 if chunks:
                     chunk = chunks.pop(0)
-                    p = multiprocessing.Process(target=self._process_images, args=(gpu_id, chunk))
+                    p = multiprocessing.Process(target=self._process_images, args=(gpu_id, chunk, q))
                     processes.append(p)
                     p.start()
 
@@ -71,9 +72,7 @@ class PaddleXLayoutParser(object):
             p.join()
 
         # 获取结果并返回
-        results = []
-        for p in processes:
-            results.extend(p.get())
+        results = [q.get() for p in processes]
 
         return results
 
