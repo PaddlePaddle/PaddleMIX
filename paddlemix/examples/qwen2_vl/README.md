@@ -13,10 +13,8 @@ PaddleMIX团队基于`Qwen2-VL-2B-Instruct`设计了专门针对文档理解类�
 |--------------------|
 | Qwen/Qwen2-VL-2B-Instruct  |
 | Qwen/Qwen2-VL-7B-Instruct  |
-| Qwen/Qwen2-VL-72B-Instruct  |
 | Qwen/Qwen2-VL-2B  |
 | Qwen/Qwen2-VL-7B  |
-| Qwen/Qwen2-VL-72B  |
 
 注意：与huggingface权重同名，但权重为paddle框架的Tensor，使用`xxx.from_pretrained("Qwen/Qwen2-VL-2B-Instruct")`即可自动下载该权重文件夹到缓存目录。
 
