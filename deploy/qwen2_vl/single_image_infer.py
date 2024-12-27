@@ -101,7 +101,7 @@ class PredictorArgument:
     block_size = 64
     cachekv_int8_type = None
     append_attn = True
-    total_max_length = 4096
+    total_max_length = 32768
     speculate_method = None
 
 
@@ -150,14 +150,14 @@ def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: Predic
         vision_model_inputs.get("attention_mask"),
     )
     position_start = position_ids[0][0][-1].item()
-    position_end = 4096 - position_ids.shape[-1] + position_start
+    position_end = config.max_position_embeddings - position_ids.shape[-1] + position_start
     position_value = (
         paddle.arange(position_start, position_end).reshape([1, 1, -1]).expand([position_ids.shape[0], 1, -1])
     )
     position_ids = paddle.concat([position_ids, position_value], axis=-1)
 
     head_dim = config.hidden_size // config.num_attention_heads
-    qwen2_Embedding = Qwen2RotaryEmbedding(head_dim, 4096, config.rope_theta)
+    qwen2_Embedding = Qwen2RotaryEmbedding(head_dim, config.max_position_embeddings, config.rope_theta)
     cos = qwen2_Embedding.cos_cached
     sin = qwen2_Embedding.sin_cached
 
@@ -229,7 +229,8 @@ def run_model():
         padding=True,
         return_tensors="pd",
     )
-    inputs_embeds = vl_model.vision_forward(**vision_model_inputs)
+    with paddle.no_grad():
+        inputs_embeds = vl_model.vision_forward(**vision_model_inputs)
     llm_model_inputs = init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config=predictor_args)
     generated_text = ""
     while llm_model_inputs["not_need_stop"]:
