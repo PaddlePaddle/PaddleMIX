@@ -180,7 +180,7 @@ class KernelInterface:
                 with open(paddle_custom_op_file_path, "w") as f:
                     f.write(
                         SubstituteTemplate(
-                            paddle_custom_op_head_part + custom_op_template,
+                            custom_op_template,
                             op_dict,
                         )
                     )
@@ -253,11 +253,27 @@ class KernelInterface:
 
 def paddle_use_triton(custom_op_template, other_config={}, key=[]):
 
-    custom_op_template += """
+    index = custom_op_template.find("PD_BUILD_OP")
+
+    body = custom_op_template[:index]
+
+    if body.find("${op_name}_InferShape") == -1:
+        body += "std::vector<std::vector<int64_t>> ${op_name}_InferShape(const std::vector<int64_t>& A_shape) {return {A_shape};}"
+
+    if body.find("${op_name}_InferDtype") == -1:
+        body += (
+            "std::vector<paddle::DataType> ${op_name}_InferDtype(const paddle::DataType& A_dtype) {return {A_dtype};}"
+        )
+
+    tail = custom_op_template[index:]
+
+    tail += """
     .SetKernelFn(PD_KERNEL(${op_name}_func))
     .SetInferDtypeFn(PD_INFER_DTYPE(${op_name}_InferDtype))
     .SetInferShapeFn(PD_INFER_SHAPE(${op_name}_InferShape));
     """
+
+    custom_op_template = paddle_custom_op_head_part + body + tail
 
     def decorator(func):
         return KernelInterface(func, custom_op_template, other_config, key)
@@ -342,10 +358,6 @@ std::vector<std::vector<int64_t>> ${op_name}_InferShape(const std::vector<int64_
     } else {
         return {{a_shape[0], b_shape[1]}};
     }
-}
-
-std::vector<paddle::DataType> ${op_name}_InferDtype(const paddle::DataType& A_dtype) {
-    return {A_dtype};
 }
 
 PD_BUILD_OP(${op_name})
@@ -956,15 +968,6 @@ std::vector<paddle::Tensor> ${op_name}_func(
   return {y};
 }
 
-std::vector<std::vector<int64_t>> ${op_name}_InferShape(
-        const std::vector<int64_t>& A_shape) {
-  return {A_shape};
-}
-
-std::vector<paddle::DataType> ${op_name}_InferDtype(const paddle::DataType& A_dtype) {
-    return {A_dtype};
-}
-
 PD_BUILD_OP(${op_name})
     .Inputs({"x", "scale", "shift", paddle::Optional("weight"), paddle::Optional("bias")})
     .Outputs({"out"})
@@ -1168,15 +1171,6 @@ std::vector<paddle::Tensor> ${op_name}_func(
     + tune_and_invoke_part
     + """
     return {y};
-}
-
-std::vector<std::vector<int64_t>> ${op_name}_InferShape(
-        const std::vector<int64_t>& A_shape) {
-  return {A_shape};
-}
-
-std::vector<paddle::DataType> ${op_name}_InferDtype(const paddle::DataType& A_dtype) {
-  return {A_dtype};
 }
 
 PD_BUILD_OP(${op_name})

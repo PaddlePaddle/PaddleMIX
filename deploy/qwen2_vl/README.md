@@ -48,3 +48,19 @@ python deploy/qwen2_vl/single_image_infer.py \
 | ---------------------- | --------------- | ------------ | ------------ |
 | Qwen2-VL-2B-Instruct   |      1.44 s     |     2.35 s   |    5.215 s   |
 | Qwen2-VL-7B-Instruct   |      1.73 s     |      4.4s    |    6.339 s   |
+
+
+### 3.2. 文本&视频输入高性能推理
+```bash
+python deploy/qwen2_vl/video_infer.py \
+    --model_name_or_path Qwen/Qwen2-VL-7B-Instruct \
+    --dtype bfloat16 \
+    --benchmark 1
+```
+
+- 在 NVIDIA A100-SXM4-80GB 上测试的单图端到端速度性能如下：
+
+| model                  | Paddle Inference|    PyTorch   | Paddle 动态图 |
+| ---------------------- | --------------- | ------------ | ------------ |
+| Qwen2-VL-2B-Instruct   |      1.503 s    |       -      |    47.922 s  |
+| Qwen2-VL-7B-Instruct   |      2.715 s    |       -      |    33.597 s  |
