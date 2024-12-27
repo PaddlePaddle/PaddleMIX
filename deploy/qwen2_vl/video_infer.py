@@ -43,31 +43,31 @@ paddle.device.cuda.empty_cache()
 
 image_processor = Qwen2VLImageProcessor()
 tokenizer = MIXQwen2Tokenizer.from_pretrained(MODEL_NAME)
-processor = Qwen2VLProcessor(image_processor, tokenizer)
 
-# min_pixels = 256*28*28 # 200704
-# max_pixels = 1280*28*28 # 1003520
-# processor = Qwen2VLProcessor(image_processor, tokenizer, min_pixels=min_pixels, max_pixels=max_pixels)
+min_pixels = 256 * 28 * 28  # 200704
+max_pixels = 1280 * 28 * 28  # 1003520
+processor = Qwen2VLProcessor(image_processor, tokenizer, min_pixels=min_pixels, max_pixels=max_pixels)
 
+# Messages containing a video and a text query
 messages = [
     {
         "role": "user",
         "content": [
             {
-                "type": "image",
-                "image": "paddlemix/demo_images/examples_image1.jpg",
+                "type": "video",
+                "video": "paddlemix/demo_images/red-panda.mp4",
+                "max_pixels": 360 * 420,
+                "fps": 1.0,
             },
-            {"type": "text", "text": "Describe this image."},
+            {"type": "text", "text": "Describe this video."},
         ],
     }
 ]
 
-# Preparation for inference
 image_inputs, video_inputs = process_vision_info(messages)
-
-question = "Describe this image."
-image_pad_token = "<|vision_start|><|image_pad|><|vision_end|>"
-text = f"<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n{image_pad_token}{question}<|im_end|>\n<|im_start|>assistant\n"
+question = "Describe this video."
+video_pad_token = "<|vision_start|><|video_pad|><|vision_end|>"
+text = f"<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n{video_pad_token}{question}<|im_end|>\n<|im_start|>assistant\n"
 
 
 @dataclass
