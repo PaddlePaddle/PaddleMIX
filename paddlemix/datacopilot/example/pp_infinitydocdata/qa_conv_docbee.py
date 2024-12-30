@@ -120,4 +120,6 @@ if __name__ == '__main__':
     dataset = dataset.filter(_filter_image_hw_ratio).nonempty()
     dataset = dataset.map(convert_scheme).nonempty()
     print('数据长度',len(dataset))
-    dataset.export_json(os.path.join(image_root, args.json_name))
+    out_path = os.path.join(image_root, args.json_name)
+    dataset.export_json(out_path)
+    print(f"数据保存在 {out_path}")
