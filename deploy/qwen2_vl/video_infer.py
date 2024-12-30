@@ -109,7 +109,7 @@ class PredictorArgument:
 class ModelArgument:
     model_type: str = field(
         default=None,
-        metadata={"help": "the type of the model, which can be one of ['gpt-3', 'ernie-3.5-se', 'llama-img2txt']"},
+        metadata={"help": "the type of the model"},
     )
 
 
