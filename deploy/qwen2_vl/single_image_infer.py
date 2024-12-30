@@ -109,7 +109,7 @@ class PredictorArgument:
 class ModelArgument:
     model_type: str = field(
         default=None,
-        metadata={"help": "the type of the model, which can be one of ['gpt-3', 'ernie-3.5-se', 'llama-img2txt']"},
+        metadata={"help": "the type of the model"},
     )
 
 
@@ -233,16 +233,17 @@ def run_model():
         inputs_embeds = vl_model.vision_forward(**vision_model_inputs)
     llm_model_inputs = init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config=predictor_args)
     generated_text = ""
+    generated_ids = paddle.to_tensor([], dtype="int64").reshape([1, 0])
     while llm_model_inputs["not_need_stop"]:
-        generated_ids = fast_llm_model.generate(**llm_model_inputs)  # already trimmed in paddle
-        llm_model_inputs["input_ids"] = generated_ids
+        generated_id = fast_llm_model.generate(**llm_model_inputs)  # already trimmed in paddle
+        llm_model_inputs["input_ids"] = generated_id
         llm_model_inputs["inputs_embeds"] = None
-        new_text_piece = processor.batch_decode(
-            generated_ids[0], skip_special_tokens=True, clean_up_tokenization_spaces=False
-        )[0]
-        if new_text_piece == "<|im_end|>":
+        generated_ids = paddle.concat([generated_ids, generated_id], axis=1)
+        if paddle.any(generated_id == 151645).item():
             break
-        generated_text += new_text_piece
+    generated_text = processor.batch_decode(
+        generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False
+    )[0]
     return generated_text
 
 
