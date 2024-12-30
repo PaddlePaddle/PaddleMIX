@@ -314,17 +314,6 @@ python setup.py install
            <li><a href="ppdiffusers/examples/dreambooth/README_sd3.md">Stable Diffusion 3 (SD3)</a></li>
             <li><a href="ppdiffusers/examples/controlnet">ControlNet</a></li>
             <li><a href="ppdiffusers/examples/t2i-adapter">T2I-Adapter</a></li>
-            <li><a href="ppdiffusers/examples/text_to_image_laion400m">LDM</a></li>
-            <li><a href="ppdiffusers/ppdiffusers/pipelines/consistency_models">Consistency Models</a></li>
-            <li><a href="ppdiffusers/ppdiffusers/pipelines/deepfloyd_if">DeepFloyd IF</a></li>
-            <li><a href="ppdiffusers/ppdiffusers/pipelines/shap_e">Shap-E</a></li>
-            <li><a href="ppdiffusers/examples/kandinsky2_2">Kandinsky-2</a></li>
-            <li><a href="ppdiffusers/ppdiffusers/pipelines/wuerstchen">Würstchen</a></li>
-            <li><a href="ppdiffusers/ppdiffusers/pipelines/hotshot_xl">Hotshot-XL</a></li>
-            <li><a href="ppdiffusers/ppdiffusers/pipelines/latent_consistency_models">LCMs</a></li>
-            <li><a href="ppdiffusers/ppdiffusers/pipelines/unidiffuser">Unidiffuser</a></li>
-            <li><a href="ppdiffusers/examples/class_conditional_image_generation/DiT">DiT</a></li>
-            <li><a href="ppdiffusers/examples/HunyuanDiT">HunyuanDiT</a></li>
         </ul>
         </ul>
           <li><b>文生视频</b></li>
@@ -357,6 +346,52 @@ python setup.py install
 </table>
 
 更多模型能力，可参考[模型能力矩阵](./paddlemix/examples/README.md)
+
+
+
+## 📊多模数据处理工具箱DataCopilot
+<table align="center">
+  <tbody>
+    <tr align="center" valign="center">
+      <td>
+        <b>基础能力</b>
+      </td>
+      <td>
+        <b>数据过滤</b>
+      </td>
+      <td>
+        <b>数据生成</b>
+      </td>
+    </tr>
+    <tr valign="top">
+      <td>
+        <ul>
+        </ul>
+          <li><b>使用文档</b></li>
+        <ul>
+            <li><a href="paddlemix/datacopilot">DataCopilot</a></li>
+      </ul>
+      </td>
+      <td>
+        <ul>
+        </ul>
+          <li><b>基于信息密度的数据过滤方案</b></li>
+        <ul>
+           <li><a href="paddlemix/datacopilot/example">PP-InsCapTagger</a></li>
+        </ul>
+      </td>
+      <td>
+        <ul>
+        </ul>
+          <li><b>文档类数据生成方案</b></li>
+        <ul>
+          <li><a href="paddlemix/datacopilot/example">PP-InfinityDocData</a></li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
 
 
 ## 🏆特色模型|工具
