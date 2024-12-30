@@ -30,7 +30,6 @@ def read_json_files(json_root,image_root):
         for file in files:
             if file.endswith('.json'):
                 json_path = os.path.join(root, file)
-                print("Processing:", json_path)
                 image_path_png = json_path.replace('.json','.png').replace(json_root,image_root)
                 image_path_jpg = json_path.replace('.json','.jpg').replace(json_root,image_root)
 
