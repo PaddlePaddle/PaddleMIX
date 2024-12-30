@@ -116,7 +116,6 @@ if __name__ == '__main__':
     image_root = args.image_root
 
     data_list = read_json_files(json_root,image_root)
-    print('数据集:',data_list)
     dataset = MMDataset(data_list)
     _filter_image_hw_ratio = partial(filter_image_hw_ratio, root=image_root)
     dataset = dataset.filter(_filter_image_hw_ratio).nonempty()
