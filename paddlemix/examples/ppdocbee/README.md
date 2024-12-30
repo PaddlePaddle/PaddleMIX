@@ -16,17 +16,17 @@ PP-DocBee 是一款专注于文档理解的多模态大模型，在中文文档�
 
 ## 2. 环境要求
 - **python >= 3.10**
-- **paddlepaddle-gpu 要求3.0.0b2或版本develop**
+- **paddlepaddle-gpu 要求>=3.0.0b2或版本develop**
+- **paddlenlp 要求>=3.0.0b2**
 ```
-# develop版安装示例
+# paddlepaddle-gpu develop版安装示例
 python -m pip install paddlepaddle-gpu==0.0.0.post118 -f https://www.paddlepaddle.org.cn/whl/linux/gpu/develop.html
-```
 
-- **paddlenlp == 3.0.0b3**
-```
-# 安装示例
+# paddlenlp 3.0.0b3安装示例（推荐）
 python -m pip install paddlenlp==3.0.0b3
 ```
+
+
 
 > 注：(默认开启flash_attn)使用flash_attn 要求A100/A800显卡或者H20显卡。V100请用float16推理。
 
@@ -147,32 +147,46 @@ python paddlemix/examples/ppdocbee/ppdocbee_infer.py \
 
 ## 5. 性能评测
 
-### 5.1 精度评测
+### 5.1 英文准确率评测
 
-Benchamrk         | Params  | DocVQA-val | ChartQA-test | InfoVQA-val | TextVQA-val | OCRBench | ChineseOCRBench | **内部中文场景评估集**
------------------ | ------- | ---------- | ------------ | ----------- | ----------- | -------- | --------------- | -------------------
-GPT-4V           |Closed Model| 87.2(test) | 78.1         |   75.1(test)|  78.0       | 64.5     |   -             |  -
-GPT-4o           |Closed Model| 92.8(test) | 85.7         |   79.2(test)|  77.4       | 73.6     |   -             |  -
-Claude 3.5 Sonnet|Closed Model| 95.2(test) | 90.8         |   74.1(test)|  74.1       | 78.8     |   -             |  -
-Gemini-1.5-Pro   |Closed Model| 93.1(test) | 87.2         |   80/1(test)|  78.7       | 75.4     |   -             |  -
-MiniCPM-V 2.0     | 2.43B   | 71.9(test) | -            |       -     |  74.1       | 60.5     |   -             |  -
-SmolVLM           | 2.25B   | 81.6(test) | -            |       -     |  72.7       | -        |   -             |  -
-Aquila-VL-2B      | 2.18B   | 85.0(test) | 76.5         | 58.3(test)  |  76.4       |  77.2    |  -              | -
-Mini-Monkey-2B    | 2.21B   | 87.4(test) | 76.5         | 60.1(test)  |  76.0       |  79.4    |  -              | -
-InternVL2-2B      | 2.21B   | 86.9(test) | 76.2         | 58.9(test)  |   73.4      |  78.1    | -               |    44.1
-InternVL2.5-2B    | 2.21B   | 88.7(test) |  79.2        |  60.9(test) | 74.3        | 80.4     |  -              | -
-DeepSeek-VL2-Tiny | *1.0B   | 88.9(test) |  **81.0**    |  66.1(test) | 80.7        | 80.9     | -               | -
-Qwen2-VL-2B       | 2.21B   | 89.2       |  73.5        |  64.1       | 79.7        | 79.4     | 76.1             |  52.8
-**PPDocBee-2B-1129**| 2.21B   | **90.1**   |  74.6        |  **65.4**   |   **81.2**  | **82.8** | **80.2**         | **60.3**
+Benchamrk         | Params  | DocVQA-val | ChartQA-test | InfoVQA-val | TextVQA-val | OCRBench 
+----------------- | ------- | ---------- | ------------ | ----------- | ----------- | -------- 
+GPT-4V           |Closed Model| 87.2(test) | 78.1         |   75.1(test)|  78.0       | 64.5   
+GPT-4o           |Closed Model| 92.8(test) | 85.7         |   79.2(test)|  77.4       | 73.6    
+Claude 3.5 Sonnet|Closed Model| 95.2(test) | 90.8         |   74.1(test)|  74.1       | 78.8   
+Gemini-1.5-Pro   |Closed Model| 93.1(test) | 87.2         |   80/1(test)|  78.7       | 75.4    
+MiniCPM-V 2.0     | 2.43B   | 71.9(test) | -            |       -     |  74.1       | 60.5    
+SmolVLM           | 2.25B   | 81.6(test) | -            |       -     |  72.7       | -        
+Aquila-VL-2B      | 2.18B   | 85.0(test) | 76.5         | 58.3(test)  |  76.4       |  77.2   
+Mini-Monkey-2B    | 2.21B   | 87.4(test) | 76.5         | 60.1(test)  |  76.0       |  79.4  
+InternVL2-2B      | 2.21B   | 86.9(test) | 76.2         | 58.9(test)  |   73.4      |  78.1  
+InternVL2.5-2B    | 2.21B   | 88.7(test) |  79.2        |  60.9(test) | 74.3        | 80.4     
+DeepSeek-VL2-Tiny | *1.0B   | 88.9(test) |  **81.0**    |  66.1(test) | 80.7        | 80.9    
+Qwen2-VL-2B       | 2.21B   | 89.2       |  73.5        |  64.1       | 79.7        | 79.4    
+**PPDocBee-2B-1129**| 2.21B   | **90.1**   |  74.6        |  **65.4**   |   **81.2**  | **82.8** 
+
+> ⚠️注意：我们在评估DocVQA和InfoVQA时默认采用了val验证集上的指标，标(test)的是竞品模型公布的测试集上的指标。
 
 
-注意：
+### 5.2 中文准确率评测
 
-1.我们在评估DocVQA和InfoVQA时默认采用了val验证集上的指标，标(test)的是竞品模型公布的测试集上的指标。
+| 模型 | 总分 | 印刷文字 | 表格 | 印章 | 图表 |
+|---|---:|---:|---:|---:|---:|
+| **PPDocBee-2B-1129** | **765** | **517** | **202** | **5** | **41** |
+| Qwen2-VL-2B | 680 | 476 | 167 | 8 | 29 |
+| Qwen2-VL-7B | 879 | 576 | 246 | 7 | 50 |
+| InternVL2.5-2B | 596 | 363 | 182 | 4 | 47 |
+| InternVL2.5-8B | 780 | 507 | 220 | 5 | 48 |
+| MINICPM2.6-8B | 682 | 442 | 196 | 6 | 38 |
+| GLM-4V Flash API | 547 | 339 | 169 | 5 | 34 |
+| GPT4O API | 685 | 436 | 198 | 5 | 46 |
+| Qwen2-VL-72B | 922 | 589 | 262 | 8 | 63 |
 
-2.[ChineseOCRBench](https://huggingface.co/datasets/SWHL/ChineseOCRBench)是3410张图像和3410条问答数据，均来自ReCTS和ESTVQA数据集。
+印刷文字 (655张)、表格 (358张)、印章 (15张)、图表 (176张)
 
-3.内部中文场景评估集包括了财报、法律法规、理工科论文、说明书、文科论文、合同、研报等场景，暂时未有计划公开。
+> ⚠️注意：
+> 2. 中文准确率评测于 2024.12.09日修订，所有图像分辨率 (1680, 1204)，共1196条数据。
+> 3. 内部中文场景评估集包括了财报、法律法规、理工科论文、说明书、文科论文、合同、研报等场景，暂时未有计划公开。
 
 
 ## 参考文献
