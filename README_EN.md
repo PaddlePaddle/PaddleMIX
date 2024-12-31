@@ -284,6 +284,7 @@ python setup.py install
         <ul>
             <li><a href="paddlemix/examples/groundingdino">Grounding DINO</a></li>
             <li><a href="paddlemix/examples/sam">SAM</a></li>
+            <li><a href="paddlemix/examples/sam2">SAM2</a></li>
             <li><a href="paddlemix/examples/YOLO-World">YOLO-World</a></li>
       </ul>
       </ul>
