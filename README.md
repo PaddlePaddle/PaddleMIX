@@ -359,6 +359,53 @@ python setup.py install
 更多模型能力，可参考[模型能力矩阵](./paddlemix/examples/README.md)
 
 
+
+## 📊多模数据处理工具箱DataCopilot
+<table align="center">
+  <tbody>
+    <tr align="center" valign="center">
+      <td>
+        <b>基础能力</b>
+      </td>
+      <td>
+        <b>数据分析</b>
+      </td>
+      <td>
+        <b>数据生成</b>
+      </td>
+    </tr>
+    <tr valign="top">
+      <td>
+        <ul>
+        </ul>
+          <li><b>使用文档</b></li>
+        <ul>
+            <li><a href="paddlemix/datacopilot">DataCopilot</a></li>
+      </ul>
+      </td>
+      <td>
+        <ul>
+        </ul>
+          <li><b>能力标签模型</b></li>
+        <ul>
+           <li><a href="paddlemix/datacopilot/example">PP-InsCapTagger</a></li>
+        </ul>
+      </td>
+      <td>
+        <ul>
+        </ul>
+          <li><b>文档类数据生成方案</b></li>
+        <ul>
+          <li><a href="paddlemix/datacopilot/example">PP-InfinityDocData</a></li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+更多数据相关功能，可参考[DataCopilot](./paddlemix/datacopilot)主页
+
+
 ## 🏆特色模型|工具
 
 ### 💎跨模态任务流水线AppFlow
