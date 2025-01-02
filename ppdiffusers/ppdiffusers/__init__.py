@@ -151,6 +151,8 @@ else:
             "SD3MultiControlNetModel",
             # new add
             "VCtrlModel",
+            # new add
+            "FluxTransformer2DModel",
         ]
     )
 
@@ -277,6 +279,7 @@ else:
             "CLIPImageProjection",
             "CogVideoXPipeline",
             "CycleDiffusionPipeline",
+            "FluxPipeline",
             "IFImg2ImgPipeline",
             "IFImg2ImgSuperResolutionPipeline",
             "IFInpaintingPipeline",
@@ -506,6 +509,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             ControlNetModel,
             DiTLLaMA2DModel,
             DiTLLaMAT2IModel,
+            FluxTransformer2DModel,
             GaussianDiffusion,
             GaussianDiffusion_SDEdit,
             Kandinsky3UNet,
@@ -558,6 +562,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             DDPMPipeline,
             DiffusionPipeline,
             DiTPipeline,
+            FluxPipeline,
             ImagePipelineOutput,
             ImgToVideoSDPipeline,
             KarrasVePipeline,

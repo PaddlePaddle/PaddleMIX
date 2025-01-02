@@ -62,6 +62,8 @@ if is_paddle_available():
     # NOTE, new add
     _import_structure["vctrl"] = ["VCtrlModel"]
     _import_structure["cogvideox_transformer_3d_vctrl"] = ["CogVideoXTransformer3DVCtrlModel"]
+    # NOTE, new add
+    _import_structure["transformer_flux"] = ["FluxTransformer2DModel"]
 
 
 if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
@@ -95,6 +97,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         from .prior_transformer import PriorTransformer
         from .t5_film_transformer import T5FilmDecoder
         from .transformer_2d import Transformer2DModel
+        from .transformer_flux import FluxTransformer2DModel
         from .transformer_sd3 import SD3Transformer2DModel
         from .transformer_temporal import TransformerTemporalModel
         from .unet_1d import UNet1DModel
