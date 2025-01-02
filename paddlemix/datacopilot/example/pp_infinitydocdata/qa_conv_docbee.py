@@ -19,8 +19,9 @@ import base64
 from PIL import Image
 from pathlib import Path
 from functools import partial
-from datacopilot.core import MMDataset
+from paddlemix.datacopilot.core import MMDataset
 import re
+import argparse
 
 def read_json_files(json_root,image_root):
     # 创建空列表用于存储字典
@@ -120,6 +121,6 @@ if __name__ == '__main__':
     dataset = dataset.filter(_filter_image_hw_ratio).nonempty()
     dataset = dataset.map(convert_scheme).nonempty()
     print('数据长度',len(dataset))
-    out_path = os.path.join(image_root, args.json_name)
+    out_path = os.path.join(image_root, args.output_file)
     dataset.export_json(out_path)
     print(f"数据保存在 {out_path}")
