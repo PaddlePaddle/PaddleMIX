@@ -34,16 +34,14 @@
 
 
 ## 📰新闻
-**🔥2024.11.21日 - 2024.12.22日  PaddleMIX开发项目挑战（已结束）**
+**🔥2025.01.07日直播课 飞桨PP系列模型上新！**
 
-- ✨「体验官招募」PaddleMIX开发项目挑战
-点击链接报名🔗：https://aistudio.baidu.com/activitydetail/1503019366
-🏆投稿至飞桨星河社区项目大厅，加精获得PaddleMIX体验官认证证书及京东卡激励
-欢迎大家投稿～
+- ✨PP-DocBee文档图像理解的新‘蜂’向标！
+为了帮助您迅速且深入地了解**PaddleMIX**的**PP-DocBee文档理解特色模型**，并熟练掌握实际操作技巧，百度高级研发工程师将在**1月7日（周二）19:00**，为您详细解读PP-DocBee的核心技术，手把手演示多模态大模型开发全流程。赶快扫描下方海报二维码预约报名！
 <details>
 <summary>点击展开活动海报</summary>
 <p align="center">
-<img src='https://github.com/user-attachments/assets/27e0bbe3-0ff8-49ef-bd39-81a31a2b288b'  width="25%">
+<img src='https://github.com/user-attachments/assets/3b7adc9e-c68d-44d1-9674-05b933947deb'  width="80%">
 </p>
 </details>
 
@@ -51,6 +49,7 @@
 
 <!-- 📚《飞桨多模态大模型开发套件PaddleMIX 2.1 震撼发布》，图文音视频场景全覆盖，多模态高效助力产业创新。超大规模训练支持，覆盖图文预训练、文生图、跨模态视觉任务，覆盖金融、教育、电商、医疗等产业场景。8月8日（周四）20：00 带你直播了解多模态大模型最新架构，深度解析PaddleMIX高性能模型库，手把手演示LLaVA模型训推全流程。[报名链接](https://www.wjx.top/vm/wKqysjx.aspx?udsid=449688)   -->
 
+**🎉 2024.01.02 新增自研文档理解模型[PP-DocBee](./paddlemix/examples/ppdocbee)推理和训练，支持[高性能推理](./deploy/ppdocbee)**
 
 **🎉 2024.12.17 支持[GOT-OCR2_0](./paddlemix/examples/GOT_OCR_2_0)推理和训练**
 
@@ -64,14 +63,15 @@
 
 **🎉 2024.11.1 支持[LLaVA-OneVision](./paddlemix/examples/llava_onevision/)和[LLaVA-Critic](./paddlemix/examples/llava_critic/)推理**
 
+
+<details>
+<summary>点击展开更多</summary>
+
 **🎉 2024.10.31 喜迎外部开发者的[创作教程页面](paddlemix_applications.md)更新**
 
 * 🌟 自9月6日发起大模型套件精品项目征集活动以来,我们收到了30个优质开发者项目,其中25个精品项目已通过平台评估并成功加精。
 
 * 🙏 衷心感谢各位开发者基于套件的精彩创作！🚀 诚挚邀请您也来分享您的创意 - 欢迎将教程发布到公开网页或[飞桨AI Studio](https://aistudio.baidu.com/aistudio/community/multimodal?from=singlemessage)社区！
-
-<details>
-<summary>点击展开更多</summary>
 
 **🔥2024.10.11 发布PaddleMIX v2.1**
 * 支持[PaddleNLP 3.0 beta](https://github.com/PaddlePaddle/PaddleNLP/releases/tag/v3.0.0-beta0)版本，抢先体验其最新功能。
