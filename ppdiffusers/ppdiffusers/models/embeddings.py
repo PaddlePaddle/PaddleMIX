@@ -22,7 +22,8 @@ from paddle import nn
 from ..utils import USE_PEFT_BACKEND
 from .activations import FP32SiLU, get_activation
 from .lora import LoRACompatibleLinear
-
+import nvtx 
+        
 
 def get_timestep_embedding(
     timesteps: paddle.Tensor,
@@ -75,15 +76,15 @@ def get_2d_sincos_pos_embed(
     if isinstance(grid_size, int):
         grid_size = (grid_size, grid_size)
 
-    grid_h = np.arange(grid_size[0], dtype=np.float32) / (grid_size[0] / base_size) / interpolation_scale
-    grid_w = np.arange(grid_size[1], dtype=np.float32) / (grid_size[1] / base_size) / interpolation_scale
-    grid = np.meshgrid(grid_w, grid_h)  # here w goes first
-    grid = np.stack(grid, axis=0)
+    grid_h = paddle.arange(grid_size[0], dtype='float32') / (grid_size[0] / base_size) / interpolation_scale
+    grid_w = paddle.arange(grid_size[1], dtype='float32') / (grid_size[1] / base_size) / interpolation_scale
+    grid = paddle.meshgrid(grid_w, grid_h)  # here w goes first
+    grid = paddle.stack(grid, axis=0)
 
     grid = grid.reshape([2, 1, grid_size[1], grid_size[0]])
     pos_embed = get_2d_sincos_pos_embed_from_grid(embed_dim, grid)
     if cls_token and extra_tokens > 0:
-        pos_embed = np.concatenate([np.zeros([extra_tokens, embed_dim]), pos_embed], axis=0)
+        pos_embed = paddle.concat([paddle.zeros([extra_tokens, embed_dim]), pos_embed], axis=0)
     return pos_embed
 
 
@@ -95,7 +96,7 @@ def get_2d_sincos_pos_embed_from_grid(embed_dim, grid):
     emb_h = get_1d_sincos_pos_embed_from_grid(embed_dim // 2, grid[0])  # (H*W, D/2)
     emb_w = get_1d_sincos_pos_embed_from_grid(embed_dim // 2, grid[1])  # (H*W, D/2)
 
-    emb = np.concatenate([emb_h, emb_w], axis=1)  # (H*W, D)
+    emb = paddle.concat([emb_h, emb_w], axis=1)  # (H*W, D)
     return emb
 
 
@@ -106,17 +107,17 @@ def get_1d_sincos_pos_embed_from_grid(embed_dim, pos):
     if embed_dim % 2 != 0:
         raise ValueError("embed_dim must be divisible by 2")
 
-    omega = np.arange(embed_dim // 2, dtype=np.float64)
+    omega = paddle.arange(embed_dim // 2, dtype='float64')
     omega /= embed_dim / 2.0
     omega = 1.0 / 10000**omega  # (D/2,)
 
-    pos = pos.reshape(-1)  # (M,)
-    out = np.einsum("m,d->md", pos, omega)  # (M, D/2), outer product
+    pos = paddle.cast(pos.reshape([-1]),dtype="float64")  # (M,)
 
-    emb_sin = np.sin(out)  # (M, D/2)
-    emb_cos = np.cos(out)  # (M, D/2)
+    out = paddle.einsum("m,d->md", pos, omega)  # (M, D/2), outer product
+    emb_sin = paddle.sin(out)  # (M, D/2)
+    emb_cos = paddle.cos(out)  # (M, D/2)
 
-    emb = np.concatenate([emb_sin, emb_cos], axis=1)  # (M, D)
+    emb = paddle.concat([emb_sin, emb_cos], axis=1)  # (M, D)
     return emb
 
 
@@ -919,11 +920,11 @@ class PixArtAlphaTextProjection(nn.Layer):
 
 def get_3d_sincos_pos_embed(
     embed_dim: int,
-    spatial_size: Union[int, Tuple[int, int]],
+    spatial_size: int or tuple,
     temporal_size: int,
     spatial_interpolation_scale: float = 1.0,
     temporal_interpolation_scale: float = 1.0,
-) -> np.ndarray:
+) -> paddle.Tensor:
     """
     Args:
         embed_dim (`int`):
@@ -934,23 +935,32 @@ def get_3d_sincos_pos_embed(
     """
     if embed_dim % 4 != 0:
         raise ValueError("`embed_dim` must be divisible by 4")
-    if isinstance(spatial_size, int):
-        spatial_size = spatial_size, spatial_size
+    if isinstance(spatial_size, int): # False
+        spatial_size = (spatial_size, spatial_size) 
     embed_dim_spatial = 3 * embed_dim // 4
     embed_dim_temporal = embed_dim // 4
-    grid_h = np.arange(spatial_size[1], dtype=np.float32) / spatial_interpolation_scale
-    grid_w = np.arange(spatial_size[0], dtype=np.float32) / spatial_interpolation_scale
-    grid = np.meshgrid(grid_w, grid_h)
-    grid = np.stack(grid, axis=0)
+
+    # Generate spatial grid
+    grid_h = paddle.arange(spatial_size[1], dtype='float32') / spatial_interpolation_scale
+    grid_w = paddle.arange(spatial_size[0], dtype='float32') / spatial_interpolation_scale
+
+    # grid = paddle.meshgrid(grid_w, grid_h)
+    grid = [grid_w.unsqueeze(0).tile([grid_h.shape[0], 1]),grid_h.unsqueeze(1).tile([1, grid_w.shape[0]])]
+    grid = paddle.stack(grid, axis=0)
     grid = grid.reshape([2, 1, spatial_size[1], spatial_size[0]])
     pos_embed_spatial = get_2d_sincos_pos_embed_from_grid(embed_dim_spatial, grid)
-    grid_t = np.arange(temporal_size, dtype=np.float32) / temporal_interpolation_scale
+
+    # Generate temporal grid
+    grid_t = paddle.arange(temporal_size, dtype='float32') / temporal_interpolation_scale
     pos_embed_temporal = get_1d_sincos_pos_embed_from_grid(embed_dim_temporal, grid_t)
-    pos_embed_spatial = pos_embed_spatial[np.newaxis, :, :]
-    pos_embed_spatial = np.repeat(pos_embed_spatial, temporal_size, axis=0)
-    pos_embed_temporal = pos_embed_temporal[:, np.newaxis, :]
-    pos_embed_temporal = np.repeat(pos_embed_temporal, spatial_size[0] * spatial_size[1], axis=1)
-    pos_embed = np.concatenate([pos_embed_temporal, pos_embed_spatial], axis=-1)
+
+    # Combine spatial and temporal embeddings
+    pos_embed_spatial = pos_embed_spatial.unsqueeze(0)
+    pos_embed_spatial = pos_embed_spatial.tile([temporal_size, 1, 1])
+    pos_embed_temporal = pos_embed_temporal.unsqueeze(1)
+    pos_embed_temporal = pos_embed_temporal.tile([1, spatial_size[0] * spatial_size[1], 1])
+    pos_embed = paddle.concat([pos_embed_temporal, pos_embed_spatial], axis=-1)
+
     return pos_embed
 
 
@@ -1006,6 +1016,8 @@ class CogVideoXPatchEmbed(paddle.nn.Layer):
         post_time_compression_frames = (sample_frames - 1) // self.temporal_compression_ratio + 1
         num_patches = post_patch_height * post_patch_width * post_time_compression_frames
 
+        # paddle.device.synchronize()
+        # emb_3d = nvtx.start_range(message="3d", color="red")
         pos_embedding = get_3d_sincos_pos_embed(
             self.embed_dim,
             (post_patch_width, post_patch_height),
@@ -1013,9 +1025,16 @@ class CogVideoXPatchEmbed(paddle.nn.Layer):
             self.spatial_interpolation_scale,
             self.temporal_interpolation_scale,
         )
+        # paddle.device.synchronize()
+        # nvtx.end_range(emb_3d)
+        
+        # paddle.device.synchronize()
+        # emb_to_tensor = nvtx.start_range(message="to_tensor", color="yellow")
         pos_embedding = paddle.to_tensor(data=pos_embedding).flatten(start_axis=0, stop_axis=1)
         joint_pos_embedding = paddle.zeros([1, self.max_text_seq_length + num_patches, self.embed_dim])
         joint_pos_embedding[0, self.max_text_seq_length :] = pos_embedding
+        # paddle.device.synchronize()
+        # nvtx.end_range(emb_to_tensor)
         return joint_pos_embedding
 
     def forward(self, text_embeds: paddle.Tensor, image_embeds: paddle.Tensor):
@@ -1026,14 +1045,35 @@ class CogVideoXPatchEmbed(paddle.nn.Layer):
             image_embeds (`torch.Tensor`):
                 Input image embeddings. Expected shape: (batch_size, num_frames, channels, height, width).
         """
-        text_embeds = self.text_proj(text_embeds)
 
+        # paddle.device.synchronize()
+        # emb_A = nvtx.start_range(message="emb_a", color="green")
+        text_embeds = self.text_proj(text_embeds)
+        # paddle.device.synchronize()
+        # nvtx.end_range(emb_A)
+        
+        
+        # paddle.device.synchronize()
+        # emb_B = nvtx.start_range(message="emb_b", color="yellow")
         batch, num_frames, channels, height, width = image_embeds.shape
         image_embeds = image_embeds.reshape([-1, channels, height, width])
         image_embeds = self.proj(image_embeds)
+        # paddle.device.synchronize()
+        # nvtx.end_range(emb_B)
+        
+        # paddle.device.synchronize()
+        # emb_C = nvtx.start_range(message="emb_c", color="red")
         image_embeds = image_embeds.reshape([batch, num_frames] + image_embeds.shape[1:])
+        # paddle.device.synchronize()
+        # nvtx.end_range(emb_C)
+        
+        # paddle.device.synchronize()
+        # emb_D = nvtx.start_range(message="emb_d", color="blue")
         image_embeds = image_embeds.flatten(3).transpose([0, 1, 3, 2])  # [batch, num_frames, height x width, channels]
         image_embeds = image_embeds.flatten(1, 2)  # [batch, num_frames x height x width, channels]
+        # paddle.device.synchronize()
+        # nvtx.end_range(emb_D)
+
 
         embeds = paddle.concat(x=[text_embeds, image_embeds], axis=1).contiguous()
         if self.use_positional_embeddings or self.use_learned_positional_embeddings:
@@ -1078,10 +1118,14 @@ def get_3d_rotary_pos_embed(
     Returns:
         `torch.Tensor`: positional embedding with shape `(temporal_size * grid_size[0] * grid_size[1], embed_dim/2)`.
     """
+    # breakpoint()
     start, stop = crops_coords
-    grid_h = np.linspace(start[0], stop[0], grid_size[0], endpoint=False, dtype=np.float32)
-    grid_w = np.linspace(start[1], stop[1], grid_size[1], endpoint=False, dtype=np.float32)
-    grid_t = np.linspace(0, temporal_size, temporal_size, endpoint=False, dtype=np.float32)
+    # grid_h = np.linspace(start[0], stop[0], grid_size[0], endpoint=False, dtype=np.float32)
+    # grid_w = np.linspace(start[1], stop[1], grid_size[1], endpoint=False, dtype=np.float32)
+    # grid_t = np.linspace(0, temporal_size, temporal_size, endpoint=False, dtype=np.float32)
+    grid_h = paddle.linspace(start[0], stop[0], grid_size[0], dtype="float32")
+    grid_w = paddle.linspace(start[1], stop[1], grid_size[1], dtype="float32")
+    grid_t = paddle.linspace(0, temporal_size, temporal_size, dtype="float32")
     dim_t = embed_dim // 4
     dim_h = embed_dim // 8 * 3
     dim_w = embed_dim // 8 * 3
@@ -1162,7 +1206,9 @@ def apply_rotary_emb(
             x_rotated = paddle.concat(x=[-x_imag, x_real], axis=-1)
         else:
             raise ValueError(f"`use_real_unbind_dim={use_real_unbind_dim}` but should be -1 or -2.")
-        out = (x.astype(dtype="float32") * cos + x_rotated.astype(dtype="float32") * sin).to(x.dtype)
+        # out = (x.astype(dtype="float32") * cos + x_rotated.astype(dtype="float32") * sin).to(x.dtype)
+        out = paddle.cast((x.astype(dtype="float32") * cos + x_rotated.astype(dtype="float32") * sin),x.dtype)
+
         return out
     else:
         x_rotated = paddle.as_complex(x=x.astype(dtype="float32").reshape(*tuple(x.shape)[:-1], -1, 2))

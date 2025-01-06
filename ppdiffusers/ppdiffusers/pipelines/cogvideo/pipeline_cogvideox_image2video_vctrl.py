@@ -20,7 +20,7 @@ from typing import Callable, Dict, List, Optional, Tuple, Union
 import paddle
 import paddlenlp
 import PIL
-
+import nvtx
 from ppdiffusers.callbacks import MultiPipelineCallbacks, PipelineCallback
 from ppdiffusers.image_processor import PipelineImageInput, VaeImageProcessor
 from ppdiffusers.models import (
@@ -736,25 +736,38 @@ class CogVideoXVCtrlImageToVideoPipeline(DiffusionPipeline):
                 latent_model_input = paddle.concat(x=[latent_model_input, latent_image_input], axis=2)
                 timestep = t.expand(shape=tuple(latent_model_input.shape)[0])
                 control_model_input = latent_model_input
+                # breakpoint()
+                
 
+                
+                # paddle.device.synchronize()
+                # vctrl_nvtx = nvtx.start_range(message="vctrl", color="red")
+                
                 vctrl_block_samples = self.vctrl(
                     control_model_input,
                     timestep,
                     v_cond=v_cond,
-                    v_cond_scale=conditioning_scale,
-                    image_rotary_emb=v_cond_rotary_emb,
+                    image_rotary_emb=[v_cond_rotary_emb[0],v_cond_rotary_emb[1]],
                     return_dict=False,
                 )
+                # paddle.device.synchronize()
+                # nvtx.end_range(vctrl_nvtx)
 
+
+                # paddle.device.synchronize()
+                # transformer_nvtx = nvtx.start_range(message="transformer", color="yellow")
                 noise_pred = self.transformer(
                     hidden_states=latent_model_input,
                     encoder_hidden_states=prompt_embeds,
                     timestep=timestep,
                     block_vctrl_residuals=vctrl_block_samples,
-                    vctrl_layout_type=vctrl_layout_type,
-                    image_rotary_emb=image_rotary_emb,
+                    # vctrl_layout_type=vctrl_layout_type,
+                    image_rotary_emb=[image_rotary_emb[0],image_rotary_emb[1]],
                     return_dict=False,
                 )
+                # paddle.device.synchronize()
+                # nvtx.end_range(transformer_nvtx)
+                
                 noise_pred = noise_pred.astype(dtype="float32")
 
                 if use_dynamic_cfg:

@@ -33,7 +33,7 @@ from ppdiffusers.models.modeling_utils import ModelMixin
 from ppdiffusers.models.normalization import AdaLayerNorm, CogVideoXLayerNormZero
 from ppdiffusers.utils import logging
 from ppdiffusers.utils.paddle_utils import maybe_allow_in_graph
-
+import nvtx
 logger = logging.get_logger(__name__)
 
 
@@ -92,7 +92,18 @@ class CogVideoXBlock(paddle.nn.Layer):
     ):
         super().__init__()
         self.norm1 = CogVideoXLayerNormZero(time_embed_dim, dim, norm_elementwise_affine, norm_eps, bias=True)
-
+        
+        self.silu = paddle.nn.Silu()
+        self.linear1 = paddle.nn.Linear(in_features=time_embed_dim,
+            out_features=6 * dim, bias_attr=True)
+        self.norm3 = paddle.nn.LayerNorm(normalized_shape=dim,
+            epsilon=norm_eps, weight_attr=norm_elementwise_affine, bias_attr=norm_elementwise_affine)
+        
+        self.linear1.weight = self.norm1.linear.weight
+        self.linear1.bias = self.norm1.linear.bias
+        self.norm3.weight = self.norm1.norm.weight
+        self.norm3.bias = self.norm1.norm.bias
+        # breakpoint()
         self.attn1 = Attention(
             query_dim=dim,
             dim_head=attention_head_dim,
@@ -105,6 +116,17 @@ class CogVideoXBlock(paddle.nn.Layer):
         )
 
         self.norm2 = CogVideoXLayerNormZero(time_embed_dim, dim, norm_elementwise_affine, norm_eps, bias=True)
+        
+        self.linear2 = paddle.nn.Linear(in_features=time_embed_dim,
+            out_features=6 * dim, bias_attr=True)
+        self.norm4 = paddle.nn.LayerNorm(normalized_shape=dim,
+            epsilon=norm_eps, weight_attr=norm_elementwise_affine, bias_attr=norm_elementwise_affine)
+        
+        self.linear2.weight = self.norm2.linear.weight
+        self.linear2.bias = self.norm2.linear.bias
+        self.norm4.weight = self.norm2.norm.weight
+        self.norm4.bias = self.norm2.norm.bias
+        
         self.ff = FeedForward(
             dim,
             dropout=dropout,
@@ -113,7 +135,13 @@ class CogVideoXBlock(paddle.nn.Layer):
             inner_dim=ff_inner_dim,
             bias=ff_bias,
         )
-
+    # @paddle.incubate.jit.inference(
+    #     save_model_dir="./tmp/vctrl/transformer_block",
+    #     enable_new_ir=False, 
+    #     cache_static_model=False,
+    #     exp_enable_use_cutlass=False,
+    #     delete_pass_lists=[],
+    # )
     def forward(
         self,
         hidden_states: paddle.Tensor,
@@ -121,25 +149,59 @@ class CogVideoXBlock(paddle.nn.Layer):
         temb: paddle.Tensor,
         image_rotary_emb: Optional[Tuple[paddle.Tensor, paddle.Tensor]] = None,
     ) -> paddle.Tensor:
+        
+        # paddle.device.synchronize()
+        # transformer_block_nvtx = nvtx.start_range(message="block", color="red")
 
         text_seq_length = encoder_hidden_states.shape[1]
+        # breakpoint()
 
-        norm_hidden_states, norm_encoder_hidden_states, gate_msa, enc_gate_msa = self.norm1(
-            hidden_states, encoder_hidden_states, temb
-        )
+        # norm_hidden_states, norm_encoder_hidden_states, gate_msa, enc_gate_msa = self.norm1(
+        #     hidden_states, encoder_hidden_states, temb
+        # )
+        
+        shift, scale, gate, enc_shift, enc_scale, enc_gate = self.linear1(self
+            .silu(temb)).chunk(chunks=6, axis=1)
+        norm_hidden_states = self.norm3(hidden_states) * (1 + scale)[:, None, :
+            ] + shift[:, None, :]
+        norm_encoder_hidden_states = self.norm3(encoder_hidden_states) * (1 +
+            enc_scale)[:, None, :] + enc_shift[:, None, :]
+        gate_msa, enc_gate_msa = gate, enc_gate
 
+        # breakpoint()
         attn_hidden_states, attn_encoder_hidden_states = self.attn1(
             hidden_states=norm_hidden_states,
             encoder_hidden_states=norm_encoder_hidden_states,
             image_rotary_emb=image_rotary_emb,
         )
 
-        hidden_states = hidden_states + gate_msa * attn_hidden_states
-        encoder_hidden_states = encoder_hidden_states + enc_gate_msa * attn_encoder_hidden_states
+        # paddle.device.synchronize()
+        # transformer_block_norm_nvtx = nvtx.start_range(message="norm", color="green")
 
-        norm_hidden_states, norm_encoder_hidden_states, gate_ff, enc_gate_ff = self.norm2(
-            hidden_states, encoder_hidden_states, temb
+
+        # hidden_states = hidden_states + gate_msa * attn_hidden_states
+        # encoder_hidden_states = encoder_hidden_states + enc_gate_msa * attn_encoder_hidden_states
+
+        # norm_hidden_states, norm_encoder_hidden_states, gate_ff, enc_gate_ff = self.norm2(
+        #     hidden_states, encoder_hidden_states, temb
+        # )
+
+        shift, scale, gate, enc_shift, enc_scale, enc_gate = self.linear2(self.silu(temb)).chunk(chunks=6, axis=1)
+        # norm_hidden_states = self.norm4(hidden_states) * (1 + scale)[:, None, :] + shift[:, None, :]
+        # norm_encoder_hidden_states = self.norm4(encoder_hidden_states) * (1 + enc_scale)[:, None, :] + enc_shift[:, None, :]
+        gate_ff, enc_gate_ff = gate[:, None, :], enc_gate[:, None, :]
+        
+        import paddlemix
+        hidden_states, norm_hidden_states = paddlemix.triton_ops.fused_adaLN_scale_residual(
+            hidden_states, attn_hidden_states, gate_msa, scale, shift, epsilon=1e-05
         )
+        
+        encoder_hidden_states, norm_encoder_hidden_states = paddlemix.triton_ops.fused_adaLN_scale_residual(
+            encoder_hidden_states, attn_encoder_hidden_states, enc_gate_msa, enc_scale, enc_shift, epsilon=1e-05
+        )
+
+        # paddle.device.synchronize()
+        # nvtx.end_range(transformer_block_norm_nvtx)
 
         norm_hidden_states = paddle.concat(x=[norm_encoder_hidden_states, norm_hidden_states], axis=1)
 
@@ -148,6 +210,10 @@ class CogVideoXBlock(paddle.nn.Layer):
         hidden_states = hidden_states + gate_ff * ff_output[:, text_seq_length:]
         encoder_hidden_states = encoder_hidden_states + enc_gate_ff * ff_output[:, :text_seq_length]
 
+        # paddle.device.synchronize()
+        # nvtx.end_range(transformer_block_nvtx)
+
+        
         return hidden_states, encoder_hidden_states
 
 
@@ -258,7 +324,7 @@ class CogVideoXTransformer3DVCtrlModel(ModelMixin, ConfigMixin):
             use_positional_embeddings=not use_rotary_positional_embeddings,
             use_learned_positional_embeddings=use_learned_positional_embeddings,
         )
-        self.embedding_dropout = paddle.nn.Dropout(p=dropout)
+        # self.embedding_dropout = paddle.nn.Dropout(p=dropout)
         self.time_proj = Timesteps(inner_dim, flip_sin_to_cos, freq_shift)
         self.time_embedding = TimestepEmbedding(inner_dim, time_embed_dim, timestep_activation_fn)
         self.transformer_blocks = paddle.nn.LayerList(
@@ -277,6 +343,15 @@ class CogVideoXTransformer3DVCtrlModel(ModelMixin, ConfigMixin):
                 for _ in range(num_layers)
             ]
         )
+        
+        # self.transformer_blocks = paddle.incubate.jit.inference(
+        #     self.transformer_blocks,
+        #     enable_new_ir=False,
+        #     cache_static_model=False,
+        #     exp_enable_use_cutlass=False,
+        #     delete_pass_lists=[],
+        # )
+        
         self.norm_final = paddle.nn.LayerNorm(
             normalized_shape=inner_dim,
             epsilon=norm_eps,
@@ -387,26 +462,60 @@ class CogVideoXTransformer3DVCtrlModel(ModelMixin, ConfigMixin):
         encoder_hidden_states: paddle.Tensor,
         timestep: Union[int, float, paddle.Tensor],
         timestep_cond: Optional[paddle.Tensor] = None,
-        image_rotary_emb: Optional[Tuple[paddle.Tensor, paddle.Tensor]] = None,
+        image_rotary_emb: Optional[list[paddle.Tensor, paddle.Tensor]] = None,
         block_vctrl_residuals: Optional[List[paddle.Tensor]] = None,
-        vctrl_layout_type: Optional[str] = "even",
+        # vctrl_layout_type: Optional[str] = "even",
         return_dict: bool = True,
     ):
+        
+        import nvtx
+        
+        # paddle.device.synchronize()
+        # vctrl_qian = nvtx.start_range(message="A", color="green")
+                
+        vctrl_layout_type = "even"
         batch_size, num_frames, channels, height, width = tuple(hidden_states.shape)
 
+        
+        
+        # paddle.device.synchronize()
+        # vctrl_B = nvtx.start_range(message="B", color="yellow")
         timesteps = timestep
         t_emb = self.time_proj(timesteps)
-
-        t_emb = t_emb.to(dtype=hidden_states.dtype)
+        # paddle.device.synchronize()
+        # nvtx.end_range(vctrl_B)
+        
+        # paddle.device.synchronize()
+        # vctrl_C = nvtx.start_range(message="C", color="blue")
+        # t_emb = t_emb.to(dtype=hidden_states.dtype)
+        t_emb = paddle.cast(t_emb,dtype=hidden_states.dtype)
         emb = self.time_embedding(t_emb, timestep_cond)
-
+        # paddle.device.synchronize()
+        # nvtx.end_range(vctrl_C)
+        
+        
+        
+        # paddle.device.synchronize()
+        # vctrl_D = nvtx.start_range(message="D", color="red")
         hidden_states = self.patch_embed(encoder_hidden_states, hidden_states)
-        hidden_states = self.embedding_dropout(hidden_states)
-
+        # hidden_states = self.embedding_dropout(hidden_states)
+        # paddle.device.synchronize()
+        # nvtx.end_range(vctrl_D)
+        
+        # paddle.device.synchronize()
+        # vctrl_E = nvtx.start_range(message="E", color="green")
         text_seq_length = tuple(encoder_hidden_states.shape)[1]
         encoder_hidden_states = hidden_states[:, :text_seq_length]
         hidden_states = hidden_states[:, text_seq_length:]
+        # paddle.device.synchronize()
+        # nvtx.end_range(vctrl_E)
 
+
+        # paddle.device.synchronize()
+        # nvtx.end_range(vctrl_qian)
+        
+        # paddle.device.synchronize()
+        # vctrl_blocks = nvtx.start_range(message="blocks", color="green")
         for i, block in enumerate(self.transformer_blocks):
 
             if self.training and self.gradient_checkpointing:
@@ -456,7 +565,9 @@ class CogVideoXTransformer3DVCtrlModel(ModelMixin, ConfigMixin):
                         )
                 else:
                     raise ValueError(f"vctrl_layout_type {vctrl_layout_type} is not supported.")
-
+        # paddle.device.synchronize()
+        # nvtx.end_range(vctrl_blocks)
+        
         if not self.config.use_rotary_positional_embeddings:
             hidden_states = self.norm_final(hidden_states)
         else:

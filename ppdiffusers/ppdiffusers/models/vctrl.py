@@ -209,8 +209,19 @@ class VCtrlBlock(paddle.nn.Layer):
         attention_out_bias: bool = True,
     ):
         super().__init__()
+        
         self.norm1 = VCtrlLayerNormZero(time_embed_dim, dim, norm_elementwise_affine, norm_eps, bias=True)
-
+        # breakpoint()
+        self.silu1 = paddle.nn.Silu()
+        self.linear1 = paddle.nn.Linear(in_features=time_embed_dim, out_features=3 * dim, bias_attr=True)
+        self.norm3 = paddle.nn.LayerNorm(
+            normalized_shape=dim, epsilon=1e-05, weight_attr=True, bias_attr=True
+        )
+        self.linear1.weight = self.norm1.linear.weight
+        self.linear1.bias = self.norm1.linear.bias
+        self.norm3.weight = self.norm1.norm.weight
+        self.norm3.bias = self.norm1.norm.bias
+        
         self.attn1 = Attention(
             query_dim=dim,
             dim_head=attention_head_dim,
@@ -222,6 +233,18 @@ class VCtrlBlock(paddle.nn.Layer):
             processor=VCtrlAttnProcessor2_0(),
         )
         self.norm2 = VCtrlLayerNormZero(time_embed_dim, dim, norm_elementwise_affine, norm_eps, bias=True)
+
+        self.silu2 = paddle.nn.Silu()
+        self.linear2 = paddle.nn.Linear(in_features=time_embed_dim, out_features=3 * dim, bias_attr=True)
+        self.norm4 = paddle.nn.LayerNorm(
+            normalized_shape=dim, epsilon=1e-05, weight_attr=True, bias_attr=True
+        )
+        
+        self.linear2.weight = self.norm2.linear.weight
+        self.linear2.bias = self.norm2.linear.bias
+        self.norm4.weight = self.norm2.norm.weight
+        self.norm4.bias = self.norm2.norm.bias
+        # breakpoint()
         self.ff = FeedForward(
             dim,
             dropout=dropout,
@@ -238,12 +261,30 @@ class VCtrlBlock(paddle.nn.Layer):
         image_rotary_emb: Optional[Tuple[paddle.Tensor, paddle.Tensor]] = None,
     ) -> paddle.Tensor:
 
-        norm_hidden_states, gate_msa = self.norm1(hidden_states, temb)
+        # breakpoint()
+
+        # norm_hidden_states, gate_msa = self.norm1(hidden_states, temb)
+        shift, scale, gate = self.linear1(self.silu1(temb)).chunk(chunks=3, axis=1)
+        norm_hidden_states = self.norm3(hidden_states) * (1 + scale)[:, None, :] + shift[:, None, :]
+        gate_msa = gate
 
         attn_hidden_states = self.attn1(hidden_states=norm_hidden_states, image_rotary_emb=image_rotary_emb)
 
-        hidden_states = hidden_states + gate_msa * attn_hidden_states
-        norm_hidden_states, gate_ff = self.norm2(hidden_states, temb)
+        # hidden_states = hidden_states + gate[:, None, :] * attn_hidden_states
+
+
+        # norm_hidden_states, gate_ff = self.norm2(hidden_states, temb)
+        shift, scale, gate = self.linear2(self.silu2(temb)).chunk(chunks=3, axis=1)
+        # norm_hidden_states = self.norm4(hidden_states) * (1 + scale)[:, None, :] + shift[:, None, :]
+        gate_ff = gate[:, None, :]
+        
+        
+        import paddlemix
+        hidden_states, norm_hidden_states = paddlemix.triton_ops.fused_adaLN_scale_residual(
+            hidden_states, attn_hidden_states, gate_msa, scale, shift, epsilon=1e-05
+        )
+        
+        
         ff_output = self.ff(norm_hidden_states)
         hidden_states = hidden_states + gate_ff * ff_output
         return hidden_states
@@ -336,32 +377,42 @@ class VCtrlModel(ModelMixin, ConfigMixin):
         sample: paddle.Tensor,
         timestep: Union[paddle.Tensor, float, int],
         v_cond: paddle.Tensor,
-        v_cond_scale: float = 1.0,
-        image_rotary_emb: Optional[Tuple[paddle.Tensor, paddle.Tensor]] = None,
+        image_rotary_emb: Optional[list[paddle.Tensor, paddle.Tensor]] = None,
         return_dict: bool = True,
-    ) -> Union[VCtrlModelOutput, Tuple[Tuple[paddle.Tensor, ...], paddle.Tensor]]:
+    ) -> Union[VCtrlModelOutput, list[list[paddle.Tensor, ...], paddle.Tensor]]:
         dtype = sample.dtype
         timesteps = timestep
         t_emb = self.time_proj(timesteps)
 
-        t_emb = t_emb.to(dtype=dtype)
+        # t_emb = t_emb.to(dtype=dtype)
+        t_emb = paddle.cast(t_emb,dtype=dtype)
         t_emb = self.time_embedding(t_emb)
 
         sample = self.sample_patch_embed(sample)
         v_cond = self.cond_patch_embed(v_cond)
 
-        mean_latents, std_latents = paddle.mean(x=sample, axis=(1, 2), keepdim=True), paddle.std(
-            x=sample.to(dtype="float32"), axis=(1, 2), keepdim=True
-        ).to(dtype=dtype)
-        mean_control, std_control = paddle.mean(x=v_cond, axis=(1, 2), keepdim=True), paddle.std(
-            x=v_cond.to(dtype="float32"), axis=(1, 2), keepdim=True
-        ).to(dtype=dtype)
+        # mean_latents, std_latents = paddle.mean(x=sample, axis=(1, 2), keepdim=True), paddle.std(
+        #     x=sample.to(dtype="float32"), axis=(1, 2), keepdim=True
+        # ).to(dtype=dtype)
+        # mean_control, std_control = paddle.mean(x=v_cond, axis=(1, 2), keepdim=True), paddle.std(
+        #     x=v_cond.to(dtype="float32"), axis=(1, 2), keepdim=True
+        # ).to(dtype=dtype)
+        
+        mean_latents, std_latents = paddle.mean(x=sample, axis=(1, 2), keepdim=True), paddle.cast(paddle.std(
+            x=paddle.cast(sample,dtype="float32"), axis=(1, 2), keepdim=True
+        ),dtype=dtype)
+        mean_control, std_control = paddle.mean(x=v_cond, axis=(1, 2), keepdim=True), paddle.cast(paddle.std(
+            x=paddle.cast(v_cond,dtype="float32"), axis=(1, 2), keepdim=True
+        ),dtype=dtype)
 
         v_cond = (v_cond - mean_control) * (std_latents / (std_control + 1e-05)) + mean_latents
 
         hidden_states = sample + v_cond
-        hidden_states = hidden_states.to(dtype=dtype)
+        # hidden_states = hidden_states.to(dtype=dtype)
+        hidden_states = paddle.cast(hidden_states,dtype=dtype)
 
+        # breakpoint()
+        # self.modify_state_dict(self.state_dict())
         features = []
         for i, block in enumerate(self.transformer_blocks):
             if self.training and self.gradient_checkpointing:
@@ -380,8 +431,32 @@ class VCtrlModel(ModelMixin, ConfigMixin):
                 hidden_states = block(hidden_states=hidden_states, temb=t_emb, image_rotary_emb=image_rotary_emb)
 
             features.append(hidden_states)
-        features = [(feature * v_cond_scale) for feature in features]
+        features = [(feature * 1.0) for feature in features]
 
         if not return_dict:
             return features
         return VCtrlModelOutput(vctrl_block_samples=features)
+
+
+    # @classmethod
+    # # def custom_modify_weight(cls, model_to_load, state_dict):
+    # def modify_state_dict():
+    #     # NOTE:(changwenbin,zhoukangkang) SD3 num_layers is 24
+    #     sd3_num_layers = 7
+    #     for i in range(sd3_num_layers):
+    #         map_sd3 = [
+    #             (f"{i}.linear1.weight", f"{i}.norm1.linear.weight"),
+    #             (f"{i}.linear1.bias", f"{i}.norm1.linear.bias"),
+    #             (f"{i}.norm3.weight", f"{i}.norm1.norm.weight"),
+    #             (f"{i}.norm3.bias", f"{i}.norm1.norm.bias"),
+    #             (f"{i}.linear2.weight", f"{i}.norm2.linear.weight"),
+    #             (f"{i}.linear2.bias", f"{i}.norm2.linear.bias"),
+    #             (f"{i}.norm4.weight", f"{i}.norm2.norm.weight"),
+    #             (f"{i}.norm4.bias", f"{i}.norm2.norm.bias"),
+
+    #         ]
+    #         for to_, from_ in map_sd3:
+    #             if "transformer_blocks." + from_ in self.state_dict():
+    #                 state_dict["transformer_blocks." + to_] = state_dict["transformer_blocks." + from_]
+    #             else:
+    #                 print(f"Warning!!: '{from_}' not found in state_dict")

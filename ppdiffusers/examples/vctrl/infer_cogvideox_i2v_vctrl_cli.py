@@ -16,7 +16,7 @@ import argparse
 import gc
 import os
 import re
-
+import datetime
 import numpy as np
 import paddle
 from decord import VideoReader
@@ -29,6 +29,9 @@ from ppdiffusers import (
     CogVideoXVCtrlImageToVideoPipeline,
     VCtrlModel,
 )
+
+os.environ["INFERENCE_OPTIMIZE_TRITON"] = "True"
+
 
 
 def write_mp4(video_path, samples, fps=8):
@@ -198,21 +201,103 @@ if __name__ == "__main__":
             validation_control_images = [ref_image] + validation_control_images
     num_frames = len(validation_control_images)
     num_frames = min(num_frames, args.max_frame)
-    video = pipeline(
-        image=ref_image,
-        prompt=args.prompt,
-        num_inference_steps=args.num_inference_steps,
-        num_frames=num_frames,
-        guidance_scale=args.guidance_scale,
-        generator=paddle.Generator().manual_seed(42),
-        conditioning_frames=validation_control_images[:num_frames],
-        conditioning_frame_indices=list(range(num_frames)),
-        conditioning_scale=args.conditioning_scale,
-        width=args.width,
-        height=args.height,
-        task=args.task,
-        conditioning_masks=validation_mask_images[:num_frames] if args.task == "mask" else None,
-        vctrl_layout_type=args.vctrl_layout_type,
-    ).frames[0]
-    final_result.append(video)
-    save_vid_side_by_side(final_result, validation_control_images[:num_frames], args.output_dir, fps=args.fps)
+
+
+    # pipeline.vctrl = paddle.incubate.jit.inference(
+    #     pipeline.vctrl,
+    #     save_model_dir="./tmp/vctrl/vctrl_block",
+    #     enable_new_ir=True,
+    #     cache_static_model=True,
+    #     exp_enable_use_cutlass=False,
+    #     delete_pass_lists=[],
+    # )
+
+
+    
+    if False:
+        print("Benchmarking...")
+        warm_up = 1
+        repeat_times = 4
+        sumtime = 0.0
+        times = repeat_times + warm_up
+        for i in range(times):
+            if i > 0:
+                paddle.device.synchronize()
+                starttime = datetime.datetime.now()
+            with paddle.no_grad():
+                video = pipeline(
+                    image=ref_image,
+                    prompt=args.prompt,
+                    num_inference_steps=args.num_inference_steps,
+                    num_frames=num_frames,
+                    guidance_scale=args.guidance_scale,
+                    generator=paddle.Generator().manual_seed(42),
+                    conditioning_frames=validation_control_images[:num_frames],
+                    conditioning_frame_indices=list(range(num_frames)),
+                    conditioning_scale=args.conditioning_scale,
+                    width=args.width,
+                    height=args.height,
+                    task=args.task,
+                    conditioning_masks=validation_mask_images[:num_frames] if args.task == "mask" else None,
+                    vctrl_layout_type=args.vctrl_layout_type,
+                ).frames[0]
+            if i > 0:
+                paddle.device.synchronize()
+                endtime = datetime.datetime.now()
+                
+                final_result.append(video)
+                save_vid_side_by_side(final_result, validation_control_images[:num_frames], args.output_dir, fps=args.fps)
+
+            if i > 0:
+                duringtime = endtime - starttime
+                duringtime = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
+                sumtime += duringtime
+                print("Single end to end time : ", duringtime, "ms")
+                inference_global_mem = paddle.device.cuda.memory_reserved() / (1024**3)
+                print(f"Inference used CUDA memory : {inference_global_mem:.3f} GiB")
+        print(f"Single ave end to end time : ", sumtime / repeat_times, "ms")
+
+    else:
+        # breakpoint()
+        # print(pipeline.transformer)
+        # breakpoint()
+        
+        
+
+        
+        # pipeline.transformer = paddle.incubate.jit.inference(
+        #     pipeline.transformer,
+        #     save_model_dir="./tmp/vctrl/transformer_block",
+        #     enable_new_ir=False,
+        #     cache_static_model=False,
+        #     exp_enable_use_cutlass=False,
+        #     delete_pass_lists=[],
+        # )
+        # pipeline.transformer.transformer_blocks = paddle.incubate.jit.inference(
+        #     pipeline.transformer.transformer_blocks,
+        #     save_model_dir="./tmp/vctrl/transformer_block",
+        #     enable_new_ir=False,
+        #     cache_static_model=False,
+        #     exp_enable_use_cutlass=False,
+        #     delete_pass_lists=[],
+        # )
+        video = pipeline(
+            image=ref_image,
+            prompt=args.prompt,
+            num_inference_steps=args.num_inference_steps,
+            num_frames=num_frames,
+            guidance_scale=args.guidance_scale,
+            generator=paddle.Generator().manual_seed(42),
+            conditioning_frames=validation_control_images[:num_frames],
+            conditioning_frame_indices=list(range(num_frames)),
+            conditioning_scale=args.conditioning_scale,
+            width=args.width,
+            height=args.height,
+            task=args.task,
+            conditioning_masks=validation_mask_images[:num_frames] if args.task == "mask" else None,
+            vctrl_layout_type=args.vctrl_layout_type,
+        ).frames[0]
+        
+        
+        final_result.append(video)
+        save_vid_side_by_side(final_result, validation_control_images[:num_frames], args.output_dir, fps=args.fps)

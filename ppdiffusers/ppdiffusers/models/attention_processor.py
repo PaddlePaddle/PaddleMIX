@@ -23,6 +23,7 @@ from ..utils import USE_PEFT_BACKEND, deprecate, logging
 from ..utils.import_utils import is_ppxformers_available
 from ..utils.paddle_utils import maybe_allow_in_graph
 from .lora import LoRACompatibleLinear, LoRALinearLayer
+from .embeddings import apply_rotary_emb
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -2197,7 +2198,7 @@ class CogVideoXAttnProcessor2_0:
 
         # Apply RoPE if needed
         if image_rotary_emb is not None:
-            from .embeddings import apply_rotary_emb
+            # from ppdiffusers import apply_rotary_emb
 
             query[:, :, text_seq_length:] = apply_rotary_emb(query[:, :, text_seq_length:], image_rotary_emb)
             if not attn.is_cross_attention:
@@ -2214,6 +2215,14 @@ class CogVideoXAttnProcessor2_0:
             dropout_p=0.0,
             is_causal=False,
         )
+        # import paddlemix
+        # norm_hidden_states1 = paddlemix.triton_ops.sageattn_qk_int8_pv_fp16_triton(
+        #     query.transpose([0, 2, 1, 3]),
+        #     key.transpose([0, 2, 1, 3]),
+        #     value.transpose([0, 2, 1, 3]),
+        #     is_causal=False, 
+        #     tensor_layout="NHD")
+        
 
         hidden_states = hidden_states.reshape([batch_size, -1, attn.heads * head_dim])
 
