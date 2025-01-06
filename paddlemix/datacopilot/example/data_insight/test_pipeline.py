@@ -38,6 +38,19 @@ def parse_args():
         "--clip_model", type=str, default="openai/clip-vit-base-patch32", help="Name or path of the CLIP model to use"
     )
 
+    parser.add_argument(
+        "--chunk_size",
+        type=int,
+        default=1000,
+        help="Number of samples to process in each batch (default: 1000)",
+    )
+    parser.add_argument(
+        "--quality_thresholds",
+        type=str,
+        default="0.7,0.6,0.3",
+        help="Comma-separated quality thresholds for image,text,matching (default: 0.7,0.6,0.3)",
+    )
+
     return parser.parse_args()
 
 
@@ -47,9 +60,18 @@ def test_pipeline(args):
     Args:
         args: Command line arguments
     """
-    # Initialize modules
+    # Parse quality thresholds
+    img_thresh, text_thresh, match_thresh = map(float, args.quality_thresholds.split(","))
+
+    # Initialize modules with updated parameters
     analyzer = DataAnalyzer(clip_model_name=args.clip_model, dataset_dir=args.data_dir)
-    cleaner = DataCleaner(clip_model_name=args.clip_model, dataset_dir=args.data_dir)
+    cleaner = DataCleaner(
+        clip_model_name=args.clip_model,
+        dataset_dir=args.data_dir,
+        image_quality_threshold=img_thresh,
+        text_quality_threshold=text_thresh,
+        matching_threshold=match_thresh,
+    )
     augmentor = DataAugmentor(dataset_dir=args.data_dir)
     visualizer = DataVisualizer(output_dir=args.output_dir)
 
@@ -64,16 +86,82 @@ def test_pipeline(args):
     os.makedirs(args.output_dir, exist_ok=True)
 
     try:
-        # 1. Data Analysis
-        print("Running data analysis...")
-        stats = analyzer.analyze(args.annotation_file)
-        visualizer.plot_data_distribution(stats)
+        # 1. Initial Data Analysis
+        print("Running initial data analysis...")
+        stats = analyzer.analyze(args.annotation_file, chunk_size=args.chunk_size)
 
-        # 2. Data Cleaning
+        # Visualize initial statistics
+        visualizer.plot_data_distribution(stats, title="Initial Data Distribution")
+        visualizer.plot_language_distribution(stats["language_dist"], filename="initial_language_dist.png")
+
+        # 2. Quality Analysis
+        print("Analyzing data quality...")
+        quality_metrics = {
+            "image_quality": [],
+            "text_quality": [],
+            "matching_scores": [],
+        }
+
+        with open(args.annotation_file, "r") as f:
+            samples = json.load(f)
+
+        # Analyze sample subset
+        analysis_samples = samples[: min(100, len(samples))]
+        for sample in analysis_samples:
+            if "image" in sample and "conversations" in sample:
+                image_path = os.path.join(args.data_dir, sample["image"])
+                text = " ".join(conv["value"] for conv in sample["conversations"])
+
+                # Analyze image quality
+                img_quality = analyzer.analyze_image_quality(image_path)
+                quality_metrics["image_quality"].append(img_quality["quality_score"])
+                visualizer.plot_image_quality_metrics(
+                    img_quality, filename=f"image_quality_{len(quality_metrics['image_quality'])}.png"
+                )
+
+                # Analyze text quality
+                text_quality = analyzer.analyze_text_quality(text)
+                quality_metrics["text_quality"].append(text_quality["text_score"])
+                visualizer.plot_text_quality_analysis(
+                    text_quality, filename=f"text_quality_{len(quality_metrics['text_quality'])}.png"
+                )
+
+                # Analyze matching quality
+                matching = analyzer.analyze_image_text_matching(image_path, text)
+                if matching:
+                    quality_metrics["matching_scores"].append(matching["similarity_score"])
+                    visualizer.plot_matching_analysis(
+                        matching, filename=f"matching_{len(quality_metrics['matching_scores'])}.png"
+                    )
+
+                # Display sample with metrics
+                visualizer.display_sample(
+                    {
+                        "image": image_path,
+                        "conversations": sample["conversations"],
+                        "metrics": {
+                            "image_quality": img_quality["quality_score"],
+                            "text_quality": text_quality["text_score"],
+                            "matching_score": matching["similarity_score"] if matching else 0.0,
+                        },
+                    },
+                    filename=f"sample_{len(quality_metrics['image_quality'])}.png",
+                )
+
+        # Plot quality score distributions
+        for metric_name, scores in quality_metrics.items():
+            if scores:
+                visualizer.plot_quality_scores(
+                    scores,
+                    title=f"{metric_name.replace('_', ' ').title()} Distribution",
+                    filename=f"{metric_name}_distribution.png",
+                )
+
+        # 3. Data Cleaning
         print("Running data cleaning...")
         cleaned_data, clean_stats = cleaner.clean(args.annotation_file)
 
-        # 3. Data Augmentation
+        # 4. Data Augmentation
         print("Running data augmentation...")
         try:
             augmented_data = augmentor.augment(cleaned_data)
@@ -81,17 +169,26 @@ def test_pipeline(args):
             print(f"Error in augmentation pipeline: {e}")
             augmented_data = cleaned_data
 
-        # 4. Result Visualization
-        print("Visualizing results...")
-        # Compare before/after stats
-        before_stats = stats
+        # 5. Final Analysis and Visualization
+        print("Generating final analysis...")
         after_stats = analyzer.analyze(augmented_data)
 
-        visualizer.compare_results(before=before_stats, after=after_stats, title="Data Processing Results Comparison")
+        # Compare and visualize results
+        visualizer.compare_results(
+            before=stats,
+            after=after_stats,
+            title="Before vs After Processing Comparison",
+            filename="processing_comparison.png",
+        )
 
-        # Display sample results if available
-        if augmented_data and len(augmented_data) > 0:
-            visualizer.display_sample(augmented_data[0])
+        # Generate comprehensive report with all metrics
+        report_stats = {
+            **after_stats,
+            "quality_metrics": quality_metrics,
+            "cleaning_stats": clean_stats,
+            "initial_stats": stats,
+        }
+        visualizer.generate_report(report_stats)
 
         # Save processed data
         output_json = os.path.join(args.output_dir, "processed_data.json")
