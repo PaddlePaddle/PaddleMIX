@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import random
 from typing import Dict, List
 
@@ -20,9 +21,21 @@ from PIL import Image, ImageEnhance
 
 
 class DataAugmentor:
-    def __init__(self):
-        self.image_aug_prob = 0.5  # Image augmentation probability
-        self.text_aug_prob = 0.3  # Text augmentation probability
+    def __init__(self, dataset_dir: str = None):
+        """Initialize DataAugmentor.
+
+        Args:
+            dataset_dir: Base directory containing the dataset images
+        """
+        self.image_aug_prob = 0.5
+        self.text_aug_prob = 0.3
+        self.dataset_dir = dataset_dir
+
+    def _get_image_path(self, image_name: str) -> str:
+        """Get full image path by combining dataset directory and image name."""
+        if self.dataset_dir:
+            return os.path.join(self.dataset_dir, image_name)
+        return image_name
 
     def augment_image(self, image_path: str) -> Image.Image:
         """Image augmentation"""
@@ -66,15 +79,18 @@ class DataAugmentor:
         """Text augmentation"""
         try:
             if random.random() < self.text_aug_prob:
+                # Initialize augmenters with vocab file path
+                vocab_path = os.path.join(os.path.dirname(__file__), "vocab.json")
+
                 # Synonym replacement
                 if random.random() < 0.5:
-                    substitute = WordSubstitute()
-                    text = substitute(text)
+                    substitute = WordSubstitute(aug_type="synonym", create_n=1, aug_n=1, vocab=vocab_path)
+                    text = substitute.augment(text)[0]
 
                 # Random deletion
                 if random.random() < 0.5:
-                    delete = WordDelete()
-                    text = delete(text)
+                    delete = WordDelete(create_n=1, aug_n=1, vocab=vocab_path)
+                    text = delete.augment(text)[0]
 
             return text
         except Exception as e:
@@ -114,8 +130,11 @@ class DataAugmentor:
                 if not all(k in sample for k in ["id", "image", "conversations"]):
                     continue
 
+                # Get full image path
+                image_path = self._get_image_path(sample["image"])
+
                 # Image augmentation
-                augmented_image = self.augment_image(sample["image"])
+                augmented_image = self.augment_image(image_path)
                 if augmented_image is None:
                     continue
 
