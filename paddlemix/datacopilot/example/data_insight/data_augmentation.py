@@ -22,23 +22,44 @@ from PIL import Image, ImageEnhance
 
 class DataAugmentor:
     def __init__(self, dataset_dir: str = None):
-        """Initialize DataAugmentor.
+        """Initialize DataAugmentor with configuration for image and text augmentation.
 
         Args:
-            dataset_dir: Base directory containing the dataset images
+            dataset_dir (str, optional): Base directory containing the dataset images.
+                If None, image paths are treated as absolute paths. Defaults to None.
         """
         self.image_aug_prob = 0.5
         self.text_aug_prob = 0.3
         self.dataset_dir = dataset_dir
 
     def _get_image_path(self, image_name: str) -> str:
-        """Get full image path by combining dataset directory and image name."""
+        """Construct full image path by combining dataset directory and image name.
+
+        Args:
+            image_name (str): Name or relative path of the image file
+
+        Returns:
+            str: Full path to the image file
+        """
         if self.dataset_dir:
             return os.path.join(self.dataset_dir, image_name)
         return image_name
 
     def augment_image(self, image_path: str) -> Image.Image:
-        """Image augmentation"""
+        """Apply random augmentations to an image.
+
+        Performs a series of random transformations including rotation, scaling,
+        cropping, and brightness adjustment based on configured probabilities.
+
+        Args:
+            image_path (str): Path to the image file to augment
+
+        Returns:
+            Image.Image: Augmented image object, or None if augmentation fails
+
+        Raises:
+            IOError: If the image file cannot be opened
+        """
         try:
             img = Image.open(image_path)
 
@@ -76,7 +97,20 @@ class DataAugmentor:
             return None
 
     def augment_text(self, text: str) -> str:
-        """Text augmentation"""
+        """Apply random augmentations to text.
+
+        Performs synonym replacement and random word deletion based on configured
+        probabilities using a vocabulary file.
+
+        Args:
+            text (str): Input text to augment
+
+        Returns:
+            str: Augmented text, or original text if augmentation fails
+
+        Raises:
+            FileNotFoundError: If the vocabulary file is missing
+        """
         try:
             if random.random() < self.text_aug_prob:
                 # Initialize augmenters with vocab file path
@@ -98,7 +132,22 @@ class DataAugmentor:
             return text
 
     def augment_samples(self, samples: List[Dict]) -> List[Dict]:
-        """Sample augmentation"""
+        """Augment a batch of samples containing image-text pairs.
+
+        Args:
+            samples (List[Dict]): List of samples where each sample contains:
+                - image_path: Path to the image file
+                - text: Associated text
+
+        Returns:
+            List[Dict]: List of augmented samples containing:
+                - image_path: Original image path
+                - text: Augmented text
+                - augmented_image: Augmented image object
+
+        Note:
+            Samples that fail augmentation are excluded from the results
+        """
         try:
             augmented_samples = []
             for sample in samples:
@@ -121,7 +170,22 @@ class DataAugmentor:
             return samples
 
     def augment(self, samples: List[Dict]) -> List[Dict]:
-        """Main entry point for data augmentation"""
+        """Main entry point for augmenting a dataset of image-text conversations.
+
+        Args:
+            samples (List[Dict]): List of samples where each sample contains:
+                - id: Unique sample identifier
+                - image: Image file name or path
+                - conversations: List of conversation turns
+                - meta: Optional metadata (preserved if present)
+
+        Returns:
+            List[Dict]: Combined list of original and augmented samples. Each
+                augmented sample has a modified id with '_aug' suffix.
+
+        Note:
+            Invalid samples are skipped and not included in the results
+        """
         try:
             augmented_samples = []
 

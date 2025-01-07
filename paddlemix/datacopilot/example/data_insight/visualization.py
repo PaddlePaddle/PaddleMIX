@@ -27,6 +27,12 @@ logger = logging.getLogger(__name__)
 
 class DataVisualizer:
     def __init__(self, output_dir="outputs"):
+        """Initialize DataVisualizer with configuration for saving visualizations.
+
+        Args:
+            output_dir (str, optional): Directory to save visualization files.
+                Defaults to "outputs". Will be created if it doesn't exist.
+        """
         plt.style.use("default")
         sns.set_palette("husl")
         self.output_dir = output_dir
@@ -38,7 +44,19 @@ class DataVisualizer:
         self.current_figures = 0
 
     def _create_figure(self, *args, **kwargs):
-        """Safely create a new figure, closing old ones if needed."""
+        """Safely create a new figure, managing memory by closing old figures.
+
+        Args:
+            *args: Positional arguments passed to plt.figure()
+            **kwargs: Keyword arguments passed to plt.figure()
+
+        Returns:
+            matplotlib.figure.Figure: The created figure object
+
+        Note:
+            Automatically closes old figures when reaching max_figures limit
+            to prevent memory leaks.
+        """
         if self.current_figures >= self.max_figures:
             plt.close("all")
             self.current_figures = 0
@@ -47,7 +65,20 @@ class DataVisualizer:
         return fig
 
     def _create_subplots(self, *args, **kwargs):
-        """Safely create subplots, closing old ones if needed."""
+        """Safely create subplots, managing memory by closing old figures.
+
+        Args:
+            *args: Positional arguments passed to plt.subplots()
+            **kwargs: Keyword arguments passed to plt.subplots()
+
+        Returns:
+            Tuple[matplotlib.figure.Figure, matplotlib.axes.Axes]:
+                The created figure and axes objects
+
+        Note:
+            Automatically closes old figures when reaching max_figures limit
+            to prevent memory leaks.
+        """
         if self.current_figures >= self.max_figures:
             plt.close("all")
             self.current_figures = 0
@@ -58,7 +89,23 @@ class DataVisualizer:
     def plot_data_distribution(
         self, stats: Dict, title: str = "Data Distribution", filename: str = "distribution.png"
     ):
-        """Plot data distribution and save to file"""
+        """Plot and save visualization of dataset statistics.
+
+        Creates a two-panel plot showing:
+        1. Numeric metrics (counts, averages, etc.)
+        2. Distributions (languages, formats, etc.)
+
+        Args:
+            stats (Dict): Dictionary containing dataset statistics
+            title (str, optional): Plot title. Defaults to "Data Distribution".
+            filename (str, optional): Output filename. Defaults to "distribution.png".
+
+        Returns:
+            None: Saves plot to output directory
+
+        Raises:
+            ValueError: If stats dictionary is empty or invalid
+        """
         try:
             # Filter numeric values for plotting
             numeric_stats = {k: v for k, v in stats.items() if isinstance(v, (int, float)) and not isinstance(v, bool)}
@@ -92,7 +139,19 @@ class DataVisualizer:
     def plot_quality_scores(
         self, scores: List[float], title: str = "Quality Scores Distribution", filename: str = "quality_scores.png"
     ):
-        """Plot quality scores distribution and save to file"""
+        """Plot and save histogram of quality scores.
+
+        Args:
+            scores (List[float]): List of quality scores (0-1)
+            title (str, optional): Plot title. Defaults to "Quality Scores Distribution".
+            filename (str, optional): Output filename. Defaults to "quality_scores.png".
+
+        Returns:
+            None: Saves plot to output directory
+
+        Note:
+            Includes KDE (Kernel Density Estimate) overlay on histogram
+        """
         try:
             sns.histplot(scores, bins=20, kde=True)
             plt.title(title)
@@ -107,7 +166,24 @@ class DataVisualizer:
     def compare_results(
         self, before: Dict, after: Dict, title: str = "Processing Results Comparison", filename: str = "comparison.png"
     ):
-        """Compare processing results and save to file"""
+        """Plot and save comparison of processing results.
+
+        Creates a two-panel plot showing:
+        1. Comparison of numeric metrics before and after processing
+        2. Comparison of distributions (e.g. languages) before and after
+
+        Args:
+            before (Dict): Statistics before processing
+            after (Dict): Statistics after processing
+            title (str, optional): Plot title. Defaults to "Processing Results Comparison".
+            filename (str, optional): Output filename. Defaults to "comparison.png".
+
+        Returns:
+            None: Saves plot to output directory
+
+        Raises:
+            ValueError: If input dictionaries are empty or invalid
+        """
         try:
             fig, axes = self._create_subplots(2, 1, figsize=(15, 12))
 
@@ -149,7 +225,20 @@ class DataVisualizer:
             print(f"Error comparing results: {e}")
 
     def display_sample(self, sample: Dict, filename: str = "sample.png"):
-        """Save sample image and conversations to file"""
+        """Visualize and save a sample image with its conversations.
+
+        Args:
+            sample (Dict): Sample containing:
+                - image: Path to image file
+                - conversations: List of conversation turns
+            filename (str, optional): Output filename. Defaults to "sample.png".
+
+        Returns:
+            None: Saves visualization to output directory
+
+        Note:
+            If image or conversations are missing, those panels will be empty
+        """
         try:
             fig, axes = self._create_subplots(1, 2, figsize=(15, 6))
 
@@ -178,7 +267,23 @@ class DataVisualizer:
             print(f"Error saving sample: {e}")
 
     def plot_image_quality_metrics(self, metrics: Dict[str, float], filename: str = "image_quality.png"):
-        """Plot image quality metrics visualization."""
+        """Plot and save radar chart of image quality metrics.
+
+        Args:
+            metrics (Dict[str, float]): Dictionary of image quality metrics including:
+                - quality_score: Overall quality score
+                - blur_score: Blur detection score
+                - resolution_score: Resolution quality score
+                - brightness_score: Lighting quality score
+                - contrast_score: Image contrast score
+                - color_score: Color quality score
+                - noise_score: Image noise level score
+                - saturation_score: Color saturation score
+            filename (str, optional): Output filename. Defaults to "image_quality.png".
+
+        Returns:
+            None: Saves plot to output directory
+        """
         try:
             # Extract metrics
             quality_metrics = {
@@ -214,7 +319,21 @@ class DataVisualizer:
             logger.error(f"Error plotting image quality metrics: {e}")
 
     def plot_text_quality_analysis(self, metrics: Dict[str, Any], filename: str = "text_quality.png"):
-        """Plot text quality analysis visualization."""
+        """Plot and save text quality metrics visualization.
+
+        Creates a two-panel plot showing:
+        1. Basic text metrics (overall score, vocabulary diversity, readability)
+        2. Detailed metrics (sentence length, punctuation ratio)
+
+        Args:
+            metrics (Dict[str, Any]): Dictionary of text quality metrics including:
+                - text_score: Overall text quality score
+                - metrics: Dictionary containing detailed metrics
+            filename (str, optional): Output filename. Defaults to "text_quality.png".
+
+        Returns:
+            None: Saves plot to output directory
+        """
         try:
             fig, (ax1, ax2) = self._create_subplots(1, 2, figsize=(15, 6))
 
@@ -246,7 +365,16 @@ class DataVisualizer:
             logger.error(f"Error plotting text quality analysis: {e}")
 
     def plot_matching_analysis(self, matching_info: Dict[str, Any], filename: str = "matching_analysis.png"):
-        """Plot image-text matching analysis visualization."""
+        """Plot and save gauge chart of image-text matching score.
+
+        Args:
+            matching_info (Dict[str, Any]): Dictionary containing:
+                - similarity_score: Image-text similarity score (0-1)
+            filename (str, optional): Output filename. Defaults to "matching_analysis.png".
+
+        Returns:
+            None: Saves plot to output directory
+        """
         try:
             fig = self._create_figure(figsize=(10, 6))
             ax = fig.add_subplot(111, projection="polar")
@@ -281,7 +409,18 @@ class DataVisualizer:
             logger.error(f"Error plotting matching analysis: {e}")
 
     def plot_language_distribution(self, language_dist: Dict[str, float], filename: str = "language_dist.png"):
-        """Plot language distribution visualization."""
+        """Plot and save bar chart of language distribution.
+
+        Args:
+            language_dist (Dict[str, float]): Dictionary mapping language codes to proportions
+            filename (str, optional): Output filename. Defaults to "language_dist.png".
+
+        Returns:
+            None: Saves plot to output directory
+
+        Note:
+            Languages are sorted by proportion in descending order
+        """
         try:
             # Sort languages by proportion
             sorted_langs = sorted(language_dist.items(), key=lambda x: x[1], reverse=True)
@@ -301,7 +440,21 @@ class DataVisualizer:
             logger.error(f"Error plotting language distribution: {e}")
 
     def generate_report(self, stats: Dict, filename: str = "analysis_report.html"):
-        """Generate comprehensive analysis report in HTML format."""
+        """Generate and save comprehensive analysis report in HTML format.
+
+        Args:
+            stats (Dict): Dictionary containing analysis statistics
+            filename (str, optional): Output filename. Defaults to "analysis_report.html".
+
+        Returns:
+            None: Saves HTML report to output directory
+
+        Note:
+            Report includes:
+            - Dataset overview
+            - Quality metrics
+            - Links to visualization images
+        """
         try:
             # Simplified HTML template with inline CSS
             report_template = """<!DOCTYPE html>

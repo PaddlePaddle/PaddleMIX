@@ -23,7 +23,20 @@ from visualization import DataVisualizer
 
 
 def parse_args():
-    """Parse command line arguments."""
+    """Parse and validate command line arguments for the data processing pipeline.
+
+    Returns:
+        argparse.Namespace: Parsed command line arguments containing:
+            - annotation_file: Path to annotation JSON file
+            - data_dir: Path to dataset directory
+            - output_dir: Output directory path
+            - clip_model: CLIP model name/path
+            - chunk_size: Batch size for processing
+            - quality_thresholds: Comma-separated quality thresholds
+
+    Raises:
+        argparse.ArgumentError: If required arguments are missing
+    """
     parser = argparse.ArgumentParser(description="Data analysis and processing pipeline")
 
     parser.add_argument("--annotation_file", type=str, required=True, help="Path to the annotation JSON file")
@@ -55,10 +68,31 @@ def parse_args():
 
 
 def test_pipeline(args):
-    """Run the data processing pipeline.
+    """Run the complete data processing pipeline including analysis, cleaning, and augmentation.
+
+    The pipeline performs the following steps:
+    1. Initial data analysis and visualization
+    2. Quality analysis of images and text
+    3. Data cleaning based on quality thresholds
+    4. Data augmentation of cleaned samples
+    5. Final analysis and report generation
 
     Args:
-        args: Command line arguments
+        args (argparse.Namespace): Command line arguments containing:
+            - annotation_file: Path to annotation JSON file
+            - data_dir: Path to dataset directory
+            - output_dir: Output directory path
+            - clip_model: CLIP model name/path
+            - chunk_size: Batch size for processing
+            - quality_thresholds: Comma-separated quality thresholds
+
+    Returns:
+        None: Results are saved to output directory
+
+    Raises:
+        FileNotFoundError: If input files/directories don't exist
+        json.JSONDecodeError: If annotation file is invalid JSON
+        RuntimeError: If any pipeline step fails
     """
     # Parse quality thresholds
     img_thresh, text_thresh, match_thresh = map(float, args.quality_thresholds.split(","))
@@ -203,7 +237,18 @@ def test_pipeline(args):
 
 
 def main():
-    """Main entry point."""
+    """Main entry point for the data processing pipeline.
+
+    Parses command line arguments and executes the data processing pipeline.
+    Handles any exceptions that occur during pipeline execution.
+
+    Returns:
+        None: Results are saved to output directory
+
+    Note:
+        The pipeline creates the output directory if it doesn't exist.
+        All generated files are saved in the output directory.
+    """
     args = parse_args()
     test_pipeline(args)
 
