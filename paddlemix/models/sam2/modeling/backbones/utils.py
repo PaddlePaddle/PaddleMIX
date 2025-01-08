@@ -35,8 +35,8 @@ def window_partition(x, window_size):
     if pad_h > 0 or pad_w > 0:
         x = paddle.nn.functional.pad(x=x, pad=(0, 0, 0, pad_w, 0, pad_h, 0, 0))
     Hp, Wp = H + pad_h, W + pad_w
-    x = x.view(B, Hp // window_size, window_size, Wp // window_size, window_size, C)
-    windows = x.transpose(perm=[0, 1, 3, 2, 4, 5]).view(-1, window_size, window_size, C)
+    x = x.reshape([B, Hp // window_size, window_size, Wp // window_size, window_size, C])
+    windows = x.transpose(perm=[0, 1, 3, 2, 4, 5]).reshape([-1, window_size, window_size, C])
     return windows, (Hp, Wp)
 
 
@@ -54,8 +54,8 @@ def window_unpartition(windows, window_size, pad_hw, hw):
     Hp, Wp = pad_hw
     H, W = hw
     B = tuple(windows.shape)[0] // (Hp * Wp // window_size // window_size)
-    x = windows.view(B, Hp // window_size, Wp // window_size, window_size, window_size, -1)
-    x = x.transpose(perm=[0, 1, 3, 2, 4, 5]).view(B, Hp, Wp, -1)
+    x = windows.reshape([B, Hp // window_size, Wp // window_size, window_size, window_size, -1])
+    x = x.transpose(perm=[0, 1, 3, 2, 4, 5]).reshape([B, Hp, Wp, -1])
     if Hp > H or Wp > W:
         x = x[:, :H, :W, :]
     return x

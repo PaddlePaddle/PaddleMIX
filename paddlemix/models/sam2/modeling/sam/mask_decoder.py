@@ -188,7 +188,7 @@ class MaskDecoder(paddle.nn.Layer):
         perm_53 = list(range(x.ndim))
         perm_53[1] = 2
         perm_53[2] = 1
-        src = x.transpose(perm=perm_53).view(b, c, h, w)
+        src = x.transpose(perm=perm_53).reshape([b, c, h, w])
         if not self.use_high_res_features:
             upscaled_embedding = self.output_upscaling(src)
         else:
@@ -201,7 +201,7 @@ class MaskDecoder(paddle.nn.Layer):
             hyper_in_list.append(self.output_hypernetworks_mlps[i](mask_tokens_out[:, i, :]))
         hyper_in = paddle.stack(x=hyper_in_list, axis=1)
         b, c, h, w = tuple(upscaled_embedding.shape)
-        masks = (hyper_in @ upscaled_embedding.view(b, c, h * w)).view(b, -1, h, w)
+        masks = (hyper_in @ upscaled_embedding.reshape([b, c, h * w])).reshape([b, -1, h, w])
         iou_pred = self.iou_prediction_head(iou_token_out)
         if self.pred_obj_scores:
             assert s == 1

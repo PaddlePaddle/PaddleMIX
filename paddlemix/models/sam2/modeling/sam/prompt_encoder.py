@@ -104,7 +104,7 @@ class PromptEncoder(paddle.nn.Layer):
     def _embed_boxes(self, boxes: paddle.Tensor) -> paddle.Tensor:
         """Embeds box prompts."""
         boxes = boxes + 0.5
-        coords = boxes.reshape(-1, 2, 2)
+        coords = boxes.reshape([-1, 2, 2])
         corner_embedding = self.pe_layer.forward_with_coords(coords, self.input_image_size)
         corner_embedding[:, 0, :] += self.point_embeddings[2].weight
         corner_embedding[:, 1, :] += self.point_embeddings[3].weight
@@ -171,7 +171,7 @@ class PromptEncoder(paddle.nn.Layer):
         if masks is not None:
             dense_embeddings = self._embed_masks(masks)
         else:
-            dense_embeddings = self.no_mask_embed.weight.reshape(1, -1, 1, 1).expand(
+            dense_embeddings = self.no_mask_embed.weight.reshape([1, -1, 1, 1]).expand(
                 shape=[bs, -1, self.image_embedding_size[0], self.image_embedding_size[1]]
             )
         return sparse_embeddings, dense_embeddings

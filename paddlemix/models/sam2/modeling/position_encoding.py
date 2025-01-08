@@ -63,7 +63,7 @@ class PositionEmbeddingSine(paddle.nn.Layer):
         (bx, nx), (by, ny), (bl, nl) = tuple(x.shape), tuple(y.shape), tuple(labels.shape)
         assert bx == by and nx == ny and bx == bl and nx == nl
         pos_x, pos_y = self._encode_xy(x.flatten(), y.flatten())
-        pos_x, pos_y = pos_x.reshape(bx, nx, -1), pos_y.reshape(by, ny, -1)
+        pos_x, pos_y = pos_x.reshape([bx, nx, -1]), pos_y.reshape([by, ny, -1])
         pos = paddle.concat(x=(pos_y, pos_x, labels[:, :, None]), axis=2)
         return pos
 
@@ -71,16 +71,16 @@ class PositionEmbeddingSine(paddle.nn.Layer):
     def forward(self, x: paddle.Tensor):
         cache_key = tuple(x.shape)[-2], tuple(x.shape)[-1]
         if cache_key in self.cache:
-            return self.cache[cache_key][None].repeat(tuple(x.shape)[0], 1, 1, 1)
+            return self.cache[cache_key][None].tile([tuple(x.shape)[0], 1, 1, 1])
         y_embed = (
             paddle.arange(start=1, end=tuple(x.shape)[-2] + 1, dtype="float32")
-            .view(1, -1, 1)
-            .repeat(tuple(x.shape)[0], 1, tuple(x.shape)[-1])
+            .reshape([1, -1, 1])
+            .tile((tuple(x.shape)[0], 1, tuple(x.shape)[-1]))
         )
         x_embed = (
             paddle.arange(start=1, end=tuple(x.shape)[-1] + 1, dtype="float32")
-            .view(1, 1, -1)
-            .repeat(tuple(x.shape)[0], tuple(x.shape)[-2], 1)
+            .reshape([1, 1, -1])
+            .tile((tuple(x.shape)[0], tuple(x.shape)[-2], 1))
         )
         if self.normalize:
             eps = 1e-06
@@ -165,13 +165,13 @@ def reshape_for_broadcast(freqs_cis: paddle.Tensor, x: paddle.Tensor):
     assert 0 <= 1 < ndim
     assert tuple(freqs_cis.shape) == (tuple(x.shape)[-2], tuple(x.shape)[-1])
     shape = [(d if i >= ndim - 2 else 1) for i, d in enumerate(tuple(x.shape))]
-    return freqs_cis.view(*shape)
+    return freqs_cis.reshape(shape)
 
 
 def apply_rotary_enc(xq: paddle.Tensor, xk: paddle.Tensor, freqs_cis: paddle.Tensor, repeat_freqs_k: bool = False):
-    xq_ = paddle.as_complex(x=xq.astype(dtype="float32").reshape(*tuple(xq.shape)[:-1], -1, 2))
+    xq_ = paddle.as_complex(x=xq.astype(dtype="float32").reshape([*tuple(xq.shape)[:-1], -1, 2]))
     xk_ = (
-        paddle.as_complex(x=xk.astype(dtype="float32").reshape(*tuple(xk.shape)[:-1], -1, 2))
+        paddle.as_complex(x=xk.astype(dtype="float32").reshape([*tuple(xk.shape)[:-1], -1, 2]))
         if tuple(xk.shape)[-2] != 0
         else None
     )
@@ -182,7 +182,7 @@ def apply_rotary_enc(xq: paddle.Tensor, xk: paddle.Tensor, freqs_cis: paddle.Ten
     if repeat_freqs_k:
         r = tuple(xk_.shape)[-2] // tuple(xq_.shape)[-2]
         if "gpu" in str(freqs_cis.place):
-            freqs_cis = freqs_cis.repeat(*([1] * (freqs_cis.ndim - 2)), r, 1)
+            freqs_cis = freqs_cis.tile((*([1] * (freqs_cis.ndim - 2)), r, 1))
         else:
             freqs_cis = (
                 freqs_cis.unsqueeze(axis=2).expand(shape=[-1, -1, r, -1, -1]).flatten(start_axis=2, stop_axis=3)
