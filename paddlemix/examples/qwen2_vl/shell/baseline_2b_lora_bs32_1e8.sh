@@ -26,7 +26,7 @@ export PYTHONPATH="${PYTHONPATH}:$(pwd)"
 export MASTER_PORT=34229
 export TF_CPP_MIN_LOG_LEVEL=3
 
-OUTPUT_DIR='work_dirs/basline_330k_7b_bs32_1e8'
+OUTPUT_DIR='work_dirs/baseline_330k_2b_bs32_1e8'
 
 if [ ! -d "$OUTPUT_DIR" ]; then
   mkdir -p "$OUTPUT_DIR"
@@ -42,7 +42,7 @@ TRAINING_PYTHON="python -m paddle.distributed.launch --master ${MASTER} --nnodes
 ${TRAINING_PYTHON} --log_dir ${OUTPUT_DIR}/paddle_distributed_logs \
   paddlemix/examples/qwen2_vl/qwen2vl_finetune.py \
   --do_train \
-  --model_name_or_path "Qwen/Qwen2-VL-7B-Instruct" \
+  --model_name_or_path "Qwen/Qwen2-VL-2B-Instruct" \
   --output_dir ${OUTPUT_DIR} \
   --logging_dir ${OUTPUT_DIR}/logs \
   --meta_path ${meta_path} \
@@ -78,4 +78,9 @@ ${TRAINING_PYTHON} --log_dir ${OUTPUT_DIR}/paddle_distributed_logs \
   --sharding="stage1" \
   --amp_master_grad=1 \
   --hybrid_parallel_topo_order="sharding_first" \
+  --lora True \
+  --lora_rank=12 \
+  --lora_alpha=256 \
+  --lora_dropout=0.0 \
+  --lora_target_modules="model.layers.*q_proj.*,model.layers.*k_proj.*,model.layers.*v_proj.*,model.layers.*gate_proj.*,model.layers.*up_proj.*,model.layers.*down_proj.*,model.layers.*o_proj.*" \
   2>&1 | tee -a "${OUTPUT_DIR}/training_log.txt"
