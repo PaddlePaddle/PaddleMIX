@@ -85,16 +85,16 @@ wget https://paddlenlp.bj.bcebos.com/datasets/paddlemix/playground/opensource_js
 
 ```bash
 # 2B
-sh paddlemix/examples/qwen2_vl/shell/basline_2b_bs32_1e8.sh
+sh paddlemix/examples/qwen2_vl/shell/baseline_2b_bs32_1e8.sh
 
 # 2B lora
-sh paddlemix/examples/qwen2_vl/shell/basline_2b_lora_bs32_1e8.sh
+sh paddlemix/examples/qwen2_vl/shell/baseline_2b_lora_bs32_1e8.sh
 
 # 7B
-sh paddlemix/examples/qwen2_vl/shell/basline_7b_bs32_1e8.sh
+sh paddlemix/examples/qwen2_vl/shell/baseline_7b_bs32_1e8.sh
 
 # 7B lora
-sh paddlemix/examples/qwen2_vl/shell/basline_7b_lora_bs32_1e8.sh
+sh paddlemix/examples/qwen2_vl/shell/baseline_7b_lora_bs32_1e8.sh
 ```
 
 注意：微调2b模型的运行示例如下：

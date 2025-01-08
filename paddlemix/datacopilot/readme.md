@@ -26,7 +26,7 @@ from paddlemix.datacopilot.core import MMDataset, SCHEMA
 import paddlemix.datacopilot.ops as ops
 ```
 
-## 四、核心概念 
+## 四、核心概念
 工具核心概念包括Schema和Dataset。Schema用于定义多模态数据组织结构和字段名字。MMDataset作为数据操作的核心类，为存储，查看，转换，生成等操作的基本对象。
 
 ### SCHEMA
@@ -40,7 +40,7 @@ class SCHEMA(Enum):
 
 ### DATASET
 
-核心类MMDeteset，为存储，查看，转换，生成等操作的基本对象。支持基本的运算（切片，加法，遍历等操作）。支持json数据源。内置map，filter函数，用于高效处理数据，支持多进程和多线程并发功能。支持链式调用，方便组合多种原子操作以实现复杂的功能。通过以map函数为接口实现对数据集每个元素的处理，通过register注册机制可灵活新增作用于整个数据集的通用操作功能。
+核心类MMDataset，为存储，查看，转换，生成等操作的基本对象。支持基本的运算（切片，加法，遍历等操作）。支持json数据源。内置map，filter函数，用于高效处理数据，支持多进程和多线程并发功能。支持链式调用，方便组合多种原子操作以实现复杂的功能。通过以map函数为接口实现对数据集每个元素的处理，通过register注册机制可灵活新增作用于整个数据集的通用操作功能。
 ```
 'from_auto',
 'from_json',
@@ -184,7 +184,7 @@ sampled_dataset = dataset.sample(10)  # 随机抽取10个样本
 ```
 
 ## 七、使用案例
-1. 导入导出  
+1. 导入导出
 ```
 import functools
 from paddlemix.datacopilot.core import MMDataset, SCHEMA
@@ -196,9 +196,9 @@ print(len(dataset))
 dataset.export_json('/path/to/your/output/file.json')
 ```
 
-2. 字段处理  
+2. 字段处理
 ```
-# custom code 
+# custom code
 def update_url(item: T) -> T: ...
 
 def augment_prompt(item: T) -> T: ...
@@ -216,7 +216,7 @@ dataset = dataset.map(update_url).map(augment_prompt)
 dataset = dataset.filter(is_wanted).nonempty()
 ```
 
-3. LLaVA-SFT训练  
+3. LLaVA-SFT训练
 数据准备和训练流程参考项目[pp_cap_instruct](https://aistudio.baidu.com/projectdetail/7917712)
 
 ## 八、总结
