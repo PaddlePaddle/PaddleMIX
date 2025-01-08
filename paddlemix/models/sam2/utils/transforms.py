@@ -68,7 +68,8 @@ class SAM2Transforms(paddle.nn.Layer):
         Expects a tensor of shape Bx4. The coordinates can be in absolute image or normalized coordinates,
         if the coords are in absolute image coordinates, normalize should be set to True and original image size is required.
         """
-        boxes = self.transform_coords(boxes.reshape(-1, 2, 2), normalize, orig_hw)
+
+        boxes = self.transform_coords(boxes.reshape([-1, 2, 2]), normalize, orig_hw)
         return boxes
 
     def postprocess_masks(self, masks: paddle.Tensor, orig_hw) -> paddle.Tensor:

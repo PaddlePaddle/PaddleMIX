@@ -184,7 +184,7 @@ class Attention(paddle.nn.Layer):
 
     def _separate_heads(self, x: paddle.Tensor, num_heads: int) -> paddle.Tensor:
         b, n, c = tuple(x.shape)
-        x = x.reshape(b, n, num_heads, c // num_heads)
+        x = x.reshape([b, n, num_heads, c // num_heads])
 
         return x.transpose([0, 2, 1, 3])
 
@@ -192,7 +192,8 @@ class Attention(paddle.nn.Layer):
         b, n_heads, n_tokens, c_per_head = tuple(x.shape)
 
         x = x.transpose(perm=[0, 2, 1, 3])
-        return x.reshape(b, n_tokens, n_heads * c_per_head)
+
+        return x.reshape([b, n_tokens, n_heads * c_per_head])
 
     def forward(self, q: paddle.Tensor, k: paddle.Tensor, v: paddle.Tensor) -> paddle.Tensor:
         q = self.q_proj(q)

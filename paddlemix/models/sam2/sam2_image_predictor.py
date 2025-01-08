@@ -324,7 +324,7 @@ class SAM2ImagePredictor:
         else:
             concat_points = None
         if boxes is not None:
-            box_coords = boxes.reshape(-1, 2, 2)
+            box_coords = boxes.reshape([-1, 2, 2])
             box_labels = paddle.to_tensor(data=[[2, 3]], dtype="int32", place=boxes.place)
             box_labels = box_labels.repeat(boxes.shape[0], 1)
             if concat_points is not None:

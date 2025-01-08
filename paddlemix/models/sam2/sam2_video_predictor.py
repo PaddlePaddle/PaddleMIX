@@ -174,9 +174,10 @@ class SAM2VideoPredictor(SAM2Base):
                 )
             if not isinstance(box, paddle.Tensor):
                 box = paddle.to_tensor(data=box, dtype="float32", place=points.place)
-            box_coords = box.reshape(1, 2, 2)
+
+            box_coords = box.reshape([1, 2, 2])
             box_labels = paddle.to_tensor(data=[2, 3], dtype="int32", place=labels.place)
-            box_labels = box_labels.reshape(1, 2)
+            box_labels = box_labels.reshape([1, 2])
             points = paddle.concat(x=[box_coords, points], axis=1)
             labels = paddle.concat(x=[box_labels, labels], axis=1)
         if normalize_coords:

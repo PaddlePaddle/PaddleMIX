@@ -49,16 +49,17 @@ class MultiScaleAttention(paddle.nn.Layer):
 
     def forward(self, x: paddle.Tensor) -> paddle.Tensor:
         B, H, W, _ = tuple(x.shape)
-        qkv = self.qkv(x).reshape(B, H * W, 3, self.num_heads, -1)
+
+        qkv = self.qkv(x).reshape([B, H * W, 3, self.num_heads, -1])
         q, k, v = paddle.unbind(input=qkv, axis=2)
         if self.q_pool:
-            q = do_pool(q.reshape(B, H, W, -1), self.q_pool)
+            q = do_pool(q.reshape([B, H, W, -1]), self.q_pool)
             H, W = tuple(q.shape)[1:3]
-            q = q.reshape(B, H * W, self.num_heads, -1)
+            q = q.reshape([B, H * W, self.num_heads, -1])
 
         x = paddle.nn.functional.scaled_dot_product_attention_(q, k, v)
 
-        x = x.reshape(B, H, W, -1)
+        x = x.reshape([B, H, W, -1])
         x = self.proj(x)
         return x
 

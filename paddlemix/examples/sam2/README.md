@@ -11,6 +11,7 @@
   <img src="https://github.com/user-attachments/assets/62626ba4-d81f-4c09-bc79-dc8310eddd5d" align="middle" width = "600" />
 </p>
 
+
 ## 2. 快速开始
 
 ### 获取权重
@@ -29,8 +30,3 @@ python paddlemix/examples/sam2/grounded_sam2_tracking_demo.py \
        --output_path output.mp4 \
        --prompt "input your prompt here"
 ```
-
-
-
-
-

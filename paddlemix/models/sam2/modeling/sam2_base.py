@@ -468,7 +468,7 @@ class SAM2Base(paddle.nn.Layer):
                     else:
                         obj_pos = paddle.zeros(shape=[len(pos_list), B, self.mem_dim], dtype=obj_ptrs.dtype)
                     if self.mem_dim < C:
-                        obj_ptrs = obj_ptrs.reshape(-1, B, C // self.mem_dim, self.mem_dim)
+                        obj_ptrs = obj_ptrs.reshape([-1, B, C // self.mem_dim, self.mem_dim])
                         obj_ptrs = obj_ptrs.transpose(perm=[0, 2, 1, 3]).flatten(start_axis=0, stop_axis=1)
                         obj_pos = obj_pos.repeat_interleave(repeats=C // self.mem_dim, axis=0)
                     to_cat_memory.append(obj_ptrs)
@@ -479,7 +479,7 @@ class SAM2Base(paddle.nn.Layer):
         else:
             if self.directly_add_no_mem_embed:
                 pix_feat_with_mem = current_vision_feats[-1] + self.no_mem_embed
-                pix_feat_with_mem = pix_feat_with_mem.transpose(perm=[1, 2, 0]).view(B, C, H, W)
+                pix_feat_with_mem = pix_feat_with_mem.transpose(perm=[1, 2, 0]).reshape([B, C, H, W])
                 return pix_feat_with_mem
 
             to_cat_memory = [self.no_mem_embed.expand(shape=[1, B, self.mem_dim])]
@@ -494,7 +494,7 @@ class SAM2Base(paddle.nn.Layer):
             memory_pos=memory_pos_embed,
             num_obj_ptr_tokens=num_obj_ptr_tokens,
         )
-        pix_feat_with_mem = pix_feat_with_mem.transpose(perm=[1, 2, 0]).view(B, C, H, W)
+        pix_feat_with_mem = pix_feat_with_mem.transpose(perm=[1, 2, 0]).reshape([B, C, H, W])
         return pix_feat_with_mem
 
     def _encode_new_memory(
@@ -504,7 +504,7 @@ class SAM2Base(paddle.nn.Layer):
         B = current_vision_feats[-1].shape[1]
         C = self.hidden_dim
         H, W = feat_sizes[-1]
-        pix_feat = current_vision_feats[-1].transpose(perm=[1, 2, 0]).view(B, C, H, W)
+        pix_feat = current_vision_feats[-1].transpose(perm=[1, 2, 0]).reshape([B, C, H, W])
         if self.non_overlap_masks_for_mem_enc and not self.training:
             pred_masks_high_res = self._apply_non_overlapping_constraints(pred_masks_high_res)
         binarize = self.binarize_mask_from_pts_for_mem_enc and is_mask_from_pts
@@ -543,14 +543,14 @@ class SAM2Base(paddle.nn.Layer):
         current_out = {"point_inputs": point_inputs, "mask_inputs": mask_inputs}
         if len(current_vision_feats) > 1:
             high_res_features = [
-                x.transpose(perm=[1, 2, 0]).view(x.shape[1], x.shape[2], *s)
+                x.transpose(perm=[1, 2, 0]).reshape([x.shape[1], x.shape[2], *s])
                 for x, s in zip(current_vision_feats[:-1], feat_sizes[:-1])
             ]
         else:
             high_res_features = None
         if mask_inputs is not None and self.use_mask_input_as_output_without_sam:
             pix_feat = current_vision_feats[-1].transpose(perm=[1, 2, 0])
-            pix_feat = pix_feat.view(-1, self.hidden_dim, *feat_sizes[-1])
+            pix_feat = pix_feat.reshape([-1, self.hidden_dim, *feat_sizes[-1]])
             sam_outputs = self._use_mask_as_output(pix_feat, high_res_features, mask_inputs)
         else:
             pix_feat = self._prepare_memory_conditioned_features(

@@ -90,7 +90,7 @@ if __name__ == "__main__":
     # filter output
     logits_filt = logits.clone()
     boxes_filt = boxes.clone()
-    filt_mask = logits_filt.max(axis=1)[0] > args.box_threshold
+    filt_mask = logits_filt.max(axis=1) > args.box_threshold
     logits_filt = logits_filt[filt_mask]  # num_filt, 256
     boxes_filt = boxes_filt[filt_mask]  # num_filt, 4
 
