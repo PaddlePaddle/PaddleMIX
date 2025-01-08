@@ -42,17 +42,17 @@ python -m pip install paddlenlp==3.0.0b3
 
 ### a. 单图预测
 ```bash
-python paddlemix/examples/qwen2_vl/single_image_infer.py
+CUDA_VISIBLE_DEVICES=0 python paddlemix/examples/qwen2_vl/single_image_infer.py
 ```
 
 ### b. 多图预测
 ```bash
-python paddlemix/examples/qwen2_vl/multi_image_infer.py
+CUDA_VISIBLE_DEVICES=0 python paddlemix/examples/qwen2_vl/multi_image_infer.py
 ```
 
 ### c. 视频预测
 ```bash
-python paddlemix/examples/qwen2_vl/video_infer.py
+CUDA_VISIBLE_DEVICES=0 python paddlemix/examples/qwen2_vl/video_infer.py
 ```
 
 ## 4 模型微调
@@ -106,19 +106,19 @@ sh paddlemix/examples/qwen2_vl/shell/basline_7b_lora_bs32_1e8.sh
 同按步骤3中的模型推理预测，只需将`paddlemix/examples/qwen2_vl/single_image_infer.py`中的`--model_path`参数修改为微调后的模型路径即可。
 
 ```bash
-python paddlemix/examples/qwen2_vl/single_image_infer.py
+CUDA_VISIBLE_DEVICES=0 python paddlemix/examples/qwen2_vl/single_image_infer.py
 ```
 
 ### 5 高性能推理优化
 
 [Paddle高性能推理优化后](../../../deploy/qwen2_vl/)，测试结果如下：
 
-- 在 NVIDIA A100-SXM4-80GB 上测试的单图端到端速度性能如下：
+- 在 NVIDIA A800-80GB 上测试的单图端到端速度性能如下：
 
 | model                  | Paddle Inference|    PyTorch   | Paddle 动态图 |
 | ---------------------- | --------------- | ------------ | ------------ |
-| Qwen2-VL-2B-Instruct   |      1.44 s     |     2.35 s   |    5.215 s   |
-| Qwen2-VL-7B-Instruct   |      1.73 s     |      4.4s    |    6.339 s   |
+| Qwen2-VL-2B-Instruct   |      1.053 s     |     2.086 s   |   5.766 s   |
+| Qwen2-VL-7B-Instruct   |      2.293 s     |     3.132 s   |   6.221 s   |
 
 
 
