@@ -8,7 +8,7 @@
     <a href="https://github.com/PaddlePaddle/PaddleMix/releases"><img src="https://img.shields.io/github/v/release/PaddlePaddle/PaddleMix?color=ffa"></a>
     <a href="./LICENSE"><img src="https://img.shields.io/badge/license-Apache%202-dfd.svg"></a>
     <a href=""><img src="https://img.shields.io/badge/python-3.7+-aff.svg"></a>
-    <a href=""><img src="https://img.shields.io/badge/os-linux%2C%20win%2C%20mac-pink.svg"></a>
+    <a href=""><img src="https://img.shields.io/badge/os-linux-pink.svg"></a>
     <a href="#📌社区交流"><img src="https://img.shields.io/badge/微信-小助手加群-green?logo=wechat&amp"></a>
     <a href="https://github.com/PaddlePaddle/PaddleMIX/stargazers"><img src="https://img.shields.io/github/stars/PaddlePaddle/PaddleMIX?color=ccf"></a>
 
@@ -34,14 +34,15 @@
 
 
 ## 📰新闻
-**🔥2025.01.07日直播课 飞桨PP系列模型上新！**
+**🔥2025.01.07日直播课（已结束） 飞桨PP系列模型上新！**
+- 🔗PaddleMIX的直播回放链接：[点击](https://aistudio.baidu.com/course/introduce/32178)
+- 🎉PaddleMIX推出轻量级多模态文档理解模型PP-DocBee！基于多模态大模型实现端到端文档图像理解，破解业界复杂图表文档解析难题。采用ViT+MLP+LLM架构，优化数据合成策略、数据预处理、训练方式、OCR后处理辅助等环节。OCR小模型与LLM大模型结合、基于渲染引擎生产图像数据等众多策略实现问答质量更高，生成成本可控。支持本地gradio部署、OpenAI服务部署，提供飞桨星河社区在线环境快速体验。**1月7日（周二）19:00**，直播为您详细解读PP-DocBee的核心技术与产业应用。🚀报名链接：https://www.wjx.top/vm/mlDdpSb.aspx?udsid=309483
 
-- ✨PP-DocBee文档图像理解的新‘蜂’向标！
-为了帮助您迅速且深入地了解**PaddleMIX**的**PP-DocBee文档理解特色模型**，并熟练掌握实际操作技巧，百度高级研发工程师将在**1月7日（周二）19:00**，为您详细解读PP-DocBee的核心技术，手把手演示多模态大模型开发全流程。赶快扫描下方海报二维码预约报名！
+
 <details>
 <summary>点击展开活动海报</summary>
 <p align="center">
-<img src='https://github.com/user-attachments/assets/3b7adc9e-c68d-44d1-9674-05b933947deb'  width="80%">
+<img src='https://github.com/user-attachments/assets/5836c9df-4ea6-421b-acef-89f928e0763e'  width="80%">
 </p>
 </details>
 
