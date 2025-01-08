@@ -34,18 +34,15 @@
 
 
 ## 📰 News
+**🔥 Live Course on January 7th, 2025 - New PaddlePaddle PP Series Models!**
 
-**🔥PaddleMIX Development Project Challenge (November 21 - December 22, 2024)**
+- ✨PP-DocBee: A New Benchmark for Document Image Understanding!
+🎉PaddleMIX introduces PP-DocBee, a lightweight multimodal document understanding model! Based on multimodal large models, it achieves end-to-end document image understanding, solving complex document parsing challenges. Using a ViT+MLP+LLM architecture, it optimizes data synthesis strategies, preprocessing, training methods, and OCR post-processing assistance. By combining small OCR models with large LLMs and using rendering engine-based image data generation strategies, it achieves higher quality Q&A with controllable generation costs. Supports local Gradio deployment, OpenAI service deployment, and provides quick access through PaddlePaddle Galaxy community online environment. **Join us on Tuesday, January 7th at 19:00** for a detailed explanation of PP-DocBee's core technology and industry applications. 🚀Registration link: https://www.wjx.top/vm/mlDdpSb.aspx?udsid=309483
 
-
-**🔥Live Course on January 7th, 2025: New PaddlePaddle PP Series Models Released!**
-
-- ✨PP-DocBee: A New 'Bee'-ginning in Document Image Understanding!
-To help you quickly and deeply understand **PaddleMIX**'s **PP-DocBee document understanding model** and master practical skills, Baidu's senior R&D engineers will provide a detailed explanation of PP-DocBee's core technology and demonstrate the complete development process of multimodal large models at **19:00 on January 7th (Tuesday)**. Scan the QR code below to register now!
 <details>
 <summary>Click to expand event poster</summary>
 <p align="center">
-<img src='https://github.com/user-attachments/assets/3b7adc9e-c68d-44d1-9674-05b933947deb'  width="80%">
+<img src='https://github.com/user-attachments/assets/5836c9df-4ea6-421b-acef-89f928e0763e'  width="80%">
 </p>
 </details>
 
