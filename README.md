@@ -34,20 +34,26 @@
 
 
 ## 📰新闻
-**🔥2024.11.21日 - 2024.12.22日  PaddleMIX开发项目挑战**
+**🔥2025.01.07日直播课 飞桨PP系列模型上新！**
 
-- ✨「体验官招募」PaddleMIX开发项目挑战
-点击链接报名🔗：https://aistudio.baidu.com/activitydetail/1503019366
-🏆投稿至飞桨星河社区项目大厅，加精获得PaddleMIX体验官认证证书及京东卡激励
-欢迎大家投稿～
+- ✨PP-DocBee文档图像理解的新‘蜂’向标！
+为了帮助您迅速且深入地了解**PaddleMIX**的**PP-DocBee文档理解特色模型**，并熟练掌握实际操作技巧，百度高级研发工程师将在**1月7日（周二）19:00**，为您详细解读PP-DocBee的核心技术，手把手演示多模态大模型开发全流程。赶快扫描下方海报二维码预约报名！
+<details>
+<summary>点击展开活动海报</summary>
 <p align="center">
-<img src='https://github.com/user-attachments/assets/27e0bbe3-0ff8-49ef-bd39-81a31a2b288b'  width="25%">
+<img src='https://github.com/user-attachments/assets/3b7adc9e-c68d-44d1-9674-05b933947deb'  width="80%">
 </p>
-
+</details>
 
 ## 📣最新进展
 
 <!-- 📚《飞桨多模态大模型开发套件PaddleMIX 2.1 震撼发布》，图文音视频场景全覆盖，多模态高效助力产业创新。超大规模训练支持，覆盖图文预训练、文生图、跨模态视觉任务，覆盖金融、教育、电商、医疗等产业场景。8月8日（周四）20：00 带你直播了解多模态大模型最新架构，深度解析PaddleMIX高性能模型库，手把手演示LLaVA模型训推全流程。[报名链接](https://www.wjx.top/vm/wKqysjx.aspx?udsid=449688)   -->
+
+**🎉 2024.01.02 新增自研文档理解模型[PP-DocBee](./paddlemix/examples/ppdocbee)推理和训练，支持[高性能推理](./deploy/ppdocbee)**
+
+**🎉 2024.12.17 支持[GOT-OCR2_0](./paddlemix/examples/GOT_OCR_2_0)推理和训练**
+
+**🎉 2024.12.17 支持[InternVL2_5(1B、2B、4B、8B)](./paddlemix/examples/internvl2)推理**
 
 **🎉 2024.11.27 支持[Janus/JanusFlow](./paddlemix/examples/janus)推理**
 
@@ -56,6 +62,10 @@
 **🎉 2024.11.8 支持[DenseConnector](./paddlemix/examples/llava_denseconnector)和[Aquila-VL-2B-llava-qwen](./paddlemix/examples/llava_onevision/)推理**
 
 **🎉 2024.11.1 支持[LLaVA-OneVision](./paddlemix/examples/llava_onevision/)和[LLaVA-Critic](./paddlemix/examples/llava_critic/)推理**
+
+
+<details>
+<summary>点击展开更多</summary>
 
 **🎉 2024.10.31 喜迎外部开发者的[创作教程页面](paddlemix_applications.md)更新**
 
@@ -81,6 +91,7 @@
 * 新增跨模态应用流水线[AppFlow](./applications/README.md)，一键支持自动标注，图像编辑，音生图等11种跨模态应用
 * [PPDiffusers](./ppdiffusers/README.md)发布 0.19.3 版本，新增SDXL及相关任务
 
+</details>
 
 ---
 
@@ -299,10 +310,18 @@ python setup.py install
           <li><b>文生图</b></li>
         <ul>
            <li><a href="ppdiffusers/examples/stable_diffusion">Stable Diffusion</a></li>
+           <li><a href="ppdiffusers/ppdiffusers/pipelines/stable_diffusion_xl">SDXL</a></li>
            <li><a href="ppdiffusers/examples/dreambooth/README_sd3.md">Stable Diffusion 3 (SD3)</a></li>
             <li><a href="ppdiffusers/examples/controlnet">ControlNet</a></li>
             <li><a href="ppdiffusers/examples/t2i-adapter">T2I-Adapter</a></li>
             <li><a href="ppdiffusers/examples/text_to_image_laion400m">LDM</a></li>
+            <li><a href="ppdiffusers/ppdiffusers/pipelines/consistency_models">Consistency Models</a></li>
+            <li><a href="ppdiffusers/ppdiffusers/pipelines/deepfloyd_if">DeepFloyd IF</a></li>
+            <li><a href="ppdiffusers/ppdiffusers/pipelines/shap_e">Shap-E</a></li>
+            <li><a href="ppdiffusers/examples/kandinsky2_2">Kandinsky-2</a></li>
+            <li><a href="ppdiffusers/ppdiffusers/pipelines/wuerstchen">Würstchen</a></li>
+            <li><a href="ppdiffusers/ppdiffusers/pipelines/hotshot_xl">Hotshot-XL</a></li>
+            <li><a href="ppdiffusers/ppdiffusers/pipelines/latent_consistency_models">LCMs</a></li>
             <li><a href="ppdiffusers/ppdiffusers/pipelines/unidiffuser">Unidiffuser</a></li>
             <li><a href="ppdiffusers/examples/class_conditional_image_generation/DiT">DiT</a></li>
             <li><a href="ppdiffusers/examples/HunyuanDiT">HunyuanDiT</a></li>
@@ -310,10 +329,13 @@ python setup.py install
         </ul>
           <li><b>文生视频</b></li>
         <ul>
-           <li><a href="ppdiffusers/examples/lvdm">LVDM</a></li>
+           <li><a href="ppdiffusers/examples/text_to_video_lvdm">LVDM</a></li>
            <li><a href="ppdiffusers/examples/stable_video_diffusion">SVD</a></li>
            <li><a href="ppdiffusers/examples/AnimateAnyone">AnimateAnyone</a></li>
            <li><a href="ppdiffusers/examples/Open-Sora">OpenSora</a></li>
+           <li><a href="ppdiffusers/ppdiffusers/pipelines/animatediff">AnimateDiff</a></li>
+           <li><a href="ppdiffusers/ppdiffusers/pipelines/text_to_video_synthesis">zeroscope_v2_XL</a></li>
+           <li><a href="ppdiffusers/examples/cogvideo">CogVideoX</a></li>
         </ul>
         </ul>
           <li><b>音频生成</b></li>
@@ -335,6 +357,53 @@ python setup.py install
 </table>
 
 更多模型能力，可参考[模型能力矩阵](./paddlemix/examples/README.md)
+
+
+
+## 📊多模数据处理工具箱DataCopilot
+<table align="center">
+  <tbody>
+    <tr align="center" valign="center">
+      <td>
+        <b>基础能力</b>
+      </td>
+      <td>
+        <b>数据分析</b>
+      </td>
+      <td>
+        <b>数据生成</b>
+      </td>
+    </tr>
+    <tr valign="top">
+      <td>
+        <ul>
+        </ul>
+          <li><b>使用文档</b></li>
+        <ul>
+            <li><a href="paddlemix/datacopilot">DataCopilot</a></li>
+      </ul>
+      </td>
+      <td>
+        <ul>
+        </ul>
+          <li><b>能力标签模型</b></li>
+        <ul>
+           <li><a href="paddlemix/datacopilot/example">PP-InsCapTagger</a></li>
+        </ul>
+      </td>
+      <td>
+        <ul>
+        </ul>
+          <li><b>文档类数据生成方案</b></li>
+        <ul>
+          <li><a href="paddlemix/datacopilot/example">PP-InfinityDocData</a></li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+更多数据相关功能，可参考[DataCopilot](./paddlemix/datacopilot)主页
 
 
 ## 🏆特色模型|工具

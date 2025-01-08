@@ -34,20 +34,26 @@
 
 
 ## 📰 News
+
 **🔥PaddleMIX Development Project Challenge (November 21 - December 22, 2024)**
 
-- ✨"Experience Officer Recruitment" PaddleMIX Development Project Challenge
-Click the link to sign up 🔗: https://aistudio.baidu.com/activitydetail/1503019366
-🏆Submit to the PaddleGalaxy Community Project Hall - get certified as a PaddleMIX Experience Officer and receive JD.com gift cards as rewards
-Welcome your submissions!
-<p align="center">
-<img src='https://github.com/user-attachments/assets/27e0bbe3-0ff8-49ef-bd39-81a31a2b288b' width="25%">
-</p>
 
-- 🎉 The PaddleMIX multimodal large model toolkit releases version 2.1! On October 31 (Thursday) at 20:00, Baidu development engineers provided a detailed interpretation of the toolkit updates, as well as the implementation details and case applications of PP-InsCapTagger, the multimodal data capability labeling model.
+**🔥Live Course on January 7th, 2025: New PaddlePaddle PP Series Models Released!**
+
+- ✨PP-DocBee: A New 'Bee'-ginning in Document Image Understanding!
+To help you quickly and deeply understand **PaddleMIX**'s **PP-DocBee document understanding model** and master practical skills, Baidu's senior R&D engineers will provide a detailed explanation of PP-DocBee's core technology and demonstrate the complete development process of multimodal large models at **19:00 on January 7th (Tuesday)**. Scan the QR code below to register now!
+<details>
+<summary>Click to expand event poster</summary>
+<p align="center">
+<img src='https://github.com/user-attachments/assets/3b7adc9e-c68d-44d1-9674-05b933947deb'  width="80%">
+</p>
+</details>
+
 
 ## 📣 Latest Developments
+**🎉 2024.01.02 Added support for [PP-DocBee](./paddlemix/examples/ppdocbee) inference and training, supporting [high-performance inference](./deploy/ppdocbee)**
 
+**🎉 2024.12.17 Support for [InternVL2_5 (1B, 2B, 4B, 8B)](./paddlemix/examples/internvl2) inference**
 
 **🎉 2024.11.27 Added support for [Janus/JanusFlow](./paddlemix/examples/janus) inference**
 
@@ -56,6 +62,10 @@ Welcome your submissions!
 **🎉 2024.11.8 Support for [DenseConnector](./paddlemix/examples/llava_denseconnector) and [Aquila-VL-2B-llava-qwen](./paddlemix/examples/llava_onevision/) inference**
 
 **🎉 2024.11.1 Support for [LLaVA-OneVision](./paddlemix/examples/llava_onevision/) and [LLaVA-Critic](./paddlemix/examples/llava_critic/) inference**
+
+
+<details>
+<summary>Click to expand more</summary>
 
 **🎉 2024.10.31 Welcome to the Update of External Developer's Creative [Tutorial Page](paddlemix_applications.md)**
 * 🌟 Since the launch of our Large Model Suite Premium Project Collection activity on September 6th, we have received 30 high-quality developer projects. Among them, 25 premium projects have successfully passed the platform evaluation and been featured.
@@ -79,6 +89,9 @@ Welcome your submissions!
 * Added distributed training capabilities for vision-language pre-training models, and BLIP-2 now supports trillion-scale training.
 * Introduced the cross-modal application pipeline [AppFlow](./applications/README.md), which supports 11 cross-modal applications such as automatic annotation, image editing, and audio-to-image with one click.
 * [PPDiffusers](./ppdiffusers/README.md) released version 0.19.3, adding SDXL and related tasks.
+</details>
+
+
 ---
 
 ## 🌈 Introduction

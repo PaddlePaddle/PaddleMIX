@@ -49,8 +49,8 @@ _IS_NPU = "npu" in paddle.get_device()
 def _get_unpad_data(attention_mask):
     seqlens_in_batch = attention_mask.sum(axis=-1, dtype="int32")
     indices = paddle.nonzero(attention_mask.flatten(), as_tuple=False).flatten()
-    max_seqlen_in_batch = seqlens_in_batch.max().item()
-    cu_seqlens = F.pad(paddle.cumsum(seqlens_in_batch, axis=0), (1, 0))
+    max_seqlen_in_batch = seqlens_in_batch.max().item()  # [2, 1, 1323]
+    cu_seqlens = F.pad(paddle.cumsum(seqlens_in_batch, axis=0), (1, 0), data_format="NCL")
     return (
         indices,
         cu_seqlens,
@@ -274,15 +274,9 @@ class PatchEmbed(nn.Layer):
             [-1, self.in_channels, self.temporal_patch_size, self.patch_size, self.patch_size]
         )
 
-        if _IS_NPU:
-            # NOTE: In npu device, conv3d only support fp16 or bf16 dtype.
-            hidden_states = F.conv3d(
-                hidden_states.cast(paddle.bfloat16),
-                self.proj.weight.cast(paddle.bfloat16),
-                stride=self.proj._stride)
-            hidden_states = hidden_states.to(target_dtype).reshape([-1, self.embed_dim])
-        else:
-            hidden_states = self.proj(hidden_states.to(dtype=target_dtype)).reshape([-1, self.embed_dim])
+        # NOTE（changwenbin）: AttributeError: 'Variable' object has no attribute 'to'.
+        # hidden_states = self.proj(hidden_states.to(dtype=target_dtype)).reshape([-1, self.embed_dim])
+        hidden_states = self.proj(paddle.cast(hidden_states, dtype=target_dtype)).reshape([-1, self.embed_dim])
         return hidden_states
 
 
@@ -368,23 +362,34 @@ class VisionFlashAttention2(nn.Layer):
         q, k, v = qkv.unbind(axis=0)
         q = apply_rotary_pos_emb_vision(q.unsqueeze(axis=0), rotary_pos_emb).squeeze(axis=0)
         k = apply_rotary_pos_emb_vision(k.unsqueeze(axis=0), rotary_pos_emb).squeeze(axis=0)
-        max_seqlen = (cu_seqlens[1:] - cu_seqlens[:-1]).max().item()
 
-        softmax_scale = self.head_dim**-0.5  # TODO: 需要手动加上
-        attn_output = (
-            flash_attn_varlen_func(  # flash_attn_unpadded
+        if _IS_NPU:
+            attn_output = paddle.nn.functional.flash_attention_npu(  # TODO: flash_attn_unpadded
                 q.astype("bfloat16"),  # 不支持float32
                 k.astype("bfloat16"),
                 v.astype("bfloat16"),
-                cu_seqlens,
-                cu_seqlens,
-                max_seqlen,
-                max_seqlen,
-                scale=softmax_scale,  # TODO: 需要手动加上
-            )[0]
-            .squeeze(0)
-            .reshape([seq_length, -1])
-        )
+                is_varlen=True,
+                batch_size=1,
+                seq_length=seq_length,
+            ).reshape([seq_length, -1])
+        else:
+            max_seqlen = (cu_seqlens[1:] - cu_seqlens[:-1]).max().item()
+
+            softmax_scale = self.head_dim**-0.5  # TODO: 需要手动加上
+            attn_output = (
+                flash_attn_varlen_func(  # flash_attn_unpadded
+                    q.astype("bfloat16"),  # 不支持float32
+                    k.astype("bfloat16"),
+                    v.astype("bfloat16"),
+                    cu_seqlens,
+                    cu_seqlens,
+                    max_seqlen,
+                    max_seqlen,
+                    scale=softmax_scale,  # TODO: 需要手动加上
+                )[0]
+                .squeeze(0)
+                .reshape([seq_length, -1])
+            )
         attn_output = attn_output.astype(paddle.float32)
         attn_output = self.proj(attn_output)
         return attn_output
@@ -608,18 +613,18 @@ class Qwen2VLAttention(nn.Layer):
         key_states = repeat_kv(key_states, self.num_key_value_groups)
         value_states = repeat_kv(value_states, self.num_key_value_groups)
 
-        query_states = query_states.astype("float32") 
+        query_states = query_states.astype("float32")
         key_states = key_states.astype("float32")
         value_states = value_states.astype("float32")
-        
+
         attn_weights = paddle.matmul(query_states, key_states.transpose([0, 1, 3, 2])) / math.sqrt(self.head_dim)
 
         if attention_mask is not None:
             attn_weights = attn_weights + attention_mask
         attn_weights = nn.functional.softmax(attn_weights, axis=-1, dtype="float32")
-
+        attn_weights = nn.functional.dropout(x=attn_weights, p=self.attention_dropout, training=self.training)
         attn_output = paddle.matmul(attn_weights.cast(self.config.dtype), value_states.cast(self.config.dtype))
-        
+
         if attn_output.shape != [bsz, self.num_heads, q_len, self.head_dim]:
             raise ValueError(
                 f"`attn_output` should be of size {(bsz, q_len, self.num_heads, self.head_dim)}, but is"
@@ -705,7 +710,7 @@ class Qwen2VLFlashAttention2(Qwen2VLAttention):
             query_states,
             key_states,
             value_states,
-            None,
+            None,  # attention_mask,  # TODO: batch infer时不能是None；如果不是batch infer, attention_mask可以是None, 也可以是全1传进来
             q_len
             # dropout=0.0 if not self.training else self.attention_dropout,
             # causal=self.is_causal,
@@ -742,48 +747,71 @@ class Qwen2VLFlashAttention2(Qwen2VLAttention):
         # Contains at least one padding token in the sequence
         causal = self.is_causal and query_length != 1
 
-        head_dim = query_states.shape[-1]
-        softmax_scale = head_dim**-0.5  # TODO: 需要手动加上
-
-        if attention_mask is not None:
-            batch_size = query_states.shape[0]  # [2, 3383, 16, 128]
-
-            query_states, key_states, value_states, indices_q, cu_seq_lens, max_seq_lens = self._unpad_input(
-                query_states, key_states, value_states, attention_mask, query_length
-            )
-
-            cu_seqlens_q, cu_seqlens_k = cu_seq_lens
-            max_seqlen_in_batch_q, max_seqlen_in_batch_k = max_seq_lens
-
-            attn_output_unpad = flash_attn_varlen_func(  # TODO: flash_attn_unpadded
-                query_states,  # [5998, 16, 128]
-                key_states,  # [5998, 8, 128]
-                value_states,  # [5998, 8, 128]
-                cu_seqlens_q=cu_seqlens_q,
-                cu_seqlens_k=cu_seqlens_k,
-                max_seqlen_q=max_seqlen_in_batch_q,
-                max_seqlen_k=max_seqlen_in_batch_k,
-                scale=softmax_scale,  # not softmax_scale=
-                dropout=dropout,
-                causal=causal,
-            )[0]
-
-            attn_output = pad_input(attn_output_unpad, indices_q, batch_size, query_length)
+        if _IS_NPU:
+            if attention_mask is not None:
+                attn_output = paddle.nn.functional.flash_attention_npu(  # TODO: flash_attn_unpadded
+                    query_states,  # [5998, 16, 128]
+                    key_states,  # [5998, 8, 128]
+                    value_states,  # [5998, 8, 128]
+                    attn_mask=attention_mask,
+                    dropout=dropout,
+                    causal=causal,
+                    is_varlen=True,
+                )
+            else:
+                dtype = query_states.dtype
+                attn_output = paddle.nn.functional.flash_attention_npu(  # TODO: flash_attn_unpadded
+                    query_states.astype("bfloat16"),  # [5998, 16, 128]
+                    key_states.astype("bfloat16"),  # [5998, 8, 128]
+                    value_states.astype("bfloat16"),  # [5998, 8, 128]
+                    attn_mask=attention_mask,
+                    dropout=dropout,
+                    causal=causal,
+                )
+                attn_output = attn_output.astype(dtype)
         else:
-            attn_output = flash_attn_func(
-                query_states,
-                key_states,
-                value_states,
-                dropout,
-                causal=causal,  # no softmax_scale=
-            )[0]
+            head_dim = query_states.shape[-1]
+            softmax_scale = head_dim**-0.5  # TODO: 需要手动加上
+
+            if attention_mask is not None:  # attention_mask.shape # [2, 1, 1323, 1323]
+                batch_size = query_states.shape[0]  # [2, 1323, 12, 128]
+                query_states, key_states, value_states, indices_q, cu_seq_lens, max_seq_lens = self._unpad_input(
+                    query_states, key_states, value_states, attention_mask, query_length
+                )
+                cu_seqlens_q, cu_seqlens_k = cu_seq_lens
+                max_seqlen_in_batch_q, max_seqlen_in_batch_k = max_seq_lens
+
+                attn_output_unpad = flash_attn_varlen_func(  # TODO: flash_attn_unpadded
+                    query_states,  # [5998, 16, 128]
+                    key_states,  # [5998, 8, 128]
+                    value_states,  # [5998, 8, 128]
+                    cu_seqlens_q=cu_seqlens_q,
+                    cu_seqlens_k=cu_seqlens_k,
+                    max_seqlen_q=max_seqlen_in_batch_q,
+                    max_seqlen_k=max_seqlen_in_batch_k,
+                    scale=softmax_scale,  # not softmax_scale=
+                    dropout=dropout,
+                    causal=causal,
+                )[0]
+
+                attn_output = pad_input(attn_output_unpad, indices_q, batch_size, query_length)
+            else:
+                attn_output = flash_attn_func(
+                    query_states,
+                    key_states,
+                    value_states,
+                    dropout,
+                    causal=causal,  # no softmax_scale=
+                )[0]
 
         return attn_output
 
     def _unpad_input(self, query_layer, key_layer, value_layer, attention_mask, query_length):
+        # Note: This function was named _upad_input() in torch transformers/modeling_flash_attention_utils.py
         indices_k, cu_seqlens_k, max_seqlen_in_batch_k = _get_unpad_data(attention_mask)
         batch_size, kv_seq_len, num_key_value_heads, head_dim = key_layer.shape
 
+        # TODO：cuda error
         key_layer = index_first_axis(
             key_layer.reshape([batch_size * kv_seq_len, num_key_value_heads, head_dim]), indices_k
         )
@@ -831,7 +859,9 @@ class Qwen2VLDecoderLayer(nn.Layer):
                 f"Sliding Window Attention is enabled but not implemented for `{config.attn_implementation}`; "
                 "unexpected results may be encountered."
             )
+        # TODO: batch infer 时使用 Qwen2VLFlashAttention2待修复
         self.self_attn = create_attention_module(config, "qwen2vl", layer_idx=layer_idx)
+        # self.self_attn = Qwen2VLAttention(config, layer_idx)
         self.mlp = Qwen2MLP(config)
         self.input_layernorm = Qwen2RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.post_attention_layernorm = Qwen2RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
@@ -869,7 +899,8 @@ class Qwen2VLDecoderLayer(nn.Layer):
         residual = hidden_states
 
         hidden_states = self.input_layernorm(hidden_states)
-        
+
+        # Self Attention
         hidden_states, self_attn_weights, present_key_value = self.self_attn(
             hidden_states=hidden_states,
             attention_mask=attention_mask,
@@ -980,7 +1011,7 @@ class Qwen2VisionTransformerPretrainedModel(Qwen2VLPreTrainedModel):
         return rotary_pos_emb
 
     def forward(self, hidden_states: paddle.Tensor, grid_thw: paddle.Tensor) -> paddle.Tensor:
-        
+
         hidden_states = self.patch_embed(hidden_states)
         rotary_pos_emb = self.rot_pos_emb(grid_thw)
 
@@ -1203,8 +1234,6 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
         # Initialize weights and apply final processing
         # self.post_init()
 
-        self.rope_deltas = 0  # TODO: hard code
-
     def get_input_embeddings(self):
         return self.model.embed_tokens
 
@@ -1223,8 +1252,12 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
     def get_decoder(self):
         return self.model
 
+    @staticmethod
     def get_rope_index(
-        self,
+        spatial_merge_size,
+        image_token_id,
+        video_token_id,
+        vision_start_token_id,
         input_ids: paddle.Tensor,
         image_grid_thw: Optional[paddle.Tensor] = None,
         video_grid_thw: Optional[paddle.Tensor] = None,
@@ -1274,18 +1307,15 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
             position_ids (`paddle.Tensor` of shape `(3, batch_size, sequence_length)`)
             mrope_position_deltas (`paddle.Tensor` of shape `(batch_size)`)
         """
-        spatial_merge_size = self.config.vision_config.spatial_merge_size
-        image_token_id = self.config.image_token_id
-        video_token_id = self.config.video_token_id
-        vision_start_token_id = self.config.vision_start_token_id
         mrope_position_deltas = []
         if image_grid_thw is not None or video_grid_thw is not None:
             total_input_ids = input_ids
             position_ids = paddle.ones([3, input_ids.shape[0], input_ids.shape[1]], dtype=input_ids.dtype)
             image_index, video_index = 0, 0
             for i, input_ids in enumerate(total_input_ids):
+                # TODO: CUDA error in some paddle version
                 if attention_mask is not None:
-                    input_ids = input_ids[attention_mask[i] == 1]
+                    input_ids = paddle.to_tensor(input_ids.cpu()[attention_mask[i].cpu() == 1])
                 image_nums, video_nums = 0, 0
                 vision_start_indices = paddle.nonzero(input_ids == vision_start_token_id).squeeze(1)
                 vision_tokens = input_ids[vision_start_indices + 1]
@@ -1353,7 +1383,9 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
                 if _IS_NPU:
                     # NOTE: bool + id的混合索引赋值未生效，暂时绕过
                     bool_indices = (attention_mask[i] == 1).unsqueeze(0).tile([position_ids.shape[0], 1])
-                    position_ids[:, i] = paddle.index_put(position_ids[:, i], [bool_indices], llm_positions.reshape([-1]))
+                    position_ids[:, i] = paddle.index_put(
+                        position_ids[:, i], [bool_indices], llm_positions.reshape([-1])
+                    )
                 else:
                     position_ids[..., i, attention_mask[i] == 1] = llm_positions
                 mrope_position_deltas.append(llm_positions.max() + 1 - len(total_input_ids[i]))
@@ -1392,6 +1424,44 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
             model_kwargs["rope_deltas"] = outputs.rope_deltas
 
         return model_kwargs
+
+    # NOTE（changwenbin）: Vision module added for high-performance inference.
+    def vision_forward(
+        self,
+        input_ids: paddle.Tensor,
+        inputs_embeds: Optional[paddle.Tensor] = None,
+        attention_mask: Optional[paddle.Tensor] = None,
+        position_ids: Optional[paddle.Tensor] = None,
+        pixel_values: Optional[paddle.Tensor] = None,
+        pixel_values_videos: Optional[paddle.Tensor] = None,
+        image_grid_thw: Optional[paddle.Tensor] = None,
+        video_grid_thw: Optional[paddle.Tensor] = None,
+        rope_deltas: Optional[paddle.Tensor] = None,
+    ):
+        if inputs_embeds is None:
+            # NOTE: (zhoukangkang、changwenbin) In the high-performance reasoning of Qwen2-vl,
+            # in order to reduce video memory, the qwen2 embed_tokens method in Paddlenlp is reused here.
+            from paddlenlp.experimental.transformers.qwen2.modeling import (
+                Qwen2VLForConditionalGenerationBlockInferenceModel,
+            )
+
+            assert isinstance(
+                self.model, Qwen2VLForConditionalGenerationBlockInferenceModel
+            ), "model is not an instance of Qwen2VLForConditionalGenerationBlockInferenceModel"
+
+            inputs_embeds = self.model.qwen2.embed_tokens(input_ids)
+
+            if pixel_values is not None:
+                pixel_values = paddle.cast(pixel_values, paddle.bfloat16)
+                image_embeds = self.visual(pixel_values, grid_thw=image_grid_thw)
+                image_mask = input_ids == self.config.image_token_id
+                inputs_embeds[image_mask] = image_embeds
+            if pixel_values_videos is not None:
+                pixel_values_videos = paddle.cast(pixel_values_videos, paddle.bfloat16)
+                video_embeds = self.visual(pixel_values_videos, grid_thw=video_grid_thw)
+                video_mask = input_ids == self.config.video_token_id
+                inputs_embeds[video_mask] = video_embeds
+        return inputs_embeds
 
     def forward(
         self,
@@ -1453,7 +1523,8 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
 
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states  # fmt:skip
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        # Note：始终为True
+        return_dict = True  # return_dict if return_dict is not None else self.config.use_return_dict
 
         if inputs_embeds is None:
             inputs_embeds = self.model.embed_tokens(input_ids)
@@ -1494,16 +1565,21 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
             shift_logits = logits[..., :-1, :]  # [1, 395, 151936]
             shift_labels = labels[..., 1:]  # [1, 395]
             # Flatten the tokens
-            # loss_fct = nn.CrossEntropyLoss()
-            loss_fct = nn.CrossEntropyLoss(reduction="sum")
             shift_logits = shift_logits.reshape([-1, self.config.vocab_size])
             shift_labels = shift_labels.reshape([-1])
-            loss = loss_fct(shift_logits, shift_labels)
+            if _IS_NPU:
+                tmp = F.log_softmax(shift_logits, axis=1)
+                loss = F.nll_loss(tmp, shift_labels, reduction="sum")
+            else:
+                loss_fct = nn.CrossEntropyLoss(reduction="sum")
+                loss = loss_fct(shift_logits, shift_labels)
             label_sum = paddle.sum(shift_labels != -100).cast("float32")
             loss = loss / label_sum
 
         if not return_dict:
-            output = (logits,) + outputs[1:]
+            # output = (logits,) + outputs[1:]
+            # Note: (changwenbin) fix "can only concatenate tuple (not "list") to tuple".
+            output = (logits,) + tuple(outputs[1:])
             return (loss,) + output if loss is not None else output
             # return logits + 28 layers k and v
 
@@ -1544,15 +1620,19 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
             input_ids = input_ids[:, -1].unsqueeze(-1)
 
         rope_deltas = kwargs.get("rope_deltas", None)
-        rope_deltas = self.rope_deltas if self.rope_deltas != 0 else rope_deltas
-        # TODO: hard code, need to be fixed
 
         if attention_mask is not None and position_ids is None:
             if cache_position is None or (cache_position is not None and cache_position[0] == 0):
                 position_ids, rope_deltas = self.get_rope_index(
-                    input_ids, image_grid_thw, video_grid_thw, attention_mask
+                    self.config.vision_config.spatial_merge_size,
+                    self.config.image_token_id,
+                    self.config.video_token_id,
+                    self.config.vision_start_token_id,
+                    input_ids,
+                    image_grid_thw,
+                    video_grid_thw,
+                    attention_mask,
                 )
-                self.rope_deltas = rope_deltas
             else:
                 batch_size, seq_length = input_ids.shape
                 delta = (
@@ -1572,30 +1652,6 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
             model_inputs = {"inputs_embeds": inputs_embeds}
         else:
             model_inputs = {"input_ids": input_ids}
-
-        # past_key_values: DynamicCache() # torch always be DynamicCache
-        # if isinstance(past_key_values, StaticCache) and attention_mask.ndim == 2:
-        if False and attention_mask.ndim == 2:
-            if inputs_embeds is not None:
-                batch_size, sequence_length = tuple(inputs_embeds.shape)
-                device = inputs_embeds.place
-            else:
-                batch_size, sequence_length = tuple(input_ids.shape)
-                device = input_ids.place
-
-            dtype = self.lm_head.weight.dtype
-            min_dtype = paddle.finfo(dtype=dtype).min
-
-            attention_mask = _prepare_4d_causal_attention_mask_with_cache_position(
-                attention_mask,
-                sequence_length=sequence_length,
-                target_length=past_key_values.get_max_length(),
-                dtype=dtype,
-                device=device,
-                min_dtype=min_dtype,
-                cache_position=cache_position,
-                batch_size=batch_size,
-            )
 
         model_inputs.update(
             {

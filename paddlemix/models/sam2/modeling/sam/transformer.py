@@ -192,6 +192,7 @@ class Attention(paddle.nn.Layer):
         b, n_heads, n_tokens, c_per_head = tuple(x.shape)
 
         x = x.transpose(perm=[0, 2, 1, 3])
+
         return x.reshape([b, n_tokens, n_heads * c_per_head])
 
     def forward(self, q: paddle.Tensor, k: paddle.Tensor, v: paddle.Tensor) -> paddle.Tensor:

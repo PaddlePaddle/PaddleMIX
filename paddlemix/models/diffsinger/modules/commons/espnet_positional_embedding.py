@@ -16,7 +16,8 @@ import math
 import sys
 
 import paddle
-import paddle_aux
+
+from paddlemix.models.diffsinger.utils import paddle_aux
 
 
 class PositionalEncoding(paddle.nn.Layer):

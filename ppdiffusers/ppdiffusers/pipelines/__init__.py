@@ -101,7 +101,11 @@ else:
         "AudioLDM2UNet2DConditionModel",
     ]
     _import_structure["blip_diffusion"] = ["BlipDiffusionPipeline"]
-    _import_structure["cogvideo"] = ["CogVideoXPipeline"]
+    _import_structure["cogvideo"] = [
+        "CogVideoXPipeline",
+        "CogVideoXVCtrlPipeline",
+        "CogVideoXVCtrlImageToVideoPipeline",
+    ]
     _import_structure["controlnet"].extend(
         [
             "BlipDiffusionControlNetPipeline",
@@ -119,7 +123,7 @@ else:
             "StableDiffusion3ControlNetPipeline",
             "StableDiffusion3ControlNetInpaintingPipeline",
         ]
-    ) 
+    )
     _import_structure["deepfloyd_if"] = [
         "IFImg2ImgPipeline",
         "IFImg2ImgSuperResolutionPipeline",
@@ -376,7 +380,11 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             AudioLDM2UNet2DConditionModel,
         )
         from .blip_diffusion import BlipDiffusionPipeline
-        from .cogvideo import CogVideoXPipeline
+        from .cogvideo import (
+            CogVideoXPipeline,
+            CogVideoXVCtrlImageToVideoPipeline,
+            CogVideoXVCtrlPipeline,
+        )
         from .controlnet import (
             BlipDiffusionControlNetPipeline,
             PaddleInferStableDiffusionControlNetPipeline,
@@ -387,7 +395,10 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             StableDiffusionXLControlNetInpaintPipeline,
             StableDiffusionXLControlNetPipeline,
         )
-        from .controlnet_sd3 import StableDiffusion3ControlNetInpaintingPipeline, StableDiffusion3ControlNetPipeline
+        from .controlnet_sd3 import (
+            StableDiffusion3ControlNetInpaintingPipeline,
+            StableDiffusion3ControlNetPipeline,
+        )
         from .deepfloyd_if import (
             IFImg2ImgPipeline,
             IFImg2ImgSuperResolutionPipeline,
@@ -472,7 +483,10 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             StableUnCLIPImg2ImgPipeline,
             StableUnCLIPPipeline,
         )
-        from .stable_diffusion_3 import StableDiffusion3Img2ImgPipeline, StableDiffusion3Pipeline
+        from .stable_diffusion_3 import (
+            StableDiffusion3Img2ImgPipeline,
+            StableDiffusion3Pipeline,
+        )
         from .stable_diffusion_safe import StableDiffusionPipelineSafe
         from .stable_diffusion_xl import (
             PaddleInferStableDiffusionXLImg2ImgPipeline,

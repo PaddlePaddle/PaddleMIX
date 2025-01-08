@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import math
-from typing import List, Optional, Tuple, Union
+import warnings
+from typing import Optional, Tuple, Union
 
 import numpy as np
 import paddle
@@ -283,6 +284,7 @@ class TimestepEmbedding(nn.Layer):
     def forward(self, sample, condition=None):
         if condition is not None:
             sample = sample + self.cond_proj(condition.cast(sample.dtype))  # NEW ADD cast dtype
+
         sample = self.linear_1(sample)
 
         if self.act is not None:
@@ -915,9 +917,13 @@ class PixArtAlphaTextProjection(nn.Layer):
         return hidden_states
 
 
-def get_3d_sincos_pos_embed(embed_dim: int, spatial_size: Union[int, Tuple[
-    int, int]], temporal_size: int, spatial_interpolation_scale: float=1.0,
-    temporal_interpolation_scale: float=1.0) ->np.ndarray:
+def get_3d_sincos_pos_embed(
+    embed_dim: int,
+    spatial_size: Union[int, Tuple[int, int]],
+    temporal_size: int,
+    spatial_interpolation_scale: float = 1.0,
+    temporal_interpolation_scale: float = 1.0,
+) -> np.ndarray:
     """
     Args:
         embed_dim (`int`):
@@ -927,52 +933,45 @@ def get_3d_sincos_pos_embed(embed_dim: int, spatial_size: Union[int, Tuple[
         temporal_interpolation_scale (`float`, defaults to 1.0):
     """
     if embed_dim % 4 != 0:
-        raise ValueError('`embed_dim` must be divisible by 4')
+        raise ValueError("`embed_dim` must be divisible by 4")
     if isinstance(spatial_size, int):
         spatial_size = spatial_size, spatial_size
     embed_dim_spatial = 3 * embed_dim // 4
     embed_dim_temporal = embed_dim // 4
-    grid_h = np.arange(spatial_size[1], dtype=np.float32
-        ) / spatial_interpolation_scale
-    grid_w = np.arange(spatial_size[0], dtype=np.float32
-        ) / spatial_interpolation_scale
+    grid_h = np.arange(spatial_size[1], dtype=np.float32) / spatial_interpolation_scale
+    grid_w = np.arange(spatial_size[0], dtype=np.float32) / spatial_interpolation_scale
     grid = np.meshgrid(grid_w, grid_h)
     grid = np.stack(grid, axis=0)
     grid = grid.reshape([2, 1, spatial_size[1], spatial_size[0]])
-    pos_embed_spatial = get_2d_sincos_pos_embed_from_grid(embed_dim_spatial,
-        grid)
-    grid_t = np.arange(temporal_size, dtype=np.float32
-        ) / temporal_interpolation_scale
-    pos_embed_temporal = get_1d_sincos_pos_embed_from_grid(embed_dim_temporal,
-        grid_t)
+    pos_embed_spatial = get_2d_sincos_pos_embed_from_grid(embed_dim_spatial, grid)
+    grid_t = np.arange(temporal_size, dtype=np.float32) / temporal_interpolation_scale
+    pos_embed_temporal = get_1d_sincos_pos_embed_from_grid(embed_dim_temporal, grid_t)
     pos_embed_spatial = pos_embed_spatial[np.newaxis, :, :]
     pos_embed_spatial = np.repeat(pos_embed_spatial, temporal_size, axis=0)
     pos_embed_temporal = pos_embed_temporal[:, np.newaxis, :]
-    pos_embed_temporal = np.repeat(pos_embed_temporal, spatial_size[0] *
-        spatial_size[1], axis=1)
-    pos_embed = np.concatenate([pos_embed_temporal, pos_embed_spatial], axis=-1
-        )
+    pos_embed_temporal = np.repeat(pos_embed_temporal, spatial_size[0] * spatial_size[1], axis=1)
+    pos_embed = np.concatenate([pos_embed_temporal, pos_embed_spatial], axis=-1)
     return pos_embed
 
-class CogVideoXPatchEmbed(paddle.nn.Layer):
 
+class CogVideoXPatchEmbed(paddle.nn.Layer):
     def __init__(
-        self, 
-        patch_size: int=2, 
-        in_channels: int=16, 
-        embed_dim: int=1920, 
-        text_embed_dim: int=4096, 
-        bias: bool=True, 
-        sample_width: int=90, 
-        sample_height: int=60, 
-        sample_frames: int=49,
-        temporal_compression_ratio: int=4, 
-        max_text_seq_length: int=226,
-        spatial_interpolation_scale: float=1.875,
-        temporal_interpolation_scale: float=1.0, 
-        use_positional_embeddings: bool=True, 
-        use_learned_positional_embeddings: bool=True
-    ) ->None:
+        self,
+        patch_size: int = 2,
+        in_channels: int = 16,
+        embed_dim: int = 1920,
+        text_embed_dim: int = 4096,
+        bias: bool = True,
+        sample_width: int = 90,
+        sample_height: int = 60,
+        sample_frames: int = 49,
+        temporal_compression_ratio: int = 4,
+        max_text_seq_length: int = 226,
+        spatial_interpolation_scale: float = 1.875,
+        temporal_interpolation_scale: float = 1.0,
+        use_positional_embeddings: bool = True,
+        use_learned_positional_embeddings: bool = True,
+    ) -> None:
         super().__init__()
         self.patch_size = patch_size
         self.embed_dim = embed_dim
@@ -986,31 +985,33 @@ class CogVideoXPatchEmbed(paddle.nn.Layer):
         self.use_positional_embeddings = use_positional_embeddings
         self.use_learned_positional_embeddings = use_learned_positional_embeddings
 
-        self.proj = paddle.nn.Conv2D(in_channels=in_channels, out_channels=
-            embed_dim, kernel_size=(patch_size, patch_size), stride=
-            patch_size, bias_attr=bias)
+        self.proj = paddle.nn.Conv2D(
+            in_channels=in_channels,
+            out_channels=embed_dim,
+            kernel_size=(patch_size, patch_size),
+            stride=patch_size,
+            bias_attr=bias,
+        )
 
-        self.text_proj = paddle.nn.Linear(in_features=text_embed_dim,
-            out_features=embed_dim)
+        self.text_proj = paddle.nn.Linear(in_features=text_embed_dim, out_features=embed_dim)
 
         if use_positional_embeddings or use_learned_positional_embeddings:
             persistent = use_learned_positional_embeddings
             pos_embedding = self._get_positional_embeddings(sample_height, sample_width, sample_frames)
-            self.register_buffer(name='pos_embedding', tensor=pos_embedding,
-                persistable=persistent)
+            self.register_buffer(name="pos_embedding", tensor=pos_embedding, persistable=persistent)
 
-    def _get_positional_embeddings(self, sample_height: int, sample_width:
-        int, sample_frames: int) ->paddle.Tensor:
+    def _get_positional_embeddings(self, sample_height: int, sample_width: int, sample_frames: int) -> paddle.Tensor:
         post_patch_height = sample_height // self.patch_size
         post_patch_width = sample_width // self.patch_size
         post_time_compression_frames = (sample_frames - 1) // self.temporal_compression_ratio + 1
-        num_patches = (post_patch_height * post_patch_width *post_time_compression_frames)
+        num_patches = post_patch_height * post_patch_width * post_time_compression_frames
 
         pos_embedding = get_3d_sincos_pos_embed(
-            self.embed_dim, (
-            post_patch_width, post_patch_height),
-            post_time_compression_frames, self.spatial_interpolation_scale,
-            self.temporal_interpolation_scale
+            self.embed_dim,
+            (post_patch_width, post_patch_height),
+            post_time_compression_frames,
+            self.spatial_interpolation_scale,
+            self.temporal_interpolation_scale,
         )
         pos_embedding = paddle.to_tensor(data=pos_embedding).flatten(start_axis=0, stop_axis=1)
         joint_pos_embedding = paddle.zeros([1, self.max_text_seq_length + num_patches, self.embed_dim])
@@ -1026,8 +1027,6 @@ class CogVideoXPatchEmbed(paddle.nn.Layer):
                 Input image embeddings. Expected shape: (batch_size, num_frames, channels, height, width).
         """
         text_embeds = self.text_proj(text_embeds)
-        # import numpy as np
-        # text_embeds = paddle.to_tensor(np.load("../CogVideo/inference/text_embeds.npy"), dtype=paddle.float32)
 
         batch, num_frames, channels, height, width = image_embeds.shape
         image_embeds = image_embeds.reshape([-1, channels, height, width])
@@ -1036,29 +1035,29 @@ class CogVideoXPatchEmbed(paddle.nn.Layer):
         image_embeds = image_embeds.flatten(3).transpose([0, 1, 3, 2])  # [batch, num_frames, height x width, channels]
         image_embeds = image_embeds.flatten(1, 2)  # [batch, num_frames x height x width, channels]
 
-        embeds = paddle.concat(x=[text_embeds, image_embeds], axis=1
-            ).contiguous()
-        if (self.use_positional_embeddings or self.use_learned_positional_embeddings):
-            if self.use_learned_positional_embeddings and (self.
-                sample_width != width or self.sample_height != height):
-                raise ValueError(
+        embeds = paddle.concat(x=[text_embeds, image_embeds], axis=1).contiguous()
+        if self.use_positional_embeddings or self.use_learned_positional_embeddings:
+            if self.use_learned_positional_embeddings and (self.sample_width != width or self.sample_height != height):
+                warnings.warn(
                     "It is currently not possible to generate videos at a different resolution that the defaults. This should only be the case with 'THUDM/CogVideoX-5b-I2V'.If you think this is incorrect, please open an issue at https://github.com/huggingface/diffusers/issues."
-                    )
-            pre_time_compression_frames = (num_frames - 1
-                ) * self.temporal_compression_ratio + 1
-            if (self.sample_height != height or self.sample_width != width or
-                self.sample_frames != pre_time_compression_frames):
-                pos_embedding = self._get_positional_embeddings(height,
-                    width, pre_time_compression_frames)
+                )
+            pre_time_compression_frames = (num_frames - 1) * self.temporal_compression_ratio + 1
+            if (
+                self.sample_height != height
+                or self.sample_width != width
+                or self.sample_frames != pre_time_compression_frames
+            ):
+                pos_embedding = self._get_positional_embeddings(height, width, pre_time_compression_frames)
                 pos_embedding = pos_embedding.cast(embeds.dtype)
             else:
                 pos_embedding = self.pos_embedding
             embeds = embeds + pos_embedding
         return embeds
 
-def get_3d_rotary_pos_embed(embed_dim, crops_coords, grid_size,
-    temporal_size, theta: int=10000, use_real: bool=True) ->Union[paddle.
-    Tensor, Tuple[paddle.Tensor, paddle.Tensor]]:
+
+def get_3d_rotary_pos_embed(
+    embed_dim, crops_coords, grid_size, temporal_size, theta: int = 10000, use_real: bool = True
+) -> Union[paddle.Tensor, Tuple[paddle.Tensor, paddle.Tensor]]:
     """
     RoPE for video tokens with 3D structure.
 
@@ -1080,58 +1079,93 @@ def get_3d_rotary_pos_embed(embed_dim, crops_coords, grid_size,
         `torch.Tensor`: positional embedding with shape `(temporal_size * grid_size[0] * grid_size[1], embed_dim/2)`.
     """
     start, stop = crops_coords
-    grid_h = np.linspace(start[0], stop[0], grid_size[0], endpoint=False,
-        dtype=np.float32)
-    grid_w = np.linspace(start[1], stop[1], grid_size[1], endpoint=False,
-        dtype=np.float32)
-    grid_t = np.linspace(0, temporal_size, temporal_size, endpoint=False,
-        dtype=np.float32)
+    grid_h = np.linspace(start[0], stop[0], grid_size[0], endpoint=False, dtype=np.float32)
+    grid_w = np.linspace(start[1], stop[1], grid_size[1], endpoint=False, dtype=np.float32)
+    grid_t = np.linspace(0, temporal_size, temporal_size, endpoint=False, dtype=np.float32)
     dim_t = embed_dim // 4
     dim_h = embed_dim // 8 * 3
     dim_w = embed_dim // 8 * 3
-    freqs_t = 1.0 / theta ** (paddle.arange(start=0, end=dim_t, step=2).
-        astype(dtype='float32') / dim_t)
-    grid_t = paddle.to_tensor(data=grid_t).astype(dtype='float32')
-    freqs_t = paddle.einsum('n , f -> n f', grid_t, freqs_t)
+    freqs_t = 1.0 / theta ** (paddle.arange(start=0, end=dim_t, step=2).astype(dtype="float32") / dim_t)
+    grid_t = paddle.to_tensor(data=grid_t).astype(dtype="float32")
+    freqs_t = paddle.einsum("n , f -> n f", grid_t, freqs_t)
     freqs_t = freqs_t.repeat_interleave(repeats=2, axis=-1)
-    freqs_h = 1.0 / theta ** (paddle.arange(start=0, end=dim_h, step=2).
-        astype(dtype='float32') / dim_h)
-    freqs_w = 1.0 / theta ** (paddle.arange(start=0, end=dim_w, step=2).
-        astype(dtype='float32') / dim_w)
-    grid_h = paddle.to_tensor(data=grid_h).astype(dtype='float32')
-    grid_w = paddle.to_tensor(data=grid_w).astype(dtype='float32')
-    freqs_h = paddle.einsum('n , f -> n f', grid_h, freqs_h)
-    freqs_w = paddle.einsum('n , f -> n f', grid_w, freqs_w)
+    freqs_h = 1.0 / theta ** (paddle.arange(start=0, end=dim_h, step=2).astype(dtype="float32") / dim_h)
+    freqs_w = 1.0 / theta ** (paddle.arange(start=0, end=dim_w, step=2).astype(dtype="float32") / dim_w)
+    grid_h = paddle.to_tensor(data=grid_h).astype(dtype="float32")
+    grid_w = paddle.to_tensor(data=grid_w).astype(dtype="float32")
+    freqs_h = paddle.einsum("n , f -> n f", grid_h, freqs_h)
+    freqs_w = paddle.einsum("n , f -> n f", grid_w, freqs_w)
     freqs_h = freqs_h.repeat_interleave(repeats=2, axis=-1)
     freqs_w = freqs_w.repeat_interleave(repeats=2, axis=-1)
 
     def broadcast(tensors, dim=-1):
         num_tensors = len(tensors)
         shape_lens = {len(tuple(t.shape)) for t in tensors}
-        assert len(shape_lens
-            ) == 1, 'tensors must all have the same number of dimensions'
+        assert len(shape_lens) == 1, "tensors must all have the same number of dimensions"
         shape_len = list(shape_lens)[0]
         dim = dim + shape_len if dim < 0 else dim
         dims = list(zip(*(list(tuple(t.shape)) for t in tensors)))
         expandable_dims = [(i, val) for i, val in enumerate(dims) if i != dim]
-        assert all([*(len(set(t[1])) <= 2 for t in expandable_dims)]
-            ), 'invalid dimensions for broadcastable concatenation'
+        assert all(
+            [*(len(set(t[1])) <= 2 for t in expandable_dims)]
+        ), "invalid dimensions for broadcastable concatenation"
         max_dims = [(t[0], max(t[1])) for t in expandable_dims]
         expanded_dims = [(t[0], (t[1],) * num_tensors) for t in max_dims]
         expanded_dims.insert(dim, (dim, dims[dim]))
         expandable_shapes = list(zip(*(t[1] for t in expanded_dims)))
-        tensors = [t[0].expand(shape=t[1]) for t in zip(tensors,
-            expandable_shapes)]
+        tensors = [t[0].expand(shape=t[1]) for t in zip(tensors, expandable_shapes)]
         return paddle.concat(x=tensors, axis=dim)
-    freqs = broadcast((freqs_t[:, None, None, :], freqs_h[None, :, None, :],
-        freqs_w[None, None, :, :]), dim=-1)
+
+    freqs = broadcast((freqs_t[:, None, None, :], freqs_h[None, :, None, :], freqs_w[None, None, :, :]), dim=-1)
     t, h, w, d = tuple(freqs.shape)
-    freqs = freqs.view(t * h * w, d)
+    freqs = freqs.reshape([t * h * w, d])
     sin = freqs.sin()
     cos = freqs.cos()
     if use_real:
         return cos, sin
     else:
-        freqs_cis = paddle.complex(paddle.ones_like(x=freqs) * paddle.cos(
-            freqs), paddle.ones_like(x=freqs) * paddle.sin(freqs))
+        freqs_cis = paddle.complex(
+            paddle.ones_like(x=freqs) * paddle.cos(freqs), paddle.ones_like(x=freqs) * paddle.sin(freqs)
+        )
         return freqs_cis
+
+
+def apply_rotary_emb(
+    x: paddle.Tensor,
+    freqs_cis: Union[paddle.Tensor, Tuple[paddle.Tensor]],
+    use_real: bool = True,
+    use_real_unbind_dim: int = -1,
+) -> Tuple[paddle.Tensor, paddle.Tensor]:
+    """
+    Apply rotary embeddings to input tensors using the given frequency tensor. This function applies rotary embeddings
+    to the given query or key 'x' tensors using the provided frequency tensor 'freqs_cis'. The input tensors are
+    reshaped as complex numbers, and the frequency tensor is reshaped for broadcasting compatibility. The resulting
+    tensors contain rotary embeddings and are returned as real tensors.
+
+    Args:
+        x (`torch.Tensor`):
+            Query or key tensor to apply rotary embeddings. [B, H, S, D] xk (torch.Tensor): Key tensor to apply
+        freqs_cis (`Tuple[torch.Tensor]`): Precomputed frequency tensor for complex exponentials. ([S, D], [S, D],)
+
+    Returns:
+        Tuple[torch.Tensor, torch.Tensor]: Tuple of modified query tensor and key tensor with rotary embeddings.
+    """
+    if use_real:
+        cos, sin = freqs_cis
+        cos = cos[None, None]
+        sin = sin[None, None]
+        if use_real_unbind_dim == -1:
+            x_real, x_imag = x.reshape([*tuple(x.shape)[:-1], -1, 2]).unbind(axis=-1)
+            x_rotated = paddle.stack(x=[-x_imag, x_real], axis=-1).flatten(start_axis=3)
+        elif use_real_unbind_dim == -2:
+            x_real, x_imag = x.reshape([*tuple(x.shape)[:-1], 2, -1]).unbind(axis=-2)
+            x_rotated = paddle.concat(x=[-x_imag, x_real], axis=-1)
+        else:
+            raise ValueError(f"`use_real_unbind_dim={use_real_unbind_dim}` but should be -1 or -2.")
+        out = (x.astype(dtype="float32") * cos + x_rotated.astype(dtype="float32") * sin).to(x.dtype)
+        return out
+    else:
+        x_rotated = paddle.as_complex(x=x.astype(dtype="float32").reshape(*tuple(x.shape)[:-1], -1, 2))
+        freqs_cis = freqs_cis.unsqueeze(axis=2)
+        x_out = paddle.as_real(x=x_rotated * freqs_cis).flatten(start_axis=3)
+        return x_out.astype(dtype=x.dtype)

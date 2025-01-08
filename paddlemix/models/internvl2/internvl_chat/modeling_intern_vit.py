@@ -434,7 +434,6 @@ class InternVisionEncoder(nn.Layer):
 
         encoder_states = () if output_hidden_states else None
         hidden_states = inputs_embeds
-
         for idx, encoder_layer in enumerate(self.layers):
             if output_hidden_states:
                 encoder_states = encoder_states + (hidden_states,)
@@ -511,7 +510,6 @@ class InternVisionModel(MixPretrainedModel):
                 hidden_states = self.embeddings(pixel_values)
             else:
                 raise ValueError(f'wrong pixel_values size: {pixel_values.shape}')
-
         encoder_outputs = self.encoder(
             inputs_embeds=hidden_states,
             output_hidden_states=output_hidden_states,

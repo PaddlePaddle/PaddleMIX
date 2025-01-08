@@ -1,0 +1,45 @@
+{
+  "dvqa_train_200k": {
+    "annotation": "playground/opensource_json/dvqa_train_200k.json",
+    "repeat_time": 1
+  },
+  "chartqa_train_18k": {
+    "annotation": "playground/opensource_json/chartqa_train_18k.json",
+    "repeat_time": 1
+  },
+  "ai2d_train_12k": {
+    "annotation": "playground/opensource_json/ai2d_train_12k.json",
+    "repeat_time": 1
+  },
+  "docvqa_train_10k": {
+    "annotation": "playground/opensource_json/docvqa_train_10k.json",
+    "repeat_time": 1
+  },
+  "geoqa+_72k": {
+    "annotation": "playground/opensource_json/geoqa+.json",
+    "repeat_time": 1
+  },
+  "synthdog_en_30k": {
+    "annotation": "playground/opensource_json/synthdog_en.json",
+    "repeat_time": 1
+  },
+
+
+  "llavaov_doc_all_856k": {
+    "annotation": "LLaVA-OneVision-Data_doc/llavaov_doc_all.json",
+    "repeat_time": 1
+  },
+  "llavaov_mathresoning_all_467k": {
+    "annotation": "LLaVA-OneVision-Data_math_reasoning/llavaov_mathreasoning_all.json",
+    "repeat_time": 1
+  },
+  "llavaov_ocr_all_387k": {
+    "annotation": "LLaVA-OneVision-Data_OCR/llavaov_ocr_all.json",
+    "repeat_time": 1
+  },
+  "llavaov_vqa_all_513k": {
+    "annotation": "LLaVA-OneVision-Data_vqa/llavaov_vqa_all.json",
+    "repeat_time": 1
+  }
+
+}

@@ -1,22 +1,31 @@
 # Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
-#
+# 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-#
+# 
 #     http://www.apache.org/licenses/LICENSE-2.0
-#
+# 
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""
-Processor class for Qwen2-VL.
-"""
-from typing import Dict, List, Optional, Union
-import decord
 
+import base64
+import math
+import os
+import time
+from functools import lru_cache
+from io import BytesIO
+from typing import Dict, List, Optional, Tuple, Union
+
+import numpy as np
+import paddle
+import paddle.nn.functional as F
+import PIL
+import requests
+from paddlenlp.transformers import PaddingStrategy
 from paddlenlp.transformers.feature_extraction_utils import BatchFeature
 from paddlenlp.transformers.image_transforms import (
     convert_to_rgb,
@@ -36,6 +45,38 @@ from paddlenlp.transformers.image_utils import (
     to_numpy_array,
     valid_images,
 )
+from paddlenlp.transformers.processing_utils import ProcessorMixin
+from paddlenlp.transformers.tokenizer_utils_base import (
+    PreTokenizedInput,
+    TensorType,
+    TextInput,
+    TruncationStrategy,
+)
+from PIL import Image
+
+from ppdiffusers.utils import logging
+
+from .processing_utils import BaseImageProcessor
+
+logger = logging.get_logger(__name__)
+
+
+OPENAI_CLIP_MEAN = [0.48145466, 0.4578275, 0.40821073]
+OPENAI_CLIP_STD = [0.26862954, 0.26130258, 0.27577711]
+
+IMAGE_FACTOR = 28
+MIN_PIXELS = 4 * 28 * 28
+MAX_PIXELS = 16384 * 28 * 28
+MAX_RATIO = 200
+
+VIDEO_MIN_PIXELS = 128 * 28 * 28
+VIDEO_MAX_PIXELS = 768 * 28 * 28
+VIDEO_TOTAL_PIXELS = 24576 * 28 * 28
+FRAME_FACTOR = 2
+FPS = 2.0
+FPS_MIN_FRAMES = 4
+FPS_MAX_FRAMES = 768
+
 
 VideoInput = Union[
     List["PIL.Image.Image"],
@@ -47,37 +88,12 @@ VideoInput = Union[
     List[List["np.ndarrray"]],
     List[List["paddle.Tensor"]],
 ]  # noqa
-from paddlenlp.transformers import PaddingStrategy
-from paddlenlp.transformers.processing_utils import ProcessorMixin
-from paddlenlp.transformers.tokenizer_utils_base import (
-    PreTokenizedInput,
-    TensorType,
-    TextInput,
-    TruncationStrategy,
-)
 
-from ppdiffusers.utils import logging
 
-logger = logging.get_logger(__name__)
-
-import base64
-import math
-import warnings
-from io import BytesIO
-
-import numpy as np
-import paddle
-import PIL
-import requests
-from paddle.vision import transforms
-from PIL import Image
-import os
-import time
-from functools import lru_cache
-import paddle.nn.functional as F
-
-OPENAI_CLIP_MEAN = [0.48145466, 0.4578275, 0.40821073]
-OPENAI_CLIP_STD = [0.26862954, 0.26130258, 0.27577711]
+__all__ = [
+    "Qwen2VLProcessor",
+    "Qwen2VLImageProcessor",
+]
 
 
 def is_scaled_image(image: np.ndarray) -> bool:
@@ -91,14 +107,6 @@ def is_scaled_image(image: np.ndarray) -> bool:
     return np.min(image) >= 0 and np.max(image) <= 1
 
 
-from .processing_utils import BaseImageProcessor
-
-__all__ = [
-    "Qwen2VLProcessor",
-    "Qwen2VLImageProcessor",
-]
-
-
 class Qwen2VLProcessor(ProcessorMixin):
 
     r"""
@@ -110,13 +118,13 @@ class Qwen2VLProcessor(ProcessorMixin):
     Args:
         image_processor ([`Qwen2VLImageProcessor`], *optional*):
             The image processor is a required input.
-        tokenizer ([`Qwen2TokenizerFast`], *optional*):
+        tokenizer ([`MIXQwen2Tokenizer`], *optional*):
             The tokenizer is a required input.
     """
 
     attributes = ["image_processor", "tokenizer"]
     image_processor_class = "Qwen2VLImageProcessor"
-    tokenizer_class = "Qwen2Tokenizer"
+    tokenizer_class = "MIXQwen2Tokenizer"
 
     def __init__(self, image_processor, text_processor, **kwargs):
         super().__init__(image_processor, text_processor)
@@ -609,20 +617,6 @@ class Qwen2VLImageProcessor(BaseImageProcessor):
         return BatchFeature(data=data, tensor_type=return_tensors)
 
 
-IMAGE_FACTOR = 28
-MIN_PIXELS = 4 * 28 * 28
-MAX_PIXELS = 16384 * 28 * 28
-MAX_RATIO = 200
-
-VIDEO_MIN_PIXELS = 128 * 28 * 28
-VIDEO_MAX_PIXELS = 768 * 28 * 28
-VIDEO_TOTAL_PIXELS = 24576 * 28 * 28
-FRAME_FACTOR = 2
-FPS = 2.0
-FPS_MIN_FRAMES = 4
-FPS_MAX_FRAMES = 768
-
-
 def round_by_factor(number: int, factor: int) -> int:
     """Returns the closest integer to 'number' that is divisible by 'factor'."""
     return round(number / factor) * factor
@@ -640,7 +634,7 @@ def floor_by_factor(number: int, factor: int) -> int:
 
 def smart_resize(
     height: int, width: int, factor: int = IMAGE_FACTOR, min_pixels: int = MIN_PIXELS, max_pixels: int = MAX_PIXELS
-) -> tuple[int, int]:
+) -> Tuple[int, int]:
     """
     Rescales the image so that the following conditions are met:
 
@@ -667,7 +661,7 @@ def smart_resize(
     return h_bar, w_bar
 
 
-def fetch_image(ele: dict[str, Union[str, Image.Image]], size_factor: int = IMAGE_FACTOR) -> Image.Image:
+def fetch_image(ele: Dict[str, Union[str, Image.Image]], size_factor: int = IMAGE_FACTOR) -> Image.Image:
     if "image" in ele:
         image = ele["image"]
     else:
@@ -754,6 +748,7 @@ def is_decord_available() -> bool:
     import importlib.util
     return importlib.util.find_spec("decord") is not None
 
+
 def _read_video_decord(
     ele: dict,
 ) -> paddle.Tensor:
@@ -771,13 +766,14 @@ def _read_video_decord(
     video = paddle.to_tensor(video).transpose([0, 3, 1, 2])  # Convert to TCHW format
     return video
 
+
 VIDEO_READER_BACKENDS = {
     "decord": _read_video_decord,
-    # "paddlevision": _read_video_paddlevision,
     "paddlevision": None,
 }
 
 FORCE_QWENVL_VIDEO_READER = os.getenv("FORCE_QWENVL_VIDEO_READER", None)
+
 
 @lru_cache(maxsize=1)
 def get_video_reader_backend() -> str:
@@ -789,6 +785,7 @@ def get_video_reader_backend() -> str:
         video_reader_backend = "paddlevision"
     # print(f"qwen-vl-utils using {video_reader_backend} to read video.", file=sys.stderr)
     return video_reader_backend
+
 
 def custom_resize(video, size, interpolation='bicubic', antialias=True):
     """
@@ -844,13 +841,15 @@ def custom_resize(video, size, interpolation='bicubic', antialias=True):
     
     return video
 
+
 def gaussian_kernel_1d(size, sigma):
     """生成1D高斯核"""
     x = np.arange(-(size // 2), size // 2 + 1)
     kernel = np.exp(-x**2 / (2 * sigma**2))
     return kernel / kernel.sum()
 
-def fetch_video(ele: dict, image_factor: int = IMAGE_FACTOR) -> Union[paddle.Tensor, list[Image.Image]]:
+
+def fetch_video(ele: dict, image_factor: int = IMAGE_FACTOR) -> Union[paddle.Tensor, List[Image.Image]]:
     if isinstance(ele["video"], str):
         video_reader_backend = get_video_reader_backend()
 
@@ -902,7 +901,7 @@ def fetch_video(ele: dict, image_factor: int = IMAGE_FACTOR) -> Union[paddle.Ten
         return images
 
 
-def extract_vision_info(conversations: Union[list[dict], list[list[dict]]]) -> list[dict]:
+def extract_vision_info(conversations: Union[List[dict], List[List[dict]]]) -> List[dict]:
     vision_infos = []
     if isinstance(conversations[0], dict):
         conversations = [conversations]
@@ -921,8 +920,8 @@ def extract_vision_info(conversations: Union[list[dict], list[list[dict]]]) -> l
 
 
 def process_vision_info(
-    conversations: Union[list[dict], list[list[dict]]],
-) -> tuple[Union[list[Image.Image], None, list[Union[paddle.Tensor, list[Image.Image]]], None]]:
+    conversations: Union[List[dict], List[List[dict]]],
+) -> Tuple[Union[List[Image.Image], None, List[Union[paddle.Tensor, List[Image.Image]]], None]]:
     vision_infos = extract_vision_info(conversations)
     image_inputs = []
     video_inputs = []

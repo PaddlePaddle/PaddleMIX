@@ -324,8 +324,11 @@ class Upsample(paddle.nn.Layer):
             )
 
     def forward(self, x):
-        if x.dtype != "float32":
-            x = paddle.nn.functional.interpolate(x=x.to("float32"), scale_factor=2.0, mode="nearest").to("bfloat16")
+        origin_dtype = x.dtype
+        if x.dtype != paddle.float32:
+            x = paddle.nn.functional.interpolate(x=x.astype(paddle.float32), scale_factor=2.0, mode="nearest").astype(
+                origin_dtype
+            )
         else:
             x = paddle.nn.functional.interpolate(x=x, scale_factor=2.0, mode="nearest")
         if self.with_conv:

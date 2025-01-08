@@ -49,6 +49,7 @@ class MultiScaleAttention(paddle.nn.Layer):
 
     def forward(self, x: paddle.Tensor) -> paddle.Tensor:
         B, H, W, _ = tuple(x.shape)
+
         qkv = self.qkv(x).reshape([B, H * W, 3, self.num_heads, -1])
         q, k, v = paddle.unbind(input=qkv, axis=2)
         if self.q_pool:
