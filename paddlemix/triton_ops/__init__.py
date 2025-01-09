@@ -14,41 +14,33 @@
 
 __all__ = []
 
-try:
-    from .triton_ops import (
-        adaptive_layer_norm,
-        fused_adaLN_scale_residual,
-        fused_rotary_emb,
-        paddle_use_triton,
-        rms_norm,
-        split_concat,
-        triton_split,
-        weight_only_int8,
-        sageattn_quant_per_block_int8,
-        sageattn_forward_casual_false,
-        sageattn_qk_int8_pv_fp16_triton
-    )
-    from .triton_utils import (
-        get_dtype_str,
-        paddle_custom_op_head_part,
-        tune_and_invoke_part,
-    )
 
-    __all__ += [
-        "paddle_custom_op_head_part",
-        "tune_and_invoke_part",
-        "paddle_use_triton",
-        "weight_only_int8",
-        "adaptive_layer_norm",
-        "fused_adaLN_scale_residual",
-        "rms_norm",
-        "get_dtype_str",
-        "fused_rotary_emb",
-        "split_concat",
-        "triton_split",
-        "sageattn_quant_per_block_int8",
-        "sageattn_forward_casual_false",
-        "sageattn_qk_int8_pv_fp16_triton"
-    ]
-except:
-    pass
+from .rotary_emb import apply_rotary_emb_triton
+from .triton_ops import (
+    adaptive_layer_norm,
+    fused_adaLN_scale_residual,
+    fused_rotary_emb,
+    paddle_use_triton,
+    split_concat,
+    triton_split,
+    weight_only_int8,
+)
+from .triton_utils import (
+    get_dtype_str,
+    paddle_custom_op_head_part,
+    tune_and_invoke_part,
+)
+
+__all__ += [
+    "paddle_custom_op_head_part",
+    "apply_rotary_emb_triton",
+    "tune_and_invoke_part",
+    "paddle_use_triton",
+    "weight_only_int8",
+    "adaptive_layer_norm",
+    "fused_adaLN_scale_residual",
+    "get_dtype_str",
+    "fused_rotary_emb",
+    "split_concat",
+    "triton_split",
+]
