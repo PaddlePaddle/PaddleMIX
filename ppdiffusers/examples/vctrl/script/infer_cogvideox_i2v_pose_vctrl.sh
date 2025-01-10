@@ -21,7 +21,7 @@ export LD_LIBRARY_PATH=/root/paddlejob/workspace/env_run/output/changwenbin/Padd
 export LD_LIBRARY_PATH=/root/paddlejob/workspace/env_run/output/changwenbin/Paddle/paddle/phi/kernels/fusion/cutlass/gemm_epilogue/build:$LD_LIBRARY_PATH
 export TRITON_KERNEL_CACHE_DIR=/root/paddlejob/workspace/env_run/output/changwenbin/PaddleMIX/ppdiffusers/examples/vctrl/tmp/triton_kernel
 
-# nsys profile -o vctrl_pose_trans_block02 \
+# nsys profile -o vctrl_pose_triton_static \
 python infer_cogvideox_i2v_vctrl_cli.py \
   --pretrained_model_name_or_path "paddlemix/cogvideox-5b-i2v-vctrl" \
   --vctrl_path "vctrl_pose_5b_i2v.pdparams" \

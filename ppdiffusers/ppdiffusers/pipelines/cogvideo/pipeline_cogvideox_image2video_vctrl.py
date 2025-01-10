@@ -747,7 +747,7 @@ class CogVideoXVCtrlImageToVideoPipeline(DiffusionPipeline):
                     control_model_input,
                     timestep,
                     v_cond=v_cond,
-                    image_rotary_emb=[v_cond_rotary_emb[0],v_cond_rotary_emb[1]],
+                    image_rotary_emb=v_cond_rotary_emb,
                     return_dict=False,
                 )
                 # paddle.device.synchronize()
@@ -762,7 +762,7 @@ class CogVideoXVCtrlImageToVideoPipeline(DiffusionPipeline):
                     timestep=timestep,
                     block_vctrl_residuals=vctrl_block_samples,
                     # vctrl_layout_type=vctrl_layout_type,
-                    image_rotary_emb=[image_rotary_emb[0],image_rotary_emb[1]],
+                    image_rotary_emb=image_rotary_emb,
                     return_dict=False,
                 )
                 # paddle.device.synchronize()

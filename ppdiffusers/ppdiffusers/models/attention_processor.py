@@ -529,8 +529,9 @@ class Attention(nn.Layer):
         hidden_states: paddle.Tensor,
         encoder_hidden_states: Optional[paddle.Tensor] = None,
         attention_mask: Optional[paddle.Tensor] = None,
-        **cross_attention_kwargs,
+        image_rotary_emb: Optional[tuple[paddle.Tensor, paddle.Tensor]] = None,
     ) -> paddle.Tensor:
+        cross_attention_kwargs = {"image_rotary_emb" : image_rotary_emb}
         r"""
         The forward method of the `Attention` class.
 
@@ -2196,32 +2197,56 @@ class CogVideoXAttnProcessor2_0:
         if attn.norm_k is not None:
             key = attn.norm_k(key)
 
-        # Apply RoPE if needed
+        # # Apply RoPE if needed
         if image_rotary_emb is not None:
             # from ppdiffusers import apply_rotary_emb
-
+            
+            # paddle.save(image_rotary_emb,"/root/paddlejob/workspace/env_run/output/changwenbin/PaddleMIX/image_rotary_emb.pd")
+            
+            # paddle.save(query,"/root/paddlejob/workspace/env_run/output/changwenbin/PaddleMIX/allq.pd")
+            # breakpoint()
+            # breakpoint()
+            # import paddlemix
+            # q ,k= paddlemix.triton_ops.apply_rotary_emb_triton(query[:, :, text_seq_length:],key[:, :, text_seq_length:],image_rotary_emb[0],image_rotary_emb[1])
+            # # k = paddlemix.triton_ops.apply_rotary_emb_triton(key[:, :, text_seq_length:],image_rotary_emb[0],image_rotary_emb[1])
+            # query[:, :, text_seq_length:] = q[0]
+            # key[:, :, text_seq_length:] = k[0]
             query[:, :, text_seq_length:] = apply_rotary_emb(query[:, :, text_seq_length:], image_rotary_emb)
             if not attn.is_cross_attention:
                 key[:, :, text_seq_length:] = apply_rotary_emb(key[:, :, text_seq_length:], image_rotary_emb)
+            # query[:, :, text_seq_length:] = apply_rotary_emb_triton(query[:, :, text_seq_length:], image_rotary_emb)
+            # key[:, :, text_seq_length:] = apply_rotary_emb_triton(key[:, :, text_seq_length:], image_rotary_emb)
 
+            
+            # cos,sin = image_rotary_emb
+            # cos = paddle.cast(cos,dtype="float16")
+            # sin = paddle.cast(sin,dtype="float16")
+            # breakpoint()
+            # cos = cos[None,None]
+            # sin = sin[None,None]
+            # from paddle.incubate.nn.functional import fused_rotary_position_embedding
+            # query = query.transpose([0,2,1,3])
+            # key = key.transpose([0,2,1,3])
+            # query[:,text_seq_length:,:], key[:,text_seq_length:, :], _ = fused_rotary_position_embedding(query[:,text_seq_length:,:], key[:, text_seq_length:,:],None, sin=sin, cos=cos,use_neox_rotary_style=False)
+            # breakpoint()
         # NOTE: There is diff between paddle's and torch's sdpa
         # paddle needs input: [batch_size, seq_len, num_heads, head_dim]
         # torch needs input: [batch_size, num_heads, seq_len, head_dim]
-        hidden_states = F.scaled_dot_product_attention_(
-            query.transpose([0, 2, 1, 3]),
-            key.transpose([0, 2, 1, 3]),
-            value.transpose([0, 2, 1, 3]),
-            attn_mask=attention_mask,
-            dropout_p=0.0,
-            is_causal=False,
-        )
-        # import paddlemix
-        # norm_hidden_states1 = paddlemix.triton_ops.sageattn_qk_int8_pv_fp16_triton(
+        # hidden_states = F.scaled_dot_product_attention_(
         #     query.transpose([0, 2, 1, 3]),
         #     key.transpose([0, 2, 1, 3]),
         #     value.transpose([0, 2, 1, 3]),
-        #     is_causal=False, 
-        #     tensor_layout="NHD")
+        #     attn_mask=attention_mask,
+        #     dropout_p=0.0,
+        #     is_causal=False,
+        # )
+        import paddlemix
+        hidden_states = paddlemix.triton_ops.sageattn_qk_int8_pv_fp16_triton(
+            query,
+            key,
+            value,
+            is_causal=False, 
+            tensor_layout="NHD")
         
 
         hidden_states = hidden_states.reshape([batch_size, -1, attn.heads * head_dim])

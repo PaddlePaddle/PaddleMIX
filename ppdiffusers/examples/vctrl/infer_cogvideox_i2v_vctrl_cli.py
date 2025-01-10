@@ -214,10 +214,10 @@ if __name__ == "__main__":
 
 
     
-    if False:
+    if True:
         print("Benchmarking...")
         warm_up = 1
-        repeat_times = 4
+        repeat_times = 2
         sumtime = 0.0
         times = repeat_times + warm_up
         for i in range(times):

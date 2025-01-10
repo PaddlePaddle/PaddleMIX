@@ -377,7 +377,7 @@ class VCtrlModel(ModelMixin, ConfigMixin):
         sample: paddle.Tensor,
         timestep: Union[paddle.Tensor, float, int],
         v_cond: paddle.Tensor,
-        image_rotary_emb: Optional[list[paddle.Tensor, paddle.Tensor]] = None,
+        image_rotary_emb: Optional[Tuple[paddle.Tensor, paddle.Tensor]] = None,
         return_dict: bool = True,
     ) -> Union[VCtrlModelOutput, list[list[paddle.Tensor, ...], paddle.Tensor]]:
         dtype = sample.dtype

@@ -89,10 +89,11 @@ class CogVideoXBlock(paddle.nn.Layer):
         ff_inner_dim: Optional[int] = None,
         ff_bias: bool = True,
         attention_out_bias: bool = True,
+        layer_idx = -1,
     ):
         super().__init__()
         self.norm1 = CogVideoXLayerNormZero(time_embed_dim, dim, norm_elementwise_affine, norm_eps, bias=True)
-        
+        self.layer_idx = layer_idx
         self.silu = paddle.nn.Silu()
         self.linear1 = paddle.nn.Linear(in_features=time_embed_dim,
             out_features=6 * dim, bias_attr=True)
@@ -141,6 +142,7 @@ class CogVideoXBlock(paddle.nn.Layer):
     #     cache_static_model=False,
     #     exp_enable_use_cutlass=False,
     #     delete_pass_lists=[],
+    #     switch_ir_optim = False
     # )
     def forward(
         self,
@@ -150,8 +152,8 @@ class CogVideoXBlock(paddle.nn.Layer):
         image_rotary_emb: Optional[Tuple[paddle.Tensor, paddle.Tensor]] = None,
     ) -> paddle.Tensor:
         
-        # paddle.device.synchronize()
-        # transformer_block_nvtx = nvtx.start_range(message="block", color="red")
+        paddle.device.synchronize()
+        transformer_block_nvtx = nvtx.start_range(message="block", color="red")
 
         text_seq_length = encoder_hidden_states.shape[1]
         # breakpoint()
@@ -168,7 +170,15 @@ class CogVideoXBlock(paddle.nn.Layer):
             enc_scale)[:, None, :] + enc_shift[:, None, :]
         gate_msa, enc_gate_msa = gate, enc_gate
 
-        # breakpoint()
+        # # breakpoint()
+        # if self.layer_idx ==0:
+        # self.attn1 = paddle.incubate.jit.inference(self.attn1, 
+        #                                         save_model_dir=f"/root/.cache/paddle/inference_models/forward_{self.layer_idx}/", 
+        #                                         cache_static_model = False,
+        #                                         enable_new_ir=False,
+        #                                         switch_ir_optim = False
+        #                                         )
+    
         attn_hidden_states, attn_encoder_hidden_states = self.attn1(
             hidden_states=norm_hidden_states,
             encoder_hidden_states=norm_encoder_hidden_states,
@@ -210,8 +220,8 @@ class CogVideoXBlock(paddle.nn.Layer):
         hidden_states = hidden_states + gate_ff * ff_output[:, text_seq_length:]
         encoder_hidden_states = encoder_hidden_states + enc_gate_ff * ff_output[:, :text_seq_length]
 
-        # paddle.device.synchronize()
-        # nvtx.end_range(transformer_block_nvtx)
+        paddle.device.synchronize()
+        nvtx.end_range(transformer_block_nvtx)
 
         
         return hidden_states, encoder_hidden_states
@@ -339,8 +349,9 @@ class CogVideoXTransformer3DVCtrlModel(ModelMixin, ConfigMixin):
                     attention_bias=attention_bias,
                     norm_elementwise_affine=norm_elementwise_affine,
                     norm_eps=norm_eps,
+                    layer_idx = ii,
                 )
-                for _ in range(num_layers)
+                for ii in range(num_layers)
             ]
         )
         
@@ -462,7 +473,7 @@ class CogVideoXTransformer3DVCtrlModel(ModelMixin, ConfigMixin):
         encoder_hidden_states: paddle.Tensor,
         timestep: Union[int, float, paddle.Tensor],
         timestep_cond: Optional[paddle.Tensor] = None,
-        image_rotary_emb: Optional[list[paddle.Tensor, paddle.Tensor]] = None,
+        image_rotary_emb: Optional[Tuple[paddle.Tensor, paddle.Tensor]] = None,
         block_vctrl_residuals: Optional[List[paddle.Tensor]] = None,
         # vctrl_layout_type: Optional[str] = "even",
         return_dict: bool = True,
