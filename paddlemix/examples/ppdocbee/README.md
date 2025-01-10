@@ -6,9 +6,10 @@ PP-DocBee 是PaddleMIX团队自研的一款专注于文档理解的多模态大�
 
 **本仓库支持的模型权重:**
 
-| Model              |
-|--------------------|
-| PaddleMIX/PPDocBee-2B-1129 |
+| Model              | 模型大小 | Huggingface 仓库地址 |
+|--------------------|----------|--------------------|
+| PaddleMIX/PPDocBee-2B-1129 | 2B | [PPDocBee-2B-1210](https://huggingface.co/PaddleMIX/PPDocBee-2B-1210) |
+| PaddleMIX/PPDocBee-7B-1210 | 7B | [PPDocBee-7B-1210](https://huggingface.co/PaddleMIX/PPDocBee-7B-1210) |
 
 
 ## 2 环境准备
