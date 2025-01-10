@@ -25,7 +25,7 @@ from .triton_utils import get_dtype_str, paddle_use_triton, rendering_common_tem
 @paddle_use_triton(
     key=["1"],
 )
-def apply_rotary_emb_kernel(
+def partial_rotary_emb_kernel(
     q_ptr,
     k_ptr,
     cos_ptr,
@@ -55,7 +55,7 @@ def apply_rotary_emb_kernel(
     k0 = tl.load(k_ptr + read_offsets, mask=mask & even_mask)
     k1 = tl.load(k_ptr + read_offsets + 1, mask=mask & even_mask)
 
-    block_cs_start = tl.where(s_pid > (text_seq_length - 1), (s_pid - text_seq_length) * head_dim, 0)
+    block_cs_start = tl.where(s_pid >= text_seq_length, (s_pid - text_seq_length) * head_dim, 0)
     read_cs_offsets = block_cs_start + tl.arange(0, BLOCK_SIZE)
     cs_mask = read_cs_offsets < ((seq_len - text_seq_length) * head_dim)
     cos0 = tl.load(cos_ptr + read_cs_offsets, mask=cs_mask & even_mask)
@@ -63,26 +63,10 @@ def apply_rotary_emb_kernel(
     sin0 = tl.load(sin_ptr + read_cs_offsets, mask=cs_mask & even_mask)
     sin1 = tl.load(sin_ptr + read_cs_offsets + 1, mask=cs_mask & even_mask)
 
-    oq0 = tl.where(
-        s_pid > (text_seq_length - 1),
-        tl.cast(tl.cast(q0, tl.float32) * cos0 - tl.cast(q1, tl.float32) * sin0, tl.float16),
-        q0,
-    )
-    oq1 = tl.where(
-        s_pid > (text_seq_length - 1),
-        tl.cast(tl.cast(q1, tl.float32) * cos1 + tl.cast(q0, tl.float32) * sin1, tl.float16),
-        q1,
-    )
-    ok0 = tl.where(
-        s_pid > (text_seq_length - 1),
-        tl.cast(tl.cast(k0, tl.float32) * cos0 - tl.cast(k1, tl.float32) * sin0, tl.float16),
-        k0,
-    )
-    ok1 = tl.where(
-        s_pid > (text_seq_length - 1),
-        tl.cast(tl.cast(k1, tl.float32) * cos1 + tl.cast(k0, tl.float32) * sin1, tl.float16),
-        k1,
-    )
+    oq0 = tl.where(s_pid >= text_seq_length, (q0.to(tl.float32) * cos0 - q1.to(tl.float32) * sin0).to(tl.float16), q0)
+    oq1 = tl.where(s_pid >= text_seq_length, (q1.to(tl.float32) * cos1 + q0.to(tl.float32) * sin1).to(tl.float16), q1)
+    ok0 = tl.where(s_pid >= text_seq_length, (k0.to(tl.float32) * cos0 - k1.to(tl.float32) * sin0).to(tl.float16), k0)
+    ok1 = tl.where(s_pid >= text_seq_length, (k1.to(tl.float32) * cos1 + k0.to(tl.float32) * sin1).to(tl.float16), k1)
 
     tl.store(outq_ptr + read_offsets, oq0, mask=mask & even_mask)
     tl.store(outq_ptr + read_offsets + 1, oq1, mask=mask & even_mask)
@@ -90,7 +74,7 @@ def apply_rotary_emb_kernel(
     tl.store(outk_ptr + read_offsets + 1, ok1, mask=mask & even_mask)
 
 
-def apply_rotary_emb_triton(
+def partial_rotary_emb(
     q,
     k,
     text_seq_length_tensor,
@@ -116,12 +100,12 @@ def apply_rotary_emb_triton(
 
     assert head_dim == 64, "Now,head_dim is must is 64"
     BLOCK_SIZE = head_dim
-    op_name = "apply_rotary_emb_triton"
+    op_name = "partial_rotary_emb"
     op_name += get_dtype_str(q.dtype)
     op_name += f"_{BLOCK_SIZE}"
     # 创建输出张量
 
-    apply_rotary_emb_kernel_config = [
+    partial_rotary_emb_kernel_config = [
         {"num_warps": 4},
     ]
     if op_name not in OpProtoHolder.instance().op_proto_map.keys():
@@ -135,19 +119,19 @@ def apply_rotary_emb_triton(
         auto cos_ptr = get_tensor_ptr(cos);
         auto sin_ptr = get_tensor_ptr(sin);
 
-        auto out0_tensor = paddle::empty(q.shape(), q.dtype(), q.place());
-        auto out1_tensor = paddle::empty(k.shape(), k.dtype(), k.place());
-        auto outq_ptr = get_tensor_ptr(out0_tensor);
-        auto outk_ptr = get_tensor_ptr(out1_tensor);
+        auto outq = paddle::empty(q.shape(), q.dtype(), q.place());
+        auto outk = paddle::empty(k.shape(), k.dtype(), k.place());
+        auto outq_ptr = get_tensor_ptr(outq);
+        auto outk_ptr = get_tensor_ptr(outk);
         """
-        return_tensor_names = "out0_tensor, out1_tensor"
+        return_tensor_names = "outq, outk"
 
         template_used = rendering_common_template(
-            apply_rotary_emb_triton, prepare_attr_for_triton_kernel, prepare_ptr_for_triton_kernel, return_tensor_names
+            partial_rotary_emb, prepare_attr_for_triton_kernel, prepare_ptr_for_triton_kernel, return_tensor_names
         )
 
         grid = ("batch", "num_heads", "seq_len")
-        apply_rotary_emb_kernel[(op_name, template_used, grid, apply_rotary_emb_kernel_config)](
+        partial_rotary_emb_kernel[(op_name, template_used, grid, partial_rotary_emb_kernel_config)](
             q_ptr=q,
             k_ptr=k,
             cos_ptr=cos,

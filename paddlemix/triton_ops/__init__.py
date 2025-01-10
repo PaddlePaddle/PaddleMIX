@@ -15,8 +15,8 @@
 __all__ = []
 
 try:
+    from .partial_rotary_emb import partial_rotary_emb
     from .rms_norm import rms_norm
-    from .rotary_emb import apply_rotary_emb_triton
     from .triton_ops import (
         adaptive_layer_norm,
         fused_adaLN_scale_residual,
@@ -35,6 +35,7 @@ try:
     __all__ += [
         "paddle_custom_op_head_part",
         "tune_and_invoke_part",
+        "partial_rotary_emb",
         "paddle_use_triton",
         "weight_only_int8",
         "adaptive_layer_norm",
