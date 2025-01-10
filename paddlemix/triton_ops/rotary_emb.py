@@ -122,11 +122,7 @@ def apply_rotary_emb_triton(
     # 创建输出张量
 
     apply_rotary_emb_kernel_config = [
-        {"num_warps": 2},
         {"num_warps": 4},
-        {"num_warps": 8},
-        {"num_warps": 16},
-        {"num_warps": 32},
     ]
     if op_name not in OpProtoHolder.instance().op_proto_map.keys():
         outq = paddle.empty_like(q)
