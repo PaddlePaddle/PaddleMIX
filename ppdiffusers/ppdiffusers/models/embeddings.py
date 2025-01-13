@@ -75,15 +75,15 @@ def get_2d_sincos_pos_embed(
     if isinstance(grid_size, int):
         grid_size = (grid_size, grid_size)
 
-    grid_h = np.arange(grid_size[0], dtype=np.float32) / (grid_size[0] / base_size) / interpolation_scale
-    grid_w = np.arange(grid_size[1], dtype=np.float32) / (grid_size[1] / base_size) / interpolation_scale
-    grid = np.meshgrid(grid_w, grid_h)  # here w goes first
-    grid = np.stack(grid, axis=0)
+    grid_h = paddle.arange(grid_size[0], dtype="float32") / (grid_size[0] / base_size) / interpolation_scale
+    grid_w = paddle.arange(grid_size[1], dtype="float32") / (grid_size[1] / base_size) / interpolation_scale
+    grid = paddle.meshgrid(grid_w, grid_h)  # here w goes first
+    grid = paddle.stack(grid, axis=0)
 
     grid = grid.reshape([2, 1, grid_size[1], grid_size[0]])
     pos_embed = get_2d_sincos_pos_embed_from_grid(embed_dim, grid)
     if cls_token and extra_tokens > 0:
-        pos_embed = np.concatenate([np.zeros([extra_tokens, embed_dim]), pos_embed], axis=0)
+        pos_embed = paddle.concat([paddle.zeros([extra_tokens, embed_dim]), pos_embed], axis=0)
     return pos_embed
 
 
@@ -95,7 +95,7 @@ def get_2d_sincos_pos_embed_from_grid(embed_dim, grid):
     emb_h = get_1d_sincos_pos_embed_from_grid(embed_dim // 2, grid[0])  # (H*W, D/2)
     emb_w = get_1d_sincos_pos_embed_from_grid(embed_dim // 2, grid[1])  # (H*W, D/2)
 
-    emb = np.concatenate([emb_h, emb_w], axis=1)  # (H*W, D)
+    emb = paddle.concat([emb_h, emb_w], axis=1)  # (H*W, D)
     return emb
 
 
@@ -106,17 +106,17 @@ def get_1d_sincos_pos_embed_from_grid(embed_dim, pos):
     if embed_dim % 2 != 0:
         raise ValueError("embed_dim must be divisible by 2")
 
-    omega = np.arange(embed_dim // 2, dtype=np.float64)
+    omega = paddle.arange(embed_dim // 2, dtype="float64")
     omega /= embed_dim / 2.0
     omega = 1.0 / 10000**omega  # (D/2,)
 
-    pos = pos.reshape(-1)  # (M,)
-    out = np.einsum("m,d->md", pos, omega)  # (M, D/2), outer product
+    pos = paddle.cast(pos.reshape([-1]), dtype="float64")  # (M,)
 
-    emb_sin = np.sin(out)  # (M, D/2)
-    emb_cos = np.cos(out)  # (M, D/2)
+    out = paddle.einsum("m,d->md", pos, omega)  # (M, D/2), outer product
+    emb_sin = paddle.sin(out)  # (M, D/2)
+    emb_cos = paddle.cos(out)  # (M, D/2)
 
-    emb = np.concatenate([emb_sin, emb_cos], axis=1)  # (M, D)
+    emb = paddle.concat([emb_sin, emb_cos], axis=1)  # (M, D)
     return emb
 
 
@@ -919,11 +919,11 @@ class PixArtAlphaTextProjection(nn.Layer):
 
 def get_3d_sincos_pos_embed(
     embed_dim: int,
-    spatial_size: Union[int, Tuple[int, int]],
+    spatial_size: int or tuple,
     temporal_size: int,
     spatial_interpolation_scale: float = 1.0,
     temporal_interpolation_scale: float = 1.0,
-) -> np.ndarray:
+) -> paddle.Tensor:
     """
     Args:
         embed_dim (`int`):
@@ -934,23 +934,32 @@ def get_3d_sincos_pos_embed(
     """
     if embed_dim % 4 != 0:
         raise ValueError("`embed_dim` must be divisible by 4")
-    if isinstance(spatial_size, int):
-        spatial_size = spatial_size, spatial_size
+    if isinstance(spatial_size, int):  # False
+        spatial_size = (spatial_size, spatial_size)
     embed_dim_spatial = 3 * embed_dim // 4
     embed_dim_temporal = embed_dim // 4
-    grid_h = np.arange(spatial_size[1], dtype=np.float32) / spatial_interpolation_scale
-    grid_w = np.arange(spatial_size[0], dtype=np.float32) / spatial_interpolation_scale
-    grid = np.meshgrid(grid_w, grid_h)
-    grid = np.stack(grid, axis=0)
+
+    # Generate spatial grid
+    grid_h = paddle.arange(spatial_size[1], dtype="float32") / spatial_interpolation_scale
+    grid_w = paddle.arange(spatial_size[0], dtype="float32") / spatial_interpolation_scale
+
+    # grid = paddle.meshgrid(grid_w, grid_h)
+    grid = [grid_w.unsqueeze(0).tile([grid_h.shape[0], 1]), grid_h.unsqueeze(1).tile([1, grid_w.shape[0]])]
+    grid = paddle.stack(grid, axis=0)
     grid = grid.reshape([2, 1, spatial_size[1], spatial_size[0]])
     pos_embed_spatial = get_2d_sincos_pos_embed_from_grid(embed_dim_spatial, grid)
-    grid_t = np.arange(temporal_size, dtype=np.float32) / temporal_interpolation_scale
+
+    # Generate temporal grid
+    grid_t = paddle.arange(temporal_size, dtype="float32") / temporal_interpolation_scale
     pos_embed_temporal = get_1d_sincos_pos_embed_from_grid(embed_dim_temporal, grid_t)
-    pos_embed_spatial = pos_embed_spatial[np.newaxis, :, :]
-    pos_embed_spatial = np.repeat(pos_embed_spatial, temporal_size, axis=0)
-    pos_embed_temporal = pos_embed_temporal[:, np.newaxis, :]
-    pos_embed_temporal = np.repeat(pos_embed_temporal, spatial_size[0] * spatial_size[1], axis=1)
-    pos_embed = np.concatenate([pos_embed_temporal, pos_embed_spatial], axis=-1)
+
+    # Combine spatial and temporal embeddings
+    pos_embed_spatial = pos_embed_spatial.unsqueeze(0)
+    pos_embed_spatial = pos_embed_spatial.tile([temporal_size, 1, 1])
+    pos_embed_temporal = pos_embed_temporal.unsqueeze(1)
+    pos_embed_temporal = pos_embed_temporal.tile([1, spatial_size[0] * spatial_size[1], 1])
+    pos_embed = paddle.concat([pos_embed_temporal, pos_embed_spatial], axis=-1)
+
     return pos_embed
 
 
@@ -1079,9 +1088,9 @@ def get_3d_rotary_pos_embed(
         `torch.Tensor`: positional embedding with shape `(temporal_size * grid_size[0] * grid_size[1], embed_dim/2)`.
     """
     start, stop = crops_coords
-    grid_h = np.linspace(start[0], stop[0], grid_size[0], endpoint=False, dtype=np.float32)
-    grid_w = np.linspace(start[1], stop[1], grid_size[1], endpoint=False, dtype=np.float32)
-    grid_t = np.linspace(0, temporal_size, temporal_size, endpoint=False, dtype=np.float32)
+    grid_h = paddle.linspace(start[0], stop[0], grid_size[0], dtype="float32")
+    grid_w = paddle.linspace(start[1], stop[1], grid_size[1], dtype="float32")
+    grid_t = paddle.linspace(0, temporal_size, temporal_size, dtype="float32")
     dim_t = embed_dim // 4
     dim_h = embed_dim // 8 * 3
     dim_w = embed_dim // 8 * 3

@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import argparse
+import datetime
 import gc
 import os
 import re
@@ -139,12 +140,28 @@ def parse_args():
         choices=["even", "spacing", "end"],
         help="The layout type for vctrl. Choices: 'even', 'spacing', 'end'.",
     )
+    parser.add_argument(
+        "--benchmark",
+        type=(lambda x: str(x).lower() in ["true", "1", "yes"]),
+        default=False,
+        help="if set to True, measure inference performance",
+    )
+    parser.add_argument(
+        "--inference_optimize",
+        type=(lambda x: str(x).lower() in ["true", "1", "yes"]),
+        default=False,
+        help="If set to True, all optimizations except Triton are enabled.",
+    )
     args = parser.parse_args()
     return args
 
 
 if __name__ == "__main__":
     args = parse_args()
+    if args.inference_optimize:
+        os.environ["INFERENCE_OPTIMIZE"] = "True"
+        os.environ["INFERENCE_OPTIMIZE_TRITON"] = "True"
+
     assert (args.control_images_folder is None) ^ (
         args.control_video_path is None
     ), "must and only one of [validation_control_images_folder, validation_control_video_path] should be given"
@@ -198,6 +215,50 @@ if __name__ == "__main__":
             validation_control_images = [ref_image] + validation_control_images
     num_frames = len(validation_control_images)
     num_frames = min(num_frames, args.max_frame)
+
+if args.benchmark:
+    print("Benchmarking...")
+    warm_up = 1
+    repeat_times = 2
+    sumtime = 0.0
+    times = repeat_times + warm_up
+    for i in range(times):
+        if i > 0:
+            paddle.device.synchronize()
+            starttime = datetime.datetime.now()
+        with paddle.no_grad():
+            video = pipeline(
+                image=ref_image,
+                prompt=args.prompt,
+                num_inference_steps=args.num_inference_steps,
+                num_frames=num_frames,
+                guidance_scale=args.guidance_scale,
+                generator=paddle.Generator().manual_seed(42),
+                conditioning_frames=validation_control_images[:num_frames],
+                conditioning_frame_indices=list(range(num_frames)),
+                conditioning_scale=args.conditioning_scale,
+                width=args.width,
+                height=args.height,
+                task=args.task,
+                conditioning_masks=validation_mask_images[:num_frames] if args.task == "mask" else None,
+                vctrl_layout_type=args.vctrl_layout_type,
+            ).frames[0]
+        if i > 0:
+            paddle.device.synchronize()
+            endtime = datetime.datetime.now()
+
+            final_result.append(video)
+            save_vid_side_by_side(final_result, validation_control_images[:num_frames], args.output_dir, fps=args.fps)
+
+        if i > 0:
+            duringtime = endtime - starttime
+            duringtime = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
+            sumtime += duringtime
+            print("Single end to end time : ", duringtime, "ms")
+            inference_global_mem = paddle.device.cuda.memory_reserved() / (1024**3)
+            print(f"Inference used CUDA memory : {inference_global_mem:.3f} GiB")
+    print("Single ave end to end time : ", sumtime / repeat_times, "ms")
+else:
     video = pipeline(
         image=ref_image,
         prompt=args.prompt,
