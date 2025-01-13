@@ -132,6 +132,14 @@ def main():
             train_ds, max_length=data_args.max_length, processor=train_processor, tokenizer=tokenizer
         )
 
+    input_spec = [
+        paddle.static.InputSpec(name='input_ids', shape=[-1, 2048], dtype='int32'),
+        paddle.static.InputSpec(name='attention_mask', shape=[-1, 2048], dtype='bool'),
+        paddle.static.InputSpec(name='labels', shape=[-1, 2048], dtype='int32'),
+        paddle.static.InputSpec(name='images', shape=[-1, 3, 336, 336], dtype='float32'),
+    ]
+    model = paddle.jit.to_static(model, input_spec=input_spec)
+
     # get Trainer
     trainer = get_trainer(
         pretrained_model_name_or_path=model_args.model_name_or_path,
