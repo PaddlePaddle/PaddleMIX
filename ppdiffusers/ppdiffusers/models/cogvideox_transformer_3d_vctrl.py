@@ -94,21 +94,6 @@ class CogVideoXBlock(paddle.nn.Layer):
         super().__init__()
         self.norm1 = CogVideoXLayerNormZero(time_embed_dim, dim, norm_elementwise_affine, norm_eps, bias=True)
 
-        self.inference_optimize = os.getenv("INFERENCE_OPTIMIZE") == "True"
-        if self.inference_optimize:
-            self.silu = paddle.nn.Silu()
-            self.linear1 = paddle.nn.Linear(in_features=time_embed_dim, out_features=6 * dim, bias_attr=True)
-            self.norm3 = paddle.nn.LayerNorm(
-                normalized_shape=dim,
-                epsilon=norm_eps,
-                weight_attr=norm_elementwise_affine,
-                bias_attr=norm_elementwise_affine,
-            )
-            self.linear1.weight = self.norm1.linear.weight
-            self.linear1.bias = self.norm1.linear.bias
-            self.norm3.weight = self.norm1.norm.weight
-            self.norm3.bias = self.norm1.norm.bias
-
         self.attn1 = Attention(
             query_dim=dim,
             dim_head=attention_head_dim,
@@ -121,18 +106,6 @@ class CogVideoXBlock(paddle.nn.Layer):
         )
 
         self.norm2 = CogVideoXLayerNormZero(time_embed_dim, dim, norm_elementwise_affine, norm_eps, bias=True)
-        if self.inference_optimize:
-            self.linear2 = paddle.nn.Linear(in_features=time_embed_dim, out_features=6 * dim, bias_attr=True)
-            self.norm4 = paddle.nn.LayerNorm(
-                normalized_shape=dim,
-                epsilon=norm_eps,
-                weight_attr=norm_elementwise_affine,
-                bias_attr=norm_elementwise_affine,
-            )
-            self.linear2.weight = self.norm2.linear.weight
-            self.linear2.bias = self.norm2.linear.bias
-            self.norm4.weight = self.norm2.norm.weight
-            self.norm4.bias = self.norm2.norm.bias
 
         self.ff = FeedForward(
             dim,
@@ -157,39 +130,18 @@ class CogVideoXBlock(paddle.nn.Layer):
             hidden_states, encoder_hidden_states, temb
         )
 
-        if self.inference_optimize:
-            shift, scale, gate, enc_shift, enc_scale, enc_gate = self.linear1(self.silu(temb)).chunk(chunks=6, axis=1)
-            norm_hidden_states = self.norm3(hidden_states) * (1 + scale)[:, None, :] + shift[:, None, :]
-            norm_encoder_hidden_states = (
-                self.norm3(encoder_hidden_states) * (1 + enc_scale)[:, None, :] + enc_shift[:, None, :]
-            )
-            gate_msa, enc_gate_msa = gate, enc_gate
-
         attn_hidden_states, attn_encoder_hidden_states = self.attn1(
             hidden_states=norm_hidden_states,
             encoder_hidden_states=norm_encoder_hidden_states,
             image_rotary_emb=image_rotary_emb,
         )
 
-        if self.inference_optimize:
-            shift, scale, gate, enc_shift, enc_scale, enc_gate = self.linear2(self.silu(temb)).chunk(chunks=6, axis=1)
-            gate_ff, enc_gate_ff = gate[:, None, :], enc_gate[:, None, :]
+        hidden_states = hidden_states + gate_msa * attn_hidden_states
+        encoder_hidden_states = encoder_hidden_states + enc_gate_msa * attn_encoder_hidden_states
 
-            import paddlemix
-
-            hidden_states, norm_hidden_states = paddlemix.triton_ops.fused_adaLN_scale_residual(
-                hidden_states, attn_hidden_states, gate_msa, scale, shift, epsilon=1e-05
-            )
-            encoder_hidden_states, norm_encoder_hidden_states = paddlemix.triton_ops.fused_adaLN_scale_residual(
-                encoder_hidden_states, attn_encoder_hidden_states, enc_gate_msa, enc_scale, enc_shift, epsilon=1e-05
-            )
-        else:
-            hidden_states = hidden_states + gate_msa * attn_hidden_states
-            encoder_hidden_states = encoder_hidden_states + enc_gate_msa * attn_encoder_hidden_states
-
-            norm_hidden_states, norm_encoder_hidden_states, gate_ff, enc_gate_ff = self.norm2(
-                hidden_states, encoder_hidden_states, temb
-            )
+        norm_hidden_states, norm_encoder_hidden_states, gate_ff, enc_gate_ff = self.norm2(
+            hidden_states, encoder_hidden_states, temb
+        )
 
         norm_hidden_states = paddle.concat(x=[norm_encoder_hidden_states, norm_hidden_states], axis=1)
 

@@ -212,16 +212,6 @@ class VCtrlBlock(paddle.nn.Layer):
         super().__init__()
         self.norm1 = VCtrlLayerNormZero(time_embed_dim, dim, norm_elementwise_affine, norm_eps, bias=True)
 
-        self.inference_optimize = os.getenv("INFERENCE_OPTIMIZE") == "True"
-        if self.inference_optimize:
-            self.silu1 = paddle.nn.Silu()
-            self.linear1 = paddle.nn.Linear(in_features=time_embed_dim, out_features=3 * dim, bias_attr=True)
-            self.norm3 = paddle.nn.LayerNorm(normalized_shape=dim, epsilon=1e-05, weight_attr=True, bias_attr=True)
-            self.linear1.weight = self.norm1.linear.weight
-            self.linear1.bias = self.norm1.linear.bias
-            self.norm3.weight = self.norm1.norm.weight
-            self.norm3.bias = self.norm1.norm.bias
-
         self.attn1 = Attention(
             query_dim=dim,
             dim_head=attention_head_dim,
@@ -233,15 +223,6 @@ class VCtrlBlock(paddle.nn.Layer):
             processor=VCtrlAttnProcessor2_0(),
         )
         self.norm2 = VCtrlLayerNormZero(time_embed_dim, dim, norm_elementwise_affine, norm_eps, bias=True)
-
-        if self.inference_optimize:
-            self.silu2 = paddle.nn.Silu()
-            self.linear2 = paddle.nn.Linear(in_features=time_embed_dim, out_features=3 * dim, bias_attr=True)
-            self.norm4 = paddle.nn.LayerNorm(normalized_shape=dim, epsilon=1e-05, weight_attr=True, bias_attr=True)
-            self.linear2.weight = self.norm2.linear.weight
-            self.linear2.bias = self.norm2.linear.bias
-            self.norm4.weight = self.norm2.norm.weight
-            self.norm4.bias = self.norm2.norm.bias
 
         self.ff = FeedForward(
             dim,
@@ -259,27 +240,10 @@ class VCtrlBlock(paddle.nn.Layer):
         image_rotary_emb: Optional[Tuple[paddle.Tensor, paddle.Tensor]] = None,
     ) -> paddle.Tensor:
 
-        if self.inference_optimize:
-            shift, scale, gate = self.linear1(self.silu1(temb)).chunk(chunks=3, axis=1)
-            norm_hidden_states = self.norm3(hidden_states) * (1 + scale)[:, None, :] + shift[:, None, :]
-            gate_msa = gate
-        else:
-            norm_hidden_states, gate_msa = self.norm1(hidden_states, temb)
-
+        norm_hidden_states, gate_msa = self.norm1(hidden_states, temb)
         attn_hidden_states = self.attn1(hidden_states=norm_hidden_states, image_rotary_emb=image_rotary_emb)
-
-        if self.inference_optimize:
-            shift, scale, gate = self.linear2(self.silu2(temb)).chunk(chunks=3, axis=1)
-            gate_ff = gate[:, None, :]
-            import paddlemix
-
-            hidden_states, norm_hidden_states = paddlemix.triton_ops.fused_adaLN_scale_residual(
-                hidden_states, attn_hidden_states, gate_msa, scale, shift, epsilon=1e-05
-            )
-        else:
-            hidden_states = hidden_states + gate_msa * attn_hidden_states
-            norm_hidden_states, gate_ff = self.norm2(hidden_states, temb)
-
+        hidden_states = hidden_states + gate_msa * attn_hidden_states
+        norm_hidden_states, gate_ff = self.norm2(hidden_states, temb)
         ff_output = self.ff(norm_hidden_states)
         hidden_states = hidden_states + gate_ff * ff_output
         return hidden_states
