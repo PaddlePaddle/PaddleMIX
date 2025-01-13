@@ -26,6 +26,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
+from paddlenlp.transformers.configuration_utils import PretrainedConfig
 from paddlenlp.transformers.model_outputs import BaseModelOutputWithPast, ModelOutput
 from paddlenlp.transformers.model_utils import PretrainedModel
 
@@ -44,6 +45,53 @@ logger = logging.get_logger(__name__)
 
 flash_attn_func, flash_attn_varlen_func = has_flash_attn_func()
 _IS_NPU = "npu" in paddle.get_device()
+
+
+def _compute_default_rope_parameters(
+    config: Optional[PretrainedConfig] = None,
+    device: Optional["paddle.device"] = None,
+    seq_len: Optional[int] = None,
+    **rope_kwargs,
+) -> Tuple["paddle.Tensor", float]:
+    """
+    Computes the inverse frequencies according to the original RoPE implementation
+    Args:
+        config ([`~transformers.PretrainedConfig`]):
+            The model configuration.
+        device (`paddle.device`):
+            The device to use for initialization of the inverse frequencies.
+        seq_len (`int`, *optional*):
+            The current sequence length. Unused for this type of RoPE.
+        rope_kwargs (`Dict`, *optional*):
+            BC compatibility with the previous RoPE class instantiation, will be removed in v4.45.
+    Returns:
+        Tuple of (`paddle.Tensor`, `float`), containing the inverse frequencies for the RoPE embeddings and the
+        post-processing scaling factor applied to the computed cos/sin (unused in this type of RoPE).
+    """
+    if config is not None and len(rope_kwargs) > 0:
+        raise ValueError(
+            "Unexpected arguments: `**rope_kwargs` and `config` are mutually exclusive in "
+            f"`_compute_default_rope_parameters`, got `rope_kwargs`={rope_kwargs} and `config`={config}"
+        )
+    if len(rope_kwargs) > 0:
+        base = rope_kwargs["base"]
+        dim = rope_kwargs["dim"]
+    elif config is not None:
+        base = config.rope_theta
+        partial_rotary_factor = config.partial_rotary_factor if hasattr(config, "partial_rotary_factor") else 1.0
+        head_dim = getattr(config, "head_dim", config.hidden_size // config.num_attention_heads)
+        dim = int(head_dim * partial_rotary_factor)
+
+    attention_factor = 1.0  # Unused in this type of RoPE
+
+    # Compute the inverse frequencies
+    inv_freq = 1.0 / (base ** (paddle.arange(0, dim, 2, dtype="int64").astype("float32") / dim))
+    return inv_freq, attention_factor
+
+
+ROPE_INIT_FUNCTIONS = {
+    "default": _compute_default_rope_parameters,
+}
 
 
 def _get_unpad_data(attention_mask):
@@ -134,39 +182,130 @@ class Qwen2VLCausalLMOutputWithPast(ModelOutput):
     rope_deltas: Optional[paddle.Tensor] = None
 
 
-class Qwen2RotaryEmbedding(nn.Layer):
-    def __init__(self, dim, max_position_embeddings=2048, base=10000):
+class Qwen2VLRotaryEmbedding(nn.Layer):
+    def __init__(
+        self,
+        dim=None,
+        max_position_embeddings=2048,
+        base=10000,
+        device=None,
+        scaling_factor=1.0,
+        rope_type="default",
+        config: Optional[Qwen2VLConfig] = None,
+    ):
         super().__init__()
-        self.dim = dim
-        self.max_position_embeddings = max_position_embeddings
-        self.base = base
-        # [dim / 2]
-        self.inv_freq = 1.0 / (self.base ** (paddle.cast(paddle.arange(0, self.dim, 2), dtype="float32") / self.dim))
-        self._set_cos_sin_cache(seq_len=max_position_embeddings)
+        # TODO (joao): remove the `if` below, only used for BC
+        self.rope_kwargs = {}
+        if config is None:
+            logger.warning_once(
+                "`Qwen2VLRotaryEmbedding` can now be fully parameterized by passing the model config through the "
+                "`config` argument. All other arguments will be removed in v4.46"
+            )
+            self.rope_kwargs = {
+                "rope_type": rope_type,
+                "factor": scaling_factor,
+                "dim": dim,
+                "base": base,
+                "max_position_embeddings": max_position_embeddings,
+            }
+            self.rope_type = rope_type
+            self.max_seq_len_cached = max_position_embeddings
+            self.original_max_seq_len = max_position_embeddings
+        else:
+            # BC: "rope_type" was originally "type"
+            if config.rope_scaling is not None:
+                self.rope_type = config.rope_scaling.get("rope_type", config.rope_scaling.get("type"))
+            else:
+                self.rope_type = "default"
+            self.max_seq_len_cached = config.max_position_embeddings
+            self.original_max_seq_len = config.max_position_embeddings
 
-    def _set_cos_sin_cache(self, seq_len):
-        self.max_seq_len_cached = seq_len
-        # [seq_len]
-        t = paddle.arange(seq_len, dtype="float32")
-        # [seq_len, dim/2]
-        freqs = paddle.einsum("i,j->ij", t, self.inv_freq)
-        # Different from paper, but it uses a different permutation in order to obtain the same calculation
-        # [seq_len, dim]
-        emb = paddle.concat([freqs, freqs], axis=-1)
-        # [1, seqlen, 1, dim]
-        self.cos_cached = emb.cos()
-        self.sin_cached = emb.sin()
+        self.config = config
+        self.rope_init_fn = ROPE_INIT_FUNCTIONS[self.rope_type]
 
-    def forward(self, x, seq_len=None):
-        # x: [bs, num_attention_heads, seq_len, head_size]
-        if seq_len > self.max_seq_len_cached:
-            self._set_cos_sin_cache(seq_len)
-        cos = self.cos_cached[:seq_len]
-        sin = self.sin_cached[:seq_len]
-        return (
-            cos.cast(x.dtype) if cos.dtype != x.dtype else cos,
-            sin.cast(x.dtype) if sin.dtype != x.dtype else sin,
+        self.inv_freq, self.attention_scaling = self.rope_init_fn(self.config, device, **self.rope_kwargs)
+        self.original_inv_freq = self.inv_freq
+
+    def _dynamic_frequency_update(self, position_ids, device):
+        """
+        dynamic RoPE layers should recompute `inv_freq` in the following situations:
+        1 - growing beyond the cached sequence length (allow scaling)
+        2 - the current sequence length is in the original scale (avoid losing precision with small sequences)
+        """
+        seq_len = paddle.max(position_ids) + 1
+        if seq_len > self.max_seq_len_cached:  # growth
+            inv_freq, self.attention_scaling = self.rope_init_fn(
+                self.config, device, seq_len=seq_len, **self.rope_kwargs
+            )
+            self.inv_freq = inv_freq
+            self.max_seq_len_cached = seq_len
+
+        if seq_len < self.original_max_seq_len and self.max_seq_len_cached > self.original_max_seq_len:  # reset
+            self.inv_freq = self.original_inv_freq
+            self.max_seq_len_cached = self.original_max_seq_len
+
+    @paddle.no_grad()
+    def forward(self, x, position_ids):
+        if "dynamic" in self.rope_type:
+            self._dynamic_frequency_update(position_ids, device=x.device)
+
+        # Core RoPE block. In contrast to other models, Qwen2_VL has different position ids for thw grids
+        # So we expand the inv_freq to shape (3, ...)
+        inv_freq_expanded = (
+            self.inv_freq[None, None, :, None].astype("float32").expand([3, position_ids.shape[1], -1, 1])
         )
+        position_ids_expanded = position_ids[:, :, None, :].astype("float32")  # shape (3, bs, 1, positions)
+        # Force float32 (see https://github.com/huggingface/transformers/pull/29285)
+        device_type = paddle.get_device()
+        device_type = device_type if isinstance(device_type, str) and device_type != "mps" else "cpu"
+        with paddle.amp.auto_cast():
+            # Compute frequencies by matrix multiplication and transpose
+            # inv_freq_expanded shape: [3, bs, dim/2, 1]
+            # position_ids_expanded shape: [3, bs, 1, positions]
+            # Result shape after matmul: [3, bs, dim/2, positions]
+            # After transpose: [3, bs, positions, dim/2]
+            freqs = paddle.matmul(inv_freq_expanded, position_ids_expanded)
+            freqs = freqs.transpose([0, 1, 3, 2])
+            emb = paddle.concat((freqs, freqs), axis=-1)
+            cos = emb.cos()
+            sin = emb.sin()
+
+        # Advanced RoPE types (e.g. yarn) apply a post-processing scaling factor, equivalent to scaling attention
+        cos = cos * self.attention_scaling
+        sin = sin * self.attention_scaling
+
+        return cos.astype(x.dtype), sin.astype(x.dtype)
+
+    #     self.dim = dim
+    #     self.max_position_embeddings = max_position_embeddings
+    #     self.base = base
+    #     # [dim / 2]
+    #     self.inv_freq = 1.0 / (self.base ** (paddle.cast(paddle.arange(0, self.dim, 2), dtype="float32") / self.dim))
+    #     self._set_cos_sin_cache(seq_len=max_position_embeddings)
+
+    # def _set_cos_sin_cache(self, seq_len):
+    #     self.max_seq_len_cached = seq_len
+    #     # [seq_len]
+    #     t = paddle.arange(seq_len, dtype="float32")
+    #     # [seq_len, dim/2]
+    #     freqs = paddle.einsum("i,j->ij", t, self.inv_freq)
+    #     # Different from paper, but it uses a different permutation in order to obtain the same calculation
+    #     # [seq_len, dim]
+    #     emb = paddle.concat([freqs, freqs], axis=-1)
+    #     # [1, seqlen, 1, dim]
+    #     self.cos_cached = emb.cos()
+    #     self.sin_cached = emb.sin()
+
+    # def forward(self, x, seq_len=None):
+    #     # x: [bs, num_attention_heads, seq_len, head_size]
+    #     if seq_len > self.max_seq_len_cached:
+    #         self._set_cos_sin_cache(seq_len)
+    #     cos = self.cos_cached[:seq_len]
+    #     sin = self.sin_cached[:seq_len]
+    #     return (
+    #         cos.cast(x.dtype) if cos.dtype != x.dtype else cos,
+    #         sin.cast(x.dtype) if sin.dtype != x.dtype else sin,
+    #     )
 
 
 # Copied from transformers.models.llama.modeling_llama.rotate_half
@@ -177,7 +316,7 @@ def rotate_half(x):
     return paddle.concat([-x2, x1], axis=-1)  # shape is the same as x
 
 
-def apply_multimodal_rotary_pos_emb(q, k, cos, sin, position_ids, mrope_section, unsqueeze_dim=1):
+def apply_multimodal_rotary_pos_emb(q, k, cos, sin, mrope_section, unsqueeze_dim=1):
     """Applies Rotary Position Embedding with Multimodal Sections to the query and key tensors (https://qwenlm.github.io/blog/qwen2-vl/).
 
     Explanation:
@@ -210,8 +349,8 @@ def apply_multimodal_rotary_pos_emb(q, k, cos, sin, position_ids, mrope_section,
         `tuple(paddle.Tensor)` comprising of the query and key tensors rotated using the Rotary Position Embedding.
     """
 
-    cos = cos[position_ids]
-    sin = sin[position_ids]
+    # cos = cos[position_ids]
+    # sin = sin[position_ids]
     mrope_section = mrope_section * 2
     cos = paddle.concat(x=[m[i % 3] for i, m in enumerate(cos.split(mrope_section, axis=-1))], axis=-1).unsqueeze(
         axis=unsqueeze_dim
@@ -558,7 +697,7 @@ class Qwen2VLAttention(nn.Layer):
         self.v_proj = nn.Linear(self.hidden_size, self.num_key_value_heads * self.head_dim, bias_attr=True)
         self.o_proj = nn.Linear(self.num_heads * self.head_dim, self.hidden_size, bias_attr=False)
 
-        self.rotary_emb = Qwen2RotaryEmbedding(
+        self.rotary_emb = Qwen2VLRotaryEmbedding(
             self.head_dim,
             max_position_embeddings=self.max_position_embeddings,
             base=self.rope_theta,
@@ -596,9 +735,9 @@ class Qwen2VLAttention(nn.Layer):
             kv_seq_len += cache_position[0] + 1
             # kv_seq_len += past_key_value[0].shape[-2] # qwen2是 [-3]
 
-        cos, sin = self.rotary_emb(value_states, seq_len=kv_seq_len)
+        cos, sin = self.rotary_emb(value_states, position_ids)
         query_states, key_states = apply_multimodal_rotary_pos_emb(
-            query_states, key_states, cos, sin, position_ids, self.rope_scaling["mrope_section"]
+            query_states, key_states, cos, sin, self.rope_scaling["mrope_section"]
         )
 
         # [bs, num_head, seq_len, head_dim]
@@ -684,9 +823,9 @@ class Qwen2VLFlashAttention2(Qwen2VLAttention):
             kv_seq_len += cache_position[0] + 1
 
         # Because the input can be padded, the absolute sequence length depends on the max position id.
-        cos, sin = self.rotary_emb(value_states, seq_len=kv_seq_len)
+        cos, sin = self.rotary_emb(value_states, position_ids)
         query_states, key_states = apply_multimodal_rotary_pos_emb(
-            query_states, key_states, cos, sin, position_ids, self.rope_scaling["mrope_section"]
+            query_states, key_states, cos, sin, self.rope_scaling["mrope_section"]
         )
 
         if past_key_value is not None:
