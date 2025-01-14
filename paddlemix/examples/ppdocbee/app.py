@@ -24,6 +24,7 @@ import gradio as gr
 import numpy as np
 import paddle
 from PIL import Image
+import shutil
 
 # 设置使用的GPU设备
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
@@ -36,6 +37,7 @@ dtype = "bfloat16"  # V100请改成float16
 model = None
 processor = None
 
+#显卡资源充足可以去掉这个
 min_pixels = 256 * 28 * 28  # 最小像素数
 max_pixels = 48 * 48 * 28 * 28  # 最大像素数
 
@@ -129,13 +131,7 @@ class ImageCache:
 
             if not is_example:
                 # 处理上传的图片文件
-                with Image.open(image_path) as img:
-                    # 如果需要，转换为RGB
-                    if img.mode != "RGB":
-                        img = img.convert("RGB")
-                    img.save(new_path)
-
-                # 更新当前图片之前清理之前的图片
+                shutil.copy2(image_path, new_path)
                 self.cleanup_previous()
 
             self.current_image = new_path
@@ -244,7 +240,7 @@ def multimodal_understanding(image, question, seed=42, top_p=0.95, temperature=0
         # 处理视觉信息
         image_inputs, video_inputs = process_vision_info(messages)
         image_pad_token = "<|vision_start|><|image_pad|><|vision_end|>"
-        text = f"<|im_start|>system\n你是一个非常棒的多模态理解的AI助手。<|im_end|>\n<|im_start|>user\n{image_pad_token}{prompts}<|im_end|>\n<|im_start|>assistant\n"
+        text = f"<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n{image_pad_token}{prompts}<|im_end|>\n<|im_start|>assistant\n"
 
         # 生成回答
         with paddle.no_grad():

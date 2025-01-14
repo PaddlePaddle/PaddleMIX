@@ -15,9 +15,11 @@
 
 from .blip_processing import *
 from .clip_processing import *
+from .emu3_processing import *
 from .eva02_processing import *
 from .got_process import *
 from .groundingdino_processing import *
+from .image_processing_emu3 import *
 from .image_processing_minicpmv import *
 from .imagebind_processing import *
 from .internlm_xcomposer2_processing import *

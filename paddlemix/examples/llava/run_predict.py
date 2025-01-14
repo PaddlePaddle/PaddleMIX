@@ -51,14 +51,14 @@ def main(args):
     model_name_or_path = args.model_path
     tokenizer = LLavaTokenizer.from_pretrained(model_name_or_path)
     model_config = LlavaConfig.from_pretrained(model_name_or_path)
-    model = LlavaLlamaForCausalLM.from_pretrained(model_name_or_path, dtype=dtype)
+    model = LlavaLlamaForCausalLM.from_pretrained(model_name_or_path, dtype=compute_dtype)
     model.eval()
     name_or_path = (os.path.join(model_name_or_path, "processor", "eval"))
     image_processor = CLIPImageProcessor.from_pretrained(name_or_path)
     processor = LlavaProcessor(
         image_processor, 
         tokenizer,
-        max_length=max_new_tokens, 
+        max_length=args.max_new_tokens, 
         image_aspect_ratio=model_config.image_aspect_ratio
         )
 
