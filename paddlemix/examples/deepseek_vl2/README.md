@@ -11,6 +11,7 @@
 |--------------------|
 | deepseek-ai/deepseek-vl2-tiny  |
 | deepseek-ai/deepseek-vl2-small  |
+| deepseek-ai/deepseek-vl2  |
 
 注意：与huggingface权重同名，但权重为paddle框架的Tensor，使用`xxx.from_pretrained("deepseek-ai/deepseek-vl2-tiny")`即可自动下载该权重文件夹到缓存目录。
 
@@ -37,6 +38,7 @@ python paddlemix/examples/deepseek_vl2/single_image_infer.py \
 
 # Deepseek-vl2-tiny multi image understanding
 python paddlemix/examples/deepseek_vl2/multi_image_infer.py \
+    --model_path="deepseek-ai/deepseek-vl2-tiny" \
     --image_file_1="paddlemix/demo_images/examples_image1.jpg" \
     --image_file_2="paddlemix/demo_images/examples_image2.jpg" \
     --image_file_3="paddlemix/demo_images/twitter3.jpeg" \
@@ -45,6 +47,7 @@ python paddlemix/examples/deepseek_vl2/multi_image_infer.py \
 
 # Deepseek-vl2-tiny increment prefilling kv cache inference
 python paddlemix/examples/deepseek_vl2/increment_prefilling_infer.py \
+    --model_path="deepseek-ai/deepseek-vl2-tiny" \
     --image_file_1="paddlemix/demo_images/examples_image1.jpg" \
     --image_file_2="paddlemix/demo_images/examples_image2.jpg" \
     --image_file_3="paddlemix/demo_images/twitter3.jpeg" \
@@ -72,6 +75,8 @@ This is image_3: <image>
 <|Assistant|>: The first image shows a red panda resting on a wooden platform. The second image features a giant panda sitting among bamboo plants. The third image captures a rocket launch at night, with the bright trail of the rocket illuminating the sky.<｜end▁of▁sentence｜>
 ```
 ![mutli-infer](https://github.com/user-attachments/assets/4a1ade41-90ed-4d04-949a-90c3b54bdf78)
+
+
 ## 参考文献
 ```BibTeX
 @misc{wu2024deepseekvl2mixtureofexpertsvisionlanguagemodels,
