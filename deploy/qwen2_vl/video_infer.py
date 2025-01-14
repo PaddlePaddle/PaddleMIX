@@ -24,7 +24,7 @@ from paddlenlp.trl import llm_utils
 
 from paddlemix.models.qwen2_vl import MIXQwen2Tokenizer
 from paddlemix.models.qwen2_vl.modeling_qwen2_vl import (
-    Qwen2RotaryEmbedding,
+    Qwen2VLRotaryEmbedding,
     Qwen2VLForConditionalGeneration,
 )
 from paddlemix.processors.qwen2_vl_processing import (
@@ -157,7 +157,7 @@ def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: Predic
     position_ids = paddle.concat([position_ids, position_value], axis=-1)
 
     head_dim = config.hidden_size // config.num_attention_heads
-    qwen2_Embedding = Qwen2RotaryEmbedding(head_dim, config.max_position_embeddings, config.rope_theta)
+    qwen2_Embedding = Qwen2VLRotaryEmbedding(head_dim, config.max_position_embeddings, config.rope_theta)
     cos = qwen2_Embedding.cos_cached
     sin = qwen2_Embedding.sin_cached
 

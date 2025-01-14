@@ -226,6 +226,21 @@ class Qwen2VLRotaryEmbedding(nn.Layer):
         self.inv_freq, self.attention_scaling = self.rope_init_fn(self.config, device, **self.rope_kwargs)
         self.original_inv_freq = self.inv_freq
 
+        self._set_cos_sin_cache(seq_len=max_position_embeddings)
+
+    def _set_cos_sin_cache(self, seq_len):
+        self.max_seq_len_cached = seq_len
+        # [seq_len]
+        t = paddle.arange(seq_len, dtype="float32")
+        # [seq_len, dim/2]
+        freqs = paddle.einsum("i,j->ij", t, self.inv_freq)
+        # Different from paper, but it uses a different permutation in order to obtain the same calculation
+        # [seq_len, dim]
+        emb = paddle.concat([freqs, freqs], axis=-1)
+        # [1, seqlen, 1, dim]
+        self.cos_cached = emb.cos()
+        self.sin_cached = emb.sin()
+
     def _dynamic_frequency_update(self, position_ids, device):
         """
         dynamic RoPE layers should recompute `inv_freq` in the following situations:
@@ -243,7 +258,6 @@ class Qwen2VLRotaryEmbedding(nn.Layer):
         if seq_len < self.original_max_seq_len and self.max_seq_len_cached > self.original_max_seq_len:  # reset
             self.inv_freq = self.original_inv_freq
             self.max_seq_len_cached = self.original_max_seq_len
-
     @paddle.no_grad()
     def forward(self, x, position_ids):
         if "dynamic" in self.rope_type:
