@@ -2249,7 +2249,7 @@ class CogVideoXAttnProcessor2_0:
         hidden_states = F.scaled_dot_product_attention_(
             query.transpose([0, 2, 1, 3]),
             key.transpose([0, 2, 1, 3]),
-            value.transpose([0, 2, 1, 3]),
+            value,
             attn_mask=attention_mask,
             dropout_p=0.0,
             is_causal=False,
