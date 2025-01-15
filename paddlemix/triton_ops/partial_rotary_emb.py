@@ -21,11 +21,12 @@ from paddle.framework import in_dynamic_or_pir_mode
 
 from .triton_utils import get_dtype_str, paddle_use_triton, rendering_common_template
 
-#适配paddle的triton jit 编译器，这里key是为了配置 auto_tune，默认设置为1，不进行tune
+
+# 适配paddle的triton jit 编译器，这里key是为了配置 auto_tune，默认设置为1，不进行tune
 @paddle_use_triton(
     key=["1"],
 )
-def partial_rotary_emb_kernel(   #triton kernel
+def partial_rotary_emb_kernel(  # triton kernel
     q_ptr,
     k_ptr,
     cos_ptr,
@@ -72,7 +73,8 @@ def partial_rotary_emb_kernel(   #triton kernel
     tl.store(outk_ptr + read_offsets, ok0, mask=mask & even_mask)
     tl.store(outk_ptr + read_offsets + 1, ok1, mask=mask & even_mask)
 
-#triton python API
+
+# triton python API
 def partial_rotary_emb(
     q,
     k,
@@ -104,11 +106,10 @@ def partial_rotary_emb(
     op_name += get_dtype_str(q.dtype)
     op_name += f"_{HEAD_DIM}"
 
-    #这里配置了auto_tune的参数
+    # 这里配置了auto_tune的参数
     partial_rotary_emb_kernel_config = [
         {"num_warps": 4},
     ]
-    
 
     if op_name not in OpProtoHolder.instance().op_proto_map.keys():
         outq = paddle.empty_like(q)
@@ -128,7 +129,6 @@ def partial_rotary_emb(
         """
         return_tensor_names = "outq, outk"
 
-        
         template_used = rendering_common_template(
             partial_rotary_emb, prepare_attr_for_triton_kernel, prepare_ptr_for_triton_kernel, return_tensor_names
         )
