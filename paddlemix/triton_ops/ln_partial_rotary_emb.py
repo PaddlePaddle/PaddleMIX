@@ -40,27 +40,26 @@ def ln_partial_rotary_emb_kernel(
     batch,
     num_heads,
     seq_len,
-    head_dim,
     n_elements,
     norm_eps,
-    BLOCK_SIZE: tl.constexpr,
+    HEAD_DIM: tl.constexpr,
 ):
     # 计算当前线程处理的元素范围
     b_pid = tl.program_id(axis=0)
     h_pid = tl.program_id(axis=1)
     s_pid = tl.program_id(axis=2)
 
-    block_start = b_pid * num_heads * seq_len * head_dim + h_pid * seq_len * head_dim + s_pid * head_dim
-    read_offsets = block_start + tl.arange(0, BLOCK_SIZE)
+    block_start = b_pid * num_heads * seq_len * HEAD_DIM + h_pid * seq_len * HEAD_DIM + s_pid * HEAD_DIM
+    read_offsets = block_start + tl.arange(0, HEAD_DIM)
     mask = read_offsets < n_elements
     q = tl.load(q_ptr + read_offsets, mask=mask)
     k = tl.load(k_ptr + read_offsets, mask=mask)
 
     # qk layernorm
-    offs = tl.arange(0, BLOCK_SIZE)
-    masks = offs < BLOCK_SIZE
-    q_mean = tl.sum(q) / BLOCK_SIZE
-    q_var = tl.sum(q * q) / BLOCK_SIZE - q_mean * q_mean
+    offs = tl.arange(0, HEAD_DIM)
+    masks = offs < HEAD_DIM
+    q_mean = tl.sum(q) / HEAD_DIM
+    q_var = tl.sum(q * q) / HEAD_DIM - q_mean * q_mean
     q_rstd = 1 / tl.sqrt(q_var + norm_eps)
     q_resi_hat = (q - q_mean) * q_rstd
     q_weights = tl.load(q_norm_weight_ptr + offs, mask=masks)
@@ -68,8 +67,8 @@ def ln_partial_rotary_emb_kernel(
     q_bias = tl.load(q_norm_bias_ptr + offs, mask=masks)
     q_resi_hat = q_resi_hat + q_bias
 
-    k_mean = tl.sum(k, axis=0) / BLOCK_SIZE
-    k_var = tl.sum(k * k, axis=0) / BLOCK_SIZE - k_mean * k_mean
+    k_mean = tl.sum(k, axis=0) / HEAD_DIM
+    k_var = tl.sum(k * k, axis=0) / HEAD_DIM - k_mean * k_mean
     k_rstd = 1 / tl.sqrt(k_var + norm_eps)
     k_resi_hat = (k - k_mean) * k_rstd
     k_weights = tl.load(k_norm_weight_ptr + offs, mask=masks)
@@ -85,9 +84,9 @@ def ln_partial_rotary_emb_kernel(
         k1, k2 = tl.split(tl.reshape(k_resi_hat, (32, 2)))
         kc = tl.interleave(-k2, k1)
 
-        block_cs_start = (s_pid - text_seq_length) * head_dim
-        read_cs_offsets = block_cs_start + tl.arange(0, BLOCK_SIZE)
-        cs_mask = read_cs_offsets < ((seq_len - text_seq_length) * head_dim)
+        block_cs_start = (s_pid - text_seq_length) * HEAD_DIM
+        read_cs_offsets = block_cs_start + tl.arange(0, HEAD_DIM)
+        cs_mask = read_cs_offsets < ((seq_len - text_seq_length) * HEAD_DIM)
         cos = tl.load(cos_ptr + read_cs_offsets, mask=cs_mask)
         sin = tl.load(sin_ptr + read_cs_offsets, mask=cs_mask)
 
@@ -116,25 +115,24 @@ def ln_partial_rotary_emb(
     batch = q.shape[0]
     num_heads = q.shape[1]
     seq_len = q.shape[2]
-    head_dim = q.shape[3]
+    HEAD_DIM = q.shape[3]
     text_seq_length = text_seq_length_tensor.shape[0]
-    n_elements = batch * num_heads * seq_len * head_dim
+    n_elements = batch * num_heads * seq_len * HEAD_DIM
 
     prepare_attr_for_triton_kernel = """
     // 这个名字必须保证和kernel形式参数一致！
     int batch = q.dims()[0];
     int num_heads = q.dims()[1];
     int seq_len =  q.dims()[2];
-    int head_dim =  q.dims()[3];
+    int HEAD_DIM =  q.dims()[3];
     int text_seq_length = text_seq_length_tensor.dims()[0];
-    int n_elements = batch * num_heads * seq_len * head_dim;
+    int n_elements = batch * num_heads * seq_len * HEAD_DIM;
     """
 
-    assert head_dim == 64, "Now,head_dim is must is 64"
-    BLOCK_SIZE = head_dim
+    assert HEAD_DIM == 64, "Now,HEAD_DIM is must is 64"
     op_name = "ln_partial_rotary_emb"
     op_name += get_dtype_str(q.dtype)
-    op_name += f"_{BLOCK_SIZE}"
+    op_name += f"_{HEAD_DIM}"
     # 创建输出张量
 
     ln_partial_rotary_emb_kernel_config = [
@@ -182,10 +180,9 @@ def ln_partial_rotary_emb(
             batch=batch,
             num_heads=num_heads,
             seq_len=seq_len,
-            head_dim=head_dim,
             n_elements=n_elements,
             norm_eps=norm_eps,
-            BLOCK_SIZE=BLOCK_SIZE,
+            HEAD_DIM=HEAD_DIM,
         )
     if in_dynamic_or_pir_mode():
         # print(f"== we are in dynamic mode, op_name: {op_name}")

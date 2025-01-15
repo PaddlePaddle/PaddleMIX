@@ -21,11 +21,11 @@ from paddle.framework import in_dynamic_or_pir_mode
 
 from .triton_utils import get_dtype_str, paddle_use_triton, rendering_common_template
 
-
+#适配paddle的triton jit 编译器，这里key是为了配置 auto_tune，默认设置为1，不进行tune
 @paddle_use_triton(
     key=["1"],
 )
-def partial_rotary_emb_kernel(
+def partial_rotary_emb_kernel(   #triton kernel
     q_ptr,
     k_ptr,
     cos_ptr,
@@ -36,28 +36,27 @@ def partial_rotary_emb_kernel(
     batch,
     num_heads,
     seq_len,
-    head_dim,
     n_elements,
-    BLOCK_SIZE: tl.constexpr,
+    HEAD_DIM: tl.constexpr,
 ):
     # 计算当前线程处理的元素范围
     b_pid = tl.program_id(axis=0)  # grid内哪个Block
     h_pid = tl.program_id(axis=1)
     s_pid = tl.program_id(axis=2)
 
-    block_start = b_pid * num_heads * seq_len * head_dim + h_pid * seq_len * head_dim + s_pid * head_dim
-    read_offsets = block_start + tl.arange(0, BLOCK_SIZE)
+    block_start = b_pid * num_heads * seq_len * HEAD_DIM + h_pid * seq_len * HEAD_DIM + s_pid * HEAD_DIM
+    read_offsets = block_start + tl.arange(0, HEAD_DIM)
     mask = read_offsets < n_elements
-    even_mask = tl.arange(0, BLOCK_SIZE) % 2 == 0
+    even_mask = tl.arange(0, HEAD_DIM) % 2 == 0
 
     q0 = tl.load(q_ptr + read_offsets, mask=mask & even_mask)
     q1 = tl.load(q_ptr + read_offsets + 1, mask=mask & even_mask)
     k0 = tl.load(k_ptr + read_offsets, mask=mask & even_mask)
     k1 = tl.load(k_ptr + read_offsets + 1, mask=mask & even_mask)
 
-    block_cs_start = tl.where(s_pid >= text_seq_length, (s_pid - text_seq_length) * head_dim, 0)
-    read_cs_offsets = block_cs_start + tl.arange(0, BLOCK_SIZE)
-    cs_mask = read_cs_offsets < ((seq_len - text_seq_length) * head_dim)
+    block_cs_start = tl.where(s_pid >= text_seq_length, (s_pid - text_seq_length) * HEAD_DIM, 0)
+    read_cs_offsets = block_cs_start + tl.arange(0, HEAD_DIM)
+    cs_mask = read_cs_offsets < ((seq_len - text_seq_length) * HEAD_DIM)
     cos0 = tl.load(cos_ptr + read_cs_offsets, mask=cs_mask & even_mask)
     cos1 = tl.load(cos_ptr + read_cs_offsets + 1, mask=cs_mask & even_mask)
     sin0 = tl.load(sin_ptr + read_cs_offsets, mask=cs_mask & even_mask)
@@ -73,7 +72,7 @@ def partial_rotary_emb_kernel(
     tl.store(outk_ptr + read_offsets, ok0, mask=mask & even_mask)
     tl.store(outk_ptr + read_offsets + 1, ok1, mask=mask & even_mask)
 
-
+#triton python API
 def partial_rotary_emb(
     q,
     k,
@@ -84,36 +83,39 @@ def partial_rotary_emb(
     batch = q.shape[0]
     num_heads = q.shape[1]
     seq_len = q.shape[2]
-    head_dim = q.shape[3]
+    HEAD_DIM = q.shape[3]
     text_seq_length = text_seq_length_tensor.shape[0]
-    n_elements = batch * num_heads * seq_len * head_dim
+    n_elements = batch * num_heads * seq_len * HEAD_DIM
 
     prepare_attr_for_triton_kernel = """
-    // 这个名字必须保证和kernel形式参数一致！
+    // 这里是为了生成C++kernel，使用C++重新定义调用kernel时的输入参数，所以这些变量名字必须保证和triton kernel形参保持一致；
     int batch = q.dims()[0];
     int num_heads = q.dims()[1];
     int seq_len =  q.dims()[2];
-    int head_dim =  q.dims()[3];
+    int HEAD_DIM =  q.dims()[3];
     int text_seq_length = text_seq_length_tensor.dims()[0];
-    int n_elements = batch * num_heads * seq_len * head_dim;
+    int n_elements = batch * num_heads * seq_len * HEAD_DIM;
     """
 
-    assert head_dim == 64, "Now,head_dim is must is 64"
-    BLOCK_SIZE = head_dim
+    # 这里是为了将 python API name、dtype、以及 HEAD_DIM作为生成kernel的name，
+    # 以在不同情况下生成不同的kernel；
+    assert HEAD_DIM == 64, "Now,HEAD_DIM is must is 64"
     op_name = "partial_rotary_emb"
     op_name += get_dtype_str(q.dtype)
-    op_name += f"_{BLOCK_SIZE}"
-    # 创建输出张量
+    op_name += f"_{HEAD_DIM}"
 
+    #这里配置了auto_tune的参数
     partial_rotary_emb_kernel_config = [
         {"num_warps": 4},
     ]
+    
+
     if op_name not in OpProtoHolder.instance().op_proto_map.keys():
         outq = paddle.empty_like(q)
         outk = paddle.empty_like(k)
 
         prepare_ptr_for_triton_kernel = """
-        // 这个名字必须保证和kernel形式参数一致！
+        // 这里是为了生成C++kernel，使用C++重新定义调用kernel时的输入输出指针，所以这些变量名字必须保证和triton kernel形参保持一致；
         auto q_ptr = get_tensor_ptr(q);
         auto k_ptr = get_tensor_ptr(k);
         auto cos_ptr = get_tensor_ptr(cos);
@@ -126,6 +128,7 @@ def partial_rotary_emb(
         """
         return_tensor_names = "outq, outk"
 
+        
         template_used = rendering_common_template(
             partial_rotary_emb, prepare_attr_for_triton_kernel, prepare_ptr_for_triton_kernel, return_tensor_names
         )
@@ -142,9 +145,8 @@ def partial_rotary_emb(
             batch=batch,
             num_heads=num_heads,
             seq_len=seq_len,
-            head_dim=head_dim,
             n_elements=n_elements,
-            BLOCK_SIZE=BLOCK_SIZE,
+            HEAD_DIM=HEAD_DIM,
         )
     if in_dynamic_or_pir_mode():
         # print(f"== we are in dynamic mode, op_name: {op_name}")
