@@ -2227,6 +2227,7 @@ class CogVideoXAttnProcessor2_0:
                 if attn.norm_k is not None:
                     key = attn.norm_k(key)
                 if image_rotary_emb is not None and not attn.is_cross_attention:
+                    text_seq_length_tensor = paddle.empty([text_seq_length])
                     query, key = paddlemix.triton_ops.partial_rotary_emb(
                         query, key, text_seq_length_tensor, image_rotary_emb[0], image_rotary_emb[1]
                     )
