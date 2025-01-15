@@ -107,9 +107,7 @@ prompt = "A cat holding a sign that says hello world"
 image = pipe(
     prompt, num_inference_steps=args.num_inference_steps, width=args.width, height=args.height, generator=generator
 ).images[0]
-print('hello')
 if args.benchmark:
-    print('hello benchmark')
     # warmup
     for i in range(3):
         image = pipe(
