@@ -171,7 +171,7 @@ def create_train_tab(engine: "Engine") -> Dict[str, "Component"]:
         with gr.Column(scale=1):
             loss_viewer = gr.Plot()
 
-    input_elems.update({output_dir, config_path, output_box})
+    input_elems.update({output_dir, config_path, output_box, progress_bar})
     elem_dict.update(
         dict(
             arg_save_btn=arg_save_btn,
@@ -191,7 +191,7 @@ def create_train_tab(engine: "Engine") -> Dict[str, "Component"]:
     output_elems = [output_box, progress_bar, loss_viewer]
 
     start_btn.click(engine.runner.run_train_v2, input_elems, output_elems)
-    stop_btn.click(engine.runner.set_abort)
+    stop_btn.click(engine.runner.set_abort, input_elems, [output_box, progress_bar])
     resume_btn.change(engine.runner.monitor, outputs=output_elems, concurrency_limit=None)
 
     lang = engine.manager.get_elem_by_id("top.lang")

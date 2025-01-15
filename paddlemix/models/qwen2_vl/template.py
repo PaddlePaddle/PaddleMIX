@@ -128,7 +128,6 @@ class Template:
             else:
                 raise NotImplementedError("Unexpected role: {}".format(message["role"]))
 
-            # import pdb; pdb.set_trace()
             encoded_messages.append(self._convert_elements_to_ids(tokenizer, elements))
 
         return encoded_messages

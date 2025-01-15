@@ -45,7 +45,7 @@ if __name__ == '__main__':
             model_name=args.ernie_model_name, 
             access_token=args.access_token,
             api_type="aistudio", 
-            max_retries=1
+            max_retries=2
         ))
     layout_parser = PaddleXLayoutParser(gpu_id=args.gpu_id)
     image_extensions = ['*.png', '*.jpg', '*.jpeg']

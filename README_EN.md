@@ -8,7 +8,7 @@
     <a href="https://github.com/PaddlePaddle/PaddleMix/releases"><img src="https://img.shields.io/github/v/release/PaddlePaddle/PaddleMix?color=ffa"></a>
     <a href="./LICENSE"><img src="https://img.shields.io/badge/license-Apache%202-dfd.svg"></a>
     <a href=""><img src="https://img.shields.io/badge/python-3.7+-aff.svg"></a>
-    <a href=""><img src="https://img.shields.io/badge/os-linux%2C%20win%2C%20mac-pink.svg"></a>
+    <a href=""><img src="https://img.shields.io/badge/os-linux-pink.svg"></a>
     <a href="#📌社区交流"><img src="https://img.shields.io/badge/微信-小助手加群-green?logo=wechat&amp"></a>
     <a href="https://github.com/PaddlePaddle/PaddleMIX/stargazers"><img src="https://img.shields.io/github/stars/PaddlePaddle/PaddleMIX?color=ccf"></a>
 
@@ -33,25 +33,30 @@
 - [📌 Community](#community)
 
 
+
 ## 📰 News
 
-**🔥PaddleMIX Development Project Challenge (November 21 - December 22, 2024)**
+**🔥Live Course on January 16th, 2025 New PaddlePaddle PP Series Models Released!**
+- 🎉PaddleMIX introduces PP-VCtrl, the next-generation unified video generation control model! It efficiently handles tasks like character animation and scene transitions with precise control. The auxiliary condition encoder architecture enables flexible integration of control modules, while sparse residual connections ensure efficient feature propagation. The original video diffusion model architecture remains unchanged, avoiding full retraining. Leveraging high-quality datasets for recaption, human keypoint extraction, and video segmentation, along with advanced data augmentation and training strategies, PP-VCtrl improves adaptability and generation quality for edge control, pose, and mask-based video editing tasks. Its control performance and video quality outperform task-specific open-source methods. Join our live stream on **January 16th (Thursday) at 19:00** for an in-depth discussion of PP-VCtrl’s core technology and industrial applications. 🚀 Registration link:https://www.wjx.top/vm/m4sb0rh.aspx?udsid=664921
 
-**🔥2024.11.21 - 2024.12.22 PaddleMIX Development Project Challenge (Ended)**
+**🔥Live Course on January 7th, 2025 (Completed) New PaddlePaddle PP Series Models Released!**
+- 🔗Watch the PaddleMIX livestream replay: [Click here](https://aistudio.baidu.com/course/introduce/32178)
+- 🎉PaddleMIX introduces PP-DocBee, a lightweight multimodal document understanding model! Based on multimodal large models, it achieves end-to-end document image understanding, solving complex document parsing challenges in the industry. Using a ViT+MLP+LLM architecture, it optimizes data synthesis strategies, data preprocessing, training methods, and OCR post-processing assistance. By combining small OCR models with large LLM models and using rendering engine-based image data generation strategies, it achieves higher quality Q&A with controllable generation costs. Supports local gradio deployment, OpenAI service deployment, and provides quick access through the PaddlePaddle Galaxy Community online environment. On **January 7th (Tuesday) at 19:00**, join our livestream for a detailed explanation of PP-DocBee's core technology and industry applications. 🚀Registration link: https://www.wjx.top/vm/mlDdpSb.aspx?udsid=309483
 
-- ✨「Experience Officer Recruitment」PaddleMIX Development Project Challenge
-Click the link to register 🔗: [https://aistudio.baidu.com/activitydetail/1503019366](https://aistudio.baidu.com/activitydetail/1503019366)
-🏆 Submit to the PaddlePaddle Galaxy Community Project Hall to be featured and receive a PaddleMIX Experience Officer certification certificate and JD.com card incentives.
-Everyone is welcome to submit～
 
 <details>
-<summary>Click to view the event poster</summary>
+<summary>Click to expand event poster</summary>
 <p align="center">
-<img src='https://github.com/user-attachments/assets/27e0bbe3-0ff8-49ef-bd39-81a31a2b288b' width="25%">
+<img src='https://github.com/user-attachments/assets/5836c9df-4ea6-421b-acef-89f928e0763e'  width="80%">
 </p>
 </details>
 
+
 ## 📣 Latest Developments
+
+**🎉 2025.01.14 Support [deepseek-vl2](./paddlemix/examples/deepseek_vl2) inference**
+
+**🎉 2025.01.02 Added support for [PP-DocBee](./paddlemix/examples/ppdocbee) inference and training, supporting [high-performance inference](./deploy/ppdocbee)**
 
 **🎉 2024.12.17 Support for [InternVL2_5 (1B, 2B, 4B, 8B)](./paddlemix/examples/internvl2) inference**
 
@@ -63,13 +68,14 @@ Everyone is welcome to submit～
 
 **🎉 2024.11.1 Support for [LLaVA-OneVision](./paddlemix/examples/llava_onevision/) and [LLaVA-Critic](./paddlemix/examples/llava_critic/) inference**
 
+
+<details>
+<summary>Click to expand more</summary>
+
 **🎉 2024.10.31 Welcome to the Update of External Developer's Creative [Tutorial Page](paddlemix_applications.md)**
 * 🌟 Since the launch of our Large Model Suite Premium Project Collection activity on September 6th, we have received 30 high-quality developer projects. Among them, 25 premium projects have successfully passed the platform evaluation and been featured.
 
 * 🙏 We sincerely thank all developers for their wonderful creations based on our suite! 🚀 We cordially invite you to share your creativity as well - welcome to publish your tutorials on public web pages or in the [PaddlePaddle AI Studio](https://aistudio.baidu.com/aistudio/community/multimodal?from=singlemessage) community!
-
-<details>
-<summary>Click to expand more</summary>
 
 **🔥 PaddleMIX v2.1 Released on 2024.10.11**
 * Supports the [PaddleNLP 3.0 beta](https://github.com/PaddlePaddle/PaddleNLP/releases/tag/v3.0.0-beta0) version, allowing early access to its latest features.
@@ -284,6 +290,7 @@ python setup.py install
         <ul>
             <li><a href="paddlemix/examples/groundingdino">Grounding DINO</a></li>
             <li><a href="paddlemix/examples/sam">SAM</a></li>
+            <li><a href="paddlemix/examples/sam2">SAM2</a></li>
             <li><a href="paddlemix/examples/YOLO-World">YOLO-World</a></li>
       </ul>
       </ul>

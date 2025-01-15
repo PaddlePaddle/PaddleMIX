@@ -407,6 +407,13 @@ if is_ppxformers_available() or is_npu_available():
             paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
             attn_mask=paddle.ones((1, 2, 1, 1), dtype=paddle.float16),
         )
+        
+        from paddle.nn.functional.flash_attention import flash_attention
+        _ = flash_attention(
+            paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
+            paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
+            paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
+        )
     except Exception as error:
         flash_attn_error = error
         is_support_flash_attention = False
