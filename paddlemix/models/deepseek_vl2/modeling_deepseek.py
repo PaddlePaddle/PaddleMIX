@@ -291,7 +291,7 @@ class MoEGate(paddle.nn.Layer):
         )
         if self.topk_method == "noaux_tc":
             self.e_score_correction_bias = paddle.base.framework.EagerParamBase.from_tensor(
-                tensor=paddle.empty(shape=self.n_routed_experts)
+                tensor=paddle.empty(shape=[self.n_routed_experts])
             )
         self.reset_parameters()
 

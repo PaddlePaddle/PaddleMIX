@@ -165,7 +165,7 @@ class DeepseekVLV2ForCausalLM(DeepseekVLV2PreTrainedModel):
             ignore_head=vision_config.ignore_head,
             weight_init=vision_config.weight_init,
             num_classes=0,
-            approximate=True,
+            # approximate=True,
         )
         # delete params deterministic and num_recomputing_layers
         projector_config = config.projector_config
