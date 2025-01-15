@@ -106,6 +106,7 @@ class Attention(nn.Layer):
         processor: Optional["AttnProcessor"] = None,
         out_dim: int = None,
         context_pre_only=None,
+        pre_only=False,
         elementwise_affine: bool = True,
     ):
         super().__init__()
@@ -124,6 +125,7 @@ class Attention(nn.Layer):
         self.dropout = dropout
         self.out_dim = out_dim if out_dim is not None else query_dim
         self.context_pre_only = context_pre_only
+        self.pre_only = pre_only
 
         # we make use of this private variable to know whether this class is loaded
         # with an deprecated state dict so that we can convert it on the fly
@@ -224,10 +226,12 @@ class Attention(nn.Layer):
             self.add_v_proj = linear_cls(added_kv_proj_dim, self.inner_dim)
             if self.context_pre_only is not None:
                 self.add_q_proj = nn.Linear(added_kv_proj_dim, self.inner_dim)
-
-        self.to_out = nn.LayerList([])
-        self.to_out.append(linear_cls(self.inner_dim, query_dim, bias_attr=out_bias))
-        self.to_out.append(nn.Dropout(dropout))
+        if not self.pre_only:
+            self.to_out = nn.LayerList([])
+            self.to_out.append(linear_cls(self.inner_dim, query_dim, bias_attr=out_bias))
+            self.to_out.append(nn.Dropout(dropout))
+        else:
+            self.to_out = None
 
         if self.context_pre_only is not None and not self.context_pre_only:
             self.to_add_out = nn.Linear(self.inner_dim, self.out_dim, bias_attr=out_bias)
@@ -2174,9 +2178,9 @@ class FluxAttnProcessor2_0:
         inner_dim = key.shape[-1]
         head_dim = inner_dim // attn.heads
 
-        query = query.reshape([batch_size, -1, attn.heads, head_dim])
-        key = key.reshape([batch_size, -1, attn.heads, head_dim])
-        value = value.reshape([batch_size, -1, attn.heads, head_dim])
+        query = query.reshape([batch_size, -1, attn.heads, head_dim]).transpose([0, 2, 1, 3])
+        key = key.reshape([batch_size, -1, attn.heads, head_dim]).transpose([0, 2, 1, 3])
+        value = value.reshape([batch_size, -1, attn.heads, head_dim]).transpose([0, 2, 1, 3])
 
         if attn.norm_q is not None:
             query = attn.norm_q(query)
@@ -2190,9 +2194,9 @@ class FluxAttnProcessor2_0:
             encoder_hidden_states_key_proj = attn.add_k_proj(encoder_hidden_states)
             encoder_hidden_states_value_proj = attn.add_v_proj(encoder_hidden_states)
 
-            encoder_hidden_states_query_proj = encoder_hidden_states_query_proj.reshape([batch_size, -1, attn.heads, head_dim])
-            encoder_hidden_states_key_proj = encoder_hidden_states_key_proj.reshape([batch_size, -1, attn.heads, head_dim])
-            encoder_hidden_states_value_proj = encoder_hidden_states_value_proj.reshape([batch_size, -1, attn.heads, head_dim])
+            encoder_hidden_states_query_proj = encoder_hidden_states_query_proj.reshape([batch_size, -1, attn.heads, head_dim]).transpose([0, 2, 1, 3])
+            encoder_hidden_states_key_proj = encoder_hidden_states_key_proj.reshape([batch_size, -1, attn.heads, head_dim]).transpose([0, 2, 1, 3])
+            encoder_hidden_states_value_proj = encoder_hidden_states_value_proj.reshape([batch_size, -1, attn.heads, head_dim]).transpose([0, 2, 1, 3])
 
             if attn.norm_added_q is not None:
                 encoder_hidden_states_query_proj = attn.norm_added_q(encoder_hidden_states_query_proj)
@@ -2200,18 +2204,23 @@ class FluxAttnProcessor2_0:
                 encoder_hidden_states_key_proj = attn.norm_added_k(encoder_hidden_states_key_proj)
 
             # attention
-            query = paddle.concat([encoder_hidden_states_query_proj, query], axis=1)
-            key = paddle.concat([encoder_hidden_states_key_proj, key], axis=1)
-            value = paddle.concat([encoder_hidden_states_value_proj, value], axis=1)
+            query = paddle.concat([encoder_hidden_states_query_proj, query], axis=2)
+            key = paddle.concat([encoder_hidden_states_key_proj, key], axis=2)
+            value = paddle.concat([encoder_hidden_states_value_proj, value], axis=2)
 
         if image_rotary_emb is not None:
             from .embeddings import apply_rotary_emb
 
             query = apply_rotary_emb(query, image_rotary_emb)
             key = apply_rotary_emb(key, image_rotary_emb)
-
+        
         hidden_states = F.scaled_dot_product_attention_(
-            query, key, value, attn_mask=attention_mask, dropout_p=0.0, is_causal=False
+            query.transpose([0, 2, 1, 3]),
+            key.transpose([0, 2, 1, 3]),
+            value.transpose([0, 2, 1, 3]),
+            attn_mask=attention_mask, 
+            dropout_p=0.0, 
+            is_causal=False
         )
         hidden_states = hidden_states.reshape([batch_size, -1, attn.heads * head_dim])
         hidden_states = hidden_states.astype(query.dtype)
@@ -2246,7 +2255,7 @@ class FusedFluxAttnProcessor2_0:
     def __call__(
         self,
         attn: Attention,
-        hidden_states: paddle.FloatTensor,
+        hidden_states: paddle.Tensor,
         encoder_hidden_states: paddle.Tensor = None,
         attention_mask: Optional[paddle.Tensor] = None,
         image_rotary_emb: Optional[paddle.Tensor] = None,

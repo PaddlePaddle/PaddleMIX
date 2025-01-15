@@ -229,10 +229,10 @@ class FluxPipeline(
             truncation=True,
             return_length=False,
             return_overflowing_tokens=False,
-            return_tensors="pt",
+            return_tensors="pd",
         )
         text_input_ids = text_inputs.input_ids
-        untruncated_ids = self.tokenizer_2(prompt, padding="longest", return_tensors="pt").input_ids
+        untruncated_ids = self.tokenizer_2(prompt, padding="longest", return_tensors="pd").input_ids
 
         if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(text_input_ids, untruncated_ids):
             removed_text = self.tokenizer_2.batch_decode(untruncated_ids[:, self.tokenizer_max_length - 1 : -1])
@@ -249,8 +249,8 @@ class FluxPipeline(
         _, seq_len, _ = prompt_embeds.shape
 
         # duplicate text embeddings and attention mask for each generation per prompt, using mps friendly method
-        prompt_embeds = prompt_embeds.repeat(1, num_images_per_prompt, 1)
-        prompt_embeds = prompt_embeds.view(batch_size * num_images_per_prompt, seq_len, -1)
+        prompt_embeds = prompt_embeds.tile([1, num_images_per_prompt, 1])
+        prompt_embeds = prompt_embeds.reshape([batch_size * num_images_per_prompt, seq_len, -1])
 
         return prompt_embeds
 
@@ -273,11 +273,11 @@ class FluxPipeline(
             truncation=True,
             return_overflowing_tokens=False,
             return_length=False,
-            return_tensors="pt",
+            return_tensors="pd",
         )
 
         text_input_ids = text_inputs.input_ids
-        untruncated_ids = self.tokenizer(prompt, padding="longest", return_tensors="pt").input_ids
+        untruncated_ids = self.tokenizer(prompt, padding="longest", return_tensors="pd").input_ids
         if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(text_input_ids, untruncated_ids):
             removed_text = self.tokenizer.batch_decode(untruncated_ids[:, self.tokenizer_max_length - 1 : -1])
             logger.warning(
@@ -291,8 +291,8 @@ class FluxPipeline(
         prompt_embeds = prompt_embeds.astype(dtype=self.text_encoder.dtype)
 
         # duplicate text embeddings for each generation per prompt, using mps friendly method
-        prompt_embeds = prompt_embeds.repeat(1, num_images_per_prompt)
-        prompt_embeds = prompt_embeds.view(batch_size * num_images_per_prompt, -1)
+        prompt_embeds = prompt_embeds.tile([1, num_images_per_prompt])
+        prompt_embeds = prompt_embeds.reshape([batch_size * num_images_per_prompt, -1])
 
         return prompt_embeds
 
@@ -301,8 +301,8 @@ class FluxPipeline(
         prompt: Union[str, List[str]],
         prompt_2: Union[str, List[str]],
         num_images_per_prompt: int = 1,
-        prompt_embeds: Optional[paddle.FloatTensor] = None,
-        pooled_prompt_embeds: Optional[paddle.FloatTensor] = None,
+        prompt_embeds: Optional[paddle.Tensor] = None,
+        pooled_prompt_embeds: Optional[paddle.Tensor] = None,
         max_sequence_length: int = 512,
         lora_scale: Optional[float] = None,
     ):
@@ -349,7 +349,7 @@ class FluxPipeline(
             )
 
         dtype = self.text_encoder.dtype if self.text_encoder is not None else self.transformer.dtype
-        text_ids = paddle.zeros(prompt_embeds.shape[1], 3).astype(dtype=dtype)
+        text_ids = paddle.zeros([prompt_embeds.shape[1], 3]).astype(dtype=dtype)
 
         return prompt_embeds, pooled_prompt_embeds, text_ids
 
@@ -357,11 +357,11 @@ class FluxPipeline(
         dtype = next(self.image_encoder.parameters()).dtype
 
         if not isinstance(image, paddle.Tensor):
-            image = self.feature_extractor(image, return_tensors="pt").pixel_values
+            image = self.feature_extractor(image, return_tensors="pd").pixel_values
 
         image = image.astype(dtype=dtype)
         image_embeds = self.image_encoder(image).image_embeds
-        image_embeds = image_embeds.repeat_interleave(num_images_per_prompt, dim=0)
+        image_embeds = image_embeds.repeat_interleave(num_images_per_prompt, axis=0)
         return image_embeds
 
     def prepare_ip_adapter_image_embeds(
@@ -473,23 +473,23 @@ class FluxPipeline(
 
     @staticmethod
     def _prepare_latent_image_ids(batch_size, height, width, dtype):
-        latent_image_ids = paddle.zeros(height, width, 3)
-        latent_image_ids[..., 1] = latent_image_ids[..., 1] + paddle.arange(height)[:, None]
-        latent_image_ids[..., 2] = latent_image_ids[..., 2] + paddle.arange(width)[None, :]
+        latent_image_ids = paddle.zeros([height, width, 3], dtype=dtype)
+        latent_image_ids[..., 1] = latent_image_ids[..., 1] + paddle.arange(height, dtype=dtype)[:, None]
+        latent_image_ids[..., 2] = latent_image_ids[..., 2] + paddle.arange(width, dtype=dtype)[None, :]
 
         latent_image_id_height, latent_image_id_width, latent_image_id_channels = latent_image_ids.shape
 
         latent_image_ids = latent_image_ids.reshape(
-            latent_image_id_height * latent_image_id_width, latent_image_id_channels
+            [latent_image_id_height * latent_image_id_width, latent_image_id_channels]
         )
 
         return latent_image_ids.astype(dtype=dtype)
 
     @staticmethod
     def _pack_latents(latents, batch_size, num_channels_latents, height, width):
-        latents = latents.view(batch_size, num_channels_latents, height // 2, 2, width // 2, 2)
+        latents = latents.reshape([batch_size, num_channels_latents, height // 2, 2, width // 2, 2])
         latents = latents.permute(0, 2, 4, 1, 3, 5)
-        latents = latents.reshape(batch_size, (height // 2) * (width // 2), num_channels_latents * 4)
+        latents = latents.reshape([batch_size, (height // 2) * (width // 2), num_channels_latents * 4])
 
         return latents
 
@@ -502,10 +502,10 @@ class FluxPipeline(
         height = 2 * (int(height) // (vae_scale_factor * 2))
         width = 2 * (int(width) // (vae_scale_factor * 2))
 
-        latents = latents.view(batch_size, height // 2, width // 2, channels // 4, 2, 2)
+        latents = latents.reshape([batch_size, height // 2, width // 2, channels // 4, 2, 2])
         latents = latents.permute(0, 3, 1, 4, 2, 5)
 
-        latents = latents.reshape(batch_size, channels // (2 * 2), height, width)
+        latents = latents.reshape([batch_size, channels // (2 * 2), height, width])
 
         return latents
 
@@ -613,6 +613,7 @@ class FluxPipeline(
         negative_ip_adapter_image_embeds: Optional[List[paddle.Tensor]] = None,
         negative_prompt_embeds: Optional[paddle.Tensor] = None,
         negative_pooled_prompt_embeds: Optional[paddle.Tensor] = None,
+        text_ids: Optional[paddle.Tensor] = None,
         output_type: Optional[str] = "pil",
         return_dict: bool = True,
         joint_attention_kwargs: Optional[Dict[str, Any]] = None,

@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING
 
 from ...utils import (
-    DIFFUSERS_SLOW_IMPORT,
+    PPDIFFUSERS_SLOW_IMPORT,
     OptionalDependencyNotAvailable,
     _LazyModule,
     get_objects_from_module,
@@ -15,7 +15,7 @@ _additional_imports = {}
 _import_structure = {"pipeline_output": ["FluxPipelineOutput", "FluxPriorReduxPipelineOutput"]}
 
 try:
-    if not (is_transformers_available() and is_torch_available()):
+    if not (is_transformers_available() and is_paddle_available()):
         raise OptionalDependencyNotAvailable()
 except OptionalDependencyNotAvailable:
     from ...utils import dummy_torch_and_transformers_objects  # noqa F403
@@ -34,7 +34,7 @@ else:
     # _import_structure["pipeline_flux_img2img"] = ["FluxImg2ImgPipeline"]
     # _import_structure["pipeline_flux_inpaint"] = ["FluxInpaintPipeline"]
     # _import_structure["pipeline_flux_prior_redux"] = ["FluxPriorReduxPipeline"]
-if TYPE_CHECKING or DIFFUSERS_SLOW_IMPORT:
+if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
     try:
         if not (is_transformers_available() and is_paddle_available()):
             raise OptionalDependencyNotAvailable()

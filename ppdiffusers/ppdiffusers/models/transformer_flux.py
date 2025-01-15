@@ -62,7 +62,7 @@ class FluxSingleTransformerBlock(nn.Layer):
 
         self.norm = AdaLayerNormZeroSingle(dim)
         self.proj_mlp = nn.Linear(dim, self.mlp_hidden_dim)
-        self.act_mlp = nn.GELU(approximate="tanh")
+        self.act_mlp = nn.GELU(approximate=True)
         self.proj_out = nn.Linear(dim + self.mlp_hidden_dim, dim)
 
         processor = FluxAttnProcessor2_0()
@@ -292,7 +292,7 @@ class FluxTransformer2DModel(
         )
 
         self.norm_out = AdaLayerNormContinuous(self.inner_dim, self.inner_dim, elementwise_affine=False, eps=1e-6)
-        self.proj_out = nn.Linear(self.inner_dim, patch_size * patch_size * self.out_channels, bias=True)
+        self.proj_out = nn.Linear(self.inner_dim, patch_size * patch_size * self.out_channels)
 
         self.gradient_checkpointing = False
 
@@ -537,7 +537,7 @@ class FluxTransformer2DModel(
         hidden_states = paddle.concat([encoder_hidden_states, hidden_states], axis=1)
 
         for index_block, block in enumerate(self.single_transformer_blocks):
-            if self.is_training and self.gradient_checkpointing:
+            if self.training and self.gradient_checkpointing:
 
                 def create_custom_forward(module, return_dict=None):
                     def custom_forward(*inputs):

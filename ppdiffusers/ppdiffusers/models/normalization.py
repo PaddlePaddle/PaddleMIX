@@ -174,7 +174,7 @@ class AdaLayerNormZeroSingle(nn.Layer):
     def __init__(self, embedding_dim: int, norm_type="layer_norm", bias=True):
         super().__init__()
 
-        self.silu = nn.SiLU()
+        self.silu = nn.Silu()
         self.linear = nn.Linear(embedding_dim, 3 * embedding_dim, bias_attr=bias)
         if norm_type == "layer_norm":
             norm_elementwise_affine_kwargs = dict(weight_attr=False, bias_attr=False)
@@ -326,13 +326,13 @@ class RMSNorm(nn.Layer):
         else:
             self.weight = None
 
-    def forward(self, hidden_states, begin_norm_axis=2):
+    def forward(self, hidden_states, begin_norm_axis=None):
         return paddle.incubate.nn.functional.fused_rms_norm(
             x=hidden_states,
             norm_weight=self.weight,
             norm_bias=None,
             epsilon=self.epsilon,
-            begin_norm_axis=begin_norm_axis,
+            begin_norm_axis=len(hidden_states.shape)-1 if begin_norm_axis is None else begin_norm_axis,
         )[0]
 
 

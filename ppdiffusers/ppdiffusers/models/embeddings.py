@@ -567,7 +567,7 @@ class CombinedTimestepLabelEmbeddings(nn.Layer):
         return conditioning
 
 
-class CombinedTimestepGuidanceTextProjEmbeddings(nn.Module):
+class CombinedTimestepGuidanceTextProjEmbeddings(nn.Layer):
     def __init__(self, embedding_dim, pooled_projection_dim):
         super().__init__()
 
@@ -1199,22 +1199,24 @@ def get_1d_rotary_pos_embed(
     theta = theta * ntk_factor
     freqs = (
         1.0
-        / (theta ** (paddle.arange(0, dim, 2, dtype=freqs_dtype, device=pos.device)[: (dim // 2)] / dim))
+        / (theta ** (paddle.arange(0, dim, 2, dtype=freqs_dtype)[: (dim // 2)] / dim))
         / linear_factor
     )  # [D/2]
+    pos = pos.astype(freqs_dtype)
     freqs = paddle.outer(pos, freqs)  # type: ignore   # [S, D/2]
     if use_real and repeat_interleave_real:
         # flux, hunyuan-dit, cogvideox
-        freqs_cos = freqs.cos().repeat_interleave(2, axis=1).float()  # [S, D]
-        freqs_sin = freqs.sin().repeat_interleave(2, axis=1).float()  # [S, D]
+        freqs_cos = freqs.cos().repeat_interleave(2, axis=1).astype(dtype="float32")  # [S, D]
+        freqs_sin = freqs.sin().repeat_interleave(2, axis=1).astype(dtype="float32")  # [S, D]
         return freqs_cos, freqs_sin
     elif use_real:
         # stable audio, allegro
-        freqs_cos = paddle.concat([freqs.cos(), freqs.cos()], axis=-1).float()  # [S, D]
-        freqs_sin = paddle.concat([freqs.sin(), freqs.sin()], axis=-1).float()  # [S, D]
+        freqs_cos = paddle.concat([freqs.cos(), freqs.cos()], axis=-1).astype(dtype="float32")  # [S, D]
+        freqs_sin = paddle.concat([freqs.sin(), freqs.sin()], axis=-1).astype(dtype="float32")  # [S, D]
         return freqs_cos, freqs_sin
     else:
         # lumina
+        # paddle.complex(abs * paddle.cos(angle), abs * paddle.sin(angle))
         freqs_cis = paddle.polar(paddle.ones_like(freqs), freqs)  # complex64     # [S, D/2]
         return freqs_cis
     
@@ -1250,7 +1252,7 @@ def apply_rotary_emb(
             x_rotated = paddle.concat(x=[-x_imag, x_real], axis=-1)
         else:
             raise ValueError(f"`use_real_unbind_dim={use_real_unbind_dim}` but should be -1 or -2.")
-        out = (x.astype(dtype="float32") * cos + x_rotated.astype(dtype="float32") * sin).to(x.dtype)
+        out = (x.astype(dtype="float32") * cos + x_rotated.astype(dtype="float32") * sin).astype(x.dtype)
         return out
     else:
         x_rotated = paddle.as_complex(x=x.astype(dtype="float32").reshape(*tuple(x.shape)[:-1], -1, 2))
@@ -1259,7 +1261,7 @@ def apply_rotary_emb(
         return x_out.astype(dtype=x.dtype)
 
 
-class FluxPosEmbed(nn.Module):
+class FluxPosEmbed(nn.Layer):
     # modified from https://github.com/black-forest-labs/flux/blob/c00d7c60b085fce8058b9df845e036090873f2ce/src/flux/modules/layers.py#L11
     def __init__(self, theta: int, axes_dim: List[int]):
         super().__init__()
@@ -1270,8 +1272,10 @@ class FluxPosEmbed(nn.Module):
         n_axes = ids.shape[-1]
         cos_out = []
         sin_out = []
-        pos = ids.float()
-        is_mps = ids.device.type == "mps"
+        pos = ids.astype('float32')
+        # TODO
+        # is_mps = ids.device.type == "mps"
+        is_mps = False
         freqs_dtype = paddle.float32 if is_mps else paddle.float64
         for i in range(n_axes):
             cos, sin = get_1d_rotary_pos_embed(
