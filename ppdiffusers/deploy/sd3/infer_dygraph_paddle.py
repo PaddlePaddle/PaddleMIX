@@ -101,7 +101,16 @@ def change_scheduler(self, scheduler_type="ddim"):
         raise ValueError(f"Scheduler of type {scheduler_type} doesn't exist!")
     return scheduler
 
-
+def get_paddle_memory_info():
+    """get_memory_info"""
+    divisor = 2**30
+    return (
+        paddle.device.cuda.memory_allocated() / divisor,
+        paddle.device.cuda.max_memory_allocated() / divisor,
+        paddle.device.cuda.memory_reserved() / divisor,
+        paddle.device.cuda.max_memory_reserved() / divisor,
+    )
+    
 def parse_arguments():
 
     parser = argparse.ArgumentParser()
@@ -146,9 +155,6 @@ def parse_arguments():
         help="The parse_prompt_type can be one of [raw, lpw]. ",
     )
     parser.add_argument("--use_fp16", type=strtobool, default=True, help="Wheter to use FP16 mode")
-    parser.add_argument(
-        "--attention_type", type=str, default="raw", choices=["raw", "cutlass", "flash", "all"], help="attention_type."
-    )
     parser.add_argument("--device_id", type=int, default=0, help="The selected gpu id. -1 means use cpu")
     parser.add_argument(
         "--scheduler",
@@ -192,71 +198,56 @@ def main(args):
     scheduler = change_scheduler(pipe, args.scheduler)
     pipe.scheduler = scheduler
 
-    if args.attention_type == "all":
-        args.attention_type = ["raw", "cutlass", "flash"]
-    else:
-        args.attention_type = [args.attention_type]
+    width = args.width
+    height = args.height
+    pipe.set_progress_bar_config(disable=False)
 
-    for attention_type in args.attention_type:
-        if attention_type == "raw":
-            pipe.disable_xformers_memory_efficient_attention()
-        else:
-            try:
-                pipe.enable_xformers_memory_efficient_attention(attention_type)
-            except Exception as e:
-                if attention_type == "flash":
-                    warnings.warn(
-                        "Attention type flash is not supported on your GPU! We need to use 3060、3070、3080、3090、4060、4070、4080、4090、A30、A100 etc."
-                    )
-                    continue
-                else:
-                    raise ValueError(e)
-
-        if not args.use_fp16 and attention_type == "flash":
-            print("Flash attention is not supported dtype=float32! Please use float16 or bfloat16. We will skip this!")
-            continue
-
-        width = args.width
-        height = args.height
-        pipe.set_progress_bar_config(disable=False)
-
-        folder = f"paddle_attn_{attention_type}_fp16" if args.use_fp16 else f"paddle_attn_{attention_type}_fp32"
-        os.makedirs(folder, exist_ok=True)
-        if args.task_name in ["text2img", "all"]:
-            init_image = load_image(
-                "https://paddlenlp.bj.bcebos.com/models/community/junnyu/develop/control_bird_canny_demo.png"
-            )
-            # text2img
-            prompt = "bird"
-            time_costs = []
-            # warmup
-            pipe(
+    folder = f"paddle_fp16" if args.use_fp16 else f"paddle_fp32"
+    os.makedirs(folder, exist_ok=True)
+    if args.task_name in ["text2img", "all"]:
+        # text2img
+        prompt = "bird"
+        time_costs = []
+        memory_metrics = []
+        
+        # warmup
+        pipe(
+            prompt,
+            num_inference_steps=10,
+            height=height,
+            width=width,
+        )
+        print("==> Test text2img performance.")
+        for step in trange(args.benchmark_steps):
+            start = time.time()
+            paddle.seed(seed)
+            images = pipe(
                 prompt,
-                num_inference_steps=10,
+                num_inference_steps=args.inference_steps,
                 height=height,
                 width=width,
-            )
-            print("==> Test text2img performance.")
-            for step in trange(args.benchmark_steps):
-                start = time.time()
-                paddle.seed(seed)
-                images = pipe(
-                    prompt,
-                    num_inference_steps=args.inference_steps,
-                    height=height,
-                    width=width,
-                ).images
-                latency = time.time() - start
-                time_costs += [latency]
-                # print(f"No {step:3d} time cost: {latency:2f} s")
-            print(
-                f"Attention type: {attention_type}, "
-                f"Use fp16: {'true' if args.use_fp16 else 'false'}, "
-                f"Mean iter/sec: {1 / (np.mean(time_costs) / args.inference_steps):2f} it/s, "
-                f"Mean latency: {np.mean(time_costs):2f} s, p50 latency: {np.percentile(time_costs, 50):2f} s, "
-                f"p90 latency: {np.percentile(time_costs, 90):2f} s, p95 latency: {np.percentile(time_costs, 95):2f} s."
-            )
-            images[0].save(f"{folder}/text2img.png")
+            ).images
+            latency = time.time() - start
+            time_costs += [latency]
+            
+            # 收集显存信息
+            memory_allocated, max_memory_allocated, memory_reserved, max_memory_reserved = get_paddle_memory_info()
+            memory_metrics.append([memory_allocated, max_memory_allocated, memory_reserved, max_memory_reserved])
+            
+        # 计算平均显存使用情况
+        avg_memory = np.mean(memory_metrics, axis=0)
+        
+        print(
+            f"Use fp16: {'true' if args.use_fp16 else 'false'}, "
+            f"Mean iter/sec: {1 / (np.mean(time_costs) / args.inference_steps):2f} it/s, "
+            f"Mean latency: {np.mean(time_costs):2f} s, p50 latency: {np.percentile(time_costs, 50):2f} s, "
+            f"p90 latency: {np.percentile(time_costs, 90):2f} s, p95 latency: {np.percentile(time_costs, 95):2f} s."
+        )
+        print(
+            f"Memory Info (GB) - Allocated: {avg_memory[0]:.2f}, Max Allocated: {avg_memory[1]:.2f}, "
+            f"Reserved: {avg_memory[2]:.2f}, Max Reserved: {avg_memory[3]:.2f}"
+        )
+        images[0].save(f"{folder}/text2img.png")
 
 
 if __name__ == "__main__":

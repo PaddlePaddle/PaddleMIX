@@ -15,6 +15,7 @@
 
 from .blip_processing import *
 from .clip_processing import *
+from .deepseek_vl2_processing import *
 from .emu3_processing import *
 from .eva02_processing import *
 from .got_process import *
