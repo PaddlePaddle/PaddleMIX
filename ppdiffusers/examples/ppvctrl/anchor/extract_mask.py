@@ -12,7 +12,8 @@ from PIL import Image
 from paddlemix.models.groundingdino.modeling import GroundingDinoModel
 from paddlemix.processors.groundingdino_processing import GroundingDinoProcessor
 
-sys.path.append("/root/paddlejob/workspace/env_run/output/haoming/PaddleMIX/paddlemix/models")
+# sys.path.append("/root/paddlejob/workspace/env_run/output/haoming/PaddleMIX/paddlemix/models")
+sys.path.append(os.path.join(os.getcwd(), "paddlemix/models"))
 from utils.video_utils import create_video,save_video_from_bgr
 from paddlemix.models.sam2.build_sam import build_sam2, build_sam2_video_predictor
 from paddlemix.models.sam2.sam2_image_predictor import SAM2ImagePredictor

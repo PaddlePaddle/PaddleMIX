@@ -229,6 +229,24 @@ bash scripts/infer_cogvideox_i2v_pose_vctrl.sh
 ***注意:*** 人物姿态控制模型只适用于i2v模型。 
 #### 3.3 Gradio 应用
 我们还创建了一个 Gradio 应用，供您与我们的模型进行交互。
+
+配置环境&下载权重
+```bash
+pip install decord
+pip install gradio
+
+mkdir -p weights/sam2/
+wget -P weights/sam2/ https://bj.bcebos.com/v1/paddlenlp/models/community/Sam/Sam2/sam2.1_hiera_large.pdparams
+```
+使用canny任务gradio
+```bash
+python gradios/gradio_canny2video.py
+```
+使用mask任务gradio
+```bash
+python gradios/gradio_mask2video.py
+```
+
 <!-- ```
 ```
 <img src="asserts/figs/gradio.jpg" style="width:70%"> -->
