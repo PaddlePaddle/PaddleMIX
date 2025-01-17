@@ -1463,7 +1463,27 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
                 inputs_embeds[video_mask] = video_embeds
         return inputs_embeds
 
-    def forward(
+
+    def forward(self, input_ids, attention_mask, labels, pixel_values, image_grid_thw):
+        return self._forward(input_ids=input_ids, attention_mask=attention_mask, labels=labels, pixel_values=pixel_values, image_grid_thw=image_grid_thw)
+
+        # print('input_ids: ', input_ids.shape, input_ids.dtype)
+        # print('attention_mask: ', (attention_mask.shape, attention_mask.dtype) if attention_mask is not None else 'None')
+        # print('position_ids: ', (position_ids.shape, position_ids.dtype) if position_ids is not None else 'None')
+        # print('past_key_values: ', (past_key_values[0].shape, past_key_values[0].dtype) if past_key_values is not None else 'None')
+        # print('inputs_embeds: ', (inputs_embeds.shape, inputs_embeds.dtype) if inputs_embeds is not None else 'None')
+        # print('labels: ', (labels.shape, labels.dtype) if labels is not None else 'None')
+        # print('use_cache: ', use_cache)
+        # print('output_attentions: ', output_attentions)
+        # print('output_hidden_states: ', output_hidden_states)
+        # print('return_dict: ', return_dict)
+        # print('pixel_values: ', (pixel_values.shape, pixel_values.dtype) if pixel_values is not None else 'None')
+        # print('pixel_values_videos: ', (pixel_values_videos.shape, pixel_values_videos.dtype) if pixel_values_videos is not None else 'None')
+        # print('image_grid_thw: ', (image_grid_thw.shape, image_grid_thw.dtype) if image_grid_thw is not None else 'None')
+        # print('video_grid_thw: ', (video_grid_thw.shape, video_grid_thw.dtype) if video_grid_thw is not None else 'None')
+        # print('rope_deltas: ', (rope_deltas.shape, rope_deltas.dtype) if rope_deltas is not None else 'None')
+        
+    def _forward(
         self,
         input_ids: paddle.Tensor = None,  # [1, 400] sum 49356255
         attention_mask: Optional[paddle.Tensor] = None,  # [1, 400] sum 396

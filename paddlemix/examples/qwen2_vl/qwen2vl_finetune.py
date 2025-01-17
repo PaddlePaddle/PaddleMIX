@@ -584,6 +584,17 @@ def main():
         label_pad_token_id=IGNORE_INDEX,
     )
 
+    input_spec = [
+        paddle.static.InputSpec(name='input_ids', shape=[-1, 400], dtype='int32'),
+        paddle.static.InputSpec(name='attention_mask', shape=[-1, 400], dtype='bool'),
+        paddle.static.InputSpec(name='labels', shape=[-1, 400], dtype='int32'),
+        paddle.static.InputSpec(name='pixel_values', shape=[-1, 1224, 1176], dtype='float32'),
+        paddle.static.InputSpec(name='image_grid_thw', shape=[-1, 1224, 1176], dtype='int32'),
+    ]
+
+    model = paddle.jit.to_static(model, input_spec=input_spec)
+    print("--------------------paddle.jit.to_static successful------------------------")
+
     trainer = Trainer(
         model=model,
         args=training_args,
