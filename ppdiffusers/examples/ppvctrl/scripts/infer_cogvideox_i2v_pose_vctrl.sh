@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 python infer_cogvideox_i2v_vctrl_cli.py \
   --pretrained_model_name_or_path "paddlemix/cogvideox-5b-i2v-vctrl" \
   --vctrl_path "weights/poses/vctrl_pose_5b_i2v.pdparams" \
@@ -19,7 +18,7 @@ python infer_cogvideox_i2v_vctrl_cli.py \
   --control_video_path "examples/pose/case1/guide_values.mp4" \
   --ref_image_path "examples/pose/case1/reference_image.jpg" \
   --output_dir "infer_outputs/pose2video" \
-  --prompt "" \
+  --prompt_path "examples/pose/case1/prompt.txt" \
   --task "pose" \
   --width 480 \
   --height 720 \
