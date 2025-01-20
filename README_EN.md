@@ -35,6 +35,10 @@
 
 
 ## 📰 News
+
+**🔥Live Course on January 16th, 2025 New PaddlePaddle PP Series Models Released!**
+- 🎉PaddleMIX introduces PP-VCtrl, the next-generation unified video generation control model! It efficiently handles tasks like character animation and scene transitions with precise control. The auxiliary condition encoder architecture enables flexible integration of control modules, while sparse residual connections ensure efficient feature propagation. The original video diffusion model architecture remains unchanged, avoiding full retraining. Leveraging high-quality datasets for recaption, human keypoint extraction, and video segmentation, along with advanced data augmentation and training strategies, PP-VCtrl improves adaptability and generation quality for edge control, pose, and mask-based video editing tasks. Its control performance and video quality outperform task-specific open-source methods. Join our live stream on **January 16th (Thursday) at 19:00** for an in-depth discussion of PP-VCtrl’s core technology and industrial applications. 🚀 Registration link:https://www.wjx.top/vm/m4sb0rh.aspx?udsid=664921
+
 **🔥Live Course on January 7th, 2025 (Completed) New PaddlePaddle PP Series Models Released!**
 - 🔗Watch the PaddleMIX livestream replay: [Click here](https://aistudio.baidu.com/course/introduce/32178)
 - 🎉PaddleMIX introduces PP-DocBee, a lightweight multimodal document understanding model! Based on multimodal large models, it achieves end-to-end document image understanding, solving complex document parsing challenges in the industry. Using a ViT+MLP+LLM architecture, it optimizes data synthesis strategies, data preprocessing, training methods, and OCR post-processing assistance. By combining small OCR models with large LLM models and using rendering engine-based image data generation strategies, it achieves higher quality Q&A with controllable generation costs. Supports local gradio deployment, OpenAI service deployment, and provides quick access through the PaddlePaddle Galaxy Community online environment. On **January 7th (Tuesday) at 19:00**, join our livestream for a detailed explanation of PP-DocBee's core technology and industry applications. 🚀Registration link: https://www.wjx.top/vm/mlDdpSb.aspx?udsid=309483
@@ -49,7 +53,11 @@
 
 
 ## 📣 Latest Developments
-**🎉 2024.01.02 Added support for [PP-DocBee](./paddlemix/examples/ppdocbee) inference and training, supporting [high-performance inference](./deploy/ppdocbee)**
+**🎉 2025.01.20 Support [Aria](./paddlemix/examples/aria) inference**
+
+**🎉 2025.01.14 Support [deepseek-vl2](./paddlemix/examples/deepseek_vl2) inference**
+
+**🎉 2025.01.02 Added support for [PP-DocBee](./paddlemix/examples/ppdocbee) inference and training, supporting [high-performance inference](./deploy/ppdocbee)**
 
 **🎉 2024.12.17 Support for [InternVL2_5 (1B, 2B, 4B, 8B)](./paddlemix/examples/internvl2) inference**
 
@@ -66,7 +74,7 @@
 <summary>Click to expand more</summary>
 
 **🎉 2024.10.31 Welcome to the Update of External Developer's Creative [Tutorial Page](paddlemix_applications.md)**
-* 🌟 Since the launch of our Large Model Suite Premium Project Collection activity on September 6th, we have received 30 high-quality developer projects. Among them, 25 premium projects have successfully passed the platform evaluation and been featured.
+* 🌟 Since the launch of the call for high-quality projects for the large model suite on September 6, we have successfully collected **69** outstanding projects!
 
 * 🙏 We sincerely thank all developers for their wonderful creations based on our suite! 🚀 We cordially invite you to share your creativity as well - welcome to publish your tutorials on public web pages or in the [PaddlePaddle AI Studio](https://aistudio.baidu.com/aistudio/community/multimodal?from=singlemessage) community!
 
@@ -206,7 +214,7 @@ Recommended versions for environment and dependencies:
 ### 6. Install Custom Operators (Optional)
 * Some models require custom operators (FastLayerNorm, FusedLayerNorm), such as EVA-CLIP, DIT_LLAMA, etc.
 * Skip this step for non-CUDA environments (e.g., Ascend NPU)
-* ```bash
+```bash
 cd paddlemix/external_ops
 python setup.py install
 ```
@@ -378,6 +386,41 @@ PP-InsCapTagger (Instance Capability Tagger) is a dataset capability tagging mod
 
 ## 🤔 FAQ
 For answers to some common questions about our project, please refer to the [FAQ](docs/FAQ.md). If your question is not addressed, feel free to raise it in the [Issues](https://github.com/PaddlePaddle/PaddleMIX/issues).
+
+## ❤️ Acknowledgments
+
+- Some modules and case designs in PaddleMIX are inspired by the excellent design of Hugging Face's [Transformers](https://github.com/huggingface/transformers)🤗 for using pre-trained models. We express our gratitude to the authors of Hugging Face and its open-source community.
+
+- Some cases and code in PaddleMIX are contributed by the following outstanding community developers (for a complete list of contributors, please refer to: [Contributors](https://github.com/PaddlePaddle/PaddleMIX/graphs/contributors)):
+    [LokeZhou](https://github.com/LokeZhou)，
+    [luyao-cv](https://github.com/luyao-cv)，
+    [nemonameless](https://github.com/nemonameless)，
+    [westfish](https://github.com/westfish)，
+    [wjm202](https://github.com/wjm202)，
+    [JunnYu](https://github.com/JunnYu)，
+    [chang-wenbin](https://github.com/chang-wenbin)，
+    [jerrywgz](https://github.com/jerrywgz)，
+    [lyuwenyu](https://github.com/lyuwenyu)，
+    [co63oc](https://github.com/co63oc)，
+    [CrazyBoyM](https://github.com/CrazyBoyM)，
+    [KPCOFGS](https://github.com/KPCOFGS)，
+    [pkhk-1](https://github.com/pkhk-1)，
+    [1649759610](https://github.com/1649759610)，
+    [DrRyanHuang](https://github.com/DrRyanHuang)，
+    [zhiboniu](https://github.com/zhiboniu)，
+    [cocoshe](https://github.com/cocoshe)，
+    [sneaxiy](https://github.com/sneaxiy)，
+    [yangrongxinuser](https://github.com/yangrongxinuser)，
+    [cheng221](https://github.com/cheng221)，
+    [Liyulingyue](https://github.com/Liyulingyue)，
+    [zhoutianzi666](https://github.com/zhoutianzi666)，
+    [Birdylx](https://github.com/Birdylx)，
+    [FeixLiu](https://github.com/FeixLiu)，
+    [Tsaiyue](https://github.com/Tsaiyue)，
+    [fightfat](https://github.com/fightfat)，
+    [warrentdrew](https://github.com/warrentdrew)，
+    [swagger-coder](https://github.com/swagger-coder)
+    ...
 
 ## 📝 License
 This project is released under the [Apache 2.0 license](LICENSE).
