@@ -54,6 +54,13 @@
 
 ## 📣 Latest Developments
 
+** 🎉 2025.01.20 Welcoming updates to the [Creative Tutorial Page](paddlemix_applications.md) developed by external developers in the Xinghe (AIStudio) community **
+* Since September 6, we have collected 69 outstanding projects from the Xinghe (AIStudio) community! Dive in and experience application development now!
+* Introducing 22 new high-quality projects from the "PaddleMIX Suite Experience Officer" and "PaddleMIX Development Challenge" activities, covering a variety of applications such as Christmas-themed card generation 🎄 and character generation 👤. We look forward to your experience! Additionally, there are interesting applications like AI treasure identification 🔍 and music generation 🎶 waiting for you to explore.
+* 🙏 Heartfelt thanks to all developers for their wonderful creations based on the suite! 🚀 We sincerely invite you to share your creativity as well - feel free to publish your tutorials on public web pages or in the [Paddle AI Studio](https://aistudio.baidu.com/aistudio/community/multimodal?from=singlemessage) community!
+
+**🎉 2025.01.20 Support for [Aria](./paddlemix/examples/aria) inference**
+
 **🎉 2025.01.14 Support [deepseek-vl2](./paddlemix/examples/deepseek_vl2) inference**
 
 **🎉 2025.01.02 Added support for [PP-DocBee](./paddlemix/examples/ppdocbee) inference and training, supporting [high-performance inference](./deploy/ppdocbee)**
@@ -213,7 +220,7 @@ Recommended versions for environment and dependencies:
 ### 6. Install Custom Operators (Optional)
 * Some models require custom operators (FastLayerNorm, FusedLayerNorm), such as EVA-CLIP, DIT_LLAMA, etc.
 * Skip this step for non-CUDA environments (e.g., Ascend NPU)
-* ```bash
+```bash
 cd paddlemix/external_ops
 python setup.py install
 ```
@@ -385,6 +392,39 @@ PP-InsCapTagger (Instance Capability Tagger) is a dataset capability tagging mod
 
 ## 🤔 FAQ
 For answers to some common questions about our project, please refer to the [FAQ](docs/FAQ.md). If your question is not addressed, feel free to raise it in the [Issues](https://github.com/PaddlePaddle/PaddleMIX/issues).
+
+## ❤️ Acknowledgments
+
+- Some modules and case designs in PaddleMIX are inspired by the excellent design of Hugging Face's [Transformers](https://github.com/huggingface/transformers)🤗 for using pre-trained models. We express our gratitude to the authors of Hugging Face and its open-source community.
+
+- Some cases and code in PaddleMIX are contributed by the following outstanding community developers (for a complete list of contributors, please refer to: [Contributors](https://github.com/PaddlePaddle/PaddleMIX/graphs/contributors)):
+    [co63oc](https://github.com/co63oc)，
+    [CrazyBoyM](https://github.com/CrazyBoyM)，
+    [KPCOFGS](https://github.com/KPCOFGS)，
+    [pkhk-1](https://github.com/pkhk-1)，
+    [1649759610](https://github.com/1649759610)，
+    [DrRyanHuang](https://github.com/DrRyanHuang)，
+    [zhiboniu](https://github.com/zhiboniu)，
+    [cocoshe](https://github.com/cocoshe)，
+    [sneaxiy](https://github.com/sneaxiy)，
+    [yangrongxinuser](https://github.com/yangrongxinuser)，
+    [cheng221](https://github.com/cheng221)，
+    [Liyulingyue](https://github.com/Liyulingyue)，
+    [zhoutianzi666](https://github.com/zhoutianzi666)，
+    [Birdylx](https://github.com/Birdylx)，
+    [FeixLiu](https://github.com/FeixLiu)，
+    [Tsaiyue](https://github.com/Tsaiyue)，
+    [fightfat](https://github.com/fightfat)，
+    [warrentdrew](https://github.com/warrentdrew)，
+    [swagger-coder](https://github.com/swagger-coder)
+    ...
+- We extend our gratitude to the project experts in the Xinghe (AIStudio) community for developing a multitude of fascinating applications, thereby expanding the possibilities for PaddleMIX's growth. Special thanks go to the following active project experts (for a complete list, please see the [AIStudio Project Expert Recommendation List](https://aistudio.baidu.com/projectoverview)):
+    [好想成为PPDE（已成为版）](https://aistudio.baidu.com/personalcenter/thirdview/2553954)，
+    [旭_1994](https://aistudio.baidu.com/personalcenter/thirdview/9044961)，
+    [knoka](https://aistudio.baidu.com/personalcenter/thirdview/2258742)，
+    [魔术师](https://aistudio.baidu.com/personalcenter/thirdview/710848)，
+    [非鱼子焉](https://aistudio.baidu.com/personalcenter/thirdview/91451)
+    ...
 
 ## 📝 License
 This project is released under the [Apache 2.0 license](LICENSE).
