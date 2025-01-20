@@ -19,7 +19,7 @@ python infer_cogvideox_t2v_vctrl_cli.py \
   --control_video_path "examples/mask/case1/guide_values.mp4" \
   --control_mask_video_path "examples/mask/case1/mask_values.mp4" \
   --output_dir "infer_outputs/mask2video/t2v" \
-  --prompt "A black car drive on the street" \
+  --prompt_path "examples/mask/case1/prompt.txt" \
   --task "mask" \
   --width 720 \
   --height 480 \

@@ -183,7 +183,7 @@ class SAM2VideoPredictor(SAM2Base):
         if normalize_coords:
             video_H = inference_state["video_height"]
             video_W = inference_state["video_width"]
-            points = points / paddle.to_tensor(data=[video_W, video_H])
+            points = points / paddle.to_tensor(data=[float(video_W), float(video_H)], dtype='float32')
         points = points * self.image_size
 
         if not clear_old_points:

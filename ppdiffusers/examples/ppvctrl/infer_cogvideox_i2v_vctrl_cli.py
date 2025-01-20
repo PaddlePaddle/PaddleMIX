@@ -124,7 +124,7 @@ def parse_args():
     parser.add_argument("--transformer_path", type=str, default=None, required=False)
     parser.add_argument("--ref_image_path", type=str, default=None, required=False)
     parser.add_argument("--task", type=str, default=None, required=True)
-    parser.add_argument("--prompt", type=str, default=None, required=True)
+    parser.add_argument("--prompt_path", type=str, default=None, required=True)
     parser.add_argument("--vctrl_config", type=str, default=None, help="the config file for vctrl")
     parser.add_argument(
         "--random_initialization",
@@ -158,6 +158,13 @@ if __name__ == "__main__":
     elif args.control_mask_video_path is not None:
         validation_mask_images = load_images_from_video_to_pil(args.control_mask_video_path)
 
+    if args.prompt_path is  not None:
+        with open(args.prompt_path, "r") as f:
+            lines = f.readlines()
+            prompt = lines[0].strip()
+    else:
+          prompt=None
+    
     if args.vctrl_path.endswith(".pdparams"):
         vctrl = VCtrlModel.from_config(args.vctrl_config)
         vctrl.set_state_dict(state_dict=paddle.load(args.vctrl_path))
@@ -180,7 +187,7 @@ if __name__ == "__main__":
         )
     else:
         pipeline = CogVideoXVCtrlImageToVideoPipeline.from_pretrained(
-            args.pretrained_model_name_or_path, vctrl=vctrl, paddle_dtype=paddle.float16
+            args.pretrained_model_name_or_path, vctrl=vctrl, paddle_dtype=paddle.float16,low_cpu_mem_usage=True
         )
 
     pipeline.scheduler = CogVideoXDDIMScheduler.from_config(pipeline.scheduler.config, timestep_spacing="trailing")
@@ -200,7 +207,7 @@ if __name__ == "__main__":
     num_frames = min(num_frames, args.max_frame)
     video = pipeline(
         image=ref_image,
-        prompt=args.prompt,
+        prompt=prompt,
         num_inference_steps=args.num_inference_steps,
         num_frames=num_frames,
         guidance_scale=args.guidance_scale,

@@ -18,7 +18,7 @@ python infer_cogvideox_t2v_vctrl_cli.py \
   --vctrl_config "vctrl_configs/cogvideox_5b_vctrl_config.json" \
   --control_video_path "examples/canny/case1/guide_values.mp4" \
   --output_dir "infer_outputs/canny2video/t2v" \
-  --prompt "examples/canny/case1/prompt.txt" \
+  --prompt_path "examples/canny/case1/prompt.txt" \
   --task "canny" \
   --width 720 \
   --height 480 \

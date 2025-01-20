@@ -35,6 +35,10 @@
 
 
 ## 📰 News
+
+**🔥Live Course on January 16th, 2025 New PaddlePaddle PP Series Models Released!**
+- 🎉PaddleMIX introduces PP-VCtrl, the next-generation unified video generation control model! It efficiently handles tasks like character animation and scene transitions with precise control. The auxiliary condition encoder architecture enables flexible integration of control modules, while sparse residual connections ensure efficient feature propagation. The original video diffusion model architecture remains unchanged, avoiding full retraining. Leveraging high-quality datasets for recaption, human keypoint extraction, and video segmentation, along with advanced data augmentation and training strategies, PP-VCtrl improves adaptability and generation quality for edge control, pose, and mask-based video editing tasks. Its control performance and video quality outperform task-specific open-source methods. Join our live stream on **January 16th (Thursday) at 19:00** for an in-depth discussion of PP-VCtrl’s core technology and industrial applications. 🚀 Registration link:https://www.wjx.top/vm/m4sb0rh.aspx?udsid=664921
+
 **🔥Live Course on January 7th, 2025 (Completed) New PaddlePaddle PP Series Models Released!**
 - 🔗Watch the PaddleMIX livestream replay: [Click here](https://aistudio.baidu.com/course/introduce/32178)
 - 🎉PaddleMIX introduces PP-DocBee, a lightweight multimodal document understanding model! Based on multimodal large models, it achieves end-to-end document image understanding, solving complex document parsing challenges in the industry. Using a ViT+MLP+LLM architecture, it optimizes data synthesis strategies, data preprocessing, training methods, and OCR post-processing assistance. By combining small OCR models with large LLM models and using rendering engine-based image data generation strategies, it achieves higher quality Q&A with controllable generation costs. Supports local gradio deployment, OpenAI service deployment, and provides quick access through the PaddlePaddle Galaxy Community online environment. On **January 7th (Tuesday) at 19:00**, join our livestream for a detailed explanation of PP-DocBee's core technology and industry applications. 🚀Registration link: https://www.wjx.top/vm/mlDdpSb.aspx?udsid=309483
@@ -49,7 +53,10 @@
 
 
 ## 📣 Latest Developments
-**🎉 2024.01.02 Added support for [PP-DocBee](./paddlemix/examples/ppdocbee) inference and training, supporting [high-performance inference](./deploy/ppdocbee)**
+
+**🎉 2025.01.14 Support [deepseek-vl2](./paddlemix/examples/deepseek_vl2) inference**
+
+**🎉 2025.01.02 Added support for [PP-DocBee](./paddlemix/examples/ppdocbee) inference and training, supporting [high-performance inference](./deploy/ppdocbee)**
 
 **🎉 2024.12.17 Support for [InternVL2_5 (1B, 2B, 4B, 8B)](./paddlemix/examples/internvl2) inference**
 
