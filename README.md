@@ -54,6 +54,8 @@
 
 <!-- 📚《飞桨多模态大模型开发套件PaddleMIX 2.1 震撼发布》，图文音视频场景全覆盖，多模态高效助力产业创新。超大规模训练支持，覆盖图文预训练、文生图、跨模态视觉任务，覆盖金融、教育、电商、医疗等产业场景。8月8日（周四）20：00 带你直播了解多模态大模型最新架构，深度解析PaddleMIX高性能模型库，手把手演示LLaVA模型训推全流程。[报名链接](https://www.wjx.top/vm/wKqysjx.aspx?udsid=449688)   -->
 
+**🎉 2025.01.20 支持[Aria](./paddlemix/examples/aria)推理**
+
 **🎉 2025.01.14 支持[deepseek-vl2](./paddlemix/examples/deepseek_vl2)推理**
 
 **🎉 2025.01.02 新增自研文档理解模型[PP-DocBee](./paddlemix/examples/ppdocbee)推理和训练，支持[高性能推理](./deploy/ppdocbee)**
@@ -76,7 +78,7 @@
 
 **🎉 2024.10.31 喜迎外部开发者的[创作教程页面](paddlemix_applications.md)更新**
 
-* 🌟 自9月6日发起大模型套件精品项目征集活动以来,我们收到了30个优质开发者项目,其中25个精品项目已通过平台评估并成功加精。
+* 🌟 自9月6日发起大模型套件精品项目征集活动以来, 现已收集**69**个精品项目！
 
 * 🙏 衷心感谢各位开发者基于套件的精彩创作！🚀 诚挚邀请您也来分享您的创意 - 欢迎将教程发布到公开网页或[飞桨AI Studio](https://aistudio.baidu.com/aistudio/community/multimodal?from=singlemessage)社区！
 
@@ -454,6 +456,42 @@ PP-InsCapTagger(Instance Capability Tagger) 是 DataCopilot 基于 PaddleMIX 实
 
 ## 🤔FAQ
 关于我们项目的一些常见问题解答，请参考[FAQ](docs/FAQ.md)。如果您的问题没有得到解答，请随时在[Issues](https://github.com/PaddlePaddle/PaddleMIX/issues)中提出
+
+
+## ❤️致谢
+
+- PaddleMIX的部分模块和案例设计借鉴了 Hugging Face 的[Transformers](https://github.com/huggingface/transformers)🤗关于预训练模型使用的优秀设计，在此对 Hugging Face 作者及其开源社区表示感谢。
+
+- PaddleMIX 的部分案例和代码由以下优秀社区开发者贡献，（完整的贡献者请参考: [Contributors](https://github.com/PaddlePaddle/PaddleMIX/graphs/contributors)）：
+    [LokeZhou](https://github.com/LokeZhou)，
+    [luyao-cv](https://github.com/luyao-cv)，
+    [nemonameless](https://github.com/nemonameless)，
+    [westfish](https://github.com/westfish)，
+    [wjm202](https://github.com/wjm202)，
+    [JunnYu](https://github.com/JunnYu)，
+    [chang-wenbin](https://github.com/chang-wenbin)，
+    [jerrywgz](https://github.com/jerrywgz)，
+    [lyuwenyu](https://github.com/lyuwenyu)，
+    [co63oc](https://github.com/co63oc)，
+    [CrazyBoyM](https://github.com/CrazyBoyM)，
+    [KPCOFGS](https://github.com/KPCOFGS)，
+    [pkhk-1](https://github.com/pkhk-1)，
+    [1649759610](https://github.com/1649759610)，
+    [DrRyanHuang](https://github.com/DrRyanHuang)，
+    [zhiboniu](https://github.com/zhiboniu)，
+    [cocoshe](https://github.com/cocoshe)，
+    [sneaxiy](https://github.com/sneaxiy)，
+    [yangrongxinuser](https://github.com/yangrongxinuser)，
+    [cheng221](https://github.com/cheng221)，
+    [Liyulingyue](https://github.com/Liyulingyue)，
+    [zhoutianzi666](https://github.com/zhoutianzi666)，
+    [Birdylx](https://github.com/Birdylx)，
+    [FeixLiu](https://github.com/FeixLiu)，
+    [Tsaiyue](https://github.com/Tsaiyue)，
+    [fightfat](https://github.com/fightfat)，
+    [warrentdrew](https://github.com/warrentdrew)，
+    [swagger-coder](https://github.com/swagger-coder)
+    ...
 
 
 ## 📝许可证书
