@@ -158,12 +158,15 @@ if __name__ == "__main__":
     elif args.control_mask_video_path is not None:
         validation_mask_images = load_images_from_video_to_pil(args.control_mask_video_path)
 
-    if args.prompt_path is  not None:
-        with open(args.prompt_path, "r") as f:
-            lines = f.readlines()
-            prompt = lines[0].strip()
+    if args.prompt_path is not None:
+        if not args.prompt_path.endswith('.txt'):
+            prompt = args.prompt_path
+        else:
+            with open(args.prompt_path, "r") as f:
+                lines = f.readlines()
+                prompt = lines[0].strip()
     else:
-          prompt=None
+        prompt=None
 
     if args.vctrl_path.endswith(".pdparams"):
         vctrl = VCtrlModel.from_config(args.vctrl_config)
