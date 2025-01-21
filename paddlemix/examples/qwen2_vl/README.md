@@ -73,6 +73,20 @@ CUDA_VISIBLE_DEVICES=0 python paddlemix/examples/qwen2_vl/multi_image_infer.py
 CUDA_VISIBLE_DEVICES=0 python paddlemix/examples/qwen2_vl/video_infer.py
 ```
 
+### 模型推理支持分布式推理
+
+```bash
+# 2B
+sh paddlemix/examples/qwen2_vl/shell/distributed_qwen2_vl_infer_2B.sh
+# 7B
+sh paddlemix/examples/qwen2_vl/shell/distributed_qwen2_vl_infer_7B.sh
+# 72B
+sh paddlemix/examples/qwen2_vl/shell/distributed_qwen2_vl_infer_72B.sh
+# 72B QVQ
+sh paddlemix/examples/qwen2_vl/shell/distributed_qwen2_vl_infer_72B_QVQ.sh
+```
+> ⚠️注意："mp_degree"需要根据显卡数量"gpus"进行调整，例如2卡推理，则设置为2。
+
 ## 4 模型微调
 
 ### 4.1 小型示例数据集
