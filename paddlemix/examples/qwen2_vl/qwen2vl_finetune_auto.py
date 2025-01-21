@@ -498,15 +498,18 @@ class ImageCollatorForSeq2Seq(DataCollatorForSeq2Seq):
         )
         image_embeds = []
         if pixel_values is not None and image_grid_thw is not None:
+            print("================== in ImageCollatorForSeq2Seq before visual_model ==================")
             for feature in features:
                 pixel_values = paddle.to_tensor(feature["pixel_values"], dtype=paddle.get_default_dtype())
-                image_grid_thw = paddle.to_tensor(feature["image_grid_thw"])
+                image_grid_thw = paddle.to_tensor(feature["image_grid_thw"]).unsqueeze(0)
+                print(pixel_values)
+                print(image_grid_thw)
                 image_embeds.append(self.visual_model(pixel_values, grid_thw=image_grid_thw))
                 del feature["pixel_values"]
                 del feature["image_grid_thw"]
         # check
         for feature in features:
-            print("================== in ImageCollatorForSeq2Seq ==================")
+            print("================== in ImageCollatorForSeq2Seq before super().__call__ ==================")
             print("len(feature[input_ids]) : %s" % len(feature["input_ids"]))
             print("len(feature[labels]) : %s" % len(feature["labels"]))
             print("len(feature[attention_mask]) : %s" % len(feature["attention_mask"]))

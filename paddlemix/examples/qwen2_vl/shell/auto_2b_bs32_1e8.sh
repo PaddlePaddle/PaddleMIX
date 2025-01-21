@@ -53,7 +53,7 @@ ${TRAINING_PYTHON} --log_dir ${OUTPUT_DIR}/paddle_distributed_logs \
   --logging_dir ${OUTPUT_DIR}/logs \
   --meta_path ${meta_path} \
   --overwrite_output_dir True \
-  --dataloader_num_workers 8 \
+  --dataloader_num_workers 0 \
   --bf16 True \
   --fp16 False \
   --fp16_opt_level "O2" \
