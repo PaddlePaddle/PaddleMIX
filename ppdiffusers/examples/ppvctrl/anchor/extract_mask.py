@@ -12,12 +12,15 @@ from PIL import Image
 from paddlemix.models.groundingdino.modeling import GroundingDinoModel
 from paddlemix.processors.groundingdino_processing import GroundingDinoProcessor
 
-sys.path.append("/root/paddlejob/workspace/env_run/output/haoming/PaddleMIX/paddlemix/models")
+current_dir = os.getcwd()
+paddlemix_dir = os.path.abspath(os.path.join(current_dir, '../../..'))
+
+sys.path.append(os.path.join(paddlemix_dir,'paddlemix/models'))
 from utils.video_utils import create_video,save_video_from_bgr
 from paddlemix.models.sam2.build_sam import build_sam2, build_sam2_video_predictor
 from paddlemix.models.sam2.sam2_image_predictor import SAM2ImagePredictor
 
-if __name__=='__main__':
+if __name__=='__main__': 
     # parser = argparse.ArgumentParser("Grounded-Segment-Anything Demo", add_help=True)
     # args = parser.parse_args()
     
@@ -46,12 +49,13 @@ if __name__=='__main__':
     parser.add_argument(
         "--sam2_checkpoint", 
         type=str, 
-        default="anchor/sam2.1_hiera_large.pdparams",
+        default="anchor/checkpoints/mask/sam2.1_hiera_large.pdparams",
         help="path to sam checkpoint file")
 
     parser.add_argument("--input_path", type=str, default=None)
-    parser.add_argument("--control_video_path", type=str, default="output.mp4")
-    parser.add_argument("--mask_video_path", type=str, default="output.mp4")
+    parser.add_argument("--control_video_path", type=str, default="guide_values.mp4")
+    parser.add_argument("--mask_video_path", type=str, default="mask_values.mp4")
+    parser.add_argument("--reference_image_path", type=str, default="reference_image.jpg")
     
     parser.add_argument("--prompt", type=str, required=True, help="The prompt of the vidoe to be segmented.")
     parser.add_argument("--box_threshold", type=float, default=0.6)
@@ -140,7 +144,6 @@ if __name__=='__main__':
     for frame_idx, segments in video_segments.items():
         # img = cv2.cvtColor(org_frames[frame_idx], cv2.COLOR_BGR2RGB)
         img=org_frames[frame_idx]
-        print(img.shape)
         object_ids = list(segments.keys())
         masks = list(segments.values())
         masks = np.concatenate(masks, axis=0)[0]
@@ -163,4 +166,4 @@ if __name__=='__main__':
     save_video_from_bgr(annotated_frames, args.control_video_path, frame_rate=30, width=W, height=H)
     save_video_from_bgr(mask_, args.mask_video_path, frame_rate=30, width=W, height=H)
     
-    cv2.imwrite("reference.png",reference_img)
+    cv2.imwrite(args.reference_image_path,reference_img)

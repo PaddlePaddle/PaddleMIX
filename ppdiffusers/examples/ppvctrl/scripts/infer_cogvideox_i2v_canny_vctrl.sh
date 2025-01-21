@@ -19,7 +19,7 @@ python infer_cogvideox_i2v_vctrl_cli.py \
   --control_video_path "examples/canny/case1/guide_values.mp4" \
   --ref_image_path "examples/canny/case1/reference_image.jpg" \
   --output_dir "infer_outputs/canny2video/i2v" \
-  --prompt "examples/canny/case1/prompt.txt" \
+  --prompt_path "examples/canny/case1/prompt.txt" \
   --task "canny" \
   --width 720 \
   --height 480 \
