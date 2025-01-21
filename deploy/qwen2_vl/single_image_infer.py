@@ -24,7 +24,7 @@ from paddlenlp.trl import llm_utils
 
 from paddlemix.models.qwen2_vl import MIXQwen2Tokenizer
 from paddlemix.models.qwen2_vl.modeling_qwen2_vl import (
-    Qwen2RotaryEmbedding,
+    Qwen2VLRotaryEmbedding,
     Qwen2VLForConditionalGeneration,
 )
 from paddlemix.processors.qwen2_vl_processing import (
@@ -157,7 +157,7 @@ def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: Predic
     position_ids = paddle.concat([position_ids, position_value], axis=-1)
 
     head_dim = config.hidden_size // config.num_attention_heads
-    qwen2_Embedding = Qwen2RotaryEmbedding(head_dim, config.max_position_embeddings, config.rope_theta)
+    qwen2_Embedding = Qwen2VLRotaryEmbedding(head_dim, config.max_position_embeddings, config.rope_theta)
     cos = qwen2_Embedding.cos_cached
     sin = qwen2_Embedding.sin_cached
 
@@ -267,11 +267,15 @@ if predictor_args.benchmark:
             duringtime = endtime - starttime
             duringtime = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
             sumtime += duringtime
-            print(f"Single {predictor_args.model_name_or_path} end to end time : ", duringtime, "ms")
+            print(f"Single Image Inference: {predictor_args.model_name_or_path} end-to-end time : ", duringtime, "ms")
             inference_global_mem = paddle.device.cuda.memory_reserved() / (1024**3)
             print(f"Inference used CUDA memory : {inference_global_mem:.3f} GiB")
 
-    print(f"Single {predictor_args.model_name_or_path} ave end to end time : ", sumtime / repeat_times, "ms")
+    print(
+        f"Single Image Inference: {predictor_args.model_name_or_path} average end-to-end time : ",
+        sumtime / repeat_times,
+        "ms",
+    )
 
 else:
     generated_text = run_model()

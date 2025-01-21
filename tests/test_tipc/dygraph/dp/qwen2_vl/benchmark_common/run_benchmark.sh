@@ -105,7 +105,7 @@ function _train(){
     train_cmd="../paddlemix/examples/qwen2_vl/qwen2vl_finetune.py \
             --do_train \
             ${use_model_args} \
-            --meta_path ../paddlemix/examples/qwen2_vl/configs/benchmark_chartqa_500.json \
+            --meta_path ../paddlemix/examples/qwen2_vl/configs/benchmark_chartqa.json \
             ${use_output_args} \
             --logging_steps=1 \
             --num_train_epochs=${max_epochs} \

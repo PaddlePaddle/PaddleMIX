@@ -15,9 +15,12 @@
 
 from .blip_processing import *
 from .clip_processing import *
+from .deepseek_vl2_processing import *
+from .emu3_processing import *
 from .eva02_processing import *
 from .got_process import *
 from .groundingdino_processing import *
+from .image_processing_emu3 import *
 from .image_processing_minicpmv import *
 from .imagebind_processing import *
 from .internlm_xcomposer2_processing import *
@@ -35,3 +38,4 @@ from .sam_processing import *
 from .tokenizer import SimpleTokenizer, tokenize
 from .visualglm_image_processing import *
 from .visualglm_processing import *
+from .processing_aria import AriaProcessor
