@@ -27,11 +27,15 @@
 |--------------------|
 | OpenGVLab/InternVL2-1B  |
 | OpenGVLab/InternVL2_5-1B  |
+| OpenGVLab/InternVL2_5-1B-MPO  |
 | OpenGVLab/InternVL2-2B  |
 | OpenGVLab/InternVL2_5-2B  |
+| OpenGVLab/InternVL2_5-2B-MPO  |
 | OpenGVLab/InternVL2_5-4B  |
+| OpenGVLab/InternVL2_5-4B-MPO  |
 | OpenGVLab/InternVL2-8B  |
 | OpenGVLab/InternVL2_5-8B  |
+| OpenGVLab/InternVL2_5-8B-MPO  |
 | OpenGVLab/InternVL2-26B |
 | OpenGVLab/InternVL2-40B |
 | OpenGVLab/InternVL2-8B-MPO |
@@ -198,7 +202,7 @@ sh paddlemix/examples/internvl2/shell/internvl2.0/2nd_finetune/internvl2_1b_qwen
 
 ## 多卡
 # 2B
-sh paddlemix/examples/internvl2/shell/internvl2.0/2nd_finetune/internvl2_2b_internlm2_1_8b_dynamic_res_2nd_finetune_full.sh 
+sh paddlemix/examples/internvl2/shell/internvl2.0/2nd_finetune/internvl2_2b_internlm2_1_8b_dynamic_res_2nd_finetune_full.sh
 
 ## 多卡
 # 8B
@@ -211,7 +215,7 @@ sh paddlemix/examples/internvl2/shell/internvl2.0/2nd_finetune/internvl2_8b_inte
 
 ```bash
 python paddlemix/examples/internvl2/chat_demo.py \
-    --model_name_or_path "your_checkpoints" \
+    --model_name_or_path "your_checkpoint" \
     --image_path 'paddlemix/demo_images/examples_image1.jpg' \
     --text "Please describe this image in detail."
 ```

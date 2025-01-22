@@ -20,7 +20,7 @@ python infer_cogvideox_i2v_vctrl_cli.py \
   --ref_image_path "examples/mask/case1/reference_image.jpg" \
   --control_mask_video_path 'examples/mask/case1/mask_values.mp4' \
   --output_dir "infer_outputs/mask2video/i2v" \
-  --prompt "examples/mask/case1/prompt.txt" \
+  --prompt_path "examples/mask/case1/prompt.txt" \
   --task "mask" \
   --width 720 \
   --height 480 \
