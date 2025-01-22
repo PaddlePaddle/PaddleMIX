@@ -258,6 +258,7 @@ class Qwen2VLRotaryEmbedding(nn.Layer):
         if seq_len < self.original_max_seq_len and self.max_seq_len_cached > self.original_max_seq_len:  # reset
             self.inv_freq = self.original_inv_freq
             self.max_seq_len_cached = self.original_max_seq_len
+
     @paddle.no_grad()
     def forward(self, x, position_ids):
         if "dynamic" in self.rope_type:
@@ -365,6 +366,9 @@ def apply_multimodal_rotary_pos_emb(q, k, cos, sin, mrope_section, unsqueeze_dim
 
     # cos = cos[position_ids]
     # sin = sin[position_ids]
+    # print("=========== in apply_multimodal_rotary_pos_emb ===========")
+    # print(cos)
+    # print(sin)
     mrope_section = mrope_section * 2
     cos = paddle.concat(x=[m[i % 3] for i, m in enumerate(cos.split(mrope_section, axis=-1))], axis=-1).unsqueeze(
         axis=unsqueeze_dim
@@ -373,6 +377,9 @@ def apply_multimodal_rotary_pos_emb(q, k, cos, sin, mrope_section, unsqueeze_dim
         axis=unsqueeze_dim
     )
 
+    # print("=========== in apply_multimodal_rotary_pos_emb, after split and concat ===========")
+    # print(cos)
+    # print(sin)
     q_embed = (q * cos) + (rotate_half(q) * sin)
     k_embed = (k * cos) + (rotate_half(k) * sin)
     return q_embed, k_embed
@@ -543,7 +550,7 @@ class VisionFlashAttention2(nn.Layer):
                 .squeeze(0)
                 .reshape([seq_length, -1])
             )
-        attn_output = attn_output.astype(paddle.float32)
+        # attn_output = attn_output.astype(paddle.float32)
         attn_output = self.proj(attn_output)
         return attn_output
 
@@ -1160,6 +1167,9 @@ class Qwen2VisionTransformerPretrainedModel(Qwen2VLPreTrainedModel):
         pos_ids = paddle.concat(x=pos_ids, axis=0)
         max_grid_size = grid_thw[:, 1:].max()
         rotary_pos_emb_full = self.rotary_pos_emb(max_grid_size)
+        # print("========== in Qwen2VisionTransformerPretrainedModel rot_pos_emb ========")
+        # print(rotary_pos_emb_full.shape)
+        # print(pos_ids.shape)
         rotary_pos_emb = rotary_pos_emb_full[pos_ids].flatten(start_axis=1)
         return rotary_pos_emb
 
@@ -1172,6 +1182,10 @@ class Qwen2VisionTransformerPretrainedModel(Qwen2VLPreTrainedModel):
             axis=0, dtype="int32"
         )
         cu_seqlens = F.pad(cu_seqlens, (1, 0), value=0)
+        # print("========== in Qwen2VisionTransformerPretrainedModel forward ========")
+        # print(rotary_pos_emb.shape)
+        # print(cu_seqlens)
+        # print(hidden_states.shape)
 
         for idx, blk in enumerate(self.blocks):
             hidden_states = blk(hidden_states, cu_seqlens=cu_seqlens, rotary_pos_emb=rotary_pos_emb)
@@ -1678,6 +1692,23 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
         output_hidden_states = output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states  # fmt:skip
         # Note：始终为True
         return_dict = True  # return_dict if return_dict is not None else self.config.use_return_dict
+        # print("================ in Qwen2VLForConditionalGeneration forward ===================")
+        # print("================ input_ids ===================")
+        # print(input_ids)
+        # print("================ attention_mask ===================")
+        # print(attention_mask)
+        # print("================ position_ids ===================")
+        # print(position_ids)
+        # print("================ inputs_embeds ===================")
+        # print(inputs_embeds.shape)
+        # print("================ labels ===================")
+        # print(labels)
+        # print("================ pixel_values ===================")
+        # print(pixel_values)
+        # print("================ image_grid_thw ===================")
+        # print(image_grid_thw)
+        # print("================ rope_deltas ===================")
+        # print(rope_deltas)
 
         if inputs_embeds is None:
             inputs_embeds = self.model.embed_tokens(input_ids)

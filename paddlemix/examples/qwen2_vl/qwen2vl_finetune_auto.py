@@ -339,6 +339,7 @@ class LazySupervisedDataset(Dataset):
             attention_mask=attention_mask,
             pixel_values=image_data_dict["pixel_values"],
             image_grid_thw=image_data_dict["image_grid_thw"][0],
+            # images=[image_path],
         )
         return ret
 
@@ -374,6 +375,7 @@ class LazySupervisedDataset(Dataset):
             attention_mask=attention_mask,
             pixel_values=image_data_dict["pixel_values"],
             image_grid_thw=image_data_dict["image_grid_thw"][0],
+            # images=[],
         )
         return ret
 
@@ -383,10 +385,6 @@ class LazySupervisedDataset(Dataset):
             try:
                 data_item = self.raw_data[i]
                 if "images" in data_item and len(data_item["images"]) != 0:
-                    # if type(data_item['images']) == list:
-                    #     ret = self.multi_modal_multi_image_get_item(data_item)
-                    # else:
-                    #     ret = self.multi_modal_get_item(data_item)
                     ret = self.multi_modal_get_item(data_item)  # TODO: 暂时都是单图
                 else:
                     ret = self.pure_text_get_item(data_item)  # TODO: 纯文
@@ -489,50 +487,54 @@ class ImageCollatorForSeq2Seq(DataCollatorForSeq2Seq):
     model_config: Optional[Any] = None
 
     def __call__(self, features, return_tensors=None):
-        # take out pixel_values, use visual_model to embed pixel_values
-        pixel_values = (
-            [feature["pixel_values"] for feature in features] if "pixel_values" in features[0].keys() else None
-        )
-        image_grid_thw = (
-            [feature["image_grid_thw"] for feature in features] if "image_grid_thw" in features[0].keys() else None
-        )
+        # pop pixel_values, use visual_model to embed pixel_values
+        has_pixel_values = True if "pixel_values" in features[0].keys() else False
+        has_image_grid_thw = True if "image_grid_thw" in features[0].keys() else False
         image_embeds = []
-        if pixel_values is not None and image_grid_thw is not None:
-            print("================== in ImageCollatorForSeq2Seq before visual_model ==================")
+        if has_pixel_values and has_image_grid_thw:
+            # print("================== in ImageCollatorForSeq2Seq before visual_model ==================")
             for feature in features:
                 pixel_values = paddle.to_tensor(feature["pixel_values"], dtype=paddle.get_default_dtype())
                 image_grid_thw = paddle.to_tensor(feature["image_grid_thw"]).unsqueeze(0)
-                print(pixel_values)
-                print(image_grid_thw)
+                # print(pixel_values)
+                # print(image_grid_thw)
                 image_embeds.append(self.visual_model(pixel_values, grid_thw=image_grid_thw))
-                del feature["pixel_values"]
-                del feature["image_grid_thw"]
+                feature.pop("pixel_values")
+                feature.pop("image_grid_thw")
+        # print(image_embeds)
         # check
-        for feature in features:
-            print("================== in ImageCollatorForSeq2Seq before super().__call__ ==================")
-            print("len(feature[input_ids]) : %s" % len(feature["input_ids"]))
-            print("len(feature[labels]) : %s" % len(feature["labels"]))
-            print("len(feature[attention_mask]) : %s" % len(feature["attention_mask"]))
-            if "pixel_values" in feature.keys():
-                print("shape of pixel_values")
-                print(feature["pixel_values"].shape)
+        # for feature in features:
+        #     print("================== in ImageCollatorForSeq2Seq before super().__call__ ==================")
+        #     print("len(feature[input_ids]) : %s" % len(feature["input_ids"]))
+        #     print("len(feature[labels]) : %s" % len(feature["labels"]))
+        #     print("len(feature[attention_mask]) : %s" % len(feature["attention_mask"]))
+        #     if "pixel_values" in feature.keys():
+        #         print("shape of pixel_values")
+        #         print(feature["pixel_values"].shape)
 
         # call super class to process the rest of the features
         batch = super().__call__(features, return_tensors=None)
-        print("after super().__call__, batch: ")
-        print(batch)
+        # print("after super().__call__, batch: ")
+        # print(batch)
 
         # use embed_model to embed the input_ids and fill image_embeds to inputs_embeds
         # inputs_embeds = inputs_embeds.clone()
         inputs_embeds = self.embed_model(batch["input_ids"])
+        image_mask = batch["input_ids"] == self.model_config.image_token_id
+        # print("after embed_model, inputs_embeds and image_mask ")
+        # print(inputs_embeds)
+        # print(image_mask)
         for idx, image_embed in enumerate(image_embeds):
-            image_mask = batch["input_ids"] == self.model_config.image_token_id
             assert (
                 image_mask[idx].sum() == image_embed.shape[0]
             ), f"may be image_embed {image_embed.shape} is not for input_ids {image_mask[idx].sum()}."
-            inputs_embeds[idx][image_mask] = image_embeds
+            # print(inputs_embeds[idx][image_mask[idx]])
+            inputs_embeds[idx][image_mask[idx]] = image_embed
 
-        batch["inputs_embeds"] = inputs_embeds
+        batch["inputs_embeds"] = inputs_embeds._local_value()  # should calc grad
+        batch["input_ids"] = batch["input_ids"]._local_value()
+        # print("in ImageCollatorForSeq2Seq, fanal features")
+        # print(batch)
         return batch
 
 
@@ -544,6 +546,7 @@ class FinetuneTrainer(AutoTrainer):
     def _wrap_for_dist_loader(self, train_dataloader):
         dist_loader = super()._wrap_for_dist_loader(train_dataloader)
         # TODO: 动转静要求2个字段可能有问题
+        # dist_loader._input_keys = ["input_ids", "labels", "attention_mask", "pixel_values", "image_grid_thw"]
         dist_loader._input_keys = ["input_ids", "labels", "attention_mask", "inputs_embeds"]
         return dist_loader
 
@@ -607,7 +610,7 @@ def main():
     MODEL_NAME = model_args.model_name_or_path
     model = Qwen2VLForConditionalGeneration.from_pretrained(MODEL_NAME, dtype=dtype)
     image_processor = Qwen2VLImageProcessor.from_pretrained(MODEL_NAME)
-    tokenizer = MIXQwen2Tokenizer.from_pretrained(MODEL_NAME)
+    tokenizer = MIXQwen2Tokenizer.from_pretrained(MODEL_NAME, padding_side="right")
     processor = Qwen2VLProcessor(image_processor, tokenizer)
 
     tokenizer.tokenizer_path = tokenizer_path
@@ -671,6 +674,11 @@ def main():
 
     data_collator = ImageCollatorForSeq2Seq(
         tokenizer=tokenizer,
+        max_length=data_args.max_seq_length,  # Can be optimized in data_collator to use the actual longest
+        padding="max_length",
+        max_label_length=data_args.max_seq_length,  # Can be optimized in data_collator to use the actual longest
+        # template=TEMPLATES[data_args.conv_style],
+        # processor=processor,
         pad_to_multiple_of=8 if training_args.do_train else None,  # for shift short attention
         label_pad_token_id=IGNORE_INDEX,
         visual_model=model.visual,

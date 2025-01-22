@@ -61,7 +61,7 @@ ${TRAINING_PYTHON} --log_dir ${OUTPUT_DIR}/paddle_distributed_logs \
   --per_device_train_batch_size ${PER_DEVICE_BATCH_SIZE} \
   --gradient_accumulation_steps ${GRADIENT_ACC} \
   --freeze_vit True \
-  --max_seq_length 8192 \
+  --max_seq_length 2048 \
   --image_resolution 512 \
   --recompute False \
   --max_grad_norm 1.0 \
