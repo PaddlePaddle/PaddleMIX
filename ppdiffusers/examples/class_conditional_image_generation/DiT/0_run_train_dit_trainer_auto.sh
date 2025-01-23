@@ -89,9 +89,8 @@ ${TRAINING_PYTHON} train_image_generation_trainer_auto.py \
     --pipeline_parallel_degree ${PP_DEGREE} \
     --sharding_parallel_degree ${SHARDING_DEGREE} \
     --sharding "stage1" \
-    --sharding_parallel_config "enable_stage1_overlap enable_stage1_tensor_fusion" \
+    --sharding_parallel_config "enable_overlap enable_tensor_fusion" \
     --hybrid_parallel_topo_order "sharding_first" \
     --sep_parallel_degree 1 \
     --enable_auto_parallel 1 \
     --to_static $to_static \
-    # --fp16 ${USE_AMP} \
