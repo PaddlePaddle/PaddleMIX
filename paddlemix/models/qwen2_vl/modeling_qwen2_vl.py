@@ -1472,8 +1472,8 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
                 image_nums, video_nums = 0, 0
                 vision_start_indices = paddle.nonzero(input_ids == vision_start_token_id).squeeze(1)
                 vision_tokens = input_ids[vision_start_indices + 1]
-                image_nums = (vision_tokens == image_token_id).sum()
-                video_nums = (vision_tokens == video_token_id).sum()
+                image_nums = (vision_tokens == image_token_id).sum() if vision_tokens.numel() > 0 else 0
+                video_nums = (vision_tokens == video_token_id).sum() if vision_tokens.numel() > 0 else 0
                 input_tokens = input_ids.tolist()
                 llm_pos_ids_list: list = []
                 st = 0
