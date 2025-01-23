@@ -31,7 +31,7 @@ class Qwen2VLVisionConfig(PretrainedConfig):
         depth=32,
         embed_dim=1280,
         hidden_size=3584,
-        hidden_act="quick_gelu",
+        hidden_act="gelu",
         mlp_ratio=4,
         num_heads=16,
         in_channels=3,

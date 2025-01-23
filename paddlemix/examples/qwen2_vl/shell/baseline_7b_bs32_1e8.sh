@@ -1,11 +1,11 @@
 # Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -37,6 +37,25 @@ TRAINER_INSTANCES='127.0.0.1'
 MASTER='127.0.0.1:8080'
 
 meta_path="paddlemix/examples/qwen2_vl/configs/baseline_6data_330k.json"
+
+### XPU ###
+export XPU_CDNN_CLUSTER_PARALLEL=1
+export XPU_CDNN_CLUSTER_PARALLEL_STREAM_NUMBER=2
+export XPU_PADDLE_FUSE_SHARDING_BUFFER=1
+export FLAGS_use_stride_kernel="0"
+# export XPU_PADDLE_L3_SIZE=98566144 # 94 MB
+# export XBLAS_FC_AUTOTUNE_FILE="/zhangyikun02/PaddleMIX/autotune_qwen2_vl_7b"
+export BKCL_TREE_THRESHOLD=0
+
+export XPU_FUSE_RMSNorm=1
+export XPU_FUSE_ATTN_QKV=1
+export XPU_FUSE_FFN=1
+export XPU_FUSE_ROPE=1
+# export PRINT_TIMMER=1
+# export PROFILER=1
+
+# export XPUAPI_DEBUG=1
+# export XPURT_DISPATCH_MODE=PROFILING
 
 TRAINING_PYTHON="python -m paddle.distributed.launch --master ${MASTER} --nnodes 1 --nproc_per_node ${GPUS} --rank 0 --ips ${TRAINER_INSTANCES} --run_mode=collective"
 ${TRAINING_PYTHON} --log_dir ${OUTPUT_DIR}/paddle_distributed_logs \
@@ -73,6 +92,7 @@ ${TRAINING_PYTHON} --log_dir ${OUTPUT_DIR}/paddle_distributed_logs \
   --report_to "visualdl" \
   --tensor_parallel_degree=${tensor_parallel_degree} \
   --sharding_parallel_degree=${sharding_parallel_degree} \
+  --sharding_parallel_config "split_param" \
   --pipeline_parallel_degree=1 \
   --sep_parallel_degree=1 \
   --sharding="stage1" \

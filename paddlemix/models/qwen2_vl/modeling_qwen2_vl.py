@@ -20,23 +20,26 @@
 """Paddle Qwen2-VL model."""
 
 import math
+import os
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple, Union
 from functools import partial
+from typing import Any, Dict, List, Optional, Tuple, Union
+
 import paddle
+import paddle.distributed.fleet.meta_parallel as mpu
 import paddle.nn as nn
 import paddle.nn.functional as F
+from paddle import Tensor, nn
+from paddle.distributed import fleet
+from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
+from paddlenlp.transformers import linear_utils
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
+from paddlenlp.transformers.linear_utils import Linear
 from paddlenlp.transformers.model_outputs import BaseModelOutputWithPast, ModelOutput
 from paddlenlp.transformers.model_utils import PretrainedModel
-from paddlenlp.transformers import linear_utils
-from paddlenlp.transformers.linear_utils import Linear
-from paddle.distributed import fleet
 
-from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
-import paddle.distributed.fleet.meta_parallel as mpu
-
-from paddle import Tensor, nn
+# import paddlenlp.transformers.linear_utils as linear_utils
+from paddlenlp.utils.tools import get_env_device
 
 from paddlemix.models.flash_attn_utils import (
     create_attention_module,
@@ -47,6 +50,15 @@ from ppdiffusers.utils import logging
 from ...activations import ACT2FN
 from .bert_padding import index_first_axis, pad_input, unpad_input
 from .configuration_qwen2_vl import Qwen2VLConfig, Qwen2VLVisionConfig
+
+if get_env_device() == "xpu":
+    from paddle_xpu.layers.linear_utils.Linear import xpu_matmul
+else:
+    xpu_matmul = None
+try:
+    from paddle.incubate.nn.functional import fused_rotary_position_embedding
+except ImportError:
+    fused_rotary_position_embedding = None
 
 logger = logging.get_logger(__name__)
 
@@ -66,6 +78,7 @@ def get_triangle_upper_mask(x, mask=None):
     mask.stop_gradient = True
     return mask
 
+
 def parallel_matmul(x: Tensor, y: Tensor, transpose_y=True, tensor_parallel_output=True):
     is_fleet_init = True
     tensor_parallel_degree = 1
@@ -82,7 +95,7 @@ def parallel_matmul(x: Tensor, y: Tensor, transpose_y=True, tensor_parallel_outp
         y_is_distributed = tensor_parallel_degree > 1
 
     if is_fleet_init and tensor_parallel_degree > 1 and y_is_distributed:
-        
+
         # if not running under distributed.launch, it will raise AttributeError: 'Fleet' object has no attribute '_hcg'
         input_parallel = paddle.distributed.collective._c_identity(x, group=model_parallel_group)
         logits = paddle.matmul(input_parallel, y, transpose_y=transpose_y)
@@ -94,7 +107,7 @@ def parallel_matmul(x: Tensor, y: Tensor, transpose_y=True, tensor_parallel_outp
     else:
         logits = paddle.matmul(x, y, transpose_y=transpose_y)
         return logits
-    
+
 
 def _compute_default_rope_parameters(
     config: Optional[PretrainedConfig] = None,
@@ -307,6 +320,7 @@ class Qwen2VLRotaryEmbedding(nn.Layer):
         if seq_len < self.original_max_seq_len and self.max_seq_len_cached > self.original_max_seq_len:  # reset
             self.inv_freq = self.original_inv_freq
             self.max_seq_len_cached = self.original_max_seq_len
+
     @paddle.no_grad()
     def forward(self, x, position_ids):
         if "dynamic" in self.rope_type:
@@ -410,6 +424,31 @@ def apply_rotary_pos_emb_vision(tensor: paddle.Tensor, freqs: paddle.Tensor) -> 
     return output
 
 
+def fused_rotary_pos_emb_vision(
+    q: paddle.Tensor, k: paddle.Tensor, freqs: paddle.Tensor
+) -> tuple[paddle.Tensor, paddle.Tensor]:
+    orig_dtype = q.dtype
+
+    with paddle.amp.auto_cast(False):
+        q = q.astype(dtype="float32")
+        k = k.astype(dtype="float32")
+        cos = freqs.cos()
+        sin = freqs.sin()
+        cos = cos.unsqueeze(1).tile(repeat_times=[1, 1, 2]).unsqueeze(0).astype(dtype="float32")
+        sin = sin.unsqueeze(1).tile(repeat_times=[1, 1, 2]).unsqueeze(0).astype(dtype="float32")
+        if fused_rotary_position_embedding is not None:
+            output_q, output_k, _ = fused_rotary_position_embedding(
+                q, k, sin=sin, cos=cos, use_neox_rotary_style=False
+            )
+        else:
+            output_q = q * cos + rotate_half(q) * sin
+            output_k = k * cos + rotate_half(k) * sin
+
+    output_q = paddle.cast(output_q, orig_dtype).squeeze(axis=0)
+    output_k = paddle.cast(output_k, orig_dtype).squeeze(axis=0)
+    return output_q, output_k
+
+
 class VisionRotaryEmbedding(nn.Layer):
     def __init__(self, dim: int, theta: float = 10000.0) -> None:
         super().__init__()
@@ -457,9 +496,9 @@ class PatchMerger(nn.Layer):
         self.hidden_size = context_dim * (spatial_merge_size**2)
         self.ln_q = nn.LayerNorm(context_dim, epsilon=1e-6)
         self.mlp = nn.Sequential(
-            nn.Linear(self.hidden_size, self.hidden_size),
+            linear_utils.Linear(self.hidden_size, self.hidden_size),
             nn.GELU(),
-            nn.Linear(self.hidden_size, dim),
+            linear_utils.Linear(self.hidden_size, dim),
         )
 
     def forward(self, x: paddle.Tensor) -> paddle.Tensor:
@@ -470,9 +509,9 @@ class PatchMerger(nn.Layer):
 class VisionMlp(nn.Layer):
     def __init__(self, dim: int, hidden_dim: int, hidden_act: str) -> None:
         super().__init__()
-        self.fc1 = nn.Linear(dim, hidden_dim)
+        self.fc1 = linear_utils.Linear(dim, hidden_dim)
         self.act = ACT2FN[hidden_act]
-        self.fc2 = nn.Linear(hidden_dim, dim)
+        self.fc2 = linear_utils.Linear(hidden_dim, dim)
 
     def forward(self, x) -> paddle.Tensor:
         return self.fc2(self.act(self.fc1(x)))
@@ -482,8 +521,8 @@ class VisionAttention(nn.Layer):
     def __init__(self, dim: int, num_heads: int = 16) -> None:
         super().__init__()
         self.num_heads = num_heads
-        self.qkv = nn.Linear(dim, dim * 3, bias_attr=True)
-        self.proj = nn.Linear(dim, dim)
+        self.qkv = linear_utils.Linear(dim, dim * 3, bias_attr=True)
+        self.proj = linear_utils.Linear(dim, dim)
         self.head_dim = dim // num_heads  # must added
 
     def forward(
@@ -521,8 +560,8 @@ class VisionFlashAttention2(nn.Layer):
     def __init__(self, dim: int, num_heads: int = 16) -> None:
         super().__init__()
         self.num_heads = num_heads
-        self.qkv = nn.Linear(dim, dim * 3, bias_attr=True)
-        self.proj = nn.Linear(dim, dim)
+        self.qkv = linear_utils.Linear(dim, dim * 3, bias_attr=True)
+        self.proj = linear_utils.Linear(dim, dim)
         self.head_dim = dim // num_heads  # must added
 
     def forward(
@@ -531,8 +570,11 @@ class VisionFlashAttention2(nn.Layer):
         seq_length = tuple(hidden_states.shape)[0]
         qkv = self.qkv(hidden_states).reshape([seq_length, 3, self.num_heads, -1]).transpose(perm=[1, 0, 2, 3])
         q, k, v = qkv.unbind(axis=0)
-        q = apply_rotary_pos_emb_vision(q.unsqueeze(axis=0), rotary_pos_emb).squeeze(axis=0)
-        k = apply_rotary_pos_emb_vision(k.unsqueeze(axis=0), rotary_pos_emb).squeeze(axis=0)
+        if paddle.is_compiled_with_xpu() and os.getenv("XPU_FUSE_ROPE"):
+            q, k = fused_rotary_pos_emb_vision(q.unsqueeze(axis=0), k.unsqueeze(axis=0), rotary_pos_emb)
+        else:
+            q = apply_rotary_pos_emb_vision(q.unsqueeze(axis=0), rotary_pos_emb).squeeze(axis=0)
+            k = apply_rotary_pos_emb_vision(k.unsqueeze(axis=0), rotary_pos_emb).squeeze(axis=0)
 
         if _IS_NPU:
             attn_output = paddle.nn.functional.flash_attention_npu(  # TODO: flash_attn_unpadded
@@ -650,6 +692,15 @@ class Qwen2RMSNorm(nn.Layer):
         self.variance_epsilon = eps
 
     def forward(self, hidden_states):
+        if paddle.is_compiled_with_xpu() and os.getenv("XPU_FUSE_RMSNorm"):
+            try:
+                import paddle_xpu_nn  # noqa: F821
+
+                return paddle_xpu_nn.xpu_rms_norm(hidden_states, self.weight, self.variance_epsilon)[0]
+            except ImportError:
+                raise NotImplementedError(
+                    f"Implementation of fused_rms_norm is not available on xpu. Please install paddle_xpu to use this feature"
+                )
         if paddle.in_dynamic_mode():
             with paddle.amp.auto_cast(False):
                 variance = hidden_states.astype("float32").pow(2).mean(-1, keepdim=True)
@@ -672,14 +723,12 @@ class Qwen2MLP(nn.Layer):
         self.fuse_attention_ffn = config.fuse_attention_ffn
         self.tensor_parallel_degree = config.tensor_parallel_degree
 
-        
         # else:
         ColumnParallelLinear = linear_utils.ColumnParallelLinear
         RowParallelLinear = linear_utils.RowParallelLinear
 
-    
         if config.tensor_parallel_degree > 1:
-           
+
             self.gate_proj = ColumnParallelLinear(
                 self.hidden_size,
                 self.intermediate_size,
@@ -699,20 +748,28 @@ class Qwen2MLP(nn.Layer):
                 has_bias=False,
             )
         else:
-            self.gate_proj = Linear(self.hidden_size, self.intermediate_size, bias_attr=False)  # w1
-            self.up_proj = Linear(self.hidden_size, self.intermediate_size, bias_attr=False)  # w3
-            self.down_proj = Linear(self.intermediate_size, self.hidden_size, bias_attr=False)  # w2 
-            
+            if paddle.is_compiled_with_xpu() and os.getenv("XPU_FUSE_FFN"):
+                self.gate_up_fused_proj = linear_utils.Linear(
+                    self.hidden_size, self.intermediate_size * 2, bias_attr=False
+                )
+            else:
+                self.gate_proj = Linear(self.hidden_size, self.intermediate_size, bias_attr=False)  # w1
+                self.up_proj = Linear(self.hidden_size, self.intermediate_size, bias_attr=False)  # w3
+            self.down_proj = Linear(self.intermediate_size, self.hidden_size, bias_attr=False)  # w2
+
         self.act_fn = ACT2FN[config.hidden_act]
-        self.fuse_swiglu = False 
+        self.fuse_swiglu = False
 
     def forward(self, x):
-        x, y = self.gate_proj(x), self.up_proj(x)
-        if self.fuse_swiglu:
-            x = self.act_fn(x, y)
+        if paddle.is_compiled_with_xpu() and os.getenv("XPU_FUSE_FFN"):
+            x = self.gate_up_fused_proj(x)
+            x = paddle.incubate.nn.functional.swiglu(x)
         else:
-            x = self.act_fn(x) * y
-
+            x, y = self.gate_proj(x), self.up_proj(x)
+            if self.fuse_swiglu:
+                x = self.act_fn(x, y)
+            else:
+                x = self.act_fn(x) * y
         return self.down_proj(x)
 
 
@@ -768,23 +825,28 @@ class Qwen2VLAttention(nn.Layer):
                 self.num_key_value_heads % config.tensor_parallel_degree == 0
             ), f"num_key_value_heads: {self.num_key_value_heads}, tensor_parallel_degree: {config.tensor_parallel_degree}"
             self.num_key_value_heads = self.num_key_value_heads // config.tensor_parallel_degree
-        
+
         ColumnParallelLinear = linear_utils.ColumnParallelLinear
         RowParallelLinear = linear_utils.RowParallelLinear
 
         if config.tensor_parallel_degree > 1:
-            self.q_proj = ColumnParallelLinear(
-                self.hidden_size, self.hidden_size, has_bias=True, gather_output=False
-            )
+            self.q_proj = ColumnParallelLinear(self.hidden_size, self.hidden_size, has_bias=True, gather_output=False)
             self.k_proj = ColumnParallelLinear(self.hidden_size, self.config.num_key_value_heads * self.head_dim, has_bias=True, gather_output=False)  # fmt:skip
             self.v_proj = ColumnParallelLinear(self.hidden_size, self.config.num_key_value_heads * self.head_dim, has_bias=True, gather_output=False)  # fmt:skip
             self.o_proj = RowParallelLinear(self.hidden_size, self.hidden_size, has_bias=False, input_is_parallel=True)
         else:
-            self.q_proj = Linear(self.hidden_size, self.hidden_size, bias_attr=True)
-            self.k_proj = Linear(self.hidden_size, self.config.num_key_value_heads * self.head_dim, bias_attr=True)
-            self.v_proj = Linear(self.hidden_size, self.config.num_key_value_heads * self.head_dim, bias_attr=True)
+            if paddle.is_compiled_with_xpu() and os.getenv("XPU_FUSE_ATTN_QKV"):
+                self.qkv_proj = linear_utils.Linear(
+                    self.hidden_size,
+                    (self.num_heads * self.head_dim + self.num_key_value_heads * self.head_dim * 2),
+                    bias_attr=True,
+                )
+            else:
+                self.q_proj = Linear(self.hidden_size, self.hidden_size, bias_attr=True)
+                self.k_proj = Linear(self.hidden_size, self.config.num_key_value_heads * self.head_dim, bias_attr=True)
+                self.v_proj = Linear(self.hidden_size, self.config.num_key_value_heads * self.head_dim, bias_attr=True)
             self.o_proj = Linear(self.hidden_size, self.hidden_size, bias_attr=False)
-            
+
         self.rotary_emb = Qwen2VLRotaryEmbedding(
             self.head_dim,
             max_position_embeddings=self.max_position_embeddings,
@@ -812,14 +874,12 @@ class Qwen2VLAttention(nn.Layer):
             query_states = self.q_proj(hidden_states)
             key_states = self.k_proj(hidden_states)
             value_states = self.v_proj(hidden_states)
-        
-        
+
         target_query_shape = [0, 0, self.num_heads, self.head_dim]
         target_key_value_shape = [0, 0, self.num_key_value_heads, self.head_dim]
         query_states = query_states.reshape(shape=target_query_shape)
         key_states = key_states.reshape(shape=target_key_value_shape)
         value_states = value_states.reshape(shape=target_key_value_shape)
-        
 
         new_perm = [0, 2, 1, 3]
         query_states = query_states.transpose(new_perm)
@@ -898,22 +958,33 @@ class Qwen2VLFlashAttention2(Qwen2VLAttention):
     ) -> Tuple[paddle.Tensor, Optional[paddle.Tensor], Optional[Tuple[paddle.Tensor]]]:
         bsz, q_len, _ = tuple(hidden_states.shape)
 
-        try:
-            query_states = self.q_proj(hidden_states)
-            key_states = self.k_proj(hidden_states)
-            value_states = self.v_proj(hidden_states)
-        except:
-            hidden_states = hidden_states.astype("bfloat16")
-            query_states = self.q_proj(hidden_states)
-            key_states = self.k_proj(hidden_states)
-            value_states = self.v_proj(hidden_states)
+        if paddle.is_compiled_with_xpu() and os.getenv("XPU_FUSE_ATTN_QKV"):
+            mix_layer = self.qkv_proj(hidden_states)
+            query_states, key_states, value_states = paddle.split(
+                mix_layer,
+                num_or_sections=[
+                    self.num_heads * self.head_dim,
+                    self.num_key_value_heads * self.head_dim,
+                    self.num_key_value_heads * self.head_dim,
+                ],
+                axis=-1,
+            )
+        else:
+            try:
+                query_states = self.q_proj(hidden_states)
+                key_states = self.k_proj(hidden_states)
+                value_states = self.v_proj(hidden_states)
+            except:
+                hidden_states = hidden_states.astype("bfloat16")
+                query_states = self.q_proj(hidden_states)
+                key_states = self.k_proj(hidden_states)
+                value_states = self.v_proj(hidden_states)
 
         target_query_shape = [0, 0, self.num_heads, self.head_dim]
         target_key_value_shape = [0, 0, self.num_key_value_heads, self.head_dim]
         query_states = query_states.reshape(shape=target_query_shape)
         key_states = key_states.reshape(shape=target_key_value_shape)
         value_states = value_states.reshape(shape=target_key_value_shape)
-        
 
         new_perm = [0, 2, 1, 3]
         # [1, 3599, 1536] [bsz, q_len, self.num_heads * self.head_dim]
@@ -1189,7 +1260,7 @@ class Qwen2VLPreTrainedModel(PretrainedModel):
 
     def _init_weights(self, layer):
         std = 0.2
-        if isinstance(layer, (nn.Linear, nn.Conv3D)):
+        if isinstance(layer, (linear_utils.Linear, nn.Conv3D)):
             nn.initializer.Normal(mean=0.0, std=std)(layer.weight)
             if layer.bias is not None:
                 nn.initializer.Constant(0.0)(layer.bias)
@@ -1488,6 +1559,10 @@ class Qwen2LMHead(nn.Layer):
         if self.weight.is_distributed:
             # for tie_word_embeddings
             self.weight.split_axis = 0 if self.transpose_y else 1
+        if get_env_device() == "xpu":
+            self.matmul = xpu_matmul()
+        else:
+            self.matmul = None
 
     def forward(self, hidden_states, tensor_parallel_output=None):
         if tensor_parallel_output is None:
@@ -1497,9 +1572,12 @@ class Qwen2LMHead(nn.Layer):
         if self.weight.dtype != hidden_states.dtype:
             hidden_states = paddle.cast(hidden_states, self.weight.dtype)
 
-        logits = parallel_matmul(
-            hidden_states, self.weight, transpose_y=self.transpose_y, tensor_parallel_output=tensor_parallel_output
-        )
+        if get_env_device() == "xpu":
+            logits = self.matmul(hidden_states, self.weight, transpose_y=self.transpose_y, training=self.training)
+        else:
+            logits = parallel_matmul(
+                hidden_states, self.weight, transpose_y=self.transpose_y, tensor_parallel_output=tensor_parallel_output
+            )
         return logits
 
 
@@ -1912,7 +1990,7 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
         tensor_parallel_output = self.config.tensor_parallel_output and self.config.tensor_parallel_degree > 1
 
         logits = self.lm_head(hidden_states, tensor_parallel_output=tensor_parallel_output)
-    
+
         logits = paddle.cast(logits, "float32")
 
         loss = None
