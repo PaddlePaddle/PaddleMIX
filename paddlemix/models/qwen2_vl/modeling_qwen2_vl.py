@@ -52,7 +52,7 @@ from .bert_padding import index_first_axis, pad_input, unpad_input
 from .configuration_qwen2_vl import Qwen2VLConfig, Qwen2VLVisionConfig
 
 if get_env_device() == "xpu":
-    from paddle_xpu.layers.linear_utils.Linear import xpu_matmul
+    from paddle_xpu.layers.nn.linear import xpu_matmul
 else:
     xpu_matmul = None
 try:

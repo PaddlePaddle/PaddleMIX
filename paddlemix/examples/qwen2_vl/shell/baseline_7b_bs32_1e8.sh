@@ -36,7 +36,9 @@ TRAINING_MODEL_RESUME="None"
 TRAINER_INSTANCES='127.0.0.1'
 MASTER='127.0.0.1:8080'
 
-meta_path="paddlemix/examples/qwen2_vl/configs/baseline_6data_330k.json"
+# meta_path="paddlemix/examples/qwen2_vl/configs/baseline_6data_330k.json"
+meta_path="paddlemix/examples/qwen2_vl/configs/demo_chartqa_500.json"
+export PYTHONPATH="/path/to/PaddleMIX/ppdiffusers:/path/to/PaddleNLP:${PYTHONPATH}"
 
 ### XPU ###
 export XPU_CDNN_CLUSTER_PARALLEL=1
