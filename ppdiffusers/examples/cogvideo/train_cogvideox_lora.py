@@ -55,7 +55,7 @@ from ppdiffusers.pipelines.cogvideo.pipeline_cogvideox import (
 from ppdiffusers.transformers import T5EncoderModel, T5Tokenizer
 from ppdiffusers.utils import (
     convert_unet_state_dict_to_peft,
-    export_to_video,
+    export_to_video_2,
     is_wandb_available,
 )
 
@@ -611,7 +611,7 @@ def log_validation(pipe, args, accelerator, pipeline_args, epoch, is_final_valid
                     .replace("/", "_")
                 )
                 filename = os.path.join(args.output_dir, f"{phase_name}_video_{i}_{prompt}.mp4")
-                export_to_video(video, filename, fps=8)
+                export_to_video_2(video, filename, fps=8)
                 video_filenames.append(filename)
             tracker.log(
                 {

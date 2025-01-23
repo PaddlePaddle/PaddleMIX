@@ -154,7 +154,7 @@ import os
 os.environ["USE_PEFT_BACKEND"] = "True"
 import paddle
 from ppdiffusers import CogVideoXPipeline
-from ppdiffusers.utils import export_to_video
+from ppdiffusers.utils import export_to_video_2
 
 pipe = CogVideoXPipeline.from_pretrained("THUDM/CogVideoX-2b", paddle_dtype=paddle.float16)
 pipe.load_lora_weights("/path/to/lora/weights", adapter_name="cogvideox-lora")
@@ -171,5 +171,5 @@ prompt = (
     "atmosphere of this unique musical performance"
 )
 frames = pipe(prompt, guidance_scale=6, use_dynamic_cfg=True).frames[0]
-export_to_video(frames, "output.mp4", fps=8)
+export_to_video_2(frames, "output.mp4", fps=8)
 ```
