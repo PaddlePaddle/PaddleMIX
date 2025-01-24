@@ -297,6 +297,24 @@ bash scripts/infer_cogvideox_i2v_pose_vctrl.sh
 
 **基于蒙版控制的视频编辑:** https://aistudio.baidu.com/application/detail/63854
 
+#### 4.1.Gradio 环境搭建
+```bash
+pip install decord
+pip install gradio
+pip install pycocoevalcap
+
+mkdir -p weights/sam2/
+wget -P weights/sam2/ https://bj.bcebos.com/v1/paddlenlp/models/community/Sam/Sam2/sam2.1_hiera_large.pdparams
+```
+##### 4.1.1. 使用canny任务gradio
+```bash
+python gradios/gradio_canny2video.py
+```
+##### 4.1.2. 使用mask任务gradio
+```bash
+python gradios/gradio_mask2video.py
+```
+
 <!-- ```
 ```
 <img src="asserts/figs/gradio.jpg" style="width:70%"> -->
@@ -325,33 +343,4 @@ bash scripts/infer_cogvideox_i2v_pose_vctrl.sh
 
 针对不同任务特点，我们设计了相应的优化策略。在边缘控制任务中，采用动态阈值采样增加数据多样性；对于人体姿态控制任务，针对横竖版视频分别采用填充和裁剪的预处理策略；在蒙版控制任务中，我们采用基于区域面积权重的多目标采样方法，根据概率分布动态选择目标区域，并支持区域扩展和多目标联合控制，同时通过随机概率的膨胀处理来增强模型鲁棒性，使生成结果更加自然。这些策略在统一的视频生成控制框架基础上进行综合运用，显著提升了模型在各类场景下的适应能力和生成质量，并充分发挥了PP-VCtrl通用控制框架的优势。
 ### 4. 定量指标评测
-在边缘控制视频生成（Canny）、人体姿态控制视频生成（Pose）以及蒙版控制视频生成（Mask）三个任务的定量评估中，PPVCtrl模型在控制能力和视频质量指标上均能够媲美或超越现有开源的特定任务方法。
-
-<img src="assets/models/eval1.png" style="width:100%">
-
-我们进行了人工评估实验，邀请了多位评估者对不同方法生成的视频进行打分，评估维度包括视频整体质量、时序一致性等。结果显示，在所有评估维度上，PPVCtrl的评分均高于现有开源方法。
-
-<img src="assets/models/eval2.png" style="width:100%">
-
-<!-- 
-## More version
-<details close>
-<summary>Model Versions</summary>
-</details>
--->
-<!-- 
-## Contact us
-Users: [Users@example.com](Users@example.com)  
--->
-<!-- 
- ## BibTex
-
-```
-@article{guo2023animatediff,
-  title={AnimateDiff: Animate Your Personalized Text-to-Image Diffusion Models without Specific Tuning},
-  author={Guo, Yuwei and Yang, Ceyuan and Rao, Anyi and Liang, Zhengyang and Wang, Yaohui and Qiao, Yu and Agrawala, Maneesh and Lin, Dahua and Dai, Bo},
-  journal={International Conference on Learning Representations},
-  year={2025}
-}
-
-```上面的代码打印了一条消息 -->
+在边缘控制视频生成（Canny�
