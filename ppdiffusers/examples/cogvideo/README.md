@@ -8,7 +8,7 @@ CogVideoX是的开源视频生成模型，支持文本到视频（Text-to-Video�
 ### 推理示例
 
 ```shell
-python infer.py \
+python scripts/infer.py \
   --prompt "a bear is walking in a zoon" \
   --model_path THUDM/CogVideoX-2b \
   --generate_type "t2v" \
@@ -30,7 +30,7 @@ model_path 当前支持: THUDM/CogVideoX-2b、THUDM/CogVideoX-5b、THUDM/CogVide
 
 提供两个txt文件，一个是包含文本提示的`prompts.txt`文件，另一个是包含视频路径的`videos.txt` 文件（视频文件应该在给定的`-instance_data_root`根目录下）。
 
-例如：
+例如,
 `--instance_data_root`=`/dataset`, 则 `/dataset`下应包含 `prompts.txt` and `videos.txt`.
 
 `prompts.txt` 里的prompt 以行分隔:
@@ -63,6 +63,11 @@ videos/00001.mp4
 
 启动命令时，`--caption_column` 指定为 `prompts.txt`； `--video_column` 指定为 `videos.txt`.
 
+本仓库提供示例数据集
+```bash
+wget https://bj.bcebos.com/v1/dataset/PaddleMIX/davis_validation_for_cogvideox.tar
+tar -xvf davis_validation_for_cogvideox.tar
+```
 
 #### Lora微调
 
@@ -71,7 +76,7 @@ videos/00001.mp4
 
 export USE_PEFT_BACKEND=True
 
-python examples/cogvideo/train_cogvideox_lora.py \
+python examples/cogvideo/scripts/train_cogvideox_lora.py \
   --pretrained_model_name_or_path THUDM/CogVideoX-2b \
   --instance_data_root <PATH_TO_WHERE_VIDEO_FILES_ARE_STORED> \
   --caption_column prompts.txt \
@@ -149,27 +154,10 @@ python examples/cogvideo/train_cogvideox_lora.py \
 
 Lora训练完后，可用以下脚本进行推理.
 
-```python
-import os
-os.environ["USE_PEFT_BACKEND"] = "True"
-import paddle
-from ppdiffusers import CogVideoXPipeline
-from ppdiffusers.utils import export_to_video_2
-
-pipe = CogVideoXPipeline.from_pretrained("THUDM/CogVideoX-2b", paddle_dtype=paddle.float16)
-pipe.load_lora_weights("/path/to/lora/weights", adapter_name="cogvideox-lora")
-
-# Assuming lora_alpha=64 and rank=64 for training. If different, set accordingly
-pipe.set_adapters(["cogvideox-lora"], [64 / 64])
-
-prompt = (
-    "A panda, dressed in a small, red jacket and a tiny hat, sits on a wooden stool in a serene bamboo forest. The "
-    "panda's fluffy paws strum a miniature acoustic guitar, producing soft, melodic tunes. Nearby, a few other "
-    "pandas gather, watching curiously and some clapping in rhythm. Sunlight filters through the tall bamboo, "
-    "casting a gentle glow on the scene. The panda's face is expressive, showing concentration and joy as it plays. "
-    "The background includes a small, flowing stream and vibrant green foliage, enhancing the peaceful and magical "
-    "atmosphere of this unique musical performance"
-)
-frames = pipe(prompt, guidance_scale=6, use_dynamic_cfg=True).frames[0]
-export_to_video_2(frames, "output.mp4", fps=8)
+```bash
+python scripts/lora_infer.py \
+      --model_path THUDM/CogVideoX-2b \
+      --prompt "a bear is walking in a zoon" \
+      --lora_path path-lora \
+      --output_path output.mp4
 ```
