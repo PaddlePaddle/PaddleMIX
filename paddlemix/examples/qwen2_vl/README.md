@@ -73,6 +73,10 @@ CUDA_VISIBLE_DEVICES=0 python paddlemix/examples/qwen2_vl/multi_image_infer.py
 CUDA_VISIBLE_DEVICES=0 python paddlemix/examples/qwen2_vl/video_infer.py
 ```
 
+### d. batch推理
+```bash
+CUDA_VISIBLE_DEVICES=0 python paddlemix/examples/qwen2_vl/batch_infer.py
+```
 ### 模型推理支持分布式推理
 
 ```bash
