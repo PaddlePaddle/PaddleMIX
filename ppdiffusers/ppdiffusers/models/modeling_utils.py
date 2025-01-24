@@ -148,7 +148,8 @@ def get_parameter_dtype(parameter: nn.Layer) -> paddle.dtype:
 
 
 def load_state_dict(
-    checkpoint_file: Union[str, os.PathLike], state_dict, tensor_parallel_split_mapping=None, ignore_keys=None
+    checkpoint_file: Union[str, os.PathLike], state_dict, tensor_parallel_split_mapping=None, ignore_keys=None,map_location=None
+
 ):
     """
     Reads a PaddlePaddle checkpoint file, returning properly formatted errors if they arise.
@@ -184,7 +185,11 @@ def load_state_dict(
                     weight = tensor_parallel_split_mapping[key](py_safe_slice_)
                 else:
                     weight = f.get_tensor(key)
-                state_dict[key] = paddle.Tensor(weight, zero_copy=True)
+
+                if map_location=="cpu":   
+                    state_dict[key] = paddle.Tensor(weight, zero_copy=True,place=paddle.CPUPlace())
+                else:
+                    state_dict[key] = paddle.Tensor(weight, zero_copy=True)
 
     else:
         if any(checkpoint_file.endswith(suffix) for suffix in [".pt", ".pth", ".bin", ".ckpt"]):
@@ -794,6 +799,7 @@ class ModelMixin(nn.Layer):
         variant = kwargs.pop("variant", None)
         use_safetensors = kwargs.pop("use_safetensors", None)
         ignore_keys = kwargs.pop("ignore_keys", [])
+        map_location = kwargs.pop("map_location", None)
 
         # distributed kwargs
         tensor_parallel_degree = kwargs.pop("tensor_parallel_degree", 1)
@@ -1027,6 +1033,7 @@ class ModelMixin(nn.Layer):
             from_diffusers=from_diffusers,
             tensor_parallel_split_mapping=tensor_parallel_split_mapping,
             tensor_parallel_degree=tensor_parallel_degree,
+            map_location=map_location,
         )
 
         loading_info = {
@@ -1063,6 +1070,7 @@ class ModelMixin(nn.Layer):
         from_diffusers=False,
         tensor_parallel_split_mapping=None,
         tensor_parallel_degree=1,
+        map_location=None,
     ):
         state_dict = OrderedDict()
         model_state_dict = model.state_dict()
@@ -1083,6 +1091,7 @@ class ModelMixin(nn.Layer):
                 state_dict,  # inplace update state_dict
                 tensor_parallel_split_mapping=tensor_parallel_split_mapping,
                 ignore_keys=ignore_keys,
+                map_location=map_location,
             )
             # NOTE: new add support old state_dict
             model._update_deprecated_state_dict(state_dict)

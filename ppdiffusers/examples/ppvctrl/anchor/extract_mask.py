@@ -16,6 +16,7 @@ current_dir = os.getcwd()
 paddlemix_dir = os.path.abspath(os.path.join(current_dir, '../../..'))
 
 sys.path.append(os.path.join(paddlemix_dir,'paddlemix/models'))
+
 from utils.video_utils import create_video,save_video_from_bgr
 from paddlemix.models.sam2.build_sam import build_sam2, build_sam2_video_predictor
 from paddlemix.models.sam2.sam2_image_predictor import SAM2ImagePredictor
