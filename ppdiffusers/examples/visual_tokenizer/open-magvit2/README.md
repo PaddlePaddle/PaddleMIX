@@ -6,7 +6,7 @@ This project provides the implementation of PaddlePaddle, support training and i
 #### Installation
 #### GPU
 - **Env**: We have tested on `Python 3.10` and `CUDA 11.8` (other versions may also be fine).
-- **PaddlePaddle** `Paddle3.0beta1`
+- **PaddlePaddle** `>=Paddle3.0beta1`
 - **Dependencies**: `pip install -r requirements.txt`
 
 
