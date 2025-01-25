@@ -46,6 +46,5 @@ try:
         "triton_split",
         "sageattn_qk_int8_pv_fp16_triton"
     ]
-except Exception as e:
-    print(f"cannot import triton_ops, error: {e}")
-    exit(1)
+except:
+    pass

@@ -33,18 +33,6 @@ def parse_args():
         default=False,
         help="If set to True, all optimizations except Triton are enabled.",
     )
-    parser.add_argument(
-        "--static_mode",
-        type=(lambda x: str(x).lower() in ["true", "1", "yes"]),
-        default=False,
-        help="If set to True, build static graph to execute.",
-    )
-    parser.add_argument(
-        "--use_sageattn",
-        type=(lambda x: str(x).lower() in ["true", "1", "yes"]),
-        default=False,
-        help="If set to True, use sage attention.",
-    )
 
     parser.add_argument("--height", type=int, default=512, help="Height of the generated image.")
     parser.add_argument("--width", type=int, default=512, help="Width of the generated image.")
@@ -67,8 +55,6 @@ if args.inference_optimize:
     os.environ["INFERENCE_OPTIMIZE_TRITON"] = "True"
     os.environ["INFERENCE_MP_SIZE"] = str(args.mp_size)
     os.environ["INFERENCE_DP_SIZE"] = str(args.dp_size)
-if args.use_sageattn:
-    os.environ["USE_SAGEATTN"] = "True"
 if args.dtype == "float32":
     inference_dtype = paddle.float32
 elif args.dtype == "float16":

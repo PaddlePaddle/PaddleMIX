@@ -19,7 +19,6 @@ from paddle.distributed.fleet.meta_parallel import ColumnParallelLinear as CPLin
 from paddle.distributed.fleet.meta_parallel import RowParallelLinear as RPLinear
 from paddle.nn import LayerList as LayerList
 
-import os
 
 class SimplifiedSD3(nn.Layer):
     def __init__(self, num_layers: int, dim: int, num_attention_heads: int, attention_head_dim: int, mp_degree: int):
@@ -80,7 +79,7 @@ class SimplifiedSD3(nn.Layer):
             self.ffn2_context = LayerList([nn.Linear(self.dim * 4, self.dim) for i in range(num_layers - 1)])
 
     def forward(self, hidden_states, encoder_hidden_states, temb):
-        # print("--------------------this is simplified_sd3------------------------")
+        print("--------------------this is simplified_sd3------------------------")
         temb_silu = self.silu(temb)
 
         last_ffn_output = None
@@ -158,10 +157,7 @@ class SimplifiedSD3(nn.Layer):
             k = k.reshape([bs, -1, head_nums, self.head_dim])
             v = v.reshape([bs, -1, head_nums, self.head_dim])
 
-            if os.getenv("USE_SAGEATTN", False) and self.head_dim in [64, 128]:
-                norm_hidden_states1 = paddlemix.triton_ops.sageattn_qk_int8_pv_fp16_triton(q, k, v, is_causal=False, tensor_layout="NHD")
-            else:
-                norm_hidden_states1 = F.scaled_dot_product_attention_(q, k, v, dropout_p=0.0, is_causal=False)
+            norm_hidden_states1 = F.scaled_dot_product_attention_(q, k, v, dropout_p=0.0, is_causal=False)
             norm_hidden_states1 = norm_hidden_states1.reshape([bs, -1, head_nums * self.head_dim])
             attn_output, context_attn_output = paddle.split(norm_hidden_states1, num_or_sections=[seq1, seq2], axis=1)
 

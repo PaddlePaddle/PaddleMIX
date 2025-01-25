@@ -323,10 +323,6 @@ tune_and_invoke_part = """
 
             status = run_triton_kernel(algo_id);
             // assert(status == CUDA_SUCCESS);
-            if (status != CUDA_SUCCESS) {
-                std::cout << "algo tuning failed, CUDA status: " << status << std::endl;
-                exit(1);
-            }
 
             if (repeat_id >= 0) {
                 (cudaEventRecord(end[repeat_id]));
