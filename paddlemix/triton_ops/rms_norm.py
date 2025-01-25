@@ -162,11 +162,13 @@ def rms_norm(x, weight=None, bias=None, epsilon=1e-5):
             "weight@OPTIONAL": weight,
             "bias@OPTIONAL": bias,
         }
+        attrs = {"epsilon": epsilon}
         y = helper.create_variable_for_type_inference(dtype=x.dtype)
+        outputs = {"y": y}
         helper.append_op(
             type=op_name,
             inputs=inputs,
-            attrs={"epsilon": epsilon},
-            outputs={"y": y},
+            attrs=attrs,
+            outputs=outputs,
         )
         return y

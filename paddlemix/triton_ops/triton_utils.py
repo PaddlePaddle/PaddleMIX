@@ -374,8 +374,7 @@ std::vector<paddle::Tensor> ${op_name}_func(${input_and_attr}) {
   return {${return_tensor_names}};
 }
 
-
-${d2s_infer_shape_dtype_part}
+${d2s_infer_code}
 
 PD_BUILD_OP(${op_name})
     .Inputs({${paddle_input_sig}})
@@ -393,7 +392,7 @@ def rendering_common_template(
     prepare_attr_for_triton_kernel,
     prepare_ptr_for_triton_kernel,
     return_tensor_names,
-    d2s_infer_shape_dtype_part=None,
+    d2s_infer_code="",
 ):
     signature = inspect.signature(func)
     arg_names = [v.name for v in signature.parameters.values()]
@@ -434,15 +433,21 @@ def rendering_common_template(
         paddle_output_sig += f""""{name}","""
     paddle_output_sig = paddle_output_sig[:-1]
 
-    if d2s_infer_shape_dtype_part is None:
-        d2s_infer_shape_dtype_part = """
-        std::vector<std::vector<int64_t>> ${op_name}_InferShape(const std::vector<int64_t>& A_shape) {return {${tmp1}};}
-        std::vector<paddle::DataType> ${op_name}_InferDtype(const paddle::DataType& A_dtype) {return {${tmp2}};}
-        """
-        tmp1 = ",".join(["A_shape"] * len(return_tensor_names.split(",")))
-        tmp2 = ",".join(["A_dtype"] * len(return_tensor_names.split(",")))
-        tmp_dict = {"tmp1": tmp1, "tmp2": tmp2}
-        d2s_infer_shape_dtype_part = SubstituteTemplate(d2s_infer_shape_dtype_part, tmp_dict)
+    if "${op_name}_InferShape" not in d2s_infer_code:
+        d2s_infer_shape_part = "std::vector<std::vector<int64_t>> ${op_name}_InferShape(const std::vector<int64_t>& A_shape) {return {${tmp}};}\n "
+        tmp = ",".join(["A_shape"] * len(return_tensor_names.split(",")))
+        tmp_dict = {"tmp": tmp}
+        d2s_infer_shape_part = SubstituteTemplate(d2s_infer_shape_part, tmp_dict)
+
+        d2s_infer_code += d2s_infer_shape_part
+
+    if "${op_name}_InferDtype" not in d2s_infer_code:
+        d2s_infer_dtype_part = "std::vector<paddle::DataType> ${op_name}_InferDtype(const paddle::DataType& A_dtype) {return {${tmp}};}\n "
+        tmp = ",".join(["A_dtype"] * len(return_tensor_names.split(",")))
+        tmp_dict = {"tmp": tmp}
+        d2s_infer_dtype_part = SubstituteTemplate(d2s_infer_dtype_part, tmp_dict)
+
+        d2s_infer_code += d2s_infer_dtype_part
 
     result_str = SubstituteTemplate(
         common_template,
@@ -452,7 +457,7 @@ def rendering_common_template(
             "prepare_ptr_for_triton_kernel": prepare_ptr_for_triton_kernel,
             "return_tensor_names": return_tensor_names,
             "arbitary_output_name": arbitary_output_name,
-            "d2s_infer_shape_dtype_part": d2s_infer_shape_dtype_part,
+            "d2s_infer_code": d2s_infer_code,
             "paddle_input_sig": paddle_input_sig,
             "paddle_output_sig": paddle_output_sig,
             "paddle_attr_sig": paddle_attr_sig,

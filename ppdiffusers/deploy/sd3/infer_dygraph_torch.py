@@ -237,6 +237,17 @@ def set_attn_processor(self, processor):
         fn_recursive_attn_processor(name, module, processor)
 
 
+def get_torch_memory_info():
+    """get_memory_info"""
+    divisor = 2**30
+    return (
+        torch.cuda.memory_allocated() / divisor,
+        torch.cuda.max_memory_allocated() / divisor,
+        torch.cuda.memory_reserved() / divisor,
+        torch.cuda.max_memory_reserved() / divisor,
+    )
+
+
 def main(args):
     if args.tf32:
         torch.backends.cuda.matmul.allow_tf32 = True
@@ -289,6 +300,8 @@ def main(args):
             # text2img
             prompt = "bird"
             time_costs = []
+            memory_metrics = []  
+            
             # warmup
             pipe(
                 prompt,
@@ -308,13 +321,22 @@ def main(args):
                 ).images
                 latency = time.time() - start
                 time_costs += [latency]
-                # print(f"No {step:3d} time cost: {latency:2f} s")
+                
+                memory_allocated, max_memory_allocated, memory_reserved, max_memory_reserved = get_torch_memory_info()
+                memory_metrics.append([memory_allocated, max_memory_allocated, memory_reserved, max_memory_reserved])
+                
+            avg_memory = np.mean(memory_metrics, axis=0)
+            
             print(
                 f"Attention type: {attention_type}, "
                 f"Use fp16: {'true' if args.use_fp16 else 'false'}, "
                 f"Mean iter/sec: {1 / (np.mean(time_costs) / args.inference_steps):2f} it/s, "
                 f"Mean latency: {np.mean(time_costs):2f} s, p50 latency: {np.percentile(time_costs, 50):2f} s, "
                 f"p90 latency: {np.percentile(time_costs, 90):2f} s, p95 latency: {np.percentile(time_costs, 95):2f} s."
+            )
+            print(
+                f"Memory Info (GB) - Allocated: {avg_memory[0]:.2f}, Max Allocated: {avg_memory[1]:.2f}, "
+                f"Reserved: {avg_memory[2]:.2f}, Max Reserved: {avg_memory[3]:.2f}"
             )
             images[0].save(f"{folder}/text2img.png")
 

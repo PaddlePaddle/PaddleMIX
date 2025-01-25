@@ -24,8 +24,8 @@ from paddlenlp.trl import llm_utils
 
 from paddlemix.models.qwen2_vl import MIXQwen2Tokenizer
 from paddlemix.models.qwen2_vl.modeling_qwen2_vl import (
-    Qwen2RotaryEmbedding,
     Qwen2VLForConditionalGeneration,
+    Qwen2VLRotaryEmbedding,
 )
 from paddlemix.processors.qwen2_vl_processing import (
     Qwen2VLImageProcessor,
@@ -43,10 +43,11 @@ paddle.device.cuda.empty_cache()
 
 image_processor = Qwen2VLImageProcessor()
 tokenizer = MIXQwen2Tokenizer.from_pretrained(MODEL_NAME)
+processor = Qwen2VLProcessor(image_processor, tokenizer)
 
-min_pixels = 256 * 28 * 28  # 200704
-max_pixels = 1280 * 28 * 28  # 1003520
-processor = Qwen2VLProcessor(image_processor, tokenizer, min_pixels=min_pixels, max_pixels=max_pixels)
+# min_pixels = 256 * 28 * 28  # 200704
+# max_pixels = 1280 * 28 * 28  # 1003520
+# processor = Qwen2VLProcessor(image_processor, tokenizer, min_pixels=min_pixels, max_pixels=max_pixels)
 
 # Messages containing a video and a text query
 messages = [
@@ -157,7 +158,7 @@ def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: Predic
     position_ids = paddle.concat([position_ids, position_value], axis=-1)
 
     head_dim = config.hidden_size // config.num_attention_heads
-    qwen2_Embedding = Qwen2RotaryEmbedding(head_dim, config.max_position_embeddings, config.rope_theta)
+    qwen2_Embedding = Qwen2VLRotaryEmbedding(head_dim, config.max_position_embeddings, config.rope_theta)
     cos = qwen2_Embedding.cos_cached
     sin = qwen2_Embedding.sin_cached
 
