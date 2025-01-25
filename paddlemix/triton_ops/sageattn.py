@@ -27,9 +27,8 @@ def sageattn_quant_per_block_int8_kernel(
     stride_sz, 
     stride_sh,
     sm_scale,
-    Grid,                   # grid num, through compiling
-    h_attn,                 # grid num, through compiling
-    bsz,                    # grid num, through compiling
+    h_attn: tl.constexpr,                 # grid num, through compiling
+    bsz: tl.constexpr,                    # grid num, through compiling
     C: tl.constexpr,
     BLK: tl.constexpr
 ):
@@ -54,22 +53,50 @@ def sageattn_quant_per_block_int8_kernel(
     tl.store(output_ptrs, x_int8, mask=offs_n[:, None] < L)
     tl.store(scale_ptrs, scale)
     
-# note: here we need to do one single operation, instead of fused two.
-# reference: quant_per_block.py
+# per-block quant triton API
 def sageattn_quant_per_block_int8(x, 
                                 km=None, 
                                 BLKQ=128, BLKK=64,
                                 sm_scale=1.0, 
                                 tensor_layout="HND", q_or_k="q"):
-    
-
+    """
+    [params]
+        x: paddle.Tensor, dtype in fp16 or bf16, this is usually q or k input tensor.
+        km: paddle.Tensor, the mean tensor of k tensor. Must be provided when the `x` is k tensor.
+        BLKQ: int, the BLK for computing q tensor. Default 128, which is an optimized value.
+        BLKK: int, the BLK for computing k tensor. Default 64, which is an optimized value.
+        sm_scale: float, the scale factor for dynamic quant.
+        tensor_layout: string. Only in ['HND', 'NHD'], 'HND' -> [bsz, num_heads, seq_len, head_dim],
+                        'HND' -> [bsz, seq_len, num_heads, head_dim]
+        q_or_k: string. Only in ['q', 'k'], which should be clarified when using this API.
+    [Examples]
+        batch_size = 2
+        num_heads = 24
+        seq_len = 1376
+        head_dim = 64
+        
+        sm_scale = 1.0 / (head_dim_og ** 0.5)
+        
+        # note: this layout is 'NHD'
+        tensor_layout = 'NHD'
+        q = paddle.randn(shape=(batch_size, seq_len, num_heads, head_dim), dtype="float16")
+        k = paddle.randn(shape=(batch_size, seq_len, num_heads, head_dim), dtype="float16")
+        v = paddle.randn(shape=(batch_size, seq_len, num_heads, head_dim), dtype="float16")
+        
+        km = paddle.mean(k, axis=seq_dim, keepdim=True)
+        
+        q_int8, q_scale = sageattn_quant_per_block_int8(
+            q, km=None, BLKQ=BLKQ, BLKK=BLKK, sm_scale=sm_scale, tensor_layout=tensor_layout, q_or_k='q')
+        k_int8, k_scale = sageattn_quant_per_block_int8(
+            k, km=km, BLKQ=BLKQ, BLKK=BLKK, sm_scale=sm_scale, tensor_layout=tensor_layout, q_or_k='k')
+    """
     if km is not None and q_or_k == "k":
         x = x - km
         
     if tensor_layout == "HND":
         b, h_attn, seq_len, head_dim = x.shape
 
-        # there is no stride in static mode, so we need to compute it manually
+        # there is no `stride` attribute in static mode, so we need to compute it manually
         stride_iz, stride_ih, stride_in = head_dim * seq_len * h_attn, head_dim * seq_len, head_dim * 1
         stride_oz, stride_oh, stride_on = head_dim * seq_len * h_attn, head_dim * seq_len, head_dim * 1
     elif tensor_layout == "NHD":
@@ -86,7 +113,6 @@ def sageattn_quant_per_block_int8(x,
     L = seq_len
     C = head_dim
     BLK = BLKQ if q_or_k == "q" else BLKK
-    gd = BLK
     sm_scale = sm_scale * 1.44269504 if q_or_k == "q" else 1.0
 
     stride_sz = h_attn * ((seq_len + BLK - 1) // BLK)
@@ -150,7 +176,7 @@ def sageattn_quant_per_block_int8(x,
     int L = seq_len;
     int stride_sz = scale_tensor.strides()[0];
     int stride_sh = scale_tensor.strides()[1];
-    int Grid = BLK;
+    // int Grid = BLK;
     int bsz = b;
 """
 
@@ -161,12 +187,12 @@ def sageattn_quant_per_block_int8(x,
     if op_name not in OpProtoHolder.instance().op_proto_map.keys():
         Output = paddle.empty(x.shape, dtype=paddle.int8)
         Scale = paddle.empty((b, h_attn, (seq_len + BLK - 1) // BLK), dtype='float32')
-        # due to compute reasons, output_tensor & scale_tensor has beed defined in above areas, see `prepare_attr_for_triton_kernel`
+        # output_tensor & scale_tensor has beed defined in above areas
         prepare_ptr_for_triton_kernel = """
-        // prepare tensor
-        auto Input = get_tensor_ptr(x);
-        auto Output = get_tensor_ptr(output_tensor);
-        auto Scale = get_tensor_ptr(scale_tensor);
+    // prepare tensor
+    auto Input = get_tensor_ptr(x);
+    auto Output = get_tensor_ptr(output_tensor);
+    auto Scale = get_tensor_ptr(scale_tensor);
 """
         return_tensor_names = "output_tensor, scale_tensor"
         
@@ -176,7 +202,7 @@ def sageattn_quant_per_block_int8(x,
             prepare_ptr_for_triton_kernel=prepare_ptr_for_triton_kernel,
             return_tensor_names=return_tensor_names
         )
-        grid = ("(L + Grid - 1) / Grid", "h_attn", "bsz")
+        grid = ("(L + BLK - 1) / BLK", "h_attn", "bsz")
         sageattn_quant_per_block_int8_kernel[(op_name, template_used, grid)](
             Input=x, 
             Output=Output, 
@@ -191,9 +217,8 @@ def sageattn_quant_per_block_int8(x,
             stride_sz=stride_sz, 
             stride_sh=stride_sh,
             sm_scale=sm_scale,
-            Grid=gd,            # grid num, through compiling
-            h_attn=h_attn,      # grid num, through compiling
-            bsz=b,           # grid num, through compiling
+            h_attn=h_attn,      # grid num, for compiling
+            bsz=b,              # grid num, for compiling
             C=C, 
             BLK=BLK
         )
@@ -239,20 +264,19 @@ def sageattn_attn_fwd_casual_false_kernel(
             stride_vz, stride_vh, stride_vn,  
             stride_oz, stride_oh, stride_on,  
             qo_len, kv_len, BSZ,
-            H_: tl.constexpr, 
+            h_qo: tl.constexpr, 
             num_kv_groups: tl.constexpr,
             HEAD_DIM: tl.constexpr,  
             BLOCK_M: tl.constexpr,  
             BLOCK_N: tl.constexpr,  
-            STAGE: tl.constexpr,
             RETURN_LSE: tl.constexpr,):
     start_m = tl.program_id(0)
 
     off_z = tl.program_id(2).to(tl.int64)
     off_h = tl.program_id(1).to(tl.int64)
 
-    q_scale_offset = (off_z * H_ + off_h) * tl.cdiv(qo_len, BLOCK_M)
-    k_scale_offset = (off_z * (H_ // num_kv_groups) + off_h // num_kv_groups) * tl.cdiv(kv_len, BLOCK_N)  
+    q_scale_offset = (off_z * h_qo + off_h) * tl.cdiv(qo_len, BLOCK_M)
+    k_scale_offset = (off_z * (h_qo // num_kv_groups) + off_h // num_kv_groups) * tl.cdiv(kv_len, BLOCK_N)  
     
     offs_m = start_m * BLOCK_M + tl.arange(0, BLOCK_M)
     offs_n = tl.arange(0, BLOCK_N)
@@ -303,7 +327,7 @@ def sageattn_attn_fwd_casual_false_kernel(
     tl.store(O_block_ptr, acc.to(Out.type.element_ty), mask = (offs_m[:, None] < qo_len))
 
     if RETURN_LSE:
-        lse_ptrs = Lse + (off_z * qo_len * H_ + off_h * qo_len) + offs_m
+        lse_ptrs = Lse + (off_z * qo_len * h_qo + off_h * qo_len) + offs_m
         l_i = tl.log2(l_i) + m_i
         tl.store(lse_ptrs, l_i, mask = (offs_m < qo_len))
         
@@ -313,10 +337,37 @@ def sageattn_forward_casual_false(q, k, v,
                                   output_dtype="float16",
                                   tensor_layout="HND", 
                                   return_lse=False):
-    BLOCK_M = 128
-    BLOCK_N = 64
-    stage = 1
-    
+    """
+    [params]
+        q: paddle.Tensor, dtype in int8, q tensor after quant.
+        k: paddle.Tensor, dtype in int8, k tensor after quant.
+        v: paddle.Tensor, dtype in fp16 or bf16, v tensor.
+        q_scale: paddle.Tensor, dtype in fp16 or bf16, this is the output tensor for scale factor, from quant kernel.
+        k_scale: paddle.Tensor, dtype in fp16 or bf16, this is the output tensor for scale factor, from quant kernel.
+        output_dtype: string. Only in ['float16', 'bfloat16']. The datatype of q, k, v tensor.
+        tensor_layout: string. Only in ['HND', 'NHD'], 'HND' -> [bsz, num_heads, seq_len, head_dim],
+                        'HND' -> [bsz, seq_len, num_heads, head_dim]
+        return_lse: bool. Return lse correction or not. Useful in parallel computing. Default False.
+    [Examples]
+        batch_size = 2
+        num_heads = 24
+        seq_len = 1376
+        head_dim = 64
+        
+        sm_scale = 1.0 / (head_dim_og ** 0.5)
+        
+        # note: this layout is 'NHD'
+        tensor_layout = 'NHD'
+        q = paddle.randn(shape=(batch_size, seq_len, num_heads, head_dim), dtype="float16")
+        k = paddle.randn(shape=(batch_size, seq_len, num_heads, head_dim), dtype="float16")
+        v = paddle.randn(shape=(batch_size, seq_len, num_heads, head_dim), dtype="float16")
+        
+        km = paddle.mean(k, axis=seq_dim, keepdim=True)
+        
+        q_int8, q_scale, k_int8, k_scale = per_block_int8(q, k, km=km, sm_scale=sm_scale, tensor_layout=tensor_layout)
+        o, lse = sageattn_forward_casual_false(q_int8, k_int8, v, q_scale, k_scale, 
+                                                output_dtype="float16", tensor_layout=tensor_layout)
+    """
     assert output_dtype in ["float16", "bfloat16"]
     
     Out = paddle.empty(q.shape, dtype=output_dtype)
@@ -422,7 +473,7 @@ def sageattn_forward_casual_false(q, k, v,
 
     op_name = "triton_sageattn_attn_fwd_casual_false"
     op_name += get_dtype_str(q.dtype)
-    op_name += f"_{BLOCK_M}_{BLOCK_N}_BSZ{BSZ}_seq{qo_len}_h{h_qo}_head{HEAD_DIM_K}"
+    op_name += f"_BSZ{BSZ}_seq{qo_len}_h{h_qo}_dim{HEAD_DIM_K}"
     
     sageattn_attn_fwd_casual_false_config = []
     if head_dim == 64:
@@ -465,7 +516,7 @@ def sageattn_forward_casual_false(q, k, v,
             prepare_ptr_for_triton_kernel=prepare_ptr_for_triton_kernel,
             return_tensor_names=return_tensor_names
         )
-        grid = ("(qo_len+BLOCK_M-1)/BLOCK_M", "H_", "BSZ")
+        grid = ("(qo_len + BLOCK_M - 1) / BLOCK_M", "h_qo", "BSZ")
         sageattn_attn_fwd_casual_false_kernel[(op_name, template_used, grid, sageattn_attn_fwd_casual_false_config)](
             Q=q, 
             K=k, 
@@ -489,12 +540,11 @@ def sageattn_forward_casual_false(q, k, v,
             qo_len=qo_len,
             kv_len=kv_len, 
             BSZ=BSZ,
-            H_=h_qo, 
+            h_qo=h_qo, 
             num_kv_groups=num_kv_groups,
             HEAD_DIM=HEAD_DIM_K,
-            BLOCK_M=BLOCK_M, 
-            BLOCK_N=BLOCK_N, 
-            STAGE=stage,
+            BLOCK_M=128, 
+            BLOCK_N=64, 
             RETURN_LSE=1 if return_lse else 0
         )
         
@@ -558,6 +608,19 @@ def sageattn_qk_int8_pv_fp16_triton(
     return_lse: bool = False,
     **kwargs
 ) -> paddle.Tensor:
+    """
+    Examples:
+        batch_size = 2
+        num_heads = 24
+        seq_len = 1376
+        head_dim = 64
+        q = paddle.randn(shape=(batch_size, seq_len, num_heads, head_dim), dtype="float16")
+        k = paddle.randn(shape=(batch_size, seq_len, num_heads, head_dim), dtype="float16")
+        v = paddle.randn(shape=(batch_size, seq_len, num_heads, head_dim), dtype="float16")
+        sm_scale = 1 / (head_dim ** 0.5)
+        
+        o = paddlemix.triton_ops.sageattn_qk_int8_pv_fp16_triton(q, k, v, tensor_layout="NHD", is_casual=False, sm_scale=sm_scale, smooth_k=True, return_lse=False)
+    """
     dtype = q.dtype
     assert dtype in [paddle.float16, paddle.bfloat16], "Input tensors must be in dtype of torch.float16 or torch.bfloat16"
     assert str(q.place) == str(k.place) == str(v.place), f"All tensors must be on the same device. Got q: {q.place}, k: {k.place}, v: {v.place}"
