@@ -21,7 +21,7 @@ image_size=256
 global_batch_size=256
 num_workers=8
 epochs=1400
-logging_steps=50
+logging_steps=1
 save_steps=5000
 
 global_seed=0

@@ -241,6 +241,7 @@ class TrainerArguments(TrainingArguments):
         metadata={"help": "Whether to use autocast fp32/16 to fp8 in transoformer engine."},
     )
 
+
 @dataclass
 class AutoTrainerArguments(TrainingArguments):
     """
@@ -254,6 +255,10 @@ class AutoTrainerArguments(TrainingArguments):
     resume_from_checkpoint: Optional[str] = field(
         default=None,
         metadata={"help": "The path to a folder with a valid checkpoint for your model."},
+    )
+    use_intermediate_api: bool = field(
+        default=False,
+        metadata={"help": "Weather to use auto_parallel intermediate api"},
     )
 
     optim: str = field(default="adamw", metadata={"help": "optimizer setting, [lamb/adamw]"})
@@ -386,10 +391,12 @@ class AutoTrainerArguments(TrainingArguments):
     refined_ops_patterns: Optional[List[str]] = field(
         default=None, metadata={"help": "The pattern of refined recompute."}
     )
+
     def __post_init__(self):
         print("AutoTrainerArguments __post_init__")
         super().__post_init__()
         assert self.enable_auto_parallel
+
 
 @dataclass
 class NoTrainerTrainingArguments:
