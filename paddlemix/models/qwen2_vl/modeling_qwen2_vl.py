@@ -952,13 +952,13 @@ class Qwen2VLFlashAttention2(Qwen2VLAttention):
             query_states,
             key_states,
             value_states,
-            None,  # attention_mask,  # TODO: batch infer时不能是None；如果不是batch infer, attention_mask可以是None, 也可以是全1传进来
+            attention_mask,  
             q_len
             # dropout=0.0 if not self.training else self.attention_dropout,
             # causal=self.is_causal,
         )
 
-        # attn_output = attn_output.reshape([bsz, q_len, self.hidden_size])
+        attn_output = attn_output.reshape([bsz, q_len, -1])
         attn_output = self.o_proj(attn_output)
         if not output_attentions:
             attn_weights = None
@@ -1046,10 +1046,10 @@ class Qwen2VLFlashAttention2(Qwen2VLAttention):
                     causal=causal,  # no softmax_scale=
                 )[0]
 
-        # 修改这里的维度转换，考虑并行策略下的维度
-        batch_size = query_states.shape[0]
-        hidden_size = self.num_heads * self.head_dim  # 计算实际的 hidden_size
-        attn_output = attn_output.reshape([batch_size, query_length, hidden_size])
+        # # 修改这里的维度转换，考虑并行策略下的维度
+        # batch_size = query_states.shape[0]
+        # hidden_size = self.num_heads * self.head_dim  # 计算实际的 hidden_size
+        # attn_output = attn_output.reshape([batch_size, query_length, hidden_size])
 
         return attn_output
 
@@ -1106,7 +1106,7 @@ class Qwen2VLDecoderLayer(nn.Layer):
                 f"Sliding Window Attention is enabled but not implemented for `{config.attn_implementation}`; "
                 "unexpected results may be encountered."
             )
-        # TODO: batch infer 时使用 Qwen2VLFlashAttention2待修复
+
         self.self_attn = create_attention_module(config, "qwen2vl", layer_idx=layer_idx)
         # self.self_attn = Qwen2VLAttention(config, layer_idx)
         self.mlp = Qwen2MLP(config)
@@ -1386,10 +1386,12 @@ class Qwen2VLModel(Qwen2VLPreTrainedModel):
             # [bs, seq_len]
             attention_mask = paddle.ones((batch_size, seq_length_with_past), dtype=paddle.bool)
 
-        attention_mask = self._prepare_decoder_attention_mask(
-            attention_mask, (batch_size, seq_length), cache_length, inputs_embeds.dtype
-        )  # [bs, 1, seq_len, seq_len]
-        causal_mask = attention_mask
+        if flash_attn_varlen_func:
+            causal_mask = attention_mask
+        else:
+            causal_mask = self._prepare_decoder_attention_mask(
+                attention_mask, (batch_size, seq_length), cache_length, inputs_embeds.dtype
+            )  # [bs, 1, seq_len, seq_len]
 
         if cache_position is None:
             past_seen_tokens = past_key_values[0][0].shape[2] if past_key_values[0] is not None else 0

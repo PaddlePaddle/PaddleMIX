@@ -298,12 +298,6 @@ bash scripts/infer_cogvideox_i2v_pose_vctrl.sh
 
 **Note**: The pose control models only for i2v (image-to-video) models .
 
-
-
-<!-- ```
-```
-<img src="asserts/figs/gradio.jpg" style="width:70%"> -->
-
 ### 4. Gradio
 
 We have also created a Gradio application for you to interact with our model.
@@ -314,10 +308,6 @@ We have also created a Gradio application for you to interact with our model.
 
 #### 4.1. Gradio Environment Setup 
 ```bash
-pip install decord
-pip install gradio
-pip install pycocoevalcap
-
 mkdir -p weights/sam2/
 wget -P weights/sam2/ https://bj.bcebos.com/v1/paddlenlp/models/community/Sam/Sam2/sam2.1_hiera_large.pdparams
 ```

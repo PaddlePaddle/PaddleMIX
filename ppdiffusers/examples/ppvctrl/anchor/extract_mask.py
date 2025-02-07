@@ -9,14 +9,13 @@ import paddle.nn.functional as F
 import supervision as sv
 from PIL import Image
 
-from paddlemix.models.groundingdino.modeling import GroundingDinoModel
-from paddlemix.processors.groundingdino_processing import GroundingDinoProcessor
-
 current_dir = os.getcwd()
 paddlemix_dir = os.path.abspath(os.path.join(current_dir, '../../..'))
-
 sys.path.append(os.path.join(paddlemix_dir,'paddlemix/models'))
+sys.path.append(os.path.join(os.getcwd(), "paddlemix/models"))
 
+from paddlemix.models.groundingdino.modeling import GroundingDinoModel
+from paddlemix.processors.groundingdino_processing import GroundingDinoProcessor
 from utils.video_utils import create_video,save_video_from_bgr
 from paddlemix.models.sam2.build_sam import build_sam2, build_sam2_video_predictor
 from paddlemix.models.sam2.sam2_image_predictor import SAM2ImagePredictor

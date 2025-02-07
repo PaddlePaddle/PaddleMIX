@@ -13,8 +13,11 @@ PaddleMIX团队基于`Qwen2-VL-2B-Instruct`设计了专门针对文档理解类�
 |--------------------|
 | Qwen/Qwen2-VL-2B-Instruct  |
 | Qwen/Qwen2-VL-7B-Instruct  |
+| Qwen/Qwen2-VL-72B-Instruct  |
 | Qwen/Qwen2-VL-2B  |
 | Qwen/Qwen2-VL-7B  |
+| Qwen/Qwen2-VL-72B  |
+| Qwen/QVQ-72B-Preview  |
 
 注意：与huggingface权重同名，但权重为paddle框架的Tensor，使用`xxx.from_pretrained("Qwen/Qwen2-VL-2B-Instruct")`即可自动下载该权重文件夹到缓存目录。
 
@@ -73,6 +76,10 @@ CUDA_VISIBLE_DEVICES=0 python paddlemix/examples/qwen2_vl/multi_image_infer.py
 CUDA_VISIBLE_DEVICES=0 python paddlemix/examples/qwen2_vl/video_infer.py
 ```
 
+### d. batch推理
+```bash
+CUDA_VISIBLE_DEVICES=0 python paddlemix/examples/qwen2_vl/batch_infer.py
+```
 ### 模型推理支持分布式推理
 
 ```bash
