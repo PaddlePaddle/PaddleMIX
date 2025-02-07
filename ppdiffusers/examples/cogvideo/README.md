@@ -21,9 +21,9 @@ model_path 当前支持: THUDM/CogVideoX-2b、THUDM/CogVideoX-5b、THUDM/CogVide
 
 ### 训练示例
 
-> [!NOTE]
-> 硬件要求：Nvidia A100 80G
-> 目前，LoRA微调仅针对 [CogVideoX-2b](https://huggingface.co/THUDM/CogVideoX-2b).
+
+* 硬件要求：Nvidia A100 80G
+* 目前，LoRA微调仅针对 [CogVideoX-2b](https://huggingface.co/THUDM/CogVideoX-2b).
 
 #### 数据准备
 
@@ -111,44 +111,45 @@ python examples/cogvideo/scripts/train_cogvideox_lora.py \
 
 ```
 
-> [参数说明]
-> pretrained_model_name_or_path：预训练模型路径
-> instance_data_root：数据集路径
-> caption_column：文本提示文件
-> video_column：视频文件
-> id_token：自定义的标识符，非必要，保持默认即可
-> validation_prompt：验证提示词
-> validation_prompt_separator：验证提示词的分隔符
-> num_validation_videos：验证视频数量
-> validation_epochs：验证epoch周期
-> seed：随机种子
-> rank：LoRA秩
-> lora_alpha：LoRA缩放因子
-> mixed_precision：混合精度, 可选bf16, fp16，no; no表示不使用混合精度,用float32
-> fp16_opt_level：fp16优化级别，可选O0, O1, O2; O0表示不使用混合精度,用float32
-> output_dir：输出目录
-> height：视频高度
-> width：视频宽度
-> fps：视频帧率
-> max_num_frames：视频最大帧数,当前最大支持49帧
-> skip_frames_start：起始帧跳过数
-> skip_frames_end：结束帧跳过数
-> train_batch_size：训练批次大小
-> num_train_epochs：训练周期
-> checkpointing_steps：检查点保存间隔
-> gradient_accumulation_steps：梯度累积步数
-> learning_rate：学习率,paddle默认会*0.01
-> lr_scheduler：学习率调度器
-> lr_warmup_steps：学习率预热步数
-> lr_num_cycles：学习率周期数
-> enable_slicing：vae是否启用切片
-> enable_tiling：vae是否启用平铺
-> optimizer：优化器
-> adam_beta1：Adam优化器β1
-> adam_beta2：Adam优化器β2
-> max_grad_norm：最大梯度范数
-> report_to：报告工具，可选wandb
-
+**参数说明**
+```
+pretrained_model_name_or_path：预训练模型路径
+instance_data_root：数据集路径
+caption_column：文本提示文件
+video_column：视频文件
+id_token：自定义的标识符，非必要，保持默认即可
+validation_prompt：验证提示词
+validation_prompt_separator：验证提示词的分隔符
+num_validation_videos：验证视频数量
+validation_epochs：验证epoch周期
+seed：随机种子
+rank：LoRA秩
+lora_alpha：LoRA缩放因子
+mixed_precision：混合精度, 可选bf16, fp16，no; no表示不使用混合精度,用float32
+fp16_opt_level：fp16优化级别，可选O0, O1, O2; O0表示不使用混合精度,用float32
+output_dir：输出目录
+height：视频高度
+width：视频宽度
+fps：视频帧率
+max_num_frames：视频最大帧数,当前最大支持49帧
+skip_frames_start：起始帧跳过数
+skip_frames_end：结束帧跳过数
+train_batch_size：训练批次大小
+num_train_epochs：训练周期
+checkpointing_steps：检查点保存间隔
+gradient_accumulation_steps：梯度累积步数
+learning_rate：学习率,paddle默认会*0.01
+lr_scheduler：学习率调度器
+lr_warmup_steps：学习率预热步数
+lr_num_cycles：学习率周期数
+enable_slicing：vae是否启用切片
+enable_tiling：vae是否启用平铺
+optimizer：优化器
+adam_beta1：Adam优化器β1
+adam_beta2：Adam优化器β2
+max_grad_norm：最大梯度范数
+report_to：报告工具，可选wandb
+```
 
 ## Lora推理
 
