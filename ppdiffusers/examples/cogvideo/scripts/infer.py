@@ -1,3 +1,17 @@
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 """
 This script demonstrates how to generate a video using the CogVideoX model with the Hugging Face `diffusers` pipeline.
 The script supports different types of video generation, including text-to-video (t2v), image-to-video (i2v),
@@ -21,14 +35,11 @@ import argparse
 from typing import Literal
 
 import paddle
-from ppdiffusers import (
-    CogVideoXPipeline,
-    CogVideoXDDIMScheduler,
-    CogVideoXDPMScheduler,
-    # CogVideoXImageToVideoPipeline,
-    # CogVideoXVideoToVideoPipeline,
-)
 
+from ppdiffusers import (  # CogVideoXImageToVideoPipeline,; CogVideoXVideoToVideoPipeline,
+    CogVideoXDDIMScheduler,
+    CogVideoXPipeline,
+)
 from ppdiffusers.utils import export_to_video_2
 
 
@@ -66,9 +77,6 @@ def generate_video(
     # 1.  Load the pre-trained CogVideoX pipeline with the specified precision (bfloat16).
     # add device_map="balanced" in the from_pretrained function and remove the enable_model_cpu_offload()
     # function to use Multi GPUs.
-
-    image = None
-    video = None
 
     if generate_type == "i2v":
         # pipe = CogVideoXImageToVideoPipeline.from_pretrained(model_path, dtype=dtype)
