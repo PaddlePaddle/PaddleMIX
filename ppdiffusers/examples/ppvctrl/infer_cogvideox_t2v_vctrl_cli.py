@@ -124,7 +124,7 @@ def parse_args():
     parser.add_argument("--transformer_path", type=str, default=None, required=False)
     parser.add_argument("--ref_image_path", type=str, default=None, required=False)
     parser.add_argument("--task", type=str, default=None, required=True)
-    parser.add_argument("--prompt", type=str, default=None, required=True)
+    parser.add_argument("--prompt_path", type=str, default=None, required=True)
     parser.add_argument("--vctrl_config", type=str, default=None, help="the config file for vctrl")
     parser.add_argument(
         "--random_initialization",
@@ -157,6 +157,13 @@ if __name__ == "__main__":
         validation_mask_images = load_images_from_folder_to_pil(args.control_mask_images_folder)
     elif args.control_mask_video_path is not None:
         validation_mask_images = load_images_from_video_to_pil(args.control_mask_video_path)
+
+    if args.prompt_path is  not None:
+        with open(args.prompt_path, "r") as f:
+            lines = f.readlines()
+            prompt = lines[0].strip()
+    else:
+          prompt=None
 
     if args.vctrl_path.endswith(".pdparams"):
         vctrl = VCtrlModel.from_config(args.vctrl_config)
@@ -199,7 +206,7 @@ if __name__ == "__main__":
     num_frames = min(num_frames, args.max_frame)
 
     video = pipeline(
-        prompt=args.prompt,
+        prompt=prompt,
         num_inference_steps=args.num_inference_steps,
         num_frames=num_frames,
         guidance_scale=args.guidance_scale,

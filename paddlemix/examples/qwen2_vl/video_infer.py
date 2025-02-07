@@ -28,7 +28,7 @@ from paddlemix.utils.log import logger
 
 def main(args):
     paddle.seed(seed=0)
-    compute_dtype = "float16" if args.fp16 else "bfloat16"
+    compute_dtype = args.dtype
     if "npu" in paddle.get_device():
         is_bfloat16_supported = True
     else:
@@ -41,9 +41,11 @@ def main(args):
 
     image_processor = Qwen2VLImageProcessor()
     tokenizer = MIXQwen2Tokenizer.from_pretrained(args.model_path)
-    min_pixels = 256 * 28 * 28  # 200704
-    max_pixels = 1280 * 28 * 28  # 1003520
-    processor = Qwen2VLProcessor(image_processor, tokenizer, min_pixels=min_pixels, max_pixels=max_pixels)
+    processor = Qwen2VLProcessor(image_processor, tokenizer)
+
+    # min_pixels = 256*28*28 # 200704
+    # max_pixels = 1280*28*28 # 1003520
+    # processor = Qwen2VLProcessor(image_processor, tokenizer, min_pixels=min_pixels, max_pixels=max_pixels)
 
     # Messages containing a video and a text query
     messages = [
@@ -87,7 +89,7 @@ def main(args):
                 start = time.time()
             with paddle.no_grad():
                 generated_ids = model.generate(
-                    **inputs, max_new_tokens=args.max_new_tokens, temperature=args.temperature
+                    **inputs, max_new_tokens=args.max_new_tokens, temperature=args.temperature, top_p=args.top_p
                 )  # already trimmed in paddle
                 output_text = processor.batch_decode(
                     generated_ids[0], skip_special_tokens=True, clean_up_tokenization_spaces=False
@@ -104,11 +106,15 @@ def main(args):
     else:
         # Inference: Generation of the output
         generated_ids = model.generate(
-            **inputs, max_new_tokens=args.max_new_tokens, temperature=args.temperature
+            **inputs, max_new_tokens=args.max_new_tokens, temperature=args.temperature, top_p=args.top_p
         )  # already trimmed in paddle
         output_text = processor.batch_decode(
             generated_ids[0], skip_special_tokens=True, clean_up_tokenization_spaces=False
         )
+        print(f"GPU memory_allocated: {paddle.device.cuda.memory_allocated() / 1024 ** 3:.2f} GB")
+        print(f"GPU max_memory_allocated: {paddle.device.cuda.max_memory_allocated() / 1024 ** 3:.2f} GB")
+        print(f"GPU memory_reserved: {paddle.device.cuda.memory_reserved() / 1024 ** 3:.2f} GB")
+        print(f"GPU max_memory_reserved: {paddle.device.cuda.max_memory_reserved() / 1024 ** 3:.2f} GB")
         print("output_text:\n", output_text)
 
 
@@ -117,8 +123,10 @@ if __name__ == "__main__":
     parser.add_argument("--model_path", type=str, default="Qwen/Qwen2-VL-2B-Instruct")
     parser.add_argument("--question", type=str, default="Describe this video.")
     parser.add_argument("--video_file", type=str, default="paddlemix/demo_images/red-panda.mp4")
+    parser.add_argument("--top_p", type=float, default=0.01)
     parser.add_argument("--temperature", type=float, default=0.01)
-    parser.add_argument("--max_new_tokens", type=int, default=128)
+    parser.add_argument("--max_new_tokens", type=int, default=512)
+    parser.add_argument("--dtype", type=str, default="bfloat16")
     parser.add_argument("--fp16", action="store_true")
     parser.add_argument("--benchmark", action="store_true")
     args = parser.parse_args()

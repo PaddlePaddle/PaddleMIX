@@ -8,7 +8,7 @@ PP-DocBee 是PaddleMIX团队自研的一款专注于文档理解的多模态大�
 
 | Model              | 模型大小 | Huggingface 仓库地址 |
 |--------------------|----------|--------------------|
-| PaddleMIX/PPDocBee-2B-1129 | 2B | [PPDocBee-2B-1210](https://huggingface.co/PaddleMIX/PPDocBee-2B-1210) |
+| PaddleMIX/PPDocBee-2B-1129 | 2B | [PPDocBee-2B-1129](https://huggingface.co/PaddleMIX/PPDocBee-2B-1129) |
 | PaddleMIX/PPDocBee-7B-1210 | 7B | [PPDocBee-7B-1210](https://huggingface.co/PaddleMIX/PPDocBee-7B-1210) |
 
 
@@ -110,6 +110,16 @@ python paddlemix/examples/ppdocbee/ppdocbee_infer.py \
 | 14 | 西班牙（ESP） | 5 | 11 | 3 | 19 |
 | 15 | 牙买加（JAM） | 5 | 4 | 2 | 11 |
 ```
+
+**模型推理支持分布式推理**
+
+```bash
+# 2B
+sh paddlemix/examples/ppdocbee/shell/distributed_ppdocbee_infer_2B.sh
+# 7B
+sh paddlemix/examples/ppdocbee/shell/distributed_ppdocbee_infer_7B.sh
+```
+> ⚠️注意："mp_degree"需要根据显卡数量"gpus"进行调整，例如2卡推理，则设置为2。
 
 ### 4.2 模型微调
 
