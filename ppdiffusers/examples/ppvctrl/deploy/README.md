@@ -16,9 +16,10 @@ python -m pip install --pre paddlepaddle-gpu -i https: //www.paddlepaddle.org.cn
 python -m pip install paddlemix
 
 ```
+
 ## 推理优化内容：  
 目前PP-VCtrl通过使用部分高性能的融合算子来提升推理性能，例如`ln_partial_rotary_emb`和`partial_rotary_emb`等高性能融合算子。   
-其中，`ln_partial_rotary_emb`将Q，K的Norm以及ROPE算子融合；
+其中，`ln_partial_rotary_emb`将Q，K的Norm以及ROPE算子融合；  
 
 ## 高性能推理指令：
 ```shell
