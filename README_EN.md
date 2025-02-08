@@ -294,6 +294,8 @@ python setup.py install
             <li><a href="paddlemix/examples/visualglm">VIsualGLM</a></li>
             <li><a href="paddlemix/examples/cogvlm">CogVLM && CogAgent</a></li>
             <li><a href="paddlemix/examples/internlm_xcomposer2">InternLM-XComposer2</a></li>
+            <li><a href="paddlemix/examples/deepseek_vl2">DeepSeek-VL2</a></li> 
+            <li><a href="paddlemix/examples/aria">Aria</a></li>
       </ul>
       </ul>
           <li><b>Open-World Visual Model</b></li>
@@ -349,6 +351,8 @@ python setup.py install
           <li><b>Unified Multimodal Model</b></li>
         <ul>
           <li><a href="paddlemix/examples/janus">Janus</a></li>
+          <li><a href="paddlemix/examples/showo">Showo</a></li>
+          <li><a href="paddlemix/examples/emu3">Emu3</a></li>
         </ul>
       </td>
     </tr>
