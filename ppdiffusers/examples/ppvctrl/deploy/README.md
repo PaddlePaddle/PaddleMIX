@@ -1,7 +1,8 @@
-# ppvctrl 高性能推理
+# PP-VCtrl 高性能推理
 
-- Paddle Inference提供 ppvctrl 系列模型的高性能推理实现，推理性能提升10%+
+- Paddle Inference提供 PP-VCtrl 系列模型的高性能推理实现，推理性能提升10%+
 环境准备：
+
 ```shell
 # 安装 triton并适配paddle
 python -m pip install triton
@@ -15,14 +16,13 @@ python -m pip install --pre paddlepaddle-gpu -i https: //www.paddlepaddle.org.cn
 python -m pip install paddlemix
 
 ```
-
-##推理优化内容：  
-目前ppvctrl通过使用部分高性能的融合算子来提升推理性能，例如`ln_partial_rotary_emb`和`partial_rotary_emb`等高性能融合算子。   
+## 推理优化内容：  
+目前PP-VCtrl通过使用部分高性能的融合算子来提升推理性能，例如`ln_partial_rotary_emb`和`partial_rotary_emb`等高性能融合算子。   
 其中，`ln_partial_rotary_emb`将Q，K的Norm以及ROPE算子融合；
 
-##高性能推理指令：
+## 高性能推理指令：
 ```shell
-cd ppdiffusers/examples/ppvctrl/deploy
+cd ppdiffusers/examples/PP-VCtrl/deploy
 bash scripts/infer_cogvideox_i2v_pose_vctrl.sh
 ```
 注：--inference_optimize 1 用于开启推理优化，--benchmark 1 用于开启性能测试。
