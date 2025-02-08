@@ -1,6 +1,6 @@
-paddlepaddle-gpu==3.0.0b
 jsonargparse[signatures]>=4.27.7
 albumentations==1.4.4
+academictorrents
 omegaconf
 einops
 requests
