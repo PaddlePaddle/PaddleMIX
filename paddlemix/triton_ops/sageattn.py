@@ -529,7 +529,397 @@ def sageattn_forward_casual_false(q, k, v,
             stride_qh=stride_qh, 
             stride_qn=stride_qn,
             stride_kz=stride_kz, 
-            stride_kh=stride_kz, 
+            stride_kh=stride_kh, 
+            stride_kn=stride_kn,
+            stride_vz=stride_vz, 
+            stride_vh=stride_vh, 
+            stride_vn=stride_vn,
+            stride_oz=stride_oz, 
+            stride_oh=stride_oh, 
+            stride_on=stride_on,
+            qo_len=qo_len,
+            kv_len=kv_len, 
+            BSZ=BSZ,
+            h_qo=h_qo, 
+            num_kv_groups=num_kv_groups,
+            HEAD_DIM=HEAD_DIM_K,
+            BLOCK_M=128, 
+            BLOCK_N=64, 
+            RETURN_LSE=1 if return_lse else 0
+        )
+        
+    if in_dynamic_or_pir_mode():
+        outs = _C_ops._run_custom_op(
+            op_name,
+            q,k,v, q_scale, k_scale, 
+            output_dtype,
+            tensor_layout, 
+            return_lse
+        )
+
+        return outs[0], outs[1]
+    else:
+        helper = LayerHelper(op_name, **locals())
+        inputs = {
+            "q": q,
+            "k": k,
+            "v": v,
+            "q_scale": q_scale,
+            "k_scale": k_scale,
+        }
+        out_tensor = helper.create_variable_for_type_inference(dtype=Out.dtype)
+        out_lse = helper.create_variable_for_type_inference(dtype=Lse.dtype)
+        
+        helper.append_op(
+            type=op_name,
+            inputs=inputs,
+            attrs={
+                "output_type": output_dtype,
+                "tensor_layout": tensor_layout,
+                "return_lse": 1 if return_lse else 0
+            },
+            outputs={
+                "out_tensor": out_tensor,
+                "lse_tensor": out_lse
+            }
+        )
+        
+        return out_tensor, out_lse
+    
+
+@paddle_use_triton(
+    key=["1"]
+)
+def sageattn_attn_fwd_casual_true_kernel(
+            Q, K, V, Q_scale, K_scale, Out, Lse, 
+            stride_qz, stride_qh, stride_qn,
+            stride_kz, stride_kh, stride_kn,  
+            stride_vz, stride_vh, stride_vn,  
+            stride_oz, stride_oh, stride_on,  
+            qo_len, kv_len, BSZ,
+            h_qo: tl.constexpr, 
+            num_kv_groups: tl.constexpr,
+            HEAD_DIM: tl.constexpr,  
+            BLOCK_M: tl.constexpr,  
+            BLOCK_N: tl.constexpr,  
+            RETURN_LSE: tl.constexpr,):
+    start_m = tl.program_id(0)
+
+    off_z = tl.program_id(2).to(tl.int64)
+    off_h = tl.program_id(1).to(tl.int64)
+
+    q_scale_offset = (off_z * h_qo + off_h) * tl.cdiv(qo_len, BLOCK_M)
+    k_scale_offset = (off_z * (h_qo // num_kv_groups) + off_h // num_kv_groups) * tl.cdiv(kv_len, BLOCK_N)  
+    
+    offs_m = start_m * BLOCK_M + tl.arange(0, BLOCK_M)
+    offs_n = tl.arange(0, BLOCK_N)
+    offs_k = tl.arange(0, HEAD_DIM)
+    Q_ptrs = Q + (off_z * stride_qz + off_h * stride_qh) + offs_m[:, None] * stride_qn + offs_k[None, :]
+    Q_scale_ptr = Q_scale + q_scale_offset + start_m
+    K_ptrs = K + (off_z * stride_kz + (off_h // num_kv_groups) * stride_kh) + offs_n[None, :] * stride_kn + offs_k[:, None] 
+    K_scale_ptr = K_scale + k_scale_offset
+    V_ptrs = V + (off_z * stride_vz + (off_h // num_kv_groups) * stride_vh) + offs_n[:, None] * stride_vn + offs_k[None, :]
+    O_block_ptr = Out + (off_z * stride_oz + off_h * stride_oh) + offs_m[:, None] * stride_on + offs_k[None, :]
+    
+    m_i = tl.zeros([BLOCK_M], dtype=tl.float32) - float("inf")
+    l_i = tl.zeros([BLOCK_M], dtype=tl.float32) + 1.0
+    acc = tl.zeros([BLOCK_M, HEAD_DIM], dtype=tl.float32)
+    
+    q = tl.load(Q_ptrs, mask = offs_m[:, None] < qo_len)
+    q_scale = tl.load(Q_scale_ptr)
+    
+    # restore the K_scale_ptr, K_ptrs, V_ptrs
+    original_K_scale_ptr = K_scale_ptr
+    original_K_ptrs = K_ptrs
+    original_V_ptrs = V_ptrs
+    
+    # fused zone
+    # STAGE == 1
+    lo, hi = 0, start_m * BLOCK_M
+    
+    for start_n in range(lo, hi, BLOCK_N):
+        start_n = tl.multiple_of(start_n, BLOCK_N)
+        k_mask = offs_n[None, :] < (kv_len - start_n)   
+        k = tl.load(K_ptrs, mask = k_mask)
+        k_scale = tl.load(K_scale_ptr)
+        qk = tl.dot(q, k).to(tl.float32) * q_scale * k_scale 
+
+        # stage == 1 branch
+        m_ij = tl.maximum(m_i, tl.max(qk, 1))
+        qk = qk - m_ij[:, None]
+        # stage == 1 branch end
+        
+        p = tl.math.exp2(qk)
+        l_ij = tl.sum(p, 1)
+        
+        alpha = tl.math.exp2(m_i - m_ij)
+        l_i = l_i * alpha + l_ij
+        
+        acc = acc * alpha[:, None]
+        
+        v = tl.load(V_ptrs, mask = offs_n[:, None] < (kv_len - start_n))
+        p = p.to(tl.float16)
+        
+        acc += tl.dot(p, v, out_dtype=tl.float16)   
+        m_i = m_ij
+        K_ptrs += BLOCK_N * stride_kn
+        K_scale_ptr += 1
+        V_ptrs += BLOCK_N * stride_vn
+    
+    # stage == 2
+    # restore
+    K_scale_ptr = original_K_scale_ptr
+    V_ptrs = original_V_ptrs
+    K_ptrs = original_K_ptrs
+    
+    # begin stage == 2
+    lo, hi = start_m * BLOCK_M, (start_m + 1) * BLOCK_M
+    lo = tl.multiple_of(lo, BLOCK_M)
+    K_scale_ptr += lo // BLOCK_N
+    K_ptrs += stride_kn * lo
+    V_ptrs += stride_vn * lo
+
+    for start_n in range(lo, hi, BLOCK_N):
+        start_n = tl.multiple_of(start_n, BLOCK_N)
+        k_mask = offs_n[None, :] < (kv_len - start_n)   
+        k = tl.load(K_ptrs, mask = k_mask)
+        k_scale = tl.load(K_scale_ptr)
+        qk = tl.dot(q, k).to(tl.float32) * q_scale * k_scale 
+
+        # stage == 2 branch
+        mask = offs_m[:, None] >= (start_n + offs_n[None, :])
+        qk = qk + tl.where(mask, 0, -1.0e6)
+        m_ij = tl.maximum(m_i, tl.max(qk, 1))
+        qk -= m_ij[:, None]
+        # stage == 2 branch end
+        
+        p = tl.math.exp2(qk)
+        l_ij = tl.sum(p, 1)
+        
+        alpha = tl.math.exp2(m_i - m_ij)
+        l_i = l_i * alpha + l_ij
+        
+        acc = acc * alpha[:, None]
+        
+        v = tl.load(V_ptrs, mask = offs_n[:, None] < (kv_len - start_n))
+        p = p.to(tl.float16)
+        
+        acc += tl.dot(p, v, out_dtype=tl.float16)   
+        m_i = m_ij
+        K_ptrs += BLOCK_N * stride_kn
+        K_scale_ptr += 1
+        V_ptrs += BLOCK_N * stride_vn
+        
+    # fused zone end
+    
+    acc = acc / l_i[:, None]
+    tl.store(O_block_ptr, acc.to(Out.type.element_ty), mask = (offs_m[:, None] < qo_len))
+
+    if RETURN_LSE:
+        lse_ptrs = Lse + (off_z * qo_len * h_qo + off_h * qo_len) + offs_m
+        l_i = tl.log2(l_i) + m_i
+        tl.store(lse_ptrs, l_i, mask = (offs_m < qo_len))
+        
+
+def sageattn_forward_casual_true(q, k, v, 
+                                  q_scale, k_scale, 
+                                  output_dtype="float16",
+                                  tensor_layout="HND", 
+                                  return_lse=False):
+    """
+    [params]
+        q: paddle.Tensor, dtype in int8, q tensor after quant.
+        k: paddle.Tensor, dtype in int8, k tensor after quant.
+        v: paddle.Tensor, dtype in fp16 or bf16, v tensor.
+        q_scale: paddle.Tensor, dtype in fp16 or bf16, this is the output tensor for scale factor, from quant kernel.
+        k_scale: paddle.Tensor, dtype in fp16 or bf16, this is the output tensor for scale factor, from quant kernel.
+        output_dtype: string. Only in ['float16', 'bfloat16']. The datatype of q, k, v tensor.
+        tensor_layout: string. Only in ['HND', 'NHD'], 'HND' -> [bsz, num_heads, seq_len, head_dim],
+                        'HND' -> [bsz, seq_len, num_heads, head_dim]
+        return_lse: bool. Return lse correction or not. Useful in parallel computing. Default False.
+    [Examples]
+        batch_size = 2
+        num_heads = 24
+        seq_len = 1376
+        head_dim = 64
+        
+        sm_scale = 1.0 / (head_dim_og ** 0.5)
+        
+        # note: this layout is 'NHD'
+        tensor_layout = 'NHD'
+        q = paddle.randn(shape=(batch_size, seq_len, num_heads, head_dim), dtype="float16")
+        k = paddle.randn(shape=(batch_size, seq_len, num_heads, head_dim), dtype="float16")
+        v = paddle.randn(shape=(batch_size, seq_len, num_heads, head_dim), dtype="float16")
+        
+        km = paddle.mean(k, axis=seq_dim, keepdim=True)
+        
+        q_int8, q_scale, k_int8, k_scale = per_block_int8(q, k, km=km, sm_scale=sm_scale, tensor_layout=tensor_layout)
+        o, lse = sageattn_forward_casual_true(q_int8, k_int8, v, q_scale, k_scale, 
+                                                output_dtype="float16", tensor_layout=tensor_layout)
+    """
+    assert output_dtype in ["float16", "bfloat16"]
+    
+    Out = paddle.empty(q.shape, dtype=output_dtype)
+    if tensor_layout == "HND":
+        b, h_qo, qo_len, head_dim = q.shape
+        _, h_kv, kv_len, _ = k.shape
+
+        stride_qz, stride_qh, stride_qn = h_qo * qo_len * head_dim, qo_len * head_dim, head_dim
+        stride_kz, stride_kh, stride_kn = h_kv * kv_len * head_dim, kv_len * head_dim, head_dim
+        stride_vz, stride_vh, stride_vn = h_kv * kv_len * head_dim, kv_len * head_dim, head_dim
+        stride_oz, stride_oh, stride_on = h_qo * qo_len * head_dim, qo_len * head_dim, head_dim
+    elif tensor_layout == "NHD":
+        b, qo_len, h_qo, head_dim = q.shape
+        _, kv_len, h_kv, _ = k.shape
+        
+        stride_qz, stride_qh, stride_qn = qo_len * h_qo * head_dim, head_dim, h_qo * head_dim
+        stride_kz, stride_kh, stride_kn = kv_len * h_kv * head_dim, head_dim, h_kv * head_dim
+        stride_vz, stride_vh, stride_vn = kv_len * h_kv * head_dim, head_dim, h_kv * head_dim
+        stride_oz, stride_oh, stride_on = qo_len * h_qo * head_dim, head_dim, h_qo * head_dim
+    else:
+        raise ValueError(f"Unknown tensor layout: {tensor_layout}")
+    
+    HEAD_DIM_K = head_dim
+    num_kv_groups = h_qo // h_kv
+    BSZ = b
+    
+    prepare_attr_for_triton_kernel = """
+    paddle::DataType output_t;
+    if (output_dtype == std::string("float16")) {
+        output_t = paddle::DataType::FLOAT16;
+    } else {
+        output_t = paddle::DataType::BFLOAT16;
+    }
+    
+    auto out_tensor = paddle::empty(q.shape(), output_t, q.place());
+    auto q_strides = q.strides();
+    auto k_strides = k.strides();
+    auto v_strides = v.strides();
+    auto o_strides = out_tensor.strides();
+    
+    int b, h_qo, qo_len, head_dim;
+    int kv_len, h_kv;
+    
+    int stride_qz, stride_qh, stride_qn;
+    int stride_kz, stride_kh, stride_kn;
+    int stride_vz, stride_vh, stride_vn;
+    int stride_oz, stride_oh, stride_on;
+    
+    if (tensor_layout == "HND") {
+        b = q.shape()[0];
+        h_qo = q.shape()[1];
+        qo_len = q.shape()[2];
+        head_dim = q.shape()[3];
+        
+        h_kv = k.shape()[1];
+        kv_len = k.shape()[2];
+        
+        stride_qz = q_strides[0];
+        stride_qh = q_strides[1];
+        stride_qn = q_strides[2];
+        
+        stride_kz = k_strides[0];
+        stride_kh = k_strides[1];
+        stride_kn = k_strides[2];
+        
+        stride_vz = v_strides[0];
+        stride_vh = v_strides[1];
+        stride_vn = v_strides[2];
+        
+        stride_oz = o_strides[0];
+        stride_oh = o_strides[1];
+        stride_on = o_strides[2];
+    } else if (tensor_layout == "NHD") {
+        b = q.shape()[0];
+        qo_len = q.shape()[1];   // reverse
+        h_qo = q.shape()[2];
+        head_dim = q.shape()[3];
+        
+        kv_len = k.shape()[1];   // reverse
+        h_kv = k.shape()[2];
+        
+        stride_qz = q_strides[0];
+        stride_qh = q_strides[2];       // reverse
+        stride_qn = q_strides[1];
+        
+        stride_kz = k_strides[0];
+        stride_kh = k_strides[2];       // reverse
+        stride_kn = k_strides[1];
+        
+        stride_vz = v_strides[0];
+        stride_vh = v_strides[2];       // reverse
+        stride_vn = v_strides[1];
+        
+        stride_oz = o_strides[0];
+        stride_oh = o_strides[2];       // reverse
+        stride_on = o_strides[1];
+    } else {
+        throw std::runtime_error("Unsupported tensor layout");
+    }
+    
+    int HEAD_DIM_K = head_dim;
+    int num_kv_groups = h_qo / h_kv;
+"""
+
+    op_name = "triton_sageattn_attn_fwd_casual_true"
+    op_name += get_dtype_str(q.dtype)
+    op_name += f"_BSZ{BSZ}_seq{qo_len}_h{h_qo}_dim{HEAD_DIM_K}"
+    
+    sageattn_attn_fwd_casual_true_config = []
+    if head_dim == 64:
+        sageattn_attn_fwd_casual_true_config.append({
+            "num_warps": 4,
+            "num_stages": 4
+        })
+    else:
+        sageattn_attn_fwd_casual_true_config.append({
+            "num_warps": 8,
+            "num_stages": 4
+        })
+    
+    if op_name not in OpProtoHolder.instance().op_proto_map.keys():
+        if return_lse:
+            Lse = paddle.empty((b, h_qo, qo_len), dtype=paddle.float32)
+        else:
+            Lse = paddle.empty((0, 0, 0), dtype=paddle.float32)
+        prepare_ptr_for_triton_kernel = """
+        paddle::Tensor lse_tensor;
+        
+        if (return_lse) {
+            lse_tensor = paddle::empty({b, h_qo, qo_len}, q.dtype(), q.place());
+        } else {
+            lse_tensor = paddle::empty({1,1,1}, paddle::DataType::FLOAT32, paddle::CPUPlace());
+        }
+        
+        auto Q = get_tensor_ptr(q);
+        auto K = get_tensor_ptr(k);
+        auto V = get_tensor_ptr(v);
+        auto Q_scale = get_tensor_ptr(q_scale);
+        auto K_scale = get_tensor_ptr(k_scale);
+        auto Out = get_tensor_ptr(out_tensor);
+        auto Lse = get_tensor_ptr(lse_tensor);
+    """
+        return_tensor_names = "out_tensor, lse_tensor"
+        template_used = rendering_common_template(
+            sageattn_forward_casual_true, 
+            prepare_attr_for_triton_kernel=prepare_attr_for_triton_kernel,
+            prepare_ptr_for_triton_kernel=prepare_ptr_for_triton_kernel,
+            return_tensor_names=return_tensor_names
+        )
+        grid = ("(qo_len + BLOCK_M - 1) / BLOCK_M", "h_qo", "BSZ")
+        sageattn_attn_fwd_casual_true_kernel[(op_name, template_used, grid, sageattn_attn_fwd_casual_true_config)](
+            Q=q, 
+            K=k, 
+            V=v, 
+            Q_scale=q_scale, 
+            K_scale=k_scale, 
+            Out=Out, 
+            Lse=Lse, 
+            stride_qz=stride_qz, 
+            stride_qh=stride_qh, 
+            stride_qn=stride_qn,
+            stride_kz=stride_kz, 
+            stride_kh=stride_kh, 
             stride_kn=stride_kn,
             stride_vz=stride_vz, 
             stride_vh=stride_vh, 
