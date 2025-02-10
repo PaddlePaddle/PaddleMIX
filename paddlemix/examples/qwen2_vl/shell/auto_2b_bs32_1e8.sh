@@ -14,6 +14,7 @@
 
 set -x
 
+export FLAGS_use_cuda_managed_memory=true
 GPUS=${GPUS:-8}
 BATCH_SIZE=${BATCH_SIZE:-32}
 PER_DEVICE_BATCH_SIZE=${PER_DEVICE_BATCH_SIZE:-1}
@@ -61,7 +62,7 @@ ${TRAINING_PYTHON} --log_dir ${OUTPUT_DIR}/paddle_distributed_logs \
   --per_device_train_batch_size ${PER_DEVICE_BATCH_SIZE} \
   --gradient_accumulation_steps ${GRADIENT_ACC} \
   --freeze_vit True \
-  --max_seq_length 2048 \
+  --max_seq_length 1024 \
   --image_resolution 512 \
   --recompute False \
   --max_grad_norm 1.0 \
@@ -84,5 +85,4 @@ ${TRAINING_PYTHON} --log_dir ${OUTPUT_DIR}/paddle_distributed_logs \
   --sharding="stage1" \
   --amp_master_grad=1 \
   --hybrid_parallel_topo_order="sharding_first" \
-
   2>&1 | tee -a "${OUTPUT_DIR}/training_log.txt"
