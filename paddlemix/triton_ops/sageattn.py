@@ -859,6 +859,7 @@ def sageattn_forward_casual_true(q, k, v,
     
     int HEAD_DIM_K = head_dim;
     int num_kv_groups = h_qo / h_kv;
+    int BSZ = b;
 """
 
     op_name = "triton_sageattn_attn_fwd_casual_true"
@@ -1050,7 +1051,7 @@ def sageattn_qk_int8_pv_fp16_triton(
     q_int8, q_scale, k_int8, k_scale = per_block_int8(q, k, km=km, sm_scale=sm_scale, tensor_layout=tensor_layout)
 
     if is_casual:
-        pass
+        o, lse = sageattn_forward_casual_true(q_int8, k_int8, v, q_scale, k_scale, output_dtype="float16", tensor_layout=tensor_layout, return_lse=return_lse)
     else:
         o, lse = sageattn_forward_casual_false(q_int8, k_int8, v, q_scale, k_scale, output_dtype="float16", tensor_layout=tensor_layout, return_lse=return_lse)
     
