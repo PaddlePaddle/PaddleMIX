@@ -51,7 +51,7 @@ def get_wint8_kernel_config():
     return configs
 
 
-triton_wint8_template = """
+d2s_infer_code = """
 std::vector<std::vector<int64_t>> ${op_name}_InferShape(const std::vector<int64_t>& a_shape,
                                                         const std::vector<int64_t>& b_shape,
                                                         const std::vector<int64_t>& c_shape,
@@ -332,7 +332,7 @@ def weight_only_int8(x, qweight, scales, bias=None, bool_trans_w=True):
         output = paddle.zeros((M, N), dtype=x.dtype)
 
         prepare_ptr_for_triton_kernel = """
-        auto output = paddle::empty({M,N}, x.dtype(), x.place());
+        auto output = paddle::full({M,N}, 0, x.dtype(), x.place());
         auto a_ptr = get_tensor_ptr(x);
         auto b_ptr = get_tensor_ptr(qweight);
         auto c_ptr = get_tensor_ptr(output);
@@ -343,7 +343,11 @@ def weight_only_int8(x, qweight, scales, bias=None, bool_trans_w=True):
 
         return_tensor_names = "output"
         template_used = rendering_common_template(
-            weight_only_int8, prepare_attr_for_triton_kernel, prepare_ptr_for_triton_kernel, return_tensor_names
+            weight_only_int8,
+            prepare_attr_for_triton_kernel,
+            prepare_ptr_for_triton_kernel,
+            return_tensor_names,
+            d2s_infer_code,
         )
 
         grid = (
@@ -373,18 +377,21 @@ def weight_only_int8(x, qweight, scales, bias=None, bool_trans_w=True):
         return outs[0]
     else:
         helper = LayerHelper(op_name, **locals())
-        out = helper.create_variable_for_type_inference(dtype=x.dtype)
+
         inputs = {
             "x": x,
             "qweight": qweight,
             "scales": scales,
             "bias@OPTIONAL": bias,
         }
+        attrs = {"bool_trans_w": bool_trans_w}
+        output = helper.create_variable_for_type_inference(dtype=x.dtype)
+        outputs = {"output": output}
 
         helper.append_op(
             type=op_name,
             inputs=inputs,
-            attrs={"bool_trans_w": bool_trans_w},
-            outputs={"out": out},
+            attrs=attrs,
+            outputs=outputs,
         )
-        return out
+        return output

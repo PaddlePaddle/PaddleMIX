@@ -35,6 +35,13 @@
 
 
 ## 📰 News
+**🔥 Live Course on January 16, 2025: New Releases in the PaddlePaddle PP Series Models!**
+
+- 🎉 PaddleMIX introduces the next-generation unified video generation control model, PP-VCtrl! It is efficiently applied to precise control tasks in video generation, such as character animation and scene transitions. The auxiliary conditional encoder architecture allows for flexible integration of various control modules, achieving efficient control propagation of features through sparse residual connections while maintaining the original training video diffusion model generator architecture unchanged, thus avoiding full retraining. It utilizes high-quality available datasets for recaptioning, human keypoint extraction, and video segmentation, employing diverse data augmentation and training strategies to sequentially meet the data needs of edge control, human pose, and mask control video editing tasks, significantly enhancing adaptability and generation quality. The control capabilities and video quality metrics surpass open-source methods for specific tasks. Join us for a detailed explanation of the core technologies and industrial applications of PP-VCtrl on **January 16 (Thursday) at 19:00**. 🚀 Registration link: https://www.wjx.top/vm/m4sb0rh.aspx?udsid=664921
+
+**🔥Live Course on January 16th, 2025 New PaddlePaddle PP Series Models Released!**
+- 🎉PaddleMIX introduces PP-VCtrl, the next-generation unified video generation control model! It efficiently handles tasks like character animation and scene transitions with precise control. The auxiliary condition encoder architecture enables flexible integration of control modules, while sparse residual connections ensure efficient feature propagation. The original video diffusion model architecture remains unchanged, avoiding full retraining. Leveraging high-quality datasets for recaption, human keypoint extraction, and video segmentation, along with advanced data augmentation and training strategies, PP-VCtrl improves adaptability and generation quality for edge control, pose, and mask-based video editing tasks. Its control performance and video quality outperform task-specific open-source methods. Join our live stream on **January 16th (Thursday) at 19:00** for an in-depth discussion of PP-VCtrl’s core technology and industrial applications. 🚀 Registration link:https://www.wjx.top/vm/m4sb0rh.aspx?udsid=664921
+
 **🔥Live Course on January 7th, 2025 (Completed) New PaddlePaddle PP Series Models Released!**
 - 🔗Watch the PaddleMIX livestream replay: [Click here](https://aistudio.baidu.com/course/introduce/32178)
 - 🎉PaddleMIX introduces PP-DocBee, a lightweight multimodal document understanding model! Based on multimodal large models, it achieves end-to-end document image understanding, solving complex document parsing challenges in the industry. Using a ViT+MLP+LLM architecture, it optimizes data synthesis strategies, data preprocessing, training methods, and OCR post-processing assistance. By combining small OCR models with large LLM models and using rendering engine-based image data generation strategies, it achieves higher quality Q&A with controllable generation costs. Supports local gradio deployment, OpenAI service deployment, and provides quick access through the PaddlePaddle Galaxy Community online environment. On **January 7th (Tuesday) at 19:00**, join our livestream for a detailed explanation of PP-DocBee's core technology and industry applications. 🚀Registration link: https://www.wjx.top/vm/mlDdpSb.aspx?udsid=309483
@@ -49,7 +56,17 @@
 
 
 ## 📣 Latest Developments
-**🎉 2024.01.02 Added support for [PP-DocBee](./paddlemix/examples/ppdocbee) inference and training, supporting [high-performance inference](./deploy/ppdocbee)**
+
+** 🎉 2025.01.20 Welcoming updates to the [Creative Tutorial Page](paddlemix_applications.md) developed by external developers in the Xinghe (AIStudio) community **
+* Since September 6, we have collected 69 outstanding projects from the Xinghe (AIStudio) community! Dive in and experience application development now!
+* Introducing 22 new high-quality projects from the "PaddleMIX Suite Experience Officer" and "PaddleMIX Development Challenge" activities, covering a variety of applications such as Christmas-themed card generation 🎄 and character generation 👤. We look forward to your experience! Additionally, there are interesting applications like AI treasure identification 🔍 and music generation 🎶 waiting for you to explore.
+* 🙏 Heartfelt thanks to all developers for their wonderful creations based on the suite! 🚀 We sincerely invite you to share your creativity as well - feel free to publish your tutorials on public web pages or in the [Paddle AI Studio](https://aistudio.baidu.com/aistudio/community/multimodal?from=singlemessage) community!
+
+**🎉 2025.01.20 Support for [Aria](./paddlemix/examples/aria) inference**
+
+**🎉 2025.01.14 Support [deepseek-vl2](./paddlemix/examples/deepseek_vl2) inference**
+
+**🎉 2025.01.02 Added support for [PP-DocBee](./paddlemix/examples/ppdocbee) inference and training, supporting [high-performance inference](./deploy/ppdocbee)**
 
 **🎉 2024.12.17 Support for [InternVL2_5 (1B, 2B, 4B, 8B)](./paddlemix/examples/internvl2) inference**
 
@@ -206,7 +223,7 @@ Recommended versions for environment and dependencies:
 ### 6. Install Custom Operators (Optional)
 * Some models require custom operators (FastLayerNorm, FusedLayerNorm), such as EVA-CLIP, DIT_LLAMA, etc.
 * Skip this step for non-CUDA environments (e.g., Ascend NPU)
-* ```bash
+```bash
 cd paddlemix/external_ops
 python setup.py install
 ```
@@ -277,6 +294,8 @@ python setup.py install
             <li><a href="paddlemix/examples/visualglm">VIsualGLM</a></li>
             <li><a href="paddlemix/examples/cogvlm">CogVLM && CogAgent</a></li>
             <li><a href="paddlemix/examples/internlm_xcomposer2">InternLM-XComposer2</a></li>
+            <li><a href="paddlemix/examples/deepseek_vl2">DeepSeek-VL2</a></li> 
+            <li><a href="paddlemix/examples/aria">Aria</a></li>
       </ul>
       </ul>
           <li><b>Open-World Visual Model</b></li>
@@ -332,6 +351,8 @@ python setup.py install
           <li><b>Unified Multimodal Model</b></li>
         <ul>
           <li><a href="paddlemix/examples/janus">Janus</a></li>
+          <li><a href="paddlemix/examples/showo">Showo</a></li>
+          <li><a href="paddlemix/examples/emu3">Emu3</a></li>
         </ul>
       </td>
     </tr>
@@ -378,6 +399,39 @@ PP-InsCapTagger (Instance Capability Tagger) is a dataset capability tagging mod
 
 ## 🤔 FAQ
 For answers to some common questions about our project, please refer to the [FAQ](docs/FAQ.md). If your question is not addressed, feel free to raise it in the [Issues](https://github.com/PaddlePaddle/PaddleMIX/issues).
+
+## ❤️ Acknowledgments
+
+- Some modules and case designs in PaddleMIX are inspired by the excellent design of Hugging Face's [Transformers](https://github.com/huggingface/transformers)🤗 for using pre-trained models. We express our gratitude to the authors of Hugging Face and its open-source community.
+
+- Some cases and code in PaddleMIX are contributed by the following outstanding community developers (for a complete list of contributors, please refer to: [Contributors](https://github.com/PaddlePaddle/PaddleMIX/graphs/contributors)):
+    [co63oc](https://github.com/co63oc)，
+    [CrazyBoyM](https://github.com/CrazyBoyM)，
+    [KPCOFGS](https://github.com/KPCOFGS)，
+    [pkhk-1](https://github.com/pkhk-1)，
+    [1649759610](https://github.com/1649759610)，
+    [DrRyanHuang](https://github.com/DrRyanHuang)，
+    [zhiboniu](https://github.com/zhiboniu)，
+    [cocoshe](https://github.com/cocoshe)，
+    [sneaxiy](https://github.com/sneaxiy)，
+    [yangrongxinuser](https://github.com/yangrongxinuser)，
+    [cheng221](https://github.com/cheng221)，
+    [Liyulingyue](https://github.com/Liyulingyue)，
+    [zhoutianzi666](https://github.com/zhoutianzi666)，
+    [Birdylx](https://github.com/Birdylx)，
+    [FeixLiu](https://github.com/FeixLiu)，
+    [Tsaiyue](https://github.com/Tsaiyue)，
+    [fightfat](https://github.com/fightfat)，
+    [warrentdrew](https://github.com/warrentdrew)，
+    [swagger-coder](https://github.com/swagger-coder)
+    ...
+- We extend our gratitude to the project experts in the Xinghe (AIStudio) community for developing a multitude of fascinating applications, thereby expanding the possibilities for PaddleMIX's growth. Special thanks go to the following active project experts (for a complete list, please see the [AIStudio Project Expert Recommendation List](https://aistudio.baidu.com/projectoverview)):
+    [好想成为PPDE（已成为版）](https://aistudio.baidu.com/personalcenter/thirdview/2553954)，
+    [旭_1994](https://aistudio.baidu.com/personalcenter/thirdview/9044961)，
+    [knoka](https://aistudio.baidu.com/personalcenter/thirdview/2258742)，
+    [魔术师](https://aistudio.baidu.com/personalcenter/thirdview/710848)，
+    [非鱼子焉](https://aistudio.baidu.com/personalcenter/thirdview/91451)
+    ...
 
 ## 📝 License
 This project is released under the [Apache 2.0 license](LICENSE).

@@ -22,12 +22,21 @@
 import math
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple, Union
-
+from functools import partial
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
+from paddlenlp.transformers.configuration_utils import PretrainedConfig
 from paddlenlp.transformers.model_outputs import BaseModelOutputWithPast, ModelOutput
 from paddlenlp.transformers.model_utils import PretrainedModel
+from paddlenlp.transformers import linear_utils
+from paddlenlp.transformers.linear_utils import Linear
+from paddle.distributed import fleet
+
+from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
+import paddle.distributed.fleet.meta_parallel as mpu
+
+from paddle import Tensor, nn
 
 from paddlemix.models.flash_attn_utils import (
     create_attention_module,
@@ -41,9 +50,97 @@ from .configuration_qwen2_vl import Qwen2VLConfig, Qwen2VLVisionConfig
 
 logger = logging.get_logger(__name__)
 
-
 flash_attn_func, flash_attn_varlen_func = has_flash_attn_func()
 _IS_NPU = "npu" in paddle.get_device()
+
+
+def get_triangle_upper_mask(x, mask=None):
+    if mask is not None:
+        return mask
+    # [bsz, n_head, q_len, kv_seq_len]
+    shape = x.shape
+    #  [bsz, 1, q_len, kv_seq_len]
+    shape[1] = 1
+    mask = paddle.full(shape, paddle.finfo(x.dtype).min, dtype=x.dtype)
+    mask = paddle.triu(mask, diagonal=1)
+    mask.stop_gradient = True
+    return mask
+
+def parallel_matmul(x: Tensor, y: Tensor, transpose_y=True, tensor_parallel_output=True):
+    is_fleet_init = True
+    tensor_parallel_degree = 1
+    try:
+        hcg = fleet.get_hybrid_communicate_group()
+        model_parallel_group = hcg.get_model_parallel_group()
+        tensor_parallel_degree = hcg.get_model_parallel_world_size()
+    except:
+        is_fleet_init = False
+
+    if paddle.in_dynamic_mode():
+        y_is_distributed = y.is_distributed
+    else:
+        y_is_distributed = tensor_parallel_degree > 1
+
+    if is_fleet_init and tensor_parallel_degree > 1 and y_is_distributed:
+        
+        # if not running under distributed.launch, it will raise AttributeError: 'Fleet' object has no attribute '_hcg'
+        input_parallel = paddle.distributed.collective._c_identity(x, group=model_parallel_group)
+        logits = paddle.matmul(input_parallel, y, transpose_y=transpose_y)
+
+        if tensor_parallel_output:
+            return logits
+        return paddle.distributed.collective._c_concat(logits, group=model_parallel_group)
+
+    else:
+        logits = paddle.matmul(x, y, transpose_y=transpose_y)
+        return logits
+    
+
+def _compute_default_rope_parameters(
+    config: Optional[PretrainedConfig] = None,
+    device: Optional["paddle.device"] = None,
+    seq_len: Optional[int] = None,
+    **rope_kwargs,
+) -> Tuple["paddle.Tensor", float]:
+    """
+    Computes the inverse frequencies according to the original RoPE implementation
+    Args:
+        config ([`~transformers.PretrainedConfig`]):
+            The model configuration.
+        device (`paddle.device`):
+            The device to use for initialization of the inverse frequencies.
+        seq_len (`int`, *optional*):
+            The current sequence length. Unused for this type of RoPE.
+        rope_kwargs (`Dict`, *optional*):
+            BC compatibility with the previous RoPE class instantiation, will be removed in v4.45.
+    Returns:
+        Tuple of (`paddle.Tensor`, `float`), containing the inverse frequencies for the RoPE embeddings and the
+        post-processing scaling factor applied to the computed cos/sin (unused in this type of RoPE).
+    """
+    if config is not None and len(rope_kwargs) > 0:
+        raise ValueError(
+            "Unexpected arguments: `**rope_kwargs` and `config` are mutually exclusive in "
+            f"`_compute_default_rope_parameters`, got `rope_kwargs`={rope_kwargs} and `config`={config}"
+        )
+    if len(rope_kwargs) > 0:
+        base = rope_kwargs["base"]
+        dim = rope_kwargs["dim"]
+    elif config is not None:
+        base = config.rope_theta
+        partial_rotary_factor = config.partial_rotary_factor if hasattr(config, "partial_rotary_factor") else 1.0
+        head_dim = getattr(config, "head_dim", config.hidden_size // config.num_attention_heads)
+        dim = int(head_dim * partial_rotary_factor)
+
+    attention_factor = 1.0  # Unused in this type of RoPE
+
+    # Compute the inverse frequencies
+    inv_freq = 1.0 / (base ** (paddle.arange(0, dim, 2, dtype="int64").astype("float32") / dim))
+    return inv_freq, attention_factor
+
+
+ROPE_INIT_FUNCTIONS = {
+    "default": _compute_default_rope_parameters,
+}
 
 
 def _get_unpad_data(attention_mask):
@@ -134,14 +231,50 @@ class Qwen2VLCausalLMOutputWithPast(ModelOutput):
     rope_deltas: Optional[paddle.Tensor] = None
 
 
-class Qwen2RotaryEmbedding(nn.Layer):
-    def __init__(self, dim, max_position_embeddings=2048, base=10000):
+class Qwen2VLRotaryEmbedding(nn.Layer):
+    def __init__(
+        self,
+        dim=None,
+        max_position_embeddings=2048,
+        base=10000,
+        device=None,
+        scaling_factor=1.0,
+        rope_type="default",
+        config: Optional[Qwen2VLConfig] = None,
+    ):
         super().__init__()
-        self.dim = dim
-        self.max_position_embeddings = max_position_embeddings
-        self.base = base
-        # [dim / 2]
-        self.inv_freq = 1.0 / (self.base ** (paddle.cast(paddle.arange(0, self.dim, 2), dtype="float32") / self.dim))
+        # TODO (joao): remove the `if` below, only used for BC
+        self.rope_kwargs = {}
+        if config is None:
+            logger.warning_once(
+                "`Qwen2VLRotaryEmbedding` can now be fully parameterized by passing the model config through the "
+                "`config` argument. All other arguments will be removed in v4.46"
+            )
+            self.rope_kwargs = {
+                "rope_type": rope_type,
+                "factor": scaling_factor,
+                "dim": dim,
+                "base": base,
+                "max_position_embeddings": max_position_embeddings,
+            }
+            self.rope_type = rope_type
+            self.max_seq_len_cached = max_position_embeddings
+            self.original_max_seq_len = max_position_embeddings
+        else:
+            # BC: "rope_type" was originally "type"
+            if config.rope_scaling is not None:
+                self.rope_type = config.rope_scaling.get("rope_type", config.rope_scaling.get("type"))
+            else:
+                self.rope_type = "default"
+            self.max_seq_len_cached = config.max_position_embeddings
+            self.original_max_seq_len = config.max_position_embeddings
+
+        self.config = config
+        self.rope_init_fn = ROPE_INIT_FUNCTIONS[self.rope_type]
+
+        self.inv_freq, self.attention_scaling = self.rope_init_fn(self.config, device, **self.rope_kwargs)
+        self.original_inv_freq = self.inv_freq
+
         self._set_cos_sin_cache(seq_len=max_position_embeddings)
 
     def _set_cos_sin_cache(self, seq_len):
@@ -157,16 +290,54 @@ class Qwen2RotaryEmbedding(nn.Layer):
         self.cos_cached = emb.cos()
         self.sin_cached = emb.sin()
 
-    def forward(self, x, seq_len=None):
-        # x: [bs, num_attention_heads, seq_len, head_size]
-        if seq_len > self.max_seq_len_cached:
-            self._set_cos_sin_cache(seq_len)
-        cos = self.cos_cached[:seq_len]
-        sin = self.sin_cached[:seq_len]
-        return (
-            cos.cast(x.dtype) if cos.dtype != x.dtype else cos,
-            sin.cast(x.dtype) if sin.dtype != x.dtype else sin,
+    def _dynamic_frequency_update(self, position_ids, device):
+        """
+        dynamic RoPE layers should recompute `inv_freq` in the following situations:
+        1 - growing beyond the cached sequence length (allow scaling)
+        2 - the current sequence length is in the original scale (avoid losing precision with small sequences)
+        """
+        seq_len = paddle.max(position_ids) + 1
+        if seq_len > self.max_seq_len_cached:  # growth
+            inv_freq, self.attention_scaling = self.rope_init_fn(
+                self.config, device, seq_len=seq_len, **self.rope_kwargs
+            )
+            self.inv_freq = inv_freq
+            self.max_seq_len_cached = seq_len
+
+        if seq_len < self.original_max_seq_len and self.max_seq_len_cached > self.original_max_seq_len:  # reset
+            self.inv_freq = self.original_inv_freq
+            self.max_seq_len_cached = self.original_max_seq_len
+    @paddle.no_grad()
+    def forward(self, x, position_ids):
+        if "dynamic" in self.rope_type:
+            self._dynamic_frequency_update(position_ids, device=x.device)
+
+        # Core RoPE block. In contrast to other models, Qwen2_VL has different position ids for thw grids
+        # So we expand the inv_freq to shape (3, ...)
+        inv_freq_expanded = (
+            self.inv_freq[None, None, :, None].astype("float32").expand([3, position_ids.shape[1], -1, 1])
         )
+        position_ids_expanded = position_ids[:, :, None, :].astype("float32")  # shape (3, bs, 1, positions)
+        # Force float32 (see https://github.com/huggingface/transformers/pull/29285)
+        device_type = paddle.get_device()
+        device_type = device_type if isinstance(device_type, str) and device_type != "mps" else "cpu"
+        with paddle.amp.auto_cast():
+            # Compute frequencies by matrix multiplication and transpose
+            # inv_freq_expanded shape: [3, bs, dim/2, 1]
+            # position_ids_expanded shape: [3, bs, 1, positions]
+            # Result shape after matmul: [3, bs, dim/2, positions]
+            # After transpose: [3, bs, positions, dim/2]
+            freqs = paddle.matmul(inv_freq_expanded, position_ids_expanded)
+            freqs = freqs.transpose([0, 1, 3, 2])
+            emb = paddle.concat((freqs, freqs), axis=-1)
+            cos = emb.cos()
+            sin = emb.sin()
+
+        # Advanced RoPE types (e.g. yarn) apply a post-processing scaling factor, equivalent to scaling attention
+        cos = cos * self.attention_scaling
+        sin = sin * self.attention_scaling
+
+        return cos.astype(x.dtype), sin.astype(x.dtype)
 
 
 # Copied from transformers.models.llama.modeling_llama.rotate_half
@@ -177,7 +348,7 @@ def rotate_half(x):
     return paddle.concat([-x2, x1], axis=-1)  # shape is the same as x
 
 
-def apply_multimodal_rotary_pos_emb(q, k, cos, sin, position_ids, mrope_section, unsqueeze_dim=1):
+def apply_multimodal_rotary_pos_emb(q, k, cos, sin, mrope_section, unsqueeze_dim=1):
     """Applies Rotary Position Embedding with Multimodal Sections to the query and key tensors (https://qwenlm.github.io/blog/qwen2-vl/).
 
     Explanation:
@@ -210,8 +381,8 @@ def apply_multimodal_rotary_pos_emb(q, k, cos, sin, position_ids, mrope_section,
         `tuple(paddle.Tensor)` comprising of the query and key tensors rotated using the Rotary Position Embedding.
     """
 
-    cos = cos[position_ids]
-    sin = sin[position_ids]
+    # cos = cos[position_ids]
+    # sin = sin[position_ids]
     mrope_section = mrope_section * 2
     cos = paddle.concat(x=[m[i % 3] for i, m in enumerate(cos.split(mrope_section, axis=-1))], axis=-1).unsqueeze(
         axis=unsqueeze_dim
@@ -466,7 +637,7 @@ def _prepare_4d_causal_attention_mask_with_cache_position(
 
 # Copied from transformers.models.qwen2.modeling_qwen2.Qwen2RMSNorm
 class Qwen2RMSNorm(nn.Layer):
-    def __init__(self, hidden_size, eps=1e-6):
+    def __init__(self, config: Qwen2VLConfig, hidden_size, eps=1e-6):
         """
         Qwen2RMSNorm is equivalent to T5LayerNorm
         """
@@ -498,13 +669,51 @@ class Qwen2MLP(nn.Layer):
         super().__init__()
         self.hidden_size = config.hidden_size
         self.intermediate_size = config.intermediate_size
-        self.gate_proj = nn.Linear(self.hidden_size, self.intermediate_size, bias_attr=False)
-        self.up_proj = nn.Linear(self.hidden_size, self.intermediate_size, bias_attr=False)
-        self.down_proj = nn.Linear(self.intermediate_size, self.hidden_size, bias_attr=False)
-        self.act_fn = ACT2FN[config.hidden_act]
+        self.fuse_attention_ffn = config.fuse_attention_ffn
+        self.tensor_parallel_degree = config.tensor_parallel_degree
 
-    def forward(self, hidden_state):
-        return self.down_proj(self.act_fn(self.gate_proj(hidden_state)) * self.up_proj(hidden_state))
+        
+        # else:
+        ColumnParallelLinear = linear_utils.ColumnParallelLinear
+        RowParallelLinear = linear_utils.RowParallelLinear
+
+    
+        if config.tensor_parallel_degree > 1:
+           
+            self.gate_proj = ColumnParallelLinear(
+                self.hidden_size,
+                self.intermediate_size,
+                gather_output=False,
+                has_bias=False,
+            )
+            self.up_proj = ColumnParallelLinear(
+                self.hidden_size,
+                self.intermediate_size,
+                gather_output=False,
+                has_bias=False,
+            )
+            self.down_proj = RowParallelLinear(
+                self.intermediate_size,
+                self.hidden_size,
+                input_is_parallel=True,
+                has_bias=False,
+            )
+        else:
+            self.gate_proj = Linear(self.hidden_size, self.intermediate_size, bias_attr=False)  # w1
+            self.up_proj = Linear(self.hidden_size, self.intermediate_size, bias_attr=False)  # w3
+            self.down_proj = Linear(self.intermediate_size, self.hidden_size, bias_attr=False)  # w2 
+            
+        self.act_fn = ACT2FN[config.hidden_act]
+        self.fuse_swiglu = False 
+
+    def forward(self, x):
+        x, y = self.gate_proj(x), self.up_proj(x)
+        if self.fuse_swiglu:
+            x = self.act_fn(x, y)
+        else:
+            x = self.act_fn(x) * y
+
+        return self.down_proj(x)
 
 
 # Copied from transformers.models.llama.modeling_llama.repeat_kv
@@ -547,18 +756,36 @@ class Qwen2VLAttention(nn.Layer):
         self.is_causal = True
         self.attention_dropout = config.attention_dropout
         self.rope_scaling = config.rope_scaling
+        # self.sequence_parallel = config.sequence_parallel
 
-        if (self.head_dim * self.num_heads) != self.hidden_size:
-            raise ValueError(
-                f"hidden_size must be divisible by num_heads (got `hidden_size`: {self.hidden_size}"
-                f" and `num_heads`: {self.num_heads})."
+        if config.tensor_parallel_degree > 1:
+            assert (
+                self.num_heads % config.tensor_parallel_degree == 0
+            ), f"num_heads: {self.num_heads}, tensor_parallel_degree: {config.tensor_parallel_degree}"
+            self.num_heads = self.num_heads // config.tensor_parallel_degree
+
+            assert (
+                self.num_key_value_heads % config.tensor_parallel_degree == 0
+            ), f"num_key_value_heads: {self.num_key_value_heads}, tensor_parallel_degree: {config.tensor_parallel_degree}"
+            self.num_key_value_heads = self.num_key_value_heads // config.tensor_parallel_degree
+        
+        ColumnParallelLinear = linear_utils.ColumnParallelLinear
+        RowParallelLinear = linear_utils.RowParallelLinear
+
+        if config.tensor_parallel_degree > 1:
+            self.q_proj = ColumnParallelLinear(
+                self.hidden_size, self.hidden_size, has_bias=True, gather_output=False
             )
-        self.q_proj = nn.Linear(self.hidden_size, self.num_heads * self.head_dim, bias_attr=True)
-        self.k_proj = nn.Linear(self.hidden_size, self.num_key_value_heads * self.head_dim, bias_attr=True)
-        self.v_proj = nn.Linear(self.hidden_size, self.num_key_value_heads * self.head_dim, bias_attr=True)
-        self.o_proj = nn.Linear(self.num_heads * self.head_dim, self.hidden_size, bias_attr=False)
-
-        self.rotary_emb = Qwen2RotaryEmbedding(
+            self.k_proj = ColumnParallelLinear(self.hidden_size, self.config.num_key_value_heads * self.head_dim, has_bias=True, gather_output=False)  # fmt:skip
+            self.v_proj = ColumnParallelLinear(self.hidden_size, self.config.num_key_value_heads * self.head_dim, has_bias=True, gather_output=False)  # fmt:skip
+            self.o_proj = RowParallelLinear(self.hidden_size, self.hidden_size, has_bias=False, input_is_parallel=True)
+        else:
+            self.q_proj = Linear(self.hidden_size, self.hidden_size, bias_attr=True)
+            self.k_proj = Linear(self.hidden_size, self.config.num_key_value_heads * self.head_dim, bias_attr=True)
+            self.v_proj = Linear(self.hidden_size, self.config.num_key_value_heads * self.head_dim, bias_attr=True)
+            self.o_proj = Linear(self.hidden_size, self.hidden_size, bias_attr=False)
+            
+        self.rotary_emb = Qwen2VLRotaryEmbedding(
             self.head_dim,
             max_position_embeddings=self.max_position_embeddings,
             base=self.rope_theta,
@@ -585,20 +812,28 @@ class Qwen2VLAttention(nn.Layer):
             query_states = self.q_proj(hidden_states)
             key_states = self.k_proj(hidden_states)
             value_states = self.v_proj(hidden_states)
+        
+        
+        target_query_shape = [0, 0, self.num_heads, self.head_dim]
+        target_key_value_shape = [0, 0, self.num_key_value_heads, self.head_dim]
+        query_states = query_states.reshape(shape=target_query_shape)
+        key_states = key_states.reshape(shape=target_key_value_shape)
+        value_states = value_states.reshape(shape=target_key_value_shape)
+        
 
         new_perm = [0, 2, 1, 3]
-        query_states = query_states.reshape([bsz, q_len, self.num_heads, self.head_dim]).transpose(new_perm)
-        key_states = key_states.reshape([bsz, q_len, self.num_key_value_heads, self.head_dim]).transpose(new_perm)
-        value_states = value_states.reshape([bsz, q_len, self.num_key_value_heads, self.head_dim]).transpose(new_perm)
+        query_states = query_states.transpose(new_perm)
+        key_states = key_states.transpose(new_perm)
+        value_states = value_states.transpose(new_perm)
 
         kv_seq_len = key_states.shape[-2]  # q_len ######## [bs, num_head, seq_len, head_dim]      # qwen2是 [-3]
         if past_key_value is not None:
             kv_seq_len += cache_position[0] + 1
             # kv_seq_len += past_key_value[0].shape[-2] # qwen2是 [-3]
 
-        cos, sin = self.rotary_emb(value_states, seq_len=kv_seq_len)
+        cos, sin = self.rotary_emb(value_states, position_ids)
         query_states, key_states = apply_multimodal_rotary_pos_emb(
-            query_states, key_states, cos, sin, position_ids, self.rope_scaling["mrope_section"]
+            query_states, key_states, cos, sin, self.rope_scaling["mrope_section"]
         )
 
         # [bs, num_head, seq_len, head_dim]
@@ -673,20 +908,27 @@ class Qwen2VLFlashAttention2(Qwen2VLAttention):
             key_states = self.k_proj(hidden_states)
             value_states = self.v_proj(hidden_states)
 
+        target_query_shape = [0, 0, self.num_heads, self.head_dim]
+        target_key_value_shape = [0, 0, self.num_key_value_heads, self.head_dim]
+        query_states = query_states.reshape(shape=target_query_shape)
+        key_states = key_states.reshape(shape=target_key_value_shape)
+        value_states = value_states.reshape(shape=target_key_value_shape)
+        
+
         new_perm = [0, 2, 1, 3]
         # [1, 3599, 1536] [bsz, q_len, self.num_heads * self.head_dim]
-        query_states = query_states.reshape([bsz, q_len, self.num_heads, self.head_dim]).transpose(new_perm)
-        key_states = key_states.reshape([bsz, q_len, self.num_key_value_heads, self.head_dim]).transpose(new_perm)
-        value_states = value_states.reshape([bsz, q_len, self.num_key_value_heads, self.head_dim]).transpose(new_perm)
+        query_states = query_states.transpose(new_perm)
+        key_states = key_states.transpose(new_perm)
+        value_states = value_states.transpose(new_perm)
 
         kv_seq_len = key_states.shape[-2]  # q_len ######## [bs, num_head, seq_len, head_dim]      # qwen2是 [-3]
         if past_key_value is not None:
             kv_seq_len += cache_position[0] + 1
 
         # Because the input can be padded, the absolute sequence length depends on the max position id.
-        cos, sin = self.rotary_emb(value_states, seq_len=kv_seq_len)
+        cos, sin = self.rotary_emb(value_states, position_ids)
         query_states, key_states = apply_multimodal_rotary_pos_emb(
-            query_states, key_states, cos, sin, position_ids, self.rope_scaling["mrope_section"]
+            query_states, key_states, cos, sin, self.rope_scaling["mrope_section"]
         )
 
         if past_key_value is not None:
@@ -710,13 +952,13 @@ class Qwen2VLFlashAttention2(Qwen2VLAttention):
             query_states,
             key_states,
             value_states,
-            None,  # attention_mask,  # TODO: batch infer时不能是None；如果不是batch infer, attention_mask可以是None, 也可以是全1传进来
+            attention_mask,  
             q_len
             # dropout=0.0 if not self.training else self.attention_dropout,
             # causal=self.is_causal,
         )
 
-        attn_output = attn_output.reshape([bsz, q_len, self.hidden_size])
+        attn_output = attn_output.reshape([bsz, q_len, -1])
         attn_output = self.o_proj(attn_output)
         if not output_attentions:
             attn_weights = None
@@ -804,6 +1046,11 @@ class Qwen2VLFlashAttention2(Qwen2VLAttention):
                     causal=causal,  # no softmax_scale=
                 )[0]
 
+        # # 修改这里的维度转换，考虑并行策略下的维度
+        # batch_size = query_states.shape[0]
+        # hidden_size = self.num_heads * self.head_dim  # 计算实际的 hidden_size
+        # attn_output = attn_output.reshape([batch_size, query_length, hidden_size])
+
         return attn_output
 
     def _unpad_input(self, query_layer, key_layer, value_layer, attention_mask, query_length):
@@ -859,12 +1106,12 @@ class Qwen2VLDecoderLayer(nn.Layer):
                 f"Sliding Window Attention is enabled but not implemented for `{config.attn_implementation}`; "
                 "unexpected results may be encountered."
             )
-        # TODO: batch infer 时使用 Qwen2VLFlashAttention2待修复
+
         self.self_attn = create_attention_module(config, "qwen2vl", layer_idx=layer_idx)
         # self.self_attn = Qwen2VLAttention(config, layer_idx)
         self.mlp = Qwen2MLP(config)
-        self.input_layernorm = Qwen2RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-        self.post_attention_layernorm = Qwen2RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.input_layernorm = Qwen2RMSNorm(config, config.hidden_size, eps=config.rms_norm_eps)
+        self.post_attention_layernorm = Qwen2RMSNorm(config, config.hidden_size, eps=config.rms_norm_eps)
 
     def forward(
         self,
@@ -1031,12 +1278,26 @@ class Qwen2VLModel(Qwen2VLPreTrainedModel):
         super().__init__(config)
         self.padding_idx = config.pad_token_id
         self.vocab_size = config.vocab_size
+        self.hidden_size = config.hidden_size
+        # Recompute defaults to False and is controlled by Trainer
 
-        self.embed_tokens = nn.Embedding(config.vocab_size, config.hidden_size, self.padding_idx)
+        if config.tensor_parallel_degree > 1 and config.vocab_size % config.tensor_parallel_degree == 0:
+            self.embed_tokens = mpu.VocabParallelEmbedding(
+                self.vocab_size,
+                self.hidden_size,
+                weight_attr=paddle.ParamAttr(initializer=nn.initializer.XavierNormal()),
+            )
+        else:
+            self.embed_tokens = nn.Embedding(
+                self.vocab_size,
+                self.hidden_size,
+            )
+
+        # self.embed_tokens = nn.Embedding(config.vocab_size, config.hidden_size, self.padding_idx)
         self.layers = nn.LayerList(
             [Qwen2VLDecoderLayer(config, layer_idx) for layer_idx in range(config.num_hidden_layers)]
         )
-        self.norm = Qwen2RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.norm = Qwen2RMSNorm(config, config.hidden_size, eps=config.rms_norm_eps)
 
         self.gradient_checkpointing = False
 
@@ -1125,10 +1386,12 @@ class Qwen2VLModel(Qwen2VLPreTrainedModel):
             # [bs, seq_len]
             attention_mask = paddle.ones((batch_size, seq_length_with_past), dtype=paddle.bool)
 
-        attention_mask = self._prepare_decoder_attention_mask(
-            attention_mask, (batch_size, seq_length), cache_length, inputs_embeds.dtype
-        )  # [bs, 1, seq_len, seq_len]
-        causal_mask = attention_mask
+        if flash_attn_varlen_func:
+            causal_mask = attention_mask
+        else:
+            causal_mask = self._prepare_decoder_attention_mask(
+                attention_mask, (batch_size, seq_length), cache_length, inputs_embeds.dtype
+            )  # [bs, 1, seq_len, seq_len]
 
         if cache_position is None:
             past_seen_tokens = past_key_values[0][0].shape[2] if past_key_values[0] is not None else 0
@@ -1193,7 +1456,10 @@ class Qwen2LMHead(nn.Layer):
     def __init__(self, config, embedding_weights=None, transpose_y=False):
         super(Qwen2LMHead, self).__init__()
         self.config = config
-        vocab_size = config.vocab_size
+        if config.tensor_parallel_degree > 1 and config.vocab_size % config.tensor_parallel_degree == 0:
+            vocab_size = config.vocab_size // config.tensor_parallel_degree
+        else:
+            vocab_size = config.vocab_size
 
         self.transpose_y = transpose_y
         if transpose_y:
@@ -1206,14 +1472,36 @@ class Qwen2LMHead(nn.Layer):
                     dtype=paddle.get_default_dtype(),
                 )
         else:
-            # for weight from model init
-            self.weight = self.create_parameter(
-                shape=[config.hidden_size, vocab_size],
-                dtype=paddle.get_default_dtype(),
-            )
 
-    def forward(self, hidden_states):
-        logits = paddle.matmul(hidden_states, self.weight, transpose_y=self.transpose_y)
+            if vocab_size != config.vocab_size:
+                with get_rng_state_tracker().rng_state():
+                    self.weight = self.create_parameter(
+                        shape=[config.hidden_size, vocab_size],
+                        dtype=paddle.get_default_dtype(),
+                    )
+            else:
+                self.weight = self.create_parameter(
+                    shape=[config.hidden_size, vocab_size],
+                    dtype=paddle.get_default_dtype(),
+                )
+
+        # Must set distributed attr for Tensor Parallel !
+        self.weight.is_distributed = True if (vocab_size != config.vocab_size) else False
+        if self.weight.is_distributed:
+            # for tie_word_embeddings
+            self.weight.split_axis = 0 if self.transpose_y else 1
+
+    def forward(self, hidden_states, tensor_parallel_output=None):
+        if tensor_parallel_output is None:
+            tensor_parallel_output = self.config.tensor_parallel_output
+
+        # 确保数据类型一致
+        if self.weight.dtype != hidden_states.dtype:
+            hidden_states = paddle.cast(hidden_states, self.weight.dtype)
+
+        logits = parallel_matmul(
+            hidden_states, self.weight, transpose_y=self.transpose_y, tensor_parallel_output=tensor_parallel_output
+        )
         return logits
 
 
@@ -1225,6 +1513,7 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
         self.visual = Qwen2VisionTransformerPretrainedModel._from_config(config.vision_config)
         self.model = Qwen2VLModel(config)
         self.vocab_size = config.vocab_size
+
         if config.tie_word_embeddings:
             self.lm_head = Qwen2LMHead(config, embedding_weights=self.model.embed_tokens.weight, transpose_y=True)
             self.tie_weights()
@@ -1251,6 +1540,64 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
 
     def get_decoder(self):
         return self.model
+
+    @classmethod
+    def _get_tensor_parallel_mappings(cls, config: Qwen2VLConfig, is_split=True):
+
+        logger.info("Qwen2 inference model _get_tensor_parallel_mappings")
+
+        from paddlenlp.transformers.conversion_utils import split_or_merge_func
+
+        fn = split_or_merge_func(
+            is_split=is_split,
+            tensor_parallel_degree=config.tensor_parallel_degree,
+            tensor_parallel_rank=config.tensor_parallel_rank,
+            num_attention_heads=config.num_attention_heads,
+        )
+
+        def get_tensor_parallel_split_mappings(num_layers):
+            final_actions = {}
+
+            base_actions = {
+                "lm_head.weight": partial(fn, is_column=True),
+                # Row Linear
+                "embed_tokens.weight": partial(fn, is_column=False),
+                "layers.0.self_attn.o_proj.weight": partial(fn, is_column=False),
+                "layers.0.mlp.down_proj.weight": partial(fn, is_column=False),
+            }
+
+            # Column Linear
+            # if config.fuse_attention_qkv:
+            #     base_actions["layers.0.self_attn.qkv_proj.weight"] = partial(fn, is_column=True)
+            # else:
+            base_actions["layers.0.self_attn.q_proj.weight"] = partial(fn, is_column=True)
+            base_actions["layers.0.self_attn.q_proj.bias"] = partial(fn, is_column=True)
+            # if we have enough num_key_value_heads to split, then split it.
+            if config.num_key_value_heads % config.tensor_parallel_degree == 0:
+                base_actions["layers.0.self_attn.k_proj.weight"] = partial(fn, is_column=True)
+                base_actions["layers.0.self_attn.v_proj.weight"] = partial(fn, is_column=True)
+                base_actions["layers.0.self_attn.k_proj.bias"] = partial(fn, is_column=True)
+                base_actions["layers.0.self_attn.v_proj.bias"] = partial(fn, is_column=True)
+
+            if config.fuse_attention_ffn:
+                base_actions["layers.0.mlp.gate_up_fused_proj.weight"] = partial(
+                    fn, is_column=True, is_naive_2fuse=True
+                )
+            else:
+                base_actions["layers.0.mlp.gate_proj.weight"] = partial(fn, is_column=True)
+                base_actions["layers.0.mlp.up_proj.weight"] = partial(fn, is_column=True)
+
+            for key, action in base_actions.items():
+                if "layers.0." in key:
+                    for i in range(num_layers):
+                        final_actions[key.replace("layers.0.", f"layers.{i}.")] = action
+                final_actions[key] = action
+
+            return final_actions
+
+        mappings = get_tensor_parallel_split_mappings(config.num_hidden_layers)
+
+        return mappings
 
     @staticmethod
     def get_rope_index(
@@ -1319,8 +1666,8 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
                 image_nums, video_nums = 0, 0
                 vision_start_indices = paddle.nonzero(input_ids == vision_start_token_id).squeeze(1)
                 vision_tokens = input_ids[vision_start_indices + 1]
-                image_nums = (vision_tokens == image_token_id).sum()
-                video_nums = (vision_tokens == video_token_id).sum()
+                image_nums = (vision_tokens == image_token_id).sum() if vision_tokens.numel() > 0 else 0
+                video_nums = (vision_tokens == video_token_id).sum() if vision_tokens.numel() > 0 else 0
                 input_tokens = input_ids.tolist()
                 llm_pos_ids_list: list = []
                 st = 0
@@ -1438,6 +1785,7 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
         video_grid_thw: Optional[paddle.Tensor] = None,
         rope_deltas: Optional[paddle.Tensor] = None,
     ):
+
         if inputs_embeds is None:
             # NOTE: (zhoukangkang、changwenbin) In the high-performance reasoning of Qwen2-vl,
             # in order to reduce video memory, the qwen2 embed_tokens method in Paddlenlp is reused here.
@@ -1450,11 +1798,11 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
             ), "model is not an instance of Qwen2VLForConditionalGenerationBlockInferenceModel"
 
             inputs_embeds = self.model.qwen2.embed_tokens(input_ids)
-
             if pixel_values is not None:
                 pixel_values = paddle.cast(pixel_values, paddle.bfloat16)
                 image_embeds = self.visual(pixel_values, grid_thw=image_grid_thw)
                 image_mask = input_ids == self.config.image_token_id
+
                 inputs_embeds[image_mask] = image_embeds
             if pixel_values_videos is not None:
                 pixel_values_videos = paddle.cast(pixel_values_videos, paddle.bfloat16)
@@ -1529,15 +1877,21 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
         if inputs_embeds is None:
             inputs_embeds = self.model.embed_tokens(input_ids)
             if pixel_values is not None:
-                pixel_values = paddle.cast(pixel_values, paddle.get_default_dtype())
+                # 确保 pixel_values 和 inputs_embeds 使用相同的数据类型
+                pixel_values = paddle.cast(pixel_values, inputs_embeds.dtype)
                 image_embeds = self.visual(pixel_values, grid_thw=image_grid_thw)
+                # 确保 image_embeds 和 inputs_embeds 使用相同的数据类型
+                image_embeds = paddle.cast(image_embeds, inputs_embeds.dtype)
                 image_mask = input_ids == self.config.image_token_id
                 if self.training:
                     inputs_embeds = inputs_embeds.clone()
                 inputs_embeds[image_mask] = image_embeds
             if pixel_values_videos is not None:
-                pixel_values_videos = paddle.cast(pixel_values_videos, paddle.get_default_dtype())
+                # 确保 pixel_values_videos 和 inputs_embeds 使用相同的数据类型
+                pixel_values_videos = paddle.cast(pixel_values_videos, inputs_embeds.dtype)
                 video_embeds = self.visual(pixel_values_videos, grid_thw=video_grid_thw)
+                # 确保 video_embeds 和 inputs_embeds 使用相同的数据类型
+                video_embeds = paddle.cast(video_embeds, inputs_embeds.dtype)
                 video_mask = input_ids == self.config.video_token_id
                 inputs_embeds[video_mask] = video_embeds
             if attention_mask is not None:
@@ -1556,7 +1910,11 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
         )
 
         hidden_states = outputs[0]
-        logits = self.lm_head(hidden_states)
+
+        tensor_parallel_output = self.config.tensor_parallel_output and self.config.tensor_parallel_degree > 1
+
+        logits = self.lm_head(hidden_states, tensor_parallel_output=tensor_parallel_output)
+    
         logits = paddle.cast(logits, "float32")
 
         loss = None

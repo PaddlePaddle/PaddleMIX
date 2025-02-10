@@ -1,0 +1,14 @@
+mode: paddle
+draw_threshold: 0.5
+metric: KeyPointTopDownCOCOEval
+use_dynamic_shape: false
+arch: VitPose_TopDown_WholeBody
+min_subgraph_size: 3
+Preprocess:
+- trainsize:
+  - 288
+  - 384
+  type: TopDownAffineImage
+- type: Permute
+label_list:
+- keypoint

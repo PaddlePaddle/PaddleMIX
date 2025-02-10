@@ -14,8 +14,8 @@
 import os
 from contextlib import nullcontext
 from functools import partial
-from typing import Callable, Dict, List, Optional, Union
 from pathlib import Path
+from typing import Callable, Dict, List, Optional, Union
 
 import numpy as np
 import paddle
@@ -1588,10 +1588,8 @@ class SD3LoraLoaderMixin:
         weight_name = kwargs.pop("weight_name", None)
         use_safetensors = kwargs.pop("use_safetensors", None)
 
-        allow_pickle = False
         if use_safetensors is None:
             use_safetensors = True
-            allow_pickle = True
 
         user_agent = {
             "file_type": "attn_procs_weights",
@@ -1661,7 +1659,14 @@ class SD3LoraLoaderMixin:
         return state_dict, from_diffusers
 
     @classmethod
-    def load_lora_into_transformer(cls, state_dict, transformer, adapter_name=None, _pipeline=None, from_diffusers=None,):
+    def load_lora_into_transformer(
+        cls,
+        state_dict,
+        transformer,
+        adapter_name=None,
+        _pipeline=None,
+        from_diffusers=None,
+    ):
         """
         This will load the LoRA layers specified in `state_dict` into `transformer`.
         Parameters:
@@ -1678,7 +1683,11 @@ class SD3LoraLoaderMixin:
         if from_diffusers is None:
             from_diffusers = FROM_DIFFUSERS
 
-        from ppdiffusers.peft import LoraConfig, inject_adapter_in_model, set_peft_model_state_dict
+        from ppdiffusers.peft import (
+            LoraConfig,
+            inject_adapter_in_model,
+            set_peft_model_state_dict,
+        )
 
         keys = list(state_dict.keys())
 
@@ -1700,9 +1709,7 @@ class SD3LoraLoaderMixin:
 
             lora_config_kwargs = get_peft_kwargs(rank, network_alpha_dict=None, peft_state_dict=state_dict)
             if "use_dora" in lora_config_kwargs:
-                raise ValueError(
-                    "ppdiffusers.peft does not support dora yet"
-                )
+                raise ValueError("ppdiffusers.peft does not support dora yet")
             lora_config = LoraConfig(**lora_config_kwargs)
 
             # adapter_name

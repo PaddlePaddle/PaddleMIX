@@ -22,7 +22,6 @@ from paddle import _C_ops
 from paddle.base.framework import OpProtoHolder
 from paddle.base.layer_helper import LayerHelper
 from paddle.framework import in_dynamic_or_pir_mode
-from typing import Any, List, Literal, Optional, Tuple, Union
 
 from .triton_utils import (
     get_dtype_str,
@@ -250,7 +249,7 @@ def fused_adaLN_scale_residual(
         )
 
     if in_dynamic_or_pir_mode():
-        # print(f"== we are in dynamic mode, op_name: {op_name}")
+        print(f"== we are in dynamic mode, op_name: {op_name}")
         outs = _C_ops._run_custom_op(
             op_name,
             x,
@@ -465,16 +464,17 @@ def adaptive_layer_norm(x, scale, shift, weight=None, bias=None, epsilon=1e-05):
             "weight@OPTIONAL": weight,
             "bias@OPTIONAL": bias,
         }
-        out = helper.create_variable_for_type_inference(dtype=x.dtype)
+        y = helper.create_variable_for_type_inference(dtype=x.dtype)
         helper.append_op(
             type=op_name,
             inputs=inputs,
             attrs={
                 "epsilon": epsilon,
             },
-            outputs={"out": out},
+            outputs={"y": y},
         )
-        return out
+        return y
+
 
 fused_rotary_emb_template = (
     """
@@ -690,7 +690,7 @@ def fused_rotary_emb(
         )
 
     if in_dynamic_or_pir_mode():
-        # print(f"== we are in dynamic mode, op_name: {op_name}")
+        print(f"== we are in dynamic mode, op_name: {op_name}")
         outs = _C_ops._run_custom_op(
             op_name,
             x,
@@ -868,7 +868,7 @@ def split_concat(x, y):
         )
 
     if in_dynamic_or_pir_mode():
-        # print(f"== we are in dynamic mode, op_name: {op_name}")
+        print(f"== we are in dynamic mode, op_name: {op_name}")
         outs = _C_ops._run_custom_op(
             op_name,
             x,
@@ -995,7 +995,7 @@ def triton_split(x, num_or_sections=[-1, -1], axis=1):
         )
 
     if in_dynamic_or_pir_mode():
-        # print(f"== we are in dynamic mode, op_name: {op_name}")
+        print(f"== we are in dynamic mode, op_name: {op_name}")
         outs = _C_ops._run_custom_op(
             op_name,
             x,
