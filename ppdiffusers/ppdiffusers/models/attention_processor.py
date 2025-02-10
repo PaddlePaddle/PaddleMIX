@@ -20,7 +20,7 @@ import paddle.nn.functional as F
 from paddle import einsum, nn
 
 from ..utils import USE_PEFT_BACKEND, deprecate, logging
-from ..utils.import_utils import is_ppxformers_available
+from ..utils.import_utils import is_npu_available, is_ppxformers_available
 from ..utils.paddle_utils import maybe_allow_in_graph
 from .lora import LoRACompatibleLinear, LoRALinearLayer
 
@@ -111,7 +111,7 @@ class Attention(nn.Layer):
         super().__init__()
 
         # To prevent circular import.
-        from .normalization import  RMSNorm, FP32LayerNorm, LpNorm
+        from .normalization import FP32LayerNorm, LpNorm, RMSNorm
 
         self.inner_dim = dim_head * heads
         self.inner_dim = out_dim if out_dim is not None else dim_head * heads
@@ -251,7 +251,7 @@ class Attention(nn.Layer):
         # We use the AttnProcessor2_5 by default when paddle 2.5 is used which uses
         # paddle.nn.functional.scaled_dot_product_attention_ for native Flash/memory_efficient_attention
         if processor is None:
-            processor = AttnProcessor2_5() if is_ppxformers_available() else AttnProcessor()
+            processor = AttnProcessor2_5() if is_ppxformers_available() or is_npu_available() else AttnProcessor()
         self.set_processor(processor)
 
     @property
@@ -997,12 +997,20 @@ class JointAttnProcessor2_5:
             encoder_hidden_states_key_proj = attn.add_k_proj(encoder_hidden_states)
             encoder_hidden_states_value_proj = attn.add_v_proj(encoder_hidden_states)
 
-            encoder_hidden_states_query_proj = encoder_hidden_states_query_proj.reshape([batch_size, -1, attn.heads, head_dim])
-            encoder_hidden_states_key_proj = encoder_hidden_states_key_proj.reshape([batch_size, -1, attn.heads, head_dim])
-            encoder_hidden_states_value_proj = encoder_hidden_states_value_proj.reshape([batch_size, -1, attn.heads, head_dim])
+            encoder_hidden_states_query_proj = encoder_hidden_states_query_proj.reshape(
+                [batch_size, -1, attn.heads, head_dim]
+            )
+            encoder_hidden_states_key_proj = encoder_hidden_states_key_proj.reshape(
+                [batch_size, -1, attn.heads, head_dim]
+            )
+            encoder_hidden_states_value_proj = encoder_hidden_states_value_proj.reshape(
+                [batch_size, -1, attn.heads, head_dim]
+            )
 
             if attn.norm_added_q is not None:
-                encoder_hidden_states_query_proj = attn.norm_added_q(encoder_hidden_states_query_proj, begin_norm_axis=3)
+                encoder_hidden_states_query_proj = attn.norm_added_q(
+                    encoder_hidden_states_query_proj, begin_norm_axis=3
+                )
             if attn.norm_added_k is not None:
                 encoder_hidden_states_key_proj = attn.norm_added_k(encoder_hidden_states_key_proj, begin_norm_axis=3)
 
