@@ -593,32 +593,27 @@ class ImageCollatorForSeq2Seq(DataCollatorForSeq2Seq):
         features["input_ids"] = features["input_ids"]._local_value()
         # features["inputs_embeds"] = dist.reshard(inputs_embeds, inputs_embeds.process_mesh, inputs_embeds.placements)
 
-        if self.model is not None and hasattr(self.model, "get_rope_index"):  # for qwen2vl mrope
-            print("warning, in get_rope_index")
-            features["position_ids"], features["rope_deltas"] = self.model.get_rope_index(
-                input_ids=features["input_ids"],
-                image_grid_thw=mm_inputs.get("image_grid_thw", None),
-                video_grid_thw=mm_inputs.get("video_grid_thw", None),
-                attention_mask=features["attention_mask"],
-            )
+        # if self.model is not None and hasattr(self.model, "get_rope_index"):  # for qwen2vl mrope
+        #     print("warning, in get_rope_index")
+        #     features["position_ids"], features["rope_deltas"] = self.model.get_rope_index(
+        #         input_ids=features["input_ids"],
+        #         image_grid_thw=mm_inputs.get("image_grid_thw", None),
+        #         video_grid_thw=mm_inputs.get("video_grid_thw", None),
+        #         attention_mask=features["attention_mask"],
+        #     )
         # print("in ImageCollatorForSeq2Seq, fanal features")
         # print(features)
 
-        # if "cross_attention_mask" in mm_inputs:  # for mllama inputs when pad_to_multiple_of is enabled
-        #     cross_attention_mask = mm_inputs.pop("cross_attention_mask")
-        #     seq_len = features["input_ids"].size(1)
-        #     orig_len = cross_attention_mask.size(1)
-        #     mm_inputs["cross_attention_mask"] = F.pad(cross_attention_mask, (0, 0, 0, 0, 0, seq_len - orig_len))
-
-        # features.update(mm_inputs)
-        # if isinstance(features.get("pixel_values"), list):  # for pixtral inputs
-        #     features = features.data  # use default_collate() instead of BatchEncoding.to()
-
-        # if "image_bound" in features:  # for minicpmv inputs
-        #     bsz, seq_length = features["input_ids"].shape
-        #     features["position_ids"] = paddle.arange(seq_length).long().repeat(bsz, 1)
-        #     return {"data": features, "input_ids": features["input_ids"], "labels": features["labels"]}
-        return features
+        # The requirement for dynamic to static can only have 2 fields
+        return {
+            "input_ids": [
+                features["input_ids"],
+                features["attention_mask"],
+                features["inputs_embeds"],
+                features["labels"],
+            ],
+            "labels": features["labels"],
+        }
 
 
 class FinetuneTrainer(AutoTrainer):
@@ -628,9 +623,9 @@ class FinetuneTrainer(AutoTrainer):
 
     def _wrap_for_dist_loader(self, train_dataloader):
         dist_loader = super()._wrap_for_dist_loader(train_dataloader)
-        # TODO: 动转静要求2个字段可能有问题
-        # dist_loader._input_keys = ["input_ids", "labels", "attention_mask", "pixel_values", "image_grid_thw"]
-        dist_loader._input_keys = ["input_ids", "labels", "attention_mask", "inputs_embeds"]
+        # The requirement for dynamic to static can only have 2 fields
+        # dist_loader._input_keys = ["input_ids", "labels", "attention_mask", "inputs_embeds"]
+        dist_loader._input_keys = ["input_ids", "labels"]
         return dist_loader
 
 
