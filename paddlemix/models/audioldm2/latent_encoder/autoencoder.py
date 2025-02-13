@@ -30,7 +30,11 @@ class DiagonalGaussianDistribution(object):
             self.var = self.std = paddle.zeros_like(self.mean)
 
     def sample(self):
-        x = self.mean + self.std * paddle.randn(self.mean.shape)
+        if paddle.is_compiled_with_xpu():
+            sample = paddle.to_tensor(numpy.random.randn(self.mean.shape))
+        else:
+            sample = paddle.randn(self.mean.shape)
+        x = self.mean + self.std * sample
         return x
 
     def kl(self, other=None):
