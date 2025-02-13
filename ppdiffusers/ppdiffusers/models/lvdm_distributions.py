@@ -49,7 +49,7 @@ class DiagonalGaussianDistribution(object):
     def sample(self, noise=None):
         if noise is None:
             if paddle.is_compiled_with_xpu():
-                noise = paddle.to_tensor(numpy.random.randn(self.mean.shape))
+                noise = paddle.to_tensor(np.random.randn(self.mean.shape))
             else:
                 noise = paddle.randn(shape=self.mean.shape)
         x = self.mean + self.std * noise
