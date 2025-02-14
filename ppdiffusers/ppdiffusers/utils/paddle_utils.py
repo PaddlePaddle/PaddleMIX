@@ -19,7 +19,7 @@ import threading
 import time
 from contextlib import contextmanager
 from typing import List, Optional, Tuple, Union
-
+import numpy as np
 from . import logging
 from .import_utils import is_paddle_available
 
@@ -93,16 +93,28 @@ if is_paddle_available():
         is_bfloat16 = "bfloat16" in str(dtype) or "bfloat16" in paddle.get_default_dtype()
         if is_bfloat16:
             if generator is None:
-                return randn(shape, dtype=paddle.bfloat16, name=name)
+                if paddle.is_compiled_with_xpu():
+                    return paddle.to_tensor(np.random.randn(*shape),dtype='paddle.bfloat16')
+                else:
+                    return rand(shape,dtype=paddle.bfloat16,name=name)
             else:
                 with get_rng_state_tracker().rng_state(generator):
-                    return randn(shape, dtype=paddle.bfloat16, name=name)
+                    if paddle.is_compiled_with_xpu():
+                        return paddle.to_tensor(np.random.randn(*shape),dtype='paddle.bfloat16')
+                    else:
+                        return rand(shape,dtype=paddle.bfloat16,name=name)
         else:
             if generator is None:
-                return randn(shape, dtype=dtype, name=name)
+                if paddle.is_compiled_with_xpu():
+                    return paddle.to_tensor(np.random.randn(*shape))
+                else:
+                    return rand(shape, dtype=dtype, name=name)
             else:
                 with get_rng_state_tracker().rng_state(generator):
-                    return randn(shape, dtype=dtype, name=name)
+                    if paddle.is_compiled_with_xpu():
+                        return paddle.to_tensor(np.random.randn(*shape))
+                    else:
+                        return rand(shape, dtype=dtype, name=name)
 
     @paddle.jit.not_to_static
     def rand_pt(shape, dtype=None, name=None, **kwargs):
