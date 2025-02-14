@@ -96,25 +96,25 @@ if is_paddle_available():
                 if paddle.is_compiled_with_xpu():
                     return paddle.to_tensor(np.random.randn(*shape),dtype='paddle.bfloat16')
                 else:
-                    return rand(shape,dtype=paddle.bfloat16,name=name)
+                    return randn(shape, dtype=paddle.bfloat16, name=name)
             else:
                 with get_rng_state_tracker().rng_state(generator):
                     if paddle.is_compiled_with_xpu():
                         return paddle.to_tensor(np.random.randn(*shape),dtype='paddle.bfloat16')
                     else:
-                        return rand(shape,dtype=paddle.bfloat16,name=name)
+                        return randn(shape,dtype=paddle.bfloat16,name=name)
         else:
             if generator is None:
                 if paddle.is_compiled_with_xpu():
                     return paddle.to_tensor(np.random.randn(*shape))
                 else:
-                    return rand(shape, dtype=dtype, name=name)
+                    return randn(shape, dtype=dtype, name=name)
             else:
                 with get_rng_state_tracker().rng_state(generator):
                     if paddle.is_compiled_with_xpu():
                         return paddle.to_tensor(np.random.randn(*shape))
                     else:
-                        return rand(shape, dtype=dtype, name=name)
+                        return randn(shape, dtype=dtype, name=name)
 
     @paddle.jit.not_to_static
     def rand_pt(shape, dtype=None, name=None, **kwargs):
