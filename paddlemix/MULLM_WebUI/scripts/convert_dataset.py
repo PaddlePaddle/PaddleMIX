@@ -90,7 +90,7 @@ if __name__ == "__main__":
         dataset_info = {}
     if args.dataset_dir not in dataset_info.keys():
         dataset_info[args.dataset_dir] = {
-            "file_name": f"{args.dataset_dir}.json",
+            "file_name": f"{args.dataset_dir}/{args.dataset_dir}.json",
             "formatting": "sharegpt",
             "columns": {"messages": "messages", "images": "images"},
             "tags": {"role_tag": "role", "content_tag": "content", "user_tag": "user", "assistant_tag": "assistant"},
