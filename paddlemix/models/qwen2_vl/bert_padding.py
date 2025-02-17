@@ -72,7 +72,7 @@ class IndexPutFirstAxis(paddle.autograd.PyLayer):
         """Class Attribute: torch.autograd.function.FunctionCtx.saved_tensors, can not convert, please check whether it is torch.Tensor.*/torch.autograd.function.FunctionCtx.*/torch.distributions.Distribution.* and convert manually"""
         (indices,) = ctx.saved_tensor()
         grad_values = grad_output[indices]
-        return grad_values, None, None
+        return grad_values, None
 
 
 index_put_first_axis = IndexPutFirstAxis.apply

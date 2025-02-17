@@ -723,7 +723,10 @@ def is_paddlenlp_version(operation: str, version: str):
     if not _paddlenlp_available:
         return False
     if _paddlenlp_version == "0.0.0" or "post" in _paddlenlp_version:
-        return True
+        if operation in [">", ">=", "=="]:
+            return True
+        elif operation in ["<", "<=", "!="]:
+            return False
     return compare_versions(parse(_paddlenlp_version), operation, version)
 
 

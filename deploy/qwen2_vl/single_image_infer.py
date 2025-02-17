@@ -24,7 +24,7 @@ from paddlenlp.trl import llm_utils
 
 from paddlemix.models.qwen2_vl import MIXQwen2Tokenizer
 from paddlemix.models.qwen2_vl.modeling_qwen2_vl import (
-    Qwen2RotaryEmbedding,
+    Qwen2VLRotaryEmbedding,
     Qwen2VLForConditionalGeneration,
 )
 from paddlemix.processors.qwen2_vl_processing import (
@@ -101,7 +101,7 @@ class PredictorArgument:
     block_size = 64
     cachekv_int8_type = None
     append_attn = True
-    total_max_length = 4096
+    total_max_length = 32768
     speculate_method = None
 
 
@@ -109,7 +109,7 @@ class PredictorArgument:
 class ModelArgument:
     model_type: str = field(
         default=None,
-        metadata={"help": "the type of the model, which can be one of ['gpt-3', 'ernie-3.5-se', 'llama-img2txt']"},
+        metadata={"help": "the type of the model"},
     )
 
 
@@ -150,14 +150,14 @@ def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: Predic
         vision_model_inputs.get("attention_mask"),
     )
     position_start = position_ids[0][0][-1].item()
-    position_end = 4096 - position_ids.shape[-1] + position_start
+    position_end = config.max_position_embeddings - position_ids.shape[-1] + position_start
     position_value = (
         paddle.arange(position_start, position_end).reshape([1, 1, -1]).expand([position_ids.shape[0], 1, -1])
     )
     position_ids = paddle.concat([position_ids, position_value], axis=-1)
 
     head_dim = config.hidden_size // config.num_attention_heads
-    qwen2_Embedding = Qwen2RotaryEmbedding(head_dim, 4096, config.rope_theta)
+    qwen2_Embedding = Qwen2VLRotaryEmbedding(head_dim, config.max_position_embeddings, config.rope_theta)
     cos = qwen2_Embedding.cos_cached
     sin = qwen2_Embedding.sin_cached
 
@@ -201,13 +201,13 @@ parser = PdArgumentParser((PredictorArgument, ModelArgument))
 predictor_args, model_args = parser.parse_args_into_dataclasses()
 
 paddle.set_default_dtype(predictor_args.dtype)
-config = AutoConfig.from_pretrained(MODEL_NAME)
+config = AutoConfig.from_pretrained(predictor_args.model_name_or_path)
 
 # NOTE: (changwenbin) This is for using the inference optimization of paddlenlp qwen2.
 config.model_type = "qwen2"
-generation_config = GenerationConfig.from_pretrained(MODEL_NAME)
+generation_config = GenerationConfig.from_pretrained(predictor_args.model_name_or_path)
 fast_llm_model = AutoInferenceModelForCausalLM.from_pretrained(
-    MODEL_NAME,
+    predictor_args.model_name_or_path,
     config=config,
     predictor_args=predictor_args,
     model_args=model_args,
@@ -229,24 +229,26 @@ def run_model():
         padding=True,
         return_tensors="pd",
     )
-    inputs_embeds = vl_model.vision_forward(**vision_model_inputs)
+    with paddle.no_grad():
+        inputs_embeds = vl_model.vision_forward(**vision_model_inputs)
     llm_model_inputs = init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config=predictor_args)
     generated_text = ""
+    generated_ids = paddle.to_tensor([], dtype="int64").reshape([1, 0])
     while llm_model_inputs["not_need_stop"]:
-        generated_ids = fast_llm_model.generate(**llm_model_inputs)  # already trimmed in paddle
-        llm_model_inputs["input_ids"] = generated_ids
+        generated_id = fast_llm_model.generate(**llm_model_inputs)  # already trimmed in paddle
+        llm_model_inputs["input_ids"] = generated_id
         llm_model_inputs["inputs_embeds"] = None
-        new_text_piece = processor.batch_decode(
-            generated_ids[0], skip_special_tokens=True, clean_up_tokenization_spaces=False
-        )[0]
-        if new_text_piece == "<|im_end|>":
+        generated_ids = paddle.concat([generated_ids, generated_id], axis=1)
+        if paddle.any(generated_id == 151645).item():
             break
-        generated_text += new_text_piece
+    generated_text = processor.batch_decode(
+        generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False
+    )[0]
     return generated_text
 
 
 if predictor_args.benchmark:
-    print(f"Benchmarking {MODEL_NAME} ...")
+    print(f"Benchmarking {predictor_args.model_name_or_path} ...")
     warm_up = 3
     repeat_times = 10
     sumtime = 0.0
@@ -265,11 +267,15 @@ if predictor_args.benchmark:
             duringtime = endtime - starttime
             duringtime = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
             sumtime += duringtime
-            print(f"Single {MODEL_NAME} end to end time : ", duringtime, "ms")
+            print(f"Single Image Inference: {predictor_args.model_name_or_path} end-to-end time : ", duringtime, "ms")
             inference_global_mem = paddle.device.cuda.memory_reserved() / (1024**3)
             print(f"Inference used CUDA memory : {inference_global_mem:.3f} GiB")
 
-    print(f"Single {MODEL_NAME} ave end to end time : ", sumtime / repeat_times, "ms")
+    print(
+        f"Single Image Inference: {predictor_args.model_name_or_path} average end-to-end time : ",
+        sumtime / repeat_times,
+        "ms",
+    )
 
 else:
     generated_text = run_model()

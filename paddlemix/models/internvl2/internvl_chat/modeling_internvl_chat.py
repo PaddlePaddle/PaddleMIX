@@ -307,7 +307,7 @@ class InternVLChatModel(MixPretrainedModel):
 
         template = get_conv_template(self.template)
         template.system_message = self.system_message
-        eos_token_id = tokenizer.convert_tokens_to_ids(template.sep)
+        eos_token_id = tokenizer.convert_tokens_to_ids(template.sep.strip())
 
         history = [] if history is None else history
         for (old_question, old_answer) in history:
@@ -324,16 +324,18 @@ class InternVLChatModel(MixPretrainedModel):
         for num_patches in num_patches_list:
             image_tokens = IMG_START_TOKEN + IMG_CONTEXT_TOKEN * self.num_image_token * num_patches + IMG_END_TOKEN
             query = query.replace("<image>", image_tokens, 1)
+        model_inputs = tokenizer(query, add_special_tokens=True, return_tensors="pd")
 
-        model_inputs = tokenizer(query, return_tensors="pd")
         input_ids = model_inputs["input_ids"]
         attention_mask = model_inputs["attention_mask"]
         generation_config["eos_token_id"] = eos_token_id
+        generation_config = GenerationConfig(**generation_config)
+
         generation_output = self.generate(
             pixel_values=pixel_values,  # [7, 3, 448, 448]
+            generation_config=generation_config,
             input_ids=input_ids,  # [1, 1847]
             attention_mask=attention_mask,  # [1, 1847]
-            **generation_config,  # {'max_new_tokens': 1024, 'do_sample': False, 'eos_token_id': 92542}
         )
         response = tokenizer.batch_decode(generation_output[0], skip_special_tokens=True)[0]
         response = response.split(template.sep)[0].strip()

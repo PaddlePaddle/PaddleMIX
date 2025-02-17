@@ -96,7 +96,7 @@ pipe.transformer = paddle.incubate.jit.inference(
     save_model_dir="./tmp/sd3",
     enable_new_ir=True,
     cache_static_model=True,
-    exp_enable_use_cutlass=True,
+    exp_enable_use_cutlass=False,
     delete_pass_lists=["add_norm_fuse_pass"],
 )
 
@@ -107,7 +107,6 @@ prompt = "A cat holding a sign that says hello world"
 image = pipe(
     prompt, num_inference_steps=args.num_inference_steps, width=args.width, height=args.height, generator=generator
 ).images[0]
-
 if args.benchmark:
     # warmup
     for i in range(3):
