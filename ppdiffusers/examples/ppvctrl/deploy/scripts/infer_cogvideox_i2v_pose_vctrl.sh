@@ -17,12 +17,12 @@ export CUDA_VISIBLE_DEVICES=2
 export TRITON_KERNEL_CACHE_DIR=./tmp/triton_kernel
 python infer_cogvideox_i2v_vctrl_cli.py \
   --pretrained_model_name_or_path "paddlemix/cogvideox-5b-i2v-vctrl" \
-  --vctrl_path "../vctrl_pose_5b_i2v.pdparams" \
+  --vctrl_path "../weights/poses/vctrl_pose_5b_i2v.pdparams" \
   --vctrl_config "../vctrl_configs/cogvideox_5b_i2v_vctrl_config.json" \
   --control_video_path "../examples/pose/case1/guide_values.mp4" \
   --ref_image_path "../examples/pose/case1/reference_image.jpg" \
   --output_dir "infer_outputs/pose2video" \
-  --prompt "A young woman with short blue hair and a playful expression dances on a paved pathway in a park, wearing a yellow hoodie with a red rose graphic and light blue denim shorts. She is surrounded by lush greenery under a clear sky. As she continues, her attire includes white sneakers and yellow socks, and she makes a heart-shaped gesture with her arms. Her hoodie features a red flower and a pocket with a red flower emblem. She then appears in a yellow hoodie with a red rose emblem and denim shorts, standing on a stone pavement. Finally, she stands confidently, her left hand on her hip, wearing a yellow hoodie with a red flower and a pocket with a brown bear design." \
+  --prompt "../examples/pose/case1/prompt.txt" \
   --task "pose" \
   --width 480 \
   --height 720 \
