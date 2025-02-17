@@ -11,6 +11,21 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from __future__ import annotations
+
+from paddlemix.datacopilot.core.schema import T
 
 
-from ._info import head, info
+class Tagger(object):
+    def tag(self, item: T) -> T:
+        item[self.key()] = self.score(item)
+        return item
+
+    def key(self) -> str:
+        raise NotImplementedError
+
+    def score(self, item: T) -> float:
+        raise NotImplementedError
+
+    def __call__(self, item: T) -> T:
+        return self.tag(item)

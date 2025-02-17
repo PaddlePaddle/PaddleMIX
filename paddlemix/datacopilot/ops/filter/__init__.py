@@ -12,5 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
-from ._info import head, info
+from ._ensemble import ensemble
+from ._iqa_arniqa import iqa_arniqa, tag_arniqa
+from ._iqa_brisque import iqa_brisque, tag_brisque
+from ._tagger import Tagger

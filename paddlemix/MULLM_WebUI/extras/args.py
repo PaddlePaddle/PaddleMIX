@@ -438,9 +438,6 @@ class ModelArguments(ProcessorArguments, ExportArguments, VllmArguments):
         if self.new_special_tokens is not None:  # support multiple special tokens
             self.new_special_tokens = [token.strip() for token in self.new_special_tokens.split(",")]
 
-        if self.export_quantization_bit is not None and self.export_quantization_dataset is None:
-            raise ValueError("Quantization dataset is necessary for exporting.")
-
         # if isinstance(self.vllm_config, str) and self.vllm_config.startswith("{"):
         #     self.vllm_config = _convert_str_dict(json.loads(self.vllm_config))
 
@@ -721,25 +718,7 @@ class FinetuningArguments(FreezeArguments, LoraArguments):
         self.lora_alpha: int = self.lora_alpha or self.lora_rank * 2
         # self.lora_target: List[str] = split_arg(self.lora_target)
         self.freeze_vision_tower = self.freeze_vision_tower or self.train_mm_proj_only
-
         assert self.finetuning_type in ["lora", "full"], "Invalid fine-tuning method."
-        # assert self.ref_model_quantization_bit in [None, 8, 4], "We only accept 4-bit or 8-bit quantization."
-
-        if self.use_llama_pro and self.finetuning_type == "full":
-            raise ValueError("`use_llama_pro` is only valid for Freeze or LoRA training.")
-
-        if self.train_mm_proj_only and self.finetuning_type != "full":
-            raise ValueError("`train_mm_proj_only` is only valid for full training.")
-
-        if self.finetuning_type != "lora":
-            if self.loraplus_lr_ratio is not None:
-                raise ValueError("`loraplus_lr_ratio` is only valid for LoRA training.")
-
-            if self.use_rslora:
-                raise ValueError("`use_rslora` is only valid for LoRA training.")
-
-            if self.pissa_init:
-                raise ValueError("`pissa_init` is only valid for LoRA training.")
 
 
 _TRAIN_ARGS = [ModelArguments, DataArguments, Seq2SeqTrainingArguments, FinetuningArguments, GeneratingArguments]
