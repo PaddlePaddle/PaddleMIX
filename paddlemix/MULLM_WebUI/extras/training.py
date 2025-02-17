@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import gradio as gr
 import paddle
 
-from .constants import RUNNING_LOG, TRAINER_LOG
+from .constants import RUNNING_LOG, TRAINBLE_MODELS, TRAINER_LOG, TRAINING_STAGES
 from .packages import is_matplotlib_available
 from .ploting import gen_loss_plot
 
@@ -39,6 +39,13 @@ def get_peak_memory() -> Tuple[int, int]:
         return paddle.device.cuda.max_memory_allocated(), paddle.device.cuda.max_memory_reserved()
     else:
         return 0, 0
+
+
+def is_trainable(stage, model_name):
+    if model_name in TRAINBLE_MODELS[TRAINING_STAGES[stage]]:
+        return True
+    else:
+        return False
 
 
 def get_trainer_info(output_path: os.PathLike, do_train: bool) -> Tuple[str, "gr.Slider", Optional["gr.Plot"]]:

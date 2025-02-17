@@ -22,7 +22,7 @@ import paddle
 from decord import VideoReader
 from moviepy.editor import ImageSequenceClip
 from PIL import Image
-
+import math
 from ppdiffusers import (
     CogVideoXDDIMScheduler,
     CogVideoXTransformer3DVCtrlModel,
@@ -117,9 +117,10 @@ def parse_args():
     parser.add_argument("--height", type=int, default=720, required=False)
     parser.add_argument("--width", type=int, default=480, required=False)
     parser.add_argument("--max_frame", type=int, default=9, required=False)
+    parser.add_argument("--strides", type=int, default=40, required=False)
     parser.add_argument("--guidance_scale", type=float, default=3.5, required=False)
     parser.add_argument("--num_inference_steps", type=int, default=25, required=False)
-    parser.add_argument("--fps", type=int, default=8, required=False)
+    parser.add_argument("--fps", type=int, default=30, required=False)
     parser.add_argument("--vctrl_path", type=str, default=None, required=False)
     parser.add_argument("--transformer_path", type=str, default=None, required=False)
     parser.add_argument("--ref_image_path", type=str, default=None, required=False)
@@ -176,7 +177,7 @@ if __name__ == "__main__":
         vctrl = VCtrlModel.from_config(args.vctrl_config)
     else:
         vctrl = VCtrlModel.from_pretrained(
-            args.vctrl_path, subfolder="vctrl", low_cpu_mem_usage=True, paddle_dtype=paddle.float16
+            args.vctrl_path, low_cpu_mem_usage=True, paddle_dtype=paddle.float16
         )
     if args.transformer_path:
         transformer = CogVideoXTransformer3DVCtrlModel.from_pretrained(
@@ -206,23 +207,53 @@ if __name__ == "__main__":
         ref_image = Image.open(args.ref_image_path).convert("RGB")
         if args.task == "character_pose":
             validation_control_images = [ref_image] + validation_control_images
-    num_frames = len(validation_control_images)
-    num_frames = min(num_frames, args.max_frame)
-    video = pipeline(
-        image=ref_image,
-        prompt=prompt,
-        num_inference_steps=args.num_inference_steps,
-        num_frames=num_frames,
-        guidance_scale=args.guidance_scale,
-        generator=paddle.Generator().manual_seed(42),
-        conditioning_frames=validation_control_images[:num_frames],
-        conditioning_frame_indices=list(range(num_frames)),
-        conditioning_scale=args.conditioning_scale,
-        width=args.width,
-        height=args.height,
-        task=args.task,
-        conditioning_masks=validation_mask_images[:num_frames] if args.task == "mask" else None,
-        vctrl_layout_type=args.vctrl_layout_type,
-    ).frames[0]
-    final_result.append(video)
-    save_vid_side_by_side(final_result, validation_control_images[:num_frames], args.output_dir, fps=args.fps)
+    # Total franes of input video. 
+    toltal_frames = len(validation_control_images)
+    
+    # Inference times for a long video.
+    inference_times=math.ceil((toltal_frames-args.max_frame)/args.strides)+1
+    num_frames=args.max_frame
+    
+    
+    for step in range(inference_times):
+        end_frame=min(step*args.strides+num_frames,toltal_frames)
+        if end_frame!=toltal_frames:
+            start_frame=step*args.strides
+        else:
+            start_frame=end_frame-num_frames
+            
+        validation_control_images_slice = validation_control_images[start_frame:end_frame ]
+        
+        if args.control_mask_video_path is not None:
+            validation_mask_images_slice = validation_mask_images[start_frame:end_frame ]
+        print(f"step:{step},start_frame:{start_frame},end_frame:{end_frame}")
+        print(len(validation_control_images_slice))
+        print(toltal_frames)
+
+        video = pipeline(
+            image=ref_image,
+            prompt=prompt,
+            num_inference_steps=25,
+            num_frames=num_frames,
+            guidance_scale=args.guidance_scale,
+            generator=paddle.Generator().manual_seed(42),
+            conditioning_frames=validation_control_images_slice,
+            conditioning_frame_indices=list(range(num_frames)),
+            conditioning_scale=args.conditioning_scale,
+            width=args.width,
+            height=args.height,
+            task=args.task,
+            conditioning_masks=validation_mask_images_slice if args.task == "mask" else None,
+            vctrl_layout_type=args.vctrl_layout_type,
+            ).frames[0]
+        # reference image for next video generation
+        ref_image=video[args.strides]
+        paddle.device.cuda.empty_cache()
+        if end_frame!=toltal_frames:
+            final_result.append(video[:args.strides])
+        else:
+            final_result.append(video[:end_frame-step*args.strides])
+        
+        
+save_vid_side_by_side(final_result, validation_control_images[:toltal_frames], args.output_dir,fps=args.fps)
+        
