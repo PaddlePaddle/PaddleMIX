@@ -81,7 +81,7 @@ class Qwen2RMSNorm(paddle.nn.Layer):
         return self.weight * hidden_states.to(input_dtype)
 
 
-class Qwen2RotaryEmbedding(nn.Layer):
+class Qwen2VLRotaryEmbedding(nn.Layer):
     def __init__(self, dim, max_position_embeddings=2048, base=10000):
         super().__init__()
         self.dim = dim
@@ -289,7 +289,7 @@ class HyperQwen2Attention(nn.Layer):
         self.v_proj = nn.Linear(self.hidden_size, self.num_key_value_heads * self.head_dim, bias_attr=True)
         self.o_proj = nn.Linear(self.num_heads * self.head_dim, self.hidden_size, bias_attr=False)
 
-        self.rotary_emb = Qwen2RotaryEmbedding(
+        self.rotary_emb = Qwen2VLRotaryEmbedding(
             self.head_dim,
             max_position_embeddings=self.max_position_embeddings,
             base=self.rope_theta,

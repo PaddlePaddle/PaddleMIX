@@ -13,30 +13,51 @@ PaddleMIX团队基于`Qwen2-VL-2B-Instruct`设计了专门针对文档理解类�
 |--------------------|
 | Qwen/Qwen2-VL-2B-Instruct  |
 | Qwen/Qwen2-VL-7B-Instruct  |
+| Qwen/Qwen2-VL-72B-Instruct  |
 | Qwen/Qwen2-VL-2B  |
 | Qwen/Qwen2-VL-7B  |
+| Qwen/Qwen2-VL-72B  |
+| Qwen/QVQ-72B-Preview  |
 
 注意：与huggingface权重同名，但权重为paddle框架的Tensor，使用`xxx.from_pretrained("Qwen/Qwen2-VL-2B-Instruct")`即可自动下载该权重文件夹到缓存目录。
 
 
 ## 2 环境准备
+1）[安装PaddlePaddle](https://github.com/PaddlePaddle/PaddleMIX?tab=readme-ov-file#3-%EF%B8%8F%E5%AE%89%E8%A3%85paddlepaddle)
 - **python >= 3.10**
-- **paddlepaddle-gpu 要求是develop版本**
+- **paddlepaddle-gpu 要求是3.0.0b2或develop版本**
 ```bash
-# 安装示例
+# 提供三种 PaddlePaddle 安装命令示例，也可参考PaddleMIX主页的安装教程进行安装
+
+# 3.0.0b2版本安装示例 (CUDA 11.8)
+python -m pip install paddlepaddle-gpu==3.0.0b2 -i https://www.paddlepaddle.org.cn/packages/stable/cu118/
+
+# Develop 版本安装示例
 python -m pip install paddlepaddle-gpu==0.0.0.post118 -f https://www.paddlepaddle.org.cn/whl/linux/gpu/develop.html
+
+# sh 脚本快速安装
+sh build_paddle_env.sh
 ```
 
-- **paddlenlp == 3.0.0b3**
+2）[安装PaddleMIX环境依赖包](https://github.com/PaddlePaddle/PaddleMIX?tab=readme-ov-file#3-%EF%B8%8F%E5%AE%89%E8%A3%85paddlepaddle)
+- **paddlenlp >= 3.0.0b3**
+
 ```bash
-# 安装示例
-python -m pip install paddlenlp==3.0.0b3
+# 提供两种 PaddleMIX 依赖安装命令示例
+
+# pip 安装示例，安装paddlemix、ppdiffusers、项目依赖、paddlenlp
+python -m pip install -e . --user
+python -m pip install -e ppdiffusers --user
+python -m pip install -r requirements.txt --user
+python -m pip install paddlenlp==3.0.0b3 --user
+
+# sh 脚本快速安装
+sh build_env.sh
 ```
 
 > 注：
 * 请确保安装了以上依赖，否则无法运行。同时，需要安装 paddlemix/external_ops 下的自定义OP, `python setup.py install`。如果安装后仍然找不到算子，需要额外设置PYTHONPATH
-* (默认开启flash_attn)使用flash_attn 要求A100/A800显卡或者H20显卡
-
+* (默认开启flash_attn)使用flash_attn 要求A100/A800显卡或者H20显卡。V100请用float16推理。
 
 ## 3 推理预测
 
@@ -54,6 +75,24 @@ CUDA_VISIBLE_DEVICES=0 python paddlemix/examples/qwen2_vl/multi_image_infer.py
 ```bash
 CUDA_VISIBLE_DEVICES=0 python paddlemix/examples/qwen2_vl/video_infer.py
 ```
+
+### d. batch推理
+```bash
+CUDA_VISIBLE_DEVICES=0 python paddlemix/examples/qwen2_vl/batch_infer.py
+```
+### 模型推理支持分布式推理
+
+```bash
+# 2B
+sh paddlemix/examples/qwen2_vl/shell/distributed_qwen2_vl_infer_2B.sh
+# 7B
+sh paddlemix/examples/qwen2_vl/shell/distributed_qwen2_vl_infer_7B.sh
+# 72B
+sh paddlemix/examples/qwen2_vl/shell/distributed_qwen2_vl_infer_72B.sh
+# 72B QVQ
+sh paddlemix/examples/qwen2_vl/shell/distributed_qwen2_vl_infer_72B_QVQ.sh
+```
+> ⚠️注意："mp_degree"需要根据显卡数量"gpus"进行调整，例如2卡推理，则设置为2。
 
 ## 4 模型微调
 

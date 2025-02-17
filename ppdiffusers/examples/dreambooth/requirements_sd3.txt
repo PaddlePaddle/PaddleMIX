@@ -1,2 +1,2 @@
 Pillow
-wandb
+wandb==0.19.4

@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import os
 from importlib import import_module
 from typing import Optional, Union
 
@@ -111,7 +112,7 @@ class Attention(nn.Layer):
         super().__init__()
 
         # To prevent circular import.
-        from .normalization import  RMSNorm, FP32LayerNorm, LpNorm
+        from .normalization import FP32LayerNorm, LpNorm, RMSNorm
 
         self.inner_dim = dim_head * heads
         self.inner_dim = out_dim if out_dim is not None else dim_head * heads
@@ -997,12 +998,20 @@ class JointAttnProcessor2_5:
             encoder_hidden_states_key_proj = attn.add_k_proj(encoder_hidden_states)
             encoder_hidden_states_value_proj = attn.add_v_proj(encoder_hidden_states)
 
-            encoder_hidden_states_query_proj = encoder_hidden_states_query_proj.reshape([batch_size, -1, attn.heads, head_dim])
-            encoder_hidden_states_key_proj = encoder_hidden_states_key_proj.reshape([batch_size, -1, attn.heads, head_dim])
-            encoder_hidden_states_value_proj = encoder_hidden_states_value_proj.reshape([batch_size, -1, attn.heads, head_dim])
+            encoder_hidden_states_query_proj = encoder_hidden_states_query_proj.reshape(
+                [batch_size, -1, attn.heads, head_dim]
+            )
+            encoder_hidden_states_key_proj = encoder_hidden_states_key_proj.reshape(
+                [batch_size, -1, attn.heads, head_dim]
+            )
+            encoder_hidden_states_value_proj = encoder_hidden_states_value_proj.reshape(
+                [batch_size, -1, attn.heads, head_dim]
+            )
 
             if attn.norm_added_q is not None:
-                encoder_hidden_states_query_proj = attn.norm_added_q(encoder_hidden_states_query_proj, begin_norm_axis=3)
+                encoder_hidden_states_query_proj = attn.norm_added_q(
+                    encoder_hidden_states_query_proj, begin_norm_axis=3
+                )
             if attn.norm_added_k is not None:
                 encoder_hidden_states_key_proj = attn.norm_added_k(encoder_hidden_states_key_proj, begin_norm_axis=3)
 
@@ -2188,20 +2197,52 @@ class CogVideoXAttnProcessor2_0:
 
         query = query.reshape([batch_size, -1, attn.heads, head_dim]).transpose([0, 2, 1, 3])
         key = key.reshape([batch_size, -1, attn.heads, head_dim]).transpose([0, 2, 1, 3])
-        value = value.reshape([batch_size, -1, attn.heads, head_dim]).transpose([0, 2, 1, 3])
+        value = value.reshape([batch_size, -1, attn.heads, head_dim])
+        inference_optimize = os.getenv("INFERENCE_OPTIMIZE") == "True"
+        if inference_optimize:
+            import paddlemix
 
-        if attn.norm_q is not None:
-            query = attn.norm_q(query)
-        if attn.norm_k is not None:
-            key = attn.norm_k(key)
+            if (
+                attn.norm_q is not None
+                and attn.norm_k is not None
+                and image_rotary_emb is not None
+                and not attn.is_cross_attention
+            ):
+                text_seq_length_tensor = paddle.empty([text_seq_length])
+                query, key = paddlemix.triton_ops.ln_partial_rotary_emb(
+                    query,
+                    key,
+                    text_seq_length_tensor,
+                    image_rotary_emb[0],
+                    image_rotary_emb[1],
+                    attn.norm_q.weight,
+                    attn.norm_q.bias,
+                    attn.norm_k.weight,
+                    attn.norm_k.bias,
+                    norm_eps=1e-5,
+                )
+            elif attn.norm_q is None or attn.norm_k is None:
+                if attn.norm_q is not None:
+                    query = attn.norm_q(query)
+                if attn.norm_k is not None:
+                    key = attn.norm_k(key)
+                if image_rotary_emb is not None and not attn.is_cross_attention:
+                    text_seq_length_tensor = paddle.empty([text_seq_length])
+                    query, key = paddlemix.triton_ops.partial_rotary_emb(
+                        query, key, text_seq_length_tensor, image_rotary_emb[0], image_rotary_emb[1]
+                    )
+        else:
+            if attn.norm_q is not None:
+                query = attn.norm_q(query)
+            if attn.norm_k is not None:
+                key = attn.norm_k(key)
+            # Apply RoPE if needed
+            if image_rotary_emb is not None:
+                from .embeddings import apply_rotary_emb
 
-        # Apply RoPE if needed
-        if image_rotary_emb is not None:
-            from .embeddings import apply_rotary_emb
-
-            query[:, :, text_seq_length:] = apply_rotary_emb(query[:, :, text_seq_length:], image_rotary_emb)
-            if not attn.is_cross_attention:
-                key[:, :, text_seq_length:] = apply_rotary_emb(key[:, :, text_seq_length:], image_rotary_emb)
+                query[:, :, text_seq_length:] = apply_rotary_emb(query[:, :, text_seq_length:], image_rotary_emb)
+                if not attn.is_cross_attention:
+                    key[:, :, text_seq_length:] = apply_rotary_emb(key[:, :, text_seq_length:], image_rotary_emb)
 
         # NOTE: There is diff between paddle's and torch's sdpa
         # paddle needs input: [batch_size, seq_len, num_heads, head_dim]
@@ -2209,7 +2250,7 @@ class CogVideoXAttnProcessor2_0:
         hidden_states = F.scaled_dot_product_attention_(
             query.transpose([0, 2, 1, 3]),
             key.transpose([0, 2, 1, 3]),
-            value.transpose([0, 2, 1, 3]),
+            value,
             attn_mask=attention_mask,
             dropout_p=0.0,
             is_causal=False,

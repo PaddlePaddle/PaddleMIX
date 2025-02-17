@@ -32,7 +32,7 @@ from .extras.callbacks import LogCallback
 from .extras.constants import IGNORE_INDEX, PEFT_METHODS, TRAINING_STAGES
 from .extras.packages import is_gradio_available
 from .extras.template import get_template_and_fix_tokenizer
-from .extras.training import get_eval_results, get_trainer_info
+from .extras.training import get_eval_results, get_trainer_info, is_trainable
 from .locales import ALERTS
 
 if is_gradio_available():
@@ -71,6 +71,7 @@ class Runner:
     def _initialize(self, data: Dict["Component", Any], do_train: bool, from_preview: bool) -> str:
         get = lambda elem_id: data[self.manager.get_elem_by_id(elem_id)]
         lang, model_name, model_path = get("top.lang"), get("top.model_name"), get("top.model_path")
+        stage = get("train.training_stage")
         dataset = get("train.dataset") if do_train else get("eval.dataset")
         config_path = get("train.config_path")
         if self.running:
@@ -100,6 +101,9 @@ class Runner:
         else:
             if not get("eval.output_dir"):
                 return ALERTS["err_no_output_dir"][lang]
+
+        if not is_trainable(stage, model_name):
+            return ALERTS["err_invalid_training_model"][lang]
 
         return ""
 
@@ -236,6 +240,7 @@ class Runner:
             # lang = get("top.lang")
             output_box = self.manager.get_elem_by_id("{}.output_box".format("train"))
             progress_bar = self.manager.get_elem_by_id("{}.progress_bar".format("train"))
+            gr.Info(error)
             yield {
                 output_box: error,
                 progress_bar: gr.Slider(visible=False),

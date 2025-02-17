@@ -26,28 +26,35 @@ import paddle
 import paddle.nn.functional as F
 from einops import rearrange
 from paddle import nn
-from paddle.nn import CrossEntropyLoss, MSELoss, BCEWithLogitsLoss
+from paddle.nn import BCEWithLogitsLoss, CrossEntropyLoss, MSELoss
 from paddlenlp.transformers.activations import ACT2FN
 from paddlenlp.transformers.model_outputs import (
     BaseModelOutputWithPast,
     CausalLMOutputWithPast,
 )
 from paddlenlp.transformers.model_utils import PretrainedModel
-from .configuration_internlm2 import InternLM2Config
 
 from ppdiffusers.utils import logging
+
+from .configuration_internlm2 import InternLM2Config
+
 logger = logging.get_logger(__name__)
-from ..bert_padding import pad_input, unpad_input, index_first_axis
+from ..bert_padding import index_first_axis, pad_input, unpad_input
+
 try:
     from paddle.nn.functional.flash_attention import flash_attention as flash_attn_func
-    from paddle.nn.functional.flash_attention import flash_attn_unpadded as flash_attn_varlen_func
+    from paddle.nn.functional.flash_attention import (
+        flash_attn_unpadded as flash_attn_varlen_func,
+    )
+
     print("modeling_internlm2 has_flash_attn is True.")
     has_flash_attn = True
 except:
     flash_attn_func, flash_attn_varlen_func = None, None
     print("modeling_internlm2 has_flash_attn is False.")
     has_flash_attn = False
-has_flash_attn = False # TODO
+has_flash_attn = False  # TODO
+
 
 def _get_unpad_data(attention_mask):
     seqlens_in_batch = attention_mask.sum(axis=-1, dtype="int32")
@@ -128,7 +135,7 @@ class InternLM2RotaryEmbedding(nn.Layer):
         self.max_position_embeddings = max_position_embeddings
         self.base = base
         inv_freq = 1.0 / (self.base ** (paddle.arange(0, self.dim, 2).cast("float32") / self.dim))
-        self.register_buffer('inv_freq', inv_freq, persistable=False) #persistent=False)
+        self.register_buffer("inv_freq", inv_freq, persistable=False)  # persistent=False)
 
         # Build here to make `torch.jit.trace` work.
         self._set_cos_sin_cache(seq_len=max_position_embeddings, dtype=paddle.get_default_dtype())
@@ -137,11 +144,11 @@ class InternLM2RotaryEmbedding(nn.Layer):
         self.max_seq_len_cached = seq_len
         t = paddle.arange(self.max_seq_len_cached).to(dtype=self.inv_freq.dtype)
 
-        freqs = paddle.einsum('i,j->ij', t, self.inv_freq)
+        freqs = paddle.einsum("i,j->ij", t, self.inv_freq)
         # Different from paper, but it uses a different permutation in order to obtain the same calculation
         emb = paddle.concat((freqs, freqs), axis=-1)
-        self.register_buffer('cos_cached', emb.cos().to(dtype), persistable=False) #persistent=False)
-        self.register_buffer('sin_cached', emb.sin().to(dtype), persistable=False) #persistent=False)
+        self.register_buffer("cos_cached", emb.cos().to(dtype), persistable=False)  # persistent=False)
+        self.register_buffer("sin_cached", emb.sin().to(dtype), persistable=False)  # persistent=False)
 
     def forward(self, x, seq_len=None):
         # x: [bs, num_attention_heads, seq_len, head_size]
@@ -167,11 +174,11 @@ class InternLM2LinearScalingRotaryEmbedding(InternLM2RotaryEmbedding):
         t = paddle.arange(self.max_seq_len_cached).to(dtype=self.inv_freq.dtype)
         t = t / self.scaling_factor
 
-        freqs = paddle.einsum('i,j->ij', t, self.inv_freq)
+        freqs = paddle.einsum("i,j->ij", t, self.inv_freq)
         # Different from paper, but it uses a different permutation in order to obtain the same calculation
         emb = paddle.concat((freqs, freqs), axis=-1)
-        self.register_buffer('cos_cached', emb.cos().to(dtype), persistable=False) #persistent=False)
-        self.register_buffer('sin_cached', emb.sin().to(dtype), persistable=False) #persistent=False)
+        self.register_buffer("cos_cached", emb.cos().to(dtype), persistable=False)  # persistent=False)
+        self.register_buffer("sin_cached", emb.sin().to(dtype), persistable=False)  # persistent=False)
 
 
 # Copied from transformers.model.llama.modeling_llama.LlamaDynamicNTKScalingRotaryEmbedding with Llama->InternLM2
@@ -191,23 +198,23 @@ class InternLM2DynamicNTKScalingRotaryEmbedding(InternLM2RotaryEmbedding):
             base = self.base * (
                 (self.scaling_factor * seq_len / self.max_position_embeddings) - (self.scaling_factor - 1)
             ) ** (self.dim / (self.dim - 2))
-            inv_freq = 1.0 / (base ** (paddle.arange(0, self.dim, 2).cast('float32') / self.dim))
-            self.register_buffer('inv_freq', inv_freq, persistable=False) #persistent=False)
+            inv_freq = 1.0 / (base ** (paddle.arange(0, self.dim, 2).cast("float32") / self.dim))
+            self.register_buffer("inv_freq", inv_freq, persistable=False)  # persistent=False)
 
         t = paddle.arange(self.max_seq_len_cached).to(dtype=self.inv_freq.dtype)
 
-        freqs = paddle.einsum('i,j->ij', t, self.inv_freq)
+        freqs = paddle.einsum("i,j->ij", t, self.inv_freq)
         # Different from paper, but it uses a different permutation in order to obtain the same calculation
         emb = paddle.concat((freqs, freqs), axis=-1)
-        self.register_buffer('cos_cached', emb.cos().to(dtype), persistable=False) #persistent=False)
-        self.register_buffer('sin_cached', emb.sin().to(dtype), persistable=False) #persistent=False)
+        self.register_buffer("cos_cached", emb.cos().to(dtype), persistable=False)  # persistent=False)
+        self.register_buffer("sin_cached", emb.sin().to(dtype), persistable=False)  # persistent=False)
 
 
 # Copied from transformers.model.llama.modeling_llama.rotate_half
 def rotate_half(x):
     """Rotates half the hidden dims of the input."""
     x1 = x[..., : x.shape[-1] // 2]
-    x2 = x[..., x.shape[-1] // 2:]
+    x2 = x[..., x.shape[-1] // 2 :]
     return paddle.concat((-x2, x1), axis=-1)
 
 
@@ -267,8 +274,8 @@ class InternLM2Attention(nn.Layer):
 
         if (self.head_dim * self.num_heads) != self.hidden_size:
             raise ValueError(
-                f'hidden_size must be divisible by num_heads (got `hidden_size`: {self.hidden_size}'
-                f' and `num_heads`: {self.num_heads}).'
+                f"hidden_size must be divisible by num_heads (got `hidden_size`: {self.hidden_size}"
+                f" and `num_heads`: {self.num_heads})."
             )
 
         self.wqkv = nn.Linear(
@@ -288,16 +295,16 @@ class InternLM2Attention(nn.Layer):
                 base=self.config.rope_theta,
             )
         else:
-            scaling_type = self.config.rope_scaling['type']
-            scaling_factor = self.config.rope_scaling['factor']
-            if scaling_type == 'dynamic':
+            scaling_type = self.config.rope_scaling["type"]
+            scaling_factor = self.config.rope_scaling["factor"]
+            if scaling_type == "dynamic":
                 self.rotary_emb = InternLM2DynamicNTKScalingRotaryEmbedding(
                     self.head_dim,
                     max_position_embeddings=self.max_position_embeddings,
                     base=self.config.rope_theta,
                     scaling_factor=scaling_factor,
                 )
-            elif scaling_type == 'linear':
+            elif scaling_type == "linear":
                 self.rotary_emb = InternLM2LinearScalingRotaryEmbedding(
                     self.head_dim,
                     max_position_embeddings=self.max_position_embeddings,
@@ -321,32 +328,34 @@ class InternLM2Attention(nn.Layer):
         use_cache: bool = False,
         **kwargs,
     ) -> Tuple[paddle.Tensor, Optional[paddle.Tensor], Optional[Tuple[paddle.Tensor]]]:
-        if 'padding_mask' in kwargs:
+        if "padding_mask" in kwargs:
             warnings.warn(
-                'Passing `padding_mask` is deprecated and will be removed in v4.37. '
-                'Please make sure use `attention_mask` instead.`'
+                "Passing `padding_mask` is deprecated and will be removed in v4.37. "
+                "Please make sure use `attention_mask` instead.`"
             )
 
-        bsz, q_len, _ = hidden_states.shape # [1, 1847, 2048]
+        bsz, q_len, _ = hidden_states.shape  # [1, 1847, 2048]
 
         try:
             qkv_states = self.wqkv(hidden_states)
         except:
-            qkv_states = self.wqkv(hidden_states.cast('bfloat16'))
+            qkv_states = self.wqkv(hidden_states.cast("bfloat16"))
         # [1, 1847, 4096]
 
         qkv_states = rearrange(
             qkv_states,
-            'b q (h gs d) -> b q h gs d',
+            "b q (h gs d) -> b q h gs d",
             gs=2 + self.num_key_value_groups,
             d=self.head_dim,
         )
         # [1, 1847, 8, 4, 128]
 
         query_states = qkv_states[..., : self.num_key_value_groups, :]
-        query_states = rearrange(query_states, 'b q h gs d -> b q (h gs) d') # [1, 1847, 8, 2, 128]->[1, 1847, 16, 128]
-        key_states = qkv_states[..., -2, :] # [1, 1847, 8, 128]
-        value_states = qkv_states[..., -1, :] # [1, 1847, 8, 128]
+        query_states = rearrange(
+            query_states, "b q h gs d -> b q (h gs) d"
+        )  # [1, 1847, 8, 2, 128]->[1, 1847, 16, 128]
+        key_states = qkv_states[..., -2, :]  # [1, 1847, 8, 128]
+        value_states = qkv_states[..., -1, :]  # [1, 1847, 8, 128]
 
         query_states = query_states.transpose([0, 2, 1, 3])
         key_states = key_states.transpose([0, 2, 1, 3])
@@ -423,31 +432,31 @@ class InternLM2FlashAttention2(InternLM2Attention):
         **kwargs
     ) -> Tuple[paddle.Tensor, Optional[paddle.Tensor], Optional[Tuple[paddle.Tensor]]]:
         # InternLM2FlashAttention2 attention does not support output_attentions
-        if 'padding_mask' in kwargs:
+        if "padding_mask" in kwargs:
             warnings.warn(
-                'Passing `padding_mask` is deprecated and will be removed in v4.37. '
-                'Please make sure use `attention_mask` instead.`'
+                "Passing `padding_mask` is deprecated and will be removed in v4.37. "
+                "Please make sure use `attention_mask` instead.`"
             )
 
             # overwrite attention_mask with padding_mask
-            attention_mask = kwargs.pop('padding_mask')
+            attention_mask = kwargs.pop("padding_mask")
 
         output_attentions = False
 
-        bsz, q_len, _ = hidden_states.shape # [1, 1847, 2048]
+        bsz, q_len, _ = hidden_states.shape  # [1, 1847, 2048]
 
-        qkv_states = self.wqkv(hidden_states) # [1, 1847, 4096]
+        qkv_states = self.wqkv(hidden_states)  # [1, 1847, 4096]
 
         qkv_states = rearrange(
             qkv_states,
-            'b q (h gs d) -> b q h gs d',
+            "b q (h gs d) -> b q h gs d",
             gs=2 + self.num_key_value_groups,
             d=self.head_dim,
         )
         # [1, 1847, 8, 4, 128]
 
         query_states = qkv_states[..., : self.num_key_value_groups, :]
-        query_states = rearrange(query_states, 'b q h gs d -> b q (h gs) d')
+        query_states = rearrange(query_states, "b q h gs d -> b q (h gs) d")
         key_states = qkv_states[..., -2, :]
         value_states = qkv_states[..., -1, :]
 
@@ -478,13 +487,11 @@ class InternLM2FlashAttention2(InternLM2Attention):
         value_states = value_states.transpose(perm=[0, 2, 1, 3])
 
         original_dtype = query_states.dtype
-        query_states = query_states.astype('bfloat16')
-        key_states = key_states.astype('bfloat16')
-        value_states = value_states.astype('bfloat16')
+        query_states = query_states.astype("bfloat16")
+        key_states = key_states.astype("bfloat16")
+        value_states = value_states.astype("bfloat16")
         # return tuple 0 is output, 1 is softmax return
-        attn_output = self._flash_attention_forward(
-            query_states, key_states, value_states, attention_mask, q_len
-        )
+        attn_output = self._flash_attention_forward(query_states, key_states, value_states, attention_mask, q_len)
         attn_output = attn_output.astype(original_dtype)
         attn_output = attn_output.reshape([bsz, q_len, self.hidden_size])
         attn_output = self.wo(attn_output)
@@ -520,10 +527,10 @@ class InternLM2FlashAttention2(InternLM2Attention):
         causal = self.is_causal and query_length != 1
 
         head_dim = query_states.shape[-1]
-        softmax_scale = head_dim**-0.5 # TODO: 需要手动加上
+        softmax_scale = head_dim**-0.5  # TODO: 需要手动加上
 
         if attention_mask is not None:
-            batch_size = query_states.shape[0] # [2, 3383, 16, 128]
+            batch_size = query_states.shape[0]  # [2, 3383, 16, 128]
 
             query_states, key_states, value_states, indices_q, cu_seq_lens, max_seq_lens = self._unpad_input(
                 query_states, key_states, value_states, attention_mask, query_length
@@ -532,15 +539,15 @@ class InternLM2FlashAttention2(InternLM2Attention):
             cu_seqlens_q, cu_seqlens_k = cu_seq_lens
             max_seqlen_in_batch_q, max_seqlen_in_batch_k = max_seq_lens
 
-            attn_output_unpad = flash_attn_varlen_func( # TODO: flash_attn_unpadded 
-                query_states, # [5998, 16, 128]
-                key_states, # [5998, 8, 128]
-                value_states, # [5998, 8, 128]
+            attn_output_unpad = flash_attn_varlen_func(  # TODO: flash_attn_unpadded
+                query_states,  # [5998, 16, 128]
+                key_states,  # [5998, 8, 128]
+                value_states,  # [5998, 8, 128]
                 cu_seqlens_q=cu_seqlens_q,
                 cu_seqlens_k=cu_seqlens_k,
                 max_seqlen_q=max_seqlen_in_batch_q,
                 max_seqlen_k=max_seqlen_in_batch_k,
-                scale=softmax_scale, # not softmax_scale=
+                scale=softmax_scale,  # not softmax_scale=
                 dropout=dropout,
                 causal=causal,
             )[0]
@@ -548,7 +555,11 @@ class InternLM2FlashAttention2(InternLM2Attention):
             attn_output = pad_input(attn_output_unpad, indices_q, batch_size, query_length)
         else:
             attn_output = flash_attn_func(
-                query_states, key_states, value_states, dropout, causal=causal, # no softmax_scale=
+                query_states,
+                key_states,
+                value_states,
+                dropout,
+                causal=causal,  # no softmax_scale=
             )[0]
 
         return attn_output
@@ -594,8 +605,8 @@ class InternLM2FlashAttention2(InternLM2Attention):
 
 
 INTERNLM2_ATTENTION_CLASSES = {
-    'eager': InternLM2Attention,
-    'flash_attention_2': InternLM2FlashAttention2,
+    "eager": InternLM2Attention,
+    "flash_attention_2": InternLM2FlashAttention2,
 }
 
 
@@ -635,14 +646,14 @@ class InternLM2DecoderLayer(nn.Layer):
                 (see `past_key_values`).
             past_key_value (`Tuple(paddle.Tensor)`, *optional*): cached past key and value projection states
         """
-        if 'padding_mask' in kwargs:
+        if "padding_mask" in kwargs:
             warnings.warn(
-                'Passing `padding_mask` is deprecated and will be removed in v4.37. '
-                'Please make sure use `attention_mask` instead.`'
+                "Passing `padding_mask` is deprecated and will be removed in v4.37. "
+                "Please make sure use `attention_mask` instead.`"
             )
 
         original_dtype = hidden_states.dtype
-        residual = hidden_states.astype(original_dtype) # todo
+        residual = hidden_states.astype(original_dtype)  # todo
 
         hidden_states = self.attention_norm(hidden_states)
 
@@ -660,13 +671,13 @@ class InternLM2DecoderLayer(nn.Layer):
 
         # Fully Connected
         original_dtype = hidden_states.dtype
-        residual = hidden_states.astype(original_dtype) # todo
+        residual = hidden_states.astype(original_dtype)  # todo
 
         hidden_states = self.ffn_norm(hidden_states)
         try:
             hidden_states = self.feed_forward(hidden_states)
         except:
-            hidden_states = self.feed_forward(hidden_states.cast('bfloat16'))
+            hidden_states = self.feed_forward(hidden_states.cast("bfloat16"))
         hidden_states = residual + hidden_states
 
         outputs = (hidden_states,)
@@ -683,10 +694,10 @@ class InternLM2DecoderLayer(nn.Layer):
 # # Copied from transformers.models.llama.modeling_llama.LlamaPreTrainedModel with Llama->InternLM2
 class InternLM2PretrainedModel(PretrainedModel):
     config_class = InternLM2Config
-    base_model_prefix = 'model'
+    base_model_prefix = "model"
     supports_gradient_checkpointing = True
-    _no_split_modules = ['InternLM2DecoderLayer']
-    _skip_keys_device_placement = 'past_key_values'
+    _no_split_modules = ["InternLM2DecoderLayer"]
+    _skip_keys_device_placement = "past_key_values"
     _supports_flash_attn_2 = True
 
     def _init_weights(self, layer):
@@ -711,7 +722,7 @@ class InternLM2Model(InternLM2PretrainedModel):
         config: InternLM2Config
     """
 
-    _auto_class = 'AutoModel'
+    _auto_class = "AutoModel"
 
     def __init__(self, config: InternLM2Config):
         super().__init__(config)
@@ -719,8 +730,8 @@ class InternLM2Model(InternLM2PretrainedModel):
         self.vocab_size = config.vocab_size
         self.config = config
         if not has_flash_attn:
-            self.config.attn_implementation = 'eager'
-            logger.warning_once('Warning: Flash attention is not available, using eager attention instead.')
+            self.config.attn_implementation = "eager"
+            logger.warning_once("Warning: Flash attention is not available, using eager attention instead.")
 
         self.tok_embeddings = nn.Embedding(config.vocab_size, config.hidden_size, self.padding_idx)
 
@@ -729,7 +740,7 @@ class InternLM2Model(InternLM2PretrainedModel):
 
         self.gradient_checkpointing = False
         # Initialize weights and apply final processing
-        #self.post_init()
+        # self.post_init()
 
     def get_input_embeddings(self):
         return self.tok_embeddings
@@ -780,13 +791,13 @@ class InternLM2Model(InternLM2PretrainedModel):
 
         # retrieve input_ids and inputs_embeds
         if input_ids is not None and inputs_embeds is not None:
-            raise ValueError('You cannot specify both input_ids and inputs_embeds at the same time')
+            raise ValueError("You cannot specify both input_ids and inputs_embeds at the same time")
         elif input_ids is not None:
             batch_size, seq_length = input_ids.shape[:2]
         elif inputs_embeds is not None:
             batch_size, seq_length = inputs_embeds.shape[:2]
         else:
-            raise ValueError('You have to specify either input_ids or inputs_embeds')
+            raise ValueError("You have to specify either input_ids or inputs_embeds")
 
         seq_length_with_past = seq_length
         past_key_values_length = 0
@@ -796,21 +807,21 @@ class InternLM2Model(InternLM2PretrainedModel):
 
         if position_ids is None:
             position_ids = paddle.arange(
-                past_key_values_length, seq_length + past_key_values_length, dtype="int64",
+                past_key_values_length,
+                seq_length + past_key_values_length,
+                dtype="int64",
             )
             position_ids = position_ids.unsqueeze(0)
 
         if inputs_embeds is None:
             inputs_embeds = self.tok_embeddings(input_ids)
 
-        if self.config.attn_implementation == 'flash_attention_2':
+        if self.config.attn_implementation == "flash_attention_2":
             # 2d mask is passed through the layers
             attention_mask = attention_mask if (attention_mask is not None and 0 in attention_mask.numpy()) else None
         else:
             if attention_mask is None:
-                attention_mask = paddle.ones(
-                    (batch_size, seq_length_with_past), dtype=paddle.bool
-                )
+                attention_mask = paddle.ones((batch_size, seq_length_with_past), dtype=paddle.bool)
             attention_mask = self._prepare_decoder_attention_mask(
                 attention_mask, (batch_size, seq_length), inputs_embeds, past_key_values_length
             )
@@ -821,7 +832,7 @@ class InternLM2Model(InternLM2PretrainedModel):
         if self.gradient_checkpointing and self.training:
             if use_cache:
                 logger.warning_once(
-                    '`use_cache=True` is incompatible with gradient checkpointing. Setting `use_cache=False`...'
+                    "`use_cache=True` is incompatible with gradient checkpointing. Setting `use_cache=False`..."
                 )
                 use_cache = False
 
@@ -890,9 +901,9 @@ class InternLM2Model(InternLM2PretrainedModel):
 
 # Modified from transformers.model.llama.modeling_llama.LlamaForCausalLM
 class InternLM2ForCausalLM(InternLM2PretrainedModel):
-    _auto_class = 'AutoModelForCausalLM'
+    _auto_class = "AutoModelForCausalLM"
 
-    _tied_weights_keys = ['output.weight']
+    _tied_weights_keys = ["output.weight"]
 
     def __init__(self, config):
         super().__init__(config)
@@ -901,7 +912,7 @@ class InternLM2ForCausalLM(InternLM2PretrainedModel):
         self.output = nn.Linear(config.hidden_size, config.vocab_size, bias_attr=False)
 
         # Initialize weights and apply final processing
-        #self.post_init()
+        # self.post_init()
 
     def get_input_embeddings(self):
         return self.model.tok_embeddings
@@ -923,16 +934,16 @@ class InternLM2ForCausalLM(InternLM2PretrainedModel):
 
     def forward(
         self,
-        input_ids: paddle.Tensor = None, # Nonr
-        attention_mask: Optional[paddle.Tensor] = None, # [2, 2336]
-        position_ids: Optional[paddle.Tensor] = None, # None
-        past_key_values: Optional[List[paddle.Tensor]] = None, # None
-        inputs_embeds: Optional[paddle.Tensor] = None, # [2, 2336, 2048]
-        labels: Optional[paddle.Tensor] = None, # None
-        use_cache: Optional[bool] = None, 
-        output_attentions: Optional[bool] = None, # False
-        output_hidden_states: Optional[bool] = None, # False
-        return_dict: Optional[bool] = None, # True
+        input_ids: paddle.Tensor = None,  # Nonr
+        attention_mask: Optional[paddle.Tensor] = None,  # [2, 2336]
+        position_ids: Optional[paddle.Tensor] = None,  # None
+        past_key_values: Optional[List[paddle.Tensor]] = None,  # None
+        inputs_embeds: Optional[paddle.Tensor] = None,  # [2, 2336, 2048]
+        labels: Optional[paddle.Tensor] = None,  # None
+        use_cache: Optional[bool] = None,
+        output_attentions: Optional[bool] = None,  # False
+        output_hidden_states: Optional[bool] = None,  # False
+        return_dict: Optional[bool] = None,  # True
     ) -> Union[Tuple, CausalLMOutputWithPast]:
         r"""
         Args:
@@ -983,9 +994,9 @@ class InternLM2ForCausalLM(InternLM2PretrainedModel):
         try:
             logits = self.output(hidden_states)
         except:
-            logits = self.output(hidden_states.cast('bfloat16'))
+            logits = self.output(hidden_states.cast("bfloat16"))
 
-        logits = logits.cast('float32')
+        logits = logits.cast("float32")
 
         loss = None
         if labels is not None:
@@ -1027,28 +1038,28 @@ class InternLM2ForCausalLM(InternLM2PretrainedModel):
 
             input_ids = input_ids[:, remove_prefix_length:]
 
-        position_ids = kwargs.get('position_ids', None)
+        position_ids = kwargs.get("position_ids", None)
         if attention_mask is not None and position_ids is None:
             # create position_ids on the fly for batch generation
             attention_mask_int64 = attention_mask.cast("int64")
             position_ids = attention_mask_int64.cumsum(-1) - 1
-            #position_ids.masked_fill_(attention_mask == 0, 1)
+            # position_ids.masked_fill_(attention_mask == 0, 1)
             position_ids = paddle.where(attention_mask_int64 == 0, paddle.ones_like(position_ids), position_ids)
             if past_key_values:
                 position_ids = position_ids[:, -input_ids.shape[1] :]
 
         # if `inputs_embeds` are passed, we only want to use them in the 1st generation step
         if inputs_embeds is not None and past_key_values is None:
-            model_inputs = {'inputs_embeds': inputs_embeds}
+            model_inputs = {"inputs_embeds": inputs_embeds}
         else:
-            model_inputs = {'input_ids': input_ids}
+            model_inputs = {"input_ids": input_ids}
 
         model_inputs.update(
             {
-                'position_ids': position_ids,
-                'past_key_values': past_key_values,
-                'use_cache': kwargs.get('use_cache'),
-                'attention_mask': attention_mask,
+                "position_ids": position_ids,
+                "past_key_values": past_key_values,
+                "use_cache": kwargs.get("use_cache"),
+                "attention_mask": attention_mask,
             }
         )
         return model_inputs
@@ -1062,9 +1073,9 @@ class InternLM2ForCausalLM(InternLM2PretrainedModel):
             )
         return reordered_past
 
-    def build_inputs(self, tokenizer, query: str, history: List[Tuple[str, str]] = [], meta_instruction=''):
+    def build_inputs(self, tokenizer, query: str, history: List[Tuple[str, str]] = [], meta_instruction=""):
         if tokenizer.add_bos_token:
-            prompt = ''
+            prompt = ""
         else:
             prompt = tokenizer.bos_token
         if meta_instruction:
@@ -1072,7 +1083,7 @@ class InternLM2ForCausalLM(InternLM2PretrainedModel):
         for record in history:
             prompt += f"""<|im_start|>user\n{record[0]}<|im_end|>\n<|im_start|>assistant\n{record[1]}<|im_end|>\n"""
         prompt += f"""<|im_start|>user\n{query}<|im_end|>\n<|im_start|>assistant\n"""
-        return tokenizer([prompt], return_tensors='pd')
+        return tokenizer([prompt], return_tensors="pd")
 
     @paddle.no_grad()
     def chat(
@@ -1085,15 +1096,15 @@ class InternLM2ForCausalLM(InternLM2PretrainedModel):
         do_sample: bool = True,
         temperature: float = 0.8,
         top_p: float = 0.8,
-        meta_instruction: str = 'You are an AI assistant whose name is InternLM (书生·浦语).\n'
-                                '- InternLM (书生·浦语) is a conversational language model that is developed by Shanghai AI Laboratory (上海人工智能实验室). It is designed to be helpful, honest, and harmless.\n'
-                                '- InternLM (书生·浦语) can understand and communicate fluently in the language chosen by the user such as English and 中文.',
+        meta_instruction: str = "You are an AI assistant whose name is InternLM (书生·浦语).\n"
+        "- InternLM (书生·浦语) is a conversational language model that is developed by Shanghai AI Laboratory (上海人工智能实验室). It is designed to be helpful, honest, and harmless.\n"
+        "- InternLM (书生·浦语) can understand and communicate fluently in the language chosen by the user such as English and 中文.",
         **kwargs,
     ):
         inputs = self.build_inputs(tokenizer, query, history, meta_instruction)
         inputs = {k: v for k, v in inputs.items() if paddle.is_tensor(v)}
         # also add end-of-assistant token in eos token id to avoid unnecessary generation
-        eos_token_id = [tokenizer.eos_token_id, tokenizer.convert_tokens_to_ids(['<|im_end|>'])[0]]
+        eos_token_id = [tokenizer.eos_token_id, tokenizer.convert_tokens_to_ids(["<|im_end|>"])[0]]
         outputs = self.generate(
             **inputs,
             streamer=streamer,
@@ -1104,8 +1115,48 @@ class InternLM2ForCausalLM(InternLM2PretrainedModel):
             eos_token_id=eos_token_id,
             **kwargs,
         )
-        outputs = outputs[0].cpu().tolist()[len(inputs['input_ids'][0]): ]
+        outputs = outputs[0].cpu().tolist()[len(inputs["input_ids"][0]) :]
         response = tokenizer.decode(outputs, skip_special_tokens=True)
-        response = response.split('<|im_end|>')[0]
+        response = response.split("<|im_end|>")[0]
         history = history + [(query, response)]
         return response, history
+
+    def tie_weights(self):
+        """
+        Tie the weights between the input embeddings and the output embeddings.
+        """
+        if self.config.tie_word_embeddings:
+            output_embeddings = self.get_output_embeddings()
+            input_embeddings = self.get_input_embeddings()
+            if output_embeddings is not None and input_embeddings is not None:
+                if input_embeddings.weight.T.shape != output_embeddings.weight.shape:
+                    logger.warning(
+                        f"The shape of input embeddings is {input_embeddings.weight.shape} and the shape of output embeddings is {output_embeddings.weight.shape}. "
+                        "This is only expected if you are calling the `resize_token_embeddings` method"
+                    )
+                output_embeddings.weight.data = input_embeddings.weight.T
+                if getattr(output_embeddings, "bias", None) is not None:
+                    # need to pad
+                    if output_embeddings.weight.shape[0] > output_embeddings.bias.shape[0]:
+                        old_bias = output_embeddings.bias
+                        pad_length = output_embeddings.weight.shape[0] - old_bias.shape[0]
+                        output_embeddings.bias = output_embeddings.create_parameter(
+                            shape=[output_embeddings.weight.shape[0]],
+                            attr=output_embeddings._bias_attr,
+                            dtype=output_embeddings._dtype,
+                            is_bias=True,
+                        )
+                        new_bias = paddle.concat(
+                            [old_bias, paddle.zeros([pad_length], dtype=output_embeddings.bias.dtype)]
+                        )
+                        output_embeddings.bias.set_value(new_bias)
+                    # need to trim
+                    elif output_embeddings.weight.shape[0] < output_embeddings.bias.shape[0]:
+                        new_bias = output_embeddings.bias[: output_embeddings.weight.shape[0]]
+                        output_embeddings.bias = output_embeddings.create_parameter(
+                            shape=[output_embeddings.weight.shape[0]],
+                            attr=output_embeddings._bias_attr,
+                            dtype=output_embeddings._dtype,
+                            is_bias=True,
+                        )
+                        output_embeddings.bias.set_value(new_bias)

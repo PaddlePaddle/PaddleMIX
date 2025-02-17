@@ -28,7 +28,7 @@ from paddlemix.utils.log import logger
 
 def main(args):
     paddle.seed(seed=0)
-    compute_dtype = "float16" if args.fp16 else "bfloat16"
+    compute_dtype = args.dtype
     if "npu" in paddle.get_device():
         is_bfloat16_supported = True
     else:
@@ -36,6 +36,7 @@ def main(args):
     if compute_dtype == "bfloat16" and not is_bfloat16_supported:
         logger.warning("bfloat16 is not supported on your device,change to float32")
         compute_dtype = "float32"
+    print("compute_dtype", compute_dtype)
 
     model = Qwen2VLForConditionalGeneration.from_pretrained(args.model_path, dtype=compute_dtype)
 
@@ -86,7 +87,7 @@ def main(args):
                 start = time.time()
             with paddle.no_grad():
                 generated_ids = model.generate(
-                    **inputs, max_new_tokens=args.max_new_tokens, temperature=args.temperature
+                    **inputs, max_new_tokens=args.max_new_tokens, temperature=args.temperature, top_p=args.top_p
                 )  # already trimmed in paddle
                 output_text = processor.batch_decode(
                     generated_ids[0], skip_special_tokens=True, clean_up_tokenization_spaces=False
@@ -103,11 +104,15 @@ def main(args):
     else:
         # Inference: Generation of the output
         generated_ids = model.generate(
-            **inputs, max_new_tokens=args.max_new_tokens, temperature=args.temperature
+            **inputs, max_new_tokens=args.max_new_tokens, temperature=args.temperature, top_p=args.top_p
         )  # already trimmed in paddle
         output_text = processor.batch_decode(
             generated_ids[0], skip_special_tokens=True, clean_up_tokenization_spaces=False
         )
+        print(f"GPU memory_allocated: {paddle.device.cuda.memory_allocated() / 1024 ** 3:.2f} GB")
+        print(f"GPU max_memory_allocated: {paddle.device.cuda.max_memory_allocated() / 1024 ** 3:.2f} GB")
+        print(f"GPU memory_reserved: {paddle.device.cuda.memory_reserved() / 1024 ** 3:.2f} GB")
+        print(f"GPU max_memory_reserved: {paddle.device.cuda.max_memory_reserved() / 1024 ** 3:.2f} GB")
         print("output_text:\n", output_text)
 
 
@@ -116,9 +121,10 @@ if __name__ == "__main__":
     parser.add_argument("--model_path", type=str, default="Qwen/Qwen2-VL-2B-Instruct")
     parser.add_argument("--question", type=str, default="Describe this image.")
     parser.add_argument("--image_file", type=str, default="paddlemix/demo_images/examples_image1.jpg")
+    parser.add_argument("--top_p", type=float, default=0.01)
     parser.add_argument("--temperature", type=float, default=0.01)
-    parser.add_argument("--max_new_tokens", type=int, default=128)
-    parser.add_argument("--fp16", action="store_true")
+    parser.add_argument("--max_new_tokens", type=int, default=512)
+    parser.add_argument("--dtype", type=str, default="bfloat16")
     parser.add_argument("--benchmark", action="store_true")
     args = parser.parse_args()
     main(args)
