@@ -67,7 +67,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def test_pipeline(args):
+def pipeline(args):
     """Run the complete data processing pipeline including analysis, cleaning, and augmentation.
 
     The pipeline performs the following steps:
@@ -250,7 +250,7 @@ def main():
         All generated files are saved in the output directory.
     """
     args = parse_args()
-    test_pipeline(args)
+    pipeline(args)
 
 
 if __name__ == "__main__":
