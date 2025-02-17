@@ -240,14 +240,14 @@ class MapDataset(Dataset):
 
     def __init__(self, data, **kwargs):
         self.data = data
-        self._transform_pipline = []
+        self._transform_pipeline = []
         self.new_data = self.data
         self.info = kwargs
         self.label_list = self.info.pop("label_list", None)
         self.vocab_info = self.info.pop("vocab_info", None)
 
     def _transform(self, data):
-        for fn in self._transform_pipline:
+        for fn in self._transform_pipeline:
             data = fn(data)
         return data
 
@@ -256,7 +256,7 @@ class MapDataset(Dataset):
         Basic function of `MapDataset` to get sample from dataset with a given
         index.
         """
-        return self._transform(self.new_data[idx]) if self._transform_pipline else self.new_data[idx]
+        return self._transform(self.new_data[idx]) if self._transform_pipeline else self.new_data[idx]
 
     def __len__(self):
         """
@@ -380,7 +380,7 @@ class MapDataset(Dataset):
         if batched:
             self.new_data = fn(self.new_data)
         elif lazy:
-            self._transform_pipline.append(fn)
+            self._transform_pipeline.append(fn)
         else:
             self.new_data = [fn(self.new_data[idx]) for idx in range(len(self.new_data))]
         return self
@@ -403,14 +403,14 @@ class IterDataset(IterableDataset):
 
     def __init__(self, data, **kwargs):
         self.data = data
-        self._transform_pipline = []
-        self._filter_pipline = []
+        self._transform_pipeline = []
+        self._filter_pipeline = []
 
         self.label_list = kwargs.pop("label_list", None)
         self.vocab_info = kwargs.pop("vocab_info", None)
 
     def _transform(self, data):
-        for fn in self._transform_pipline:
+        for fn in self._transform_pipeline:
             data = fn(data)
         return data
 
@@ -418,7 +418,7 @@ class IterDataset(IterableDataset):
         return True
 
     def _filter(self, data):
-        for fn in self._filter_pipline:
+        for fn in self._filter_pipeline:
             if not fn(data):
                 return False
         return True
@@ -430,19 +430,19 @@ class IterDataset(IterableDataset):
         num_samples = 0
         if inspect.isfunction(self.data):
             for example in self.data():
-                if (not self._filter_pipline or self._filter(self._filter_pipline)) and self._shard_filter(
+                if (not self._filter_pipeline or self._filter(self._filter_pipeline)) and self._shard_filter(
                     num_samples=num_samples
                 ):
-                    yield self._transform(example) if self._transform_pipline else example
+                    yield self._transform(example) if self._transform_pipeline else example
                 num_samples += 1
         else:
             if inspect.isgenerator(self.data):
-                warnings.warn("Reciving generator as data source, data can only be iterated once")
+                warnings.warn("Receiving generator as data source, data can only be iterated once")
             for example in self.data:
-                if (not self._filter_pipline or self._filter(self._filter_pipline)) and self._shard_filter(
+                if (not self._filter_pipeline or self._filter(self._filter_pipeline)) and self._shard_filter(
                     num_samples=num_samples
                 ):
-                    yield self._transform(example) if self._transform_pipline else example
+                    yield self._transform(example) if self._transform_pipeline else example
                 num_samples += 1
 
     def filter(self, fn):
@@ -455,7 +455,7 @@ class IterDataset(IterableDataset):
                 returns a boolean. Samples that return False are discarded.
         """
 
-        self._filter_pipline.append(fn)
+        self._filter_pipeline.append(fn)
 
         return self
 
@@ -495,7 +495,7 @@ class IterDataset(IterableDataset):
                 sample as argument.
         """
 
-        self._transform_pipline.append(fn)
+        self._transform_pipeline.append(fn)
 
         return self
 

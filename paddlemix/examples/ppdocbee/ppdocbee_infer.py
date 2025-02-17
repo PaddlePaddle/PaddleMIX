@@ -37,7 +37,7 @@ def main(args):
         logger.warning("bfloat16 is not supported on your device,change to float32")
         compute_dtype = "float32"
 
-    model = Qwen2VLForConditionalGeneration.from_pretrained(args.model_path, dtype="bfloat16")
+    model = Qwen2VLForConditionalGeneration.from_pretrained(args.model_path, dtype=compute_dtype)
 
     image_processor = Qwen2VLImageProcessor()
     tokenizer = MIXQwen2Tokenizer.from_pretrained(args.model_path)
@@ -117,7 +117,7 @@ def main(args):
             output_text = processor.batch_decode(
                 generated_ids[0], skip_special_tokens=True, clean_up_tokenization_spaces=False
             )
-        print("output_text:\n", output_text)
+        print("output_text:\n", output_text[0])
 
 
 if __name__ == "__main__":

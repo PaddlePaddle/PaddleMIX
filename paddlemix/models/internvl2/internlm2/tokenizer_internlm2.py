@@ -18,14 +18,17 @@
 
 """Tokenization classes for InternLM."""
 import os
+import re
 from shutil import copyfile
 from typing import Any, Dict, List, Optional, Tuple
 
 import sentencepiece as spm
 from paddlenlp.transformers.tokenizer_utils import PretrainedTokenizer
+from paddlenlp.transformers.tokenizer_utils_base import AddedToken, TextInput
+
 from paddlemix.utils.log import logger
 
-VOCAB_FILES_NAMES = {'vocab_file': './tokenizer.model'}
+VOCAB_FILES_NAMES = {"vocab_file": "./tokenizer.model"}
 # VOCAB_FILES_NAMES = {"vocab_file": "sentencepiece.bpe.model"}
 
 # Modified from transformers.model.llama.tokenization_llama.LlamaTokenizer
@@ -38,18 +41,18 @@ class InternLM2Tokenizer(PretrainedTokenizer):
             Path to the vocabulary file.
     """
 
-    resource_files_names = VOCAB_FILES_NAMES # vocab_files_names in torch
-    pretrained_resource_files_map = {} # pretrained_vocab_files_map in torch
-    model_input_names = ['input_ids', 'attention_mask']
-    _auto_class = 'AutoTokenizer'
+    resource_files_names = VOCAB_FILES_NAMES  # vocab_files_names in torch
+    pretrained_resource_files_map = {}  # pretrained_vocab_files_map in torch
+    model_input_names = ["input_ids", "attention_mask"]
+    _auto_class = "AutoTokenizer"
 
     def __init__(
         self,
         vocab_file,
-        unk_token='<unk>',
-        bos_token='<s>',
-        eos_token='</s>',
-        pad_token='</s>',
+        unk_token="<unk>",
+        bos_token="<s>",
+        eos_token="</s>",
+        pad_token="</s>",
         sp_model_kwargs: Optional[Dict[str, Any]] = None,
         add_bos_token=True,
         add_eos_token=False,
@@ -78,7 +81,7 @@ class InternLM2Tokenizer(PretrainedTokenizer):
     def no_prefix_space_tokens(self):
         if self._no_prefix_space_tokens is None:
             vocab = self.convert_ids_to_tokens(list(range(self.vocab_size)))
-            self._no_prefix_space_tokens = {i for i, tok in enumerate(vocab) if not tok.startswith('▁')}
+            self._no_prefix_space_tokens = {i for i, tok in enumerate(vocab) if not tok.startswith("▁")}
         return self._no_prefix_space_tokens
 
     @property
@@ -115,20 +118,20 @@ class InternLM2Tokenizer(PretrainedTokenizer):
 
     def _maybe_add_prefix_space(self, tokens, decoded):
         if tokens and tokens[0] not in self.no_prefix_space_tokens:
-            return ' ' + decoded
+            return " " + decoded
         else:
             return decoded
 
     def convert_tokens_to_string(self, tokens):
         """Converts a sequence of tokens (string) in a single string."""
         current_sub_tokens = []
-        out_string = ''
+        out_string = ""
         prev_is_special = False
         for token in tokens:
             # make sure that special tokens are not decoded using sentencepiece model
             if token in self.all_special_tokens:
                 if not prev_is_special:
-                    out_string += ' '
+                    out_string += " "
                 out_string += self.sp_model.decode(current_sub_tokens) + token
                 prev_is_special = True
                 current_sub_tokens = []
@@ -152,16 +155,16 @@ class InternLM2Tokenizer(PretrainedTokenizer):
             `Tuple(str)`: Paths to the files saved.
         """
         if not os.path.isdir(save_directory):
-            logger.error(f'Vocabulary path ({save_directory}) should be a directory')
+            logger.error(f"Vocabulary path ({save_directory}) should be a directory")
             return
         out_vocab_file = os.path.join(
-            save_directory, (filename_prefix + '-' if filename_prefix else '') + VOCAB_FILES_NAMES['vocab_file']
+            save_directory, (filename_prefix + "-" if filename_prefix else "") + VOCAB_FILES_NAMES["vocab_file"]
         )
 
         if os.path.abspath(self.vocab_file) != os.path.abspath(out_vocab_file) and os.path.isfile(self.vocab_file):
             copyfile(self.vocab_file, out_vocab_file)
         elif not os.path.isfile(self.vocab_file):
-            with open(out_vocab_file, 'wb') as fi:
+            with open(out_vocab_file, "wb") as fi:
                 content_spiece_model = self.sp_model.serialized_model_proto()
                 fi.write(content_spiece_model)
 
@@ -231,3 +234,77 @@ class InternLM2Tokenizer(PretrainedTokenizer):
         if token_ids_1 is None:
             return len(token_ids_0 + eos) * [0]
         return len(token_ids_0 + eos + token_ids_1 + eos) * [0]
+
+    def tokenize(self, text: TextInput, **kwargs) -> List[str]:
+        """
+        Converts a string into a sequence of tokens, using the tokenizer.
+
+        Split in words for word-based vocabulary or sub-words for sub-word-based vocabularies
+        (BPE/SentencePieces/WordPieces). Takes care of added tokens.
+
+        Args:
+            text (`str`):
+                The sequence to be encoded.
+            **kwargs (additional keyword arguments):
+                Passed along to the model-specific `prepare_for_tokenization` preprocessing method.
+
+        Returns:
+            `List[str]`: The list of tokens.
+        """
+        split_special_tokens = kwargs.pop("split_special_tokens", self.split_special_tokens)
+
+        text, kwargs = self.prepare_for_tokenization(text, **kwargs)
+
+        # Simple mapping string => AddedToken for special tokens with specific tokenization behaviors
+        all_special_tokens_extended = dict(
+            (str(t), t) for t in self.all_special_tokens_extended if isinstance(t, AddedToken)
+        )
+
+        if hasattr(self, "do_lower_case") and self.do_lower_case:
+            # convert non-special tokens to lowercase. Might be super slow as well?
+            escaped_special_toks = [
+                re.escape(s_tok) for s_tok in (self.unique_no_split_tokens + self.all_special_tokens)
+            ]
+            pattern = r"(" + r"|".join(escaped_special_toks) + r")|" + r"(.+?)"
+            text = re.sub(pattern, lambda m: m.groups()[0] or m.groups()[1].lower(), text)
+
+        if split_special_tokens:
+            no_split_token = []
+            tokens = [text]
+        else:
+            no_split_token = set(self.unique_no_split_tokens)  # don't split on any of the added tokens
+            # "This is something<special_token_1>  else"
+            tokens = self.tokens_trie.split(text)
+
+        # ["This is something", "<special_token_1>", "  else"]
+        for i, token in enumerate(tokens):
+            if token in no_split_token:
+                tok_extended = all_special_tokens_extended.get(token, None)
+                left = tokens[i - 1] if i > 0 else None
+                right = tokens[i + 1] if i < len(tokens) - 1 else None
+                if isinstance(tok_extended, AddedToken):
+                    if tok_extended.rstrip and right:
+                        # A bit counter-intuitive but we strip the left of the string
+                        # since tok_extended.rstrip means the special token is eating all white spaces on its right
+                        tokens[i + 1] = right.lstrip()
+                    # Strip white spaces on the left
+                    if tok_extended.lstrip and left:
+                        tokens[i - 1] = left.rstrip()  # Opposite here
+                    if tok_extended.single_word and left and left[-1] != " ":
+                        tokens[i - 1] += token
+                        tokens[i] = ""
+                    elif tok_extended.single_word and right and right[0] != " ":
+                        tokens[i + 1] = token + tokens[i + 1]
+                        tokens[i] = ""
+        # ["This is something", "<special_token_1>", "else"]
+        tokenized_text = []
+        for token in tokens:
+            # Need to skip eventual empty (fully stripped) tokens
+            if not token:
+                continue
+            if token in no_split_token:
+                tokenized_text.append(token)
+            else:
+                tokenized_text.extend(self._tokenize(token))
+        # ["This", " is", " something", "<special_token_1>", "else"]
+        return tokenized_text

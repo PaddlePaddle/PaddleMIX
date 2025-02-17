@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any, Dict
 
 from .chatter import WebChatModel
 from .common import get_time
+from .extras.constants import DEFAULT
 from .locales import LOCALES
 from .manager import Manager
 from .runner import Runner
@@ -45,9 +46,9 @@ class Engine:
 
     def resume(self):
         init_dict = {
-            "top.lang": {"value": "zh"},
-            "top.model_name": {"value": "Qwen2-VL-2B-Instruct"},
-            "top.model_path": {"value": "Qwen/Qwen2-VL-2B-Instruct"},
+            "top.lang": {"value": DEFAULT["lang"]},
+            "top.model_name": {"value": DEFAULT["model"]},
+            "top.model_path": {"value": DEFAULT["model_path"]},
         }
 
         if not self.pure_chat:
