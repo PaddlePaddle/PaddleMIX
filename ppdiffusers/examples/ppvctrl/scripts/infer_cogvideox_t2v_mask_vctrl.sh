@@ -14,7 +14,7 @@
 
 python infer_cogvideox_t2v_vctrl_cli.py \
   --pretrained_model_name_or_path "paddlemix/cogvideox-5b-vctrl" \
-  --vctrl_path "weights/mask/vctrl_5b_t2v_mask.pdparams" \
+  --vctrl_path "paddlemix/vctrl-5b-t2v-mask" \
   --vctrl_config "vctrl_configs/cogvideox_5b_vctrl_config.json" \
   --control_video_path "examples/mask/case1/guide_values.mp4" \
   --control_mask_video_path "examples/mask/case1/mask_values.mp4" \
@@ -25,4 +25,6 @@ python infer_cogvideox_t2v_vctrl_cli.py \
   --height 480 \
   --max_frame 49 \
   --guidance_scale 3.5 \
-  --num_inference_steps 25
+  --num_inference_steps 25 \
+ 
+  

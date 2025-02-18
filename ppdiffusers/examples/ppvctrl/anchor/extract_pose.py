@@ -2119,7 +2119,7 @@ def topdown_unite_predict_video(topdown_keypoint_detector,
     keypoint_smoothing = KeypointSmoothing(
         width, height, filter_type=FLAGS.filter_type, beta=0.05)
     model = create_model(FLAGS.det_model_dir)
-    
+    pose_map=[]
     while (1):
         ret, frame = capture.read()
         if not ret:
@@ -2158,6 +2158,7 @@ def topdown_unite_predict_video(topdown_keypoint_detector,
             keypoint_res,
             visual_thresh=FLAGS.keypoint_threshold,
             returnimg=True)
+        pose_map.append(im)
 
         if save_res:
             store_res.append([
@@ -2171,6 +2172,7 @@ def topdown_unite_predict_video(topdown_keypoint_detector,
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
     writer.release()
+    cv2.imwrite(FLAGS.reference_image_path.replace("reference","control"), pose_map[0])
     print('output_video saved to: {}'.format(out_path))
     if save_res:
         """

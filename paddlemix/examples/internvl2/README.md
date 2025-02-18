@@ -90,7 +90,7 @@ python paddlemix/examples/internvl2/chat_demo_video.py \
   * `text`: 用户指令, 例如 "Please describe this video in detail."
 
 
-## 4 模型微调
+## 4 模型训练
 
 ### 4.1 微调数据准备
 
@@ -189,8 +189,28 @@ playground/
 │   ├── geoqa+
 │   │   └── images
 ```
+### 4.2 预训练命令
 
-### 4.2 微调命令
+```bash
+# 多卡
+# 1B InternVl2 (LLM Qwen2.5-0.5B)
+sh paddlemix/examples/internvl2/shell/internvl2.0/pretrain/internvl2_1b_qwen2-5_0_5b_dynamic_res_pretrain.sh
+
+## 多卡
+# 2B InternVl2 (LLM internlm-1_8b)
+sh paddlemix/examples/internvl2/shell/internvl2.0/pretrain/internvl2_2b_internlm2_1_8b_dynamic_res_pretrain.sh
+# 2B InternVl2 (LLM Qwen2.5-1.5b)
+sh paddlemix/examples/internvl2/shell/internvl2.0/pretrain/internvl2_2b_qwen2-5_1_5b_dynamic_res_pretrain.sh
+
+## 多卡
+# 4B InternVl2 (LLM Qwen2.5-3b)
+sh paddlemix/examples/internvl2/shell/internvl2.0/pretrain/internvl2_2b_qwen2-5_3b_dynamic_res_pretrain.sh
+
+## 多卡
+# 8B InternVl2 (LLM Qwen2.5-7b)
+sh paddlemix/examples/internvl2/shell/internvl2.0/pretrain/internvl2_8b_qwen2-5_7b_dynamic_res_pretrain.sh
+```
+### 4.3 微调命令
 
 注意：此微调训练为全参数微调，冻结视觉编码器而放开LLM训练，1B V100 32G可跑。
 2B模型微调训练的显存大小约为40G，8B模型微调训练的显存大小约为80G。
@@ -209,7 +229,7 @@ sh paddlemix/examples/internvl2/shell/internvl2.0/2nd_finetune/internvl2_2b_inte
 sh paddlemix/examples/internvl2/shell/internvl2.0/2nd_finetune/internvl2_8b_internlm2_7b_dynamic_res_2nd_finetune_full.sh
 ```
 
-### 4.3 微调后使用
+### 4.4 微调后使用
 
 同按步骤3中的模型推理预测，只需将`model_name_or_path`参数修改为微调后的模型路径即可。
 
@@ -220,7 +240,7 @@ python paddlemix/examples/internvl2/chat_demo.py \
     --text "Please describe this image in detail."
 ```
 
-### 4.4 MiniMonkey 模型
+### 4.5 MiniMonkey 模型
 
 [MiniMonkey](https://github.com/Yuliang-Liu/Monkey/blob/main/project/mini_monkey/) 是基于 InternVL2 的专用于OCR文档理解的多模态大模型。
 具体使用请参照[minimonkey](../minimonkey/)

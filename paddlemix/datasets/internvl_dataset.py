@@ -330,15 +330,15 @@ def preprocess_mpt(
 
     # Mask targets. Only compute loss on the assistant outputs.
     sep = conv.sep + conv.roles[1]  # <|im_end|><|im_start|>assistant\n
-    for conversation, target in zip(conversations, targets):
-        total_len = int(target.not_equal(paddle.to_tensor(tokenizer.pad_token_id)).sum())
+    for idx, conversation in enumerate(conversations):
+        total_len = int(targets[idx].not_equal(paddle.to_tensor(tokenizer.pad_token_id)).sum())
 
         turns = conversation.split(conv.sep)
         re_turns = [conv.sep.join(turns[:3])]  # system + user + gpt
         for conv_idx in range(3, len(turns), 2):
             re_turns.append(conv.sep.join(turns[conv_idx:conv_idx + 2]))  # user + gpt
         cur_len = 0
-        target[:cur_len] = IGNORE_TOKEN_ID
+        targets[idx, :cur_len] = IGNORE_TOKEN_ID
         for i, turn in enumerate(re_turns):
             if turn == '':
                 break
@@ -351,17 +351,17 @@ def preprocess_mpt(
             instruction_len = len(tokenizer(parts[0]).input_ids)
 
             # Ignore the user instructions
-            target[cur_len: cur_len + instruction_len] = IGNORE_TOKEN_ID
+            targets[idx, cur_len: cur_len + instruction_len] = IGNORE_TOKEN_ID
             # print(f'[question {i}]', tokenizer.decode(input_ids[:, cur_len: cur_len + instruction_len][0]))
             # print(f'[answer {i}]', tokenizer.decode(input_ids[:, cur_len + instruction_len: cur_len + turn_len][0]))
-            # print(f'[label {i}]', target[cur_len + instruction_len: cur_len + turn_len])
+            # print(f'[label {i}]', targets[idx, cur_len + instruction_len: cur_len + turn_len])
             cur_len += turn_len
 
-        target[cur_len:] = IGNORE_TOKEN_ID
+        targets[idx, cur_len:] = IGNORE_TOKEN_ID
 
         if cur_len < tokenizer.model_max_length:
             if cur_len != total_len:
-                target[:] = IGNORE_TOKEN_ID
+                targets[idx, :] = IGNORE_TOKEN_ID
                 print(
                     f'WARNING: tokenization mismatch: {cur_len} vs. {total_len}.'
                     f' #turn = {len(turns) - 1}. (ignored). This dataset is {ds_name}.'

@@ -249,6 +249,8 @@ def get_pointer_hint(dtypes):
             hint += "*fp32:16,"
         elif ele == paddle.bfloat16:
             hint += "*bf16:16,"
+        elif ele == paddle.int32:
+            hint += "*i32:16,"
     return hint
 
 
@@ -276,14 +278,19 @@ CUdeviceptr get_tensor_ptr(const paddle::Tensor& input){
     assert(false);
     return (CUdeviceptr)(nullptr);
   }
-} """
+}
+
+int triton_cdiv(int x, int y) {
+    int result = (x + y - 1) / y;
+    return (int)(result);
+}
+"""
 
 tune_and_invoke_part = """
   std::vector<int> problem_size = {${key}};
   auto run_triton_kernel = [&](int algo_id) -> CUresult{
       return ${op_name}_kernel(run_stream,
                                                ${triton_kernel_args},
-
                                                algo_id);
   };
 
@@ -407,6 +414,12 @@ def rendering_common_template(
         elif type(arg_defaults[i]) == bool:
             input_and_attr += f"bool {arg_names[i]},"
             paddle_attr_sig += f""""{arg_names[i]}: bool","""
+        elif type(arg_defaults[i]) == int:
+            input_and_attr += f"int64_t {arg_names[i]},"
+            paddle_attr_sig += f""""{arg_names[i]}: int64_t","""
+        elif type(arg_defaults[i]) == str:
+            input_and_attr += f"std::string {arg_names[i]},"
+            paddle_attr_sig += f""""{arg_names[i]}: std::string","""
         else:
             input_and_attr += f"const paddle::Tensor & {arg_names[i]},"
             paddle_input_sig += f""""{arg_names[i]}","""
