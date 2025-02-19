@@ -14,13 +14,12 @@
 from __future__ import annotations
 
 import numpy as np
-import paddle
 from PIL import Image
 
-from paddlemix.datacopilot.core import register
-from paddlemix.datacopilot.core.schema import T
-from paddlemix.datacopilot.nn import ARNIQA
+import paddle
 
+from ...core.schema import T, register
+from ...nn import ARNIQA
 from ._tagger import Tagger
 
 _arniqa = ARNIQA()
