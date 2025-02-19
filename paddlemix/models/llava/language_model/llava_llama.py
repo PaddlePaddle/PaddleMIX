@@ -99,6 +99,17 @@ class LlavaLlamaForCausalLM(LlamaForCausalLM, LlavaMetaForCausalLM):
             ) = self.prepare_inputs_labels_for_multimodal(
                 input_ids, position_ids, attention_mask, past_key_values, labels, images, image_size
             )
+            
+        # 通过attention_mask计算有效token数量
+        if attention_mask is not None:
+            # 统计当前batch的有效token数（排除padding）
+            current_batch_tokens = attention_mask.sum().item()  # shape: (batch_size, seq_len)
+        else:
+            # 如果没有padding，直接取inputs_embeds的batch_size*seq_length
+            current_batch_tokens = inputs_embeds.size(0) * inputs_embeds.size(1)
+
+        self.efficient_token_count = current_batch_tokens
+        self.input_shape = inputs_embeds.shape
 
         return super().forward(
             input_ids=input_ids,
