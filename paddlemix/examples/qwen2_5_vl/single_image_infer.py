@@ -37,7 +37,7 @@ def main(args):
         compute_dtype = "float32"
     print("compute_dtype", compute_dtype)
 
-    model = Qwen2_5_VLForConditionalGeneration.from_pretrained(args.model_path, dtype=compute_dtype, attn_implementation="eager")
+    model = Qwen2_5_VLForConditionalGeneration.from_pretrained(args.model_path, dtype=compute_dtype, attn_implementation=args.attn_implementation)
 
     image_processor = Qwen2_5_VLImageProcessor()
     tokenizer = MIXQwen2_5_Tokenizer.from_pretrained(args.model_path)
@@ -120,5 +120,6 @@ if __name__ == "__main__":
     parser.add_argument("--max_new_tokens", type=int, default=128)
     parser.add_argument("--dtype", type=str, default="bfloat16")
     parser.add_argument("--benchmark", action="store_true")
+    parser.add_argument("--attn_implementation", type=str, default="eager")
     args = parser.parse_args()
     main(args)
