@@ -61,22 +61,22 @@ sh build_env.sh
 
 ## 3 推理预测
 
-### a. 单图预测
+### a. 单图预测 (单卡 32G A卡V卡 显存可运行3B模型)
 ```bash
 CUDA_VISIBLE_DEVICES=0 python paddlemix/examples/qwen2_vl/single_image_infer.py
 ```
 
-### b. 多图预测
+### b. 多图预测 (单卡 32G A卡V卡 显存可运行3B模型)
 ```bash
 CUDA_VISIBLE_DEVICES=0 python paddlemix/examples/qwen2_vl/multi_image_infer.py
 ```
 
-### c. 视频预测
+### c. 视频预测 (单卡 32G A卡V卡 显存可运行3B模型)
 ```bash
 CUDA_VISIBLE_DEVICES=0 python paddlemix/examples/qwen2_vl/video_infer.py
 ```
 
-### d. batch推理
+### d. batch推理 (单卡 32G A卡V卡 显存可运行3B模型)
 ```bash
 CUDA_VISIBLE_DEVICES=0 python paddlemix/examples/qwen2_vl/batch_infer.py
 ```
@@ -123,16 +123,16 @@ wget https://paddlenlp.bj.bcebos.com/datasets/paddlemix/playground/opensource_js
 注意：此微调训练为语言模型微调，冻结视觉编码器而放开LLM训练，2B模型全量微调训练的显存大小约为30G，7B模型全量微调训练的显存大小约为75G。
 
 ```bash
-# 2B
+# 2B (多张40G A卡 显存可运行3B模型)
 sh paddlemix/examples/qwen2_vl/shell/baseline_2b_bs32_1e8.sh
 
-# 2B lora
+# 2B lora (多张40G A卡 显存可运行3B模型)
 sh paddlemix/examples/qwen2_vl/shell/baseline_2b_lora_bs32_1e8.sh
 
-# 7B
+# 7B (多张80G A卡 显存可运行7B模型)
 sh paddlemix/examples/qwen2_vl/shell/baseline_7b_bs32_1e8.sh
 
-# 7B lora
+# 7B lora (多张80G A卡 显存可运行7B模型)
 sh paddlemix/examples/qwen2_vl/shell/baseline_7b_lora_bs32_1e8.sh
 ```
 
