@@ -67,7 +67,7 @@ def is_valid_image_resolution(
 
 @register()
 def image_resolution_filter(
-    dataset,
+    dataset: MMDataset,
     min_width: Optional[float] = 112,
     min_height: Optional[float] = 112,
     max_width: Optional[float] = None,

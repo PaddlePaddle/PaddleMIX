@@ -19,8 +19,7 @@ import numpy as np
 from brisque import BRISQUE
 from PIL import Image
 
-from paddlemix.datacopilot.core import register
-from paddlemix.datacopilot.core.schema import T
+from ...core import register, T
 
 from ._tagger import Tagger
 

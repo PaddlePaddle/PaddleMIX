@@ -51,7 +51,7 @@ def is_avg_line_length_valid(item, min_length: int = 10, max_length: float = flo
 
 @register()
 def average_line_length_filter(
-    dataset, 
+    dataset: MMDataset, 
     min_length: Optional[int] = 10, 
     max_length: Optional[float] = float('inf')  # Default is no upper limit
 ) -> MMDataset:

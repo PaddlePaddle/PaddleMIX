@@ -73,7 +73,7 @@ def is_language_valid(item, lang: Optional[Union[str, List[str]]] = None, min_sc
 
 @register()
 def language_id_filter(
-    dataset, 
+    dataset: MMDataset, 
     lang: Optional[Union[str, List[str]]] = None, 
     min_score: float = 0.8,
 ) -> MMDataset:

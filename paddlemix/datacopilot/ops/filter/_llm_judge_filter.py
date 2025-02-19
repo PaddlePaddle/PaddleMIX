@@ -12,14 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
-from paddlenlp.transformers import AutoTokenizer, AutoModelForCausalLM
-from paddlemix.datacopilot.core import MMDataset, register
+import re
 from tqdm import tqdm
 from typing import Dict, List
-import json
+
 import paddle
-import re
+from paddlenlp.transformers import AutoTokenizer, AutoModelForCausalLM
+
+from ...core import MMDataset, register
+
 
 def load_model(model_name: str):
     """

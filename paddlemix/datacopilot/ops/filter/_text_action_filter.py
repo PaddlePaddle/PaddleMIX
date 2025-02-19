@@ -70,7 +70,7 @@ def is_action_count_valid(item, nlp, min_action_num: int = 1) -> bool:
 
 @register()
 def text_action_filter(
-    dataset, 
+    dataset: MMDataset, 
     lang: str = 'en', 
     min_action_num: Optional[int] = 1
 ) -> MMDataset:

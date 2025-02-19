@@ -52,7 +52,7 @@ def is_special_char_ratio_valid(item, min_ratio: float = 0.0, max_ratio: float =
 
 @register()
 def special_characters_filter(
-    dataset, 
+    dataset: MMDataset, 
     min_ratio: Optional[float] = 0.0, 
     max_ratio: Optional[float] = 0.25
 ) -> MMDataset:

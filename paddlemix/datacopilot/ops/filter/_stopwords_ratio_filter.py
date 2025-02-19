@@ -13,12 +13,12 @@
 # limitations under the License.
 
 
-from typing import Optional
-from ...core import MMDataset, register
+import os
 from functools import partial
+from typing import Optional
 import nltk
 from nltk.corpus import stopwords
-import os
+from ...core import MMDataset, register
 
 # Global variable to track stopwords set
 _stop_words = None

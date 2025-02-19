@@ -72,7 +72,7 @@ def is_char_ngram_valid(item, rep_len: int = 10, min_ratio: float = 0.0, max_rat
 
 @register()
 def char_ngram_repetition_filter(
-    dataset, 
+    dataset: MMDataset, 
     rep_len: Optional[int] = 10, 
     min_ratio: Optional[float] = 0.0, 
     max_ratio: Optional[float] = 0.5

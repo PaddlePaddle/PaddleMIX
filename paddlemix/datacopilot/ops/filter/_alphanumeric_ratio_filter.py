@@ -48,7 +48,7 @@ def is_alnum_ratio_valid(item, min_ratio: float = 0.25, max_ratio: float = float
 
 @register()
 def alphanumeric_ratio_filter(
-    dataset, 
+    dataset: MMDataset, 
     min_ratio: Optional[float] = 0.25, 
     max_ratio: Optional[float] = float('inf')
 ) -> MMDataset:

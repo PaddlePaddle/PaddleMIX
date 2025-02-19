@@ -39,7 +39,7 @@ def is_chat_length_valid(item, max_length: int = 2048) -> bool:
 
 @register()
 def conversation_length_filter(
-    dataset, 
+    dataset: MMDataset, 
     max_length: Optional[int] = 2048, 
 ) -> MMDataset:
     print("Filtering out conversations that are too long...")

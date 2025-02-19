@@ -14,15 +14,14 @@
 
 
 import os
+import sys
 from typing import Optional
 from functools import partial
 from ...core import MMDataset, register
-from paddlenlp.transformers import AutoTokenizer
-import sys
 
 
 # Define the function to compute token count
-def compute_token_count(user_conv: str, tokenizer: AutoTokenizer) -> int:
+def compute_token_count(user_conv: str, tokenizer) -> int:
     """
     Compute the number of tokens in the sample (conversation).
 
@@ -36,9 +35,10 @@ def compute_token_count(user_conv: str, tokenizer: AutoTokenizer) -> int:
     tokens = tokenizer(user_conv, truncation=True, return_tensors="pd", use_fast=True)["input_ids"].flatten()
     return len(tokens)
 
+
 @register()
 def token_num_filter(
-    dataset, 
+    dataset: MMDataset, 
     tokenizer_model: str = "Qwen/Qwen2.5-7B", 
     min_tokens: Optional[int] = 10, 
     max_tokens: Optional[int] = sys.maxsize
@@ -56,8 +56,9 @@ def token_num_filter(
         MMDataset: The filtered dataset.
     """
     print(f"Filtering samples based on token count: min tokens = {min_tokens}, max tokens = {max_tokens}...")
-    
+
     # Initialize the tokenizer
+    from paddlenlp.transformers import AutoTokenizer
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_model)
 
     def filter_func(item):
