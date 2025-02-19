@@ -33,7 +33,6 @@ from paddlemix.processors.qwen2_5_vl_processing import (
     Qwen2_5_VLProcessor,
     process_vision_info,
 )
-from paddlemix.utils.log import logger
 
 MODEL_NAME = "Qwen/Qwen2.5-VL-7B-Instruct"
 vl_model = Qwen2_5_VLForConditionalGeneration.from_pretrained(MODEL_NAME, dtype="bfloat16")

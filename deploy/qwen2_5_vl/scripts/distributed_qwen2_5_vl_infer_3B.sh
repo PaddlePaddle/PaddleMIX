@@ -31,7 +31,7 @@ export CUDA_VISIBLE_DEVICES=2
 
 export PATH="/root/paddlejob/workspace/env_run/output/changwenbin/softmax_cuda/nvidia/nsight-systems/2024.4.1/bin:$PATH"
 
-/root/paddlejob/workspace/env_run/output/changwenbin/softmax_cuda/nvidia/nsight-systems/2024.4.1/bin/nsys profile -o binbin_qwen2_5 \
+# /root/paddlejob/workspace/env_run/output/changwenbin/softmax_cuda/nvidia/nsight-systems/2024.4.1/bin/nsys profile -o binbin_qwen2_5 \
 python /root/paddlejob/workspace/env_run/output/changwenbin/PaddleMIX/deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
     --model_name_or_path Qwen/Qwen2.5-VL-7B-Instruct \
     --dtype bfloat16 \
