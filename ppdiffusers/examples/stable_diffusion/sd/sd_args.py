@@ -92,7 +92,6 @@ class SDTrainingArguments(TrainingArguments):
 
         if self.to_static:
             self.use_ema = False
-            self.enable_xformers_memory_efficient_attention = False
             self.recompute = False
 
 
