@@ -2215,10 +2215,10 @@ class CogVideoXAttnProcessor2_0:
                     text_seq_length_tensor,
                     image_rotary_emb[0],
                     image_rotary_emb[1],
-                    attn.norm_q.weight,
-                    attn.norm_q.bias,
-                    attn.norm_k.weight,
-                    attn.norm_k.bias,
+                    attn.norm_q.weight.cuda(),
+                    attn.norm_q.bias.cuda(),
+                    attn.norm_k.weight.cuda(),
+                    attn.norm_k.bias.cuda(),
                     norm_eps=1e-5,
                 )
             elif attn.norm_q is None or attn.norm_k is None:

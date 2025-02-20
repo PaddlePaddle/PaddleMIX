@@ -13,5 +13,4 @@
 # limitations under the License.
 
 
-from ._info import info, head
-
+from ._info import head, info

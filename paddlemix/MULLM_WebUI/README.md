@@ -9,7 +9,7 @@ PaddleMIX MULLM_WebUI 是一个基于PaddleMIX套件的交互式平台，主要�
 |-------|------------|-------|---|-----|
 | qwen2_vl|2B/7B| ✅     | ✅   | ✅   |
 | PPDocBee-2B-1129|2B | ✅     | ✅   | ✅ |
-
+| qwen2_5_vl|3B/7B/72B| ✅     | ❌   | ❌   |
 >* ✅: Supported
 >* 🚧: In Progress
 >* ❌: Not Supported
