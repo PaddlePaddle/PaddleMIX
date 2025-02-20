@@ -26,6 +26,7 @@ from paddlenlp.transformers.tokenizer_utils import PretrainedTokenizer
 from PIL import Image
 from PIL.Image import Image as ImageObject
 from typing_extensions import override
+from paddlemix.processors.processing_utils import BaseImageProcessor
 
 IGNORE_INDEX = -100
 IMAGE_PLACEHOLDER = "<image>"
@@ -153,16 +154,16 @@ class BasePlugin:
         if len(images) != 0:
             images = self._regularize_images(
                 images,
-                image_resolution=getattr(processor, "image_resolution", 512),
+                image_resolution=getattr(processor, "image_resolution", 768),
             )
             input_dict["images"] = images
 
         if len(videos) != 0:
             videos = self._regularize_videos(
                 videos,
-                image_resolution=getattr(processor, "video_resolution", 128),
+                image_resolution=getattr(processor, "video_resolution", 256),
                 video_fps=getattr(processor, "video_fps", 1.0),
-                video_maxlen=getattr(processor, "video_maxlen", 64),
+                video_maxlen=getattr(processor, "video_maxlen", 128),
             )
             input_dict["videos"] = videos
 
@@ -257,6 +258,7 @@ class Qwen2_5_vlPlugin(BasePlugin):
         image_processor = getattr(processor, "image_processor")
         merge_length: int = getattr(image_processor, "merge_size") ** 2
         mm_inputs = self._get_mm_inputs(images, videos, processor)
+
         image_grid_thw = mm_inputs.get("image_grid_thw", [])
         video_grid_thw = mm_inputs.get("video_grid_thw", [])
 
@@ -311,7 +313,15 @@ class Qwen2_5_vlPlugin(BasePlugin):
         processor: Optional["ProcessorMixin"],
     ) -> Dict[str, Union[List[int], "paddle.Tensor"]]:
         self._validate_input(images, videos)
-        return self._get_mm_inputs(images, videos, processor)
+        mm_inputs = self._get_mm_inputs(images, videos, processor)
+        image_processor: "BaseImageProcessor" = getattr(processor, "image_processor")
+        if "second_per_grid_ts" in getattr(image_processor, "model_input_names", []) and "video_grid_thw" in mm_inputs:
+            video_fps = getattr(processor, "video_fps", 2.0)
+            mm_inputs["second_per_grid_ts"] = [image_processor.temporal_patch_size / video_fps] * len(
+                mm_inputs["video_grid_thw"]
+            )
+
+        return mm_inputs
 
 
 PLUGINS = {
