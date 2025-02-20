@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# distributed_qwen2_vl_infer_2B.sh
-
 export CUDA_VISIBLE_DEVICES=2
 # python /root/paddlejob/workspace/env_run/output/changwenbin/PaddleMIX/deploy/qwen2_5_vl/single_image_infer.py \
 # --benchmark 
@@ -29,10 +27,27 @@ export CUDA_VISIBLE_DEVICES=2
 #     --mp_degree 1 \
     # --benchmark 
 
-export PATH="/root/paddlejob/workspace/env_run/output/changwenbin/softmax_cuda/nvidia/nsight-systems/2024.4.1/bin:$PATH"
+export PATH="/root/paddlejob/workspace/env_run/output/changwenbin/softmax_cuda/nvidia/nsight-systems/2025.1.1/bin:$PATH"
 
-# /root/paddlejob/workspace/env_run/output/changwenbin/softmax_cuda/nvidia/nsight-systems/2024.4.1/bin/nsys profile -o binbin_qwen2_5 \
+# /root/paddlejob/workspace/env_run/output/changwenbin/softmax_cuda/nvidia/nsight-systems/2025.1.1/bin/nsys profile -o binbin_qwen2_5 \
+
 python /root/paddlejob/workspace/env_run/output/changwenbin/PaddleMIX/deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
-    --model_name_or_path Qwen/Qwen2.5-VL-7B-Instruct \
+    --model_name_or_path Qwen/Qwen2.5-VL-3B-Instruct \
     --dtype bfloat16 \
     --benchmark True 
+    
+
+
+
+
+# python /root/paddlejob/workspace/env_run/output/changwenbin/PaddleMIX/deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
+#     --model_name_or_path Qwen/Qwen2.5-VL-3B-Instruct \
+#     --dtype bfloat16 \
+#     --quant_type weight_only_int8 \
+#     --benchmark True 
+    
+# model_path=${1:-"Qwen/Qwen2-7B-Instruct"}
+
+# python -m paddle.distributed.launch --gpus "2,3" ./predict/predictor.py \
+#     --model_name_or_path Qwen/Qwen2.5-VL-3B-Instruct \
+#     --dtype bfloat16
