@@ -547,6 +547,12 @@ class Qwen2_5_VLVisionSdpaAttention(nn.Layer):
         self.qkv = nn.Linear(dim, dim * 3, bias_attr=True)
         self.proj = nn.Linear(dim, dim)
 
+        is_bfloat16_supported = paddle.amp.is_bfloat16_supported()
+        if is_bfloat16_supported:
+            self.compute_dtype = "bfloat16"
+        else:
+            self.compute_dtype = "float16"
+
     def forward(
         self, hidden_states: paddle.Tensor, cu_seqlens: paddle.Tensor, rotary_pos_emb: paddle.Tensor = None
     ) -> paddle.Tensor:
@@ -554,20 +560,24 @@ class Qwen2_5_VLVisionSdpaAttention(nn.Layer):
         q, k, v = (
             self.qkv(hidden_states).reshape([seq_length, 3, self.num_heads, -1]).transpose([1, 0, 2, 3]).unbind(0)
         )
-        q = apply_rotary_pos_emb_vision(q.unsqueeze(0), rotary_pos_emb).squeeze(0)
-        k = apply_rotary_pos_emb_vision(k.unsqueeze(0), rotary_pos_emb).squeeze(0)
-
-        attention_mask = paddle.zeros([1, seq_length, seq_length], dtype="bool")
+        q = apply_rotary_pos_emb_vision(q.unsqueeze(0), rotary_pos_emb)
+        k = apply_rotary_pos_emb_vision(k.unsqueeze(0), rotary_pos_emb)
+        attention_mask = paddle.zeros([1, 1, seq_length, seq_length], dtype="bool")
         for i in range(1, len(cu_seqlens)):
             attention_mask[..., cu_seqlens[i - 1] : cu_seqlens[i], cu_seqlens[i - 1] : cu_seqlens[i]] = True
-        q = q.transpose([1, 0, 2])
-        k = k.transpose([1, 0, 2])
-        v = v.transpose([1, 0, 2])
+
+        zero = paddle.zeros(attention_mask.shape, dtype=hidden_states.dtype)
+        neg_inf = paddle.full_like(attention_mask, paddle.finfo(hidden_states.dtype).min, dtype=hidden_states.dtype)
+        attention_mask = paddle.where(attention_mask, zero, neg_inf)
+        v = v.unsqueeze(0)
+
         attn_output = paddle.nn.functional.scaled_dot_product_attention(query
-            =q, key=k, value=v, attn_mask=attention_mask, dropout_p=0.0)
-        attn_output = attn_output.transpose([1, 0, 2])
+            =q.astype(self.compute_dtype), key=k.astype(self.compute_dtype), value=v.astype(self.compute_dtype), attn_mask=attention_mask.astype(self.compute_dtype), dropout_p=0.0)
+
+        attn_output = attn_output.transpose([1, 0, 2]).astype(paddle.float32)
         attn_output = attn_output.reshape([seq_length, -1])
         attn_output = self.proj(attn_output)
+
         return attn_output
 
 
@@ -585,6 +595,7 @@ class Qwen2_5_VLVisionBlock(paddle.nn.Layer):
         self.norm2 = Qwen2RMSNorm(config.hidden_size, eps=1e-6)
         self.attn = QWEN2_5_VL_VISION_ATTENTION_CLASSES[attn_implementation](
             config.hidden_size, num_heads=config.num_heads)
+
         self.mlp = Qwen2_5_VLMLP(config, bias=True)
 
     def forward(self, hidden_states, cu_seqlens, rotary_pos_emb) -> paddle.Tensor:
@@ -1094,7 +1105,7 @@ class Qwen2_5_VLSdpaAttention(Qwen2_5_VLAttention):
                 past_key_value=past_key_value, output_attentions=
                 output_attentions, use_cache=use_cache, cache_position=
                 cache_position, position_embeddings=position_embeddings)
-        bsz, q_len, _ = hidden_states.size()
+        bsz, q_len, _ = hidden_states.shape
         
         try:
             query_states = self.q_proj(hidden_states)
@@ -1125,8 +1136,6 @@ class Qwen2_5_VLSdpaAttention(Qwen2_5_VLAttention):
             # kv_seq_len += past_key_value[0].shape[-2] # qwen2是 [-3]
 
 
-
-
         # Because the input can be padded, the absolute sequence length depends on the max position id.
         cos, sin = self.rotary_emb(value_states, position_ids)
         query_states, key_states = apply_multimodal_rotary_pos_emb(
@@ -1150,11 +1159,14 @@ class Qwen2_5_VLSdpaAttention(Qwen2_5_VLAttention):
         key_states = key_states.transpose(perm=[0, 2, 1, 3])
         value_states = value_states.transpose(perm=[0, 2, 1, 3])
         
-        
+        # For SDPA, when possible, we will rely on its `is_causal` argument instead of its `attn_mask` argument, in
+        # order to dispatch on Flash Attention 2. This feature is not compatible with static cache, as SDPA will fail
+        # to infer the attention mask.
+        attention_mask = None
         causal_mask = attention_mask
         # Convert attention mask slicing
         if attention_mask is not None:
-            causal_mask = attention_mask[:, :, :, : key_states.shape[-2]]
+            causal_mask = attention_mask[:, :, :, : key_states.shape[-3]]
 
         # Ensure contiguous tensors for PaddlePaddle
         if query_states.place.is_gpu_place() and attention_mask is not None:
@@ -1165,7 +1177,6 @@ class Qwen2_5_VLSdpaAttention(Qwen2_5_VLAttention):
         # Determine if the operation is causal
         is_causal = True if causal_mask is None and q_len > 1 else False
 
-        # Use PaddlePaddle's equivalent of scaled dot product attention
         attn_output = paddle.nn.functional.scaled_dot_product_attention(
             query_states,
             key_states,
@@ -1175,9 +1186,7 @@ class Qwen2_5_VLSdpaAttention(Qwen2_5_VLAttention):
             is_causal=is_causal,
         )
 
-        # Transpose and reshape the output
-        attn_output = paddle.transpose(attn_output, perm=[0, 2, 1])
-        attn_output = paddle.reshape([attn_output, [bsz, q_len, self.hidden_size]])
+        attn_output = attn_output.reshape([bsz, q_len, -1])
 
         # Apply the output projection
         attn_output = self.o_proj(attn_output)
@@ -1546,6 +1555,7 @@ class Qwen2_5_VLModel(Qwen2_5_VLPreTrainedModel):
         if attention_mask is None:
             # [bs, seq_len]
             attention_mask = paddle.ones((batch_size, seq_length_with_past), dtype=paddle.bool)
+
         if self.config._attn_implementation == "flash_attention_2":
             causal_mask = attention_mask
         else:
