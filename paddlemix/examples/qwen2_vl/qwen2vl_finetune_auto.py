@@ -535,7 +535,7 @@ class ImageCollatorForSeq2Seq(DataCollatorForSeq2Seq):
             for i, feature in enumerate(features):
                 feature["token_type_ids"] = token_type_ids[i]
 
-        # pop pixel_values, use visual_model to embed pixel_values
+        # # pop pixel_values, use visual_model to embed pixel_values
         # has_pixel_values = True if "pixel_values" in features[0].keys() else False
         # has_image_grid_thw = True if "image_grid_thw" in features[0].keys() else False
         # image_embeds = []
@@ -550,7 +550,7 @@ class ImageCollatorForSeq2Seq(DataCollatorForSeq2Seq):
         #         feature.pop("pixel_values")
         #         feature.pop("image_grid_thw")
         # print(image_embeds)
-        # check
+        # # check
         # for feature in features:
         #     print("================== in ImageCollatorForSeq2Seq before super().__call__ ==================")
         #     print("len(feature[input_ids]) : %s" % len(feature["input_ids"]))
@@ -722,6 +722,7 @@ def main():
 
     # lora
     if model_args.lora:
+        print("===================lora_rank:",model_args.lora_rank,"===================")
         if model_args.lora_path is None:
             target_modules = model_args.lora_target_modules.split(",")
             lora_config = LoRAConfig(
@@ -760,7 +761,7 @@ def main():
         pad_to_multiple_of=8 if training_args.do_train else None,  # for shift short attention
         label_pad_token_id=IGNORE_INDEX,
         visual_model=model.visual,
-        embed_model=model.model.embed_tokens,
+        embed_model=model.get_input_embeddings(),
         model_config=model.config,
         dtype=dtype,
     )
