@@ -17,7 +17,7 @@ import os
 import paddle
 import paddlenlp
 
-""" PyTorch DeepSeek model and compatible with both DeepSeekV2 and DeepSeekV3"""
+""" Paddle DeepSeek model and compatible with both DeepSeekV2 and DeepSeekV3"""
 import math
 import warnings
 from typing import List, Optional, Tuple, Union
@@ -287,7 +287,7 @@ class MoEGate(paddle.nn.Layer):
         self.norm_topk_prob = config.norm_topk_prob
         self.gating_dim = config.hidden_size
         self.weight = paddle.base.framework.EagerParamBase.from_tensor(
-            tensor=paddle.empty(shape=(self.n_routed_experts, self.gating_dim))
+            tensor=paddle.empty(shape=(self.gating_dim, self.n_routed_experts))
         )
         if self.topk_method == "noaux_tc":
             self.e_score_correction_bias = paddle.base.framework.EagerParamBase.from_tensor(
@@ -305,7 +305,7 @@ class MoEGate(paddle.nn.Layer):
         bsz, seq_len, h = tuple(hidden_states.shape)
         hidden_states = hidden_states.view([-1, h])
         logits = paddle.nn.functional.linear(
-            x=hidden_states.astype("float32"), weight=self.weight.astype("float32").T, bias=None
+            x=hidden_states.astype("float32"), weight=self.weight.astype("float32"), bias=None
         )
         if self.scoring_func == "softmax":
             scores = paddle.nn.functional.softmax(logits, axis=-1, dtype="float32")
@@ -398,7 +398,8 @@ class AddAuxiliaryLoss(paddle.autograd.PyLayer):
         return grad_output, grad_loss
 
 
-class DeepseekV2MoE(paddle.nn.Layer):
+from paddlenlp.transformers.deepseek_v2.modeling import DeepseekV2MoE
+class DeepseekV2MoE_bug(paddle.nn.Layer):
     """
     A mixed expert module containing shared experts.
     """
@@ -439,15 +440,23 @@ class DeepseekV2MoE(paddle.nn.Layer):
 
     def forward(self, hidden_states):
         identity = hidden_states
-        orig_shape = tuple(hidden_states.shape)
+        orig_shape = tuple(hidden_states.shape) # [1, 668, 1280]
         topk_idx, topk_weight, aux_loss = self.gate(hidden_states)
+        # [668, 6]  [668, 6]  0.00119756
         hidden_states = hidden_states.view([-1, hidden_states.shape[-1]])
         flat_topk_idx = topk_idx.view([-1])
+        #import pdb; pdb.set_trace() #
         if self.training:
-            hidden_states = hidden_states.repeat_interleave(repeats=self.num_experts_per_tok, axis=0)
-            y = paddle.empty_like(x=hidden_states)
-            for i, expert in enumerate(self.experts):
+            hidden_states = hidden_states.repeat_interleave(repeats=self.num_experts_per_tok, axis=0) # [4008, 1280]
+            y = paddle.empty_like(hidden_states)
+            for i, expert in enumerate(self.experts): # 64个
+                #try:
                 y[flat_topk_idx == i] = expert(hidden_states[flat_topk_idx == i])
+                #except:
+                #    print('i', i, flat_topk_idx==i)
+                # if paddle.any(flat_topk_idx == i):
+                #     y[flat_topk_idx == i] = expert(hidden_states[flat_topk_idx == i])
+
             y = (y.view([*tuple(topk_weight.shape), -1]) * topk_weight.unsqueeze(axis=-1)).sum(axis=1)
             y = y.to(hidden_states.dtype).view(orig_shape)
             y = AddAuxiliaryLoss.apply(y, aux_loss)
@@ -888,7 +897,7 @@ ATTENTION_CLASSES = {
     "mla_eager": DeepseekV2Attention,
     "mla_flash_attention": DeepseekV2FlashAttention,
     "mha_eager": LlamaAttention,
-    "mha_flash_attention": LlamaAttention,
+    "mha_flash_attention": LlamaAttention, # LlamaFlashAttention2
 }
 
 
@@ -904,11 +913,14 @@ class DeepseekV2DecoderLayer(paddle.nn.Layer):
             self.self_attn = ATTENTION_CLASSES[attn_implementation](config=config, layer_idx=layer_idx)
         else:
             self.self_attn = ATTENTION_CLASSES[attn_implementation](config=config)
+        # print('self.self_attn', self.self_attn, config) # LlamaAttention
         self.mlp = (
             DeepseekV2MoE(config)
-            if config.n_routed_experts is not None
-            and layer_idx >= config.first_k_dense_replace
-            and layer_idx % config.moe_layer_freq == 0
+            if (
+                config.n_routed_experts is not None
+                and layer_idx >= config.first_k_dense_replace
+                and layer_idx % config.moe_layer_freq == 0
+            )
             else DeepseekV2MLP(config)
         )
         self.input_layernorm = DeepseekV2RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
@@ -942,15 +954,20 @@ class DeepseekV2DecoderLayer(paddle.nn.Layer):
         hidden_states = self.input_layernorm(hidden_states)
 
         # Self Attention
-        hidden_states, self_attn_weights, present_key_value = self.self_attn(
+        attn_output = self.self_attn(
             hidden_states=hidden_states,
             attention_mask=attention_mask,
             position_ids=position_ids,
             past_key_value=past_key_value,
             output_attentions=True,
-            use_cache=use_cache,
+            use_cache=use_cache, #
             **kwargs,
         )
+        if use_cache:
+            hidden_states, self_attn_weights, present_key_value = attn_output
+        else:
+            hidden_states, self_attn_weights = attn_output
+            present_key_value = None
 
         # Fully Connected
         hidden_states = residual + hidden_states
@@ -966,19 +983,6 @@ class DeepseekV2DecoderLayer(paddle.nn.Layer):
         if use_cache:
             outputs += (present_key_value,)
         return outputs
-
-
-DeepseekV2_START_DOCSTRING = """
-    This model inherits from [`PreTrainedModel`]. Check the superclass documentation for the generic methods the
-    library implements for all its model (such as downloading or saving, resizing the input embeddings, pruning heads
-    etc.)
-
-    Parameters:
-        config ([`DeepseekV2Config`]):
-            Model configuration class with all the parameters of the model. Initializing with a config file does not
-            load the weights associated with the model, only the configuration. Check out the
-            [`~PreTrainedModel.from_pretrained`] method to load the model weights.
-"""
 
 
 class DeepseekV2PreTrainedModel(PretrainedModel):
@@ -1001,76 +1005,6 @@ class DeepseekV2PreTrainedModel(PretrainedModel):
                 module.weight.data.normal_(mean=0.0, std=std)
                 if module._padding_idx is not None:
                     module.weight.data[module._padding_idx].zero_()
-
-
-DeepseekV2_INPUTS_DOCSTRING = """
-    Args:
-        input_ids (`paddle.Tensor` of shape `(batch_size, sequence_length)`):
-            Indices of input sequence tokens in the vocabulary. Padding will be ignored by default should you provide
-            it.
-
-            Indices can be obtained using [`AutoTokenizer`]. See [`PreTrainedTokenizer.encode`] and
-            [`PreTrainedTokenizer.__call__`] for details.
-
-            [What are input IDs?](../glossary#input-ids)
-        attention_mask (`paddle.Tensor` of shape `(batch_size, sequence_length)`, *optional*):
-            Mask to avoid performing attention on padding token indices. Mask values selected in `[0, 1]`:
-
-            - 1 for tokens that are **not masked**,
-            - 0 for tokens that are **masked**.
-
-            [What are attention masks?](../glossary#attention-mask)
-
-            Indices can be obtained using [`AutoTokenizer`]. See [`PreTrainedTokenizer.encode`] and
-            [`PreTrainedTokenizer.__call__`] for details.
-
-            If `past_key_values` is used, optionally only the last `input_ids` have to be input (see
-            `past_key_values`).
-
-            If you want to change padding behavior, you should read [`modeling_opt._prepare_decoder_attention_mask`]
-            and modify to your needs. See diagram 1 in [the paper](https://arxiv.org/abs/1910.13461) for more
-            information on the default strategy.
-
-            - 1 indicates the head is **not masked**,
-            - 0 indicates the head is **masked**.
-        position_ids (`paddle.Tensor` of shape `(batch_size, sequence_length)`, *optional*):
-            Indices of positions of each input sequence tokens in the position embeddings. Selected in the range `[0,
-            config.n_positions - 1]`.
-
-            [What are position IDs?](../glossary#position-ids)
-        past_key_values (`Cache` or `tuple(tuple(paddle.Tensor))`, *optional*):
-            Pre-computed hidden-states (key and values in the self-attention blocks and in the cross-attention
-            blocks) that can be used to speed up sequential decoding. This typically consists in the `past_key_values`
-            returned by the model at a previous stage of decoding, when `use_cache=True` or `config.use_cache=True`.
-
-            Two formats are allowed:
-            - a [`~cache_utils.Cache`] instance;
-            - Tuple of `tuple(paddle.Tensor)` of length `config.n_layers`, with each tuple having 2 tensors of
-            shape `(batch_size, num_heads, sequence_length, embed_size_per_head)`). This is also known as the legacy
-            cache format.
-
-            The model will output the same cache format that is fed as input. If no `past_key_values` are passed, the
-            legacy cache format will be returned.
-
-            If `past_key_values` are used, the user can optionally input only the last `input_ids` (those that don't
-            have their past key value states given to this model) of shape `(batch_size, 1)` instead of all `input_ids`
-            of shape `(batch_size, sequence_length)`.
-        inputs_embeds (`paddle.Tensor` of shape `(batch_size, sequence_length, hidden_size)`, *optional*):
-            Optionally, instead of passing `input_ids` you can choose to directly pass an embedded representation. This
-            is useful if you want more control over how to convert `input_ids` indices into associated vectors than the
-            model's internal embedding lookup matrix.
-        use_cache (`bool`, *optional*):
-            If set to `True`, `past_key_values` key value states are returned and can be used to speed up decoding (see
-            `past_key_values`).
-        output_attentions (`bool`, *optional*):
-            Whether or not to return the attentions tensors of all attention layers. See `attentions` under returned
-            tensors for more detail.
-        output_hidden_states (`bool`, *optional*):
-            Whether or not to return the hidden states of all layers. See `hidden_states` under returned tensors for
-            more detail.
-        return_dict (`bool`, *optional*):
-            Whether or not to return a [`~utils.ModelOutput`] instead of a plain tuple.
-"""
 
 
 class DeepseekV2Model(DeepseekV2PreTrainedModel):
@@ -1165,9 +1099,6 @@ class DeepseekV2Model(DeepseekV2PreTrainedModel):
             past_key_value = past_key_values[idx] if past_key_values is not None else None
             # note: we currently not support gradient_checkpointing
             if self.gradient_checkpointing and self.training:
-                # layer_outputs = self._gradient_checkpointing_func(decoder_layer
-                #     .__call__, hidden_states, attention_mask, position_ids,
-                #     past_key_values, output_attentions, use_cache)
                 raise NotImplementedError
             else:
                 layer_outputs = decoder_layer(
@@ -1277,13 +1208,15 @@ class DeepseekV2ForCausalLM(DeepseekV2PreTrainedModel):
         logits = logits.astype(dtype="float32")
         loss = None
         if labels is not None:
-            shift_logits = logits[..., :-1, :].contiguous()
-            shift_labels = labels[..., 1:].contiguous()
-            loss_fct = paddle.nn.CrossEntropyLoss()
-            shift_logits = shift_logits.view([-1, self.config.vocab_size])
-            shift_labels = shift_labels.view([-1])
-            shift_labels = shift_labels.to(shift_logits.place)
+            shift_logits = logits[..., :-1, :]
+            shift_labels = labels[..., 1:]
+            loss_fct = paddle.nn.CrossEntropyLoss(reduction="sum")
+            shift_logits = shift_logits.reshape([-1, self.config.vocab_size])
+            shift_labels = shift_labels.reshape([-1])
             loss = loss_fct(shift_logits, shift_labels)
+            label_sum = paddle.sum(shift_labels != -100).cast("float32")
+            loss = loss / label_sum
+
         if not return_dict:
             output = (logits,) + outputs[1:]
             return (loss,) + output if loss is not None else output
@@ -1356,100 +1289,3 @@ class DeepseekV2ForCausalLM(DeepseekV2PreTrainedModel):
                 ),
             )
         return reordered_past
-
-
-class DeepseekV2ForSequenceClassification(DeepseekV2PreTrainedModel):
-    def __init__(self, config):
-        super().__init__(config)
-        self.num_labels = config.num_labels
-        self.model = DeepseekV2Model(config)
-        self.score = paddle.nn.Linear(in_features=config.hidden_size, out_features=self.num_labels, bias_attr=False)
-        # self.post_init()
-
-    def get_input_embeddings(self):
-        return self.model.embed_tokens
-
-    def set_input_embeddings(self, value):
-        self.model.embed_tokens = value
-
-    def forward(
-        self,
-        input_ids: paddle.Tensor = None,
-        attention_mask: Optional[paddle.Tensor] = None,
-        position_ids: Optional[paddle.Tensor] = None,
-        past_key_values: Optional[List[paddle.Tensor]] = None,
-        inputs_embeds: Optional[paddle.Tensor] = None,
-        labels: Optional[paddle.Tensor] = None,
-        use_cache: Optional[bool] = None,
-        output_attentions: Optional[bool] = None,
-        output_hidden_states: Optional[bool] = None,
-        return_dict: Optional[bool] = None,
-    ) -> Union[Tuple, paddlenlp.transformers.model_outputs.SequenceClassifierOutputWithPast]:
-        """
-        labels (`paddle.Tensor` of shape `(batch_size,)`, *optional*):
-            Labels for computing the sequence classification/regression loss. Indices should be in `[0, transformers.,
-            config.num_labels - 1]`. If `config.num_labels == 1` a regression loss is computed (Mean-Square loss), If
-            `config.num_labels > 1` a classification loss is computed (Cross-Entropy).
-        """
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
-        transformer_outputs = self.model(
-            input_ids,
-            attention_mask=attention_mask,
-            position_ids=position_ids,
-            past_key_values=past_key_values,
-            inputs_embeds=inputs_embeds,
-            use_cache=use_cache,
-            output_attentions=output_attentions,
-            output_hidden_states=output_hidden_states,
-            return_dict=return_dict,
-        )
-        hidden_states = transformer_outputs[0]
-        logits = self.score(hidden_states)
-        if input_ids is not None:
-            batch_size = tuple(input_ids.shape)[0]
-        else:
-            batch_size = tuple(inputs_embeds.shape)[0]
-        if self.config.pad_token_id is None and batch_size != 1:
-            raise ValueError("Cannot handle batch sizes > 1 if no padding token is defined.")
-        if self.config.pad_token_id is None:
-            sequence_lengths = -1
-        elif input_ids is not None:
-            sequence_lengths = (
-                paddle.equal(x=input_ids, y=self.config.pad_token_id).astype(dtype="int32").argmax(axis=-1) - 1
-            ).to(logits.place)
-        else:
-            sequence_lengths = -1
-        pooled_logits = logits[paddle.arange(end=batch_size), sequence_lengths]
-        loss = None
-        if labels is not None:
-            labels = labels.to(logits.place)
-            if self.config.problem_type is None:
-                if self.num_labels == 1:
-                    self.config.problem_type = "regression"
-                elif self.num_labels > 1 and (labels.dtype == "int64" or labels.dtype == "int32"):
-                    self.config.problem_type = "single_label_classification"
-                else:
-                    self.config.problem_type = "multi_label_classification"
-            if self.config.problem_type == "regression":
-                loss_fct = paddle.nn.MSELoss()
-                if self.num_labels == 1:
-                    loss = loss_fct(pooled_logits.squeeze(), labels.squeeze())
-                else:
-                    loss = loss_fct(pooled_logits, labels)
-            elif self.config.problem_type == "single_label_classification":
-                loss_fct = paddle.nn.CrossEntropyLoss()
-                loss = loss_fct(pooled_logits.view([-1, self.num_labels]), labels.view([-1]))
-            elif self.config.problem_type == "multi_label_classification":
-                loss_fct = paddle.nn.BCEWithLogitsLoss()
-                loss = loss_fct(pooled_logits, labels)
-        if not return_dict:
-            output = (pooled_logits,) + transformer_outputs[1:]
-            return (loss,) + output if loss is not None else output
-
-        return paddlenlp.transformers.modeling_outputs.SequenceClassifierOutputWithPast(
-            loss=loss,
-            logits=pooled_logits,
-            past_key_values=transformer_outputs.past_key_values,
-            hidden_states=transformer_outputs.hidden_states,
-            attentions=transformer_outputs.attentions,
-        )

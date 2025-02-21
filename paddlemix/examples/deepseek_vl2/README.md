@@ -77,6 +77,12 @@ This is image_3: <image>
 ![mutli-infer](https://github.com/user-attachments/assets/4a1ade41-90ed-4d04-949a-90c3b54bdf78)
 
 
+## 4 训练微调
+```bash
+# 2B
+sh paddlemix/examples/deepseek_vl2/shell/deepseek_vl2_tiny_bs32_1e8.sh
+```
+
 ## 参考文献
 ```BibTeX
 @misc{wu2024deepseekvl2mixtureofexpertsvisionlanguagemodels,

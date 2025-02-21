@@ -71,13 +71,13 @@ class DeepseekVLMlpProjector(paddle.nn.Layer):
         if self.cfg.token_pooling:
             batch_size, wxh, channels = tuple(x.shape)
             w = h = int(wxh**0.5)
-            x = x.view([batch_size, w, h, channels])
+            x = x.reshape([batch_size, w, h, channels])
             x = x.transpose(perm=[0, 3, 1, 2])
             patches = x.unfold(axis=2, size=2, step=2).unfold(axis=3, size=2, step=2)
             batch_size, channels, h_patches, w_patches, _, _ = tuple(patches.shape)
-            patches = patches.contiguous().view([batch_size, channels, h_patches * w_patches, -1])
-            patches = patches.transpose(perm=[0, 2, 1, 3]).contiguous()
-            patches = patches.view([batch_size, h_patches * w_patches, channels * 4])
+            patches = patches.reshape([batch_size, channels, h_patches * w_patches, -1])
+            patches = patches.transpose(perm=[0, 2, 1, 3])
+            patches = patches.reshape([batch_size, h_patches * w_patches, channels * 4])
             x = self.token_pooling_layer(patches)
 
         elif self.cfg.projector_type == "downsample_mlp_gelu":
@@ -259,10 +259,10 @@ class DeepseekVLV2ForCausalLM(DeepseekVLV2PreTrainedModel):
                 tile_index += num_tiles_in_image + 1
 
                 if self.tile_tag == "2D":
-                    global_features = global_features.view([h, w, n_dim])
+                    global_features = global_features.reshape([h, w, n_dim])
                     new_lines_in_global = repeat(self.image_newline, "d -> h 1 d", h=h)
                     global_features = paddle.concat(x=[global_features, new_lines_in_global], axis=1)
-                    global_features = global_features.view([-1, n_dim])
+                    global_features = global_features.reshape([-1, n_dim])
                     local_features = rearrange(
                         local_features,
                         "(th tw) (h w) d -> (th h) (tw w) d",
@@ -275,7 +275,7 @@ class DeepseekVLV2ForCausalLM(DeepseekVLV2PreTrainedModel):
                     new_lines_in_local = repeat(self.image_newline, "d -> (th h) 1 d", th=num_height_tiles, h=h)
 
                     local_features = paddle.concat(x=[local_features, new_lines_in_local], axis=1)
-                    local_features = local_features.view([-1, n_dim])
+                    local_features = local_features.reshape([-1, n_dim])
                     if self.global_view_pos == "head":
                         global_local_features = paddle.concat(
                             x=[global_features, self.view_seperator[None, :], local_features], axis=0
@@ -388,13 +388,14 @@ class DeepseekVLV2ForCausalLM(DeepseekVLV2PreTrainedModel):
         )
         use_cache = use_cache if use_cache is not None else self.config.use_cache
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
-
+        
         if inputs_embeds is None:
+            # print('forward input_ids', input_ids.shape, input_ids.sum())
             inputs_embeds = self.prepare_inputs_embeds(
-                input_ids=input_ids,
-                images=images,
-                images_seq_mask=images_seq_mask,
-                images_spatial_crop=images_spatial_crop,
+                input_ids=input_ids, # [1, 1509]
+                images=images, # [1, 7, 3, 384, 384]
+                images_seq_mask=images_seq_mask, # [1, 1509]
+                images_spatial_crop=images_spatial_crop, # [1, 1, 2]
             )
             if attention_mask is not None:
                 attention_mask = attention_mask.to(inputs_embeds.place)
