@@ -29,6 +29,7 @@ import paddle
 import paddle.distributed as dist
 from paddle.io import Dataset
 from paddlenlp.data import DataCollatorForSeq2Seq, DataCollatorWithPadding
+from paddlenlp.peft import LoRAConfig, LoRAModel
 from paddlenlp.trainer import PdArgumentParser, TrainingArguments, set_seed
 from paddlenlp.trainer.trainer import Trainer
 from paddlenlp.trainer.trainer_utils import get_last_checkpoint
@@ -339,7 +340,9 @@ class LazySupervisedDataset(Dataset):
                 labels = labels[:idx] + [-100] * n_image_tokens + labels[idx + 1:]
             images_seq_mask = images_seq_mask[:idx] + [True] * n_image_tokens + images_seq_mask[idx + 1:]
             new_num_tokens += n_image_tokens - 1
-        #print('2 len(input_ids), len(labels), len(images_seq_mask)', len(input_ids), len(labels), len(images_seq_mask))
+        # print('2 len(input_ids), len(labels), len(images_seq_mask)', len(input_ids), len(labels), len(images_seq_mask))
+        # print('input_ids', input_ids)
+        # print('labels', labels)
 
         output = DeepseekVLChatProcessorOutput(
             sft_format=None,
@@ -442,6 +445,8 @@ def print_trainable_params(model: paddle.nn.Layer) -> None:
         if not param.stop_gradient:
             # print('{}, shape: {}, requires grad: {}'.format(k, param.shape, not param.stop_gradient))
             trainable_params += num_params
+    # model.image_newline, shape: [1280], requires grad: True
+    # model.view_seperator, shape: [1280], requires grad: True
     print(
         "trainable params: {:d} || all params: {:d} || trainable%: {:.4f}".format(
             trainable_params, all_param, 100 * trainable_params / all_param
@@ -547,6 +552,25 @@ def main():
     if model_args.freeze_llm:
         model.language = model.language.eval()
         _freeze_params(model.language)
+
+    # lora
+    if model_args.lora:
+        if model_args.lora_path is None:
+            target_modules = model_args.lora_target_modules.split(",")
+            lora_config = LoRAConfig(
+                target_modules=target_modules,
+                r=model_args.lora_rank,
+                lora_alpha=model_args.lora_alpha,
+                lora_dropout=model_args.lora_dropout,
+                merge_weights=False,
+                tensor_parallel_degree=training_args.tensor_parallel_degree,
+                dtype=dtype,
+            )
+            model = LoRAModel(model, lora_config)
+        else:
+            model = LoRAModel.from_pretrained(model=model, lora_path=model_args.lora_path)
+        model.mark_only_lora_as_trainable()
+        model.print_trainable_parameters()
 
     print_trainable_params(model)
 

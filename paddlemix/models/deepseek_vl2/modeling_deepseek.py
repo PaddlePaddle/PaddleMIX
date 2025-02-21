@@ -15,6 +15,7 @@
 import os
 
 import paddle
+import paddle.nn as nn
 import paddlenlp
 
 """ Paddle DeepSeek model and compatible with both DeepSeekV2 and DeepSeekV3"""
@@ -284,6 +285,8 @@ class MoEGate(paddle.nn.Layer):
         self.topk_method = config.topk_method
         self.n_group = config.n_group
         self.topk_group = config.topk_group
+
+        # topk selection algorithm
         self.norm_topk_prob = config.norm_topk_prob
         self.gating_dim = config.hidden_size
         self.weight = paddle.base.framework.EagerParamBase.from_tensor(
@@ -345,6 +348,7 @@ class MoEGate(paddle.nn.Layer):
             tmp_scores = scores_for_choice.masked_fill(mask=~score_mask.astype(dtype="bool"), value=0.0)
             _, topk_idx = paddle.topk(k=self.top_k, sorted=False, x=tmp_scores, axis=-1)
             topk_weight = scores.take_along_axis(axis=1, indices=topk_idx, broadcast=False)
+
         if self.top_k > 1 and self.norm_topk_prob:
             denominator = topk_weight.sum(axis=-1, keepdim=True) + 1e-20
             topk_weight = topk_weight / denominator * self.routed_scaling_factor
@@ -398,8 +402,8 @@ class AddAuxiliaryLoss(paddle.autograd.PyLayer):
         return grad_output, grad_loss
 
 
-from paddlenlp.transformers.deepseek_v2.modeling import DeepseekV2MoE
-class DeepseekV2MoE_bug(paddle.nn.Layer):
+#from paddlenlp.transformers.deepseek_v2.modeling import DeepseekV2MoE # diff
+class DeepseekV2MoE(paddle.nn.Layer):
     """
     A mixed expert module containing shared experts.
     """
@@ -408,31 +412,16 @@ class DeepseekV2MoE_bug(paddle.nn.Layer):
         super().__init__()
         self.config = config
         self.num_experts_per_tok = config.num_experts_per_tok
-        if hasattr(config, "ep_size") and config.ep_size > 1:
-            assert config.ep_size == paddle.distributed.get_world_size()
-            self.ep_size = config.ep_size
-            self.experts_per_rank = config.n_routed_experts // config.ep_size
-            self.ep_rank = paddle.distributed.get_rank()
-            self.experts = paddle.nn.LayerList(
-                sublayers=[
-                    (
-                        DeepseekV2MLP(config, intermediate_size=config.moe_intermediate_size)
-                        if i >= self.ep_rank * self.experts_per_rank and i < (self.ep_rank + 1) * self.experts_per_rank
-                        else None
-                    )
-                    for i in range(config.n_routed_experts)
-                ]
-            )
-        else:
-            self.ep_size = 1
-            self.experts_per_rank = config.n_routed_experts
-            self.ep_rank = 0
-            self.experts = paddle.nn.LayerList(
-                sublayers=[
-                    DeepseekV2MLP(config, intermediate_size=config.moe_intermediate_size)
-                    for i in range(config.n_routed_experts)
-                ]
-            )
+
+        self.ep_size = 1
+        self.experts_per_rank = config.n_routed_experts
+        self.ep_rank = 0
+        self.experts = nn.LayerList(
+            [
+                DeepseekV2MLP(config, intermediate_size=config.moe_intermediate_size)
+                for i in range(config.n_routed_experts)
+            ]
+        )
         self.gate = MoEGate(config)
         if config.n_shared_experts is not None:
             intermediate_size = config.moe_intermediate_size * config.n_shared_experts
@@ -440,28 +429,25 @@ class DeepseekV2MoE_bug(paddle.nn.Layer):
 
     def forward(self, hidden_states):
         identity = hidden_states
-        orig_shape = tuple(hidden_states.shape) # [1, 668, 1280]
+        orig_shape = hidden_states.shape
         topk_idx, topk_weight, aux_loss = self.gate(hidden_states)
-        # [668, 6]  [668, 6]  0.00119756
-        hidden_states = hidden_states.view([-1, hidden_states.shape[-1]])
-        flat_topk_idx = topk_idx.view([-1])
-        #import pdb; pdb.set_trace() #
+        hidden_states = hidden_states.reshape([-1, hidden_states.shape[-1]])
+        flat_topk_idx = topk_idx.reshape([-1])
+        # remove the infer method
         if self.training:
-            hidden_states = hidden_states.repeat_interleave(repeats=self.num_experts_per_tok, axis=0) # [4008, 1280]
+            hidden_states = hidden_states.repeat_interleave(self.num_experts_per_tok, axis=0)
             y = paddle.empty_like(hidden_states)
-            for i, expert in enumerate(self.experts): # 64个
-                #try:
-                y[flat_topk_idx == i] = expert(hidden_states[flat_topk_idx == i])
-                #except:
-                #    print('i', i, flat_topk_idx==i)
-                # if paddle.any(flat_topk_idx == i):
-                #     y[flat_topk_idx == i] = expert(hidden_states[flat_topk_idx == i])
+            for i, expert in enumerate(self.experts):
+                # y[flat_topk_idx == i] = expert(hidden_states[flat_topk_idx == i])
+                if paddle.any(flat_topk_idx == i):
+                    y[flat_topk_idx == i] = expert(hidden_states[flat_topk_idx == i])
 
-            y = (y.view([*tuple(topk_weight.shape), -1]) * topk_weight.unsqueeze(axis=-1)).sum(axis=1)
-            y = y.to(hidden_states.dtype).view(orig_shape)
-            y = AddAuxiliaryLoss.apply(y, aux_loss)
+            y = (y.reshape([*topk_weight.shape, -1]) * topk_weight.unsqueeze(-1)).sum(axis=1)
+            y = paddle.cast(y, hidden_states.dtype).reshape([*orig_shape])
+            if self.gate.alpha > 0.0:
+                y = AddAuxiliaryLoss.apply(y, aux_loss)
         else:
-            y = self.moe_infer(hidden_states, topk_idx, topk_weight).view(orig_shape)
+            y = self.moe_infer(hidden_states, topk_idx, topk_weight).reshape([*orig_shape])
         if self.config.n_shared_experts is not None:
             y = y + self.shared_experts(identity)
         return y
@@ -536,18 +522,6 @@ class DeepseekV2MoE_bug(paddle.nn.Layer):
             .astype(new_x.dtype)
         )
         return final_out
-
-
-def repeat_kv(hidden_states: paddle.Tensor, n_rep: int) -> paddle.Tensor:
-    """
-    This is the equivalent of torch.repeat_interleave(x, dim=1, repeats=n_rep). The hidden states go from (batch,
-    num_key_value_heads, seqlen, head_dim) to (batch, num_attention_heads, seqlen, head_dim)
-    """
-    batch, num_key_value_heads, slen, head_dim = tuple(hidden_states.shape)
-    if n_rep == 1:
-        return hidden_states
-    hidden_states = hidden_states[:, :, None, :, :].expand(shape=[batch, num_key_value_heads, n_rep, slen, head_dim])
-    return hidden_states.reshape([batch, num_key_value_heads * n_rep, slen, head_dim])
 
 
 class DeepseekV2Attention(paddle.nn.Layer):
@@ -837,7 +811,6 @@ class DeepseekV2FlashAttention(DeepseekV2Attention):
             query_states = query_states.astype(target_dtype)
             key_states = key_states.astype(target_dtype)
             value_states = value_states.astype(target_dtype)
-        # import pdb;pdb.set_trace()
         # attn_output = self._flash_attention_forward(query_states,key_states,value_states,attention_mask,q_len,dropout=dropout_rate,softmax_scale=self.softmax_scale)
         attn_output = self._flash_attention_forward(
             query_states,
@@ -894,8 +867,10 @@ class DeepseekV2FlashAttention(DeepseekV2Attention):
 ATTENTION_CLASSES = {
     "eager": DeepseekV2Attention,
     "flash_attention": DeepseekV2FlashAttention,
+
     "mla_eager": DeepseekV2Attention,
     "mla_flash_attention": DeepseekV2FlashAttention,
+
     "mha_eager": LlamaAttention,
     "mha_flash_attention": LlamaAttention, # LlamaFlashAttention2
 }
@@ -913,7 +888,7 @@ class DeepseekV2DecoderLayer(paddle.nn.Layer):
             self.self_attn = ATTENTION_CLASSES[attn_implementation](config=config, layer_idx=layer_idx)
         else:
             self.self_attn = ATTENTION_CLASSES[attn_implementation](config=config)
-        # print('self.self_attn', self.self_attn, config) # LlamaAttention
+
         self.mlp = (
             DeepseekV2MoE(config)
             if (
@@ -990,9 +965,6 @@ class DeepseekV2PreTrainedModel(PretrainedModel):
     base_model_prefix = "model"
     supports_gradient_checkpointing = False
     _no_split_modules = ["DeepseekV2DecoderLayer"]
-    _skip_keys_device_placement = "past_key_values"
-    _supports_flash_attn_2 = False
-    _supports_cache_class = False
 
     def _init_weights(self, module):
         with paddle.no_grad():

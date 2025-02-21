@@ -16,10 +16,6 @@ set -x
 
 GPUS=${GPUS:-8}
 BATCH_SIZE=${BATCH_SIZE:-32}
-
-# GPUS=${GPUS:-1}
-# BATCH_SIZE=${BATCH_SIZE:-1}
-
 PER_DEVICE_BATCH_SIZE=${PER_DEVICE_BATCH_SIZE:-1}
 
 GRADIENT_ACC=$((BATCH_SIZE / PER_DEVICE_BATCH_SIZE / GPUS))
@@ -42,8 +38,6 @@ MASTER='127.0.0.1:8080'
 
 meta_path="paddlemix/examples/deepseek_vl2/configs/LaTeX_OCR.json"
 
-#  --lr_scheduler_type "cosine" \
-
 TRAINING_PYTHON="python -m paddle.distributed.launch --master ${MASTER} --nnodes 1 --nproc_per_node ${GPUS} --rank 0 --ips ${TRAINER_INSTANCES} --run_mode=collective"
 ${TRAINING_PYTHON} --log_dir ${OUTPUT_DIR}/paddle_distributed_logs \
   paddlemix/examples/deepseek_vl2/deepseek_vl2_finetune.py \
@@ -62,7 +56,6 @@ ${TRAINING_PYTHON} --log_dir ${OUTPUT_DIR}/paddle_distributed_logs \
   --gradient_accumulation_steps ${GRADIENT_ACC} \
   --freeze_vit True \
   --freeze_llm True \
-  --max_seq_length 8192 \
   --image_resolution 384 \
   --recompute False \
   --max_grad_norm 1.0 \
@@ -85,4 +78,9 @@ ${TRAINING_PYTHON} --log_dir ${OUTPUT_DIR}/paddle_distributed_logs \
   --sharding="stage1" \
   --amp_master_grad=1 \
   --hybrid_parallel_topo_order="sharding_first" \
+  --lora True \
+  --lora_rank=8 \
+  --lora_alpha=32 \
+  --lora_dropout=0.05 \
+  --lora_target_modules="language.model.layers.*.self_attn.q_proj.*,language.model.layers.*.self_attn.k_proj.*,language.model.layers.*.self_attn.v_proj.*,language.model.layers.*.self_attn.*o_proj.*,language.model.layers.*.mlp.experts.*.gate_proj.*,language.model.layers.*.mlp.experts.*.up_proj.*,language.model.layers.*.mlp.experts.*.down_proj.*,language.model.layers.*.mlp.gate_proj.*,language.model.layers.*.mlp.up_proj.*,language.model.layers.*.mlp.down_proj.*" \
   2>&1 | tee -a "${OUTPUT_DIR}/training_log.txt"

@@ -186,6 +186,8 @@ class DeepseekVLV2ForCausalLM(DeepseekVLV2PreTrainedModel):
                 dtype=paddle.get_default_dtype(),
                 default_initializer=paddle.nn.initializer.Normal(std=embed_std),
             )
+            self.image_newline.stop_gradient = True
+            self.view_seperator.stop_gradient = True
         elif self.tile_tag == "1D":
             candidate_resolutions = config.candidate_resolutions
             if len(candidate_resolutions) == 0:
@@ -381,7 +383,16 @@ class DeepseekVLV2ForCausalLM(DeepseekVLV2PreTrainedModel):
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
         cache_position: Optional[paddle.Tensor] = None,
-    ):
+    ):     
+        # print('input_ids', input_ids.shape, input_ids.sum().item()) # [1, 472] 54625351
+        # print('attention_mask', attention_mask) # [1, 472]
+        # print('position_ids', position_ids) # None
+        # # print('inputs_embeds', inputs_embeds.shape, inputs_embeds.sum().item())
+        # print('images', images.shape, images.sum().item())
+        # print('images_seq_mask', images_seq_mask)
+        # print('images_spatial_crop', images_spatial_crop)
+        # print('labels', labels)
+        # import pdb; pdb.set_trace()
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
@@ -419,7 +430,7 @@ class DeepseekVLV2ForCausalLM(DeepseekVLV2PreTrainedModel):
         gc.collect()
         if paddle.device.cuda.device_count() >= 1:
             paddle.device.cuda.empty_cache()
-            paddle.device.cuda.synchronize()
+            # paddle.device.cuda.synchronize()
 
     def _move_past_key_values_to_cpu(self, past_key_values):
         if past_key_values is None:
