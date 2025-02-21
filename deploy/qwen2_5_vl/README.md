@@ -85,7 +85,7 @@ python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
 ### 一键推理
 ```bash
 cd PaddleMIX
-sh deploy/qwen2_5_vl/scripts/hp_qwen2_5_vl_infer.sh
+sh deploy/qwen2_5_vl/scripts/qwen2_5_vl.sh
 ```
 
 ## 在 NVIDIA A800-SXM4-80GB 上测试的性能如下：
