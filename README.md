@@ -314,11 +314,6 @@ python setup.py install
         <ul>
             <li><a href="paddlemix/examples/imagebind">ImageBind</a></li>
       </ul>
-      </ul>
-        <li><b>数据分析</b></li>
-      <ul>
-          <li><a href="./paddlemix/datacopilot/example/pp_inscaptagger/">PP-InsCapTagger</a></li>
-      </ul>
       </td>
       <td>
         <ul>
