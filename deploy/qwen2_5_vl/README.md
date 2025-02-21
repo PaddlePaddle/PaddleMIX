@@ -34,12 +34,11 @@ python -m pip install -e ppdiffusers --user
 python -m pip install -r requirements.txt --user
 
 # pip 安装示例，安装develop版本的PaddleNLP、自定义算子
-git submodule update --init --recursive
+git clone https: //github.com/PaddlePaddle/PaddleNLP.git
 cd PaddleNLP
-pip install -e .
+python setup.py install
 cd csrc
 python setup_cuda.py install
-
 ```
 
 
@@ -61,7 +60,6 @@ python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
     --temperature 0.95 \
     --dtype bfloat16 \
     --benchmark True
-
 ```
 
 

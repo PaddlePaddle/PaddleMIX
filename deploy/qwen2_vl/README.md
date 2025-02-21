@@ -19,10 +19,9 @@ python -m pip install paddlepaddle-gpu==0.0.0.post118 -f https: //www.paddlepadd
 在PaddleMIX/代码目录下执行以下命令安装特定版本的paddlenlp：
 ```bash
 # 安装示例
-git submodule update --init --recursive
+git clone https: //github.com/PaddlePaddle/PaddleNLP.git
 cd PaddleNLP
-git reset --hard e91c2d3d634b12769c30aa419ddf931c20b7ca9f
-pip install -e .
+python setup.py install
 cd csrc
 python setup_cuda.py install
 ```
