@@ -14,7 +14,7 @@
 
 #fp16  高性能推理
 python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
-    --model_name_or_path Qwen/Qwen2.5-VL-7B-Instruct \
+    --model_name_or_path Qwen/Qwen2.5-VL-3B-Instruct \
     --question "Describe this image." \
     --image_file paddlemix/demo_images/examples_image1.jpg \
     --min_length 128 \
@@ -26,9 +26,9 @@ python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
     --benchmark True 
     
 
-# # weight only int8 量化推理
-# python /root/paddlejob/workspace/env_run/output/changwenbin/PaddleMIX/deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
-#     --model_name_or_path Qwen/Qwen2.5-VL-7B-Instruct \
+# weight only int8 量化推理
+# python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
+#     --model_name_or_path Qwen/Qwen2.5-VL-3B-Instruct \
 #     --question "Describe this image." \
 #     --image_file paddlemix/demo_images/examples_image1.jpg \
 #     --min_length 128 \
@@ -36,7 +36,6 @@ python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
 #     --top_k 0 \
 #     --top_p 0.01 \
 #     --temperature 0.95 \
-#     --dtype bfloat16 \ 
-#     --quant_type weight_only_int8 \
+#     --dtype bfloat16 \
+#     --quant_type "weight_only_int8" \
 #     --benchmark True 
-    

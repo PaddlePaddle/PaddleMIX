@@ -99,6 +99,7 @@ class PredictorArgument:
         default=None,
         metadata={"help": "speculate method, it should be one of ['None', 'inference_with_reference']"},
     )
+    return_full_hidden_states: bool = field(default=False, metadata={"help": "whether return full hidden_states"})
 
 
 @dataclass
@@ -239,9 +240,9 @@ paddle.device.cuda.empty_cache()
 
 image_processor = Qwen2_5_VLImageProcessor()
 tokenizer = MIXQwen2_5_Tokenizer.from_pretrained(predictor_args.model_name_or_path)
+processor = Qwen2_5_VLProcessor(image_processor, tokenizer)
 # min_pixels = 256*28*28 # 200704
 # max_pixels = 1280*28*28 # 1003520
-processor = Qwen2_5_VLProcessor(image_processor, tokenizer)
 
 messages = [
     {
