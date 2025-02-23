@@ -15,12 +15,12 @@
 set -x
  
 export FLAGS_use_cuda_managed_memory=true
-GPUS=${GPUS:-4}
+GPUS=${GPUS:-8}
 BATCH_SIZE=${BATCH_SIZE:-32}
 PER_DEVICE_BATCH_SIZE=${PER_DEVICE_BATCH_SIZE:-1}
  
 pipeline_parallel_degree=${pipeline_parallel_degree:-1}
-tensor_parallel_degree=${tensor_parallel_degree:-1}
+tensor_parallel_degree=${tensor_parallel_degree:-2}
 sep_parallel_degree=${tensor_parallel_degree}
 sharding_parallel_degree=$((GPUS / tensor_parallel_degree / pipeline_parallel_degree))
 GRADIENT_ACC=$((BATCH_SIZE / PER_DEVICE_BATCH_SIZE / sharding_parallel_degree))
@@ -86,7 +86,7 @@ ${TRAINING_PYTHON} --log_dir ${OUTPUT_DIR}/paddle_distributed_logs \
   --amp_master_grad=1 \
   --hybrid_parallel_topo_order="sharding_first" \
   --lora True \
-  --lora_rank=12 \
+  --lora_rank=16 \
   --lora_alpha=256 \
   --lora_dropout=0.0 \
   --lora_target_modules="model.layers.*q_proj.*,model.layers.*k_proj.*,model.layers.*v_proj.*,model.layers.*gate_proj.*,model.layers.*up_proj.*,model.layers.*down_proj.*,model.layers.*o_proj.*" \
