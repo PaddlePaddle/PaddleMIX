@@ -56,7 +56,7 @@ ${TRAINING_PYTHON} \
   --gradient_accumulation_steps ${GRADIENT_ACC} \
   --freeze_vit True \
   --max_seq_length 8192 \
-  --image_resolution 512 \
+  --image_resolution 768 \
   --recompute False \
   --max_grad_norm 1.0 \
   --evaluation_strategy "no" \

@@ -22,14 +22,14 @@ from paddlenlp.trainer import PdArgumentParser
 from paddlenlp.transformers import AutoConfig, AutoInferenceModelForCausalLM
 from paddlenlp.trl import llm_utils
 
-from paddlemix.models.qwen2_vl import MIXQwen2Tokenizer
-from paddlemix.models.qwen2_vl.modeling_qwen2_vl import (
-    Qwen2VLForConditionalGeneration,
-    Qwen2VLRotaryEmbedding,
+from paddlemix.models.qwen2_5_vl import MIXQwen2_5_Tokenizer
+from paddlemix.models.qwen2_5_vl.modeling_qwen2_5_vl import (
+    Qwen2_5_VLForConditionalGeneration,
+    Qwen2_5_VLRotaryEmbedding,
 )
-from paddlemix.processors.qwen2_vl_processing import (
-    Qwen2VLImageProcessor,
-    Qwen2VLProcessor,
+from paddlemix.processors.qwen2_5_vl_processing import (
+    Qwen2_5_VLImageProcessor,
+    Qwen2_5_VLProcessor,
     process_vision_info,
 )
 
@@ -141,9 +141,11 @@ def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: Predic
         config.image_token_id,
         config.video_token_id,
         config.vision_start_token_id,
+        config.vision_config["tokens_per_second"],
         vision_model_inputs.get("input_ids"),
         vision_model_inputs.get("image_grid_thw"),
         vision_model_inputs.get("video_grid_thw", None),
+        vision_model_inputs.get("second_per_grid_ts", None),
         vision_model_inputs.get("attention_mask"),
     )
     position_start = position_ids[0][0][-1].item()
@@ -154,7 +156,7 @@ def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: Predic
     position_ids = paddle.concat([position_ids, position_value], axis=-1)
 
     head_dim = config.hidden_size // config.num_attention_heads
-    qwen2_Embedding = Qwen2VLRotaryEmbedding(head_dim, config.max_position_embeddings, config.rope_theta)
+    qwen2_Embedding = Qwen2_5_VLRotaryEmbedding(head_dim, config.max_position_embeddings, config.rope_theta)
     cos = qwen2_Embedding.cos_cached
     sin = qwen2_Embedding.sin_cached
 
@@ -196,12 +198,9 @@ def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: Predic
 
 def run_model(predictor_args):
 
-    question = "Describe this image."
-    image_pad_token = "<|vision_start|><|image_pad|><|vision_end|>"
-    text = f"<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n{image_pad_token}{question}<|im_end|>\n<|im_start|>assistant\n"
-
+    texts = [processor.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)]
     vision_model_inputs = processor(
-        text=text,
+        text=texts,
         images=image_inputs,
         videos=video_inputs,
         padding=True,
@@ -213,7 +212,9 @@ def run_model(predictor_args):
     generated_text = ""
     generated_ids = paddle.to_tensor([], dtype="int64").reshape([1, 0])
     while llm_model_inputs["not_need_stop"]:
+
         generated_id = fast_llm_model.generate(**llm_model_inputs)  # already trimmed in paddle
+
         llm_model_inputs["input_ids"] = generated_id
         llm_model_inputs["inputs_embeds"] = None
         generated_ids = paddle.concat([generated_ids, generated_id], axis=1)
@@ -229,7 +230,7 @@ parser = PdArgumentParser((PredictorArgument, ModelArgument))
 predictor_args, model_args = parser.parse_args_into_dataclasses()
 
 # MODEL_NAME = "Qwen/Qwen2.5-VL-3B-Instruct"
-vl_model = Qwen2VLForConditionalGeneration.from_pretrained(predictor_args.model_name_or_path, dtype="bfloat16")
+vl_model = Qwen2_5_VLForConditionalGeneration.from_pretrained(predictor_args.model_name_or_path, dtype="bfloat16")
 
 # NOTE: (zhoukangkang、changwenbin) Because we only use the visual model here,
 # in order to reduce video memory,we delete the language model.
@@ -237,9 +238,9 @@ del vl_model.model
 paddle.device.cuda.empty_cache()
 
 
-image_processor = Qwen2VLImageProcessor()
-tokenizer = MIXQwen2Tokenizer.from_pretrained(predictor_args.model_name_or_path)
-processor = Qwen2VLProcessor(image_processor, tokenizer)
+image_processor = Qwen2_5_VLImageProcessor()
+tokenizer = MIXQwen2_5_Tokenizer.from_pretrained(predictor_args.model_name_or_path)
+processor = Qwen2_5_VLProcessor(image_processor, tokenizer)
 # min_pixels = 256*28*28 # 200704
 # max_pixels = 1280*28*28 # 1003520
 

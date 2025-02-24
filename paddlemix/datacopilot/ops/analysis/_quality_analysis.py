@@ -1,10 +1,25 @@
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from tqdm import tqdm
+from typing import Dict
+
 import paddle
 from paddlenlp.transformers import Qwen2Tokenizer
 from paddlemix.models.qwen2_vl.modeling_qwen2_vl import Qwen2VLForConditionalGeneration
 from paddlemix.processors.qwen2_vl_processing import Qwen2VLImageProcessor, Qwen2VLProcessor, process_vision_info
-from tqdm import tqdm
-from typing import Dict
-from paddlemix.datacopilot.core import MMDataset, register
+from ...core import MMDataset, register
 
 # Predefined evaluation metrics and corresponding prompt templates
 CRITERIA_PROMPTS = {
