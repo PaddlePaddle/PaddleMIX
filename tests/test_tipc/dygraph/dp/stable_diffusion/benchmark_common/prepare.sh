@@ -41,5 +41,6 @@ python -m pip install huggingface-hub==0.23.0
 # uninstall ppdiffusers and install develop paddlemix
 python -m pip uninstall -y ppdiffusers
 python -m pip install -e ../
+python -m pip install -e ../ppdiffusers/
 python -m pip list
 cd -

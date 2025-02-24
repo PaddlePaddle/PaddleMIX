@@ -20,7 +20,7 @@ import random
 import sys
 import traceback
 from dataclasses import dataclass, field
-from typing import Dict, Optional
+from typing import Dict, Optional, Sequence, Any
 
 import numpy as np
 import paddle
@@ -42,13 +42,13 @@ from paddlemix.processors.qwen2_vl_processing import (
     Qwen2VLImageProcessor,
     Qwen2VLProcessor,
 )
+from paddlenlp.transformers.processing_utils import ProcessorMixin
 
 Image.MAX_IMAGE_PIXELS = None
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 MaximumDecompressedSize = 1024
 MegaByte = 2**20
 PngImagePlugin.MAX_TEXT_CHUNK = MaximumDecompressedSize * MegaByte
-
 logger = logging.getLogger(__name__)
 
 
@@ -303,8 +303,6 @@ class LazySupervisedDataset(Dataset):
 
         # Merge the image path
         image_path = self.get_image_path(data_item["images"][0])  # TODO: now only single image
-        image = self.load_image(image_path)
-        image_data_dict = transform(image)
 
         messages = data_item["messages"]
 
@@ -328,19 +326,11 @@ class LazySupervisedDataset(Dataset):
             input_ids=input_ids,
             labels=labels,
             attention_mask=attention_mask,
-            pixel_values=image_data_dict["pixel_values"],
-            image_grid_thw=image_data_dict["image_grid_thw"][0],
+            images=[image_path],
         )
         return ret
 
     def pure_text_get_item(self, data_item):
-        # Build transformation function
-        transform = self.get_transform()
-
-        # Create a blank white image
-        image = Image.new("RGB", (224, 224), (255, 255, 255))
-        image_data_dict = transform(image)
-
         messages = data_item["messages"]
 
         input_ids, labels = _encode_supervised_example(
@@ -363,9 +353,9 @@ class LazySupervisedDataset(Dataset):
             input_ids=input_ids,
             labels=labels,
             attention_mask=attention_mask,
-            pixel_values=image_data_dict["pixel_values"],
-            image_grid_thw=image_data_dict["image_grid_thw"][0],
+            images=[],
         )
+        
         return ret
 
     def __getitem__(self, i) -> Dict[str, paddle.Tensor]:
@@ -374,10 +364,6 @@ class LazySupervisedDataset(Dataset):
             try:
                 data_item = self.raw_data[i]
                 if "images" in data_item and len(data_item["images"]) != 0:
-                    # if type(data_item['images']) == list:
-                    #     ret = self.multi_modal_multi_image_get_item(data_item)
-                    # else:
-                    #     ret = self.multi_modal_get_item(data_item)
                     ret = self.multi_modal_get_item(data_item)  # TODO: 暂时都是单图
                 else:
                     ret = self.pure_text_get_item(data_item)  # TODO: 纯文
@@ -457,6 +443,95 @@ def print_trainable_params(model: paddle.nn.Layer) -> None:
     )
 
 
+@dataclass
+class MultiModalDataCollatorForSeq2Seq(DataCollatorForSeq2Seq):
+    r"""
+    Data collator that supports VLMs.
+
+    Features should contain input_ids, attention_mask, labels, and optionally contain images and videos.
+    """
+
+    template: Optional["TEMPLATES"] = None
+    processor: Optional["ProcessorMixin"] = None
+
+    def __post_init__(self):
+        if self.template is None:
+            raise ValueError("Template is required for MultiModalDataCollator.")
+
+    def __call__(self, features: Sequence[Dict[str, Any]]) -> Dict[str, "paddle.Tensor"]:
+        batch_images, batch_videos, batch_imglens, batch_vidlens, batch_input_ids = [], [], [], [], []
+
+        for feature in features:
+            images = feature.pop("images", None) or []
+            videos = feature.pop("videos", None) or []
+            batch_images.extend(images)
+            batch_videos.extend(videos)
+            batch_imglens.append(len(images))
+            batch_vidlens.append(len(videos))
+            batch_input_ids.append(feature["input_ids"])                
+
+        if (
+            self.processor is not None and sum(batch_imglens) == 0 and sum(batch_vidlens) == 0
+        ):  
+            fake_messages = [{"role": "user", "content": IMAGE_PLACEHOLDER}]
+            fake_images = [Image.new("RGB", (64, 64), (255, 255, 255))]
+            fake_messages = self.template.mm_plugin.process_messages(fake_messages, fake_images, [], self.processor)
+            fake_input_ids = self.tokenizer.encode(fake_messages[0]["content"], add_special_tokens=False)
+            fake_input_ids, _ = self.template.mm_plugin.process_token_ids(
+                fake_input_ids, None, fake_images, [], self.tokenizer, self.processor
+            )
+
+            if len(fake_input_ids) != 0:
+                if self.tokenizer.padding_side == "right":
+                    features[0]["input_ids"] = features[0]["input_ids"]+ fake_input_ids["input_ids"]
+                    features[0]["attention_mask"] = features[0]["attention_mask"] + [0] * len(fake_input_ids["input_ids"])
+                    features[0]["labels"] = features[0]["labels"] + [IGNORE_INDEX] * len(fake_input_ids["input_ids"])
+                else:
+                    features[0]["input_ids"] = fake_input_ids["input_ids"] + features[0]["input_ids"]
+                    features[0]["attention_mask"] = [0] * len(fake_input_ids["input_ids"]) + features[0]["attention_mask"]
+                    features[0]["labels"] = [IGNORE_INDEX] * len(fake_input_ids["input_ids"]) + features[0]["labels"]
+
+            batch_images = fake_images
+            batch_imglens[0] = 1
+            batch_input_ids[0] = features[0]["input_ids"]
+
+        mm_inputs = self.template.mm_plugin.get_mm_inputs(
+            batch_images, batch_videos, batch_imglens, batch_vidlens, batch_input_ids, self.processor
+        )
+        if "token_type_ids" in mm_inputs:
+            token_type_ids = mm_inputs.pop("token_type_ids")
+            for i, feature in enumerate(features):
+                feature["token_type_ids"] = token_type_ids[i]
+
+        features: Dict[str, "paddle.Tensor"] = super().__call__(features)
+
+        if self.model is not None and hasattr(self.model, "get_rope_index"):  # for qwen2vl mrope
+            features["position_ids"], features["rope_deltas"] = self.model.get_rope_index(
+                input_ids=features["input_ids"],
+                image_grid_thw=mm_inputs.get("image_grid_thw", None),
+                video_grid_thw=mm_inputs.get("video_grid_thw", None),
+                attention_mask=features["attention_mask"],
+            )
+
+        if "cross_attention_mask" in mm_inputs:  # for mllama inputs when pad_to_multiple_of is enabled
+            cross_attention_mask = mm_inputs.pop("cross_attention_mask")
+            seq_len = features["input_ids"].size(1)
+            orig_len = cross_attention_mask.size(1)
+            mm_inputs["cross_attention_mask"] = F.pad(cross_attention_mask, (0, 0, 0, 0, 0, seq_len - orig_len))
+
+        features.update(mm_inputs)
+        if isinstance(features.get("pixel_values"), list):  # for pixtral inputs
+            features = features.data  # use default_collate() instead of BatchEncoding.to()
+
+        if "image_bound" in features:  # for minicpmv inputs
+            bsz, seq_length = features["input_ids"].shape
+            features["position_ids"] = paddle.arange(seq_length).long().repeat(bsz, 1)
+            return {"data": features, "input_ids": features["input_ids"], "labels": features["labels"]}
+
+        return features
+
+
+
 def main():
     parser = PdArgumentParser((ModelArguments, DataTrainingArguments, PreTrainingArguments))
     if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
@@ -516,7 +591,7 @@ def main():
     MODEL_NAME = model_args.model_name_or_path
     model = Qwen2VLForConditionalGeneration.from_pretrained(MODEL_NAME, dtype=dtype)
     image_processor = Qwen2VLImageProcessor.from_pretrained(MODEL_NAME)
-    tokenizer = MIXQwen2Tokenizer.from_pretrained(MODEL_NAME)
+    tokenizer = MIXQwen2Tokenizer.from_pretrained(MODEL_NAME, padding_side="right")
     processor = Qwen2VLProcessor(image_processor, tokenizer)
 
     tokenizer.tokenizer_path = tokenizer_path
@@ -578,8 +653,10 @@ def main():
     # set seed for paddle dataloaders
     set_seed(training_args.seed)
 
-    data_collator = DataCollatorForSeq2Seq(
+    data_collator = MultiModalDataCollatorForSeq2Seq(
         tokenizer=tokenizer,
+        template=TEMPLATES[data_args.conv_style],
+        processor=processor,
         pad_to_multiple_of=8 if training_args.do_train else None,  # for shift short attention
         label_pad_token_id=IGNORE_INDEX,
     )
