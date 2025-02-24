@@ -31,7 +31,7 @@ python -m pip install -e . --user
 python -m pip install -e ppdiffusers --user
 python -m pip install -r requirements.txt --user
 
-ƒ
+# 安装PaddleNLP
 git clone https://github.com/PaddlePaddle/PaddleNLP.git
 cd PaddleNLP
 python setup.py install
