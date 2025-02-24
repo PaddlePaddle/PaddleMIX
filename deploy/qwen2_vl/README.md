@@ -58,8 +58,6 @@ sh deploy/qwen2_vl/scripts/qwen2_vl.sh
 #### 参数设定：默认情况下，使用model自带的generation_config.json中的参数。
 |     parameter      |      Value     |
 | ------------------ | -------------- |
-|  input_tokens_len  |  997 tokens    |
-|  output_tokens_len |  128 tokens    |
 |       Top-K        |       1        |
 |       Top-P        |     0.001      |
 |    temperature     |      0.1       |
@@ -71,6 +69,12 @@ sh deploy/qwen2_vl/scripts/qwen2_vl.sh
 |     min_length     |       128      |
 |     min_length     |       128      |
 
+
+#### 下方表格中所示性能对应的输入输出大小。
+|     parameter      |      Value     |
+| ------------------ | -------------- |
+|  input_tokens_len  |  997 tokens    |
+|  output_tokens_len |  128 tokens    |
 
 - 在 NVIDIA A800-80GB 上测试的单图端到端速度性能如下：
 
