@@ -206,7 +206,7 @@ def run_model(predictor_args):
         padding=True,
         return_tensors="pd",
     )
-    input_tokens = vision_model_inputs.input_ids.shape[1]
+    input_tokens_len = vision_model_inputs.input_ids.shape[1]
     with paddle.no_grad():
         inputs_embeds = vl_model.vision_forward(**vision_model_inputs)
     llm_model_inputs = init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config=predictor_args)
@@ -223,7 +223,7 @@ def run_model(predictor_args):
         generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False
     )[0]
     output_tokens_len = generated_ids.shape[1]
-    return generated_text,input_tokens,output_tokens_len
+    return generated_text,input_tokens_len,output_tokens_len
 
 
 parser = PdArgumentParser((PredictorArgument, ModelArgument))
