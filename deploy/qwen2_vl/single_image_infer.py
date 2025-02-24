@@ -222,7 +222,8 @@ def run_model(predictor_args):
     generated_text = processor.batch_decode(
         generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False
     )[0]
-    return generated_text,input_tokens,generated_ids.shape[1]
+    output_tokens_len = generated_ids.shape[1]
+    return generated_text,input_tokens,output_tokens_len
 
 
 parser = PdArgumentParser((PredictorArgument, ModelArgument))
@@ -318,10 +319,8 @@ if predictor_args.benchmark:
     )
     print(f"GPU memory_allocated: {paddle.device.cuda.memory_allocated() / 1024 ** 3:.2f} GB")
     print(f"GPU max_memory_allocated: {paddle.device.cuda.max_memory_allocated() / 1024 ** 3:.2f} GB")
-    print(f"GPU memory_reserved: {paddle.device.cuda.memory_reserved() / 1024 ** 3:.2f} GB")
-    print(f"GPU max_memory_reserved: {paddle.device.cuda.max_memory_reserved() / 1024 ** 3:.2f} GB")
-    print("input_tokens_len is :",generated_text[1])
-    print("output_tokens_len is :",generated_text[2])
+    print("input_tokens_len is :",generated_text[1],"tokens")
+    print("output_tokens_len is :",generated_text[2],"tokens")
 
 else:
     generated_text = run_model(predictor_args)
