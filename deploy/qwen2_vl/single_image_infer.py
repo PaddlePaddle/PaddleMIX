@@ -26,6 +26,7 @@ from paddlemix.models.qwen2_vl import MIXQwen2Tokenizer
 from paddlemix.models.qwen2_vl.modeling_qwen2_vl import (
     Qwen2VLForConditionalGeneration,
     Qwen2VLRotaryEmbedding,
+    Qwen2VLRotaryEmbedding,
 )
 from paddlemix.processors.qwen2_vl_processing import (
     Qwen2VLImageProcessor,
@@ -76,12 +77,51 @@ class PredictorArgument:
             "help": "Quantization type. Supported values: a8w8, a8w8c8, a8w8_fp8, a8w8c8_fp8, weight_only_int4, weight_only_int8"
         },
     )
+    decode_strategy: str = field(
+        default="sampling",
+        metadata={
+            "help": "the decoding strategy of generation, which should be one of ['sampling', 'greedy_search', 'beam_search']. Default to sampling"
+        },
+    )
+    use_flash_attention: bool = field(
+        default=False,
+        metadata={"help": "Whether to use flash attention"},
+    )
+
+    mode: str = field(
+        default="dynamic", metadata={"help": "the type of predictor, it should be one of [dynamic, static]"}
+    )
+    inference_model: bool = field(default=False, metadata={"help": "whether use InferenceModel to do generation"})
+    quant_type: str = field(
+        default="",
+        metadata={
+            "help": "Quantization type. Supported values: a8w8, a8w8c8, a8w8_fp8, a8w8c8_fp8, weight_only_int4, weight_only_int8"
+        },
+    )
     benchmark: bool = field(
         default=False,
         metadata={
             "help": "If benchmark set as `True`, we will force model decode to max_length, which is helpful to compute throughput. "
         },
     )
+    use_fake_parameter: bool = field(default=False, metadata={"help": "use fake parameter, for ptq scales now."})
+    block_attn: bool = field(default=True, metadata={"help": "whether use block attention"})
+    block_size: int = field(default=64, metadata={"help": "the block size for cache_kvs."})
+    cachekv_int8_type: str = field(
+        default=None,
+        metadata={
+            "help": "If cachekv_int8_type set as `dynamic`, cache kv would be quantized to int8 dynamically. If cachekv_int8_type set as `static`, cache kv would be quantized to int8 Statically."
+        },
+    )
+    append_attn: bool = field(default=True, metadata={"help": "whether use append attention"})
+    total_max_length: int = field(
+        default=128000, metadata={"help": "Super parameter. Maximum sequence length(encoder+decoder)."}
+    )
+    speculate_method: str = field(
+        default=None,
+        metadata={"help": "speculate method, it should be one of ['None', 'inference_with_reference']"},
+    )
+    return_full_hidden_states: bool = field(default=False, metadata={"help": "whether return full hidden_states"})
     use_fake_parameter: bool = field(default=False, metadata={"help": "use fake parameter, for ptq scales now."})
     block_attn: bool = field(default=True, metadata={"help": "whether use block attention"})
     block_size: int = field(default=64, metadata={"help": "the block size for cache_kvs."})
@@ -199,8 +239,14 @@ def run_model(predictor_args):
     question = "Describe this image."
     image_pad_token = "<|vision_start|><|image_pad|><|vision_end|>"
     text = f"<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n{image_pad_token}{question}<|im_end|>\n<|im_start|>assistant\n"
+def run_model(predictor_args):
+
+    question = "Describe this image."
+    image_pad_token = "<|vision_start|><|image_pad|><|vision_end|>"
+    text = f"<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n{image_pad_token}{question}<|im_end|>\n<|im_start|>assistant\n"
 
     vision_model_inputs = processor(
+        text=text,
         text=text,
         images=image_inputs,
         videos=video_inputs,
@@ -302,6 +348,7 @@ if predictor_args.benchmark:
         if i > 2:
             paddle.device.synchronize()
             starttime = datetime.datetime.now()
+        generated_text = run_model(predictor_args)
         generated_text = run_model(predictor_args)
         if i > 2:
             paddle.device.synchronize()

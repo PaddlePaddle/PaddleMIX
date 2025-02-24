@@ -227,6 +227,7 @@ def run_model(predictor_args):
     return generated_text,input_tokens,generated_ids.shape[1]
 
 
+
 parser = PdArgumentParser((PredictorArgument, ModelArgument))
 predictor_args, model_args = parser.parse_args_into_dataclasses()
 
