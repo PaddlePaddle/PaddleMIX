@@ -50,10 +50,10 @@ class PredictorArgument:
     src_length: int = field(default=2048, metadata={"help": "The max length of source text."})
     min_length: int = field(default=1, metadata={"help": "the min length for decoding."})
     max_length: int = field(default=1024, metadata={"help": "the max length for decoding."})
-    top_k: int = field(default=0, metadata={"help": "top_k parameter for generation"})
-    top_p: float = field(default=0.9, metadata={"help": "top_p parameter for generation"})
-    temperature: float = field(default=0.8, metadata={"help": "top_p parameter for generation"})
-    repetition_penalty: float = field(default=1.0, metadata={"help": "repetition penalty parameter for generation"})
+    top_k: int = field(default=1, metadata={"help": "top_k parameter for generation"})
+    top_p: float = field(default=0.001, metadata={"help": "top_p parameter for generation"})
+    temperature: float = field(default=0.1, metadata={"help": "top_p parameter for generation"})
+    repetition_penalty: float = field(default=1.05, metadata={"help": "repetition penalty parameter for generation"})
     dtype: str = field(default=None, metadata={"help": "Model dtype"})
     decode_strategy: str = field(
         default="sampling",
@@ -207,6 +207,7 @@ def run_model(predictor_args):
         padding=True,
         return_tensors="pd",
     )
+    input_tokens = vision_model_inputs.input_ids.shape[1]
     with paddle.no_grad():
         inputs_embeds = vl_model.vision_forward(**vision_model_inputs)
     llm_model_inputs = init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config=predictor_args)
@@ -222,7 +223,7 @@ def run_model(predictor_args):
     generated_text = processor.batch_decode(
         generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False
     )[0]
-    return generated_text
+    return generated_text,input_tokens,generated_ids.shape[1]
 
 
 parser = PdArgumentParser((PredictorArgument, ModelArgument))
@@ -257,7 +258,7 @@ messages = [
 ]
 # Preparation for inference
 image_inputs, video_inputs = process_vision_info(messages)
-
+# breakpoint()
 
 paddle.set_default_dtype(predictor_args.dtype)
 # tensor_parallel_degree = paddle.distributed.get_world_size()
@@ -305,24 +306,25 @@ if predictor_args.benchmark:
         if i > 2:
             paddle.device.synchronize()
             endtime = datetime.datetime.now()
-            print("Final output_text:\n", generated_text)
+            print("Final output_text:\n", generated_text[0])
 
         if i > 2:
             duringtime = endtime - starttime
             duringtime = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
             sumtime += duringtime
             print(f"Single Image Inference: {predictor_args.model_name_or_path} end-to-end time : ", duringtime, "ms")
-            print(f"GPU memory_allocated: {paddle.device.cuda.memory_allocated() / 1024 ** 3:.2f} GB")
-            print(f"GPU max_memory_allocated: {paddle.device.cuda.max_memory_allocated() / 1024 ** 3:.2f} GB")
-            print(f"GPU memory_reserved: {paddle.device.cuda.memory_reserved() / 1024 ** 3:.2f} GB")
-            print(f"GPU max_memory_reserved: {paddle.device.cuda.max_memory_reserved() / 1024 ** 3:.2f} GB")
-
     print(
         f"Single Image Inference: {predictor_args.model_name_or_path} average end-to-end time : ",
         sumtime / repeat_times,
         "ms",
     )
+    print(f"GPU memory_allocated: {paddle.device.cuda.memory_allocated() / 1024 ** 3:.2f} GB")
+    print(f"GPU max_memory_allocated: {paddle.device.cuda.max_memory_allocated() / 1024 ** 3:.2f} GB")
+    print(f"GPU memory_reserved: {paddle.device.cuda.memory_reserved() / 1024 ** 3:.2f} GB")
+    print(f"GPU max_memory_reserved: {paddle.device.cuda.max_memory_reserved() / 1024 ** 3:.2f} GB")
+    print("input_tokens_len is :",generated_text[1])
+    print("output_tokens_len is :",generated_text[2])
 
 else:
     generated_text = run_model(predictor_args)
-    print("Final output_text:\n", generated_text)
+    print("Final output_text:\n", generated_text[0])
