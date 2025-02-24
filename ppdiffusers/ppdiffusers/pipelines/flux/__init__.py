@@ -6,7 +6,7 @@ from ...utils import (
     _LazyModule,
     get_objects_from_module,
     is_paddle_available,
-    is_transformers_available,
+    is_paddlenlp_available,
 )
 
 
@@ -15,12 +15,12 @@ _additional_imports = {}
 _import_structure = {"pipeline_output": ["FluxPipelineOutput", "FluxPriorReduxPipelineOutput"]}
 
 try:
-    if not (is_transformers_available() and is_paddle_available()):
+    if not (is_paddlenlp_available() and is_paddle_available()):
         raise OptionalDependencyNotAvailable()
 except OptionalDependencyNotAvailable:
-    from ...utils import dummy_torch_and_transformers_objects  # noqa F403
+    from ...utils import dummy_paddle_and_paddlenlp_objects  # noqa F403
 
-    _dummy_objects.update(get_objects_from_module(dummy_torch_and_transformers_objects))
+    _dummy_objects.update(get_objects_from_module(dummy_paddle_and_paddlenlp_objects))
 else:
     # _import_structure["modeling_flux"] = ["ReduxImageEncoder"]
     _import_structure["pipeline_flux"] = ["FluxPipeline"]
@@ -30,13 +30,14 @@ else:
     # _import_structure["pipeline_flux_controlnet"] = ["FluxControlNetPipeline"]
     # _import_structure["pipeline_flux_controlnet_image_to_image"] = ["FluxControlNetImg2ImgPipeline"]
     # _import_structure["pipeline_flux_controlnet_inpainting"] = ["FluxControlNetInpaintPipeline"]
-    # _import_structure["pipeline_flux_fill"] = ["FluxFillPipeline"]
-    # _import_structure["pipeline_flux_img2img"] = ["FluxImg2ImgPipeline"]
-    # _import_structure["pipeline_flux_inpaint"] = ["FluxInpaintPipeline"]
+    _import_structure["pipeline_flux_fill"] = ["FluxFillPipeline"]
+    _import_structure["pipeline_flux_img2img"] = ["FluxImg2ImgPipeline"]
+    _import_structure["pipeline_flux_inpaint"] = ["FluxInpaintPipeline"]
     # _import_structure["pipeline_flux_prior_redux"] = ["FluxPriorReduxPipeline"]
+
 if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
     try:
-        if not (is_transformers_available() and is_paddle_available()):
+        if not (is_paddlenlp_available() and is_paddle_available()):
             raise OptionalDependencyNotAvailable()
     except OptionalDependencyNotAvailable:
         from ...utils.dummy_paddle_and_paddlenlp_objects import *  # noqa F403
@@ -49,9 +50,9 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         # from .pipeline_flux_controlnet import FluxControlNetPipeline
         # from .pipeline_flux_controlnet_image_to_image import FluxControlNetImg2ImgPipeline
         # from .pipeline_flux_controlnet_inpainting import FluxControlNetInpaintPipeline
-        # from .pipeline_flux_fill import FluxFillPipeline
-        # from .pipeline_flux_img2img import FluxImg2ImgPipeline
-        # from .pipeline_flux_inpaint import FluxInpaintPipeline
+        from .pipeline_flux_fill import FluxFillPipeline
+        from .pipeline_flux_img2img import FluxImg2ImgPipeline
+        from .pipeline_flux_inpaint import FluxInpaintPipeline
         # from .pipeline_flux_prior_redux import FluxPriorReduxPipeline
 else:
     import sys

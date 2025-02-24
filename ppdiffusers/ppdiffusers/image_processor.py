@@ -262,6 +262,7 @@ class VaeImageProcessor(ConfigMixin):
         image[image >= 0.5] = 1
         return image
 
+# TypeError: VaeImageProcessor.preprocess() got an unexpected keyword argument 'crops_coords'
     def preprocess(
         self,
         image: Union[paddle.Tensor, PIL.Image.Image, np.ndarray],

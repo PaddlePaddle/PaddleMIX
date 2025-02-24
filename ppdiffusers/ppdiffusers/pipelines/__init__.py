@@ -133,7 +133,10 @@ else:
         "IFSuperResolutionPipeline",
     ]
     _import_structure["flux"] = [
+        "FluxImg2ImgPipeline",
+        "FluxInpaintPipeline",
         "FluxPipeline",
+        "FluxFillPipeline",
     ]
     _import_structure["kandinsky"] = [
         "KandinskyCombinedPipeline",
@@ -411,6 +414,9 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             IFSuperResolutionPipeline,
         )
         from .flux import (
+            FluxFillPipeline,
+            FluxImg2ImgPipeline,
+            FluxInpaintPipeline,
             FluxPipeline,
         )
         from .img_to_video import ImgToVideoSDPipeline, ImgToVideoSDPipelineOutput
