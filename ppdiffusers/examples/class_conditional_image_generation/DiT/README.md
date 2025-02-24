@@ -28,6 +28,13 @@ pip install -r requirements.txt
 ```
 
 我们提供了下载链接：
+
+```bash
+cd data
+sh download_data.sh
+cd ..
+```
+
 - `wget https://bj.bcebos.com/v1/paddlenlp/datasets/paddlemix/fastdit_features/fastdit_imagenet256.tar`；
 - 特征抽取流程请参考[fast-DiT](https://github.com/chuanyangjin/fast-DiT/blob/main/extract_features.py)
 

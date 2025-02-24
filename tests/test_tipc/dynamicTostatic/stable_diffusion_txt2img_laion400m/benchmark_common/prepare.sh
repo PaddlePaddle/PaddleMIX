@@ -18,6 +18,7 @@ python -m pip install -e .
 # 安装 stable diffusion 依赖
 cd examples/stable_diffusion
 pip install -r requirements.txt
+pip install soundfile==0.12.1 #20250103版本升级后报错
 python -m pip list
 # 删除当前目录下的data
 # cd ppdiffusers/examples/stable_diffusion

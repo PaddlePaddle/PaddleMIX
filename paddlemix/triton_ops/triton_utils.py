@@ -12,12 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import inspect
 import os
 import re
 import sys
 
 import paddle
 import triton
+from paddle.base.framework import OpProtoHolder
 
 compile_file = triton.__path__[0] + "/tools/compile.py"
 link_file = triton.__path__[0] + "/tools/link.py"
@@ -314,7 +316,7 @@ tune_and_invoke_part = """
             }
 
             auto flush_l2_cache = paddle::full(
-                {10 * 1024 * 1024}, 0, paddle::DataType::INT32, x.place());
+                {10 * 1024 * 1024}, 0, paddle::DataType::INT32, ${arbitary_output_name}.place());
             // std::cout << &flush_l2_cache  << std::endl;
             // this is used when out is need to be reset to zero, such as split-k gemm.
             ${reset_zero_when_tune};
@@ -354,3 +356,317 @@ tune_and_invoke_part = """
     assert(status == CUDA_SUCCESS);
   }
 """
+
+
+common_template = (
+    """
+std::vector<paddle::Tensor> ${op_name}_func(${input_and_attr}) {
+  ${prepare_attr_for_triton_kernel}
+  ${prepare_ptr_for_triton_kernel}
+  auto  run_stream = ${arbitary_output_name}.stream();
+  """
+    + tune_and_invoke_part
+    + """
+  return {${return_tensor_names}};
+}
+
+${d2s_infer_code}
+
+PD_BUILD_OP(${op_name})
+    .Inputs({${paddle_input_sig}})
+    .Outputs({${paddle_output_sig}})
+    .Attrs({${paddle_attr_sig}})
+    .SetKernelFn(PD_KERNEL(${op_name}_func))
+    .SetInferDtypeFn(PD_INFER_DTYPE(${op_name}_InferDtype))
+    .SetInferShapeFn(PD_INFER_SHAPE(${op_name}_InferShape));
+"""
+)
+
+
+def rendering_common_template(
+    func,
+    prepare_attr_for_triton_kernel,
+    prepare_ptr_for_triton_kernel,
+    return_tensor_names,
+    d2s_infer_code="",
+):
+    signature = inspect.signature(func)
+    arg_names = [v.name for v in signature.parameters.values()]
+    arg_defaults = [v.default for v in signature.parameters.values()]
+    input_and_attr = ""
+    paddle_input_sig = ""
+    paddle_attr_sig = ""
+
+    for i in range(len(arg_names)):
+        if arg_defaults[i] == None:
+            input_and_attr += f"paddle::optional<paddle::Tensor> & {arg_names[i]},"
+            paddle_input_sig += f"""paddle::Optional("{arg_names[i]}"),"""
+        elif type(arg_defaults[i]) == float:
+            input_and_attr += f"float {arg_names[i]},"
+            paddle_attr_sig += f""""{arg_names[i]}: float","""
+        elif type(arg_defaults[i]) == bool:
+            input_and_attr += f"bool {arg_names[i]},"
+            paddle_attr_sig += f""""{arg_names[i]}: bool","""
+        else:
+            input_and_attr += f"const paddle::Tensor & {arg_names[i]},"
+            paddle_input_sig += f""""{arg_names[i]}","""
+    input_and_attr = input_and_attr[:-1]
+    paddle_input_sig = paddle_input_sig[:-1]
+    if len(paddle_attr_sig) > 1:
+        paddle_attr_sig = paddle_attr_sig[:-1]
+
+    paddle_output_sig = ""
+    arbitary_output_name = ""
+    for name in return_tensor_names.split(","):
+        name = name.strip()
+        arbitary_output_name = name
+        paddle_output_sig += f""""{name}","""
+    paddle_output_sig = paddle_output_sig[:-1]
+
+    if "${op_name}_InferShape" not in d2s_infer_code:
+        d2s_infer_shape_part = "std::vector<std::vector<int64_t>> ${op_name}_InferShape(const std::vector<int64_t>& A_shape) {return {${tmp}};}\n "
+        tmp = ",".join(["A_shape"] * len(return_tensor_names.split(",")))
+        tmp_dict = {"tmp": tmp}
+        d2s_infer_shape_part = SubstituteTemplate(d2s_infer_shape_part, tmp_dict)
+
+        d2s_infer_code += d2s_infer_shape_part
+
+    if "${op_name}_InferDtype" not in d2s_infer_code:
+        d2s_infer_dtype_part = "std::vector<paddle::DataType> ${op_name}_InferDtype(const paddle::DataType& A_dtype) {return {${tmp}};}\n "
+        tmp = ",".join(["A_dtype"] * len(return_tensor_names.split(",")))
+        tmp_dict = {"tmp": tmp}
+        d2s_infer_dtype_part = SubstituteTemplate(d2s_infer_dtype_part, tmp_dict)
+
+        d2s_infer_code += d2s_infer_dtype_part
+
+    result_str = SubstituteTemplate(
+        common_template,
+        {
+            "input_and_attr": input_and_attr,
+            "prepare_attr_for_triton_kernel": prepare_attr_for_triton_kernel,
+            "prepare_ptr_for_triton_kernel": prepare_ptr_for_triton_kernel,
+            "return_tensor_names": return_tensor_names,
+            "arbitary_output_name": arbitary_output_name,
+            "d2s_infer_code": d2s_infer_code,
+            "paddle_input_sig": paddle_input_sig,
+            "paddle_output_sig": paddle_output_sig,
+            "paddle_attr_sig": paddle_attr_sig,
+        },
+    )
+
+    return paddle_custom_op_head_part + result_str
+
+
+class KernelInterface:
+    def __init__(
+        self,
+        func,
+        other_config,
+        key_args=["1"],
+    ):
+        self.func = func
+        self.key_args = key_args
+
+        signature = inspect.signature(func)
+        self.arg_names = [v.name for v in signature.parameters.values()]
+        for ele in self.arg_names:
+            assert self.arg_names.count(ele) == 1
+        arg_defaults = [v.default for v in signature.parameters.values()]
+
+        # self.annotations = {
+        #     name: ty for name, ty in func.__annotations__.items()
+        # }
+        self.annotations = dict(func.__annotations__)
+
+        self.constexprs = [
+            self.arg_names.index(name)
+            for name in self.arg_names
+            if self.annotations.get(name) == triton.language.core.constexpr
+        ]
+
+        self.arg_exclude_constexpr = [
+            self.arg_names[i] for i in range(len(self.arg_names)) if i not in self.constexprs
+        ]
+
+        import textwrap
+
+        py_script = textwrap.dedent(inspect.getsource(func))
+
+        import re
+
+        pat = r"def\s" + func.__name__
+        func_begin = re.findall(pat, py_script)
+        assert len(func_begin) == 1
+        func_begin = func_begin[0]
+        py_script = py_script[py_script.find(func_begin) :]
+
+        def decorator(*args, **kwargs):
+            all_input = []
+
+            for i in range(len(args)):
+                all_input.append(args[i])
+
+            position_arguments_num = len(all_input)
+            for i in range(position_arguments_num, len(self.arg_names)):
+                if self.arg_names[i] in kwargs.keys():
+                    all_input.append(kwargs[self.arg_names[i]])
+                else:
+                    # means this input is not specified, it muse be a tl.constexpr.
+                    assert i in self.constexprs
+                    all_input.append(None)
+
+            dtypes = []
+            x_list = []
+            const_args = [self.arg_names[i] for i in self.constexprs]
+            # we dont allow there are two strings in const_args, and one is a substring of the other.
+            for i in const_args:
+                for j in const_args:
+                    if i != j and i.find(j) != -1:
+                        raise ValueError(
+                            f"We find {i}, {j} in tl.constexpr args, and {j} is a substring of {i}, please modify your triton kernel arguments names to avoid this."
+                        )
+
+            const_hint_dict = {}
+            for i in range(len(all_input)):
+                ele = all_input[i]
+                if (
+                    type(ele) == paddle.Tensor
+                    or type(ele) == paddle.base.framework.EagerParamBase
+                    or type(ele) == paddle.base.framework.Parameter
+                    or type(ele) == paddle.base.framework.Variable
+                    or type(ele) == paddle.base.libpaddle.pir.Value
+                ):
+                    dtypes.append(ele.dtype)
+                elif i in self.constexprs:
+                    const_hint_dict[self.arg_names[i]] = ele
+                else:
+                    x_list.append(ele)
+
+            op_name = self.op_name
+
+            python_package_name = f"{op_name}_package"
+
+            generated_dir = os.getenv("TRITON_KERNEL_CACHE_DIR", None)
+            print("the kernel cache dir is:", generated_dir)
+            assert (
+                generated_dir is not None
+            ), "TRITON_KERNEL_CACHE_DIR is None, please set it such as export TRITON_KERNEL_CACHE_DIR=/tmp/haha "
+            generated_dir = f"{generated_dir}/{op_name}"
+            os.makedirs(generated_dir, exist_ok=True)
+
+            py_script_file = f"{generated_dir}/triton_kernels.py"
+            extract_triton_kernel(func, py_script_file)
+
+            address_hint = get_pointer_hint(dtypes)
+            value_hint = get_value_hint(x_list)
+            const_args = [f"{{{ele}}}" for ele in const_args]
+            const_args = ",".join(const_args)
+
+            lanuch_grid = list(self.grid)
+            for i in range(len(lanuch_grid)):
+                ele = lanuch_grid[i]
+                if type(ele) == str:
+                    for key in const_hint_dict.keys():
+                        if key in ele:
+                            ele = ele.replace(key, f"{{{key}}}")
+                else:
+                    ele = str(ele)
+
+                lanuch_grid[i] = ele
+            if len(lanuch_grid) < 3:
+                lanuch_grid += ["1"] * (3 - len(lanuch_grid))
+            lanuch_grid = ",".join(lanuch_grid)
+
+            op_dict = {"op_name": op_name, "reset_zero_when_tune": ""}
+            op_dict["triton_kernel_args"] = ",".join(self.arg_exclude_constexpr)
+            op_dict["key"] = ",".join(self.key_args)
+            # when tunning, we need to reset the out to zero.
+            if "reset_zero_when_tune" in other_config.keys():
+                op_dict["reset_zero_when_tune"] = other_config["reset_zero_when_tune"]
+
+            paddle_custom_op_file_path = f"{generated_dir}/{op_name}.cu"
+            so_path = find_so_path(generated_dir, python_package_name)
+
+            if so_path is None:
+                print("== we do not find so_path, we need to compile it")
+                with open(paddle_custom_op_file_path, "w") as f:
+                    f.write(
+                        SubstituteTemplate(
+                            self.custom_op_template,
+                            op_dict,
+                        )
+                    )
+                    f.close()
+
+                # ahead of time compile command.
+                aot_template = (
+                    f"""{python_path}   {compile_file} {py_script_file}   -n {func.__name__} -o {generated_dir}/{op_name}_kernel --out-name {op_name}_kernel  """
+                    + """ -w {num_warps} -ns {num_stages} """
+                    + f""" -s"{address_hint} {value_hint} {const_args}" """
+                    + f"""  -g "{lanuch_grid}" """
+                )
+                all_tune_config = list(self.tune_config)
+                if len(all_tune_config) == 0:
+                    # when user do not specify config, we use const_hint_dict as config.
+                    all_tune_config = [const_hint_dict]
+                    # reset const_hint_dict as empty.
+                    const_hint_dict = {}
+                codegen_commands = []
+                for config in all_tune_config:
+                    for key in const_hint_dict.keys():
+                        if const_hint_dict[key] is not None:
+                            if key not in config.keys():
+                                config[key] = const_hint_dict[key]
+                            else:
+                                raise ValueError(f"you specify {key} both in arguments and config, this is wrong.")
+                        else:
+                            assert key in config.keys(), f"you must specify {key} in your config."
+                    if "num_warps" not in config.keys():
+                        config["num_warps"] = 4
+                    if "num_stages" not in config.keys():
+                        config["num_stages"] = 4
+
+                    for key in config:
+                        assert config[key] is not None, f"{key} must be specified."
+                    codegen_command = aot_template.format(
+                        **config,
+                    )
+                    print(codegen_command)
+                    codegen_commands.append(codegen_command)
+                multi_process_do(codegen_commands)
+
+                link_command = f"{python_path}  {link_file}  {generated_dir}/*.h -o {generated_dir}/{op_name}_kernel"
+                re = os.system(link_command)
+                assert re == 0
+
+                # rename the .c file to .cu
+                rename_c_to_cu(generated_dir)
+                # build the package to so, not install
+                build_package(generated_dir, python_package_name)
+
+            if op_name not in OpProtoHolder.instance().op_proto_map.keys():
+                so_path = find_so_path(generated_dir, python_package_name)
+                print("== we find so_path: ", so_path)
+                assert so_path is not None
+                paddle.utils.cpp_extension.load_op_meta_info_and_register_op(so_path)
+
+        self.decorator = decorator
+
+    def __getitem__(self, op_name_and_grid):
+        assert len(op_name_and_grid) >= 3, "len(op_name_and_grid) must >= 3."
+        self.op_name = op_name_and_grid[0]
+        self.custom_op_template = op_name_and_grid[1]
+        self.grid = op_name_and_grid[2]
+        if len(op_name_and_grid) == 3:
+            self.tune_config = {}
+        else:
+            self.tune_config = op_name_and_grid[3]
+
+        return self.decorator
+
+
+def paddle_use_triton(other_config={}, key=[]):
+    def decorator(func):
+        return KernelInterface(func, other_config, key)
+
+    return decorator

@@ -586,6 +586,17 @@ Answer the questions.""",
     sep="<|im_end|>",
 )
 
+conv_phi_v0 = Conversation(
+    system="",
+    roles=("USER", "ASSISTANT"),
+    version="v0",
+    messages=(),
+    offset=0,
+    sep_style=SeparatorStyle.TWO,
+    sep=" ",
+    sep2="<|endoftext|>",
+)
+
 default_conversation = conv_vicuna_v0
 conv_templates = {
     "default": conv_vicuna_v0,
@@ -613,6 +624,7 @@ conv_templates = {
     "qwen_1_5": conv_qwen,
     "qwen_2": conv_qwen,
     "gemma_instruct": conv_gemma_instruct,
+    "phi1.5": conv_phi_v0,
 }
 
 

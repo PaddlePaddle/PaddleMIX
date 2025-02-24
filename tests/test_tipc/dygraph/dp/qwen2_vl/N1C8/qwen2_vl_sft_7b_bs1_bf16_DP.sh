@@ -18,7 +18,7 @@ bs_item=1
 fp_item=bf16O2
 run_mode=DP
 device_num=N1C8
-max_epochs=3
+max_epochs=1
 num_workers=8
 
 # get data

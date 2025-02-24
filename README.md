@@ -8,7 +8,7 @@
     <a href="https://github.com/PaddlePaddle/PaddleMix/releases"><img src="https://img.shields.io/github/v/release/PaddlePaddle/PaddleMix?color=ffa"></a>
     <a href="./LICENSE"><img src="https://img.shields.io/badge/license-Apache%202-dfd.svg"></a>
     <a href=""><img src="https://img.shields.io/badge/python-3.7+-aff.svg"></a>
-    <a href=""><img src="https://img.shields.io/badge/os-linux%2C%20win%2C%20mac-pink.svg"></a>
+    <a href=""><img src="https://img.shields.io/badge/os-linux-pink.svg"></a>
     <a href="#📌社区交流"><img src="https://img.shields.io/badge/微信-小助手加群-green?logo=wechat&amp"></a>
     <a href="https://github.com/PaddlePaddle/PaddleMIX/stargazers"><img src="https://img.shields.io/github/stars/PaddlePaddle/PaddleMIX?color=ccf"></a>
 
@@ -34,16 +34,19 @@
 
 
 ## 📰新闻
-**🔥2024.11.21日 - 2024.12.22日  PaddleMIX开发项目挑战（已结束）**
+**🔥2025.01.16日直播课 飞桨PP系列模型上新！**
 
-- ✨「体验官招募」PaddleMIX开发项目挑战
-点击链接报名🔗：https://aistudio.baidu.com/activitydetail/1503019366
-🏆投稿至飞桨星河社区项目大厅，加精获得PaddleMIX体验官认证证书及京东卡激励
-欢迎大家投稿～
+- 🎉PaddleMIX推出新一代统一视频生成控制模型PP-VCtrl！高效应用于人物动画、场景转换等视频生成精确控制任务。辅助条件编码器架构实现各类控制模块灵活接入，通过稀疏残差连接实现特征的高效控制传播，保持原训练视频扩散模型生成器架构不变，避免全量重训练。基于高质量可用数据集做recaption、人体关节点提取和视频分割，并采用多样化数据增强和训练策略，依次满足边缘控制、人体姿态与蒙版控制视频编辑任务的数据需求，显著提升适应能力和生成质量。控制能力和视频质量指标超越开源特定任务方法。**1月16日（周四）19:00**，直播为您详细解读PP-VCtrl的核心技术与产业应用。🚀报名链接：https://www.wjx.top/vm/m4sb0rh.aspx?udsid=664921
+
+**🔥2025.01.07日直播课（已结束） 飞桨PP系列模型上新！**
+- 🔗PaddleMIX的直播回放链接：[点击](https://aistudio.baidu.com/course/introduce/32178)
+- 🎉PaddleMIX推出轻量级多模态文档理解模型PP-DocBee！基于多模态大模型实现端到端文档图像理解，破解业界复杂图表文档解析难题。采用ViT+MLP+LLM架构，优化数据合成策略、数据预处理、训练方式、OCR后处理辅助等环节。OCR小模型与LLM大模型结合、基于渲染引擎生产图像数据等众多策略实现问答质量更高，生成成本可控。支持本地gradio部署、OpenAI服务部署，提供飞桨星河社区在线环境快速体验。**1月7日（周二）19:00**，直播为您详细解读PP-DocBee的核心技术与产业应用。🚀报名链接：https://www.wjx.top/vm/mlDdpSb.aspx?udsid=309483
+
+
 <details>
 <summary>点击展开活动海报</summary>
 <p align="center">
-<img src='https://github.com/user-attachments/assets/27e0bbe3-0ff8-49ef-bd39-81a31a2b288b'  width="25%">
+<img src='https://github.com/user-attachments/assets/5836c9df-4ea6-421b-acef-89f928e0763e'  width="80%">
 </p>
 </details>
 
@@ -51,6 +54,16 @@
 
 <!-- 📚《飞桨多模态大模型开发套件PaddleMIX 2.1 震撼发布》，图文音视频场景全覆盖，多模态高效助力产业创新。超大规模训练支持，覆盖图文预训练、文生图、跨模态视觉任务，覆盖金融、教育、电商、医疗等产业场景。8月8日（周四）20：00 带你直播了解多模态大模型最新架构，深度解析PaddleMIX高性能模型库，手把手演示LLaVA模型训推全流程。[报名链接](https://www.wjx.top/vm/wKqysjx.aspx?udsid=449688)   -->
 
+**🎉 2025.01.20 喜迎外部开发者在星河(AIStudio)社区开发的[创作教程页面](paddlemix_applications.md)更新**
+* 自9月6日，已收集星河(AIStudio)社区69个精品项目！快来动手体验应用开发吧～
+* 新增「PaddleMIX套件体验官」和「飞桨PaddleMIX开发大赛」活动推出的22个精品项目，涵盖圣诞主题贺卡生成🎄、人物生成👤等多种应用，期待您的体验！此外，还有AI鉴宝🔍、图生音乐🎶等有趣的应用等待您来探索～
+* 🙏 衷心感谢各位开发者基于套件的精彩创作！🚀 诚挚邀请您也来分享您的创意 - 欢迎将教程发布到公开网页或[飞桨AI Studio](https://aistudio.baidu.com/aistudio/community/multimodal?from=singlemessage)社区 
+
+**🎉 2025.01.20 支持[Aria](./paddlemix/examples/aria)推理**
+
+**🎉 2025.01.14 支持[deepseek-vl2](./paddlemix/examples/deepseek_vl2)推理**
+
+**🎉 2025.01.02 新增自研文档理解模型[PP-DocBee](./paddlemix/examples/ppdocbee)推理和训练，支持[高性能推理](./deploy/ppdocbee)**
 
 **🎉 2024.12.17 支持[GOT-OCR2_0](./paddlemix/examples/GOT_OCR_2_0)推理和训练**
 
@@ -64,14 +77,15 @@
 
 **🎉 2024.11.1 支持[LLaVA-OneVision](./paddlemix/examples/llava_onevision/)和[LLaVA-Critic](./paddlemix/examples/llava_critic/)推理**
 
+
+<details>
+<summary>点击展开更多</summary>
+
 **🎉 2024.10.31 喜迎外部开发者的[创作教程页面](paddlemix_applications.md)更新**
 
 * 🌟 自9月6日发起大模型套件精品项目征集活动以来,我们收到了30个优质开发者项目,其中25个精品项目已通过平台评估并成功加精。
 
 * 🙏 衷心感谢各位开发者基于套件的精彩创作！🚀 诚挚邀请您也来分享您的创意 - 欢迎将教程发布到公开网页或[飞桨AI Studio](https://aistudio.baidu.com/aistudio/community/multimodal?from=singlemessage)社区！
-
-<details>
-<summary>点击展开更多</summary>
 
 **🔥2024.10.11 发布PaddleMIX v2.1**
 * 支持[PaddleNLP 3.0 beta](https://github.com/PaddlePaddle/PaddleNLP/releases/tag/v3.0.0-beta0)版本，抢先体验其最新功能。
@@ -290,6 +304,7 @@ python setup.py install
         <ul>
             <li><a href="paddlemix/examples/groundingdino">Grounding DINO</a></li>
             <li><a href="paddlemix/examples/sam">SAM</a></li>
+            <li><a href="paddlemix/examples/sam2">SAM2</a></li>
             <li><a href="paddlemix/examples/YOLO-World">YOLO-World</a></li>
       </ul>
       </ul>
@@ -358,6 +373,53 @@ python setup.py install
 更多模型能力，可参考[模型能力矩阵](./paddlemix/examples/README.md)
 
 
+
+## 📊多模数据处理工具箱DataCopilot
+<table align="center">
+  <tbody>
+    <tr align="center" valign="center">
+      <td>
+        <b>基础能力</b>
+      </td>
+      <td>
+        <b>数据分析</b>
+      </td>
+      <td>
+        <b>数据生成</b>
+      </td>
+    </tr>
+    <tr valign="top">
+      <td>
+        <ul>
+        </ul>
+          <li><b>使用文档</b></li>
+        <ul>
+            <li><a href="paddlemix/datacopilot">DataCopilot</a></li>
+      </ul>
+      </td>
+      <td>
+        <ul>
+        </ul>
+          <li><b>能力标签模型</b></li>
+        <ul>
+           <li><a href="paddlemix/datacopilot/example">PP-InsCapTagger</a></li>
+        </ul>
+      </td>
+      <td>
+        <ul>
+        </ul>
+          <li><b>文档类数据生成方案</b></li>
+        <ul>
+          <li><a href="paddlemix/datacopilot/example">PP-InfinityDocData</a></li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+更多数据相关功能，可参考[DataCopilot](./paddlemix/datacopilot)主页
+
+
 ## 🏆特色模型|工具
 
 ### 💎跨模态任务流水线AppFlow
@@ -399,6 +461,41 @@ PP-InsCapTagger(Instance Capability Tagger) 是 DataCopilot 基于 PaddleMIX 实
 
 ## 🤔FAQ
 关于我们项目的一些常见问题解答，请参考[FAQ](docs/FAQ.md)。如果您的问题没有得到解答，请随时在[Issues](https://github.com/PaddlePaddle/PaddleMIX/issues)中提出
+
+
+## ❤️致谢
+
+- PaddleMIX的部分模块和案例设计借鉴了 Hugging Face 的[Transformers](https://github.com/huggingface/transformers)🤗关于预训练模型使用的优秀设计，在此对 Hugging Face 作者及其开源社区表示感谢。
+
+- PaddleMIX 的部分案例和代码由以下优秀社区开发者贡献，（完整的贡献者请参考: [Contributors](https://github.com/PaddlePaddle/PaddleMIX/graphs/contributors)）：
+    [co63oc](https://github.com/co63oc)，
+    [CrazyBoyM](https://github.com/CrazyBoyM)，
+    [KPCOFGS](https://github.com/KPCOFGS)，
+    [pkhk-1](https://github.com/pkhk-1)，
+    [1649759610](https://github.com/1649759610)，
+    [DrRyanHuang](https://github.com/DrRyanHuang)，
+    [zhiboniu](https://github.com/zhiboniu)，
+    [cocoshe](https://github.com/cocoshe)，
+    [sneaxiy](https://github.com/sneaxiy)，
+    [yangrongxinuser](https://github.com/yangrongxinuser)，
+    [cheng221](https://github.com/cheng221)，
+    [Liyulingyue](https://github.com/Liyulingyue)，
+    [zhoutianzi666](https://github.com/zhoutianzi666)，
+    [Birdylx](https://github.com/Birdylx)，
+    [FeixLiu](https://github.com/FeixLiu)，
+    [Tsaiyue](https://github.com/Tsaiyue)，
+    [fightfat](https://github.com/fightfat)，
+    [warrentdrew](https://github.com/warrentdrew)，
+    [swagger-coder](https://github.com/swagger-coder)
+    ...
+
+- 感谢星河(AIStudio)社区的项目达人们开发了众多有趣的应用，为PaddleMIX的发展创造了更多可能性。特别感谢以下活跃的项目达人（完整名单请参见[AIStudio 项目达人推荐榜](https://aistudio.baidu.com/projectoverview)）：
+    [好想成为PPDE（已成为版）](https://aistudio.baidu.com/personalcenter/thirdview/2553954)，
+    [旭_1994](https://aistudio.baidu.com/personalcenter/thirdview/9044961)，
+    [knoka](https://aistudio.baidu.com/personalcenter/thirdview/2258742)，
+    [魔术师](https://aistudio.baidu.com/personalcenter/thirdview/710848)，
+    [非鱼子焉](https://aistudio.baidu.com/personalcenter/thirdview/91451)
+    ...
 
 
 ## 📝许可证书

@@ -117,7 +117,7 @@ def main(args):
             output_text = processor.batch_decode(
                 generated_ids[0], skip_special_tokens=True, clean_up_tokenization_spaces=False
             )
-        print("output_text:\n", output_text)
+        print("output_text:\n", output_text[0])
 
 
 if __name__ == "__main__":

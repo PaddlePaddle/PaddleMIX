@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Dict
 import gradio as gr
 
 from ..common import get_model_info, list_checkpoints
-from ..extras.constants import METHODS
+from ..extras.constants import DEFAULT, DEFAULT_TEMPLATE, METHODS, SUPPORTED_MODELS
 from ..extras.template import TEMPLATES
 
 if TYPE_CHECKING:
@@ -26,10 +26,10 @@ if TYPE_CHECKING:
 
 def create_top() -> Dict[str, "Component"]:
     # available_models = list(SUPPORTED_MODELS.keys()) + ["Custom"]
-    available_models = ["Qwen2-VL-2B-Instruct", "Qwen2-VL-7B-Instruct"]
+    available_models = list(SUPPORTED_MODELS.keys())
     with gr.Row():
         lang = gr.Dropdown(choices=["en", "zh"], scale=1, value="en")
-        model_name = gr.Dropdown(choices=available_models, scale=3, value="Qwen2-VL-2B-Instruct")
+        model_name = gr.Dropdown(choices=available_models, scale=3, value=DEFAULT["model"])
         model_path = gr.Textbox(scale=3)
 
     with gr.Row():
@@ -37,7 +37,7 @@ def create_top() -> Dict[str, "Component"]:
         checkpoint_path = gr.Dropdown(scale=6, value="")
 
     with gr.Row():
-        template = gr.Dropdown(choices=list(TEMPLATES.keys()), value="qwen2_vl", scale=2)
+        template = gr.Dropdown(choices=list(TEMPLATES.keys()), value=DEFAULT_TEMPLATE["default"], scale=2)
     model_name.change(get_model_info, [model_name], [model_path, template], queue=False).then(
         list_checkpoints, [model_name, finetuning_type], [checkpoint_path], queue=False
     )

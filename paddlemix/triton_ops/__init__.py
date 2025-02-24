@@ -15,21 +15,21 @@
 __all__ = []
 
 try:
+    from .rms_norm import rms_norm
     from .triton_ops import (
         adaptive_layer_norm,
         fused_adaLN_scale_residual,
         fused_rotary_emb,
         paddle_use_triton,
-        rms_norm,
         split_concat,
         triton_split,
-        weight_only_int8,
     )
     from .triton_utils import (
         get_dtype_str,
         paddle_custom_op_head_part,
         tune_and_invoke_part,
     )
+    from .wint8 import weight_only_int8
 
     __all__ += [
         "paddle_custom_op_head_part",
