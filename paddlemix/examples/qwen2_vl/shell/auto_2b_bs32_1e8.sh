@@ -29,7 +29,7 @@ export PYTHONPATH="${PYTHONPATH}:$(pwd)"
 export MASTER_PORT=34229
 export TF_CPP_MIN_LOG_LEVEL=3
 
-OUTPUT_DIR='work_dirs/auto_330k_2b_bs32_1e8'
+OUTPUT_DIR='work_dirs/new219/auto_baseline_6data_330k.json'
 
 if [ ! -d "$OUTPUT_DIR" ]; then
   mkdir -p "$OUTPUT_DIR"

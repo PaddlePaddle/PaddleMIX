@@ -20,7 +20,7 @@ BATCH_SIZE=${BATCH_SIZE:-32}
 PER_DEVICE_BATCH_SIZE=${PER_DEVICE_BATCH_SIZE:-1}
  
 pipeline_parallel_degree=${pipeline_parallel_degree:-1}
-tensor_parallel_degree=${tensor_parallel_degree:-2}
+tensor_parallel_degree=${tensor_parallel_degree:-1}
 sep_parallel_degree=${tensor_parallel_degree}
 sharding_parallel_degree=$((GPUS / tensor_parallel_degree / pipeline_parallel_degree))
 GRADIENT_ACC=$((BATCH_SIZE / PER_DEVICE_BATCH_SIZE / sharding_parallel_degree))
@@ -29,7 +29,7 @@ export PYTHONPATH="${PYTHONPATH}:$(pwd)"
 export MASTER_PORT=34229
 export TF_CPP_MIN_LOG_LEVEL=3
 export FLAGS_use_cuda_managed_memory=true
-OUTPUT_DIR='work_dirs/new219/lora_auto_baseline_6data_330k2'
+OUTPUT_DIR='work_dirs/new219/lora_auto_baseline_6data_330k3'
  
 if [ ! -d "$OUTPUT_DIR" ]; then
   mkdir -p "$OUTPUT_DIR"

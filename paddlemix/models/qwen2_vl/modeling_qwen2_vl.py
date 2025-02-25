@@ -1466,7 +1466,7 @@ class Qwen2VLModel(Qwen2VLPreTrainedModel):
                 all_self_attns += (layer_outputs[1],)
 
         hidden_states = self.norm(hidden_states)
-
+        # print("=========hidden_states=========",hidden_states)
         # add hidden states from the last decoder layer
         if output_hidden_states:
             all_hidden_states += (hidden_states,)
@@ -1481,6 +1481,7 @@ class Qwen2VLModel(Qwen2VLPreTrainedModel):
             hidden_states=all_hidden_states,
             attentions=all_self_attns,
         )
+        
 
 
 class Qwen2LMHead(nn.Layer):
@@ -1963,7 +1964,7 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
         )
 
         hidden_states = outputs[0]
-
+        print("hidden_states ============================:",hidden_states)
         tensor_parallel_output = self.config.tensor_parallel_output and self.config.tensor_parallel_degree > 1
 
         logits = self.lm_head(hidden_states, tensor_parallel_output=tensor_parallel_output)
