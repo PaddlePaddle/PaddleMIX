@@ -13,25 +13,16 @@ from .triton_utils import get_dtype_str, paddle_use_triton, rendering_common_tem
 @paddle_use_triton(
     key=["1"]
 )
-def sageattn_quant_per_block_int8_kernel(
-    Input,
-    Output,
-    Scale,
-    L,
-    stride_iz, 
-    stride_ih, 
-    stride_in,
-    stride_oz, 
-    stride_oh, 
-    stride_on,
-    stride_sz, 
-    stride_sh,
-    sm_scale,
-    h_attn: tl.constexpr,                 # grid num, through compiling
-    bsz: tl.constexpr,                    # grid num, through compiling
-    C: tl.constexpr,
-    BLK: tl.constexpr
-):
+def sageattn_quant_per_block_int8_kernel(Input, Output, Scale, L,
+                                        stride_iz, stride_ih, stride_in,
+                                        stride_oz, stride_oh, stride_on,
+                                        stride_sz, stride_sh,
+                                        sm_scale,
+                                        h_attn: tl.constexpr,                 # grid num, through compiling
+                                        bsz: tl.constexpr,                    # grid num, through compiling
+                                        C: tl.constexpr,
+                                        BLK: tl.constexpr
+                                    ):
     off_blk = tl.program_id(axis=0)
     off_h = tl.program_id(axis=1)
     off_b = tl.program_id(axis=2)
@@ -56,19 +47,17 @@ def sageattn_quant_per_block_int8_kernel(
 # per-block quant triton API
 def sageattn_quant_per_block_int8(x, 
                                 km=None, 
-                                BLKQ=128, BLKK=64,
+                                BLK=128,
                                 sm_scale=1.0, 
-                                tensor_layout="HND", q_or_k="q"):
+                                tensor_layout="HND"):
     """
     [params]
         x: paddle.Tensor, dtype in fp16 or bf16, this is usually q or k input tensor.
         km: paddle.Tensor, the mean tensor of k tensor. Must be provided when the `x` is k tensor.
-        BLKQ: int, the BLK for computing q tensor. Default 128, which is an optimized value.
-        BLKK: int, the BLK for computing k tensor. Default 64, which is an optimized value.
+        BLK: int, the BLK for computing q & k tensor. Default 128 for q, 64 for k, which is an optimized value.
         sm_scale: float, the scale factor for dynamic quant.
         tensor_layout: string. Only in ['HND', 'NHD'], 'HND' -> [bsz, num_heads, seq_len, head_dim],
-                        'HND' -> [bsz, seq_len, num_heads, head_dim]
-        q_or_k: string. Only in ['q', 'k'], which should be clarified when using this API.
+                                                        'HND' -> [bsz, seq_len, num_heads, head_dim]
     [Examples]
         batch_size = 2
         num_heads = 24
@@ -86,11 +75,11 @@ def sageattn_quant_per_block_int8(x,
         km = paddle.mean(k, axis=seq_dim, keepdim=True)
         
         q_int8, q_scale = sageattn_quant_per_block_int8(
-            q, km=None, BLKQ=BLKQ, BLKK=BLKK, sm_scale=sm_scale, tensor_layout=tensor_layout, q_or_k='q')
+            q, km=None, BLK=BLKQ, sm_scale=sm_scale, tensor_layout=tensor_layout)
         k_int8, k_scale = sageattn_quant_per_block_int8(
-            k, km=km, BLKQ=BLKQ, BLKK=BLKK, sm_scale=sm_scale, tensor_layout=tensor_layout, q_or_k='k')
+            k, km=km, BLK=BLKK, sm_scale=sm_scale, tensor_layout=tensor_layout)
     """
-    if km is not None and q_or_k == "k":
+    if km is not None:
         x = x - km
         
     if tensor_layout == "HND":
@@ -103,7 +92,7 @@ def sageattn_quant_per_block_int8(x,
         b, seq_len, h_attn, head_dim = x.shape
         
         stride_iz, stride_ih, stride_in = head_dim * seq_len * h_attn, head_dim * 1, head_dim * h_attn
-        stride_oz, stride_oh, stride_on = head_dim * seq_len * h_attn, head_dim * 1, head_dim * h_attn,
+        stride_oz, stride_oh, stride_on = head_dim * seq_len * h_attn, head_dim * 1, head_dim * h_attn
     else:
         raise ValueError(f"Unknown tensor layout: {tensor_layout}")
     
@@ -112,8 +101,7 @@ def sageattn_quant_per_block_int8(x,
 
     L = seq_len
     C = head_dim
-    BLK = BLKQ if q_or_k == "q" else BLKK
-    sm_scale = sm_scale * 1.44269504 if q_or_k == "q" else 1.0
+    sm_scale = sm_scale * 1.44269504 if km is None else 1.0
 
     stride_sz = h_attn * ((seq_len + BLK - 1) // BLK)
     stride_sh =  (seq_len + BLK - 1) // BLK
@@ -123,7 +111,7 @@ def sageattn_quant_per_block_int8(x,
     
     auto input_tensor = x;
     auto input_shape = x.shape();
-        
+    
     // define params
     int b, h_attn, seq_len, head_dim;
     int stride_iz, stride_ih, stride_in;
@@ -169,14 +157,13 @@ def sageattn_quant_per_block_int8(x,
     else {
         throw std::runtime_error("Unsupported tensor layout");
     }
-    int BLK = (q_or_k == std::string("q")) ? BLKQ : BLKK;
+
     auto scale_tensor = paddle::empty({b, h_attn, (seq_len + BLK - 1) / BLK}, 
                                         paddle::DataType::FLOAT32, 
                                         x.place());
     int L = seq_len;
     int stride_sz = scale_tensor.strides()[0];
     int stride_sh = scale_tensor.strides()[1];
-    // int Grid = BLK;
     int bsz = b;
 """
 
@@ -228,8 +215,8 @@ def sageattn_quant_per_block_int8(x,
         
     if in_dynamic_or_pir_mode():
         outs = _C_ops._run_custom_op(
-            op_name, x, km, BLKQ, BLKK,
-            sm_scale, tensor_layout, q_or_k
+            op_name, x, km, BLK,
+            sm_scale, tensor_layout
         )
         return outs[0], outs[1]
     else:
@@ -245,11 +232,9 @@ def sageattn_quant_per_block_int8(x,
             type=op_name,
             inputs=inputs,
             attrs={
-                "BLKQ": BLKQ,
-                "BLKK": BLKK,
+                "BLK": BLK,
                 "sm_scale": sm_scale,
                 "tensor_layout": tensor_layout,
-                "q_or_k": q_or_k
             },
             outputs={"output_tensor": out_int8, "scale_tensor": out_scale}
         )
@@ -988,9 +973,9 @@ def sageattn_forward_causal_true(q, k, v,
 def per_block_int8(q, k, km=None, BLKQ=128, BLKK=64, sm_scale=None, 
                    tensor_layout="HND"):
     q_int8, q_scale = sageattn_quant_per_block_int8(
-        q, km=None, BLKQ=BLKQ, BLKK=BLKK, sm_scale=sm_scale, tensor_layout=tensor_layout, q_or_k='q')
+        q, km=None, BLK=BLKQ, sm_scale=sm_scale, tensor_layout=tensor_layout)
     k_int8, k_scale = sageattn_quant_per_block_int8(
-        k, km=km, BLKQ=BLKQ, BLKK=BLKK, sm_scale=sm_scale, tensor_layout=tensor_layout, q_or_k='k')
+        k, km=km, BLK=BLKK, sm_scale=sm_scale, tensor_layout=tensor_layout)
     return q_int8, q_scale, k_int8, k_scale
 
 
