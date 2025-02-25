@@ -83,3 +83,4 @@ log/
 .vscode/
 .benchmarks/
 .mypy_cache/
+.history

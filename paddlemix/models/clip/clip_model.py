@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import paddle
+import paddle.nn.functional as F
 
 """ CLIP Model
 
@@ -288,3 +289,35 @@ class CLIP(CLIPPretrainedModel):
             (image_features, text_features, self.logit_scale.exp())
         )
         return loss_itc, image_features, text_features, self.logit_scale.exp()
+
+
+    def clip_score(self, image, input_ids=None, text_emb=None, **kwargs):
+        """
+        Calculate the CLIP score (cosine similarity) between image and text embeddings.
+
+        Args:
+            image: The input image tensor.
+            input_ids: Tokenized text input (optional).
+            text_emb: Precomputed text embeddings (optional).
+            **kwargs: Additional arguments.
+
+        Returns:
+            numpy.ndarray: The CLIP score (cosine similarity) between the image and text embeddings.
+        """
+        self.clip_scale()
+
+        # Extract image features
+        image_features = self.encode_image(image, normalize=True)
+        text = input_ids
+
+        # Extract text features
+        if text is not None or text_emb is not None:
+            text_features = self.encode_text(text, text_features=text_emb, normalize=True)
+        else:
+            print("Text input or embedding is empty, returning a score of 0.")
+            return 0.0
+        
+        # Compute cosine similarity as the CLIP score
+        clip_score = F.cosine_similarity(image_features, text_features)
+
+        return clip_score.numpy()

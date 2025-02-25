@@ -550,6 +550,10 @@ class KernelInterface:
                     or type(ele) == paddle.base.libpaddle.pir.Value
                 ):
                     dtypes.append(ele.dtype)
+                    if str(ele.place) == "Place(cpu)":
+                        raise ValueError(
+                            f"The place of tensor {ele.name} must be device(Place(gpu) or Place(xpu)..), but now it is {ele.place}"
+                        )
                 elif i in self.constexprs:
                     const_hint_dict[self.arg_names[i]] = ele
                 else:
