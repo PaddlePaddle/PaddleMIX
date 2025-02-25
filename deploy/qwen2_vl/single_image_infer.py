@@ -317,7 +317,6 @@ if predictor_args.benchmark:
         sumtime / repeat_times,
         "ms",
     )
-    print(f"GPU memory_allocated: {paddle.device.cuda.memory_allocated() / 1024 ** 3:.2f} GB")
     print(f"GPU max_memory_allocated: {paddle.device.cuda.max_memory_allocated() / 1024 ** 3:.2f} GB")
     print("input_tokens_len is :",generated_text[1],"tokens")
     print("output_tokens_len is :",generated_text[2],"tokens")
