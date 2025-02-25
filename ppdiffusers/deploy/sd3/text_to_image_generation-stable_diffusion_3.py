@@ -137,10 +137,10 @@ if args.benchmark:
         sumtime += duringtime
         print("SD3 end to end time : ", duringtime, "ms")
 
-    print("SD3 ave end to end time : ", sumtime / repeat_times, "ms")
+    print("SD3 average end-to-end time : ", sumtime / repeat_times, "ms")
 
-    cuda_mem_after_used = paddle.device.cuda.max_memory_allocated() / (1024**3)
-    print(f"Max used CUDA memory : {cuda_mem_after_used:.3f} GiB")
+    print(f"GPU max_memory_allocated: {paddle.device.cuda.max_memory_allocated() / 1024 ** 3:.2f} GB")
+
 
 
 rank_id = dist.get_rank()
