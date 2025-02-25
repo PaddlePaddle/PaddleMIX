@@ -109,5 +109,5 @@ sh deploy/qwen2_5_vl/scripts/qwen2_5_vl.sh
 
 |             model           | Paddle Inference wint8 | Paddle Inference|    PyTorch     | Paddle 动态图   |
 | --------------------------- | ---------------------  | --------------- | -------------- | -------------- |
-| Qwen/Qwen2.5-VL-3B-Instruct |          1.472 s       |     1.719 s     |      3.07 s    |     9.32 s     |
-| Qwen/Qwen2.5-VL-7B-Instruct |          1.340 s       |     1.724 s     |      9.32 s    |     9.32 s     |
+| Qwen/Qwen2.5-VL-3B-Instruct |          1.472 s       |     1.719 s     |      4.92 s    |    14.39 s     |
+| Qwen/Qwen2.5-VL-7B-Instruct |          1.340 s       |     1.724 s     |      3.89 s    |    11.09 s     |
