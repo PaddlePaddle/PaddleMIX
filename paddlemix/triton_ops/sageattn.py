@@ -190,9 +190,11 @@ def sageattn_quant_per_block_int8(x,
         # output_tensor & scale_tensor has beed defined in above areas
         prepare_ptr_for_triton_kernel = """
     // prepare tensor
-    auto Input = get_tensor_ptr(x);
-    auto Output = get_tensor_ptr(output_tensor);
-    auto Scale = get_tensor_ptr(scale_tensor);
+    CUdeviceptr input_ptrs[3] = {
+        get_tensor_ptr(x),
+        get_tensor_ptr(output_tensor),
+        get_tensor_ptr(scale_tensor)
+    };
 """
         return_tensor_names = "output_tensor, scale_tensor"
         
@@ -257,7 +259,7 @@ def sageattn_quant_per_block_int8(x,
 @paddle_use_triton(
     key=["1"]
 )
-def sageattn_attn_fwd_casual_false_kernel(
+def sageattn_attn_fwd_causal_false_kernel(
             Q, K, V, Q_scale, K_scale, Out, Lse, 
             stride_qz, stride_qh, stride_qn,
             stride_kz, stride_kh, stride_kn,  
@@ -332,7 +334,7 @@ def sageattn_attn_fwd_casual_false_kernel(
         tl.store(lse_ptrs, l_i, mask = (offs_m < qo_len))
         
 
-def sageattn_forward_casual_false(q, k, v, 
+def sageattn_forward_causal_false(q, k, v, 
                                   q_scale, k_scale, 
                                   output_dtype="float16",
                                   tensor_layout="HND", 
@@ -365,7 +367,7 @@ def sageattn_forward_casual_false(q, k, v,
         km = paddle.mean(k, axis=seq_dim, keepdim=True)
         
         q_int8, q_scale, k_int8, k_scale = per_block_int8(q, k, km=km, sm_scale=sm_scale, tensor_layout=tensor_layout)
-        o, lse = sageattn_forward_casual_false(q_int8, k_int8, v, q_scale, k_scale, 
+        o, lse = sageattn_forward_causal_false(q_int8, k_int8, v, q_scale, k_scale, 
                                                 output_dtype="float16", tensor_layout=tensor_layout)
     """
     assert output_dtype in ["float16", "bfloat16"]
@@ -471,18 +473,18 @@ def sageattn_forward_casual_false(q, k, v,
     int BSZ = b;
 """
 
-    op_name = "triton_sageattn_attn_fwd_casual_false"
+    op_name = "triton_sageattn_attn_fwd_causal_false"
     op_name += get_dtype_str(q.dtype)
     op_name += f"_BSZ{BSZ}_seq{qo_len}_h{h_qo}_dim{HEAD_DIM_K}"
     
-    sageattn_attn_fwd_casual_false_config = []
+    sageattn_attn_fwd_causal_false_config = []
     if head_dim == 64:
-        sageattn_attn_fwd_casual_false_config.append({
+        sageattn_attn_fwd_causal_false_config.append({
             "num_warps": 4,
             "num_stages": 3
         })
     else:
-        sageattn_attn_fwd_casual_false_config.append({
+        sageattn_attn_fwd_causal_false_config.append({
             "num_warps": 8,
             "num_stages": 4
         })
@@ -501,23 +503,25 @@ def sageattn_forward_casual_false(q, k, v,
             lse_tensor = paddle::empty({1,1,1}, paddle::DataType::FLOAT32, paddle::CPUPlace());
         }
         
-        auto Q = get_tensor_ptr(q);
-        auto K = get_tensor_ptr(k);
-        auto V = get_tensor_ptr(v);
-        auto Q_scale = get_tensor_ptr(q_scale);
-        auto K_scale = get_tensor_ptr(k_scale);
-        auto Out = get_tensor_ptr(out_tensor);
-        auto Lse = get_tensor_ptr(lse_tensor);
+        CUdeviceptr input_ptrs[7] = {
+            get_tensor_ptr(q),
+            get_tensor_ptr(k),
+            get_tensor_ptr(v),
+            get_tensor_ptr(q_scale),
+            get_tensor_ptr(k_scale),
+            get_tensor_ptr(out_tensor),
+            get_tensor_ptr(lse_tensor)
+        };
     """
         return_tensor_names = "out_tensor, lse_tensor"
         template_used = rendering_common_template(
-            sageattn_forward_casual_false, 
+            sageattn_forward_causal_false, 
             prepare_attr_for_triton_kernel=prepare_attr_for_triton_kernel,
             prepare_ptr_for_triton_kernel=prepare_ptr_for_triton_kernel,
             return_tensor_names=return_tensor_names
         )
         grid = ("(qo_len + BLOCK_M - 1) / BLOCK_M", "h_qo", "BSZ")
-        sageattn_attn_fwd_casual_false_kernel[(op_name, template_used, grid, sageattn_attn_fwd_casual_false_config)](
+        sageattn_attn_fwd_causal_false_kernel[(op_name, template_used, grid, sageattn_attn_fwd_causal_false_config)](
             Q=q, 
             K=k, 
             V=v, 
@@ -590,7 +594,7 @@ def sageattn_forward_casual_false(q, k, v,
 @paddle_use_triton(
     key=["1"]
 )
-def sageattn_attn_fwd_casual_true_kernel(
+def sageattn_attn_fwd_causal_true_kernel(
             Q, K, V, Q_scale, K_scale, Out, Lse, 
             stride_qz, stride_qh, stride_qn,
             stride_kz, stride_kh, stride_kn,  
@@ -721,7 +725,7 @@ def sageattn_attn_fwd_casual_true_kernel(
         tl.store(lse_ptrs, l_i, mask = (offs_m < qo_len))
         
 
-def sageattn_forward_casual_true(q, k, v, 
+def sageattn_forward_causal_true(q, k, v, 
                                   q_scale, k_scale, 
                                   output_dtype="float16",
                                   tensor_layout="HND", 
@@ -754,7 +758,7 @@ def sageattn_forward_casual_true(q, k, v,
         km = paddle.mean(k, axis=seq_dim, keepdim=True)
         
         q_int8, q_scale, k_int8, k_scale = per_block_int8(q, k, km=km, sm_scale=sm_scale, tensor_layout=tensor_layout)
-        o, lse = sageattn_forward_casual_true(q_int8, k_int8, v, q_scale, k_scale, 
+        o, lse = sageattn_forward_causal_true(q_int8, k_int8, v, q_scale, k_scale, 
                                                 output_dtype="float16", tensor_layout=tensor_layout)
     """
     assert output_dtype in ["float16", "bfloat16"]
@@ -862,18 +866,18 @@ def sageattn_forward_casual_true(q, k, v,
     int BSZ = b;
 """
 
-    op_name = "triton_sageattn_attn_fwd_casual_true"
+    op_name = "triton_sageattn_attn_fwd_causal_true"
     op_name += get_dtype_str(q.dtype)
     op_name += f"_BSZ{BSZ}_seq{qo_len}_h{h_qo}_dim{HEAD_DIM_K}"
     
-    sageattn_attn_fwd_casual_true_config = []
+    sageattn_attn_fwd_causal_true_config = []
     if head_dim == 64:
-        sageattn_attn_fwd_casual_true_config.append({
+        sageattn_attn_fwd_causal_true_config.append({
             "num_warps": 4,
             "num_stages": 4
         })
     else:
-        sageattn_attn_fwd_casual_true_config.append({
+        sageattn_attn_fwd_causal_true_config.append({
             "num_warps": 8,
             "num_stages": 4
         })
@@ -891,24 +895,26 @@ def sageattn_forward_casual_true(q, k, v,
         } else {
             lse_tensor = paddle::empty({1,1,1}, paddle::DataType::FLOAT32, paddle::CPUPlace());
         }
-        
-        auto Q = get_tensor_ptr(q);
-        auto K = get_tensor_ptr(k);
-        auto V = get_tensor_ptr(v);
-        auto Q_scale = get_tensor_ptr(q_scale);
-        auto K_scale = get_tensor_ptr(k_scale);
-        auto Out = get_tensor_ptr(out_tensor);
-        auto Lse = get_tensor_ptr(lse_tensor);
+
+        CUdeviceptr input_ptrs[7] = {
+            get_tensor_ptr(q),
+            get_tensor_ptr(k),
+            get_tensor_ptr(v),
+            get_tensor_ptr(q_scale),
+            get_tensor_ptr(k_scale),
+            get_tensor_ptr(out_tensor),
+            get_tensor_ptr(lse_tensor)
+        };
     """
         return_tensor_names = "out_tensor, lse_tensor"
         template_used = rendering_common_template(
-            sageattn_forward_casual_true, 
+            sageattn_forward_causal_true, 
             prepare_attr_for_triton_kernel=prepare_attr_for_triton_kernel,
             prepare_ptr_for_triton_kernel=prepare_ptr_for_triton_kernel,
             return_tensor_names=return_tensor_names
         )
         grid = ("(qo_len + BLOCK_M - 1) / BLOCK_M", "h_qo", "BSZ")
-        sageattn_attn_fwd_casual_true_kernel[(op_name, template_used, grid, sageattn_attn_fwd_casual_true_config)](
+        sageattn_attn_fwd_causal_true_kernel[(op_name, template_used, grid, sageattn_attn_fwd_causal_true_config)](
             Q=q, 
             K=k, 
             V=v, 
@@ -993,11 +999,10 @@ def sageattn_qk_int8_pv_fp16_triton(
     k: paddle.Tensor,
     v: paddle.Tensor,
     tensor_layout: str = "HND",
-    is_casual: bool = False,
+    is_causal: bool = False,
     sm_scale: Optional[float] = None,
     smooth_k: bool = True,
     return_lse: bool = False,
-    **kwargs
 ) -> paddle.Tensor:
     """
     Examples:
@@ -1010,7 +1015,7 @@ def sageattn_qk_int8_pv_fp16_triton(
         v = paddle.randn(shape=(batch_size, seq_len, num_heads, head_dim), dtype="float16")
         sm_scale = 1 / (head_dim ** 0.5)
         
-        o = paddlemix.triton_ops.sageattn_qk_int8_pv_fp16_triton(q, k, v, tensor_layout="NHD", is_casual=False, sm_scale=sm_scale, smooth_k=True, return_lse=False)
+        o = paddlemix.triton_ops.sageattn_qk_int8_pv_fp16_triton(q, k, v, tensor_layout="NHD", is_causal=False, sm_scale=sm_scale, smooth_k=True, return_lse=False)
     """
     dtype = q.dtype
     assert dtype in [paddle.float16, paddle.bfloat16], "Input tensors must be in dtype of torch.float16 or torch.bfloat16"
@@ -1050,10 +1055,10 @@ def sageattn_qk_int8_pv_fp16_triton(
         
     q_int8, q_scale, k_int8, k_scale = per_block_int8(q, k, km=km, sm_scale=sm_scale, tensor_layout=tensor_layout)
 
-    if is_casual:
-        o, lse = sageattn_forward_casual_true(q_int8, k_int8, v, q_scale, k_scale, output_dtype="float16", tensor_layout=tensor_layout, return_lse=return_lse)
+    if is_causal:
+        o, lse = sageattn_forward_causal_true(q_int8, k_int8, v, q_scale, k_scale, output_dtype="float16", tensor_layout=tensor_layout, return_lse=return_lse)
     else:
-        o, lse = sageattn_forward_casual_false(q_int8, k_int8, v, q_scale, k_scale, output_dtype="float16", tensor_layout=tensor_layout, return_lse=return_lse)
+        o, lse = sageattn_forward_causal_false(q_int8, k_int8, v, q_scale, k_scale, output_dtype="float16", tensor_layout=tensor_layout, return_lse=return_lse)
     
     o = o[..., :head_dim_og]
     
