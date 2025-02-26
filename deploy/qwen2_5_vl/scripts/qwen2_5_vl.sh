@@ -19,9 +19,10 @@ python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
     --image_file paddlemix/demo_images/examples_image1.jpg \
     --min_length 128 \
     --max_length 128 \
-    --top_k 0 \
-    --top_p 0.01 \
-    --temperature 0.95 \
+    --top_k 1 \
+    --top_p 0.001 \
+    --temperature 0.1 \
+    --repetition_penalty 1.05 \
     --dtype bfloat16 \
     --benchmark True 
     
@@ -33,9 +34,10 @@ python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
 #     --image_file paddlemix/demo_images/examples_image1.jpg \
 #     --min_length 128 \
 #     --max_length 128 \
-#     --top_k 0 \
-#     --top_p 0.01 \
-#     --temperature 0.95 \
+#     --top_k 1 \
+#     --top_p 0.001 \
+#     --temperature 0.1 \
+#     --repetition_penalty 1.05 \
 #     --dtype bfloat16 \
 #     --quant_type "weight_only_int8" \
 #     --benchmark True 
