@@ -2,27 +2,21 @@
 
 多模态统一模型旨在通过单一的网络结构同时处理多种模态的数据输入和输出（如文本、图像、视频等），这种模型不仅能够对图片或视频做出语义理解（如视觉问答、描述字幕等），还能根据给定文本生成高质量的图片或视频（如文生图、文生视频等）。而传统的多模态模型通常把以上两类任务分成多模态理解和多模态生成两种独立任务，并分别设计不同的结构，这样不仅增加了模型复杂度，还降低了部署效率。多模态统一模型能够高效处理混合模态任务，可以将多模态理解和多模态生成能力集成到一个统一的框架中，实现任意模态到任意模态的转换和生成。本文就将基于飞桨多模态大模型开发套件PaddleMIX介绍一下目前最热门的多模态统一模型Janus和Janus-Pro。
 Janus 是 DeepSeek 团队提出的一个统一多模态理解与生成的模型，能够在单一模型中实现图像理解和文本到图像生成的双重任务。在多模态理解方面，Janus可以处理图像描述、视觉问答（VQA）、地标识别、文字识别等多种任务；在多模态生成方面，Janus也可以根据输入的文本描述生成高质量的图片。Janus-Pro是其最新的升级版本。
-
-<div style="display: flex; justify-content: space-between;">
-  <div style="text-align: center;">
-    <img src="https://github.com/user-attachments/assets/4cd322e4-349c-4846-96d5-9713ab3e19c1" alt="Image 1" style="width: 90%;">
-    <p style="color: #808080;">多模态理解效果</p>
-  </div>
-  <div style="text-align: center;">
-    <img src="https://github.com/user-attachments/assets/9c7417d9-4b64-4783-8fc4-1e89e211a36b" alt="Image 2" style="width: 100%;">
-    <p style="color: #808080;">多模态生成效果</p>
-  </div>
+<div align="center">
+    <img src="https://github.com/user-attachments/assets/1cb32d22-9d3b-4a23-b23c-907d45932cb5" style="width: 100%;">
 </div>
 
 Janus的核心创新点在于将多模态理解与生成的视觉编码进行解耦，从而缓解了这两个任务潜在存在的冲突。Janus-Pro在此基础上，优化训练策略（包括增加训练步数、调整数据配比等）、增加数据（包括使用合成数据等）、扩大模型规模（扩大到70亿参数），从而同时提高了模型的多模态理解和生成能力。
 
 ## Janus模型结构
 Janus和Janus-Pro结构一致，均使用两个独立的编码器来理解和生成图像，而不像之前的做法依赖单个编码器来处理这两项任务。对于图像理解，Janus 使用 SigLIP 编码器将图像转换为丰富的语义特征；而对于图像生成，Janus 使用 VQ Tokenizer 将图像转换为离散标记。这种解耦的设计带来两个收益：
+
 1）将多模态理解与生成的视觉编码解耦，缓解了多模态理解和生成不同粒度需求的冲突；
+
 2）理解和生成任务都可以分别采用各领域最先进的编码技术，可输入其他模态例如点云或音频数据，并使用统一的Transformer进行处理。
 
-<div style="text-align: center;">
-    <img src="https://github.com/user-attachments/assets/1ce50ee9-4e7c-4660-87d2-b075ca5953cd" alt="Image 2" style="width: 100%;">
+<div align="center">
+    <img src="https://github.com/user-attachments/assets/1ce50ee9-4e7c-4660-87d2-b075ca5953cd" style="width: 100%;">
     <p style="color: #808080;"> Janus结构图，“Und. Encoder”和“Gen. Encoder”分别是“理解编码器”和“生成编码器”的缩写。</p>
 </div>
 
@@ -35,8 +29,8 @@ Janus和Janus-Pro结构一致，均使用两个独立的编码器来理解和生
 
 ## Janus训练流程
 Janus 的训练分为三个阶段：
-<div style="text-align: center;">
-    <img src="https://github.com/user-attachments/assets/e624f1f0-3ca1-4fbe-9aa9-8b556eacd23c" alt="Image 2" style="width: 100%;">
+<div align="center">
+    <img src="https://github.com/user-attachments/assets/e624f1f0-3ca1-4fbe-9aa9-8b556eacd23c" style="width: 100%;">
     <p style="color: #808080;"> Janus 三阶段训练步骤 </p>
 </div>
 
@@ -70,16 +64,16 @@ Janus-Pro 是 Janus 的升级版本，它在多个方面进行了优化和改进
 * 模型规模
   * 将模型参数扩展到 70 亿参数规模；
 
-<div style="text-align: center;">
-    <img src="https://github.com/user-attachments/assets/4ffadd47-29b2-49fc-ae3a-dd0a7d30cd8b" alt="Image 2" style="width: 100%;">
+<div align="center">
+    <img src="https://github.com/user-attachments/assets/4ffadd47-29b2-49fc-ae3a-dd0a7d30cd8b" style="width: 70%;">
     <p style="color: #808080;"> Janus-Pro训练三个阶段的超参数
  </p>
 </div>
 
 ## Janus-Pro的指标结果
 
-<div style="text-align: center;">
-    <img src="https://github.com/user-attachments/assets/c05d3dee-0444-4c1a-8b72-7ddb9254beb1" alt="Image 2" style="width: 100%;">
+<div align="center">
+    <img src="https://github.com/user-attachments/assets/c05d3dee-0444-4c1a-8b72-7ddb9254beb1" style="width: 70%;">
     <p style="color: #808080;"> GenEval文生图能力榜单
 
  </p>
@@ -172,7 +166,7 @@ class JanusMultiModalityCausalLM(JanusMultiModalityPreTrainedModel):
 
 配合着查看权重文件中的config，结构更加清晰。
 
-<div style="text-align: left;">
+<div align="center">
     <img src="https://github.com/user-attachments/assets/84209449-e890-4dba-9083-60f63299c62c" alt="Image 2" style="width: 50%;">
 </div>
 
@@ -370,9 +364,8 @@ python paddlemix/examples/janus/run_understanding_inference.py \
     --dtype="bfloat16"
 ```
 图片
-<div style="text-align: left;">
-    <img src="../../paddlemix/demo_images/examples_image1.jpg" alt="Image 2" style="width: 70%;">
- </p>
+<div align="left">
+    <img src="../../paddlemix/demo_images/examples_image1.jpg" style="width: 50%;">
 </div>
 输出结果：
 
@@ -387,9 +380,8 @@ python paddlemix/examples/janus/run_generation_inference.py \
     --prompt="江边有一艘船。" \
     --dtype="bfloat16"
 ```
-<div style="text-align: left;">
-    <img src="https://github.com/user-attachments/assets/99dc87e6-8e23-4b5c-b449-09cee731fcdd" alt="Image 2" style="width: 70%;">
- </p>
+<div align="left">
+    <img src="https://github.com/user-attachments/assets/99dc87e6-8e23-4b5c-b449-09cee731fcdd" style="width: 50%;">
 </div>
 
 ## 总结

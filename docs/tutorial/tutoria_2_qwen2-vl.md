@@ -9,7 +9,7 @@ Qwen2-VL系列是对Qwen-VL模型的改进升级，重新定义了传统的预�
 
 Qwen2.5-VL是对Qwen2-VL的进一步优化，通过在图像上使用图像的实际尺寸来表示坐标，时间上引入了动态 FPS (每秒帧数)训练和绝对时间编码，将 mRoPE id 直接与时间流速对齐，改进提升了模型对时间和图像尺寸的感知。同时Qwen2.5-VL重新训练了更简单高效的视觉编码器。
 
-<div style="text-align: center;">
+<div align="center">
     <img src="https://github.com/user-attachments/assets/615b3af1-4e59-46bf-8f44-adf304976f3b" alt="Image 2" style="width: 100%;">
     <p style="color: #808080;"> 图1 Qwen2-VL能力展示
  </p>
@@ -23,7 +23,7 @@ Qwen2.5-VL：3B，7B，72B
 
 ## 二、方法
 ### 2.1 Qwen2-VL
-<div style="text-align: center;">
+<div align="center">
     <img src="https://github.com/user-attachments/assets/456e9b61-c7a9-40da-a355-07327bddf577" alt="Image 2" style="width: 100%;">
     <p style="color: #808080;"> 图2: Qwen2-VL架构
  </p>
@@ -33,7 +33,7 @@ Qwen2.5-VL：3B，7B，72B
 * 原生动态分辨率：Qwen2-VL 在架构上的一大改进是实现了对原生动态分辨率的全面支持。与上一代模型相比，Qwen2-VL 能够处理任意分辨率的图像输入，不同大小图片被转换为动态数量的 tokens，最小只占 4 个 tokens。这种设计不仅确保了模型输入与图像原始信息之间的高度一致性，更是模拟了人类视觉感知的自然方式，赋予模型处理任意尺寸图像的强大能力，使其在图像处理领域展现出更加灵活和高效的表现。具体而言，为了减少每个图像的视觉令tokens，Qwen2-VL 在ViT之后使用一个简单的MLP层将相邻的2 × 2 tokens压缩为单个token，并将特殊的<|vision_start|>和<|vision_end|> token放置在压缩的视觉tokens的开始和结束处。因此，分辨率为224 × 224的图像，使用patch_size = 14的ViT编码，在进入LLM之前，将被压缩到66个tokens。
 * 多模态旋转位置嵌入（M-ROPE）：Qwen2-VL 在架构上的另一重要创新则是多模态旋转位置嵌入（M-ROPE）。传统的旋转位置嵌入只能捕捉一维序列的位置信息，而 M-ROPE 通过将原始旋转嵌入分解为代表时间、高度和宽度的三个部分，使得大规模语言模型能够同时捕捉和整合一维文本序列、二维视觉图像以及三维视频的位置信息。这一创新赋予了语言模型强大的多模态处理和推理能力，能够更好地理解和建模复杂的多模态数据。
 
-<div style="text-align: center;">
+<div align="center">
     <img src="https://github.com/user-attachments/assets/7b6acde5-7257-458b-827a-e1e37295719e" alt="Image 2" style="width: 100%;">
     <p style="color: #808080;"> 图3: 多模态旋转位置嵌入（M-ROPE）示意图
  </p>
@@ -43,7 +43,7 @@ Qwen2.5-VL：3B，7B，72B
 
 ## 2.2 Qwen2.5-VL
 
-<div style="text-align: center;">
+<div align="center">
     <img src="https://github.com/user-attachments/assets/0710d2c1-3bd3-4acd-b394-66da569f3d57" alt="Image 2" style="width: 100%;">
     <p style="color: #808080;"> 图4: Qwen2.5-VL架构 </p>
 </div>
@@ -66,18 +66,18 @@ Qwen2.5-VL在整体架构上没有太大变动，主要涉及以下两个改进�
 与Qwen-VL一样，Qwen2-VL也使用了特殊的token来区分视觉和文本输入。在图像特征序列的开始和结束处插入特殊的\<|vision_start|>和\<|vision_end|> token，用于标定图像内容。
 * 对话数据：在对话格式方面，Qwen2-VL使用ChatML格式构建了指令调优数据集，其中每个交互的语句都用两个特殊的token (<|im_start|>和<|im_end|>)来标记，以方便对话的终止。蓝色标记的部分表示被监督的部分。
 
-<div style="text-align: center;">
+<div align="center">
     <img src="https://github.com/user-attachments/assets/1f3fa79b-a052-4180-9bf4-a712ea5b3c5e" alt="Image 2" style="width: 100%;">
     <p style="color: #808080;"> 图5: Chatml的Dataset格式示例 </p>
 </div>
 
 * 视觉定位：为了使模型具备视觉定位能力，Qwen2-VL将边界框坐标归一化至\[0, 1000\)范围，并表示为$(X_{top-left},Y_{top-left})$ 和$(X_{bottom-right},Y_{bottom-right})$ 。这些坐标与文本一同作为tokens进行处理，用于标注边界框文本。为了精确地将边界框与其文本描述对应，Qwen2-VL引入了\<|object_ref_start|>和\<|object_ref_end|> token，明确指出每个边界框所对应的具体内容，从而使模型能够有效地理解并生成对特定区域的准确描述。
-<div style="text-align: center;">
+<div align="center">
     <img src="https://github.com/user-attachments/assets/c0c877fe-6d27-4f29-9553-963e6b55673c" alt="Image 2" style="width: 100%;">
     <p style="color: #808080;"> 图6: 指示性定位数据格式示例 </p>
 </div>
 * 视觉Agent：为了将Qwen2-VL发展为通用的VL-Agent，Qwen2-VL将各种Agent任务（如UI操作、机器人控制、游戏、导航等）视为序列决策问题，使Qwen2-VL能够通过多步动作执行完成任务。针对每个任务，Qwen2-VL首先为函数调用定义了一组允许的动作和关键字模式（以下划线表示）。接着，Qwen2-VL分析观察到的环境信息，进行推理和规划，选择并执行相应的动作，与环境互动以获取新的观察数据。此过程会循环进行，直到任务顺利完成。通过集成各种工具，并利用大型视觉语言模型的视觉感知能力，Qwen2-VL能够进行增量式的迭代执行。
-<div style="text-align: center;">
+<div align="center">
     <img src="https://github.com/user-attachments/assets/c0c877fe-6d27-4f29-9553-963e6b55673c" alt="Image 2" style="width: 100%;">
     <p style="color: #808080;"> 图7: 视觉Agent数据格式示例 </p>
 </div>
@@ -424,6 +424,7 @@ python paddlemix/examples/qwen2_5_vl/single_image_infer.py \
 论文链接：
 https://arxiv.org/pdf/2409.12191 Qwen2-VL: Enhancing Vision-Language Model’s Perception of the World at Any Resolution
 https://arxiv.org/pdf/2502.13923 Qwen2.5-VL Technical Report
+
 应用体验（点我试玩）：[应用中心-飞桨AI Studio星河社区](https://aistudio.baidu.com/application/detail/65916)
 
 项目地址：
