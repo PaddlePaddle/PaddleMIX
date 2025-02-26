@@ -438,4 +438,5 @@ Qwen2.5-VL:https://github.com/PaddlePaddle/PaddleMIX/tree/develop/paddlemix/exam
 Qwen2.5-VL+R1应用:https://github.com/PaddlePaddle/PaddleMIX/tree/develop/applications/MULLM
 
 AISTUDIO教程链接：
+
 [【PaddleMIX】快速体验Qwen2-VL的多模态理解模型 - 飞桨AI Studio星河社区](https://aistudio.baidu.com/projectdetail/8807257)
