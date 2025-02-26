@@ -202,7 +202,7 @@ python setup.py install
 
 **多模态大模型入门教程**
 - [零基础入门深度学习](https://www.paddlepaddle.org.cn/tutorials/projectdetail/5604804)
-- [多模态前沿模型入门教程](./docs/tutorial/algorithm_turorial.md)
+- [多模态前沿模型入门教程](./docs/tutorial/algorithm_tutorial.md)
 
 
 **快速开始**
