@@ -206,7 +206,7 @@ python setup.py install
 
 
 **快速开始**
-- [图像摘要快速体验](./docs/quick_start/image_caption.md)
+- [图像摘要快速体验](./docs/quick_start/image_caption.ipynb)
 - [图像生成快速体验](./doc/quick_start/text_to_image.md) 
 - [PaddleMIX WebUI使用](./paddlemix/MULLM_WebUI/README.md)
 
@@ -366,7 +366,7 @@ python setup.py install
 PaddleMIX提出了PP-DocBee，基于多模态大模型实现端到端的文档图像理解。它可以高效地应用在各类场景的文档理解、文档问答等，尤其是对中文的文档类理解的场景，达到了同参数量级别模型的SOTA水平。
 
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/c9860429-6e99-47fc-823f-8c8973b1c0c8" align="middle" width = 100% />
+  <img src="https://github.com/user-attachments/assets/cd2ef018-a657-4037-833e-e7d0c75e6280" align="middle" width = 100% />
 </p>
 
 
