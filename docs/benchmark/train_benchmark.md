@@ -1,7 +1,7 @@
 
 ## Train Benchmark
 
-| 模型名称              | 训练阶段 | Paddle训练性能数据（ips）  | Paddle训练显存（G）                         |
+| Model | Stage | training speed（ips）| GPU memory uage（G）                         |
 |----|---|---|---|
 | LLaVA1.6 7B            | Pretrain  | 82  | 19/22 |
 |                        | SFT       | 52  | 33/49 |
@@ -20,11 +20,11 @@
 
 Notes:
 - All models were tested on the H800 (8 * 80G) platform
-- For GPU menory usage, the table shows `max_memory_allocated/max_memory_reserved`
+- For `GPU menory usage`, the table shows `max_memory_allocated/max_memory_reserved`
 - Testing config details see blow.
 
 <details>
-<summary>Testing config</summary>
+<summary>Testing config details</summary>
 
 ```
 # LLaVA and Qwen2VL
