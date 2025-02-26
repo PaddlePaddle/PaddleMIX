@@ -46,7 +46,7 @@ def sageattn_quant_per_block_int8_kernel(Input, Output, Scale, L,
     
 # per-block quant triton API
 def sageattn_quant_per_block_int8(x, 
-                                km=None,
+                                km=None, 
                                 BLK=128,
                                 sm_scale=1.0, 
                                 tensor_layout="HND"):

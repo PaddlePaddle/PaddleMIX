@@ -334,8 +334,8 @@ class Predictor(object):
             if i > 10:
                 total += time.time()-start
             
-        print("Time: ", total/10)
-
+        print(f"average end-to-end time :  {total/10 *1000 :2f} ms.")
+        print(f"GPU max_memory_allocated: {paddle.device.cuda.max_memory_allocated() / 1024 ** 3:.2f} GB")
     def predict(self):
         roles = "user", "assistant"
         first_message = True

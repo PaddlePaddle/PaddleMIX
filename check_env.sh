@@ -41,7 +41,7 @@ if $PYTHON_CMD -c "import paddle" 2>/dev/null; then
         echo "⚠️ paddlepaddle类型: CPU版本，推荐使用GPU版本"
     fi
     
-    if [[ "$paddle_version" == "3.0.0b2" || "$paddle_version" == *"0.0.0"* ]]; then
+    if [[ "$paddle_version" == "3.0.0b2" || "$paddle_version" == "3.0.0rc" || "$paddle_version" == *"0.0.0"* ]]; then
         echo "✅ paddlepaddle版本符合要求"
     else
         echo "⚠️ 建议使用paddlepaddle 3.0.0b2或develop版本"

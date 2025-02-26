@@ -2,8 +2,7 @@
 
 ## 1. 模型介绍
 
-[Qwen2-VL
-](https: //qwenlm.github.io/blog/qwen2-vl/) 是 Qwen 团队推出的一个专注于视觉与语言（Vision-Language, VL）任务的多模态大模型。它旨在通过结合图像和文本信息，提供强大的跨模态理解能力，可以处理涉及图像描述、视觉问答（VQA）、图文检索等多种任务。Qwen2-VL通过引入创新性的技术如 Naive Dynamic Resolution 和 M-RoPE，以及深入探讨大型多模态模型的潜力，显著地提高了多模态内容的视觉理解能力。
+[Qwen2-VL](https://qwenlm.github.io/blog/qwen2-vl/) 是 Qwen 团队推出的一个专注于视觉与语言（Vision-Language, VL）任务的多模态大模型。它旨在通过结合图像和文本信息，提供强大的跨模态理解能力，可以处理涉及图像描述、视觉问答（VQA）、图文检索等多种任务。Qwen2-VL通过引入创新性的技术如 Naive Dynamic Resolution 和 M-RoPE，以及深入探讨大型多模态模型的潜力，显著地提高了多模态内容的视觉理解能力。
 
 ## 2 环境准备
 
@@ -11,7 +10,7 @@
 - **paddlepaddle-gpu 要求是develop版本**
 ```bash
 # 安装示例
-python -m pip install paddlepaddle-gpu==0.0.0.post118 -f https: //www.paddlepaddle.org.cn/whl/linux/gpu/develop.html
+python -m pip install paddlepaddle-gpu==0.0.0.post118 -f https://www.paddlepaddle.org.cn/whl/linux/gpu/develop.html
 ```
 
 - **paddlenlp 需要特定版本**
@@ -19,7 +18,7 @@ python -m pip install paddlepaddle-gpu==0.0.0.post118 -f https: //www.paddlepadd
 在PaddleMIX/代码目录下执行以下命令安装特定版本的paddlenlp：
 ```bash
 # 安装示例
-git clone https: //github.com/PaddlePaddle/PaddleNLP.git
+git clone https://github.com/PaddlePaddle/PaddleNLP.git
 cd PaddleNLP
 python setup.py install
 cd csrc
@@ -41,18 +40,6 @@ CUDA_VISIBLE_DEVICES=0 python deploy/qwen2_vl/single_image_infer.py \
     --dtype bfloat16 \
     --benchmark True \
 
-# 一键推理
-cd PaddleMIX
-sh deploy/qwen2_vl/scripts/qwen2_vl.sh
-```
-- 在 NVIDIA A800-80GB 上测试的单图端到端速度性能如下：
-
-| model                  | Paddle Inference|    PyTorch   | Paddle 动态图 |
-| ---------------------- | --------------- | ------------ | ------------ |
-| Qwen2-VL-2B-Instruct   |      1.053 s     |     2.086 s   |   5.766 s   |
-| Qwen2-VL-7B-Instruct   |      2.293 s     |     3.132 s   |   6.221 s   |
-
-
 ### 3.2. 文本&视频输入高性能推理
 ```bash
 CUDA_VISIBLE_DEVICES=0 python deploy/qwen2_vl/video_infer.py \
@@ -60,6 +47,42 @@ CUDA_VISIBLE_DEVICES=0 python deploy/qwen2_vl/video_infer.py \
     --dtype bfloat16 \
     --benchmark True
 ```
+
+
+
+## 4 一键推理 & 推理说明
+```bash
+cd PaddleMIX
+sh deploy/qwen2_vl/scripts/qwen2_vl.sh
+```
+#### 参数设定：默认情况下，使用model自带的generation_config.json中的参数。
+|     parameter      |      Value     |
+| ------------------ | -------------- |
+|       Top-K        |       1        |
+|       Top-P        |     0.001      |
+|    temperature     |      0.1       |
+| repetition_penalty |      1.05      |
+
+#### 单一测试demo执行时，指定max_length=min_length=128，固定输出长度。
+|     parameter      |      Value     |
+| ------------------ | -------------- |
+|     min_length     |       128      |
+|     min_length     |       128      |
+
+
+#### 下方表格中所示性能对应的输入输出大小。
+|     parameter      |      Value     |
+| ------------------ | -------------- |
+|  input_tokens_len  |  997 tokens    |
+|  output_tokens_len |  128 tokens    |
+
+- 在 NVIDIA A800-80GB 上测试的单图端到端速度性能如下：
+
+| model                  | Paddle Inference|    PyTorch   | Paddle 动态图 |
+| ---------------------- | --------------- | ------------ | ------------ |
+| Qwen2-VL-2B-Instruct   |      1.053 s    |    2.086 s   |   5.766 s    |
+| Qwen2-VL-7B-Instruct   |      2.293 s    |    3.132 s   |   6.221 s    |
+
 
 - 在 NVIDIA A800-80GB 上测试的单视频端到端速度性能如下：
 
