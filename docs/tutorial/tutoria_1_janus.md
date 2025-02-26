@@ -395,7 +395,8 @@ https://arxiv.org/abs/2410.13848 Janus: Decoupling Visual Encoding for Unified M
 https://arxiv.org/pdf/2501.17811 Janus-Pro: Unified Multimodal Understanding and Generation with Data and Model Scaling
 
 项目地址：
+
 https://github.com/PaddlePaddle/PaddleMIX/tree/develop/paddlemix/examples/janus
 
-aistudio教程链接：[
-【PaddleMIX】快速体验DeepSeek的多模态理解生成模型 - 飞桨AI Studio星河社区](https://aistudio.baidu.com/projectdetail/8798721)
+aistudio教程链接：
+[【PaddleMIX】快速体验DeepSeek的多模态理解生成模型 - 飞桨AI Studio星河社区](https://aistudio.baidu.com/projectdetail/8798721)

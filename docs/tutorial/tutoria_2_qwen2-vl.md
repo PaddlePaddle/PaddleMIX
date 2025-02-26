@@ -424,16 +424,18 @@ python paddlemix/examples/qwen2_5_vl/single_image_infer.py \
 论文链接：
 
 https://arxiv.org/pdf/2409.12191 Qwen2-VL: Enhancing Vision-Language Model’s Perception of the World at Any Resolution
+
 https://arxiv.org/pdf/2502.13923 Qwen2.5-VL Technical Report
 
 应用体验（点我试玩）：[应用中心-飞桨AI Studio星河社区](https://aistudio.baidu.com/application/detail/65916)
 
 项目地址：
+
 Qwen2-VL: https://github.com/PaddlePaddle/PaddleMIX/tree/develop/paddlemix/examples/qwen2_vl
 
 Qwen2.5-VL:https://github.com/PaddlePaddle/PaddleMIX/tree/develop/paddlemix/examples/qwen2_5_vl
 
 Qwen2.5-VL+R1应用:https://github.com/PaddlePaddle/PaddleMIX/tree/develop/applications/MULLM
 
-AISTUDIO教程链接：[
-【PaddleMIX】快速体验Qwen2-VL的多模态理解模型 - 飞桨AI Studio星河社区](https://aistudio.baidu.com/projectdetail/8807257)
+AISTUDIO教程链接：
+[【PaddleMIX】快速体验Qwen2-VL的多模态理解模型 - 飞桨AI Studio星河社区](https://aistudio.baidu.com/projectdetail/8807257)
