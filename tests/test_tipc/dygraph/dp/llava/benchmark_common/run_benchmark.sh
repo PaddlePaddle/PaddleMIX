@@ -17,7 +17,7 @@
 # Test training benchmark for a model.
 # Usage：bash benchmark/run_benchmark.sh ${model_item} ${bs_item} ${fp_item} ${run_mode} ${device_num}
 function _set_params(){
-    model_item=${1:-"llava-v1.6-vicuna-7b-sft"}   # (必选) 模型 item |llava-v1.6-vicuna-7b-sft|llava-v1.6-vicuna-13b-sft|llava-v1.6-vicuna-7b-pretrain|llava-v1.6-vicuna-7b-lora_sft|llava-v1.6-vicuna-13b-pretrain|llava-v1.6-vicuna-13b-lora_sft
+    model_item=${1:-"llava-v1_6-vicuna-7b-sft"}   # (必选) 模型 item |llava-v1_6-vicuna-7b-sft|llava-v1_6-vicuna-13b-sft|llava-v1_6-vicuna-7b-pretrain|llava-v1_6-vicuna-7b-lora_sft|llava-v1_6-vicuna-13b-pretrain|llava-v1_6-vicuna-13b-lora_sft
     base_batch_size=${2:-"1"}       # (必选) 如果是静态图单进程，则表示每张卡上的BS，需在训练时*卡数
     fp_item=${3:-"bf16O2"}            # (必选) fp32|fp16|bf16
     run_mode=${4:-"DP"}             # (必选) MP模型并行|DP数据并行|PP流水线并行|混合并行DP1-MP1-PP1|DP1-MP4-PP1
@@ -59,27 +59,27 @@ function _train(){
     fi
 
     #模型权重
-    if [ ${model_item} = "llava-v1.6-vicuna-7b-sft" ]; then
+    if [ ${model_item} = "llava-v1_6-vicuna-7b-sft" ]; then
         model_path="llava-v1.6-vicuna-7b"
         train_stage="sft"
     fi
-    if [ ${model_item} = "llava-v1.6-vicuna-7b-pretrain" ]; then
+    if [ ${model_item} = "llava-v1_6-vicuna-7b-pretrain" ]; then
         model_path="vicuna-7b-v1.5"
         train_stage="pretrain"
     fi
-    if [ ${model_item} = "llava-v1.6-vicuna-7b-lora_sft" ]; then
+    if [ ${model_item} = "llava-v1_6-vicuna-7b-lora_sft" ]; then
         model_path="llava-v1.6-vicuna-7b"
         train_stage="lora_sft"
     fi
-    if [ ${model_item} = "llava-v1.6-vicuna-13b-sft" ]; then
+    if [ ${model_item} = "llava-v1_6-vicuna-13b-sft" ]; then
         model_path="llava-v1.6-vicuna-13b"
         train_stage="sft"
     fi
-    if [ ${model_item} = "llava-v1.6-vicuna-13b-pretrain" ]; then
+    if [ ${model_item} = "llava-v1_6-vicuna-13b-pretrain" ]; then
         model_path="vicuna-13b-v1.5"
         train_stage="pretrain"
     fi
-    if [ ${model_item} = "llava-v1.6-vicuna-13b-lora_sft" ]; then
+    if [ ${model_item} = "llava-v1_6-vicuna-13b-lora_sft" ]; then
         model_path="llava-v1.6-vicuna-13b"
         train_stage="lora_sft"
     fi
@@ -153,10 +153,10 @@ function _train(){
             "
     fi
     if [ ${train_stage} = "lora_sft" ]; then
-        if [ ${model_item} = "llava-v1.6-vicuna-7b-lora_sft" ]; then
+        if [ ${model_item} = "llava-v1_6-vicuna-7b-lora_sft" ]; then
             train_config="../paddlemix/config/llava/v1_6/lora_sft_7b_argument_benchmark.json"
         fi
-        if [ ${model_item} = "llava-v1.6-vicuna-13b-lora_sft" ]; then
+        if [ ${model_item} = "llava-v1_6-vicuna-13b-lora_sft" ]; then
             train_config="../paddlemix/config/llava/v1_6/lora_sft_13b_argument_benchmark.json"
         fi
         train_cmd="../paddlemix/tools/supervised_finetune.py ${train_config}"
@@ -203,10 +203,10 @@ function _train(){
         #     "
     # fi
     if [ ${train_stage} = "pretrain" ]; then
-        if [ ${model_item} = "llava-v1.6-vicuna-7b-pretrain" ]; then
+        if [ ${model_item} = "llava-v1_6-vicuna-7b-pretrain" ]; then
             train_config="../paddlemix/config/llava/pretrain_7b_benchmark.json"
         fi
-        if [ ${model_item} = "llava-v1.6-vicuna-13b-pretrain" ]; then
+        if [ ${model_item} = "llava-v1_6-vicuna-13b-pretrain" ]; then
             train_config="../paddlemix/config/llava/pretrain_13b_benchmark.json"
         fi
         train_cmd="../paddlemix/examples/llava/pretrain.py ${train_config}"
