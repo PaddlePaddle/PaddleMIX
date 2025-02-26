@@ -422,6 +422,7 @@ python paddlemix/examples/qwen2_5_vl/single_image_infer.py \
 百度飞桨团队推出的PaddleMIX套件现已完整实现两大模型的推理全流程支持，通过深入解析其代码实现，研究人员和开发者能够更透彻地理解模型的核心技术细节与创新突破。我们诚挚推荐您访问AI Studio平台的专项教程（点击以下链接🔗），通过实践演练掌握前沿多模态模型的开发与应用技巧。
 
 论文链接：
+
 https://arxiv.org/pdf/2409.12191 Qwen2-VL: Enhancing Vision-Language Model’s Perception of the World at Any Resolution
 https://arxiv.org/pdf/2502.13923 Qwen2.5-VL Technical Report
 

@@ -389,6 +389,7 @@ DeepSeek 的 Janus 和 Janus-Pro 在多模态理解与生成领域展现了强�
 PaddleMIX中已经复现了Janus 和 Janus-Pro 的推理流程，通过解析代码我们也更深入地理解模型的实现细节和技术创新，快跟着aistudio教程链接一起动手实践一下吧！
 
 论文链接：
+
 https://arxiv.org/abs/2410.13848 Janus: Decoupling Visual Encoding for Unified Multimodal Understanding and Generation
 
 https://arxiv.org/pdf/2501.17811 Janus-Pro: Unified Multimodal Understanding and Generation with Data and Model Scaling
