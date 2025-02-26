@@ -23,6 +23,7 @@ if is_paddle_available():
     _import_structure["autoencoder_asym_kl"] = ["AsymmetricAutoencoderKL"]
     _import_structure["autoencoder_kl"] = ["AutoencoderKL"]
     _import_structure["autoencoder_kl_cogvideox"] = ["AutoencoderKLCogVideoX"]
+    _import_structure["autoencoder_kl_hunyuan_video"] = ["AutoencoderKLHunyuanVideo"]
     _import_structure["autoencoder_kl_temporal_decoder"] = ["AutoencoderKLTemporalDecoder"]
     _import_structure["autoencoder_tiny"] = ["AutoencoderTiny"]
     _import_structure["consistency_decoder_vae"] = ["ConsistencyDecoderVAE"]
@@ -62,6 +63,7 @@ if is_paddle_available():
     # NOTE, new add
     _import_structure["vctrl"] = ["VCtrlModel"]
     _import_structure["cogvideox_transformer_3d_vctrl"] = ["CogVideoXTransformer3DVCtrlModel"]
+    _import_structure["transformer_hunyuan_video"] = ["HunyuanVideoTransformer3DModel"]
 
 
 if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
@@ -70,6 +72,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         from .autoencoder_asym_kl import AsymmetricAutoencoderKL
         from .autoencoder_kl import AutoencoderKL
         from .autoencoder_kl_cogvideox import AutoencoderKLCogVideoX
+        from .autoencoder_kl_hunyuan_video import AutoencoderKLHunyuanVideo
         from .autoencoder_kl_temporal_decoder import AutoencoderKLTemporalDecoder
         from .autoencoder_tiny import AutoencoderTiny
         from .cogvideox_transformer_3d import CogVideoXTransformer3DModel
@@ -95,6 +98,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         from .prior_transformer import PriorTransformer
         from .t5_film_transformer import T5FilmDecoder
         from .transformer_2d import Transformer2DModel
+        from .transformer_hunyuan_video import HunyuanVideoTransformer3DModel
         from .transformer_sd3 import SD3Transformer2DModel
         from .transformer_temporal import TransformerTemporalModel
         from .unet_1d import UNet1DModel
