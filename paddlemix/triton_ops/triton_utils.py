@@ -539,6 +539,7 @@ class KernelInterface:
                             f"We find {i}, {j} in tl.constexpr args, and {j} is a substring of {i}, please modify your triton kernel arguments names to avoid this."
                         )
 
+            modified_arg_exclude_constexpr = self.arg_exclude_constexpr
             const_hint_dict = {}
             for i in range(len(all_input)):
                 ele = all_input[i]
@@ -550,6 +551,7 @@ class KernelInterface:
                     or type(ele) == paddle.base.libpaddle.pir.Value
                 ):
                     dtypes.append(ele.dtype)
+                    modified_arg_exclude_constexpr[i] = f"input_ptrs[{i}]"
                     if str(ele.place) == "Place(cpu)":
                         raise ValueError(
                             f"The place of tensor {ele.name} must be device(Place(gpu) or Place(xpu)..), but now it is {ele.place}"
@@ -595,7 +597,7 @@ class KernelInterface:
             lanuch_grid = ",".join(lanuch_grid)
 
             op_dict = {"op_name": op_name, "reset_zero_when_tune": ""}
-            op_dict["triton_kernel_args"] = ",".join(self.arg_exclude_constexpr)
+            op_dict["triton_kernel_args"] = ",".join(modified_arg_exclude_constexpr)
             op_dict["key"] = ",".join(self.key_args)
             # when tunning, we need to reset the out to zero.
             if "reset_zero_when_tune" in other_config.keys():
