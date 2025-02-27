@@ -376,7 +376,7 @@ class FluxTransformer2DModel(
 
         self.original_attn_processors = self.attn_processors
 
-        for module in self.modules():
+        for module in self.sublayers():
             if isinstance(module, Attention):
                 module.fuse_projections(fuse=True)
 

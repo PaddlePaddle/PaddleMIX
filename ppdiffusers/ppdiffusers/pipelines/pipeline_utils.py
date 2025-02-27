@@ -327,6 +327,7 @@ def load_sub_model(
     cache_dir: Union[str, os.PathLike] = None,
     variant: str = None,
     use_safetensors: bool = False,
+    map_location: str = None,
 ):
     """Helper method to load the module `name` from `library_name` and `class_name`"""
     # retrieve class candidates
@@ -403,6 +404,7 @@ def load_sub_model(
             loading_kwargs["from_diffusers"] = from_diffusers
             loading_kwargs["paddle_dtype"] = paddle_dtype
             loading_kwargs["low_cpu_mem_usage"] = low_cpu_mem_usage
+            loading_kwargs["map_location"] = map_location
 
     # check if the module is in a subdirectory
     if os.path.isdir(os.path.join(cached_folder, name)):
@@ -963,6 +965,7 @@ class DiffusionPipeline(ConfigMixin):
         use_optim_cache = kwargs.pop("use_optim_cache", False)
         load_connected_pipeline = kwargs.pop("load_connected_pipeline", False)  # noqa: F841
         model_variants = kwargs.pop("model_variants", {})
+        map_location = kwargs.pop("map_location", None)
 
         # 1. Download the checkpoints and configs
         # use snapshot download here to get it working from from_pretrained
@@ -1132,6 +1135,7 @@ class DiffusionPipeline(ConfigMixin):
                     cache_dir=cache_dir,
                     variant=variant,
                     use_safetensors=use_safetensors,
+                    map_location=map_location,
                 )
                 logger.info(
                     f"Loaded {name} as {class_name} from `{name}` subfolder of {pretrained_model_name_or_path}."

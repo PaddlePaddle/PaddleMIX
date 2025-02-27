@@ -17,7 +17,7 @@ from typing import Any, Callable, Dict, List, Optional, Union
 
 import numpy as np
 import paddle
-from  ppdiffusers.transformers import CLIPTextModel, CLIPTokenizer, T5EncoderModel # T5TokenizerFast
+from  ppdiffusers.transformers import CLIPTextModel, CLIPTokenizer, T5EncoderModel, T5Tokenizer # T5TokenizerFast
 
 from ...image_processor import PipelineImageInput, VaeImageProcessor
 from ...loaders import FromSingleFileMixin, TextualInversionLoaderMixin # FluxLoraLoaderMixin
@@ -192,7 +192,7 @@ class FluxImg2ImgPipeline(DiffusionPipeline, FromSingleFileMixin):
         text_encoder: CLIPTextModel,
         tokenizer: CLIPTokenizer,
         text_encoder_2: T5EncoderModel,
-        tokenizer_2: T5TokenizerFast,
+        tokenizer_2: T5Tokenizer,
         transformer: FluxTransformer2DModel,
     ):
         super().__init__()
@@ -468,7 +468,7 @@ class FluxImg2ImgPipeline(DiffusionPipeline, FromSingleFileMixin):
     # Copied from diffusers.pipelines.flux.pipeline_flux.FluxPipeline._pack_latents
     def _pack_latents(latents, batch_size, num_channels_latents, height, width):
         latents = latents.reshape([batch_size, num_channels_latents, height // 2, 2, width // 2, 2])
-        latents = latents.transpose(0, 2, 4, 1, 3, 5)
+        latents = latents.permute(0, 2, 4, 1, 3, 5)
         latents = latents.reshape([batch_size, (height // 2) * (width // 2), num_channels_latents * 4])
 
         return latents
@@ -484,7 +484,7 @@ class FluxImg2ImgPipeline(DiffusionPipeline, FromSingleFileMixin):
         width = 2 * (int(width) // (vae_scale_factor * 2))
 
         latents = latents.reshape([batch_size, height // 2, width // 2, channels // 4, 2, 2])
-        latents = latents.transpose(0, 3, 1, 4, 2, 5)
+        latents = latents.permute(0, 3, 1, 4, 2, 5)
 
         latents = latents.reshape([batch_size, channels // (2 * 2), height, width])
 
@@ -781,11 +781,6 @@ class FluxImg2ImgPipeline(DiffusionPipeline, FromSingleFileMixin):
                 # compute the previous noisy sample x_t -> x_t-1
                 latents_dtype = latents.dtype
                 latents = self.scheduler.step(noise_pred, t, latents, return_dict=False)[0]
-
-                if latents.dtype != latents_dtype:
-                    if torch.backends.mps.is_available():
-                        # some platforms (eg. apple mps) misbehave due to a pytorch bug: https://github.com/pytorch/pytorch/pull/99272
-                        latents = latents.astype(latents_dtype)
 
                 if callback_on_step_end is not None:
                     callback_kwargs = {}

@@ -16,13 +16,13 @@ import inspect
 from typing import Any, Callable, Dict, List, Optional, Union
 
 import numpy as np
-import torch
-from ppdiffusers.transformers import CLIPTextModel, CLIPTokenizer, T5EncoderModel, T5TokenizerFast
+import paddle
+from ppdiffusers.transformers import CLIPTextModel, CLIPTokenizer, T5EncoderModel, T5Tokenizer #T5TokenizerFast
 
 from ...image_processor import VaeImageProcessor
 from ...loaders import FromSingleFileMixin, TextualInversionLoaderMixin # FluxLoraLoaderMixin
-from ...models.autoencoders import AutoencoderKL
-from ...models.transformers import FluxTransformer2DModel
+from ...models import AutoencoderKL
+from ...models import FluxTransformer2DModel
 from ...schedulers import FlowMatchEulerDiscreteScheduler
 from ...utils import (
     logging,
@@ -30,7 +30,7 @@ from ...utils import (
     scale_lora_layers,
     unscale_lora_layers,
 )
-from ...utils.torch_utils import randn_tensor
+from ...utils.paddle_utils import randn_tensor
 from ..pipeline_utils import DiffusionPipeline
 from .pipeline_output import FluxPipelineOutput
 
@@ -201,7 +201,7 @@ class FluxFillPipeline(
         text_encoder: CLIPTextModel,
         tokenizer: CLIPTokenizer,
         text_encoder_2: T5EncoderModel,
-        tokenizer_2: T5TokenizerFast,
+        tokenizer_2: T5Tokenizer,
         transformer: FluxTransformer2DModel,
     ):
         super().__init__()
@@ -387,7 +387,7 @@ class FluxFillPipeline(
         mask = mask.reshape(
             [batch_size, height, self.vae_scale_factor, width, self.vae_scale_factor]
         )  # batch_size, height, 8, width, 8
-        mask = mask.transpose(0, 2, 4, 1, 3)  # batch_size, 8, 8, height, width
+        mask = mask.permute(0, 2, 4, 1, 3)  # batch_size, 8, 8, height, width
         mask = mask.reshape(
             [batch_size, self.vae_scale_factor * self.vae_scale_factor, height, width]
         )  # batch_size, 8*8, height, width
@@ -543,7 +543,7 @@ class FluxFillPipeline(
     # Copied from diffusers.pipelines.flux.pipeline_flux.FluxPipeline._pack_latents
     def _pack_latents(latents, batch_size, num_channels_latents, height, width):
         latents = latents.reshape([batch_size, num_channels_latents, height // 2, 2, width // 2, 2])
-        latents = latents.transpose(0, 2, 4, 1, 3, 5)
+        latents = latents.permute(0, 2, 4, 1, 3, 5)
         latents = latents.reshape([batch_size, (height // 2) * (width // 2), num_channels_latents * 4])
 
         return latents
@@ -559,7 +559,7 @@ class FluxFillPipeline(
         width = 2 * (int(width) // (vae_scale_factor * 2))
 
         latents = latents.reshape([batch_size, height // 2, width // 2, channels // 4, 2, 2])
-        latents = latents.transpose(0, 3, 1, 4, 2, 5)
+        latents = latents.permute(0, 3, 1, 4, 2, 5)
 
         latents = latents.reshape([batch_size, channels // (2 * 2), height, width])
 
@@ -645,25 +645,25 @@ class FluxFillPipeline(
     def interrupt(self):
         return self._interrupt
 
-    @torch.no_grad()
+    @paddle.no_grad()
     @replace_example_docstring(EXAMPLE_DOC_STRING)
     def __call__(
         self,
         prompt: Union[str, List[str]] = None,
         prompt_2: Optional[Union[str, List[str]]] = None,
-        image: Optional[torch.FloatTensor] = None,
-        mask_image: Optional[torch.FloatTensor] = None,
-        masked_image_latents: Optional[torch.FloatTensor] = None,
+        image: Optional[paddle.Tensor] = None,
+        mask_image: Optional[paddle.Tensor] = None,
+        masked_image_latents: Optional[paddle.Tensor] = None,
         height: Optional[int] = None,
         width: Optional[int] = None,
         num_inference_steps: int = 50,
         sigmas: Optional[List[float]] = None,
         guidance_scale: float = 30.0,
         num_images_per_prompt: Optional[int] = 1,
-        generator: Optional[Union[torch.Generator, List[torch.Generator]]] = None,
-        latents: Optional[torch.FloatTensor] = None,
-        prompt_embeds: Optional[torch.FloatTensor] = None,
-        pooled_prompt_embeds: Optional[torch.FloatTensor] = None,
+        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        latents: Optional[paddle.Tensor] = None,
+        prompt_embeds: Optional[paddle.Tensor] = None,
+        pooled_prompt_embeds: Optional[paddle.Tensor] = None,
         output_type: Optional[str] = "pil",
         return_dict: bool = True,
         joint_attention_kwargs: Optional[Dict[str, Any]] = None,
@@ -859,7 +859,7 @@ class FluxFillPipeline(
 
         # handle guidance
         if self.transformer.config.guidance_embeds:
-            guidance = paddle.full([1], guidance_scale, dtype=torch.float32)
+            guidance = paddle.full([1], guidance_scale, dtype=paddle.float32)
             guidance = guidance.expand(latents.shape[0])
         else:
             guidance = None
@@ -888,11 +888,6 @@ class FluxFillPipeline(
                 # compute the previous noisy sample x_t -> x_t-1
                 latents_dtype = latents.dtype
                 latents = self.scheduler.step(noise_pred, t, latents, return_dict=False)[0]
-
-                if latents.dtype != latents_dtype:
-                    if torch.backends.mps.is_available():
-                        # some platforms (eg. apple mps) misbehave due to a pytorch bug: https://github.com/pytorch/pytorch/pull/99272
-                        latents = latents.astype(latents_dtype)
 
                 if callback_on_step_end is not None:
                     callback_kwargs = {}
