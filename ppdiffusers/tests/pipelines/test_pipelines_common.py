@@ -69,6 +69,17 @@ def check_same_shape(tensor_list):
     return all(shape == shapes[0] for shape in shapes[1:])
 
 
+def check_qkv_fusion_matches_attn_procs_length(model, original_attn_processors):
+    current_attn_processors = model.attn_processors
+    return len(current_attn_processors) == len(original_attn_processors)
+
+
+def check_qkv_fusion_processors_exist(model):
+    current_attn_processors = model.attn_processors
+    proc_names = [v.__class__.__name__ for _, v in current_attn_processors.items()]
+    return all(p.startswith("Fused") for p in proc_names)
+
+
 class PipelineLatentTesterMixin:
     """
     This mixin is designed to be used with PipelineTesterMixin and unittest.TestCase classes.
