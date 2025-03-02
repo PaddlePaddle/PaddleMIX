@@ -433,7 +433,7 @@ class AddAuxiliaryLoss(paddle.autograd.PyLayer):
         return grad_output, grad_loss
 
 
-# from paddlenlp.transformers.deepseek_v2.modeling import DeepseekV2MoE
+#from paddlenlp.transformers.deepseek_v2.modeling import DeepseekV2MoE # diff
 class DeepseekV2MoE(paddle.nn.Layer):
     """
     A mixed expert module containing shared experts.
@@ -469,6 +469,7 @@ class DeepseekV2MoE(paddle.nn.Layer):
             hidden_states = hidden_states.repeat_interleave(self.num_experts_per_tok, axis=0)
             y = paddle.empty_like(hidden_states)
             for i, expert in enumerate(self.experts):
+                # y[flat_topk_idx == i] = expert(hidden_states[flat_topk_idx == i])
                 if paddle.any(flat_topk_idx == i):
                     y[flat_topk_idx == i] = expert(hidden_states[flat_topk_idx == i])
 
@@ -848,8 +849,8 @@ class DeepseekV2FlashAttention(DeepseekV2Attention):
             query_states = query_states.astype(target_dtype)
             key_states = key_states.astype(target_dtype)
             value_states = value_states.astype(target_dtype)
-
-        attn_output = paddle.nn.functional.scaled_dot_product_attention(
+        # attn_output = self._flash_attention_forward(query_states,key_states,value_states,attention_mask,q_len,dropout=dropout_rate,softmax_scale=self.softmax_scale)
+        attn_output = self._flash_attention_forward(
             query_states,
             key_states,
             value_states,
@@ -872,10 +873,11 @@ class DeepseekV2FlashAttention(DeepseekV2Attention):
 # from paddlenlp.transformers.deepseek_v2.modeling import DeepseekV2Attention
 ATTENTION_CLASSES = {
     "eager": DeepseekV2Attention,
-    # "flash_attention": DeepseekV2FlashAttention,
-    # "mla_eager": DeepseekV2Attention,
-    "mla_eager": DeepseekV2FlashAttention,
-    # "mla_flash_attention": DeepseekV2FlashAttention,
+    "flash_attention": DeepseekV2FlashAttention,
+
+    "mla_eager": DeepseekV2Attention,
+    "mla_flash_attention": DeepseekV2FlashAttention,
+
     "mha_eager": LlamaAttention,
     "mha_flash_attention": LlamaAttention,  # LlamaFlashAttention2
 }

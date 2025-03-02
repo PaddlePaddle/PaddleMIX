@@ -61,7 +61,7 @@ ${TRAINING_PYTHON} --log_dir ${OUTPUT_DIR}/paddle_distributed_logs \
   --save_strategy "steps" \
   --save_steps 10 \
   --save_total_limit 1 \
-  --learning_rate 1e-4 \
+  --learning_rate 1e-5 \
   --warmup_ratio 0.05 \
   --optim "adamw" \
   --lr_scheduler_type "constant" \
