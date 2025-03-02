@@ -21,29 +21,27 @@ import sys
 import traceback
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Union
-from paddlemix.datasets.internvl_dataset import (ConcatDataset,
-                                    WeightedConcatDataset)
 
 import numpy as np
 import paddle
 import paddle.distributed as dist
 from paddle.io import Dataset
-from paddlenlp.data import DataCollatorForSeq2Seq, DataCollatorWithPadding
+from paddlenlp.data import DataCollatorForSeq2Seq  # , DataCollatorWithPadding
+from paddlenlp.peft import LoRAConfig, LoRAModel
 from paddlenlp.trainer import PdArgumentParser, TrainingArguments, set_seed
 from paddlenlp.trainer.trainer import Trainer
 from paddlenlp.trainer.trainer_utils import get_last_checkpoint
+from paddlenlp.transformers import DeepseekTokenizerFast
 from PIL import Image, ImageFile, PngImagePlugin, UnidentifiedImageError
 
 from paddlemix.datasets.internvl_dataset import ConcatDataset, WeightedConcatDataset
+from paddlemix.models.deepseek_vl2 import DeepseekVLV2Config, DeepseekVLV2ForCausalLM
 from paddlemix.models.qwen2_vl.supervised import _encode_supervised_example
 from paddlemix.models.qwen2_vl.template import TEMPLATES
-from paddlemix.processors.deepseek_vl2_processing import DeepseekVLChatProcessorOutput
-
-
-from paddlenlp.transformers.llama.tokenizer_fast import LlamaTokenizerFast
-from paddlemix.models.deepseek_vl2 import DeepseekVLV2Config, DeepseekVLV2ForCausalLM
-from paddlemix.processors.deepseek_vl2_processing import DeepseekVLV2Processor
-
+from paddlemix.processors.deepseek_vl2_processing import (
+    DeepseekVLChatProcessorOutput,
+    DeepseekVLV2Processor,
+)
 
 Image.MAX_IMAGE_PIXELS = None
 ImageFile.LOAD_TRUNCATED_IMAGES = True
@@ -142,7 +140,7 @@ class DataTrainingArguments:
     """
 
     max_seq_length: Optional[int] = field(
-        default=8192,
+        default=2048,
         metadata={
             "help": (
                 "The maximum total input sequence length after tokenization. Sequences longer "
@@ -193,8 +191,6 @@ class PreTrainingArguments(TrainingArguments):
     )
 
 
-
-from typing import Any, Dict, List, Optional, Union
 def findall(token_list: List[int], sub_token_list: Union[int, List[int]]) -> List[int]:
     """Find the index of a token in the token_list."""
     if isinstance(sub_token_list, int):
@@ -204,7 +200,7 @@ def findall(token_list: List[int], sub_token_list: Union[int, List[int]]) -> Lis
     try:
         while True:
             idx = token_list.index(sub_token_list[0], idx + 1)
-            if len(sub_token_list) == 1 or sub_token_list == token_list[idx:idx + len(sub_token_list)]:
+            if len(sub_token_list) == 1 or sub_token_list == token_list[idx : idx + len(sub_token_list)]:
                 res.append(idx)
     except ValueError:
         pass
@@ -222,7 +218,7 @@ class LazySupervisedDataset(Dataset):
         ds_name,
         processor,
         max_image_size=384,
-        max_seq_length=8192,
+        max_seq_length=2048,
         repeat_time=1,
         normalize_type="imagenet",
         random_seed=0,
@@ -312,34 +308,31 @@ class LazySupervisedDataset(Dataset):
             train_on_prompt=False,
             mask_history=False,
         )
-        #print('input_ids', input_ids)
-        input_ids[0] = 0 # shit
-        #print('labels', labels)
-        # torch 54 sum 652073 [0,                             128821, 28, 223, 128815, 201, 19248, 4176, 67854, 304, 2325, 126041, 377, 270, 4609, 339, 128822, 28, 53, 438, 874, 4015, 680, 223, 20, 874, 5976, 433, 837, 680, 313, 837, 874, 9884, 680, 446, 944, 680, 274, 837, 343, 223, 20, 446, 565, 446, 944, 680, 274, 837, 1900, 837, 1204, 1]
-        #                                               [223, 128821, 28, 223, 128815, 19248, 4176, 67854, 304, 2325, 126041, 377, 270, 4609, 339, 128822, 28, 53, 438, 874, 4015, 680, 223, 20, 874, 5976, 433, 837, 680, 313, 837, 874, 9884, 680, 446, 944, 680, 274, 837, 343, 223, 20, 446, 565, 446, 944, 680, 274, 837, 1900, 837, 1204, 1]
-        # input_ids len=58 [3476, 477, 260, 11502, 22896, 16, 128821, 28, 223, 128815, 19248, 4176, 67854, 304, 2325, 126041, 377, 270, 4609, 339, 128822, 28, 53, 438, 874, 4015, 680, 223, 20, 874, 5976, 433, 837, 680, 313, 837, 874, 9884, 680, 446, 944, 680, 274, 837, 343, 223, 20, 446, 565, 446, 944, 680, 274, 837, 1900, 837, 1204, 1]
-        # labels len=58 [-100, -100, -100, -100, -100, -100, -100, -100, -100, -100, -100, -100, -100, -100, -100, -100, -100, -100, -100, -100, -100, -100, 53, 438, 874, 4015, 680, 223, 20, 874, 5976, 433, 837, 680, 313, 837, 874, 9884, 680, 446, 944, 680, 274, 837, 343, 223, 20, 446, 565, 446, 944, 680, 274, 837, 1900, 837, 1204, 1]
-        # idx_list [9]
+        # print('input_ids', input_ids)
+        input_ids[0] = 0  # shit
 
         processor = self.processor
         images_seq_mask = [False] * len(input_ids)
         idx_list = findall(input_ids, processor.image_token_id)  # '<image>'
         _, images_list, _, images_spatial_crop, num_image_tokens = processor.tokenize_with_images(
-            '<image>' * len(images), images, cropping=len(images) <= 2)
+            "<image>" * len(images), images, cropping=len(images) <= 2
+        )
         new_num_tokens = 0
         # print('idx_list', idx_list) # [4]
         # print('input_ids', input_ids)
-        #print('num_image_tokens', num_image_tokens)
-        #print('1 len(input_ids), len(labels), len(images_seq_mask)', len(input_ids), len(labels), len(images_seq_mask))
+        # print('num_image_tokens', num_image_tokens)
+        # print('1 len(input_ids), len(labels), len(images_seq_mask)', len(input_ids), len(labels), len(images_seq_mask))
 
         for idx, n_image_tokens in zip(idx_list, num_image_tokens):
             image_tokens = [processor.image_token_id] * n_image_tokens
-            input_ids = input_ids[:idx] + image_tokens + input_ids[idx + 1:]
+            input_ids = input_ids[:idx] + image_tokens + input_ids[idx + 1 :]
             if labels is not None:
-                labels = labels[:idx] + [-100] * n_image_tokens + labels[idx + 1:]
-            images_seq_mask = images_seq_mask[:idx] + [True] * n_image_tokens + images_seq_mask[idx + 1:]
+                labels = labels[:idx] + [-100] * n_image_tokens + labels[idx + 1 :]
+            images_seq_mask = images_seq_mask[:idx] + [True] * n_image_tokens + images_seq_mask[idx + 1 :]
             new_num_tokens += n_image_tokens - 1
-        #print('2 len(input_ids), len(labels), len(images_seq_mask)', len(input_ids), len(labels), len(images_seq_mask))
+        # print('2 len(input_ids), len(labels), len(images_seq_mask)', len(input_ids), len(labels), len(images_seq_mask))
+        # print('input_ids', input_ids)
+        # print('labels', labels)
 
         output = DeepseekVLChatProcessorOutput(
             sft_format=None,
@@ -348,18 +341,19 @@ class LazySupervisedDataset(Dataset):
             images=paddle.stack(images_list) if images_list else paddle.zeros((0, 3, 384, 384)),
             images_seq_mask=paddle.to_tensor(images_seq_mask),
             images_spatial_crop=paddle.to_tensor(images_spatial_crop),
-            num_image_tokens=num_image_tokens)
+            num_image_tokens=num_image_tokens,
+        )
 
-        attention_mask = [1] * len(output['input_ids'])
+        attention_mask = [1] * len(output["input_ids"])
 
         # Create the final return dictionary
         ret = dict(
-            input_ids=output['input_ids'],
+            input_ids=output["input_ids"],
             labels=labels,
             attention_mask=attention_mask,
-            images=output['images'],
-            images_seq_mask=output['images_seq_mask'],
-            images_spatial_crop=output['images_spatial_crop'],
+            images=output["images"],
+            images_seq_mask=output["images_seq_mask"],
+            images_spatial_crop=output["images_spatial_crop"],
         )
         # batched_output = dict(self.processor.batchify(output))
         return ret
@@ -373,7 +367,7 @@ class LazySupervisedDataset(Dataset):
                     ret = self.multi_modal_get_item(data_item)  # TODO: 暂时都是单图
                 else:
                     raise NotImplementedError
-                    #ret = self.pure_text_get_item(data_item)  # TODO: 纯文
+                    # ret = self.pure_text_get_item(data_item)  # TODO: 纯文
                 break
             except Exception as e:
                 print(e, self.ds_name, flush=True)
@@ -442,6 +436,8 @@ def print_trainable_params(model: paddle.nn.Layer) -> None:
         if not param.stop_gradient:
             # print('{}, shape: {}, requires grad: {}'.format(k, param.shape, not param.stop_gradient))
             trainable_params += num_params
+    # model.image_newline, shape: [1280], requires grad: True
+    # model.view_seperator, shape: [1280], requires grad: True
     print(
         "trainable params: {:d} || all params: {:d} || trainable%: {:.4f}".format(
             trainable_params, all_param, 100 * trainable_params / all_param
@@ -508,7 +504,7 @@ def main():
 
     MODEL_NAME = model_args.model_name_or_path
     model = DeepseekVLV2ForCausalLM.from_pretrained(MODEL_NAME, dtype=dtype)
-    tokenizer = LlamaTokenizerFast.from_pretrained(MODEL_NAME)
+    tokenizer = DeepseekTokenizerFast.from_pretrained(MODEL_NAME)
     config = DeepseekVLV2Config.from_pretrained(MODEL_NAME)
 
     candidate_resolutions = config["candidate_resolutions"]
@@ -548,7 +544,30 @@ def main():
         model.language = model.language.eval()
         _freeze_params(model.language)
 
+    # lora
+    if model_args.lora:
+        if model_args.lora_path is None:
+            target_modules = model_args.lora_target_modules.split(",")  #
+            lora_config = LoRAConfig(
+                target_modules=target_modules,
+                r=model_args.lora_rank,
+                lora_alpha=model_args.lora_alpha,
+                lora_dropout=model_args.lora_dropout,
+                merge_weights=False,
+                tensor_parallel_degree=training_args.tensor_parallel_degree,
+                dtype=dtype,
+            )
+            model = LoRAModel(model, lora_config)
+        else:
+            model = LoRAModel.from_pretrained(model=model, lora_path=model_args.lora_path)
+        model.mark_only_lora_as_trainable()
+        model.print_trainable_parameters()
+
     print_trainable_params(model)
+    # tiny torch: PeftModelForCausalLM: 3408.4452M Params (37.9438M Trainable [1.1132%]), 0.0008M Buffers.
+    # tiny paddle: trainable params: 37943808 || all params: 3408445248 || trainable%: 1.1132
+    # small torch : PeftModelForCausalLM: 16290.2329M Params (141.8834M Trainable [0.8710%]), 14.1566M Buffers.
+    # small paddle: trainable params: 141883392 || all params: 16290232896 || trainable%: 0.8710
 
     # print trainable parameters
     if dist.get_rank() == 0:

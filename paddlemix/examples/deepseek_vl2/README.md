@@ -78,9 +78,22 @@ This is image_3: <image>
 
 
 ## 4 训练微调
+
+### 数据准备
+下载并解压PaddleMIX团队整理的LaTeX_OCR数据集：
+
 ```bash
-# 2B
-sh paddlemix/examples/deepseek_vl2/shell/deepseek_vl2_tiny_bs32_1e8.sh
+wget https://bj.bcebos.com/paddlemix/datasets/playground/LaTeX_OCR.zip
+```
+
+### 训练命令
+
+```bash
+# DeepSeek-VL2-tiny LoRA Training
+sh paddlemix/examples/deepseek_vl2/shell/deepseek_vl2_tiny_lora_bs16_1e5.sh
+
+# DeepSeek-VL2-small LoRA Training
+sh paddlemix/examples/deepseek_vl2/shell/deepseek_vl2_small_lora_bs16_1e5.sh
 ```
 
 ## 参考文献

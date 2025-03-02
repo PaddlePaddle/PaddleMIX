@@ -15,11 +15,7 @@
 set -x
 
 GPUS=${GPUS:-8}
-BATCH_SIZE=${BATCH_SIZE:-32}
-
-# GPUS=${GPUS:-1}
-# BATCH_SIZE=${BATCH_SIZE:-1}
-
+BATCH_SIZE=${BATCH_SIZE:-16}
 PER_DEVICE_BATCH_SIZE=${PER_DEVICE_BATCH_SIZE:-1}
 
 GRADIENT_ACC=$((BATCH_SIZE / PER_DEVICE_BATCH_SIZE / GPUS))
@@ -30,7 +26,7 @@ export PYTHONPATH="${PYTHONPATH}:$(pwd)"
 export MASTER_PORT=34229
 export TF_CPP_MIN_LOG_LEVEL=3
 
-OUTPUT_DIR='work_dirs/baseline_330k_2b_bs32_1e8'
+OUTPUT_DIR='work_dirs/deepseekvl2_tiny_lora_bs16_1e4'
 
 if [ ! -d "$OUTPUT_DIR" ]; then
   mkdir -p "$OUTPUT_DIR"
@@ -41,8 +37,6 @@ TRAINER_INSTANCES='127.0.0.1'
 MASTER='127.0.0.1:8080'
 
 meta_path="paddlemix/examples/deepseek_vl2/configs/LaTeX_OCR.json"
-
-#  --lr_scheduler_type "cosine" \
 
 TRAINING_PYTHON="python -m paddle.distributed.launch --master ${MASTER} --nnodes 1 --nproc_per_node ${GPUS} --rank 0 --ips ${TRAINER_INSTANCES} --run_mode=collective"
 ${TRAINING_PYTHON} --log_dir ${OUTPUT_DIR}/paddle_distributed_logs \
@@ -61,23 +55,19 @@ ${TRAINING_PYTHON} --log_dir ${OUTPUT_DIR}/paddle_distributed_logs \
   --per_device_train_batch_size ${PER_DEVICE_BATCH_SIZE} \
   --gradient_accumulation_steps ${GRADIENT_ACC} \
   --freeze_vit True \
-  --freeze_llm True \
-  --max_seq_length 8192 \
   --image_resolution 384 \
-  --recompute False \
   --max_grad_norm 1.0 \
   --evaluation_strategy "no" \
   --save_strategy "steps" \
-  --save_steps 1000 \
+  --save_steps 10 \
   --save_total_limit 1 \
-  --learning_rate 1e-5 \
-  --warmup_ratio 0.1 \
-  --warmup_steps 100 \
-  --weight_decay 0.1 \
+  --learning_rate 1e-4 \
+  --warmup_ratio 0.05 \
   --optim "adamw" \
   --lr_scheduler_type "constant" \
   --logging_steps 1 \
   --report_to "visualdl" \
+  --recompute True \
   --tensor_parallel_degree=${tensor_parallel_degree} \
   --sharding_parallel_degree=${sharding_parallel_degree} \
   --pipeline_parallel_degree=1 \
@@ -85,4 +75,9 @@ ${TRAINING_PYTHON} --log_dir ${OUTPUT_DIR}/paddle_distributed_logs \
   --sharding="stage1" \
   --amp_master_grad=1 \
   --hybrid_parallel_topo_order="sharding_first" \
+  --lora True \
+  --lora_rank=8 \
+  --lora_alpha=32 \
+  --lora_dropout=0.05 \
+  --lora_target_modules="language.model.layers.*.self_attn.q_proj.*,language.model.layers.*.self_attn.k_proj.*,language.model.layers.*.self_attn.v_proj.*,language.model.layers.*.self_attn.*o_proj.*,language.model.layers.*.mlp.experts.*.gate_proj.*,language.model.layers.*.mlp.experts.*.up_proj.*,language.model.layers.*.mlp.experts.*.down_proj.*,language.model.layers.*.mlp.gate_proj.*,language.model.layers.*.mlp.up_proj.*,language.model.layers.*.mlp.down_proj.*" \
   2>&1 | tee -a "${OUTPUT_DIR}/training_log.txt"

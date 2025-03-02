@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Literal, Optional, Tuple
 
 import paddle
-from paddlenlp.transformers.llama.tokenizer_fast import LlamaTokenizerFast
+from paddlenlp.transformers import DeepseekTokenizerFast
 from PIL import Image, ImageOps
 
 from ..models.deepseek_vl2.conversation import get_conv_template
@@ -119,12 +119,12 @@ class ImageTransform(object):
 
 
 class DeepseekVLV2Processor(ProcessorMixin):
-    tokenizer_class = "LlamaTokenizer", "LlamaTokenizerFast"
+    tokenizer_class = "DeepseekTokenizerFast"
     attributes = ["tokenizer"]
 
     def __init__(
         self,
-        tokenizer: LlamaTokenizerFast,
+        tokenizer: DeepseekTokenizerFast,
         candidate_resolutions: Tuple[Tuple[int, int]],
         patch_size: int,
         downsample_ratio: int,

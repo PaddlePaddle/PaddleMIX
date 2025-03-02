@@ -13,18 +13,18 @@
 # limitations under the License.
 
 import gc
-from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 import paddle
 from einops import rearrange, repeat
 from paddlenlp.transformers import PretrainedModel
-from paddlenlp.transformers.model_outputs import ModelOutput
 
 from paddlemix.models.janus.siglip_vit import SigLIPVisionTransformer
 
 from .configuration_deepseek import DeepseekVLV2Config
 from .modeling_deepseek import DeepseekV2ForCausalLM
+
+# from paddlenlp.transformers.deepseek_v2.modeling import DeepseekV2ForCausalLM
 
 
 class DeepseekVLMlpProjector(paddle.nn.Layer):
@@ -102,45 +102,6 @@ class DeepseekVLMlpProjector(paddle.nn.Layer):
         return self.layers(x)
 
 
-@dataclass
-class DeepSeekVLV2CausalLMOutputWithPast(ModelOutput):
-    """
-    Base class for DeepSeek-VL2 causal language model (or autoregressive) outputs.
-
-    Args:
-        loss (`paddle.Tensor` of shape `(1,)`, *optional*, returned when `labels` is provided):
-            Language modeling loss (for next-token prediction).
-        logits (`paddle.Tensor` of shape `(batch_size, sequence_length, config.vocab_size)`):
-            Prediction scores of the language modeling head (scores for each vocabulary token before SoftMax).
-        past_key_values (`tuple(tuple(paddle.Tensor))`, *optional*, returned when `use_cache=True` is passed or when `config.use_cache=True`):
-            Tuple of `tuple(paddle.Tensor)` of length `config.n_layers`, with each tuple having 2 tensors of shape
-            `(batch_size, num_heads, sequence_length, embed_size_per_head)`)
-
-            Contains pre-computed hidden-states (key and values in the self-attention blocks) that can be used (see
-            `past_key_values` input) to speed up sequential decoding.
-        hidden_states (`tuple(paddle.Tensor)`, *optional*, returned when `output_hidden_states=True` is passed or when `config.output_hidden_states=True`):
-            Tuple of `paddle.Tensor` (one for the output of the embeddings, if the model has an embedding layer, +
-            one for the output of each layer) of shape `(batch_size, sequence_length, hidden_size)`.
-
-            Hidden-states of the model at the output of each layer plus the optional initial embedding outputs.
-        attentions (`tuple(paddle.Tensor)`, *optional*, returned when `output_attentions=True` is passed or when `config.output_attentions=True`):
-            Tuple of `paddle.Tensor` (one for each layer) of shape `(batch_size, num_heads, sequence_length,
-            sequence_length)`.
-
-            Attentions weights after the attention softmax, used to compute the weighted average in the self-attention
-            heads.
-        rope_deltas (`paddle.Tensor` of shape `(batch_size, )`, *optional*):
-            The rope index difference between sequence length and multimodal rope.
-    """
-
-    loss: Optional[paddle.Tensor] = None
-    logits: paddle.float32 = None
-    past_key_values: Optional[List[paddle.Tensor]] = None
-    hidden_states: Optional[Tuple[paddle.Tensor]] = None
-    attentions: Optional[Tuple[paddle.Tensor]] = None
-    rope_deltas: Optional[paddle.Tensor] = None
-
-
 class DeepseekVLV2PreTrainedModel(PretrainedModel):
     config_class = DeepseekVLV2Config
     base_model_prefix = "deepseek_vl_v2"
@@ -151,7 +112,6 @@ class DeepseekVLV2PreTrainedModel(PretrainedModel):
 class DeepseekVLV2ForCausalLM(DeepseekVLV2PreTrainedModel):
     def __init__(self, config: DeepseekVLV2Config):
         super().__init__(config)
-        self._use_flash_attention = config.get("_attn_implementation") == "flash_attention"
         vision_config = config.vision_config
         self.vision = SigLIPVisionTransformer(
             img_size=vision_config.image_size,
@@ -186,6 +146,8 @@ class DeepseekVLV2ForCausalLM(DeepseekVLV2PreTrainedModel):
                 dtype=paddle.get_default_dtype(),
                 default_initializer=paddle.nn.initializer.Normal(std=embed_std),
             )
+            self.image_newline.stop_gradient = True
+            self.view_seperator.stop_gradient = True
         elif self.tile_tag == "1D":
             candidate_resolutions = config.candidate_resolutions
             if len(candidate_resolutions) == 0:
@@ -380,25 +342,32 @@ class DeepseekVLV2ForCausalLM(DeepseekVLV2PreTrainedModel):
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
-        cache_position: Optional[paddle.Tensor] = None,
+        # cache_position: Optional[paddle.Tensor] = None,
     ):
+        # print('input_ids', input_ids.shape, input_ids.sum().item()) # [1, 472] 54625351 # [1, 780] 62258750
+        # print('attention_mask', attention_mask) # [1, 472]
+        # print('position_ids', position_ids) # None
+        # # print('inputs_embeds', inputs_embeds.shape, inputs_embeds.sum().item())
+        # print('images', images.shape, images.sum().item()) # [1, 3, 3, 384, 384] 348481.75 ？？
+        # print('images_seq_mask', images_seq_mask) # [1, 780]
+        # print('images_spatial_crop', images_spatial_crop) # shape=[1, 1, 2]     [[[2, 1]]]
+        # print('labels', labels) # [1, 780], sum 195540
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
         )
         use_cache = use_cache if use_cache is not None else self.config.use_cache
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
-        
+
         if inputs_embeds is None:
             # print('forward input_ids', input_ids.shape, input_ids.sum())
             inputs_embeds = self.prepare_inputs_embeds(
-                input_ids=input_ids, # [1, 1509]
-                images=images, # [1, 7, 3, 384, 384]
-                images_seq_mask=images_seq_mask, # [1, 1509]
-                images_spatial_crop=images_spatial_crop, # [1, 1, 2]
+                input_ids=input_ids,  # [1, 1509]
+                images=images,  # [1, 7, 3, 384, 384]
+                images_seq_mask=images_seq_mask,  # [1, 1509]
+                images_spatial_crop=images_spatial_crop,  # [1, 1, 2]
             )
-            if attention_mask is not None:
-                attention_mask = attention_mask.to(inputs_embeds.place)
+
         outputs = self.language.forward(
             input_ids=None,
             attention_mask=attention_mask,
@@ -410,7 +379,6 @@ class DeepseekVLV2ForCausalLM(DeepseekVLV2PreTrainedModel):
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
-            cache_position=cache_position,
         )
         return outputs
 
@@ -419,7 +387,7 @@ class DeepseekVLV2ForCausalLM(DeepseekVLV2PreTrainedModel):
         gc.collect()
         if paddle.device.cuda.device_count() >= 1:
             paddle.device.cuda.empty_cache()
-            paddle.device.cuda.synchronize()
+            # paddle.device.cuda.synchronize()
 
     def _move_past_key_values_to_cpu(self, past_key_values):
         if past_key_values is None:
@@ -440,7 +408,6 @@ class DeepseekVLV2ForCausalLM(DeepseekVLV2PreTrainedModel):
         images_seq_mask: Optional[paddle.Tensor] = None,
         images_spatial_crop: Optional[paddle.Tensor] = None,
         attention_mask=None,
-        cache_position=None,
         pixel_values=None,
         image_sizes=None,
         num_logits_to_keep=None,
@@ -455,15 +422,12 @@ class DeepseekVLV2ForCausalLM(DeepseekVLV2PreTrainedModel):
             past_key_values=past_key_values,
             inputs_embeds=inputs_embeds,  # already prepared input_embeds
             attention_mask=attention_mask,
-            cache_position=cache_position,
             num_logits_to_keep=num_logits_to_keep,
             **kwargs,
         )
-        cache_position = model_inputs["cache_position"]
-        if cache_position[0] == 0:
-            model_inputs["images"] = images
-            model_inputs["images_seq_mask"] = images_seq_mask
-            model_inputs["images_spatial_crop"] = images_spatial_crop
+        model_inputs["images"] = images
+        model_inputs["images_seq_mask"] = images_seq_mask
+        model_inputs["images_spatial_crop"] = images_spatial_crop
         return model_inputs
 
     @staticmethod

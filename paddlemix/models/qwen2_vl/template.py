@@ -235,3 +235,13 @@ _register_template(
     replace_eos=True,
     mm_plugin=get_mm_plugin(name="qwen2_vl", image_token="<|image_pad|>", video_token="<|video_pad|>"),
 )
+
+
+_register_template(
+    name="deepseek",
+    format_user=StringFormatter(slots=["<|User|>: {{content}}\n\n<|Assistant|>:"]),
+    format_separator=EmptyFormatter(slots=["\n"]),
+    default_system="",  # token_id [0]
+    replace_eos=True,
+    mm_plugin=get_mm_plugin(name="deepseek", image_token="<image>", video_token="<video>"),
+)

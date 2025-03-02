@@ -12,17 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-
-import paddle
-import paddlenlp
-
 """ Paddle DeepSeek model and compatible with both DeepSeekV2 and DeepSeekV3"""
 import math
+import os
 import warnings
 from typing import List, Optional, Tuple, Union
 
 import numpy as np
+import paddle
+import paddle.nn as nn
+import paddlenlp
+from paddle.distributed.fleet.utils import recompute
 from paddlenlp.transformers import PretrainedModel
 from paddlenlp.transformers.activations import ACT2FN
 from paddlenlp.transformers.llama.modeling import LlamaAttention
@@ -30,7 +30,6 @@ from paddlenlp.utils.tools import get_env_device
 
 from ppdiffusers.utils import logging
 
-from .attn_mask import _prepare_4d_causal_attention_mask
 from .configuration_deepseek import DeepseekV2Config
 
 logger = logging.get_logger(__name__)
@@ -46,25 +45,54 @@ except:
     flash_attention = None
 
 
-class DeepseekV2RMSNorm(paddle.nn.Layer):
-    def __init__(self, hidden_size, eps=1e-06):
-        """
-        DeepseekV2RMSNorm is equivalent to T5LayerNorm
+class DeepseekV2RMSNorm(nn.Layer):
+    def __init__(self, config: DeepseekV2Config, hidden_size=None, eps=1e-6, use_sequence_parallel=True):
+        """DeepseekV2RMSNorm is equivalent to T5LayerNorm
+
+        Args:
+            config (DeepseekV2Config): config dict of DeepseekV2
+            hidden_size (_type_): history_states size
+            eps (_type_, optional): eps value. Defaults to 1e-6.
+            use_sequence_parallel (bool, optional): A switch to disable sequence parallelism for inputs that are not in tensor parallel mode.
+                                                    By default, this is set to True.
         """
         super().__init__()
-        self.weight = paddle.create_parameter(
-            shape=[hidden_size],
-            dtype=paddle.get_default_dtype(),
-            default_initializer=paddle.nn.initializer.Constant(1),
-        )
+        self.config = config
+        self.hidden_size = hidden_size if hidden_size is not None else config.hidden_size
         self.variance_epsilon = eps
 
+        self.weight = paddle.create_parameter(
+            shape=[self.hidden_size],
+            dtype=paddle.get_default_dtype(),
+            default_initializer=nn.initializer.Constant(1.0),
+        )
+
     def forward(self, hidden_states):
-        input_dtype = hidden_states.dtype
-        hidden_states = hidden_states.astype("float32")
-        variance = hidden_states.pow(2).mean(axis=-1, keepdim=True)
-        hidden_states = hidden_states * paddle.rsqrt(x=variance + self.variance_epsilon)
-        return self.weight * hidden_states.astype(input_dtype)
+        if self.config.use_fused_rms_norm and get_env_device() == "xpu":
+            if self.weight.dtype != hidden_states.dtype:
+                hidden_states = paddle.cast(hidden_states, self.weight.dtype)
+            try:
+                import paddle_xpu_nn  # noqa: F821
+
+                return paddle_xpu_nn.xpu_rms_norm(hidden_states, self.weight, self.variance_epsilon)[0]
+            except ImportError:
+                raise NotImplementedError(
+                    f"Implementation of fused_rms_norm is not available on {get_env_device()}. Please install paddle_xpu to use this feature"
+                )
+
+        if paddle.in_dynamic_mode():
+            with paddle.amp.auto_cast(False):
+                hidden_states = hidden_states.astype("float32")
+                variance = hidden_states.pow(2).mean(-1, keepdim=True)
+                hidden_states = paddle.rsqrt(variance + self.variance_epsilon) * hidden_states
+        else:
+            hidden_states = hidden_states.astype("float32")
+            variance = hidden_states.pow(2).mean(-1, keepdim=True)
+            hidden_states = paddle.rsqrt(variance + self.variance_epsilon) * hidden_states
+
+        if self.weight.dtype in [paddle.float16, paddle.bfloat16]:
+            hidden_states = paddle.cast(hidden_states, self.weight.dtype)
+        return hidden_states * self.weight
 
 
 class DeepseekV2RotaryEmbedding(paddle.nn.Layer):
@@ -139,13 +167,13 @@ class DeepseekV2DynamicNTKScalingRotaryEmbedding(DeepseekV2RotaryEmbedding):
 
 
 def yarn_find_correction_dim(num_rotations, dim, base=10000, max_position_embeddings=2048):
-    return dim * math.log(max_position_embeddings / (num_rotations * 2 * math.pi)) / (2 * math.log(base))
+    return (dim * math.log(max_position_embeddings / (num_rotations * 2 * math.pi))) / (2 * math.log(base))
 
 
 def yarn_find_correction_range(low_rot, high_rot, dim, base=10000, max_position_embeddings=2048):
     low = math.floor(yarn_find_correction_dim(low_rot, dim, base, max_position_embeddings))
     high = math.ceil(yarn_find_correction_dim(high_rot, dim, base, max_position_embeddings))
-    return max(low, 0), min(high, dim - 1)
+    return max(low, 0), min(high, dim - 1)  # Clamp values just in case
 
 
 def yarn_get_mscale(scale=1, mscale=1):
@@ -156,9 +184,10 @@ def yarn_get_mscale(scale=1, mscale=1):
 
 def yarn_linear_ramp_mask(min, max, dim):
     if min == max:
-        max += 0.001
-    linear_func = (paddle.arange(dtype="float32", end=dim) - min) / (max - min)
-    ramp_func = paddle.clip(x=linear_func, min=0, max=1)
+        max += 0.001  # Prevent singularity
+
+    linear_func = (paddle.arange(dim, dtype=paddle.float32) - min) / (max - min)
+    ramp_func = paddle.clip(linear_func, 0, 1)
     return ramp_func
 
 
@@ -168,7 +197,6 @@ class DeepseekV2YarnRotaryEmbedding(DeepseekV2RotaryEmbedding):
         dim,
         max_position_embeddings=2048,
         base=10000,
-        device=None,
         scaling_factor=1.0,
         original_max_position_embeddings=4096,
         beta_fast=32,
@@ -182,30 +210,37 @@ class DeepseekV2YarnRotaryEmbedding(DeepseekV2RotaryEmbedding):
         self.beta_slow = beta_slow
         self.mscale = mscale
         self.mscale_all_dim = mscale_all_dim
-        super().__init__(dim, max_position_embeddings, base, device)
+        super().__init__(dim, max_position_embeddings, base)
 
-    def _set_cos_sin_cache(self, seq_len, device, dtype):
+    def _set_cos_sin_cache(self, seq_len):
         self.max_seq_len_cached = seq_len
         dim = self.dim
-        freq_extra = 1.0 / self.base ** (paddle.arange(start=0, end=dim, step=2, dtype="float32") / dim)
-        freq_inter = 1.0 / (
-            self.scaling_factor * self.base ** (paddle.arange(start=0, end=dim, step=2, dtype="float32") / dim)
-        )
+
+        freq_extra = 1.0 / (self.base ** (paddle.arange(0, dim, 2, dtype=paddle.float32) / dim))
+        freq_inter = 1.0 / (self.scaling_factor * self.base ** (paddle.arange(0, dim, 2, dtype=paddle.float32) / dim))
+
         low, high = yarn_find_correction_range(
-            self.beta_fast, self.beta_slow, dim, self.base, self.original_max_position_embeddings
+            self.beta_fast,
+            self.beta_slow,
+            dim,
+            self.base,
+            self.original_max_position_embeddings,
         )
-        inv_freq_mask = 1.0 - yarn_linear_ramp_mask(low, high, dim // 2).to(device=device, dtype="float32")
-        inv_freq = freq_inter * (1 - inv_freq_mask) + freq_extra * inv_freq_mask
-        self.register_buffer(name="inv_freq", tensor=inv_freq, persistable=False)
-        t = paddle.arange(dtype="float32", end=seq_len)
-        freqs = paddle.outer(x=t, y=inv_freq)
+        inv_freq_mask = 1.0 - yarn_linear_ramp_mask(low, high, dim // 2)
+        self.inv_freq = freq_inter * (1 - inv_freq_mask) + freq_extra * inv_freq_mask
+
+        t = paddle.arange(seq_len, dtype=paddle.float32)
+
+        freqs = paddle.outer(t, self.inv_freq)
+
         _mscale = float(
             yarn_get_mscale(self.scaling_factor, self.mscale)
             / yarn_get_mscale(self.scaling_factor, self.mscale_all_dim)
         )
-        emb = paddle.concat(x=(freqs, freqs), axis=-1)
-        self.register_buffer(name="cos_cached", tensor=(emb.cos() * _mscale).astype(dtype), persistable=False)
-        self.register_buffer(name="sin_cached", tensor=(emb.sin() * _mscale).astype(dtype), persistable=False)
+
+        emb = paddle.concat((freqs, freqs), axis=-1)
+        self.cos_cached = emb.cos() * _mscale
+        self.sin_cached = emb.sin() * _mscale
 
 
 def rotate_half(x):
@@ -249,21 +284,17 @@ def apply_rotary_pos_emb(q, k, cos, sin, position_ids, unsqueeze_dim=1):
     return q_embed, k_embed
 
 
-class DeepseekV2MLP(paddle.nn.Layer):
-    def __init__(self, config, hidden_size=None, intermediate_size=None):
+class DeepseekV2MLP(nn.Layer):
+    def __init__(self, config: DeepseekV2Config, hidden_size=None, intermediate_size=None, is_moe=False):
         super().__init__()
         self.config = config
         self.hidden_size = config.hidden_size if hidden_size is None else hidden_size
         self.intermediate_size = config.intermediate_size if intermediate_size is None else intermediate_size
-        self.gate_proj = paddle.nn.Linear(
-            in_features=self.hidden_size, out_features=self.intermediate_size, bias_attr=False
-        )
-        self.up_proj = paddle.nn.Linear(
-            in_features=self.hidden_size, out_features=self.intermediate_size, bias_attr=False
-        )
-        self.down_proj = paddle.nn.Linear(
-            in_features=self.intermediate_size, out_features=self.hidden_size, bias_attr=False
-        )
+
+        self.gate_proj = nn.Linear(self.hidden_size, self.intermediate_size, bias_attr=False)
+        self.up_proj = nn.Linear(self.hidden_size, self.intermediate_size, bias_attr=False)
+        self.down_proj = nn.Linear(self.intermediate_size, self.hidden_size, bias_attr=False)
+
         self.act_fn = ACT2FN[config.hidden_act]
 
     def forward(self, x):
@@ -284,6 +315,8 @@ class MoEGate(paddle.nn.Layer):
         self.topk_method = config.topk_method
         self.n_group = config.n_group
         self.topk_group = config.topk_group
+
+        # topk selection algorithm
         self.norm_topk_prob = config.norm_topk_prob
         self.gating_dim = config.hidden_size
         self.weight = paddle.base.framework.EagerParamBase.from_tensor(
@@ -293,13 +326,14 @@ class MoEGate(paddle.nn.Layer):
             self.e_score_correction_bias = paddle.base.framework.EagerParamBase.from_tensor(
                 tensor=paddle.empty(shape=[self.n_routed_experts])
             )
-        self.reset_parameters()
 
-    def reset_parameters(self) -> None:
-        init_KaimingUniform = paddle.nn.initializer.KaimingUniform(
-            negative_slope=math.sqrt(5), nonlinearity="leaky_relu"
-        )
-        init_KaimingUniform(self.weight)
+    #     self.reset_parameters()
+
+    # def reset_parameters(self) -> None:
+    #     init_KaimingUniform = paddle.nn.initializer.KaimingUniform(
+    #         negative_slope=math.sqrt(5), nonlinearity="leaky_relu"
+    #     )
+    #     init_KaimingUniform(self.weight)
 
     def forward(self, hidden_states):
         bsz, seq_len, h = tuple(hidden_states.shape)
@@ -345,6 +379,7 @@ class MoEGate(paddle.nn.Layer):
             tmp_scores = scores_for_choice.masked_fill(mask=~score_mask.astype(dtype="bool"), value=0.0)
             _, topk_idx = paddle.topk(k=self.top_k, sorted=False, x=tmp_scores, axis=-1)
             topk_weight = scores.take_along_axis(axis=1, indices=topk_idx, broadcast=False)
+
         if self.top_k > 1 and self.norm_topk_prob:
             denominator = topk_weight.sum(axis=-1, keepdim=True) + 1e-20
             topk_weight = topk_weight / denominator * self.routed_scaling_factor
@@ -385,7 +420,7 @@ class AddAuxiliaryLoss(paddle.autograd.PyLayer):
 
     @staticmethod
     def forward(ctx, x, loss):
-        assert loss.size == 1
+        assert paddle.numel(loss) == 1
         ctx.dtype = loss.dtype
         ctx.required_aux_loss = not loss.stop_gradient
         return x
@@ -394,12 +429,12 @@ class AddAuxiliaryLoss(paddle.autograd.PyLayer):
     def backward(ctx, grad_output):
         grad_loss = None
         if ctx.required_aux_loss:
-            grad_loss = paddle.ones(shape=[1], dtype=ctx.dtype)
+            grad_loss = paddle.ones(1, dtype=ctx.dtype)
         return grad_output, grad_loss
 
 
-from paddlenlp.transformers.deepseek_v2.modeling import DeepseekV2MoE
-class DeepseekV2MoE_bug(paddle.nn.Layer):
+# from paddlenlp.transformers.deepseek_v2.modeling import DeepseekV2MoE
+class DeepseekV2MoE(paddle.nn.Layer):
     """
     A mixed expert module containing shared experts.
     """
@@ -408,31 +443,16 @@ class DeepseekV2MoE_bug(paddle.nn.Layer):
         super().__init__()
         self.config = config
         self.num_experts_per_tok = config.num_experts_per_tok
-        if hasattr(config, "ep_size") and config.ep_size > 1:
-            assert config.ep_size == paddle.distributed.get_world_size()
-            self.ep_size = config.ep_size
-            self.experts_per_rank = config.n_routed_experts // config.ep_size
-            self.ep_rank = paddle.distributed.get_rank()
-            self.experts = paddle.nn.LayerList(
-                sublayers=[
-                    (
-                        DeepseekV2MLP(config, intermediate_size=config.moe_intermediate_size)
-                        if i >= self.ep_rank * self.experts_per_rank and i < (self.ep_rank + 1) * self.experts_per_rank
-                        else None
-                    )
-                    for i in range(config.n_routed_experts)
-                ]
-            )
-        else:
-            self.ep_size = 1
-            self.experts_per_rank = config.n_routed_experts
-            self.ep_rank = 0
-            self.experts = paddle.nn.LayerList(
-                sublayers=[
-                    DeepseekV2MLP(config, intermediate_size=config.moe_intermediate_size)
-                    for i in range(config.n_routed_experts)
-                ]
-            )
+
+        self.ep_size = 1
+        self.experts_per_rank = config.n_routed_experts
+        self.ep_rank = 0
+        self.experts = nn.LayerList(
+            [
+                DeepseekV2MLP(config, intermediate_size=config.moe_intermediate_size)
+                for i in range(config.n_routed_experts)
+            ]
+        )
         self.gate = MoEGate(config)
         if config.n_shared_experts is not None:
             intermediate_size = config.moe_intermediate_size * config.n_shared_experts
@@ -440,28 +460,24 @@ class DeepseekV2MoE_bug(paddle.nn.Layer):
 
     def forward(self, hidden_states):
         identity = hidden_states
-        orig_shape = tuple(hidden_states.shape) # [1, 668, 1280]
+        orig_shape = hidden_states.shape
         topk_idx, topk_weight, aux_loss = self.gate(hidden_states)
-        # [668, 6]  [668, 6]  0.00119756
-        hidden_states = hidden_states.view([-1, hidden_states.shape[-1]])
-        flat_topk_idx = topk_idx.view([-1])
-        #import pdb; pdb.set_trace() #
+        hidden_states = hidden_states.reshape([-1, hidden_states.shape[-1]])
+        flat_topk_idx = topk_idx.reshape([-1])
+        # remove the infer method
         if self.training:
-            hidden_states = hidden_states.repeat_interleave(repeats=self.num_experts_per_tok, axis=0) # [4008, 1280]
+            hidden_states = hidden_states.repeat_interleave(self.num_experts_per_tok, axis=0)
             y = paddle.empty_like(hidden_states)
-            for i, expert in enumerate(self.experts): # 64个
-                #try:
-                y[flat_topk_idx == i] = expert(hidden_states[flat_topk_idx == i])
-                #except:
-                #    print('i', i, flat_topk_idx==i)
-                # if paddle.any(flat_topk_idx == i):
-                #     y[flat_topk_idx == i] = expert(hidden_states[flat_topk_idx == i])
+            for i, expert in enumerate(self.experts):
+                if paddle.any(flat_topk_idx == i):
+                    y[flat_topk_idx == i] = expert(hidden_states[flat_topk_idx == i])
 
-            y = (y.view([*tuple(topk_weight.shape), -1]) * topk_weight.unsqueeze(axis=-1)).sum(axis=1)
-            y = y.to(hidden_states.dtype).view(orig_shape)
-            y = AddAuxiliaryLoss.apply(y, aux_loss)
+            y = (y.reshape([*topk_weight.shape, -1]) * topk_weight.unsqueeze(-1)).sum(axis=1)
+            y = paddle.cast(y, hidden_states.dtype).reshape([*orig_shape])
+            if self.gate.alpha > 0.0:
+                y = AddAuxiliaryLoss.apply(y, aux_loss)
         else:
-            y = self.moe_infer(hidden_states, topk_idx, topk_weight).view(orig_shape)
+            y = self.moe_infer(hidden_states, topk_idx, topk_weight).reshape([*orig_shape])
         if self.config.n_shared_experts is not None:
             y = y + self.shared_experts(identity)
         return y
@@ -538,16 +554,7 @@ class DeepseekV2MoE_bug(paddle.nn.Layer):
         return final_out
 
 
-def repeat_kv(hidden_states: paddle.Tensor, n_rep: int) -> paddle.Tensor:
-    """
-    This is the equivalent of torch.repeat_interleave(x, dim=1, repeats=n_rep). The hidden states go from (batch,
-    num_key_value_heads, seqlen, head_dim) to (batch, num_attention_heads, seqlen, head_dim)
-    """
-    batch, num_key_value_heads, slen, head_dim = tuple(hidden_states.shape)
-    if n_rep == 1:
-        return hidden_states
-    hidden_states = hidden_states[:, :, None, :, :].expand(shape=[batch, num_key_value_heads, n_rep, slen, head_dim])
-    return hidden_states.reshape([batch, num_key_value_heads * n_rep, slen, head_dim])
+from paddlenlp.transformers.deepseek_v2.modeling import scaled_dot_product_attention
 
 
 class DeepseekV2Attention(paddle.nn.Layer):
@@ -557,13 +564,14 @@ class DeepseekV2Attention(paddle.nn.Layer):
         super().__init__()
         self.config = config
         self.layer_idx = layer_idx
-        if layer_idx is None:
-            logger.warning_once(
-                f"Instantiating {self.__class__.__name__} without passing `layer_idx` is not recommended and will to errors during the forward call, if caching is used. Please make sure to provide a `layer_idx` when creating this class."
-            )
+        # if layer_idx is None:
+        #     logger.warning_once(
+        #         f"Instantiating {self.__class__.__name__} without passing `layer_idx` is not recommended and will to errors during the forward call, if caching is used. Please make sure to provide a `layer_idx` when creating this class."
+        #     )
         self.attention_dropout = config.attention_dropout
         self.hidden_size = config.hidden_size
         self.num_heads = config.num_attention_heads
+
         self.max_position_embeddings = config.max_position_embeddings
         self.rope_theta = config.rope_theta
         self.q_lora_rank = config.q_lora_rank
@@ -573,42 +581,40 @@ class DeepseekV2Attention(paddle.nn.Layer):
         self.qk_nope_head_dim = config.qk_nope_head_dim
         self.q_head_dim = config.qk_nope_head_dim + config.qk_rope_head_dim
         self.is_causal = True
+
+        self.enable_recompute = False
+
         if self.q_lora_rank is None:
-            self.q_proj = paddle.nn.Linear(
-                in_features=self.hidden_size, out_features=self.num_heads * self.q_head_dim, bias_attr=False
-            )
+            self.q_proj = nn.Linear(self.hidden_size, self.num_heads * self.q_head_dim, bias_attr=False)
         else:
-            self.q_a_proj = paddle.nn.Linear(
-                in_features=self.hidden_size, out_features=config.q_lora_rank, bias_attr=config.attention_bias
-            )
-            self.q_a_layernorm = DeepseekV2RMSNorm(config.q_lora_rank)
-            self.q_b_proj = paddle.nn.Linear(
-                in_features=config.q_lora_rank, out_features=self.num_heads * self.q_head_dim, bias_attr=False
-            )
-        self.kv_a_proj_with_mqa = paddle.nn.Linear(
-            in_features=self.hidden_size,
-            out_features=config.kv_lora_rank + config.qk_rope_head_dim,
-            bias_attr=config.attention_bias,
+            self.q_a_proj = nn.Linear(self.hidden_size, config.q_lora_rank, bias_attr=config.attention_bias)
+            self.q_a_layernorm = DeepseekV2RMSNorm(config=config, hidden_size=config.q_lora_rank)
+            self.q_b_proj = nn.Linear(config.q_lora_rank, self.num_heads * self.q_head_dim, bias_attr=False)
+
+        self.kv_a_proj_with_mqa = nn.Linear(
+            self.hidden_size, config.kv_lora_rank + config.qk_rope_head_dim, bias_attr=config.attention_bias
         )
-        self.kv_a_layernorm = DeepseekV2RMSNorm(config.kv_lora_rank)
-        self.kv_b_proj = paddle.nn.Linear(
-            in_features=config.kv_lora_rank,
-            out_features=self.num_heads * (self.q_head_dim - self.qk_rope_head_dim + self.v_head_dim),
+        self.kv_a_layernorm = DeepseekV2RMSNorm(config=config, hidden_size=config.kv_lora_rank)
+        self.kv_b_proj = nn.Linear(
+            config.kv_lora_rank,
+            self.num_heads * (self.q_head_dim - self.qk_rope_head_dim + self.v_head_dim),
             bias_attr=False,
         )
-        self.o_proj = paddle.nn.Linear(
-            in_features=self.num_heads * self.v_head_dim,
-            out_features=self.hidden_size,
-            bias_attr=config.attention_bias,
-        )
+
+        self.o_proj = nn.Linear(self.num_heads * self.v_head_dim, self.hidden_size, bias_attr=config.attention_bias)
+
         self._init_rope()
+
         self.softmax_scale = self.q_head_dim**-0.5
+
         if self.config.rope_scaling is not None:
             mscale_all_dim = self.config.rope_scaling.get("mscale_all_dim", 0)
             scaling_factor = self.config.rope_scaling["factor"]
             if mscale_all_dim:
                 mscale = yarn_get_mscale(scaling_factor, mscale_all_dim)
                 self.softmax_scale = self.softmax_scale * mscale * mscale
+
+        self.attn_func = scaled_dot_product_attention
 
     def _init_rope(self):
         if self.config.rope_scaling is None:
@@ -671,20 +677,25 @@ class DeepseekV2Attention(paddle.nn.Layer):
             q = self.q_proj(hidden_states)
         else:
             q = self.q_b_proj(self.q_a_layernorm(self.q_a_proj(hidden_states)))
-        q = q.view([bsz, q_len, self.num_heads, self.q_head_dim]).transpose(perm=[0, 2, 1, 3])
+
+        q = q.reshape([bsz, q_len, self.num_heads, self.q_head_dim]).transpose(perm=[0, 2, 1, 3])
         q_nope, q_pe = paddle.split(q, num_or_sections=[self.qk_nope_head_dim, self.qk_rope_head_dim], axis=-1)
+
         compressed_kv = self.kv_a_proj_with_mqa(hidden_states)
         compressed_kv, k_pe = paddle.split(
             x=compressed_kv, num_or_sections=[self.kv_lora_rank, self.qk_rope_head_dim], axis=-1
         )
         compressed_kv = self.kv_a_layernorm(compressed_kv)
-        k_pe = k_pe.view([bsz, q_len, 1, self.qk_rope_head_dim]).transpose(perm=[0, 2, 1, 3])
+        k_pe = k_pe.reshape([bsz, q_len, 1, self.qk_rope_head_dim]).transpose(perm=[0, 2, 1, 3])
         kv_seq_len = tuple(k_pe.shape)[-2]
         if past_key_value is not None:
             kv_seq_len += past_key_value[0].shape[1]
 
         cos, sin = self.rotary_emb(q_pe, seq_len=kv_seq_len)
+        # import pdb; pdb.set_trace()
+        # [1, 16, 2035, 64] [1, 1, 2035, 64] [2035, 64] [2035, 64]  [1, 2035]
         q_pe, k_pe = apply_rotary_pos_emb(q_pe, k_pe, cos, sin, position_ids)
+
         if use_cache and past_key_value is not None:
             compressed_kv = compressed_kv.unsqueeze(axis=2)
             k_pe = k_pe.transpose(perm=[0, 2, 1, 3])  # (b h l d) to (b l h d)
@@ -713,6 +724,7 @@ class DeepseekV2Attention(paddle.nn.Layer):
             paddle.matmul(x=q_pe, y=k_pe.transpose(perm=perm_0))
             + paddle.matmul(x=q_nope, y=compressed_kv.unsqueeze(axis=-3).transpose(perm=perm_1))
         ) * self.softmax_scale
+
         if tuple(attn_weights.shape) != (bsz, self.num_heads, q_len, kv_seq_len):
             raise ValueError(
                 f"Attention weights should be of size {bsz, self.num_heads, q_len, kv_seq_len}, but is {tuple(attn_weights.shape)}"
@@ -736,9 +748,12 @@ class DeepseekV2Attention(paddle.nn.Layer):
             )
         attn_output = attn_output.transpose(perm=[0, 2, 1, 3])
         attn_output = attn_output.reshape([bsz, q_len, self.num_heads * self.v_head_dim])
+
         attn_output = self.o_proj(attn_output)
+
         if not output_attentions:
             attn_weights = None
+
         return attn_output, attn_weights, past_key_value
 
 
@@ -751,9 +766,6 @@ class DeepseekV2FlashAttention(DeepseekV2Attention):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # self._flash_attn_uses_top_left_mask = False
-        # self._flash_attn_uses_top_left_mask = (not transformers.utils.
-        #     is_flash_attn_greater_or_equal_2_10())
 
     def forward(
         self,
@@ -771,7 +783,6 @@ class DeepseekV2FlashAttention(DeepseekV2Attention):
             )
             attention_mask = kwargs.pop("padding_mask")
 
-        output_attentions = False
         bsz, q_len, _ = tuple(hidden_states.shape)
         if self.q_lora_rank is None:
             q = self.q_proj(hidden_states)
@@ -824,7 +835,7 @@ class DeepseekV2FlashAttention(DeepseekV2Attention):
             value_states = paddle.concat([past_key_value[1], value_states], axis=1)
             past_key_value = (key_states, value_states)
 
-        dropout_rate = self.attention_dropout if self.training else 0.0
+        # dropout_rate = self.attention_dropout if self.training else 0.0
         input_dtype = query_states.dtype
         if input_dtype == "float32":
             if hasattr(self.config, "_pre_quantization_dtype"):
@@ -837,16 +848,14 @@ class DeepseekV2FlashAttention(DeepseekV2Attention):
             query_states = query_states.astype(target_dtype)
             key_states = key_states.astype(target_dtype)
             value_states = value_states.astype(target_dtype)
-        # import pdb;pdb.set_trace()
-        # attn_output = self._flash_attention_forward(query_states,key_states,value_states,attention_mask,q_len,dropout=dropout_rate,softmax_scale=self.softmax_scale)
-        attn_output = self._flash_attention_forward(
+
+        attn_output = paddle.nn.functional.scaled_dot_product_attention(
             query_states,
             key_states,
             value_states,
             attention_mask,
-            q_len,
-            dropout=dropout_rate,
-            softmax_scale=self.softmax_scale,
+            # dropout_p=dropout_rate,
+            # softmax_scale=self.softmax_scale,
         )  # output b l (head_dim*head)
 
         if self.q_head_dim != self.v_head_dim:
@@ -859,45 +868,16 @@ class DeepseekV2FlashAttention(DeepseekV2Attention):
             attn_weights = None
         return attn_output, attn_weights, past_key_value
 
-    def _flash_attention_forward(self, query_states, key_states, value_states, attention_mask, dropout=0.0):
-        """
-        Calls the forward method of Flash Attention - if the input hidden states contain at least one padding token
-        first unpad the input, then computes the attention scores and pad the final attention scores.
 
-        Args:
-            query_states (`paddle.Tensor`):
-                Input query states to be passed to Flash Attention API
-            key_states (`paddle.Tensor`):
-                Input key states to be passed to Flash Attention API
-            value_states (`paddle.Tensor`):
-                Input value states to be passed to Flash Attention API
-            attention_mask (`paddle.Tensor`):
-                The padding mask - corresponds to a tensor of size `(batch_size, seq_len)` where 0 stands for the
-                position of padding tokens and 1 for the position of non-padding tokens.
-            dropout (`int`, *optional*):
-                Attention dropout
-        """
-        # if not self._flash_attn_uses_top_left_mask:
-        #     causal = self.is_causal
-        # else:
-        #     causal = self.is_causal and query_length != 1
-        return paddle.nn.functional.scaled_dot_product_attention(
-            query_states,
-            key_states,
-            value_states,
-            attn_mask=attention_mask,
-            dropout_p=dropout,
-            training=self.training,
-        )
-
-
+# from paddlenlp.transformers.deepseek_v2.modeling import DeepseekV2Attention
 ATTENTION_CLASSES = {
     "eager": DeepseekV2Attention,
-    "flash_attention": DeepseekV2FlashAttention,
-    "mla_eager": DeepseekV2Attention,
-    "mla_flash_attention": DeepseekV2FlashAttention,
+    # "flash_attention": DeepseekV2FlashAttention,
+    # "mla_eager": DeepseekV2Attention,
+    "mla_eager": DeepseekV2FlashAttention,
+    # "mla_flash_attention": DeepseekV2FlashAttention,
     "mha_eager": LlamaAttention,
-    "mha_flash_attention": LlamaAttention, # LlamaFlashAttention2
+    "mha_flash_attention": LlamaAttention,  # LlamaFlashAttention2
 }
 
 
@@ -913,7 +893,8 @@ class DeepseekV2DecoderLayer(paddle.nn.Layer):
             self.self_attn = ATTENTION_CLASSES[attn_implementation](config=config, layer_idx=layer_idx)
         else:
             self.self_attn = ATTENTION_CLASSES[attn_implementation](config=config)
-        # print('self.self_attn', self.self_attn, config) # LlamaAttention
+        # self.self_attn = DeepseekV2Attention(config=config, layerwise_recompute=layer_idx)
+
         self.mlp = (
             DeepseekV2MoE(config)
             if (
@@ -923,8 +904,8 @@ class DeepseekV2DecoderLayer(paddle.nn.Layer):
             )
             else DeepseekV2MLP(config)
         )
-        self.input_layernorm = DeepseekV2RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-        self.post_attention_layernorm = DeepseekV2RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.input_layernorm = DeepseekV2RMSNorm(config, config.hidden_size, eps=config.rms_norm_eps)
+        self.post_attention_layernorm = DeepseekV2RMSNorm(config, config.hidden_size, eps=config.rms_norm_eps)
 
     def forward(
         self,
@@ -960,14 +941,17 @@ class DeepseekV2DecoderLayer(paddle.nn.Layer):
             position_ids=position_ids,
             past_key_value=past_key_value,
             output_attentions=True,
-            use_cache=use_cache, #
+            use_cache=use_cache,  #
             **kwargs,
         )
-        if use_cache:
+
+        if len(attn_output) == 3:
             hidden_states, self_attn_weights, present_key_value = attn_output
-        else:
+        elif len(attn_output) == 2:
             hidden_states, self_attn_weights = attn_output
             present_key_value = None
+        else:
+            raise ValueError
 
         # Fully Connected
         hidden_states = residual + hidden_states
@@ -987,12 +971,8 @@ class DeepseekV2DecoderLayer(paddle.nn.Layer):
 
 class DeepseekV2PreTrainedModel(PretrainedModel):
     config_class = DeepseekV2Config
-    base_model_prefix = "model"
-    supports_gradient_checkpointing = False
+    base_model_prefix = "model"  #
     _no_split_modules = ["DeepseekV2DecoderLayer"]
-    _skip_keys_device_placement = "past_key_values"
-    _supports_flash_attn_2 = False
-    _supports_cache_class = False
 
     def _init_weights(self, module):
         with paddle.no_grad():
@@ -1005,6 +985,49 @@ class DeepseekV2PreTrainedModel(PretrainedModel):
                 module.weight.data.normal_(mean=0.0, std=std)
                 if module._padding_idx is not None:
                     module.weight.data[module._padding_idx].zero_()
+
+
+def is_casual_mask(attention_mask):
+    """
+    Upper triangular of attention_mask equals to attention_mask is casual
+    """
+    return (paddle.triu(attention_mask) == attention_mask).all().item()
+
+
+def _make_causal_mask(input_ids_shape, past_key_values_length):
+    """
+    Make casual mask used for self-attention
+    """
+    batch_size, target_length = input_ids_shape  # target_length: seq_len
+
+    if get_env_device() == "npu":
+        mask = paddle.tril(paddle.ones((target_length, target_length))).astype("int32")
+    else:
+        mask = paddle.tril(paddle.ones((target_length, target_length), dtype="bool"))
+
+    if past_key_values_length > 0:
+        # [tgt_len, tgt_len + past_len]
+        mask = paddle.concat([paddle.ones([target_length, past_key_values_length], dtype="bool"), mask], axis=-1)
+
+    # [bs, 1, tgt_len, tgt_len + past_len]
+    return mask[None, None, :, :].expand([batch_size, 1, target_length, target_length + past_key_values_length])
+
+
+def _expand_2d_mask(mask, dtype, tgt_length):
+    """
+    Expands attention_mask from `[batch_size, src_length]` to `[batch_size, 1, tgt_length, src_length]`.
+    """
+    batch_size, src_length = mask.shape[0], mask.shape[-1]
+    tgt_length = tgt_length if tgt_length is not None else src_length
+
+    if get_env_device() == "npu":
+        mask = mask[:, None, None, :].astype(dtype)
+    else:
+        mask = mask[:, None, None, :].astype("bool")
+    mask.stop_gradient = True
+    expanded_mask = mask.expand([batch_size, 1, tgt_length, src_length])
+
+    return expanded_mask
 
 
 class DeepseekV2Model(DeepseekV2PreTrainedModel):
@@ -1020,15 +1043,15 @@ class DeepseekV2Model(DeepseekV2PreTrainedModel):
         self.padding_idx = config.pad_token_id
         self.bos_token_id = config.bos_token_id
         self.vocab_size = config.vocab_size
-        self.embed_tokens = paddle.nn.Embedding(
-            num_embeddings=config.vocab_size, embedding_dim=config.hidden_size, padding_idx=self.padding_idx
+        self.embed_tokens = nn.Embedding(config.vocab_size, config.hidden_size, self.padding_idx)
+        self.layers = nn.LayerList(
+            [DeepseekV2DecoderLayer(config, layer_idx) for layer_idx in range(config.num_hidden_layers)]
         )
-        self.layers = paddle.nn.LayerList(
-            sublayers=[DeepseekV2DecoderLayer(config, layer_idx) for layer_idx in range(config.num_hidden_layers)]
-        )
-        self._use_flash_attention = config.get("_attn_implementation", "eager") == "flash_attention"
-        self.norm = DeepseekV2RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-        self.gradient_checkpointing = False
+        # self._use_flash_attention = config.get("_attn_implementation", "eager") == "flash_attention"
+        self.norm = DeepseekV2RMSNorm(config, config.hidden_size, eps=config.rms_norm_eps)
+
+        # Recompute defaults to False and is controlled by Trainer
+        self.enable_recompute = False
         # self._post_init()
 
     def get_input_embeddings(self):
@@ -1036,6 +1059,73 @@ class DeepseekV2Model(DeepseekV2PreTrainedModel):
 
     def set_input_embeddings(self, value):
         self.embed_tokens = value
+
+    @staticmethod
+    def _prepare_decoder_attention_mask(attention_mask, input_shape, past_key_values_length, dtype):
+        if attention_mask is not None:
+            # [bsz, seq_len] -> [bsz, 1, tgt_seq_len, src_seq_len]
+            if len(attention_mask.shape) == 2:
+                expanded_attn_mask = _expand_2d_mask(attention_mask, dtype, tgt_length=input_shape[-1])
+                # For decoding phase in generation, seq_length = 1, we don't need to add causal mask
+                if input_shape[-1] > 1:
+                    combined_attention_mask = _make_causal_mask(
+                        input_shape,
+                        past_key_values_length=past_key_values_length,
+                    )
+                    expanded_attn_mask = expanded_attn_mask & combined_attention_mask
+            # [bsz, seq_len, seq_len] -> [bsz, 1, seq_len, seq_len]
+            elif len(attention_mask.shape) == 3:
+                expanded_attn_mask = attention_mask.unsqueeze(1).astype("bool")
+            # if attention_mask is already 4-D, do nothing
+            else:
+                expanded_attn_mask = attention_mask
+        else:
+            expanded_attn_mask = _make_causal_mask(
+                input_shape,
+                past_key_values_length=past_key_values_length,
+            )
+        # Convert bool attention_mask to float attention mask, which will be added to attention_scores later
+        if get_env_device() == "xpu":
+            x = paddle.to_tensor(0.0, dtype="float32")
+            y = paddle.to_tensor(-1.7005809656952787e38, dtype="float32")
+            expanded_attn_mask = paddle.where(expanded_attn_mask, x, y)
+        else:
+            expanded_attn_mask = paddle.where(expanded_attn_mask.cast("bool"), 0.0, paddle.finfo(dtype).min).astype(
+                dtype
+            )
+        return expanded_attn_mask
+
+    @paddle.jit.not_to_static
+    def recompute_training_full(
+        self,
+        layer_module: nn.Layer,
+        hidden_states: paddle.Tensor,
+        position_ids: Optional[paddle.Tensor],
+        attention_mask: paddle.Tensor,
+        output_attentions: bool,
+        past_key_value: paddle.Tensor,
+        use_cache: bool,
+        # attn_mask_startend_row_indices: Optional[paddle.Tensor] = None,
+    ):
+        def create_custom_forward(module):
+            def custom_forward(*inputs):
+                return module(*inputs)
+
+            return custom_forward
+
+        hidden_states = recompute(
+            create_custom_forward(layer_module),
+            hidden_states,
+            position_ids,
+            attention_mask,
+            output_attentions,
+            past_key_value,
+            use_cache,
+            # attn_mask_startend_row_indices,
+            use_reentrant=False,  # self.config.recompute_use_reentrant,
+        )
+
+        return hidden_states
 
     def forward(
         self,
@@ -1059,6 +1149,7 @@ class DeepseekV2Model(DeepseekV2PreTrainedModel):
         use_cache = use_cache if use_cache is not None else self.config.use_cache
 
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+
         if input_ids is not None and inputs_embeds is not None:
             raise ValueError("You cannot specify both input_ids and inputs_embeds at the same time")
         elif input_ids is not None:
@@ -1067,39 +1158,82 @@ class DeepseekV2Model(DeepseekV2PreTrainedModel):
             batch_size, seq_length = tuple(inputs_embeds.shape)[:2]
         else:
             raise ValueError("You have to specify either input_ids or inputs_embeds")
-        if self.gradient_checkpointing and self.training:
+
+        if self.enable_recompute and self.training:
             if use_cache:
                 logger.warning_once(
                     "`use_cache=True` is incompatible with gradient checkpointing. Setting `use_cache=False`transformers."
                 )
                 use_cache = False
+
+        # past_key_values_length = 0
+        # if use_cache and past_key_values is not None:
+        #     past_key_values_length = past_key_values[0][0].shape[1]
+
+        if past_key_values is None:
+            past_key_values = tuple([None] * len(self.layers))
+        # NOTE: to make cache can be clear in-time
+        past_key_values = list(past_key_values)
+
+        seq_length_with_past = seq_length
         past_key_values_length = 0
-        if use_cache and past_key_values is not None:
+        if past_key_values[0] is not None:
             past_key_values_length = past_key_values[0][0].shape[1]
+            seq_length_with_past += past_key_values_length
 
         if position_ids is None:
             position_ids = paddle.arange(
-                start=past_key_values_length, end=seq_length + past_key_values_length, dtype="int64"
+                past_key_values_length, seq_length + past_key_values_length, dtype=paddle.int64
             )
-            position_ids = position_ids.unsqueeze(axis=0)
+            position_ids = position_ids.unsqueeze(0)
 
         if inputs_embeds is None:
+            # [bs, seq_len, dim]
             inputs_embeds = self.embed_tokens(input_ids)
 
-        attention_mask = _prepare_4d_causal_attention_mask(
-            attention_mask, (batch_size, seq_length), inputs_embeds, past_key_values_length
+        # attention_mask = _prepare_4d_causal_attention_mask(
+        #     attention_mask, (batch_size, seq_length), inputs_embeds, past_key_values_length
+        # )
+
+        # [bs, seq_len]
+        attention_mask = (
+            paddle.ones((batch_size, seq_length_with_past), dtype=paddle.bool)
+            if attention_mask is None
+            else attention_mask
         )
+        attention_mask = self._prepare_decoder_attention_mask(
+            attention_mask, (batch_size, seq_length), past_key_values_length, inputs_embeds.dtype
+        )  # [bs, 1, seq_len, seq_len]
+        if self.config.use_flash_attention:
+            attention_mask = None if is_casual_mask(attention_mask) else attention_mask
+
+        # embed positions
         hidden_states = inputs_embeds
+
+        # decoder layers
         all_hidden_states = () if output_hidden_states else None
         all_self_attns = () if output_attentions else None
         next_decoder_cache = () if use_cache else None
+
         for idx, decoder_layer in enumerate(self.layers):
             if output_hidden_states:
                 all_hidden_states += (hidden_states,)
+
             past_key_value = past_key_values[idx] if past_key_values is not None else None
-            # note: we currently not support gradient_checkpointing
-            if self.gradient_checkpointing and self.training:
-                raise NotImplementedError
+
+            has_gradient = not hidden_states.stop_gradient
+            if self.enable_recompute and has_gradient:
+                layer_outputs = self.recompute_training_full(
+                    # if self.enable_recompute and self.training:
+                    #     layer_outputs = recompute(
+                    decoder_layer,
+                    hidden_states,
+                    attention_mask,
+                    position_ids,
+                    past_key_value,
+                    output_attentions,
+                    use_cache,
+                )
             else:
                 layer_outputs = decoder_layer(
                     hidden_states,
@@ -1109,18 +1243,25 @@ class DeepseekV2Model(DeepseekV2PreTrainedModel):
                     output_attentions=output_attentions,
                     use_cache=use_cache,
                 )
-            hidden_states = layer_outputs[0]
+            # NOTE: clear outdate cache after it has been used for memory saving
+            past_key_value = past_key_values[idx] = None
+            if type(layer_outputs) is tuple:
+                hidden_states = layer_outputs[0]
+            else:
+                hidden_states = layer_outputs
+
             if use_cache:
                 next_decoder_cache += (layer_outputs[2 if output_attentions else 1],)
+
             if output_attentions:
                 all_self_attns += (layer_outputs[1],)
+
         hidden_states = self.norm(hidden_states)
 
         if output_hidden_states:
             all_hidden_states += (hidden_states,)
-        next_cache = None
-        if use_cache:
-            next_cache = next_decoder_cache
+
+        next_cache = next_decoder_cache if use_cache else None
 
         if not return_dict:
             return tuple(v for v in [hidden_states, next_cache, all_hidden_states, all_self_attns] if v is not None)
@@ -1133,6 +1274,9 @@ class DeepseekV2Model(DeepseekV2PreTrainedModel):
         )
 
 
+from paddlenlp.transformers.deepseek_v2.modeling import DeepseekV2PretrainingCriterion
+
+
 class DeepseekV2ForCausalLM(DeepseekV2PreTrainedModel):
     _tied_weights_keys = ["lm_head.weight"]
 
@@ -1140,10 +1284,9 @@ class DeepseekV2ForCausalLM(DeepseekV2PreTrainedModel):
         super().__init__(config)
         self.model = DeepseekV2Model(config)
         self.vocab_size = config.vocab_size
-        self.lm_head = paddle.nn.Linear(
-            in_features=config.hidden_size, out_features=config.vocab_size, bias_attr=False
-        )
+        self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias_attr=False)
         # self.post_init()
+        self.criterion = DeepseekV2PretrainingCriterion(config)
 
     def get_input_embeddings(self):
         return self.model.embed_tokens
@@ -1175,7 +1318,7 @@ class DeepseekV2ForCausalLM(DeepseekV2PreTrainedModel):
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
-        cache_position: Optional[paddle.Tensor] = None,
+        # cache_position: Optional[paddle.Tensor] = None,
     ) -> Union[Tuple, paddlenlp.transformers.model_outputs.CausalLMOutputWithPast]:
         """
         Args:
@@ -1190,6 +1333,7 @@ class DeepseekV2ForCausalLM(DeepseekV2PreTrainedModel):
             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
         )
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+
         outputs = self.model(
             input_ids=input_ids,
             attention_mask=attention_mask,
@@ -1199,12 +1343,13 @@ class DeepseekV2ForCausalLM(DeepseekV2PreTrainedModel):
             use_cache=use_cache,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
-            return_dict=return_dict,
-            cache_position=cache_position,
+            return_dict=True,
+            # cache_position=cache_position,
         )
 
         hidden_states = outputs[0]
         logits = self.lm_head(hidden_states)
+
         logits = logits.astype(dtype="float32")
         loss = None
         if labels is not None:
@@ -1216,6 +1361,7 @@ class DeepseekV2ForCausalLM(DeepseekV2PreTrainedModel):
             loss = loss_fct(shift_logits, shift_labels)
             label_sum = paddle.sum(shift_labels != -100).cast("float32")
             loss = loss / label_sum
+            # loss = self.criterion(logits, labels, mtp_logits=[])
 
         if not return_dict:
             output = (logits,) + outputs[1:]
@@ -1247,31 +1393,38 @@ class DeepseekV2ForCausalLM(DeepseekV2PreTrainedModel):
                 and cache_length + tuple(input_ids.shape)[1] > max_cache_length
             ):
                 attention_mask = attention_mask[:, -max_cache_length:]
-        position_ids = kwargs.get("position_ids", None)
 
+        position_ids = kwargs.get("position_ids", None)
         if attention_mask is not None and position_ids is None:
+            # create position_ids on the fly for batch generation
             position_ids = attention_mask.astype(dtype="int64").cumsum(axis=-1) - 1
             position_ids.masked_fill_(mask=attention_mask == 0, value=1)
             if past_key_values:
                 position_ids = position_ids[:, -tuple(input_ids.shape)[1] :]
 
-        cache_position = kwargs.get("cache_position", None)
-        if cache_position is None and kwargs.get("cache", None) is None:
-            past_length = 0
-        elif cache_position is not None:
-            past_length = cache_position[-1] + 1
-        elif kwargs.get("cache", None):
-            past_length = kwargs["cache"][0][0].shape[1] + 1
+        # cache_position = kwargs.get("cache_position", None)
+        # if cache_position is None and kwargs.get("cache", None) is None:
+        #     print('1')
+        #     past_length = 0
+        # elif cache_position is not None:
+        #     print('2')
+        #     past_length = cache_position[-1] + 1
+        # elif kwargs.get("cache", None):
+        #     print('3')
+        #     past_length = kwargs["cache"][0][0].shape[1] + 1
 
-        cache_position = position_ids
+        # cache_position = position_ids
+
+        # if `inputs_embeds` are passed, we only want to use them in the 1st generation step
         if inputs_embeds is not None and past_key_values is None:
             model_inputs = {"inputs_embeds": inputs_embeds}
         else:
-            model_inputs = {"input_ids": input_ids.contiguous()}
+            model_inputs = {"input_ids": input_ids}
+
         model_inputs.update(
             {
-                "position_ids": position_ids.contiguous(),
-                "cache_position": cache_position,
+                "position_ids": position_ids,
+                # "cache_position": cache_position,
                 "past_key_values": past_key_values,
                 "use_cache": kwargs.get("use_cache"),
                 "attention_mask": attention_mask,
@@ -1279,13 +1432,67 @@ class DeepseekV2ForCausalLM(DeepseekV2PreTrainedModel):
         )
         return model_inputs
 
+    # def prepare_inputs_for_generation(
+    #     self, input_ids, use_cache=False, past_key_values=None, attention_mask=None, inputs_embeds=None, **kwargs
+    # ):
+    #     batch_size, seq_length = input_ids.shape
+    #     position_ids = kwargs.get("position_ids", paddle.arange(seq_length).expand((batch_size, seq_length)))
+    #     if past_key_values:
+    #         input_ids = input_ids[:, -1].unsqueeze(axis=-1)
+    #         position_ids = position_ids[:, -1].unsqueeze(-1)
+
+    #     # if `inputs_embeds` are passed, we only want to use them in the 1st generation step
+    #     if inputs_embeds is not None and past_key_values is None:
+    #         model_inputs = {"inputs_embeds": inputs_embeds}
+    #     else:
+    #         model_inputs = {"input_ids": input_ids}
+
+    #     model_inputs.update(
+    #         {
+    #             "position_ids": position_ids,
+    #             "past_key_values": past_key_values,
+    #             "use_cache": use_cache,
+    #             "attention_mask": attention_mask,
+    #         }
+    #     )
+    #     return model_inputs
+
+    @staticmethod
+    def update_model_kwargs_for_generation(outputs, model_kwargs, is_encoder_decoder=False):
+        # update cache
+        if isinstance(outputs, tuple) and len(outputs) > 1 and not isinstance(outputs[1], paddle.Tensor):
+            model_kwargs["past_key_values"] = outputs[1]
+
+        if (
+            isinstance(outputs, paddlenlp.transformers.model_outputs.CausalLMOutputWithPast)
+            and "past_key_values" in outputs
+        ):
+            model_kwargs["past_key_values"] = outputs.past_key_values
+
+        # update position_ids
+        if "position_ids" in model_kwargs and model_kwargs["position_ids"] is not None:
+            position_ids = model_kwargs["position_ids"]
+            model_kwargs["position_ids"] = paddle.concat([position_ids, position_ids[..., -1:] + 1], axis=-1)
+
+        if not is_encoder_decoder and "attention_mask" in model_kwargs:
+            # TODO: support attention mask for other models
+            attention_mask = model_kwargs["attention_mask"]
+            if len(attention_mask.shape) == 2:
+                model_kwargs["attention_mask"] = paddle.concat(
+                    [attention_mask, paddle.ones([attention_mask.shape[0], 1], dtype=attention_mask.dtype)],
+                    axis=-1,
+                )
+            elif len(attention_mask.shape) == 4:
+                model_kwargs["attention_mask"] = paddle.concat(
+                    [attention_mask, paddle.ones([*attention_mask.shape[:3], 1], dtype=attention_mask.dtype)],
+                    axis=-1,
+                )[:, :, -1:, :]
+
+        return model_kwargs
+
     @staticmethod
     def _reorder_cache(past_key_values, beam_idx):
         reordered_past = ()
         for layer_past in past_key_values:
-            reordered_past += (
-                tuple(
-                    past_state.index_select(axis=0, index=beam_idx.to(past_state.place)) for past_state in layer_past
-                ),
-            )
+            reordered_past += (tuple(past_state.index_select(0, beam_idx) for past_state in layer_past),)
         return reordered_past
