@@ -70,6 +70,7 @@ def rms_norm(x, weight=None, bias=None, epsilon=1e-5):
     import os
     os.environ["CUDA_VISIBLE_DEVICES"] = "2"
     import paddle
+    import paddlemix
 
     batch = 2
     seq = 3600

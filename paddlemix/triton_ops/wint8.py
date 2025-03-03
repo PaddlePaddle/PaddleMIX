@@ -333,6 +333,7 @@ def weight_only_int8(x, qweight, scales, bias=None, bool_trans_w=True):
 
         prepare_ptr_for_triton_kernel = """
         auto output = paddle::full({M,N}, 0, x.dtype(), x.place());
+        auto c_ptr = get_tensor_ptr(output);
         CUdeviceptr input_ptrs[5] = {
             get_tensor_ptr(x),
             get_tensor_ptr(qweight),
