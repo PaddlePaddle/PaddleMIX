@@ -40,10 +40,10 @@
 
 **🎉 2025.01.20 喜迎外部开发者在星河(AIStudio)社区开发的[创作教程页面](paddlemix_applications.md)更新**
 * 涵盖圣诞主题贺卡生成🎄、人物生成👤等多种应用，期待您的体验！此外，还有AI鉴宝🔍、图生音乐🎶等有趣的应用等待您来探索～
-* 🙏 衷心感谢各位开发者基于套件的精彩创作！🚀 诚挚邀请您也来分享您的创意 - 欢迎将教程发布到公开网页或[飞桨AI Studio](https://aistudio.baidu.com/aistudio/community/multimodal?from=singlemessage)社区 
+* 🙏 衷心感谢各位开发者基于套件的精彩创作！🚀 诚挚邀请您也来分享您的创意 - 欢迎将教程发布到公开网页或[飞桨AI Studio](https://aistudio.baidu.com/aistudio/community/multimodal?from=singlemessage)社区
 
 
-**🎉 2025.01.08 发布自研[PP-VCtrl](./ppdiffusers/examples/ppvctrl/README_CN.md)视频生成控制模型** 
+**🎉 2025.01.08 发布自研[PP-VCtrl](./ppdiffusers/examples/ppvctrl/README_CN.md)视频生成控制模型**
 * PP-VCtrl 是一个通用的视频生成控制模型，可广泛应用于人物动画、场景转换、视频编辑等视频生成场景。
 
 
@@ -207,7 +207,7 @@ python setup.py install
 
 **快速开始**
 - [图像摘要快速体验](./docs/quick_start/image_caption.ipynb)
-- [图像生成快速体验](./doc/quick_start/text_to_image.md) 
+- [图像生成快速体验](./docs/quick_start/quick_start_SD3.ipynb)
 - [PaddleMIX WebUI使用](./paddlemix/MULLM_WebUI/README.md)
 
 
@@ -282,8 +282,8 @@ python setup.py install
             <li><a href="paddlemix/examples/visualglm">VIsualGLM</a></li>
             <li><a href="paddlemix/examples/cogvlm">CogVLM && CogAgent</a></li>
             <li><a href="paddlemix/examples/internlm_xcomposer2">InternLM-XComposer2</a></li>
-            <li><a href="paddlemix/examples/deepseek_vl2">DeepSeek-VL2</a></li> 
-            <li><a href="paddlemix/examples/aria">Aria</a></li> 
+            <li><a href="paddlemix/examples/deepseek_vl2">DeepSeek-VL2</a></li>
+            <li><a href="paddlemix/examples/aria">Aria</a></li>
             <li><a href="paddlemix/examples/GOT_OCR_2_0">GOT_OCR 2.0</a></li>
             <li><a href="paddlemix/examples/ppdocbee">PP-DocBee</a></li>
         </ul>
