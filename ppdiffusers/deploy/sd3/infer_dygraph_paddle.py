@@ -240,13 +240,10 @@ def main(args):
         print(
             f"Use fp16: {'true' if args.use_fp16 else 'false'}, "
             f"Mean iter/sec: {1 / (np.mean(time_costs) / args.inference_steps):2f} it/s, "
-            f"Mean latency: {np.mean(time_costs):2f} s, p50 latency: {np.percentile(time_costs, 50):2f} s, "
-            f"p90 latency: {np.percentile(time_costs, 90):2f} s, p95 latency: {np.percentile(time_costs, 95):2f} s."
+            f"average end-to-end time :  {np.mean(time_costs)*1000 :2f} ms."
         )
-        print(
-            f"Memory Info (GB) - Allocated: {avg_memory[0]:.2f}, Max Allocated: {avg_memory[1]:.2f}, "
-            f"Reserved: {avg_memory[2]:.2f}, Max Reserved: {avg_memory[3]:.2f}"
-        )
+        print(f"GPU max_memory_allocated: {paddle.device.cuda.max_memory_allocated() / 1024 ** 3:.2f} GB")
+
         images[0].save(f"{folder}/text2img.png")
 
 
