@@ -203,6 +203,7 @@ register_conv_template(
     )
 )
 
+
 register_conv_template(
     Conversation(
         name="deepseekv2",
@@ -252,6 +253,7 @@ register_conv_template(
         stop_str=["</s>"],
     )
 )
+
 
 if __name__ == "__main__":
     print("deepseek template:")

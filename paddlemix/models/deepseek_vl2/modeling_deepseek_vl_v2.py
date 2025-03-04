@@ -20,11 +20,9 @@ from einops import rearrange, repeat
 from paddlenlp.transformers import PretrainedModel
 
 from paddlemix.models.janus.siglip_vit import SigLIPVisionTransformer
-
 from .configuration_deepseek import DeepseekVLV2Config
 from .modeling_deepseek import DeepseekV2ForCausalLM
-
-# from paddlenlp.transformers.deepseek_v2.modeling import DeepseekV2ForCausalLM
+# from paddlenlp.transformers.deepseek_v2.modeling import DeepseekV2ForCausalLM # diff
 
 
 class DeepseekVLMlpProjector(paddle.nn.Layer):

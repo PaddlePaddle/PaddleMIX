@@ -26,7 +26,7 @@ export PYTHONPATH="${PYTHONPATH}:$(pwd)"
 export MASTER_PORT=34229
 export TF_CPP_MIN_LOG_LEVEL=3
 
-OUTPUT_DIR='work_dirs/deepseekvl2_tiny_lora_bs16_1e4'
+OUTPUT_DIR='work_dirs/deepseekvl2_tiny_lora_bs16_1e5'
 
 if [ ! -d "$OUTPUT_DIR" ]; then
   mkdir -p "$OUTPUT_DIR"
@@ -59,7 +59,7 @@ ${TRAINING_PYTHON} --log_dir ${OUTPUT_DIR}/paddle_distributed_logs \
   --max_grad_norm 1.0 \
   --evaluation_strategy "no" \
   --save_strategy "steps" \
-  --save_steps 10 \
+  --save_steps 1000 \
   --save_total_limit 1 \
   --learning_rate 1e-5 \
   --warmup_ratio 0.05 \
