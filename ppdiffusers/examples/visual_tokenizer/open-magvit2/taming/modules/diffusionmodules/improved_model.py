@@ -203,7 +203,7 @@ def depth_to_space(x: paddle.Tensor, block_size: int) -> paddle.Tensor:
     outer_dims = tuple(x.shape)[:-3]
     x = x.reshape([-1, block_size, block_size, c // s, h, w])
     x = x.transpose(perm=[0, 3, 4, 1, 5, 2])
-    x = x.contiguous().reshpe([*outer_dims, c // s, h * block_size, w * block_size])
+    x = x.contiguous().reshape([*outer_dims, c // s, h * block_size, w * block_size])
     return x
 
 

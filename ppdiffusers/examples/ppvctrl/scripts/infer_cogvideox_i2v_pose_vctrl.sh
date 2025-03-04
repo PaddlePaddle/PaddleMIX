@@ -13,7 +13,7 @@
 # limitations under the License.
 python infer_cogvideox_i2v_vctrl_cli.py \
   --pretrained_model_name_or_path "paddlemix/cogvideox-5b-i2v-vctrl" \
-  --vctrl_path "weights/poses/vctrl_pose_5b_i2v.pdparams" \
+  --vctrl_path "paddlemix/vctrl-5b-i2v-pose-v2-vertical" \
   --vctrl_config "vctrl_configs/cogvideox_5b_i2v_vctrl_config.json" \
   --control_video_path "examples/pose/case1/guide_values.mp4" \
   --ref_image_path "examples/pose/case1/reference_image.jpg" \
@@ -24,4 +24,5 @@ python infer_cogvideox_i2v_vctrl_cli.py \
   --height 720 \
   --max_frame 49 \
   --guidance_scale 3.5 \
-  --num_inference_steps 25
+  --num_inference_steps 25\
+  --vctrl_layout_type spacing 

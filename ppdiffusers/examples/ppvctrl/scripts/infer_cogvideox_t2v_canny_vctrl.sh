@@ -14,7 +14,7 @@
 
 python infer_cogvideox_t2v_vctrl_cli.py \
   --pretrained_model_name_or_path "paddlemix/cogvideox-5b-vctrl" \
-  --vctrl_path "weights/canny/vctrl_canny_5b_t2v.pdparams" \
+  --vctrl_path "paddlemix/vctrl-5b-t2v-canny" \
   --vctrl_config "vctrl_configs/cogvideox_5b_vctrl_config.json" \
   --control_video_path "examples/canny/case1/guide_values.mp4" \
   --output_dir "infer_outputs/canny2video/t2v" \

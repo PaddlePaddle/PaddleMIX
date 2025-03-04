@@ -1,5 +1,8 @@
 简体中文 | [English](README.md)
 # PP-VCtrl
+<a href='https://hammingbo.github.io/ppvctrl/'>
+      <img src='https://img.shields.io/badge/Project_Page-ppvctrl-blue' alt='Project Page'></a>
+
 **PP-VCtrl** 是一个通用的视频生成控制模型，通过引入辅助条件编码器，能够灵活对接各类控制模块，并且在不改变原始生成器的前提下避免了大规模重训练。该模型利用稀疏残差连接实现对控制信号的高效传递，同时通过统一的条件编码流程，将多种控制输入转换为标准化表示，再结合任务特定掩码以提升适应性。得益于这种统一而灵活的设计，PP-VCtrl 可广泛应用于**人物动画**、**场景转换**、**视频编辑**等视频生成场景。
 
 <img src="assets/models/model.png" style="width:100%">
@@ -26,94 +29,35 @@
 
 
 ## 📷 快速展示
-### 1. 边缘控制的视频生成 (Canny)：
-<table class="center">
-    <thead>
-        <tr>
-            <th>Prompt</th> <!-- 新增的列标题，在最左边 -->
-            <th>Reference Image</th>
-            <th>Control Videos</th>
-            <th>Ours (PP-VCtrl-5B-T2V)</th>
-            <th>Ours (PP-VCtrl-5B-I2V)</th>
-        </tr>
-    </thead>
-    <tbody>
-        <tr>
-            <td>Group of fishes swimming in aquarium.</td> <!-- 新增的文本描述，在最左边 -->
-            <td><img src="assets/figures/canny_case1_reference.jpg" alt="Reference " width="160"></td>
-            <td><img src="assets/figures/canny_case1_control_image.gif" alt="Conrotl Videos" width="160"></td>
-            <td><img src="assets/figures/canny_case1_ours_t2v.gif" alt="Ours T2V" width="160"></td>
-            <td><img src="assets/figures/canny_case1_ours_i2v.gif" alt="Ours I2V" width="160"></td>
-        </tr>
-        <tr>
-            <td>A boat with a flag on it is sailing on the sea.</td> <!-- 第二行的文本描述 -->
-            <td><img src="assets/figures/canny_case2_reference.jpg" alt="Reference" width="160"></td>
-            <td><img src="assets/figures/canny_case2_control_image.gif" alt="Control Videos" width="160"></td>
-            <td><img src="assets/figures/canny_case2_ours_t2v.gif" alt="Ours T2v" width="160"></td>
-            <td><img src="assets/figures/canny_case2_ours_i2v.gif" alt="Ours I2v" width="160"></td>
-        </tr>
-        <!-- 可以继续添加更多行 -->
-    </tbody>
-</table>
+### PP-VCtr-I2V 生成的精彩演示 
+首先对源视频提取视频控制序列（边缘，蒙版，姿态）。然后利用ControlNet重新制作视频首帧。将视频控制序列和重新制作的视频首帧输入PP-VCtrl-I2V中生成新的视频。
+
+### 1.边缘控制PPVCtrl-I2V
+| Input Video               | Control Video               | Reference      Image      | Output  Video             |
+|----------------------|-----------------------|----------------------|-----------------------|
+<img src="https://raw.githubusercontent.com/Hammingbo/Hammingbo.github.io/refs/heads/main/ppvctrl/static/gif/canny/canny_case1_pixel.gif" >|<img src="https://raw.githubusercontent.com/Hammingbo/Hammingbo.github.io/refs/heads/main/ppvctrl/static/gif/canny/canny_case1_guide.gif"> </img>|<img src="https://raw.githubusercontent.com/Hammingbo/Hammingbo.github.io/refs/heads/main/ppvctrl/static/gif/canny/canny_case1_sub1.jpg">|<img src="https://raw.githubusercontent.com/Hammingbo/Hammingbo.github.io/refs/heads/main/ppvctrl/static/gif/canny/canny_case1_sub1.gif" > </img>|
+<img src="https://raw.githubusercontent.com/Hammingbo/Hammingbo.github.io/refs/heads/main/ppvctrl/static/gif/canny/canny_case2_pixel.gif" >|<img src="https://raw.githubusercontent.com/Hammingbo/Hammingbo.github.io/refs/heads/main/ppvctrl/static/gif/canny/canny_case2_guide.gif"> </img>|<img src="https://raw.githubusercontent.com/Hammingbo/Hammingbo.github.io/refs/heads/main/ppvctrl/static/gif/canny/canny_case2_sub1.jpg">|<img src="https://raw.githubusercontent.com/Hammingbo/Hammingbo.github.io/refs/heads/main/ppvctrl/static/gif/canny/canny_case2_sub1.gif" > </img>|
 
 
 
-### 2. 蒙版控制的视频生成 (Mask)：
-<table class="center">
-    <thead>
-        <tr>
-            <th>Prompt</th> <!-- 新增的列标题，在最左边 -->
-            <th>Reference Image</th>
-            <th>Control Videos</th>
-            <th>Ours (PP-VCtrl-5B-T2V)</th>
-            <th>Ours (PP-VCtrl-5B-I2V)</th>
-        </tr>
-    </thead>
-    <tbody>
-        <tr>
-            <td>A rider in a dark helmet and white breeches is atop a chestnut horse...</td> <!-- 新增的文本描述，在最左边 -->
-            <td><img src="assets/figures/mask_case1_reference.jpg" alt="Reference " width="160"></td>
-            <td><img src="assets/figures/mask_case1_control_image.gif" alt="Conrotl Videos" width="160"></td>
-            <td><img src="assets/figures/mask_case1_ours_t2v.gif" alt="Ours T2V" width="160"></td>
-            <td><img src="assets/figures/mask_case1_ours_i2v.gif" alt="Ours I2V" width="160"></td>
-        </tr>
-        <tr>
-            <td>A dark gray Mini Cooper is parked on a city street...</td> <!-- 第二行的文本描述 -->
-            <td><img src="assets/figures/mask_case2_reference.jpg" alt="Reference" width="160"></td>
-            <td><img src="assets/figures/mask_case2_control_image.gif" alt="Control Videos" width="160"></td>
-            <td><img src="assets/figures/mask_case2_ours_t2v.gif" alt="Ours T2v" width="160"></td>
-            <td><img src="assets/figures/mask_case2_ours_i2v.gif" alt="Ours I2v" width="160"></td>
-        </tr>
-        <!-- 可以继续添加更多行 -->
-    </tbody>
-</table>
+### 2. 蒙版控制PPVCtrl-I2V
+| Input Video               | Control Video               | Reference      Image      | Output  Video             |
+|----------------------|-----------------------|----------------------|-----------------------|
+<img src="https://raw.githubusercontent.com/Hammingbo/Hammingbo.github.io/refs/heads/main/ppvctrl/static/gif/mask/mask_case1_pixel.gif" >|<img src="https://raw.githubusercontent.com/Hammingbo/Hammingbo.github.io/refs/heads/main/ppvctrl/static/gif/mask/mask_case1_guide.gif"> </img>|<img src="https://raw.githubusercontent.com/Hammingbo/Hammingbo.github.io/refs/heads/main/ppvctrl/static/gif/mask/mask_case1_sub1.jpg">|<img src="https://raw.githubusercontent.com/Hammingbo/Hammingbo.github.io/refs/heads/main/ppvctrl/static/gif/mask/mask_case1_sub1.gif" > </img>|
+<img src="https://raw.githubusercontent.com/Hammingbo/Hammingbo.github.io/refs/heads/main/ppvctrl/static/gif/mask/mask_case2_pixel.gif" >|<img src="https://raw.githubusercontent.com/Hammingbo/Hammingbo.github.io/refs/heads/main/ppvctrl/static/gif/mask/mask_case2_guide.gif"> </img>|<img src="https://raw.githubusercontent.com/Hammingbo/Hammingbo.github.io/refs/heads/main/ppvctrl/static/gif/mask/mask_case2_sub2.jpg">|<img src="https://raw.githubusercontent.com/Hammingbo/Hammingbo.github.io/refs/heads/main/ppvctrl/static/gif/mask/mask_case2_sub2.gif" > </img>|
 
-### 3. 人体姿态图控制的视频生成 (Pose)：
-<table class="center">
-    <thead>
-        <tr>
-            <th>Prompt</th> <!-- 新增的列标题，在最左边 -->
-            <th>Reference Image</th> <!-- 新增的列标题，在最左边 -->
-            <th>Control Videos</th>
-            <th>Ours (PP-VCtrl-5B-I2V)</th>
-        </tr>
-    </thead>
-    <tbody>
-        <tr>
-            <td>A young man with curly hair and a red t-shirt featuring a white logo is seen in various states of motion... </td>  
-            <td><img src="assets/figures/pose_case1_reference1.jpg" alt="Reference 1" width="160"></td> 
-           <td><img src="assets/figures/pose_case1_control_image.gif" alt="Pose Videos" width="160"></td>
-            <td><img src="assets/figures/pose_case1_ours_1.gif" alt="Ours 1" width="160"></td>
-        </tr>
-        <tr>
-            <td>A woman models an Adrianna Papell women's gown, featuring a sleeveless...</td> 
-            <td><img src="assets/figures/pose_case2_reference2.jpg" alt="Reference 1" width="160"></td> 
-            <td><img src="assets/figures/pose_case2_control_image.gif" alt="Pose Videos" width="160"></td>
-            <td><img src="assets/figures/pose_case2_ours_2.gif" alt="Ours 1" width="160"></td>
-        </tr>
-        <!-- 可以继续添加更多行 -->
-    </tbody>
-</table>
+### 3. 姿态控制PPVCtrl-I2V
+| Input Video               | Control Video               | Reference      Image      | Output  Video             |
+|----------------------|-----------------------|----------------------|-----------------------|
+<img src="https://raw.githubusercontent.com/Hammingbo/Hammingbo.github.io/refs/heads/main/ppvctrl/static/gif/pose/pose_case1_pixel.gif" >|<img src="https://raw.githubusercontent.com/Hammingbo/Hammingbo.github.io/refs/heads/main/ppvctrl/static/gif/pose/pose_case1_guide.gif"> </img>|<img src="https://raw.githubusercontent.com/Hammingbo/Hammingbo.github.io/refs/heads/main/ppvctrl/static/gif/pose/pose_case1_sub1.jpg">|<img src="https://raw.githubusercontent.com/Hammingbo/Hammingbo.github.io/refs/heads/main/ppvctrl/static/gif/pose/pose_case1_sub1.gif" > </img>|
+<img src="https://raw.githubusercontent.com/Hammingbo/Hammingbo.github.io/refs/heads/main/ppvctrl/static/gif/pose/pose_case2_pixel.gif" >|<img src="https://raw.githubusercontent.com/Hammingbo/Hammingbo.github.io/refs/heads/main/ppvctrl/static/gif/pose/pose_case2_guide.gif"> </img>|<img src="https://raw.githubusercontent.com/Hammingbo/Hammingbo.github.io/refs/heads/main/ppvctrl/static/gif/pose/pose_case2_sub1.jpg">|<img src="https://raw.githubusercontent.com/Hammingbo/Hammingbo.github.io/refs/heads/main/ppvctrl/static/gif/pose/pose_case2_sub1.gif" > </img>|
+
+
+
+
+
+
+
     
 
 
@@ -218,8 +162,8 @@ bash anchor/extract_canny.sh
 ##### 3.2.2. 蒙版控制条件提取
 ```bash
 #下载SAM2模型权重
-mkdir -p anchor/checkpoints/SAM2
-wget -P anchor/checkpoint/mask https://bj.bcebos.com/v1/paddlenlp/models/community/Sam/Sam2/sam2.1_hiera_large.pdparams
+mkdir -p anchor/checkpoints/mask
+wget -P anchor/checkpoints/mask https://bj.bcebos.com/v1/paddlenlp/models/community/Sam/Sam2/sam2.1_hiera_large.pdparams
 #提取蒙版控制条件
 bash anchor/extract_mask.sh
 ```
@@ -264,29 +208,24 @@ examples/
 ### 1. 通过边缘控制生成视频
 ```bash
 ##i2v
-mkdir -p infer_outputs/canny/i2v
 bash scripts/infer_cogvideox_i2v_canny_vctrl.sh
 
 ##t2v
-mkdir -p infer_outputs/canny/t2v
 bash scripts/infer_cogvideox_t2v_canny_vctrl.sh
 ```
 
 ### 2. 通过蒙版控制生成视频
 ```bash
 ##i2v
-mkdir -p infer_outputs/mask/i2v
 bash scripts/infer_cogvideox_i2v_mask_vctrl.sh
 
 ##t2v
-mkdir -p infer_outputs/mask/t2v
 bash scripts/infer_cogvideox_t2v_mask_vctrl.sh
 ```
 ***注意:*** 边缘和蒙版控制模型可以同时支持t2v和i2v模型。 
 ### 3. 通过人物姿态图控制生成视频
 ```bash
 ##i2v
-mkdir -p infer_outputs/pose/i2v
 bash scripts/infer_cogvideox_i2v_pose_vctrl.sh
 ```
 ***注意:*** 人物姿态控制模型只适用于i2v模型。 
@@ -343,4 +282,33 @@ python gradios/gradio_mask2video.py
 
 针对不同任务特点，我们设计了相应的优化策略。在边缘控制任务中，采用动态阈值采样增加数据多样性；对于人体姿态控制任务，针对横竖版视频分别采用填充和裁剪的预处理策略；在蒙版控制任务中，我们采用基于区域面积权重的多目标采样方法，根据概率分布动态选择目标区域，并支持区域扩展和多目标联合控制，同时通过随机概率的膨胀处理来增强模型鲁棒性，使生成结果更加自然。这些策略在统一的视频生成控制框架基础上进行综合运用，显著提升了模型在各类场景下的适应能力和生成质量，并充分发挥了PP-VCtrl通用控制框架的优势。
 ### 4. 定量指标评测
-在边缘控制视频生成（Canny�
+在边缘控制视频生成（Canny）、人体姿态控制视频生成（Pose）以及蒙版控制视频生成（Mask）三个任务的定量评估中，PPVCtrl模型在控制能力和视频质量指标上均能够媲美或超越现有开源的特定任务方法。
+
+<img src="assets/models/eval1.png" style="width:100%">
+
+我们进行了人工评估实验，邀请了多位评估者对不同方法生成的视频进行打分，评估维度包括视频整体质量、时序一致性等。结果显示，在所有评估维度上，PPVCtrl的评分均高于现有开源方法。
+
+<img src="assets/models/eval2.png" style="width:100%">
+
+<!-- 
+## More version
+<details close>
+<summary>Model Versions</summary>
+</details>
+-->
+<!-- 
+## Contact us
+Users: [Users@example.com](Users@example.com)  
+-->
+<!-- 
+ ## BibTex
+
+```
+@article{guo2023animatediff,
+  title={AnimateDiff: Animate Your Personalized Text-to-Image Diffusion Models without Specific Tuning},
+  author={Guo, Yuwei and Yang, Ceyuan and Rao, Anyi and Liang, Zhengyang and Wang, Yaohui and Qiao, Yu and Agrawala, Maneesh and Lin, Dahua and Dai, Bo},
+  journal={International Conference on Learning Representations},
+  year={2025}
+}
+
+```上面的代码打印了一条消息 -->

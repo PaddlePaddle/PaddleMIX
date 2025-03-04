@@ -17,14 +17,31 @@ from dataclasses import dataclass
 from typing import Dict, List, Literal, Optional, Tuple
 
 import paddle
-from paddlenlp.transformers.llama.tokenizer_fast import LlamaTokenizerFast
+from paddlenlp.transformers import DeepseekTokenizerFast
 from PIL import Image, ImageOps
 
 from ..models.deepseek_vl2.conversation import get_conv_template
-from ..models.deepseek_vl2.sequence import pad_sequence
 from .base_processing import ProcessorMixin
 
 __all__ = ["DeepseekVLV2Processor"]
+
+
+def pad_sequence(sequences, padding_value=0, fix_len=None):
+    """Pad a list of variable length paddle.Tensor with size L x *
+    where L is length of the sequence and * is any number of dimensions (including 0)
+    """
+    max_size = sequences[0].shape
+    trailing_dims = max_size[1:]
+    max_len = max([s.shape[0] for s in sequences])
+    if fix_len is not None:
+        assert fix_len >= max_len, "fix_len is too small."
+        max_len = fix_len
+    out_dims = (len(sequences), max_len) + trailing_dims
+    out_tensor = paddle.full(out_dims, padding_value, dtype=sequences[0].dtype)
+    for i, tensor in enumerate(sequences):
+        length = tensor.shape[0]
+        out_tensor[i, :length, ...] = tensor
+    return out_tensor
 
 
 def select_best_resolution(image_size, candidate_resolutions):
@@ -119,12 +136,12 @@ class ImageTransform(object):
 
 
 class DeepseekVLV2Processor(ProcessorMixin):
-    tokenizer_class = "LlamaTokenizer", "LlamaTokenizerFast"
+    tokenizer_class = "DeepseekTokenizerFast"
     attributes = ["tokenizer"]
 
     def __init__(
         self,
-        tokenizer: LlamaTokenizerFast,
+        tokenizer: DeepseekTokenizerFast,
         candidate_resolutions: Tuple[Tuple[int, int]],
         patch_size: int,
         downsample_ratio: int,

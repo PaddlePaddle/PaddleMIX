@@ -339,6 +339,7 @@ ALERTS = {
     "err_failed": {"en": "Failed.", "zh": "训练出错。"},
     "err_json_schema": {"en": "Invalid JSON schema.", "zh": "Json 格式错误。"},
     "err_config_not_found": {"en": "Config file is not found.", "zh": "未找到配置文件。"},
+    "err_invalid_training_model": {"en": "Currently not support this model for training", "zh": "暂时不支持此模型进行训练"},
     "warn_no_cuda": {"en": "CUDA environment was not detected.", "zh": "未检测到 CUDA 环境。"},
     "warn_output_dir_exists": {
         "en": "Output dir already exists, will resume training from here.",

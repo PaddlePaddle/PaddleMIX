@@ -171,7 +171,7 @@ def main():
             mem_gpu = (
                 train_result.metrics["train_mem_gpu_peaked_delta"] + train_result.metrics["train_mem_gpu_alloc_delta"]
             )
-            logger.info(f"Effective_samples_per_second: {effective_samples_per_second} ")
+            logger.info(f"ips: {effective_samples_per_second} ")
             logger.info(f"train_mem_gpu_peaked: {int(mem_gpu/ (2**20))} MB")
             logger.info("Benchmark done.")
         else:

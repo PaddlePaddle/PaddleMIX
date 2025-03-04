@@ -14,7 +14,7 @@ if __name__=='__main__':
     parser.add_argument("--input_path", type=str, default=None)
     parser.add_argument("--control_video_path", type=str, default="guide_values.mp4")
     parser.add_argument("--reference_image_path", type=str, default="reference_image.jpg")
-    parser.add_argument("--canny_threshold_1", type=float, default=100)
+    parser.add_argument("--canny_threshold_1", type=float, default=200)
     parser.add_argument("--canny_threshold_2", type=float, default=255)
     args = parser.parse_args()
 
@@ -37,5 +37,5 @@ if __name__=='__main__':
         frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2RGB)
         frames.append(frame)
 
-
+    cv2.imwrite(args.reference_image_path.replace("reference", "control"), frames[0])
     save_video_from_bgr(frames, args.control_video_path,frame_rate=30)

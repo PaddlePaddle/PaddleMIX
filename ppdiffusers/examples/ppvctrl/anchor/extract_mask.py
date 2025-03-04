@@ -142,7 +142,15 @@ if __name__=='__main__':
     annotated_frames = []
     mask_=[]
     for frame_idx, segments in video_segments.items():
-        # img = cv2.cvtColor(org_frames[frame_idx], cv2.COLOR_BGR2RGB)
+        if frame_idx==0:
+            first_frame=org_frames[frame_idx]
+            first_mask = list(segments.values())
+            first_mask = np.concatenate(first_mask, axis=0)[0]
+            rgb_frame_0=np.zeros((480, 720, 3), dtype=np.uint8)
+            rgb_frame_0[first_mask]=1
+            cv2.imwrite(args.reference_image_path.replace("reference","control"),rgb_frame_0*255)
+
+        
         img=org_frames[frame_idx]
         object_ids = list(segments.keys())
         masks = list(segments.values())

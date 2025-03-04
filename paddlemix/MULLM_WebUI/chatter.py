@@ -22,14 +22,15 @@ from paddlenlp.generation import TextIteratorStreamer
 from paddlenlp.peft import LoRAModel
 from paddlenlp.utils.import_utils import import_module
 
-from ..models.qwen2_vl import MIXQwen2Tokenizer
-from ..processors.qwen2_vl_processing import (
-    Qwen2VLImageProcessor,
-    Qwen2VLProcessor,
-    process_vision_info,
-)
 from .common import ChatState, change_checkbox, chat_ready, get_save_dir
-from .extras.constants import FINAL_CHECKPOINT_NAME, MODEL_MAPPING
+from .extras.constants import (
+    FINAL_CHECKPOINT_NAME,
+    IMAGE_PROCESSOR_MAPPING,
+    MODEL_MAPPING,
+    TOKENIZER_MAPPING,
+    VISION_PROCESS_MAPPING,
+    VL_PROCESSOR_MAPPING,
+)
 from .locales import ALERTS, LOCALES
 
 if TYPE_CHECKING:
@@ -43,6 +44,7 @@ class WebChatModel:
         self.engine = None
         self.processor = None
         self.tokenizer = None
+        self.model_name = None
         self.terminators = ["<|im_end|>"]
         # self.min_pixels = 256 * 28 * 28  # 200704
         # self.max_pixels = 1280 * 28 * 28  # 1003520
@@ -80,8 +82,8 @@ class WebChatModel:
             error = ALERTS["err_no_path"][lang]
 
         self.engine = engine_cls.from_pretrained(model_path, dtype=infer_dtype)
-        self.processor = self.get_processor(model_path)
-
+        self.processor = self.get_processor(model_path, model_name)
+        self.model_name = model_name
         # load lora
         if ckpt_path != "":
             self.engine = LoRAModel.from_pretrained(model=self.engine, lora_path=ckpt_path)
@@ -105,6 +107,9 @@ class WebChatModel:
 
         yield ALERTS["info_unloading"][lang], state_checkbox_group
         self.engine = None
+        self.tokenizer = None
+        self.model_name = None
+        self.processor = None
         state_checkbox_group.remove(LOCALES["model_tag"][lang])
         paddle.device.cuda.empty_cache()
         yield ALERTS["info_unloaded"][lang], state_checkbox_group
@@ -209,16 +214,19 @@ class WebChatModel:
 
         return model_module
 
-    def get_processor(self, model_path):
-        image_processor = Qwen2VLImageProcessor()
-        tokenizer = MIXQwen2Tokenizer.from_pretrained(model_path)
-        # processor = Qwen2VLProcessor(image_processor, tokenizer,min_pixels=self.min_pixels, max_pixels=self.max_pixels)
-        processor = Qwen2VLProcessor(image_processor, tokenizer)
+    def get_processor(self, model_path, model_name):
+        img_processor_cls = import_module(f"paddlemix.processors.{IMAGE_PROCESSOR_MAPPING[model_name]}")
+        image_processor = img_processor_cls()
+        tokenizer = import_module(f"paddlemix.models.{TOKENIZER_MAPPING[model_name]}").from_pretrained(model_path)
+        vl_processor_cls = import_module(f"paddlemix.processors.{VL_PROCESSOR_MAPPING[model_name]}")
+        processor = vl_processor_cls(image_processor, tokenizer)
         self.tokenizer = tokenizer
-
         return processor
 
     def generate(self, messages, generate_cfg):
+        process_vision_info = import_module(
+            f"paddlemix.processors.{VISION_PROCESS_MAPPING[self.model_name]}.process_vision_info"
+        )
         image_inputs, video_inputs = process_vision_info(messages)
         text = self.processor.tokenizer.apply_chat_template(messages, tokenize=False)
         inputs = self.processor(

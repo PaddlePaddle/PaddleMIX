@@ -93,7 +93,7 @@ def parse_arguments():
         ],
         help="The parse_prompt_type can be one of [raw, lpw]. ",
     )
-    parser.add_argument("--use_fp16", type=strtobool, default=True, help="Wheter to use FP16 mode")
+    parser.add_argument("--use_fp16", type=strtobool, default=True, help="Whether to use FP16 mode")
     parser.add_argument("--device_id", type=int, default=0, help="The selected gpu id. -1 means use cpu")
     parser.add_argument(
         "--scheduler",
@@ -396,10 +396,9 @@ def main(args):
         print(
             f"Use fp16: {'true' if args.use_fp16 else 'false'}, "
             f"Mean iter/sec: {1 / (np.mean(time_costs) / args.inference_steps):2f} it/s, "
-            f"Mean latency: {np.mean(time_costs):2f} s, p50 latency: {np.percentile(time_costs, 50):2f} s, "
-            f"p90 latency: {np.percentile(time_costs, 90):2f} s, p95 latency: {np.percentile(time_costs, 95):2f} s."
+            f"average end-to-end time :  {np.mean(time_costs)*1000 :2f} ms."
         )
-
+        print(f"GPU max_memory_allocated: {paddle.device.cuda.max_memory_allocated() / 1024 ** 3:.2f} GB")
         images[0].save(f"{folder}/{task_name}.png")
 
 
