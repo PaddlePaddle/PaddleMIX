@@ -31,23 +31,28 @@ def parse_args():
     parser.add_argument("--seed", type=int, default=42, help="Seed for inference.")
     return parser.parse_args()
 
-def extract_bbox_answer(content):
-    answer_tag_pattern = "<answer>(.*?)</answer>"
-    bbox_pattern = r"\[([-+]?\d*\.\d+|\d+),\s*([-+]?\d*\.\d+|\d+),\s*([-+]?\d*\.\d+|\d+),\s*([-+]?\d*\.\d+|\d+)\]"
+def extract_bbox_answer(method,content):
+    bbox_match = False
+    if method == "baseline":
+        bbox_pattern = r'(-?\d*\.?\d+),\s*(-?\d*\.?\d+),\s*(-?\d*\.?\d+),\s*(-?\d*\.?\d+)'
+        bbox_match = re.search(bbox_pattern, content)
+    else:
+        answer_tag_pattern = "\s*<answer>(.*?)</answer>"
+        bbox_pattern = r"\[([-+]?\d*\.\d+|\d+),\s*([-+]?\d*\.\d+|\d+),\s*([-+]?\d*\.\d+|\d+),\s*([-+]?\d*\.\d+|\d+)\]"
 
-    content_answer_match = re.search(answer_tag_pattern, content)
-    if content_answer_match:
-        content_answer = content_answer_match.group(1).strip()
-        bbox_match = re.search(bbox_pattern, content_answer)
-        if bbox_match:
-            bbox = [
-                float(bbox_match.group(1)),
-                float(bbox_match.group(2)),
-                float(bbox_match.group(3)),
-                float(bbox_match.group(4)),
-            ]
-            x1, y1, x2, y2 = bbox
-            return bbox, False
+        content_answer_match = re.search(answer_tag_pattern, content, re.DOTALL)
+        if content_answer_match:
+            content_answer = content_answer_match.group(1).strip()
+            bbox_match = re.search(bbox_pattern, content_answer)
+    if bbox_match:
+        bbox = [
+            float(bbox_match.group(1)),
+            float(bbox_match.group(2)),
+            float(bbox_match.group(3)),
+            float(bbox_match.group(4)),
+        ]
+        x1, y1, x2, y2 = bbox
+        return bbox, False
     return [0, 0, 0, 0], False
 
 
@@ -91,7 +96,7 @@ def main(args):
     model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
         MODEL_PATH,
         dtype="bfloat16",
-        attn_implementation="eager"
+        attn_implementation="flash_attention_2"
     )
 
     image_processor = Qwen2_5_VLImageProcessor()
@@ -110,6 +115,7 @@ def main(args):
         messages = []
         for x in data:
             image_path = os.path.join(IMAGE_ROOT, x["image"])
+            question = x['normal_caption'] if args.method=="baseline" else x['problem'] 
             message = [
                 {
                     "role": "user",
@@ -117,7 +123,7 @@ def main(args):
                         {"type": "image", "image": f"file://{image_path}"},
                         {
                             "type": "text",
-                            "text": QUESTION_TEMPLATE.format(Question=x["problem"]),
+                            "text": QUESTION_TEMPLATE.format(Question=question),
                         },
                     ],
                 }
@@ -147,10 +153,16 @@ def main(args):
                 padding_side="left",
                 return_tensors="pd",
             )
+            # TODO
+            # padding side bug 
+            # import pdb;pdb.set_trace()
+            inputs.update(text_inputs)
             generation_config = GenerationConfig(
                 use_cache=True,
                 max_new_tokens=256,
-                do_sample=False
+                do_sample=False,
+                eos_token_id=model.config.eos_token_id,
+                pad_token_id=model.config.pad_token_id,
             )
             with paddle.no_grad():
                 generated_ids = model.generate(
@@ -165,6 +177,7 @@ def main(args):
                 skip_special_tokens=True,
                 clean_up_tokenization_spaces=False,
             )
+            # processor.batch_decode(text_inputs['input_ids'],skip_special_tokens=True,)
             all_outputs.extend(batch_output_text)
         final_output = []
         correct_number = 0
@@ -172,7 +185,7 @@ def main(args):
             original_output = model_output
             ground_truth = input_example["solution"]
             ground_truth_normalized = input_example["normalized_solution"]
-            model_answer, normalized = extract_bbox_answer(original_output)
+            model_answer, normalized = extract_bbox_answer(args.method,original_output)
             correct = 0
             if model_answer is not None:
                 if not normalized and iou(model_answer, ground_truth) > 0.5:

@@ -128,12 +128,12 @@ class GRPOConfig(TrainingArguments):
             "help": "KL coefficient. If `0.0`, the reference model is not loaded, reducing memory usage and improving training speed."
         },
     )
-    # num_iterations: int = field(
-    #     default=1,
-    #     metadata={
-    #         "help": "Number of iterations per batch (denoted as μ in the algorithm)."
-    #     },
-    # )
+    num_iterations: int = field(
+        default=1,
+        metadata={
+            "help": "Number of iterations per batch (denoted as μ in the algorithm)."
+        },
+    )
     epsilon: float = field(
         default=0.2, metadata={"help": "Epsilon value for clipping."}
     )

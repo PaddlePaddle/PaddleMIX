@@ -8,7 +8,14 @@
 |-----------------------------|
 | Qwen/Qwen2.5-VL-3B-Instruct |
 
+
 ## 效果展示
+## 性能指标
+| Model | refcoco|  refcoco+  | refcocog | RefGTA | 
+|------|--------|------------|-----------|--------|
+|  Qwen2.5-VL-3B-Instruct   |xx% |xx%     |  xx%  | xx% |
+|  R1-Qwen2.5-VL-3B-Instruct |xx |xx%      |  xx%  | xx% |
+
 ### 训练曲线
 ![Image](https://github.com/user-attachments/assets/82e253e2-69aa-4538-ad37-37caa8450b0c)
 ### 训练回答样例
@@ -35,11 +42,11 @@ The bounding box describes the large, white vehicle on the street. The vehicle i
 ```
 
 ## 数据准备
-> 1. 下载 [COCO Train2014 image](https://huggingface.co/datasets/omlab/VLM-R1/resolve/main/train2014.zip)  并且解压到 `<your_image_root>`.
+> 1. 下载 [COCO Train2014 image](https://huggingface.co/datasets/omlab/VLM-R1/resolve/main/train2014.zip)  并且解压到指定路径如data目录.
 
 > 2. 下载 [RefGTA] (https://huggingface.co/datasets/omlab/VLM-R1/resolve/main/refgta.zip) 并解压
 
-> 3. 下载 [RefCOCO/+/g and RefGTA Annotation files](https://huggingface.co/datasets/omlab/VLM-R1/resolve/main/rec_jsons_processed.zip) and 解压放置PaddleMIX/data/目录下 (RefGTA 域外测试数据,用于泛化性测试).
+> 3. 下载 [RefCOCO/+/g and RefGTA Annotation files](https://huggingface.co/datasets/omlab/VLM-R1/resolve/main/rec_jsons_processed.zip) 解压放置PaddleMIX/data/目录下 (RefGTA 域外测试数据,用于泛化性测试).
 
 > 4. 预处理标签文件:
 ```python

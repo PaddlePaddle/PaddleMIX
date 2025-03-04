@@ -15,10 +15,6 @@ import datasets
 import PIL.Image
 from packaging import version
 
-# apply_chat_template
-# from paddlenlp.trl.trl_utils import is_conversational,maybe_apply_chat_template
-# from paddlenlp.trl.trainer.utils import generate_model_card, get_comet_experiment_url
-# from trl.models import (create_reference_model,unwrap_model_for_generation)
 from paddlenlp.trainer import Trainer,TrainerCallback
 from paddlenlp.transformers.model_utils import (
     PretrainedModel,
@@ -36,8 +32,11 @@ from paddlemix.models.qwen2_vl.template import TEMPLATES
 
 
 from .grpo_config import GRPOConfig
-from ..utils.models import create_reference_model,freeze_params
+from ..utils.tokenizer import get_tokenizer,get_processor
+from ..utils.models import create_reference_model,freeze_params,get_model
 from ..utils.data import apply_chat_template,is_conversational,maybe_apply_chat_template
+from ..utils.distributed import all_gather
+
 
 if paddlenlp.trainer.integrations.is_wandb_available():
     import wandb
@@ -135,89 +134,6 @@ class MultiModalDataCollatorForSeq2Seq(DataCollatorForSeq2Seq):
 
 
 class Qwen2VLGRPOTrainer(Trainer):
-    """
-    Trainer for the Group Relative Policy Optimization (GRPO) method. This algorithm was initially proposed in the
-    paper [DeepSeekMath: Pushing the Limits of Mathematical Reasoning in Open Language Models](https://huggingface.co/papers/2402.03300).
-
-    Example:
-
-    ```python
-    from datasets import load_dataset
-    from trl import GRPOTrainer
-
-    dataset = load_dataset("trl-lib/tldr", split="train")
-
-    trainer = GRPOTrainer(
-        model="Qwen/Qwen2-0.5B-Instruct",
-        reward_funcs="weqweasdas/RM-Gemma-2B",
-        train_dataset=dataset,
-    )
-
-    trainer.train()
-    ```
-
-    Args:
-        model (`Union[str, PreTrainedModel]`):
-            Model to be trained. Can be either:
-
-            - A string, being the *model id* of a pretrained model hosted inside a model repo on huggingface.co, or
-              a path to a *directory* containing model weights saved using
-              [`~transformers.PreTrainedModel.save_pretrained`], e.g., `'./my_model_directory/'`. The model is
-              loaded using [`~transformers.AutoModelForCausalLM.from_pretrained`] with the keywork arguments
-              in `args.model_init_kwargs`.
-            - A [`~transformers.PreTrainedModel`] object. Only causal language models are supported.
-        reward_funcs (`Union[RewardFunc, list[RewardFunc]]`):
-            Reward functions to be used for computing the rewards. To compute the rewards, we call all the reward
-            functions with the prompts and completions and sum the rewards. Can be either:
-
-            - A single reward function, such as:
-                - A string: The *model ID* of a pretrained model hosted inside a model repo on huggingface.co, or a
-                path to a *directory* containing model weights saved using
-                [`~transformers.PreTrainedModel.save_pretrained`], e.g., `'./my_model_directory/'`. The model is loaded
-                using [`~transformers.AutoModelForSequenceClassification.from_pretrained`] with `num_labels=1` and the
-                keyword arguments in `args.model_init_kwargs`.
-                - A [`~transformers.PreTrainedModel`] object: Only sequence classification models are supported.
-                - A custom reward function: The function is provided with the prompts and the generated completions,
-                  plus any additional columns in the dataset. It should return a list of rewards. For more details, see
-                  [Using a custom reward function](#using-a-custom-reward-function).
-            - A list of reward functions, where each item can independently be any of the above types. Mixing different
-            types within the list (e.g., a string model ID and a custom reward function) is allowed.
-        args ([`GRPOConfig`], *optional*, defaults to `None`):
-            Configuration for this trainer. If `None`, a default configuration is used.
-        train_dataset ([`~datasets.Dataset`] or [`~datasets.IterableDataset`]):
-            Dataset to use for training. It must include a column `"prompt"`. Any additional columns in the dataset is
-            ignored. The format of the samples can be either:
-
-            - [Standard](dataset_formats#standard): Each sample contains plain text.
-            - [Conversational](dataset_formats#conversational): Each sample contains structured messages (e.g., role
-              and content).
-        eval_dataset ([`~datasets.Dataset`], [`~datasets.IterableDataset`] or `dict[str, Union[Dataset, IterableDataset]]`):
-            Dataset to use for evaluation. It must meet the same requirements as `train_dataset`.
-        processing_class ([`~transformers.PreTrainedTokenizerBase`], *optional*, defaults to `None`):
-            Processing class used to process the data. The padding side must be set to "left". If `None`, the
-            processing class is loaded from the model's name with [`~transformers.AutoTokenizer.from_pretrained`].
-        reward_processing_classes (`Union[PreTrainedTokenizerBase, list[PreTrainedTokenizerBase]]`, *optional*, defaults to `None`):
-            Processing classes corresponding to the reward functions specified in `reward_funcs`. Can be either:
-
-            - A single processing class: Used when `reward_funcs` contains only one reward function.
-            - A list of processing classes: Must match the order and length of the reward functions in `reward_funcs`.
-            If set to `None`, or if an element of the list corresponding to a [`~transformers.PreTrainedModel`] is
-            `None`, the tokenizer for the model is automatically loaded using [`~transformers.AutoTokenizer.from_pretrained`].
-            For elements in `reward_funcs` that are custom reward functions (not [`~transformers.PreTrainedModel`]),
-            the corresponding entries in `reward_processing_classes` are ignored.
-        callbacks (list of [`~transformers.TrainerCallback`], *optional*, defaults to `None`):
-            List of callbacks to customize the training loop. Will add those to the list of default callbacks
-            detailed in [here](https://huggingface.co/docs/transformers/main_classes/callback).
-
-            If you want to remove one of the default callbacks used, use the [`~transformers.Trainer.remove_callback`]
-            method.
-        optimizers (`tuple[torch.optim.Optimizer, torch.optim.lr_scheduler.LambdaLR]`, *optional*, defaults to `(None, None)`):
-            A tuple containing the optimizer and the scheduler to use. Will default to an instance of [`AdamW`] on your
-            model and a scheduler given by [`get_linear_schedule_with_warmup`] controlled by `args`.
-        peft_config ([`~peft.PeftConfig`], *optional*, defaults to `None`):
-            PEFT configuration used to wrap the model. If `None`, the model is not wrapped.
-    """
-
     def __init__(
         self,
         model: Union[str, paddlenlp.transformers.PretrainedModel],
@@ -248,7 +164,7 @@ class Qwen2VLGRPOTrainer(Trainer):
         peft_config: Optional["PeftConfig"] = None,
         max_pixels: Optional[int] = 12845056,
         min_pixels: Optional[int] = 3136,
-        attn_implementation: str = "sdpa",
+        attn_implementation: str = "flash_attention_2",
         dtype: str = "bfloat16",
     ):
         if args is None:
@@ -257,8 +173,11 @@ class Qwen2VLGRPOTrainer(Trainer):
             args = GRPOConfig(f"{model_name}-GRPO")
         model_init_kwargs = args.model_init_kwargs or {}
         model_init_kwargs["attn_implementation"] = attn_implementation
+
         if model_init_kwargs.get("dtype") is None:
             model_init_kwargs["dtype"] = dtype
+        
+        
         if isinstance(model, str):
             model_id = model
             dtype = model_init_kwargs.get("dtype")
@@ -275,112 +194,24 @@ class Qwen2VLGRPOTrainer(Trainer):
                 raise ValueError(
                     f"Invalid `dtype` passed to `GRPOConfig`. Expected either 'auto' or a string representing a `paddle.dtype` (e.g., 'float32'), but got {dtype}."
                 )
-            # model_init_kwargs["use_cache"] = (
-            #     False
-            #     if args.gradient_checkpointing
-            #     else model_init_kwargs.get("use_cache")
-            # )
-            model_init_kwargs["use_cache"] = model_init_kwargs.get("use_cache")
-
-            if "Qwen2-VL" in model_id:
-                model = Qwen2VLForConditionalGeneration.from_pretrained(
-                    model, **model_init_kwargs
-                )
-                
-            elif "Qwen2.5-VL" in model_id:
-                model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
-                    model, **model_init_kwargs
-                )
-                freeze_params(model.visual)
-            elif "Aria" in model_id:
-                model_init_kwargs.pop("use_cache")
-                model = AriaForConditionalGeneration.from_pretrained(
-                    model, **model_init_kwargs
-                )
-            else:
-                model = paddlenlp.transformers.AutoModelForCausalLM.from_pretrained(
-                    model, **model_init_kwargs
-                )
-        else:
-            model_id = model.config._name_or_path
-            if args.model_init_kwargs is not None:
-                raise ValueError(
-                    "You passed `model_init_kwargs` to the `GRPOConfig`, but your model is already instantiated. This argument can only be used when the `model` argument is a string."
-                )
-#         if peft_config is not None:
-#             model = get_peft_model(model, peft_config)
-#         if transformers.integrations.deepspeed.is_deepspeed_zero3_enabled():
-#             if "Qwen2-VL" in model_id:
-#                 self.ref_model = (
-#                     transformers.Qwen2VLForConditionalGeneration.from_pretrained(
-#                         model_id, **model_init_kwargs
-#                     )
-#                 )
-#             elif "Qwen2.5-VL" in model_id:
-#                 self.ref_model = (
-#                     transformers.Qwen2_5_VLForConditionalGeneration.from_pretrained(
-#                         model_id, **model_init_kwargs
-#                     )
-#                 )
-#             elif "Aria" in model_id:
-#                 self.ref_model = (
-#                     transformers.AriaForConditionalGeneration.from_pretrained(
-#                         model_id, **model_init_kwargs
-#                     )
-#                 )
-#             else:
-#                 self.ref_model = transformers.AutoModelForCausalLM.from_pretrained(
-#                     model_id, **model_init_kwargs
-#                 )
-        # elif peft_config is None:
-        #     self.ref_model = create_reference_model(model)
-        # else:
+            model_init_kwargs["use_cache"] = (
+                False
+                if args.recompute
+                else model_init_kwargs.get("use_cache")
+            )
+        processor_kwargs = {
+            "max_pixels": max_pixels,
+            "min_pixels": min_pixels,
+        }
+        model_path = model_id
+        model_name = os.path.basename(model_path)
+        model = get_model(model_name,model_path,**model_init_kwargs) # model_id: Qwen/Qwen2.5-VL-3B-Instruct
         self.ref_model = create_reference_model(model)
 
         if processing_class is None:
-            if "Qwen2-VL" in model_id:
-                from paddlemix.processors.qwen2_vl_processing import (
-                    Qwen2VLImageProcessor,
-                    Qwen2VLProcessor,
-                    process_vision_info,
-                )
-                from paddlemix.models.qwen2_vl import MIXQwen2_Tokenizer
-
-                image_processor = Qwen2VLImageProcessor()
-                tokenizer = MIXQwen2Tokenizer.from_pretrained(model_id)
-                processor = Qwen2VLProcessor(image_processor, tokenizer)
-
-                processing_class = processor
-                pad_token_id = processing_class.tokenizer.pad_token_id
-                processing_class.pad_token_id = pad_token_id
-                processing_class.eos_token_id = processing_class.tokenizer.eos_token_id
-                processing_class.image_processor.max_pixels = max_pixels
-                processing_class.image_processor.min_pixels = min_pixels
-            elif "Qwen2.5-VL" in model_id:
-                from paddlemix.processors.qwen2_5_vl_processing import (
-                    Qwen2_5_VLImageProcessor,
-                    Qwen2_5_VLProcessor,
-                    process_vision_info,
-                )
-                from paddlemix.models.qwen2_5_vl import MIXQwen2_5_Tokenizer
-
-                image_processor = Qwen2_5_VLImageProcessor()
-                tokenizer = MIXQwen2_5_Tokenizer.from_pretrained(model_id)
-                processor = Qwen2_5_VLProcessor(image_processor, tokenizer)
-
-                processing_class = processor
-                pad_token_id = processing_class.tokenizer.pad_token_id
-                processing_class.pad_token_id = pad_token_id
-                processing_class.eos_token_id = processing_class.tokenizer.eos_token_id
-                processing_class.image_processor.max_pixels = max_pixels
-                processing_class.image_processor.min_pixels = min_pixels
-            elif "Aria" in model_id:
-                pass
-            else:
-                processing_class = paddlenlp.transformers.AutoTokenizer.from_pretrained(
-                    model.config._name_or_path, padding_side="left"
-                )
-                pad_token_id = processing_class.pad_token_id
+            processor,tokenizer = get_processor(model_name,model_path,**processor_kwargs)
+            processing_class = processor
+        
         if not isinstance(reward_funcs, list):
             reward_funcs = [reward_funcs]
         for i, reward_func in enumerate(reward_funcs):
@@ -389,6 +220,7 @@ class Qwen2VLGRPOTrainer(Trainer):
                     reward_func, num_labels=1, **model_init_kwargs
                 )
         self.reward_funcs = reward_funcs
+
         if reward_processing_classes is None:
             reward_processing_classes = [None] * len(reward_funcs)
         elif not isinstance(reward_processing_classes, list):
@@ -415,35 +247,29 @@ class Qwen2VLGRPOTrainer(Trainer):
                 reward_processing_classes[i] = reward_processing_class
         self.reward_processing_classes = reward_processing_classes
         self.processing_class = processing_class
-        data_collator = MultiModalDataCollatorForSeq2Seq(
-            tokenizer=tokenizer,
-            template=TEMPLATES["qwen2_vl"],
-            processor=processor,
-            pad_to_multiple_of=8,  # for shift short attention
-            label_pad_token_id=-100,
-        )
-
         self.max_prompt_length = args.max_prompt_length
         self.max_completion_length = args.max_completion_length
         self.num_generations = args.num_generations
         self.generation_config = paddlenlp.generation.GenerationConfig(
+            use_cache=model_init_kwargs['use_cache'],
             max_new_tokens=self.max_completion_length,
             do_sample=True,
-            temperature=1,
             num_return_sequences=self.num_generations,
-            pad_token_id=pad_token_id,
+            temperature=1.0,
+            eos_token_id=model.config.eos_token_id,
+            pad_token_id=model.config.pad_token_id,
         )
         self.beta = args.beta
         self.epsilon = args.epsilon
-        # model.warnings_issued["estimate_tokens"] = True
         self._metrics = defaultdict(list)
+        data_collator = None
+
         super().__init__(
             model=model,
             args=args,
             data_collator=data_collator,
             train_dataset=train_dataset,
             eval_dataset=eval_dataset,
-            # processing_class=processing_class, # TODO
             callbacks=callbacks,
             optimizers=optimizers,
         )
@@ -493,13 +319,8 @@ class Qwen2VLGRPOTrainer(Trainer):
     ):
         if return_outputs:
             raise ValueError("The GRPOTrainer does not support returning outputs")
-        # device = self.accelerator.place
         device = inputs['pixel_values'].place
-        # prompts = [x["prompt"] for x in inputs]
-        # prompts_text = [
-        #     maybe_apply_chat_template(example, self.processing_class)["prompt"]
-        #     for example in inputs
-        # ]
+
         # images = []
         # for x in inputs:
         #     if "image" in x:
@@ -516,29 +337,27 @@ class Qwen2VLGRPOTrainer(Trainer):
         #             new_w = int(w * (28 / h))
         #         img = img.resize((new_w, new_h), PIL.Image.Resampling.LANCZOS)
         #     images.append(img)
-        # prompt_inputs = self.processing_class(
-        #     text=prompts_text,
-        #     images=images,
-        #     return_tensors="pt",
-        #     padding=True,
-        #     padding_side="left",
-        #     add_special_tokens=False,
-        # )
-        # prompt_inputs = super()._prepare_inputs(prompt_inputs)
+
         prompt_ids, prompt_mask = (
             inputs["input_ids"],
             inputs["attention_mask"],
         )
-
         # repeat
         return_seq_length = self.generation_config.num_return_sequences
-        # inputs["pixel_values"] = inputs["pixel_values"].unsqueeze(0)
+
+        # TODO
+        _, pixel_seq_len,pixel_dim = inputs["pixel_values"].shape
+        inputs["pixel_values"] = inputs["pixel_values"].reshape([-1,pixel_dim])
+
+        _, _,g2 = inputs["image_grid_thw"].shape
+        inputs["image_grid_thw"] = inputs["image_grid_thw"].reshape([-1,g2])
+
         inputs["pixel_values"] = paddle.repeat_interleave(inputs["pixel_values"],repeats=return_seq_length,axis=0)
         inputs["image_grid_thw"] = paddle.repeat_interleave(inputs["image_grid_thw"],repeats=return_seq_length,axis=0)
         if self.max_prompt_length is not None:
             prompt_ids = prompt_ids[:, -self.max_prompt_length :]
             prompt_mask = prompt_mask[:, -self.max_prompt_length :]
-        
+
         if paddle.distributed.is_initialized():
             with paddle.no_grad():
                 completion_ids = unwrap_model(model).generate(**inputs,generation_config=self.generation_config)[0]
@@ -552,16 +371,12 @@ class Qwen2VLGRPOTrainer(Trainer):
         is_eos = completion_ids == self.processing_class.eos_token_id
         eos_idx = paddle.full(shape=(is_eos.shape[0],), fill_value=is_eos.shape[1], dtype="int64")
 
-        # debug
         # logger.info(completion_ids)
         # if paddle.distributed.is_initialized() and paddle.distributed.get_rank()==0:
         #     import pdb;pdb.set_trace()
         # paddle.distributed.barrier()
-        try:
-            eos_idx[is_eos.astype("bool").any(axis=1)] = is_eos.astype(dtype="int64").argmax(axis=1)[is_eos.astype("bool").any(axis=1)]
-        except:
-            # logger.info(f"{paddle.distributed.get_rank()},{is_eos}")
-            pass
+        
+        eos_idx[is_eos.astype("bool").any(axis=1)] = is_eos.astype(dtype="int64").argmax(axis=1)[is_eos.astype("bool").any(axis=1)]
 
         sequence_indices = paddle.arange(end=is_eos.shape[1]).expand(
             shape=[is_eos.shape[0], -1]
@@ -572,7 +387,6 @@ class Qwen2VLGRPOTrainer(Trainer):
         attention_mask = paddle.concat(x=[prompt_mask, completion_mask], axis=1)
         pixel_values = inputs["pixel_values"]
         image_grid_thw = inputs["image_grid_thw"]
-
         prompt_completion_ids = paddle.concat([paddle.repeat_interleave(prompt_ids,repeats=self.num_generations,axis=0),completion_ids],axis=1)
         per_token_logps = self._get_per_token_logps(
             model, prompt_completion_ids, attention_mask, pixel_values, image_grid_thw
@@ -617,7 +431,7 @@ class Qwen2VLGRPOTrainer(Trainer):
             zip(self.reward_funcs, self.reward_processing_classes)
         ):
             prompts = self.processing_class.batch_decode(prompt_ids,skip_special_tokens=True)
-            solution = [ ast.literal_eval(p.split('assistant')[-1].strip()) for p in prompts]
+            solution = [ast.literal_eval(self.processing_class.batch_decode(inputs['labels'])[0])]
              # self.processing_class.batch_decode(prompt_ids,skip_special_tokens=True)
             if isinstance(reward_func, paddlenlp.transformers.PretrainedModel):
                 if is_conversational(inputs[0]):
@@ -678,15 +492,7 @@ class Qwen2VLGRPOTrainer(Trainer):
             (per_token_loss * completion_mask.astype('float32')).sum(axis=1) / completion_mask.sum(axis=1).astype('float32')
         ).mean()
 
-        global_completion_length_list = []
-        if paddle.distributed.is_initialized():
-            global_completion_length_list = []
-            paddle.distributed.all_gather(
-                global_completion_length_list,completion_mask.sum(axis=1)
-            )
-        else:
-            global_completion_length_list = completion_mask.sum(axis=1)
-
+        global_completion_length_list = all_gather(completion_mask.sum(axis=1))
         completion_length = (
             paddle.to_tensor(global_completion_length_list)
             .astype(dtype="float32")
@@ -695,13 +501,7 @@ class Qwen2VLGRPOTrainer(Trainer):
         )
         self._metrics["completion_length"].append(completion_length)
 
-        if paddle.distributed.is_initialized():
-            global_rewards_per_func_list = []
-            paddle.distributed.all_gather(
-                global_rewards_per_func_list,rewards_per_func
-            )
-        else:
-            global_rewards_per_func_list = rewards_per_func
+        global_rewards_per_func_list = all_gather(rewards_per_func)
         reward_per_func  = (
             paddle.to_tensor(global_rewards_per_func_list)
             .astype(dtype="float32")
@@ -716,27 +516,12 @@ class Qwen2VLGRPOTrainer(Trainer):
                 reward_per_func[i].mean().item()
             )
 
-        # log
-        if paddle.distributed.is_initialized():
-            global_reward = []
-            paddle.distributed.all_gather(
-                global_reward,rewards
-            )
-        else:
-            global_reward = rewards
-
+        global_reward = all_gather(rewards)
         self._metrics["reward"].append(
            paddle.to_tensor(global_reward).mean().item()
         )
 
-        # log
-        if paddle.distributed.is_initialized():
-            global_reward_std = []
-            paddle.distributed.all_gather(
-                global_reward_std,std_grouped_rewards
-            )
-        else:
-            global_reward_std = std_grouped_rewards
+        global_reward_std = all_gather(std_grouped_rewards)
         self._metrics["reward_std"].append(
            paddle.to_tensor(global_reward_std).mean().item()
         )
@@ -744,29 +529,14 @@ class Qwen2VLGRPOTrainer(Trainer):
             (per_token_kl * completion_mask.astype("float32")).sum(axis=1) / completion_mask.astype("float32").sum(axis=1)
         ).mean()
 
-        # log
-        if paddle.distributed.is_initialized():
-            global_kl = []
-            paddle.distributed.all_gather(
-                global_kl,mean_kl
-            )
-        else:
-            global_kl = mean_kl
-
+        global_kl = all_gather(mean_kl)
         self._metrics["kl"].append(
             paddle.to_tensor(global_kl).mean().item()
         )
         is_clipped = (per_token_loss1 < per_token_loss2).astype(dtype="float32")
         clip_ratio = (is_clipped * completion_mask.astype("float32")).sum() / completion_mask.astype("float32").sum()
         
-        # log
-        if paddle.distributed.is_initialized():
-            global_clip_ratio = []
-            paddle.distributed.all_gather(
-                global_clip_ratio,clip_ratio
-            )
-        else:
-            global_clip_ratio = clip_ratio
+        global_clip_ratio = all_gather(clip_ratio)
         self._metrics["clip_ratio"].append(
             paddle.to_tensor(global_clip_ratio).mean().item()
         )
@@ -775,9 +545,6 @@ class Qwen2VLGRPOTrainer(Trainer):
     def log(self, logs: dict[str, float], start_time: Optional[float] = None,**kwargs) -> None:
         metrics = {key: (sum(val) / len(val)) for key, val in self._metrics.items()}
         logs = {**logs, **metrics}
-        # if version.parse(transformers.__version__) >= version.parse("4.47.0.dev0"):
-        #     super().log(logs, start_time)
-        # else:
         super().log(logs)
         self._metrics.clear()
 

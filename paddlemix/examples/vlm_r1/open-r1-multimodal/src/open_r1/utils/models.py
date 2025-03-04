@@ -1,11 +1,32 @@
 from typing import Optional
 import copy
 import logging
+import os
+
+from paddlenlp.utils.import_utils import import_module
+
+from .constant import SUPPORTED_MODELS,MODEL_MAPPING
+
+def is_supported_model(model_name):
+    if model_name in SUPPORTED_MODELS.keys():
+        return True
+    else:
+        return False
+
+def get_model(model_name,model_path:str = None,**kwargs):
+    if is_supported_model(model_name):
+        model_module = import_module(f"paddlemix.models.{MODEL_MAPPING[model_name]}")
+    else:
+        raise ValueError(
+            f"The input model {model_id} is currently not avaible, please try {SUPPORTED_MODELS.keys()}"
+        )
+    if model_path is None:
+        model_path = SUPPORTED_MODELS[model_name]
+    return model_module.from_pretrained(model_path,**kwargs)
 
 def freeze_params(module):
     for param in module.parameters():
         param.stop_gradient = not False
-
 
 def create_reference_model(
     model, num_shared_layers: Optional[int] = None, pattern: Optional[str] = None
@@ -71,4 +92,4 @@ def create_reference_model(
     # if pattern is not None and len(unshared_param_list) == 0:
     #     logging.warning("Pattern passed or found, but no layers matched in the model. Check for a typo.")
 
-    return ref_model.eval()
+    # return ref_model.eval()

@@ -21,9 +21,9 @@ from paddlenlp.trainer.argparser import PdArgumentParser,DataClassType,DataClass
 # training
 from paddlemix.models.qwen2_5_vl.supervised import _encode_supervised_example
 from paddlemix.models.qwen2_5_vl import MIXQwen2_5_Tokenizer
-from paddlemix.processors.qwen2_5_vl_processing import Qwen2_5_VLImageProcessor, Qwen2_5_VLProcessor
+from paddlemix.processors.qwen2_5_vl_processing import Qwen2_5_VLImageProcessor, Qwen2_5_VLProcessor,process_vision_info
 from paddlemix.models.qwen2_5_vl.template import TEMPLATES
-
+from paddlemix.models.qwen2_5_vl.mm_plugin import Qwen2_5_vlPlugin
 
 class TrlParser(PdArgumentParser):
     """
@@ -97,14 +97,6 @@ class TrlParser(PdArgumentParser):
     def parse_args_and_config(
         self, args: Optional[Iterable[str]] = None, return_remaining_strings: bool = False
     ) -> tuple[DataClass, ...]:
-        """
-        Parse command-line args and config file into instances of the specified dataclass types.
-
-        This method wraps [`transformers.HfArgumentParser.parse_args_into_dataclasses`] and also parses the config file
-        specified with the `--config` flag. The config file (in YAML format) provides argument values that replace the
-        default values in the dataclasses. Command line arguments can override values set by the config file. The
-        method also sets any environment variables specified in the `env` field of the config file.
-        """
         args = list(args) if args is not None else sys.argv[1:]
         if "--config" in args:
             # Get the config file path from
@@ -160,57 +152,6 @@ print(__file__)
 sys.path.append('paddlemix/examples/vlm_r1/open-r1-multimodal/src')
 from open_r1.trainer import GRPOConfig, Qwen2VLGRPOTrainer
 
-# from paddlemix.models.qwen2_5_vl.modeling_qwen2_5_vl import apply_rotary_pos_emb_flashatt
-# TrlParser get_peft_config
-
-# def custom_forward(
-#     self,
-#     hidden_states: paddle.Tensor,
-#     cu_seqlens: paddle.Tensor,
-#     rotary_pos_emb: Optional[paddle.Tensor] = None,
-#     position_embeddings: Optional[Tuple[paddle.Tensor, paddle.Tensor]] = None,
-# ) -> paddle.Tensor:
-#     seq_length = tuple(hidden_states.shape)[0]
-#     q, k, v = (
-#         self.qkv(hidden_states)
-#         .reshape([seq_length, 3, self.num_heads, -1])
-#         .transpose(perm=[1, 0, 2, 3])
-#         .unbind(axis=0)
-#     )
-#     if position_embeddings is None:
-#         logger.warning_once(
-#             "The attention layers in this model are transitioning from computing the RoPE embeddings internally through `rotary_pos_emb` (2D tensor of RoPE theta values), to using externally computed `position_embeddings` (Tuple of tensors, containing cos and sin). In v4.54 `rotary_pos_emb` will be removed and `position_embeddings` will be mandatory."
-#         )
-#         emb = paddle.concat(x=(rotary_pos_emb, rotary_pos_emb), axis=-1)
-#         cos = emb.cos().astype(dtype="float32")
-#         sin = emb.sin().astype(dtype="float32")
-#     else:
-#         cos, sin = position_embeddings
-#         cos = cos.astype("float32")
-#         sin = sin.astype("float32")
-#     (
-#         q,
-#         k,
-#     ) = apply_rotary_pos_emb_flashatt(
-#         q.unsqueeze(axis=0), k.unsqueeze(axis=0), cos, sin
-#     )
-#     q = q.squeeze(axis=0)
-#     k = k.squeeze(axis=0)
-#     max_seqlen = (cu_seqlens[1:] - cu_seqlens[:-1]).max().item()
-#     attn_output = (
-#         transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.flash_attn_varlen_func(
-#             q, k, v, cu_seqlens, cu_seqlens, max_seqlen, max_seqlen
-#         ).reshape(seq_length, -1)
-#     )
-#     attn_output = self.proj(attn_output)
-#     return attn_output
-
-
-# (
-#     transformers.models.qwen2_5_vl.modeling_qwen2_5_vl.Qwen2_5_VLVisionFlashAttention2.forward
-# ) = custom_forward
-
-
 @dataclass
 class GRPOScriptArguments(ScriptArguments):
     """
@@ -246,6 +187,7 @@ class LazySupervisedDataset(paddle.io.Dataset):
         data_path: str,
         script_args: GRPOScriptArguments,
         training_args: GRPOConfig,
+        model_args,
         tokenizer,processor,template
     ):
         super(LazySupervisedDataset, self).__init__()
@@ -255,6 +197,9 @@ class LazySupervisedDataset(paddle.io.Dataset):
         self.processor = processor
         self.template = template
         self.max_seq_length = training_args.max_prompt_length
+        self.training_args = training_args
+        self.model_args = model_args
+        self.script_args = script_args
         self.max_image_size = 512 # TODO
         if data_path.endswith(".yaml"):
             with open(data_path, "r") as file:
@@ -301,31 +246,11 @@ class LazySupervisedDataset(paddle.io.Dataset):
     def __len__(self):
         return len(self.list_data_dict)
 
-    def _preprocess_image(self, image):
+    def _preprocess_image(self, image,image_max_pixels,image_min_pixels):
         r"""
         Pre-processes a single image.
         """
-        image_resolution = self.max_image_size
-        if max(image.width, image.height) > image_resolution:
-            resize_factor = image_resolution / max(image.width, image.height)
-            width, height = int(image.width * resize_factor), int(image.height * resize_factor)
-            image = image.resize((width, height), resample=Image.NEAREST)
-
-        if image.mode != "RGB":
-            image = image.convert("RGB")
-
-        if min(image.width, image.height) < 28:
-            width, height = max(image.width, 28), max(image.height, 28)
-            image = image.resize((width, height), resample=Image.NEAREST)
-
-        if image.width / image.height > 200:
-            width, height = image.height * 180, image.height
-            image = image.resize((width, height), resample=Image.NEAREST)
-
-        if image.height / image.width > 200:
-            width, height = image.width, image.width * 180
-            image = image.resize((width, height), resample=Image.NEAREST)
-
+        image = Qwen2_5_vlPlugin._preprocess_image(image,image_max_pixels=image_max_pixels,image_min_pixels=image_min_pixels)
         return image
 
     def get_image_path(self, image_path):
@@ -337,40 +262,35 @@ class LazySupervisedDataset(paddle.io.Dataset):
 
     def multi_modal_get_item(self, data_item):
         # Build transformation function
-        transform = self.get_transform()
-        
-        # Ensure the first conversation contains an image placeholder
-        if "<image>" not in data_item["messages"][0]["content"]:
-            data_item["messages"][0]["content"] = "<image>\n" + data_item["messages"][0]["content"]
-
-        # Merge the image path
-        # image_path = self.get_image_path(data_item["image_path"][0])  # TODO: now only single image
-
+        # transform = self.get_transform()
         messages = data_item["messages"]
 
-        input_ids, labels = _encode_supervised_example(
-            messages=messages,
-            system="",
-            tools="",
-            images=[data_item['image']],
-            videos=[],
-            template=self.template,
-            tokenizer=self.tokenizer,
-            processor=self.processor,
-            cutoff_len=self.max_seq_length,
-            train_on_prompt=False,
-            mask_history=False,
+        text = self.processor.tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
         )
-        attention_mask = [1] * len(input_ids)
+        image_inputs, video_inputs = process_vision_info(messages)
+        inputs = self.processor(
+            text=text,
+            images=image_inputs,
+            videos=video_inputs,
+            padding=True,
+            return_tensors="pd",
+        )
+        label_ids = self.processor.tokenizer(
+            text=str(data_item['label']),
+            padding=True,
+            padding_side="left",
+            return_tensors="pd",
+        )
+        # unwrap 
+        inputs['input_ids'] = inputs['input_ids'][0]
+        inputs['attention_mask'] = inputs['attention_mask'][0]
 
         # Create the final return dictionary
         ret = dict(
-            input_ids=input_ids,
-            labels=labels,
-            attention_mask=attention_mask,
-            images=[data_item['image']],
+            **inputs,
+            labels=label_ids['input_ids'][0],
         )
-
         return ret
 
     def pure_text_get_item(self, data_item):
@@ -413,17 +333,19 @@ class LazySupervisedDataset(paddle.io.Dataset):
 
         QUESTION_TEMPLATE = "{Question} First output the thinking process in <think> </think> tags and then output the final answer in <answer> </answer> tags. Output the final answer in JSON format."
 
-        def make_conversation_image(example):
+        def make_conversation_image(example,image):
             return {
                 "messages": [
-                    {
-                        "role": "user",
-                        "content": QUESTION_TEMPLATE.format(Question=example["problem"])
-                    },
-                    {
-                        "role": "assistant",
-                        "content": str(example['solution'])
-                    }
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image", "image": image},
+                        {
+                            "type": "text",
+                            "text": QUESTION_TEMPLATE.format(Question=example['problem']),
+                        },
+                    ],
+                }
                 ]
             }
 
@@ -438,19 +360,22 @@ class LazySupervisedDataset(paddle.io.Dataset):
                 new_index = random.randint(0, len(self.list_data_dict) - 1)
                 example = self.list_data_dict[new_index]
                 image_path = os.path.join(image_root, example["image"])
-            image = self._preprocess_image(Image.open(image_path).convert("RGB"))
+            image = self._preprocess_image(Image.open(image_path).convert("RGB"),
+                        image_max_pixels=self.script_args.max_pixels,
+                        image_min_pixels=self.script_args.min_pixels,
+                    )
         else:
             image = None
-        
         data_item =  {
             "image": image,
             "image_path": example['image'],
-            # "problem": example["problem"],
-            # "label": example["solution"],
-            "messages": make_conversation_image(example)["messages"]
-            if "image" in example
-            else make_conversation(example)["prompt"],
+            "label": example["solution"],
+            "messages": make_conversation_image(example,image)["messages"]
+            # if "image" in example # TODO bug
+            # else make_conversation(example)["prompt"],
         }
+
+        
         return self.multi_modal_get_item(data_item)
         #     try:
         #         data_item = self.raw_data[i]
@@ -484,6 +409,49 @@ class LazySupervisedDataset(paddle.io.Dataset):
 
 
 def iou_reward(completions, solution, **kwargs):
+    def iou(box1, box2):
+        inter_x1 = max(box1[0], box2[0])
+        inter_y1 = max(box1[1], box2[1])
+        inter_x2 = min(box1[2]-1, box2[2]-1)
+        inter_y2 = min(box1[3]-1, box2[3]-1)
+        if inter_x1 < inter_x2 and inter_y1 < inter_y2:
+            inter = (inter_x2-inter_x1+1)*(inter_y2-inter_y1+1)
+        else:
+            inter = 0
+        union = (box1[2]-box1[0])*(box1[3]-box1[1]) + (box2[2]-box2[0])*(box2[3]-box2[1]) - inter
+        return float(inter)/union
+    contents = [completion[0]["content"] for completion in completions]
+    rewards = []
+    current_time = datetime.now().strftime("%d-%H-%M-%S-%f")
+    answer_tag_pattern = r'<answer>(.*?)</answer>'
+    # bbox_pattern = r'\[(\s*-?\d*\.?\d+\s*),\s*(\s*-?\d*\.?\d+\s*),\s*(\s*-?\d*\.?\d+\s*),\s*(\s*-?\d*\.?\d+\s*)\]'
+    bbox_pattern = r'\[(\d+),\s*(\d+),\s*(\d+),\s*(\d+)]'
+    for content, sol in zip(contents, solution):
+        reward = 0.0
+        # Try symbolic verification first
+        try:
+            content_answer_match = re.search(answer_tag_pattern, content, re.DOTALL)
+            if content_answer_match:
+                content_answer = content_answer_match.group(1).strip()
+                bbox_match = re.search(bbox_pattern, content_answer)
+                if bbox_match:
+                    bbox = [int(bbox_match.group(1)), int(bbox_match.group(2)), int(bbox_match.group(3)), int(bbox_match.group(4))]
+                    if iou(bbox, sol) > 0.5:
+                        reward = 1.0
+        except Exception:
+            pass  # Continue to next verification method if this fails
+                
+        rewards.append(reward)
+        if os.getenv("DEBUG_MODE") == "true":
+            log_path = os.getenv("LOG_PATH")
+            # local_rank = int(os.getenv("LOCAL_RANK", 0))
+            with open(log_path, "a", encoding='utf-8') as f:
+                f.write(f"------------- {current_time} Accuracy reward: {reward} -------------\n")
+                f.write(f"Content: {content}\n")
+                f.write(f"Solution: {sol}\n")
+    return rewards
+
+def float_iou_reward(completions, solution, **kwargs):
     def iou(box1, box2):
         inter_x1 = max(box1[0], box2[0])
         inter_y1 = max(box1[1], box2[1])
@@ -536,18 +504,13 @@ def iou_reward(completions, solution, **kwargs):
                 f.write(f"Solution: {sol}\n")
     return rewards
 
-
-# def format_reward(completions, **kwargs):
-#     """Reward function that checks if the completion has a specific format."""
-#     pattern = "<think>.*?</think>\\s*<answer>.*?</answer>"
-#     completion_contents = [completion[0]["content"] for completion in completions]
-#     matches = [re.fullmatch(pattern, content, re.DOTALL) for content in completion_contents]
-#     import pdb;pdb.set_trace()
-#     return [(1.0 if match else 0.0) for match in matches]
 def format_reward(completions, **kwargs):
     """Reward function that checks if the completion has a specific format."""
-    pattern = r"\s*<think>.*?</think>\s*<answer>.*?</answer>"
+    # pattern = r"<think>.*?</think>\s*<answer>.*?</answer>"
+    pattern = r"<think>.*?</think>\s*<answer>.*?\{.*\[\d+,\s*\d+,\s*\d+,\s*\d+\].*\}.*?</answer>"
+
     rewards = []
+    # kwargs['prompts']
     for completion in completions:
         reward = 0
         completion_contents = completion[0]["content"]
@@ -578,7 +541,7 @@ def main(script_args, training_args, model_args):
     image_processor = Qwen2_5_VLImageProcessor()
     tokenizer = MIXQwen2_5_Tokenizer.from_pretrained(model_path, padding_side="left")
     processor = Qwen2_5_VLProcessor(image_processor, tokenizer)
-    dataset = LazySupervisedDataset(script_args.dataset_name, script_args,training_args,tokenizer,processor,template=TEMPLATES['qwen2_5_vl'])
+    dataset = LazySupervisedDataset(script_args.dataset_name, script_args,training_args,model_args,tokenizer,processor,template=TEMPLATES['qwen2_5_vl'])
 
     trainer_cls = Qwen2VLGRPOTrainer
     trainer = trainer_cls(
