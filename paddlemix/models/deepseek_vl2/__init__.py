@@ -14,3 +14,8 @@
 
 from .configuration_deepseek import DeepseekVLV2Config
 from .modeling_deepseek_vl_v2 import DeepseekVLV2ForCausalLM
+
+__all__ = [
+    "DeepseekVLV2Config",
+    "DeepseekVLV2ForCausalLM",
+]

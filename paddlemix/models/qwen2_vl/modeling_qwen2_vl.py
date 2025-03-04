@@ -26,6 +26,7 @@ from functools import partial
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
+from paddle.distributed.fleet.utils import recompute
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
 from paddlenlp.transformers.model_outputs import BaseModelOutputWithPast, ModelOutput
 from paddlenlp.transformers.model_utils import PretrainedModel
@@ -1179,13 +1180,8 @@ class Qwen2VLDecoderLayer(nn.Layer):
 class Qwen2VLPreTrainedModel(PretrainedModel):
     config_class = Qwen2VLConfig
     base_model_prefix = "model"
-    supports_gradient_checkpointing = True
     _no_split_modules = ["Qwen2VLDecoderLayer", "Qwen2VLVisionBlock"]
     _skip_keys_device_placement = "past_key_values"
-    _supports_flash_attn_2 = True
-    _supports_sdpa = True
-    _supports_cache_class = True
-    _supports_static_cache = True
 
     def _init_weights(self, layer):
         std = 0.2
@@ -1220,6 +1216,7 @@ class Qwen2VisionTransformerPretrainedModel(Qwen2VLPreTrainedModel):
 
         self.blocks = nn.LayerList([Qwen2VLVisionBlock(config) for _ in range(config.depth)])
         self.merger = PatchMerger(dim=config.hidden_size, context_dim=config.embed_dim)
+        self.enable_recompute = False
 
     def get_dtype(self) -> paddle.dtype:
         return self.blocks[0].mlp.fc2.weight.dtype
@@ -1257,6 +1254,29 @@ class Qwen2VisionTransformerPretrainedModel(Qwen2VLPreTrainedModel):
         rotary_pos_emb = rotary_pos_emb_full[pos_ids].flatten(start_axis=1)
         return rotary_pos_emb
 
+    @paddle.jit.not_to_static
+    def recompute_training_full(
+        self,
+        layer_module: nn.Layer,
+        hidden_states: paddle.Tensor,
+        cu_seqlens_now: paddle.Tensor,
+        rotary_pos_emb: paddle.Tensor,
+    ):
+        def create_custom_forward(module):
+            def custom_forward(*inputs):
+                return module(*inputs)
+
+            return custom_forward
+
+        hidden_states = recompute(
+            create_custom_forward(layer_module),
+            hidden_states,
+            cu_seqlens_now,
+            rotary_pos_emb,
+            # use_reentrant=self.config.recompute_use_reentrant,
+        )
+        return hidden_states
+
     def forward(self, hidden_states: paddle.Tensor, grid_thw: paddle.Tensor) -> paddle.Tensor:
 
         hidden_states = self.patch_embed(hidden_states)
@@ -1268,7 +1288,12 @@ class Qwen2VisionTransformerPretrainedModel(Qwen2VLPreTrainedModel):
         cu_seqlens = F.pad(cu_seqlens, (1, 0), value=0)
 
         for idx, blk in enumerate(self.blocks):
-            hidden_states = blk(hidden_states, cu_seqlens=cu_seqlens, rotary_pos_emb=rotary_pos_emb)
+            if self.enable_recompute and self.training:
+                hidden_states = self.recompute_training_full(
+                    blk, hidden_states, cu_seqlens, rotary_pos_emb
+                )
+            else:
+                hidden_states = blk(hidden_states, cu_seqlens=cu_seqlens, rotary_pos_emb=rotary_pos_emb)
 
         return self.merger(hidden_states)
 
@@ -1299,7 +1324,7 @@ class Qwen2VLModel(Qwen2VLPreTrainedModel):
         )
         self.norm = Qwen2RMSNorm(config, config.hidden_size, eps=config.rms_norm_eps)
 
-        self.gradient_checkpointing = False
+        self.enamble_recompute = False
 
     def get_input_embeddings(self):
         return self.embed_tokens
@@ -1334,6 +1359,37 @@ class Qwen2VLModel(Qwen2VLPreTrainedModel):
         # Convert bool attention_mask to float attention mask, which will be added to attention_scores later
         expanded_attn_mask = paddle.where(expanded_attn_mask, 0.0, paddle.finfo(dtype).min).astype(dtype)
         return expanded_attn_mask
+
+    @paddle.jit.not_to_static
+    def recompute_training_full(
+        self,
+        layer_module: nn.Layer,
+        hidden_states: paddle.Tensor,
+        attention_mask: paddle.Tensor,
+        position_ids: Optional[paddle.Tensor],
+        past_key_value: paddle.Tensor,
+        output_attentions: bool,
+        use_cache: bool,
+        cache_position: Optional[paddle.Tensor] = None,
+    ):
+        def create_custom_forward(module):
+            def custom_forward(*inputs):
+                return module(*inputs)
+
+            return custom_forward
+
+        hidden_states = recompute(
+            create_custom_forward(layer_module),
+            hidden_states,
+            attention_mask,
+            position_ids,
+            past_key_value,
+            output_attentions,
+            use_cache,
+            cache_position,
+            use_reentrant=self.config.recompute_use_reentrant,
+        )
+        return hidden_states
 
     def forward(
         self,
@@ -1414,15 +1470,27 @@ class Qwen2VLModel(Qwen2VLPreTrainedModel):
 
             past_key_value = past_key_values[idx] if past_key_values is not None else None
 
-            layer_outputs = decoder_layer(
-                hidden_states,
-                attention_mask=causal_mask,
-                position_ids=position_ids,
-                past_key_value=past_key_value,
-                output_attentions=output_attentions,  # False
-                use_cache=use_cache,  # True
-                cache_position=cache_position,
-            )
+            if self.enamble_recompute and self.training:
+                layer_outputs = self.recompute_training_full(
+                    decoder_layer,
+                    hidden_states,
+                    causal_mask,
+                    position_ids,
+                    past_key_value,
+                    output_attentions,
+                    use_cache,
+                    cache_position,
+                )
+            else:
+                layer_outputs = decoder_layer(
+                    hidden_states,
+                    attention_mask=causal_mask,
+                    position_ids=position_ids,
+                    past_key_value=past_key_value,
+                    output_attentions=output_attentions,  # False
+                    use_cache=use_cache,  # True
+                    cache_position=cache_position,
+                )
 
             # NOTE: clear outdate cache after it has been used for memory saving
             past_key_value = past_key_values[idx] = None
