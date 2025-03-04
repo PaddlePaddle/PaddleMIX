@@ -28,7 +28,11 @@ import paddle
 import paddle.distributed.fleet.meta_parallel as mpu
 import paddle.nn as nn
 import paddle.nn.functional as F
+from paddle import Tensor
+from paddle.distributed import fleet
+from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
 from paddle.distributed.fleet.utils import recompute
+from paddlenlp.transformers import linear_utils
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
 from paddlenlp.transformers.linear_utils import Linear
 from paddlenlp.transformers.model_outputs import BaseModelOutputWithPast, ModelOutput
@@ -1312,9 +1316,7 @@ class Qwen2VisionTransformerPretrainedModel(Qwen2VLPreTrainedModel):
 
         for idx, blk in enumerate(self.blocks):
             if self.enable_recompute and self.training:
-                hidden_states = self.recompute_training_full(
-                    blk, hidden_states, cu_seqlens, rotary_pos_emb
-                )
+                hidden_states = self.recompute_training_full(blk, hidden_states, cu_seqlens, rotary_pos_emb)
             else:
                 hidden_states = blk(hidden_states, cu_seqlens=cu_seqlens, rotary_pos_emb=rotary_pos_emb)
 
@@ -1968,8 +1970,8 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
             input_ids, attention_mask, inputs_embeds, labels = input_ids
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states  # fmt:skip
-        # Note：始终为True
-        return_dict = True  # return_dict if return_dict is not None else self.config.use_return_dict
+        # Note：动转静时不能True
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         if inputs_embeds is None:
             inputs_embeds = self.model.embed_tokens(input_ids)
@@ -2058,7 +2060,8 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
             # output = (logits,) + outputs[1:]
             # Note: (changwenbin) fix "can only concatenate tuple (not "list") to tuple".
             output = (logits,) + tuple(outputs[1:])
-            return (loss,) + output if loss is not None else output
+            # return (loss,) + output if loss is not None else output
+            return loss if loss is not None else output  # d2s only support return loss
             # return logits + 28 layers k and v
 
         return Qwen2VLCausalLMOutputWithPast(
