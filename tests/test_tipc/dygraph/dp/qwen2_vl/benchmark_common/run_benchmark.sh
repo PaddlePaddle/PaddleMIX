@@ -27,7 +27,7 @@ function _set_params(){
     skip_steps=2                  # (必选)解析日志，跳过模型前几个性能不稳定的step
     keyword="ips:"                 # (必选)解析日志，筛选出性能数据所在行的关键字
     convergence_key="loss:"        # (可选)解析日志，筛选出收敛数据所在行的关键字 如：convergence_key="loss:"
-    max_epochs=${6:-"1"}                 # （可选）需保证模型执行时间在5分钟内，需要修改代码提前中断的直接提PR 合入套件  或是max_epoch
+    max_epochs=${6:-"2"}                 # （可选）需保证模型执行时间在5分钟内，需要修改代码提前中断的直接提PR 合入套件  或是max_epoch
     num_workers=${7:-"8"}                # (可选)
     is_large_model=False           # (可选)普通模型默认为False，如果添加大模型且只取一条ips设置为True
 
@@ -105,7 +105,7 @@ function _train(){
     train_cmd="../paddlemix/examples/qwen2_vl/qwen2vl_finetune.py \
             --do_train \
             ${use_model_args} \
-            --meta_path ../paddlemix/examples/qwen2_vl/configs/benchmark_chartqa.json \
+            --meta_path ../paddlemix/examples/qwen2_vl/configs/benchmark_chartqa_500.json \
             ${use_output_args} \
             --logging_steps=1 \
             --num_train_epochs=${max_epochs} \
