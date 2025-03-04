@@ -3,7 +3,7 @@ export WANDB_DISABLED="true"
 export CUDA_VISIBLE_DEVICES=1
 export LOG_PATH="./debug_v2.txt"
 RUN_NAME="Qwen2.5-VL-3B-GRPO-REC"
-IMAGE_ROOT="/root/paddlejob/workspace/env_run/liaojincheng/backup/dataset/coco"
+IMAGE_ROOT="coco"
 
 python -m paddle.distributed.launch \
     --nnodes=1 \
