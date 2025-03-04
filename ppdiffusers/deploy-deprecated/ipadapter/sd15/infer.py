@@ -96,8 +96,8 @@ def parse_arguments():
         ],
         help="The parse_prompt_type can be one of [raw, lpw]. ",
     )
-    parser.add_argument("--use_fp16", type=strtobool, default=True, help="Wheter to use FP16 mode")
-    parser.add_argument("--use_bf16", type=strtobool, default=False, help="Wheter to use BF16 mode")
+    parser.add_argument("--use_fp16", type=strtobool, default=True, help="Whether to use FP16 mode")
+    parser.add_argument("--use_bf16", type=strtobool, default=False, help="Whether to use BF16 mode")
     parser.add_argument("--device_id", type=int, default=0, help="The selected gpu id. -1 means use cpu")
     parser.add_argument(
         "--scheduler",

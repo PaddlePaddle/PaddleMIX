@@ -80,7 +80,7 @@ def parse_arguments():
         ],
         help="The task can be one of [text2img, all]. ",
     )
-    parser.add_argument("--use_fp16", type=strtobool, default=True, help="Wheter to use FP16 mode")
+    parser.add_argument("--use_fp16", type=strtobool, default=True, help="Whether to use FP16 mode")
     parser.add_argument("--device_id", type=int, default=0, help="The selected gpu id. -1 means use cpu")
     parser.add_argument(
         "--scheduler",

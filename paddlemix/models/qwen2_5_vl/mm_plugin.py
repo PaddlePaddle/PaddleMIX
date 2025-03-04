@@ -61,15 +61,21 @@ class BasePlugin:
         if len(videos) != 0 and self.video_token is None:
             raise ValueError("This model does not support video input.")
 
-    def _preprocess_image(self, image: "ImageObject", **kwargs) -> "ImageObject":
+    def _preprocess_image(
+        self, image: "ImageObject", image_max_pixels: int, image_min_pixels: int, **kwargs
+    ) -> "ImageObject":
         r"""
         Pre-processes a single image.
         """
-        image_resolution: int = kwargs.get("image_resolution")  # 512
-        if max(image.width, image.height) > image_resolution:
-            resize_factor = image_resolution / max(image.width, image.height)
+        if (image.width * image.height) > image_max_pixels:
+            resize_factor = math.sqrt(image_max_pixels / (image.width * image.height))
             width, height = int(image.width * resize_factor), int(image.height * resize_factor)
-            image = image.resize((width, height), resample=Image.NEAREST)
+            image = image.resize((width, height), resample=Image.Resampling.NEAREST)
+
+        if (image.width * image.height) < image_min_pixels:
+            resize_factor = math.sqrt(image_min_pixels / (image.width * image.height))
+            width, height = int(image.width * resize_factor), int(image.height * resize_factor)
+            image = image.resize((width, height), resample=Image.Resampling.NEAREST)
 
         if image.mode != "RGB":
             image = image.convert("RGB")
@@ -154,15 +160,17 @@ class BasePlugin:
         if len(images) != 0:
             images = self._regularize_images(
                 images,
-                image_resolution=getattr(processor, "image_resolution", 768),
+                image_max_pixels=getattr(processor, "image_max_pixels", 768 * 768),
+                image_min_pixels=getattr(processor, "image_min_pixels", 32 * 32),
             )
             input_dict["images"] = images
 
         if len(videos) != 0:
             videos = self._regularize_videos(
                 videos,
-                image_resolution=getattr(processor, "video_resolution", 256),
-                video_fps=getattr(processor, "video_fps", 1.0),
+                image_max_pixels=getattr(processor, "video_max_pixels", 256 * 256),
+                image_min_pixels=getattr(processor, "video_min_pixels", 16 * 16),
+                video_fps=getattr(processor, "video_fps", 2.0),
                 video_maxlen=getattr(processor, "video_maxlen", 128),
             )
             input_dict["videos"] = videos
