@@ -40,10 +40,10 @@
 
 **🎉 2025.01.20 喜迎外部开发者在星河(AIStudio)社区开发的[创作教程页面](paddlemix_applications.md)更新**
 * 涵盖圣诞主题贺卡生成🎄、人物生成👤等多种应用，期待您的体验！此外，还有AI鉴宝🔍、图生音乐🎶等有趣的应用等待您来探索～
-* 🙏 衷心感谢各位开发者基于套件的精彩创作！🚀 诚挚邀请您也来分享您的创意 - 欢迎将教程发布到公开网页或[飞桨AI Studio](https://aistudio.baidu.com/aistudio/community/multimodal?from=singlemessage)社区 
+* 🙏 衷心感谢各位开发者基于套件的精彩创作！🚀 诚挚邀请您也来分享您的创意 - 欢迎将教程发布到公开网页或[飞桨AI Studio](https://aistudio.baidu.com/aistudio/community/multimodal?from=singlemessage)社区
 
 
-**🎉 2025.01.08 发布自研[PP-VCtrl](./ppdiffusers/examples/ppvctrl/README_CN.md)视频生成控制模型** 
+**🎉 2025.01.08 发布自研[PP-VCtrl](./ppdiffusers/examples/ppvctrl/README_CN.md)视频生成控制模型**
 * PP-VCtrl 是一个通用的视频生成控制模型，可广泛应用于人物动画、场景转换、视频编辑等视频生成场景。
 
 
@@ -202,12 +202,12 @@ python setup.py install
 
 **多模态大模型入门教程**
 - [零基础入门深度学习](https://www.paddlepaddle.org.cn/tutorials/projectdetail/5604804)
-- [多模态前沿模型入门教程](./docs/tutorial/algorithm_turorial.md)
+- [多模态前沿模型入门教程](./docs/tutorial/algorithm_tutorial.md)
 
 
 **快速开始**
 - [图像摘要快速体验](./docs/quick_start/image_caption.ipynb)
-- [图像生成快速体验](./doc/quick_start/text_to_image.md) 
+- [图像生成快速体验](./docs/quick_start/quick_start_SD3.ipynb)
 - [PaddleMIX WebUI使用](./paddlemix/MULLM_WebUI/README.md)
 
 
@@ -282,8 +282,8 @@ python setup.py install
             <li><a href="paddlemix/examples/visualglm">VIsualGLM</a></li>
             <li><a href="paddlemix/examples/cogvlm">CogVLM && CogAgent</a></li>
             <li><a href="paddlemix/examples/internlm_xcomposer2">InternLM-XComposer2</a></li>
-            <li><a href="paddlemix/examples/deepseek_vl2">DeepSeek-VL2</a></li> 
-            <li><a href="paddlemix/examples/aria">Aria</a></li> 
+            <li><a href="paddlemix/examples/deepseek_vl2">DeepSeek-VL2</a></li>
+            <li><a href="paddlemix/examples/aria">Aria</a></li>
             <li><a href="paddlemix/examples/GOT_OCR_2_0">GOT_OCR 2.0</a></li>
             <li><a href="paddlemix/examples/ppdocbee">PP-DocBee</a></li>
         </ul>
@@ -363,7 +363,7 @@ python setup.py install
 
 ### 💎PP-DocBee文档理解特色模型
 
-PaddleMIX提出了PP-DocBee，基于多模态大模型实现端到端的文档图像理解。它可以高效地应用在各类场景的文档理解、文档问答等，尤其是对中文的文档类理解的场景，达到了同参数量级别模型的SOTA水平。
+PaddleMIX提出了[PP-DocBee](./paddlemix/examples/ppdocbee)，基于多模态大模型实现端到端的文档图像理解。它可以高效地应用在各类场景的文档理解、文档问答等，尤其是对中文的文档类理解的场景，达到了同参数量级别模型的SOTA水平。
 
 <p align="center">
   <img src="https://github.com/user-attachments/assets/cd2ef018-a657-4037-833e-e7d0c75e6280" align="middle" width = 100% />
@@ -372,7 +372,7 @@ PaddleMIX提出了PP-DocBee，基于多模态大模型实现端到端的文档�
 
 ### 💎PP-VCtrl视频生成控制模型
 
-PaddleMIX提出了PP-VCtrl，一个统一的可控视频生成模型，实现了对各类控制信号的灵活接入和精确控制。可以高效地应用在各类视频生成场景中，尤其是人物动画、场景转换、视频编辑等需要精确控制的任务。
+PaddleMIX提出了[PP-VCtrl](./ppdiffusers/examples/ppvctrl/README_CN.md)，一个统一的可控视频生成模型，实现了对各类控制信号的灵活接入和精确控制。可以高效地应用在各类视频生成场景中，尤其是人物动画、场景转换、视频编辑等需要精确控制的任务。
 
 <p align="center">
   <img src="https://github.com/user-attachments/assets/38c7c20c-7d72-4ad3-8bd7-237647d37ac3" align="middle" width = 100% />
