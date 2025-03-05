@@ -107,7 +107,7 @@ sh deploy/qwen2_5_vl/scripts/qwen2_5_vl.sh
 |  input_tokens_len  |  997 tokens    |
 |  output_tokens_len |  128 tokens    |
 
-|             model           | Paddle Inference wint8 | Paddle Inference|    PyTorch     | Paddle 动态图   |
-| --------------------------- | ---------------------  | --------------- | -------------- | -------------- |
-| Qwen/Qwen2.5-VL-3B-Instruct |          1.472 s       |     1.719 s     |      4.92 s    |    14.39 s     |
-| Qwen/Qwen2.5-VL-7B-Instruct |          1.340 s       |     1.724 s     |      3.89 s    |    11.09 s     |
+|             model           | Paddle Inference wint8 | Paddle Inference|    PyTorch     | 
+| --------------------------- | ---------------------  | --------------- | -------------- | 
+| Qwen/Qwen2.5-VL-3B-Instruct |          1.472 s       |     1.719 s     |      4.92 s    |   
+| Qwen/Qwen2.5-VL-7B-Instruct |          1.340 s       |     1.724 s     |      3.89 s    |  

@@ -363,7 +363,7 @@ python setup.py install
 
 ### 💎PP-DocBee文档理解特色模型
 
-PaddleMIX提出了PP-DocBee，基于多模态大模型实现端到端的文档图像理解。它可以高效地应用在各类场景的文档理解、文档问答等，尤其是对中文的文档类理解的场景，达到了同参数量级别模型的SOTA水平。
+PaddleMIX提出了[PP-DocBee](./paddlemix/examples/ppdocbee)，基于多模态大模型实现端到端的文档图像理解。它可以高效地应用在各类场景的文档理解、文档问答等，尤其是对中文的文档类理解的场景，达到了同参数量级别模型的SOTA水平。
 
 <p align="center">
   <img src="https://github.com/user-attachments/assets/cd2ef018-a657-4037-833e-e7d0c75e6280" align="middle" width = 100% />
@@ -372,7 +372,7 @@ PaddleMIX提出了PP-DocBee，基于多模态大模型实现端到端的文档�
 
 ### 💎PP-VCtrl视频生成控制模型
 
-PaddleMIX提出了PP-VCtrl，一个统一的可控视频生成模型，实现了对各类控制信号的灵活接入和精确控制。可以高效地应用在各类视频生成场景中，尤其是人物动画、场景转换、视频编辑等需要精确控制的任务。
+PaddleMIX提出了[PP-VCtrl](./ppdiffusers/examples/ppvctrl/README_CN.md)，一个统一的可控视频生成模型，实现了对各类控制信号的灵活接入和精确控制。可以高效地应用在各类视频生成场景中，尤其是人物动画、场景转换、视频编辑等需要精确控制的任务。
 
 <p align="center">
   <img src="https://github.com/user-attachments/assets/38c7c20c-7d72-4ad3-8bd7-237647d37ac3" align="middle" width = 100% />
