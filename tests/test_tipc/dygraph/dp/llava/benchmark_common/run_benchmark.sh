@@ -121,6 +121,8 @@ function _train(){
     export http_proxy=agent.baidu.com:8188
     export https_proxy=agent.baidu.com:8188
 
+    export FLAGS_prim_all=true;export FLAGS_prim_enable_dynamic=true;export FLAGS_use_cinn=true;export MIN_GRAPH_SIZE=0;export FLAGS_prim_forward_blacklist="pd_op.dropout"
+
     #训练阶段
     if [ ${train_stage} = "sft" ]; then
         train_cmd="../paddlemix/tools/supervised_finetune.py \

@@ -72,7 +72,11 @@ class LlavaLlamaForCausalLM(LlamaForCausalLM, LlavaMetaForCausalLM):
     def get_model(self):
         return self.llama
 
-    def forward(
+
+    def forward(self, input_ids, attention_mask, labels, images):
+        return self._forward(input_ids=input_ids, attention_mask=attention_mask, labels=labels, images=images)
+        
+    def _forward(
         self,
         input_ids: paddle.Tensor = None,
         attention_mask: Optional[paddle.Tensor] = None,
