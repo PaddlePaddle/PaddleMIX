@@ -21,7 +21,7 @@ from  ppdiffusers.transformers import CLIPTextModel, CLIPTokenizer, T5EncoderMod
 
 from ...image_processor import PipelineImageInput, VaeImageProcessor
 from ...loaders import FromSingleFileMixin, TextualInversionLoaderMixin # FluxLoraLoaderMixin
-from ...models.autoencoders import AutoencoderKL
+from ...models.autoencoder_kl import AutoencoderKL
 from ...models.transformer_flux import FluxTransformer2DModel
 from ...schedulers import FlowMatchEulerDiscreteScheduler
 from ...utils import (
@@ -30,7 +30,7 @@ from ...utils import (
     scale_lora_layers,
     unscale_lora_layers,
 )
-from ...utils.torch_utils import randn_tensor
+from ...utils.paddle_utils import randn_tensor
 from ..pipeline_utils import DiffusionPipeline
 from .pipeline_output import FluxPipelineOutput
 

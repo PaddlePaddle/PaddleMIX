@@ -21,8 +21,8 @@ from ppdiffusers.transformers import CLIPTextModel, CLIPTokenizer, T5EncoderMode
 
 from ...image_processor import PipelineImageInput, VaeImageProcessor
 from ...loaders import FromSingleFileMixin, TextualInversionLoaderMixin # FluxLoraLoaderMixin
-from ...models.autoencoders import AutoencoderKL
-from ...models.transformers import FluxTransformer2DModel
+from ...models.autoencoder_kl import AutoencoderKL
+from ...models.transformer_flux import FluxTransformer2DModel
 from ...schedulers import FlowMatchEulerDiscreteScheduler
 from ...utils import (
     logging,

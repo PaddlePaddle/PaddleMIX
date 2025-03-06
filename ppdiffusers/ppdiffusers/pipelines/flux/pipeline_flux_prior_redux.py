@@ -27,7 +27,7 @@ from ppdiffusers.transformers import ( # T5TokenizerFast
 )
 
 from ...image_processor import PipelineImageInput
-from ...loaders import FluxLoraLoaderMixin, TextualInversionLoaderMixin
+from ...loaders import  TextualInversionLoaderMixin # FluxLoraLoaderMixin
 from ...utils import (
     logging,
     replace_example_docstring,
