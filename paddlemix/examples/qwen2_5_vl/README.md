@@ -95,16 +95,19 @@ sh paddlemix/examples/qwen2_5_vl/shell/distributed_qwen2_5_vl_infer_72B.sh
 ```
 > ⚠️注意："mp_degree"需要根据显卡数量"gpus"进行调整，例如2卡推理，则设置为2。
 
-## 4 模型微调 (40G A卡 显存可运行3B模型)
+## 4 模型微调
 
 ### 4.1 小型示例数据集
 
-PaddleMIX团队整理了`chartqa`数据集作为小型的示例数据集，下载链接为：
+PaddleMIX团队整理了`chartqa`和`LaTeX_OCR`数据集作为小型的示例数据集，下载链接为：
 
 ```bash
 wget https://paddlenlp.bj.bcebos.com/models/community/paddlemix/benchmark/playground.tar # 1.0G
+wget https://paddlenlp.bj.bcebos.com/datasets/paddlemix/playground/LaTeX_OCR.tar # 1.7G
 ```
 playground/目录下包括了图片目录`data/chartqa/`和标注目录`opensource_json/`，详见`paddlemix/examples/qwen2_5_vl/configs/demo_chartqa_500.json`。
+LaTeX_OCR/目录下包括了图片目录和标注文件，详见`paddlemix/examples/qwen2_5_vl/configs/LaTeX_OCR.json`。
+训练时只需修改对应shell脚本中的`meta_path`参数即可。如`meta_path="paddlemix/examples/qwen2_5_vl/configs/demo_chartqa_500.json"`。
 
 
 ### 4.2 大型公开数据集
@@ -121,7 +124,11 @@ wget https://paddlenlp.bj.bcebos.com/datasets/paddlemix/playground/opensource_js
 
 ### 4.3 微调命令
 
-注意：此微调训练为语言模型微调，冻结视觉编码器而放开LLM训练，2B模型全量微调训练的显存大小约为30G，7B模型全量微调训练的显存大小约为75G。
+注意：
+1）此微调训练为语言模型微调，冻结视觉编码器而放开LLM训练。
+2）默认总bs=32，每卡bs=2，gradient_accumulation_steps=2，默认分布式训练配置为"paddle sharding stage2"策略，对应于“torch DeepSpeed ZeRO-2"策略。在LaTeX_OCR数据集训练下，2B模型微调训练的显存大小约为30G，7B模型全量微调训练的显存大小约为55G。***若训练数据集平均分辨率较大时，显存会进一步增加。***
+3）若默认训练配置下显存不足，可以调节训练shell脚本中的参数，如```PER_DEVICE_BATCH_SIZE=${PER_DEVICE_BATCH_SIZE:-1}```改小每卡bs为1，以及选择"paddle sharding stage3"策略```--sharding="stage3"```。
+
 
 ```bash
 # 3B (单张40G A卡 显存可运行3B模型)
@@ -146,4 +153,14 @@ sh paddlemix/examples/qwen2_5_vl/shell/baseline_7b_lora_bs32_1e8.sh
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 python paddlemix/examples/qwen2_5_vl/single_image_infer.py
+```
+
+## 参考文献
+```BibTeX
+@article{Qwen2.5-VL,
+  title={Qwen2.5-VL Technical Report},
+  author={Bai, Shuai and Chen, Keqin and Liu, Xuejing and Wang, Jialin and Ge, Wenbin and Song, Sibo and Dang, Kai and Wang, Peng and Wang, Shijie and Tang, Jun and Zhong, Humen and Zhu, Yuanzhi and Yang, Mingkun and Li, Zhaohai and Wan, Jianqiang and Wang, Pengfei and Ding, Wei and Fu, Zheren and Xu, Yiheng and Ye, Jiabo and Zhang, Xi and Xie, Tianbao and Cheng, Zesen and Zhang, Hang and Yang, Zhibo and Xu, Haiyang and Lin, Junyang},
+  journal={arXiv preprint arXiv:2502.13923},
+  year={2025}
+}
 ```
