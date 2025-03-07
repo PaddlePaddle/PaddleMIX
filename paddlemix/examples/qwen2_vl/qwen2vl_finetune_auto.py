@@ -36,7 +36,9 @@ from PIL import Image, ImageFile, PngImagePlugin, UnidentifiedImageError
 
 from paddlemix.datasets.internvl_dataset import ConcatDataset, WeightedConcatDataset
 from paddlemix.models.qwen2_vl import MIXQwen2Tokenizer
-from paddlemix.models.qwen2_vl.modeling_qwen2_vl import Qwen2VLForConditionalGeneration
+from paddlemix.models.qwen2_vl.modeling_qwen2_vl_network import (
+    Qwen2VLForConditionalGeneration,
+)
 from paddlemix.models.qwen2_vl.supervised import _encode_supervised_example
 from paddlemix.models.qwen2_vl.template import TEMPLATES
 from paddlemix.processors.qwen2_vl_processing import (
@@ -563,7 +565,7 @@ class ImageCollatorForSeq2Seq(DataCollatorForSeq2Seq):
         # use visual_model to embed pixel_values
         pixel_values = mm_inputs.get("pixel_values").cast(dtype=dtype)
         image_grid_thw = mm_inputs.get("image_grid_thw")
-        image_embeds = self.visual_model(pixel_values, grid_thw=image_grid_thw)
+        # image_embeds = self.visual_model(pixel_values, grid_thw=image_grid_thw)
         # call super class to process the rest of the features
         features = super().__call__(features, return_tensors=None)
         # print("after super().__call__, features: ")
@@ -571,8 +573,8 @@ class ImageCollatorForSeq2Seq(DataCollatorForSeq2Seq):
 
         # use embed_model to embed the input_ids and fill mm_inputs["pixel_values"] to inputs_embeds
         # print(f"in ImageCollatorForSeq2Seq image_embeds : {image_embeds}")
-        inputs_embeds = self.embed_model(features["input_ids"])
-        image_mask = features["input_ids"] == self.model_config.image_token_id
+        # inputs_embeds = self.embed_model(features["input_ids"])
+        # image_mask = features["input_ids"] == self.model_config.image_token_id
         # print("after embed_model, inputs_embeds and image_mask ")
         # print(inputs_embeds)
         # print(image_mask)
@@ -582,15 +584,15 @@ class ImageCollatorForSeq2Seq(DataCollatorForSeq2Seq):
         # ), f"may be image_embed {image_embed.shape} is not for input_ids {image_mask[idx].sum()}."
         # # print(inputs_embeds[idx][image_mask[idx]])
         # inputs_embeds[idx][image_mask[idx]] = image_embed
-        assert (
-            image_mask.sum() == image_embeds.shape[0]
-        ), f"may be image_embeds {image_embeds.shape} is not for input_ids which have {image_mask.sum()} image_token_id."
+        # assert (
+        #     image_mask.sum() == image_embeds.shape[0]
+        # ), f"may be image_embeds {image_embeds.shape} is not for input_ids which have {image_mask.sum()} image_token_id."
         # print(inputs_embeds[image_mask])
-        inputs_embeds[image_mask] = image_embeds
+        # inputs_embeds[image_mask] = image_embeds
 
         # because dtensor_from_local in shard_dataloader, the return of collator must be DenseTensor, not DistTensor
-        features["inputs_embeds"] = inputs_embeds._local_value()  # should calc grad
-        features["input_ids"] = features["input_ids"]._local_value()
+        # features["inputs_embeds"] = inputs_embeds._local_value()  # should calc grad
+        # features["input_ids"] = features["input_ids"]._local_value()
         # features["inputs_embeds"] = dist.reshard(inputs_embeds, inputs_embeds.process_mesh, inputs_embeds.placements)
 
         # if self.model is not None and hasattr(self.model, "get_rope_index"):  # for qwen2vl mrope
@@ -609,7 +611,8 @@ class ImageCollatorForSeq2Seq(DataCollatorForSeq2Seq):
             "input_ids": [
                 features["input_ids"],
                 features["attention_mask"],
-                features["inputs_embeds"],
+                pixel_values,
+                image_grid_thw,
                 features["labels"],
             ],
             "labels": features["labels"],
@@ -622,7 +625,10 @@ class FinetuneTrainer(AutoTrainer):
         # self.is_pretraining = True
 
     def _wrap_for_dist_loader(self, train_dataloader):
-        dist_loader = super()._wrap_for_dist_loader(train_dataloader)
+        # `dense_tensor_idx` is a 2D list indicates the index in `input_ids` return a dense_tensor from dataloader.
+        # e.g. with {"input_ids": [x, y, z], "labels":k }, dense_tensor_idx = [[2, 3]] means y/z return a dense_tensor, x retrun a dist_tensor.
+        dense_tensor_idx = [[2, 3]]
+        dist_loader = super()._wrap_for_dist_loader(train_dataloader, dense_tensor_idx)
         # The requirement for dynamic to static can only have 2 fields
         # dist_loader._input_keys = ["input_ids", "labels", "attention_mask", "inputs_embeds"]
         dist_loader._input_keys = ["input_ids", "labels"]
