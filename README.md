@@ -274,7 +274,7 @@ python setup.py install
             <li><a href="paddlemix/examples/llava_denseconnector">LLaVA-DenseConnector</a></li>
             <li><a href="paddlemix/examples/qwen_vl">Qwen-VL</a></li>
             <li><a href="paddlemix/examples/qwen2_vl">Qwen2-VL</a></li>
-            <li><a href="paddlemix/examples/qwen2.5_vl">Qwen2.5-VL</a></li>
+            <li><a href="paddlemix/examples/qwen2_5_vl">Qwen2.5-VL</a></li>
             <li><a href="paddlemix/examples/internvl2">InternVL2</a></li>
             <li><a href="paddlemix/examples/minimonkey">Mini-Monkey</a></li>
             <li><a href="paddlemix/examples/coca">CoCa</a></li>
