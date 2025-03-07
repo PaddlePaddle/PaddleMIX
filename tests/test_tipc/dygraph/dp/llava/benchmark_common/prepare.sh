@@ -34,7 +34,7 @@ pip install -r ../paddlemix/appflow/requirements.txt
 pip install -U ppdiffusers
 bash ../build_paddle_env.sh
 # python -m pip install https://paddle-wheel.bj.bcebos.com/develop/linux/linux-gpu-cuda11.8-cudnn8.6-mkl-gcc8.2-avx/paddlepaddle_gpu-0.0.0.post118-cp310-cp310-linux_x86_64.whl
-python -m pip install paddlenlp==3.0.0b2
+python -m pip install paddlenlp==3.0.0b3
 python -m pip install huggingface_hub==0.23.0
 python -m pip list
 cd -

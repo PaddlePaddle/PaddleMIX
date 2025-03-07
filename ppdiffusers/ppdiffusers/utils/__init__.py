@@ -150,6 +150,7 @@ from .paddle_utils import (
     rand_tensor,
     randint_tensor,
     randn_tensor,
+    dim2perm
 )
 from .peft_utils import (
     check_peft_version,

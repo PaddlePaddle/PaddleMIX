@@ -311,3 +311,8 @@ if is_paddle_available():
             res_hidden_states = fourier_filter(res_hidden_states, threshold=1, scale=freeu_kwargs["s2"])
 
         return hidden_states, res_hidden_states
+
+    def dim2perm(ndim, dim0, dim1):
+        perm = list(range(ndim))
+        perm[dim0], perm[dim1] = perm[dim1], perm[dim0]
+        return perm

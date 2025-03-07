@@ -121,3 +121,15 @@ class ApproximateGELU(nn.Layer):
     def forward(self, x: paddle.Tensor) -> paddle.Tensor:
         x = self.proj(x)
         return x * F.sigmoid(1.702 * x)
+
+class LinearActivation(paddle.nn.Layer):
+    def __init__(
+        self, dim_in: int, dim_out: int, bias: bool = True, activation: str = "silu"
+    ):
+        super().__init__()
+        self.proj = paddle.nn.Linear(in_features=dim_in, out_features=dim_out, bias_attr=bias)
+        self.activation = get_activation(activation)
+
+    def forward(self, hidden_states):
+        hidden_states = self.proj(hidden_states)
+        return self.activation(hidden_states)
