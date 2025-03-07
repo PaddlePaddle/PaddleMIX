@@ -25,15 +25,11 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import paddle
 import paddle.distributed as dist
-import paddle.distributed.fleet.meta_parallel as mpu
 import paddle.nn as nn
 import paddle.nn.functional as F
-from paddle import Tensor
-from paddle.distributed import fleet
 from paddle.distributed.auto_parallel.local_layer import LocalLayer
 from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
 from paddle.distributed.fleet.utils import recompute
-from paddlenlp.transformers import linear_utils
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
 from paddlenlp.transformers.linear_utils import Linear
 from paddlenlp.transformers.model_outputs import BaseModelOutputWithPast, ModelOutput
@@ -64,42 +60,12 @@ def get_triangle_upper_mask(x, mask=None):
         return mask
     # [bsz, n_head, q_len, kv_seq_len]
     shape = x.shape
-    #  [bsz, 1, q_len, kv_seq_len]
+    # [bsz, 1, q_len, kv_seq_len]
     shape[1] = 1
     mask = paddle.full(shape, paddle.finfo(x.dtype).min, dtype=x.dtype)
     mask = paddle.triu(mask, diagonal=1)
     mask.stop_gradient = True
     return mask
-
-
-def parallel_matmul(x: Tensor, y: Tensor, transpose_y=True, tensor_parallel_output=True):
-    is_fleet_init = True
-    tensor_parallel_degree = 1
-    try:
-        hcg = fleet.get_hybrid_communicate_group()
-        model_parallel_group = hcg.get_model_parallel_group()
-        tensor_parallel_degree = hcg.get_model_parallel_world_size()
-    except:
-        is_fleet_init = False
-
-    if paddle.in_dynamic_mode():
-        y_is_distributed = y.is_distributed
-    else:
-        y_is_distributed = tensor_parallel_degree > 1
-
-    if is_fleet_init and tensor_parallel_degree > 1 and y_is_distributed:
-
-        # if not running under distributed.launch, it will raise AttributeError: 'Fleet' object has no attribute '_hcg'
-        input_parallel = paddle.distributed.collective._c_identity(x, group=model_parallel_group)
-        logits = paddle.matmul(input_parallel, y, transpose_y=transpose_y)
-
-        if tensor_parallel_output:
-            return logits
-        return paddle.distributed.collective._c_concat(logits, group=model_parallel_group)
-
-    else:
-        logits = paddle.matmul(x, y, transpose_y=transpose_y)
-        return logits
 
 
 def _compute_default_rope_parameters(
@@ -693,36 +659,10 @@ class Qwen2MLP(nn.Layer):
         self.hidden_size = config.hidden_size
         self.intermediate_size = config.intermediate_size
         self.fuse_attention_ffn = config.fuse_attention_ffn
-        self.tensor_parallel_degree = config.tensor_parallel_degree
 
-        # else:
-        ColumnParallelLinear = linear_utils.ColumnParallelLinear
-        RowParallelLinear = linear_utils.RowParallelLinear
-
-        if config.tensor_parallel_degree > 1:
-
-            self.gate_proj = ColumnParallelLinear(
-                self.hidden_size,
-                self.intermediate_size,
-                gather_output=False,
-                has_bias=False,
-            )
-            self.up_proj = ColumnParallelLinear(
-                self.hidden_size,
-                self.intermediate_size,
-                gather_output=False,
-                has_bias=False,
-            )
-            self.down_proj = RowParallelLinear(
-                self.intermediate_size,
-                self.hidden_size,
-                input_is_parallel=True,
-                has_bias=False,
-            )
-        else:
-            self.gate_proj = Linear(self.hidden_size, self.intermediate_size, bias_attr=False)  # w1
-            self.up_proj = Linear(self.hidden_size, self.intermediate_size, bias_attr=False)  # w3
-            self.down_proj = Linear(self.intermediate_size, self.hidden_size, bias_attr=False)  # w2
+        self.gate_proj = Linear(self.hidden_size, self.intermediate_size, bias_attr=False)  # w1
+        self.up_proj = Linear(self.hidden_size, self.intermediate_size, bias_attr=False)  # w3
+        self.down_proj = Linear(self.intermediate_size, self.hidden_size, bias_attr=False)  # w2
 
         self.act_fn = ACT2FN[config.hidden_act]
         self.fuse_swiglu = False
@@ -779,30 +719,10 @@ class Qwen2VLAttention(nn.Layer):
         self.rope_scaling = config.rope_scaling
         # self.sequence_parallel = config.sequence_parallel
 
-        if config.tensor_parallel_degree > 1:
-            assert (
-                self.num_heads % config.tensor_parallel_degree == 0
-            ), f"num_heads: {self.num_heads}, tensor_parallel_degree: {config.tensor_parallel_degree}"
-            self.num_heads = self.num_heads // config.tensor_parallel_degree
-
-            assert (
-                self.num_key_value_heads % config.tensor_parallel_degree == 0
-            ), f"num_key_value_heads: {self.num_key_value_heads}, tensor_parallel_degree: {config.tensor_parallel_degree}"
-            self.num_key_value_heads = self.num_key_value_heads // config.tensor_parallel_degree
-
-        ColumnParallelLinear = linear_utils.ColumnParallelLinear
-        RowParallelLinear = linear_utils.RowParallelLinear
-
-        if config.tensor_parallel_degree > 1:
-            self.q_proj = ColumnParallelLinear(self.hidden_size, self.hidden_size, has_bias=True, gather_output=False)
-            self.k_proj = ColumnParallelLinear(self.hidden_size, self.config.num_key_value_heads * self.head_dim, has_bias=True, gather_output=False)  # fmt:skip
-            self.v_proj = ColumnParallelLinear(self.hidden_size, self.config.num_key_value_heads * self.head_dim, has_bias=True, gather_output=False)  # fmt:skip
-            self.o_proj = RowParallelLinear(self.hidden_size, self.hidden_size, has_bias=False, input_is_parallel=True)
-        else:
-            self.q_proj = Linear(self.hidden_size, self.hidden_size, bias_attr=True)
-            self.k_proj = Linear(self.hidden_size, self.config.num_key_value_heads * self.head_dim, bias_attr=True)
-            self.v_proj = Linear(self.hidden_size, self.config.num_key_value_heads * self.head_dim, bias_attr=True)
-            self.o_proj = Linear(self.hidden_size, self.hidden_size, bias_attr=False)
+        self.q_proj = Linear(self.hidden_size, self.hidden_size, bias_attr=True)
+        self.k_proj = Linear(self.hidden_size, self.config.num_key_value_heads * self.head_dim, bias_attr=True)
+        self.v_proj = Linear(self.hidden_size, self.config.num_key_value_heads * self.head_dim, bias_attr=True)
+        self.o_proj = Linear(self.hidden_size, self.hidden_size, bias_attr=False)
 
         self.rotary_emb = Qwen2VLRotaryEmbedding(
             self.head_dim,
@@ -1344,17 +1264,10 @@ class Qwen2VLModel(Qwen2VLPreTrainedModel):
         self.hidden_size = config.hidden_size
         # Recompute defaults to False and is controlled by Trainer
 
-        if config.tensor_parallel_degree > 1 and config.vocab_size % config.tensor_parallel_degree == 0:
-            self.embed_tokens = mpu.VocabParallelEmbedding(
-                self.vocab_size,
-                self.hidden_size,
-                weight_attr=paddle.ParamAttr(initializer=nn.initializer.XavierNormal()),
-            )
-        else:
-            self.embed_tokens = nn.Embedding(
-                self.vocab_size,
-                self.hidden_size,
-            )
+        self.embed_tokens = nn.Embedding(
+            self.vocab_size,
+            self.hidden_size,
+        )
 
         # self.embed_tokens = nn.Embedding(config.vocab_size, config.hidden_size, self.padding_idx)
         self.layers = nn.LayerList(
@@ -1565,10 +1478,8 @@ class Qwen2LMHead(nn.Layer):
     def __init__(self, config, embedding_weights=None, transpose_y=False):
         super(Qwen2LMHead, self).__init__()
         self.config = config
-        if config.tensor_parallel_degree > 1 and config.vocab_size % config.tensor_parallel_degree == 0:
-            vocab_size = config.vocab_size // config.tensor_parallel_degree
-        else:
-            vocab_size = config.vocab_size
+
+        vocab_size = config.vocab_size
 
         self.transpose_y = transpose_y
         if transpose_y:
@@ -1600,17 +1511,13 @@ class Qwen2LMHead(nn.Layer):
             # for tie_word_embeddings
             self.weight.split_axis = 0 if self.transpose_y else 1
 
-    def forward(self, hidden_states, tensor_parallel_output=None):
-        if tensor_parallel_output is None:
-            tensor_parallel_output = self.config.tensor_parallel_output
-
+    def forward(self, hidden_states):
         # 确保数据类型一致
         if self.weight.dtype != hidden_states.dtype:
             hidden_states = paddle.cast(hidden_states, self.weight.dtype)
 
-        logits = parallel_matmul(
-            hidden_states, self.weight, transpose_y=self.transpose_y, tensor_parallel_output=tensor_parallel_output
-        )
+        logits = paddle.matmul(hidden_states, self.weight, transpose_y=self.transpose_y)
+
         return logits
 
 
@@ -1996,10 +1903,7 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
 
         hidden_states = outputs[0]
 
-        tensor_parallel_output = self.config.tensor_parallel_output and self.config.tensor_parallel_degree > 1
-
-        logits = self.lm_head(hidden_states, tensor_parallel_output=tensor_parallel_output)
-
+        logits = self.lm_head(hidden_states)
         logits = paddle.cast(logits, "float32")
 
         loss = None
