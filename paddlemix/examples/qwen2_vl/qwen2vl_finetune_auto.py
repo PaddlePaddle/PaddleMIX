@@ -625,9 +625,9 @@ class FinetuneTrainer(AutoTrainer):
         # self.is_pretraining = True
 
     def _wrap_for_dist_loader(self, train_dataloader):
-        # `dense_tensor_idx` indicates the index in `input_ids` return a dense_tensor from dataloader.
-        # e.g. with input_ids = [x, y, z], dense_tensor_idx = [2, 3] means y/z return a dense_tensor, x retrun a dist_tensor.
-        dense_tensor_idx = [2, 3]
+        # `dense_tensor_idx` is a 2D list indicates the index in `input_ids` return a dense_tensor from dataloader.
+        # e.g. with {"input_ids": [x, y, z], "labels":k }, dense_tensor_idx = [[2, 3]] means y/z return a dense_tensor, x retrun a dist_tensor.
+        dense_tensor_idx = [[2, 3]]
         dist_loader = super()._wrap_for_dist_loader(train_dataloader, dense_tensor_idx)
         # The requirement for dynamic to static can only have 2 fields
         # dist_loader._input_keys = ["input_ids", "labels", "attention_mask", "inputs_embeds"]
