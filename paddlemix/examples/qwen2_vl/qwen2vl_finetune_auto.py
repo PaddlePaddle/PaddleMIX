@@ -36,7 +36,9 @@ from PIL import Image, ImageFile, PngImagePlugin, UnidentifiedImageError
 
 from paddlemix.datasets.internvl_dataset import ConcatDataset, WeightedConcatDataset
 from paddlemix.models.qwen2_vl import MIXQwen2Tokenizer
-from paddlemix.models.qwen2_vl.modeling_qwen2_vl import Qwen2VLForConditionalGeneration
+from paddlemix.models.qwen2_vl.modeling_qwen2_vl_network import (
+    Qwen2VLForConditionalGeneration,
+)
 from paddlemix.models.qwen2_vl.supervised import _encode_supervised_example
 from paddlemix.models.qwen2_vl.template import TEMPLATES
 from paddlemix.processors.qwen2_vl_processing import (
@@ -623,8 +625,10 @@ class FinetuneTrainer(AutoTrainer):
         # self.is_pretraining = True
 
     def _wrap_for_dist_loader(self, train_dataloader):
-        dtensor_idx = [2, 3]
-        dist_loader = super()._wrap_for_dist_loader(train_dataloader, dtensor_idx)
+        # `dense_tensor_idx` indicates the index in `input_ids` return a dense_tensor from dataloader.
+        # e.g. with input_ids = [x, y, z], dense_tensor_idx = [2, 3] means y/z return a dense_tensor, x retrun a dist_tensor.
+        dense_tensor_idx = [2, 3]
+        dist_loader = super()._wrap_for_dist_loader(train_dataloader, dense_tensor_idx)
         # The requirement for dynamic to static can only have 2 fields
         # dist_loader._input_keys = ["input_ids", "labels", "attention_mask", "inputs_embeds"]
         dist_loader._input_keys = ["input_ids", "labels"]
