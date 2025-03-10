@@ -1,3 +1,17 @@
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import paddle
 import paddle.nn.functional as F
 from paddlemix.models.gme_qwen2_vl.modeling_gme_qwen2_vl import GmeQwen2VL
@@ -18,8 +32,8 @@ if __name__ == "__main__":
         "The Tesla Cybertruck is a battery electric pickup truck built by Tesla, Inc. since 2023.",
     ]
     images = [
-        "paddlemix/demo_images/Tesla_window.jpg",
-        "paddlemix/demo_images/Tesla_Cybertruck.jpg",
+        'https://en.wikipedia.org/wiki/File:Tesla_Cybertruck_damaged_window.jpg',
+        'https://en.wikipedia.org/wiki/File:2024_Tesla_Cybertruck_Foundation_Series,_front_left_(Greenwich).jpg',
     ]
 
     # **3. Compute text embeddings**
