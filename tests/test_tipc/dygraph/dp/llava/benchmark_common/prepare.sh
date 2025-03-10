@@ -30,7 +30,7 @@ python -m pip install einops -i https://mirror.baidu.com/pypi/simple
 python -m pip install -r ../requirements.txt
 python -m pip install -e ../
 python -m pip install --upgrade paddlenlp pybind11 regex sentencepiece tqdm visualdl attrdict easydict pyyaml -i https://mirror.baidu.com/pypi/simple
-pip install -r ../paddlemix/appflow/requirements.txt
+# pip install -r ../paddlemix/appflow/requirements.txt
 pip install -U ppdiffusers
 # bash ../build_paddle_env.sh
 python -m pip install paddlenlp==3.0.0b3
