@@ -1,4 +1,0 @@
-datasets:
-    - json_path: data/refcoco_train_new.json
-    - json_path: data/refcocop_train_new.json
-    - json_path: data/refcocog_train_new.json

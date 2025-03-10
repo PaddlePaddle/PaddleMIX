@@ -1,25 +1,70 @@
 # VLM-R1 
 ## 简介
-自Deepseek-R1推出以来，许多研究工作都集中在对其的复现和改进上。如VLM-R1,R1-V。PaddleMIX团队决定启动复现R1在视觉语言大模型相关的研究工作，并在此基础上探索可能的优化与创新路径，推动视觉-语言大模型领域的进一步发展。
+自Deepseek-R1推出以来，许多研究工作都集中在对其的复现和改进上。如VLM-R1,R1-V。PaddleMIX团队决定启动复现R1在视觉语言大模型相关的研究工作，并在此基础上探索可能的优化与创新路径，推动视觉-语言大模型领域的进一步发展。本仓库基于Paddle实现了GRPO算法微调Qwen2.5-VL、Qwen2-VL视觉语言大模型，并支持指向性目标检测任务 (Referring Expression Comprehension)、计数问题 (Item Counting)、几何推理 (Geometry Reasoning)问题。
 
 
 本仓库支持的权重
 | Model                       |
 |-----------------------------|
-| Qwen/Qwen2.5-VL-3B-Instruct |
+| Qwen/Qwen2-VL-2B-Instruct |
+| Qwen/Qwen2-VL-7B-Instruct |
+| Qwen/Qwen2.5-VL-7B-Instruct |
+
+## 安装
+1）[安装 PaddleMIX 环境依赖包](https://github.com/PaddlePaddle/PaddleMIX/tree/develop?tab=readme-ov-file#%E5%AE%89%E8%A3%85)
+
+2）pip install math_verify
+
+注意：Python需要使用3.10及以上版本。
 
 
-## 效果展示
-## 性能指标
-| Model | refcoco|  refcoco+  | refcocog | RefGTA | 
-|------|--------|------------|-----------|--------|
-|  Qwen2.5-VL-3B-Instruct   |xx% |xx%     |  xx%  | xx% |
-|  R1-Qwen2.5-VL-3B-Instruct |xx |xx%      |  xx%  | xx% |
+## 数据准备
+### 指向性目标检测任务
+* 下载 [COCO Train2014 image](https://huggingface.co/datasets/omlab/VLM-R1/resolve/main/train2014.zip)  并且解压到指定路径PaddleMIX下的data/coco目录.
+
+* 下载 [RefGTA] (https://huggingface.co/datasets/omlab/VLM-R1/resolve/main/refgta.zip) 并解压到data/refgta目录。
+
+* 下载 [RefCOCO/+/g and RefGTA Annotation files](https://huggingface.co/datasets/omlab/VLM-R1/resolve/main/rec_jsons_processed.zip) 解压放置PaddleMIX/data/rec_jsons_processed目录下 (RefGTA 域外测试数据,用于泛化性测试).
+
+### 计数任务
+* 下载 [CLEVR-70K-Counting](https://huggingface.co/datasets/leonardPKU/clevr_cogen_a_train) 训练数据集，修改your_path为你的实际安装路径路径。例如data/clevr_cogen_a_train
+```bash
+huggingface-cli download --resume-download leonardPKU/clevr_cogen_a_train --local-dir data/clevr_cogen_a_train --repo-type="dataset"
+```
+
+* 下载测试集 [SuperCLEVR-200](https://huggingface.co/datasets/tobiaslee/Super_clevr200/resolve/main/subsplit.tgz) 并解压到data/superclevr_200目录。
+
+* 下载测试集标签 [superclevr_test200_counting_problems](https://github.com/Deep-Agent/R1-V/blob/main/src/eval/prompts/superclevr_test200_counting_problems.jsonl) 放置data目录下
+
+
+### 几何推理任务
+* 下载 [GEOQA-8k](https://huggingface.co/datasets/leonardPKU/GEOQA_R1V_Train_8K) 到data/GEOQA_R1V_Train_8K 目录。
+```bash
+huggingface-cli download --resume-download leonardPKU/GEOQA_R1V_Train_8K --local-dir data/GEOQA_R1V_Train_8K --repo-type="dataset"
+```
+* 下载 [GEO170K](https://huggingface.co/datasets/Luckyjhg/Geo170K) 测试集 到data/GEOQA_R1V_Train_8K目录
+```bash
+huggingface-cli download --resume-download Luckyjhg/Geo170K --local-dir data/Geo170K --repo-type="dataset"
+
+unzip data/Geo170K/images.zip -d data/Geo170K
+```
+ 并解压到data/GEOQA_R1V_Train_8K目录
+* 下载测试集标签 [geoqa_test_prompts](https://github.com/Deep-Agent/R1-V/blob/main/src/eval/prompts/geoqa_test_prompts.jsonl) 放置data目录下
+
+
+## 指向性目标检测效果展示
+### 性能指标
+固定随机种子，从验证集中抽取500条数据测试，结果如下：
+
+| Model | refcoco val|  refcoco+ val | refcocog val | RefGTA | 
+|-------|------------|---------------|--------------|--------|
+|  Qwen2.5-VL-3B-Instruct   |88.60% |79.60%     |  81.80%  | 71.80% |
+|  R1-Qwen2.5-VL-3B-Instruct(300steps) |89.60% |84.20%      |  85.00%  | 72.80% |
 
 ### 训练曲线
-![Image](https://github.com/user-attachments/assets/82e253e2-69aa-4538-ad37-37caa8450b0c)
-### 训练回答样例
+![Image](https://github.com/user-attachments/assets/9df169fb-7fda-4156-8d62-d8baedf0f5f3)
 
+### 训练回答样例
 ```
 ------------- Accuracy reward: 1.0 -------------
 <think>
@@ -41,61 +86,68 @@ The bounding box describes the large, white vehicle on the street. The vehicle i
 </answer>
 ```
 
-## 数据准备
-> 1. 下载 [COCO Train2014 image](https://huggingface.co/datasets/omlab/VLM-R1/resolve/main/train2014.zip)  并且解压到指定路径如data目录.
-
-> 2. 下载 [RefGTA] (https://huggingface.co/datasets/omlab/VLM-R1/resolve/main/refgta.zip) 并解压
-
-> 3. 下载 [RefCOCO/+/g and RefGTA Annotation files](https://huggingface.co/datasets/omlab/VLM-R1/resolve/main/rec_jsons_processed.zip) 解压放置PaddleMIX/data/目录下 (RefGTA 域外测试数据,用于泛化性测试).
-
-> 4. 预处理标签文件:
-```python
-# 处理refcoco
-python paddlemix/examples/vlm_r1/preprocess_refcoco.py \
-    --json_path data/refcoco_train.json \
-    --image_dir <your_image_root> \
-    --output_path data/refcoco_train_new.json
-
-# 处理refcoco+
-python paddlemix/examples/vlm_r1/preprocess_refcoco.py \
-    --json_path data/refcocop_train.json \
-    --image_dir <your_image_root> \
-    --output_path data/refcocop_train_new.json
-
-# 处理refcocog
-python paddlemix/examples/vlm_r1/preprocess_refcoco.py \
-    --json_path data/refcocog_train.json \
-    --image_dir <your_image_root> \
-    --output_path data/refcocog_train_new.json
-
-```
-
-> 5. 修改配置文件中训练数据的路径 `paddlemix/examples/vlm_r1/src/open-r1-multimodal/data_config/rec.yaml` file.
-```bash
-datasets:
-    - json_path: data/refcoco_train_new.json
-    - json_path: data/refcocop_train_new.json
-    - json_path: data/refcocog_train_new.json
-```
-
 ## 训练命令
-### GRPO
 
 ```bash
-# 八卡训练
-bash paddlemix/examples/vlm_r1/open-r1-multimodal/run_grpo_rec.sh
+# 八卡训练指向性目标检测 GRPO
+bash paddlemix/examples/vlm_r1/train/run_grpo_rec.sh
+
+# 八卡训练指向性目标检测 GRPO
+bash paddlemix/examples/vlm_r1/train/run_grpo_counting.sh
+
+# 八卡训练指向性目标检测 GRPO
+bash paddlemix/examples/vlm_r1/train/run_grpo_geometry.sh
 ```
 
 ## 测试命令
 ```bash
+# test refcoco
 python paddlemix/examples/vlm_r1/eval/test_rec.py \
-    --method "r1" \
-    --model_path "/path/to/model" \
-    --data_root "/path/to/data" \
-    --image_root "/path/to/coco" \
-    --refcoco_val refcocop_val refcocog_val \
+    --model_name "Qwen2.5-VL-3B-Instruct" \
+    --method "baseline" \
+    --model_path "Qwen/Qwen2.5-VL-3B-Instruct" \
+    --data_root "data/rec_jsons_processed" \
+    --image_root "data/coco" \
+    --test_datasets refcoco_val refcocop_val refcocog_val \
     --batch_size 32 \
     --sample_num 500 \
+    --steps 300 \
+    --seed 42
+
+# test refgta
+python paddlemix/examples/vlm_r1/eval/test_rec.py \
+    --model_name "Qwen2.5-VL-3B-Instruct" \
+    --method "r1" \
+    --model_path "Qwen/Qwen2.5-VL-3B-Instruct" \
+    --data_root "data/rec_jsons_processed" \
+    --image_root "data/refgta" \
+    --test_datasets refgta_subsample \
+    --batch_size 32 \
+    --sample_num 500 \
+    --steps 300 \
+    --seed 42
+
+# test counting
+python paddlemix/examples/vlm_r1/eval/test_r1-v.py \
+    --model_name "Qwen2.5-VL-3B-Instruct" \
+    --method "r1" \
+    --model_path "Qwen/Qwen2.5-VL-3B-Instruct" \
+    --data_root "data/" \
+    --image_root "data/superclevr_200/" \
+    --test_datasets superclevr_test200_counting_problems \
+    --batch_size 32 \
+    --steps 500 \
+    --seed 42
+
+# test geoqa
+python paddlemix/examples/vlm_r1/eval/test_r1-v.py \
+    --method "r1" \
+    --model_name "Qwen2.5-VL-3B-Instruct" \
+    --model_path "Qwen/Qwen2.5-VL-3B-Instruct" \
+    --data_root "data/" \
+    --image_root "data" \
+    --test_datasets geoqa_test_prompts \
+    --batch_size 32 \
     --steps 500 \
     --seed 42
 ```

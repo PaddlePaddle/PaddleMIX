@@ -27,6 +27,12 @@ def get_model(model_name,model_path:str = None,**kwargs):
 def freeze_params(module):
     for param in module.parameters():
         param.stop_gradient = not False
+    def fn(layer):
+        if hasattr(layer, "enable_recompute") and (
+            layer.enable_recompute is True or layer.enable_recompute == 1
+        ):
+            layer.enable_recompute = False
+    module.apply(fn)
 
 def create_reference_model(
     model, num_shared_layers: Optional[int] = None, pattern: Optional[str] = None

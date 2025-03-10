@@ -43,3 +43,12 @@ IMAGE_PROCESSOR_MAPPING = {
     "Qwen2.5-VL-7B-Instruct": "Qwen2_5_VLImageProcessor",
     "Qwen2.5-VL-72B-Instruct": "Qwen2_5_VLImageProcessor",
 }
+
+TEMPLATE_MAPPING = {
+    "PPDocBee-2B-1129": "qwen2_vl",
+    "Qwen2-VL-2B-Instruct": "qwen2_vl",
+    "Qwen2-VL-7B-Instruct": "qwen2_vl",
+    "Qwen2.5-VL-3B-Instruct": "qwen2_5_vl",
+    "Qwen2.5-VL-7B-Instruct": "qwen2_5_vl",
+    "Qwen2.5-VL-72B-Instruct": "qwen2_5_vl",
+}

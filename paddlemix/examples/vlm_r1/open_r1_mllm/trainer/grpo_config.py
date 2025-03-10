@@ -167,3 +167,7 @@ class GRPOConfig(TrainingArguments):
             "help": "Whether to log a sample of (prompt, completion) pairs every `logging_steps` steps. If `rich` is installed, it prints the sample. If `wandb` logging is enabled, it logs it to `wandb`."
         },
     )
+    
+    freeze_vision: bool = field(
+        default=False, metadata={"help": "Whether to freeze the vision model"}
+    )

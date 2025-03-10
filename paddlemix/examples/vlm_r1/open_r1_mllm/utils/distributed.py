@@ -4,7 +4,7 @@ def all_gather(item):
     if paddle.distributed.is_initialized():
         global_item = []
         paddle.distributed.all_gather(
-            global_item,std_grouped_rewards
+            global_item,item
         )
         return global_item
     else:
