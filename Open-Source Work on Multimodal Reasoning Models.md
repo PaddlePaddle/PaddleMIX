@@ -14,7 +14,7 @@
 
 ### 1.1 R1-V  
 - **开源地址**：[GitHub - Deep-Agent/R1-V](https://github.com/Deep-Agent/R1-V)  
-![Image](https://private-user-images.githubusercontent.com/14247682/410561124-e86a3ff2-a9c6-4548-8200-6c3c382d60e6.png?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NDE1ODE2MjAsIm5iZiI6MTc0MTU4MTMyMCwicGF0aCI6Ii8xNDI0NzY4Mi80MTA1NjExMjQtZTg2YTNmZjItYTljNi00NTQ4LTgyMDAtNmMzYzM4MmQ2MGU2LnBuZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNTAzMTAlMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjUwMzEwVDA0MzUyMFomWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPTliY2E3MzA4NThhYzc1NDJkYWI4ZTBiYzcyNWY1Zjc0ODE0NTk0YmM5MjdiOTAyMDFlOTNmOWJhZjUxOWJhNmImWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0In0.LdJL8ZoxSn-YlUSGP5Oke2Hu0zt5MQH2tZn9NVyWpY4)
+![lzj-1.png](https://s2.loli.net/2025/03/10/wK173DIuUA8yECs.png)
 
 #### ① 介绍  
 R1-V 是多模态推理模型的早期代表之一。  
@@ -41,50 +41,58 @@ R1-V 是多模态推理模型的早期代表之一。
   The assistant first thinks about the reasoning process in the mind and then provides the user with the answer.
   The reasoning process and answer are enclosed within <think> </think> and <answer> </answer> tags, respectively.
 
-### ③ 关键注意点  
+![lzj-2.png](https://s2.loli.net/2025/03/10/S9E6dA4PWiF2ams.png)
+
+#### ③ 关键注意点  
 
 - 训练时可使用 **7 颗 GPU 进行训练，1 颗 GPU 运行 VLLM 计算 KL 损失**。  
 - **GRPO 训练仅需普通 QA 对，不需要 `think` 过程**（如果有 `think` 数据，可先 SFT 再 GRPO）。  
 
 ---
 
-### ④ 主要问题  
+#### ④ 主要问题  
 
 - **奖励函数难以设置**（当前代码中使用的是最简单的实现方案）。  
 - **显存 OOM**：详见 [Issue #107](https://github.com/Deep-Agent/R1-V/issues/107)。  
 - **损失值经常为 0**：详见 [Huggingface Open-R1 Issue #239](https://github.com/huggingface/open-r1/issues/239)。  
 现在GRPO实现中策略都是单步更新，导致新旧策略是一样的，所以重要性采样系数是1，然后优势函数A是一个组当中每个reward的标准化，那么对优势函数A求期望自然也就是0了。所以GRPO的loss实际上就是新旧策略的KL散度项再乘一个系数beta，这也就是为什么训练过程中loss曲线和KL散度曲线分布如此相似，因为只差了一个系数beta。
-![Image](https://private-user-images.githubusercontent.com/14247682/410558819-f5191b1e-dde2-42b7-9ec9-10f7f6213c12.png?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NDE1ODE2MjAsIm5iZiI6MTc0MTU4MTMyMCwicGF0aCI6Ii8xNDI0NzY4Mi80MTA1NTg4MTktZjUxOTFiMWUtZGRlMi00MmI3LTllYzktMTBmN2Y2MjEzYzEyLnBuZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNTAzMTAlMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjUwMzEwVDA0MzUyMFomWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPWU2MWU2NWVhMTk0M2VkMzQ0Mjc3MjA4ZjkzYmE4MGRmYWRjZGVmMGZhZDNmMWY3NjlhMTVmOWQ0OTYxZjFmMTgmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0In0.Q-mdM0HXfX7s56tfib6SV5cKD5IxPe26B7BDgHocjeQ)
+
+![lzj-3.png](https://s2.loli.net/2025/03/10/nuzl4QhspJUAtK7.png)
+
 ---
 
-### ⑤ 是否可以去掉 KL 约束？  
-![Image](https://github.com/user-attachments/assets/657c7f8e-a2ef-4c84-a2de-c71a85c48589)
+#### ⑤ 是否可以去掉 KL 约束？  
+
+![lzj-4.png](https://s2.loli.net/2025/03/10/eYZmK1VJFNsPtfT.png)
 
 **去除 KL 约束的影响：**  
 - 不需要 `ref-model`，减少显存占用和前向计算成本。  
 - 可能减少训练不稳定性（类似于梯度裁剪）。  
 - 优化参数更加自由，可能探索到更佳的回答方案。  
 
+
 **参考链接**  
 - https://zhuanlan.zhihu.com/p/25067791857
 ---
 
-## 1.2 open-r1-multimodal  
+### 1.2 open-r1-multimodal  
 
 - **开源地址**：[GitHub - EvolvingLMMs-Lab/open-r1-multimodal](https://github.com/EvolvingLMMs-Lab/open-r1-multimodal)  
 
-### ① 介绍  
+#### ① 介绍  
 - **开源了第一批专注于数学推理的 8K 多模态 RL 训练示例**。  
 - **数据来源**：GPT-4o 生成（基于 Math360K 和 Geo170K），包含推理路径和可验证答案。  
 - **采用 GRPO 训练策略**，提升模型的数学推理能力。  
 
-### ② 代码改进  
+#### ② 代码改进  
 - **`format_reward` 正则匹配更加宽松**。  
 - **`reward_processing_class` 计算奖励**。  
 - **生成方式优化**：  
   - **R1-V**：批量生成多个 completions。  
   - **open-r1-multimodal**：逐个生成再拼接（更灵活，但成本更高）。  
-![Image](https://github.com/user-attachments/assets/4214897a-9baa-4b29-bf8d-db85c3584eea)
+
+![lzj-5.png](https://s2.loli.net/2025/03/10/cw9sLkbCo6fOhWM.png)
+
 ---
 
 ### 1.3 VisualThinker-R1-Zero  
@@ -92,8 +100,9 @@ R1-V 是多模态推理模型的早期代表之一。
 
 #### ① 研究意义  
 - **首个在非 SFT 2B 模型上成功实现“顿悟时刻”（emergence）并增强多模态推理能力的开源代码**。  
-- 通过强化学习（RL），模型在推理过程中出现了**自我反思能力**，类似于 DeepSeek-R1 论文中描述的现象。  
-![Image](https://camo.githubusercontent.com/cd33e6304a635c21c2fc43ebef0b3ff061796855077f0c0580aa171636b0b2c8/68747470733a2f2f6d756c74696d6f64616c2d72312e73332e75732d776573742d312e616d617a6f6e6177732e636f6d2f547261696e696e675f53746570732e706e67)
+- 通过强化学习（RL），模型在推理过程中出现了**自我反思能力**，类似于 DeepSeek-R1 论文中描述的现象。 
+
+![lzj-6.png](https://s2.loli.net/2025/03/10/31pTeosiCEjkX4n.png)
 
 #### ② 训练方法  
 - **基础模型**：Qwen2-VL  
@@ -111,8 +120,8 @@ R1-V 是多模态推理模型的早期代表之一。
   - **比 SFT 训练的模型高出约 2%**。  
   - **甚至超越了训练数据更多的指令微调模型**。  
 
-![Image](https://github.com/user-attachments/assets/5b213408-c514-4add-bf98-e5c188fa3abb)
-![Image](https://github.com/user-attachments/assets/550858c7-357b-4760-b2bd-1a4186fb2494)
+![lzj-7.png](https://s2.loli.net/2025/03/10/fz6tPKk9GCHoghL.png)
+![lzj-8.png](https://s2.loli.net/2025/03/10/ZXxnQmf8RbFsISP.png)
 
 #### ④ 代码改进  
 - **引入 `freeze_llm` 和 `freeze_vision`，控制训练过程中的参数更新**。  
@@ -120,7 +129,7 @@ R1-V 是多模态推理模型的早期代表之一。
 - **增加 `length_reward`**，鼓励生成更长的回答，提高推理深度。  
 - **兼容 `completions` 可能是字符串列表的情况，使代码更通用**。  
 
-![Image](https://github.com/user-attachments/assets/fefe9830-8764-4b50-9b3d-a6634665dcb5)
+![lzj-9.png](https://s2.loli.net/2025/03/10/QR6NgaJFGpu2SkV.png)
 
 #### ⑤ 其他发现  
 - **最大输入像素默认为 2,359,296**，是 R1-V 默认值的 **5.8 倍**。  
@@ -145,7 +154,7 @@ Vision-Language Input → DeepSeek2-VL MoE → GRPO Reward Optimization → Reas
 ### 1.5 VLM-R1  
 - **开源地址**：[GitHub - om-ai-lab/VLM-R1](https://github.com/om-ai-lab/VLM-R1)  
 
-![Image](https://github.com/om-ai-lab/VLM-R1/raw/main/assets/performance.png)
+![lzj-10.png](https://s2.loli.net/2025/03/10/1ivJylhu7IgrbP9.png)
 
 
 #### ① 介绍  
@@ -161,7 +170,7 @@ Vision-Language Input → DeepSeek2-VL MoE → GRPO Reward Optimization → Reas
     - **小于 0.5 的 IOU 计算为 0**（失败）。  
   - **作者建议可能使用“软奖励”更合适，但仍需实验验证**。  
 
-![Image](https://github.com/user-attachments/assets/7979f66c-8f59-4780-b47f-e8a816207c63)
+![lzj-11.png](https://s2.loli.net/2025/03/10/6dYBhaKcrx3z5jA.png)
 
 ---
 
@@ -169,18 +178,18 @@ Vision-Language Input → DeepSeek2-VL MoE → GRPO Reward Optimization → Reas
 - **开源地址**：[GitHub - Liuziyu77/Visual-RFT](https://github.com/Liuziyu77/Visual-RFT)  
 - **论文地址**：[arXiv - Visual-RFT](https://arxiv.org/html/2503.01785v1)  
 
-![Image](https://github.com/Liuziyu77/Visual-RFT/raw/main/assets/radar.png)
+![lzj-12.png](https://s2.loli.net/2025/03/10/ZEO1H2eMUCtwJio.png)
 
 #### ① 介绍  
 - **基于强化学习优化的视觉推理模型**，专注于提升多模态任务的推理能力。  
 - **采用类 R1-V 训练架构，acc奖励改为iou+cls奖励（对比VLM-R1为iou奖励）**。  
 
-![Image](https://github.com/Liuziyu77/Visual-RFT/raw/main/assets/framework.png)
+![lzj-13.png](https://s2.loli.net/2025/03/10/4b3zpPLsKYN6naE.png)
 
 #### ② 示例  
 - **论文提供了多个示例，展示模型在不同视觉任务中的推理表现**。  
 
-![Image](https://github.com/Liuziyu77/Visual-RFT/raw/main/assets/case_lisa.png)
+![lzj-14.png](https://s2.loli.net/2025/03/10/ney28rPEXjohAIf.png)
 
 
 
@@ -196,9 +205,14 @@ Vision-Language Input → DeepSeek2-VL MoE → GRPO Reward Optimization → Reas
   - **长 COT（Chain of Thought）视觉数据集**，结合 **LLaVA-OneVision** 高质量数据和特定领域数据（自然场景、数学、OCR、科学等）。  
   - **数据处理流程**：  
     - **数据清洗** → **图像标注** → **推理链生成** → **质量控制** → **规则强化学习**。  
-![Image](https://private-user-images.githubusercontent.com/154853005/415925788-8b0173e8-de06-4b39-b0ba-85f2f52f8c8e.png?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NDE1ODI4NjcsIm5iZiI6MTc0MTU4MjU2NywicGF0aCI6Ii8xNTQ4NTMwMDUvNDE1OTI1Nzg4LThiMDE3M2U4LWRlMDYtNGIzOS1iMGJhLTg1ZjJmNTJmOGM4ZS5wbmc_WC1BbXotQWxnb3JpdGhtPUFXUzQtSE1BQy1TSEEyNTYmWC1BbXotQ3JlZGVudGlhbD1BS0lBVkNPRFlMU0E1M1BRSzRaQSUyRjIwMjUwMzEwJTJGdXMtZWFzdC0xJTJGczMlMkZhd3M0X3JlcXVlc3QmWC1BbXotRGF0ZT0yMDI1MDMxMFQwNDU2MDdaJlgtQW16LUV4cGlyZXM9MzAwJlgtQW16LVNpZ25hdHVyZT1jODA1MGFjMTI2NTFmODdiYjYzZTZlNmY0MDkyNTk1N2U4NmNiYmM3NmU2NGFlMGFlYjE1ODY0YjUyOTkzYjQ1JlgtQW16LVNpZ25lZEhlYWRlcnM9aG9zdCJ9.atdyFnKG579-AZyLqNAv7H4om2_UjwxWEmlRzgi8bkM)
 
-#### ① 数据处理流程  
+![lzj-15.png](https://s2.loli.net/2025/03/10/npso8tPaYA4Q2VO.png)
+
+
+#### 数据处理流程  
+
+
+![lzj-16.png](https://s2.loli.net/2025/03/10/JBTZgIer5HXUw94.png)
 
 ##### 1. 数据准备与筛选  
 - **数据来源**：整合多个数据集，包括 **自然场景图像、OCR、图表、文本-图像对、数学、科学和逻辑推理数据**，部分来自 LLaVA-OneVision 数据集。  
@@ -258,6 +272,8 @@ Vision-Language Input → DeepSeek2-VL MoE → GRPO Reward Optimization → Reas
    <think> Step 2: Identify the key variables... </think>
    <answer> Final result: 42 </answer>
    - 使用 **正则表达式** 验证格式，并给予奖励或惩罚。  
+
+![lzj-17.png](https://s2.loli.net/2025/03/10/XYSVKqgMvezGrnC.png)
 
 ##### 6. 训练流程  
 1. **监督微调（SFT）**：基于 **R1-Onevision Dataset** 进行初步训练。  
@@ -323,28 +339,28 @@ Vision-Language Input → DeepSeek2-VL MoE → GRPO Reward Optimization → Reas
 - **开源地址**：[Huggingface - PKU-Alignment/Align-DS-V](https://huggingface.co/PKU-Alignment/Align-DS-V)  
 - **团队**：北京大学、香港科技大学  
 
-### ① 介绍  
+#### ① 介绍  
 Align-DS-V 基于自研全模态对齐框架 **Align-Anything**，将 DeepSeek-R1 系列模型拓展至多模态推理能力，推出多模态推理模型 **Align-DS-V**。  
 
-### ② 方法  
+#### ② 方法  
 - Align-DS-V 通过对 **视觉编码器** 进行优化，使其能够更好地理解和处理图文混合的信息。  
 - 借鉴 **LLaVA** 训练思路，将 **视觉信息投射到语言表示空间**，实现图像与文本的深度结合。  
 
-### ③ 性能  
+#### ③ 性能  
 - **多模态性能齐平 GPT-4o**，并且推理能力不降反增。  
 - 通过 Align-Anything 框架，提升多模态任务的理解和推理能力。 
 
-![Image](https://github.com/user-attachments/assets/545288d2-b072-47d7-bc26-c033bca40839)
+![lzj-18.png](https://s2.loli.net/2025/03/10/AiesSgIQDVWGnkJ.png)
 
-### ④ Align-Anything 框架架构  
+#### ④ Align-Anything 框架架构  
 Align-Anything 是一个通用的多模态对齐框架，可以用于优化不同模态（文本、图像、语音等）之间的融合能力。  
 
-![Image](https://github.com/user-attachments/assets/bd750848-2a17-4a71-a88e-65b55fa7beac)
+![lzj-19.png](https://s2.loli.net/2025/03/10/JGrS7RsMaWT9zCu.png)
 
-### ⑤ 意外发现  
+#### ⑤ 意外发现  
 - 将 **DeepSeek-R1-Distill-Llama-8B** 扩展到视觉模态后，Align-DS-R1 在原始文本模态推理能力上也取得了显著提高。  
 
-### ⑥ 开源贡献  
+#### ⑥ 开源贡献  
 - **开源了模型**：[`PKU-Alignment/Align-DS-V`](https://huggingface.co/PKU-Alignment/Align-DS-V)  
 - **开源了多个数据集**：  
   - [`PKU-Alignment/align-anything`](https://huggingface.co/datasets/PKU-Alignment/align-anything)  
