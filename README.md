@@ -30,9 +30,10 @@
 
 
 ## 📰新闻
-**🔥2025.03.03日DeepSeek多模态统一模型功能抢先体验实战营**
+**🔥2025.03.10日Qwen2-VL系列多模态理解大模型功能抢先体验实战营**
 
-- 🔥多模态大模型PaddleMIX产业实战精品课第一弹：《DeepSeek多模态统一模型功能抢先体验》。本期课程将带你在PaddleMIX框架中快速体验Janus系列模型的多模态理解与生成能力。深度解析模型实现细节与技术创新，带您实操多模态理解与生成任务处理。3月3日正式开营，名额有限，先到先得：https://www.wjx.top/vm/h700MEH.aspx?udsid=242785
+- 🔥🔥多模态大模型PaddleMIX产业实战精品课第二弹：《Qwen2-VL系列多模态理解大模型功能抢先体验》。本期课程将带你在PaddleMIX框架中快速体验Qwen2-VL系列模型的多模态理解能力。深度解析模型实现细节与技术创新，带您实操多模态理解任务处理。3月10日正式开营，名额有限，先到先得：https://www.wjx.top/vm/tUIxXxF.aspx?udsid=121597
+
 
 
 
@@ -273,7 +274,7 @@ python setup.py install
             <li><a href="paddlemix/examples/llava_denseconnector">LLaVA-DenseConnector</a></li>
             <li><a href="paddlemix/examples/qwen_vl">Qwen-VL</a></li>
             <li><a href="paddlemix/examples/qwen2_vl">Qwen2-VL</a></li>
-            <li><a href="paddlemix/examples/qwen2.5_vl">Qwen2.5-VL</a></li>
+            <li><a href="paddlemix/examples/qwen2_5_vl">Qwen2.5-VL</a></li>
             <li><a href="paddlemix/examples/internvl2">InternVL2</a></li>
             <li><a href="paddlemix/examples/minimonkey">Mini-Monkey</a></li>
             <li><a href="paddlemix/examples/coca">CoCa</a></li>
@@ -363,7 +364,7 @@ python setup.py install
 
 ### 💎PP-DocBee文档理解特色模型
 
-PaddleMIX提出了PP-DocBee，基于多模态大模型实现端到端的文档图像理解。它可以高效地应用在各类场景的文档理解、文档问答等，尤其是对中文的文档类理解的场景，达到了同参数量级别模型的SOTA水平。
+PaddleMIX提出了[PP-DocBee](./paddlemix/examples/ppdocbee)，基于多模态大模型实现端到端的文档图像理解。它可以高效地应用在各类场景的文档理解、文档问答等，尤其是对中文的文档类理解的场景，达到了同参数量级别模型的SOTA水平。
 
 <p align="center">
   <img src="https://github.com/user-attachments/assets/cd2ef018-a657-4037-833e-e7d0c75e6280" align="middle" width = 100% />
@@ -372,7 +373,7 @@ PaddleMIX提出了PP-DocBee，基于多模态大模型实现端到端的文档�
 
 ### 💎PP-VCtrl视频生成控制模型
 
-PaddleMIX提出了PP-VCtrl，一个统一的可控视频生成模型，实现了对各类控制信号的灵活接入和精确控制。可以高效地应用在各类视频生成场景中，尤其是人物动画、场景转换、视频编辑等需要精确控制的任务。
+PaddleMIX提出了[PP-VCtrl](./ppdiffusers/examples/ppvctrl/README_CN.md)，一个统一的可控视频生成模型，实现了对各类控制信号的灵活接入和精确控制。可以高效地应用在各类视频生成场景中，尤其是人物动画、场景转换、视频编辑等需要精确控制的任务。
 
 <p align="center">
   <img src="https://github.com/user-attachments/assets/38c7c20c-7d72-4ad3-8bd7-237647d37ac3" align="middle" width = 100% />

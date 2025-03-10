@@ -1105,9 +1105,10 @@ class DiffusionPipeline(ConfigMixin):
             if name in passed_class_obj:
                 # if the model is in a pipeline module, then we load it from the pipeline
                 # check that passed_class_obj has correct parent class
-                maybe_raise_or_warn(
-                    library_name, library, class_name, importable_classes, passed_class_obj, name, is_pipeline_module
-                )
+                if not os.environ.get("SKIP_PARENT_CLASS_CHECK", None):
+                    maybe_raise_or_warn(
+                        library_name, library, class_name, importable_classes, passed_class_obj, name, is_pipeline_module
+                    )
 
                 loaded_sub_model = passed_class_obj[name]
             else:
@@ -1157,6 +1158,7 @@ class DiffusionPipeline(ConfigMixin):
 
         # 8. (TODO, junnyu) make sure all modules are in eval mode and cast dtype
         for name, _module in init_kwargs.items():
+            paddle_dtype = _module.dtype if hasattr(_module, "dtype") else None 
             if isinstance(_module, nn.Layer):
                 _module.eval()
                 if paddle_dtype is not None:
