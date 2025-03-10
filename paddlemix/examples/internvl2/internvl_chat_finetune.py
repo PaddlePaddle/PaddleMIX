@@ -122,10 +122,6 @@ class ModelArguments:
         default=False,
         metadata={'help': 'Set to True to enable the use of a custom trainer.'},
     )
-    grad_checkpoint: Optional[bool] = field(
-        default=False,
-        metadata={'help': 'Set to True to use gradient checkpointing.'},
-    )
     drop_path_rate: float = field(
         default=0.0,
         metadata={'help': 'Set the drop path rate for the ViT model. Default is 0.'},
@@ -809,10 +805,6 @@ def main():
         model.language_model.config.vocab_size = len(tokenizer)
 
     model.language_model.config.use_cache = False
-    model.vision_model.gradient_checkpointing = True
-    model.vision_model.encoder.gradient_checkpointing = True
-    # if model_args.grad_checkpoint:
-    #     model.language_model._set_gradient_checkpointing()
 
     train_dataset = build_datasets(
         data_args, tokenizer, tcs_loader, model, group_by_length=training_args.group_by_length,
@@ -833,14 +825,6 @@ def main():
 
     if model_args.unfreeze_lm_head:
         model.language_model.lm_head.stop_gradient = not True
-
-    if model_args.use_backbone_lora:
-        model.wrap_backbone_lora(r=model_args.use_backbone_lora, lora_alpha=2 * model_args.use_backbone_lora)
-        model.config.use_backbone_lora = model_args.use_backbone_lora
-
-    if model_args.use_llm_lora:
-        model.wrap_llm_lora(r=model_args.use_llm_lora, lora_alpha=2 * model_args.use_llm_lora)
-        model.config.use_llm_lora = model_args.use_llm_lora
 
     if model_args.freeze_mlp:
         _freeze_params(model.mlp1)

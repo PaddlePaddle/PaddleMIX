@@ -695,7 +695,6 @@ class InternLM2DecoderLayer(nn.Layer):
 class InternLM2PretrainedModel(PretrainedModel):
     config_class = InternLM2Config
     base_model_prefix = "model"
-    supports_gradient_checkpointing = True
     _no_split_modules = ["InternLM2DecoderLayer"]
     _skip_keys_device_placement = "past_key_values"
     _supports_flash_attn_2 = True
@@ -738,7 +737,7 @@ class InternLM2Model(InternLM2PretrainedModel):
         self.layers = nn.LayerList([InternLM2DecoderLayer(config) for _ in range(config.num_hidden_layers)])
         self.norm = InternLM2RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
 
-        self.gradient_checkpointing = False
+        self.enable_recompute = False
         # Initialize weights and apply final processing
         # self.post_init()
 
@@ -829,7 +828,7 @@ class InternLM2Model(InternLM2PretrainedModel):
         # embed positions
         hidden_states = inputs_embeds
 
-        if self.gradient_checkpointing and self.training:
+        if self.enable_recompute and self.training:
             if use_cache:
                 logger.warning_once(
                     "`use_cache=True` is incompatible with gradient checkpointing. Setting `use_cache=False`..."
@@ -847,14 +846,8 @@ class InternLM2Model(InternLM2PretrainedModel):
 
             past_key_value = past_key_values[idx] if past_key_values is not None else None
 
-            if self.gradient_checkpointing and self.training:
-                # def create_custom_forward(module):
-                #     def custom_forward(*inputs):
-                #         # None for past_key_value
-                #         return module(*inputs, output_attentions, None)
-
-                #     return custom_forward
-
+            has_gradient = not hidden_states.stop_gradient
+            if self.enable_recompute and has_gradient and self.training:
                 layer_outputs = paddle.distributed.fleet.utils.recompute(
                     decoder_layer,
                     hidden_states,

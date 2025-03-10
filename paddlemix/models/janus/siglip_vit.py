@@ -601,7 +601,7 @@ class SigLIPVisionTransformer(paddle.nn.Layer):
         self.has_class_token = class_token
         self.no_embed_class = no_embed_class
         self.dynamic_img_size = dynamic_img_size
-        self.grad_checkpointing = False
+        self.enable_recompute = False
         self.ignore_head = ignore_head
         embed_args = {}
         if dynamic_img_size:
@@ -687,9 +687,6 @@ class SigLIPVisionTransformer(paddle.nn.Layer):
 
     def group_matcher(self, coarse: bool = False) -> Dict:
         return dict(stem="^cls_token|pos_embed|patch_embed", blocks=[("^blocks\\.(\\d+)", None), ("^norm", (99999,))])
-
-    def set_grad_checkpointing(self, enable: bool = True) -> None:
-        self.grad_checkpointing = enable
 
     def get_classifier(self) -> paddle.nn.Layer:
         return self.head
@@ -779,7 +776,8 @@ class SigLIPVisionTransformer(paddle.nn.Layer):
         x = self._pos_embed(x)
         x = self.patch_drop(x)
         x = self.norm_pre(x)
-        if self.grad_checkpointing:
+        has_gradient = not x.stop_gradient
+        if self.enable_recompute and has_gradient and self.training:
             x = paddle.distributed.fleet.utils.recompute(self.blocks, x)
         else:
             x = self.blocks(x)
