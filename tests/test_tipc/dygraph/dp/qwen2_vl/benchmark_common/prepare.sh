@@ -27,7 +27,7 @@ export https_proxy=agent.baidu.com:8188
 export PYTHONPATH=$(dirname "$PWD"):$PYTHONPATH
 python -m pip install -r ../requirements.txt
 python -m pip install -e ../
- python -m pip install paddlepaddle-gpu==3.0.0b2 #-i https://www.paddlepaddle.org.cn/packages/stable/cu123/
+#  python -m pip install paddlepaddle-gpu==3.0.0b2 #-i https://www.paddlepaddle.org.cn/packages/stable/cu123/
 python -m pip install paddlenlp==3.0.0b3
 python -m pip list
 cd -
