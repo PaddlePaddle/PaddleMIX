@@ -15,7 +15,7 @@ from paddlenlp.utils.import_utils import import_module
 
 sys.path.append('paddlemix/examples/vlm_r1')
 from open_r1_mllm.utils.tokenizer import get_processor
-from open_r1_mllm.utils.constant import TEMPLATE_MAPPING, MODEL_MAPPING
+from open_r1_mllm.utils.constant import TEMPLATE_MAPPING, MODEL_MAPPING, SUPPORTED_MODELS
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run R1-V evaluation.")
@@ -70,7 +70,7 @@ def main(args):
         dtype="bfloat16",
     )
 
-    processor, tokenizer = get_processor(args.model_name,MODEL_PATH)
+    processor, tokenizer = get_processor(args.model_name,SUPPORTED_MODELS[args.model_name])
     sample_num = args.sample_num
     for ds in TEST_DATASETS:
         print(f"Processing {ds}...")
