@@ -34,7 +34,7 @@ ${TRAINING_PYTHON} --log_dir ${OUTPUT_DIR}/paddle_distributed_logs \
   --conv_style "internvl2_5" \
   --output_dir ${OUTPUT_DIR} \
   --logging_dir ${OUTPUT_DIR}/logs \
-  --meta_path "paddlemix/examples/internvl2/shell/data/internvl_1_2_finetune_custom.json" \
+  --meta_path "paddlemix/examples/internvl2/shell/data/internvl_1_2_finetune.json" \
   --overwrite_output_dir True \
   --force_image_size 448 \
   --max_dynamic_patch 6 \
@@ -47,7 +47,7 @@ ${TRAINING_PYTHON} --log_dir ${OUTPUT_DIR}/paddle_distributed_logs \
   --dataloader_num_workers 4 \
   --bf16 True \
   --fp16 False \
-  --fp16_opt_level "O2" \
+  --fp16_opt_level "O1" \
   --num_train_epochs 1 \
   --per_device_train_batch_size ${PER_DEVICE_BATCH_SIZE} \
   --gradient_accumulation_steps ${GRADIENT_ACC} \

@@ -4,6 +4,8 @@ GPUS=${GPUS:-8}
 BATCH_SIZE=${BATCH_SIZE:-128}
 PER_DEVICE_BATCH_SIZE=${PER_DEVICE_BATCH_SIZE:-4}
 GRADIENT_ACC=$((BATCH_SIZE / PER_DEVICE_BATCH_SIZE / GPUS))
+tensor_parallel_degree=${tensor_parallel_degree:-1}
+sharding_parallel_degree=$((GPUS / tensor_parallel_degree))
 
 
 export PYTHONPATH="${PYTHONPATH}:$(pwd)"
@@ -33,7 +35,7 @@ ${TRAINING_PYTHON} --log_dir ${OUTPUT_DIR}/paddle_distributed_logs \
   --conv_style "internvl2_5" \
   --output_dir ${OUTPUT_DIR} \
   --logging_dir ${OUTPUT_DIR}/logs \
-  --meta_path "paddlemix/examples/internvl2/shell/data/internvl_1_2_finetune_custom.json" \
+  --meta_path "paddlemix/examples/internvl2/shell/data/internvl_1_2_finetune.json" \
   --overwrite_output_dir True \
   --force_image_size 448 \
   --max_dynamic_patch 6 \
@@ -46,7 +48,7 @@ ${TRAINING_PYTHON} --log_dir ${OUTPUT_DIR}/paddle_distributed_logs \
   --dataloader_num_workers 4 \
   --bf16 True \
   --fp16 False \
-  --fp16_opt_level "O2" \
+  --fp16_opt_level "O1" \
   --num_train_epochs 1 \
   --per_device_train_batch_size ${PER_DEVICE_BATCH_SIZE} \
   --gradient_accumulation_steps ${GRADIENT_ACC} \
@@ -73,7 +75,7 @@ ${TRAINING_PYTHON} --log_dir ${OUTPUT_DIR}/paddle_distributed_logs \
   --sharding_parallel_degree=${sharding_parallel_degree} \
   --pipeline_parallel_degree=1 \
   --sep_parallel_degree=1 \
-  --sharding="stage1" \
+  --sharding="stage2" \
   --amp_master_grad=1 \
   --hybrid_parallel_topo_order="sharding_first" \
   2>&1 | tee -a "${OUTPUT_DIR}/training_log.txt"

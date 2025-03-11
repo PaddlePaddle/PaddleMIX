@@ -28,7 +28,7 @@ ${TRAINING_PYTHON} \
   --model_name_or_path "OpenGVLab/InternVL2_5-1B" \
   --conv_style "internvl2_5" \
   --output_dir ${OUTPUT_DIR} \
-  --meta_path "paddlemix/examples/internvl2/shell/data/internvl_1_2_finetune_custom.json" \
+  --meta_path "paddlemix/examples/internvl2/shell/data/internvl_1_2_finetune.json" \
   --overwrite_output_dir True \
   --force_image_size 448 \
   --max_dynamic_patch 6 \
