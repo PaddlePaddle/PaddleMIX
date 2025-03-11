@@ -683,7 +683,7 @@ class LoraLoaderMixin:
     @classmethod
     def _remove_text_encoder_monkey_patch_classmethod(cls, text_encoder):
         if version.parse(__version__) > version.parse("0.23"):
-            deprecate("_remove_text_encoder_monkey_patch_classmethod", "0.25", LORA_DEPRECATION_MESSAGE)
+            deprecate("_remove_text_encoder_monkey_patch_classmethod", "1.0", LORA_DEPRECATION_MESSAGE)
 
         for _, attn_module in text_encoder_attn_modules(text_encoder):
             if isinstance(attn_module.q_proj, PatchedLoraProjection):
@@ -712,7 +712,7 @@ class LoraLoaderMixin:
         Monkey-patches the forward passes of attention modules of the text encoder.
         """
         if version.parse(__version__) > version.parse("0.23"):
-            deprecate("_modify_text_encoder", "0.25", LORA_DEPRECATION_MESSAGE)
+            deprecate("_modify_text_encoder", "1.0", LORA_DEPRECATION_MESSAGE)
 
         def create_patched_linear_lora(model, network_alpha, rank, dtype, lora_parameters):
             linear_layer = model.regular_linear_layer if isinstance(model, PatchedLoraProjection) else model
