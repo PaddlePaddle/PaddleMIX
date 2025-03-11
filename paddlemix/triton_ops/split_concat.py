@@ -167,7 +167,7 @@ def split_concat(x, y):
         )
 
     if in_dynamic_or_pir_mode():
-        print(f"== we are in dynamic mode, op_name: {op_name}")
+        # print(f"== we are in dynamic mode, op_name: {op_name}")
         outs = _C_ops._run_custom_op(
             op_name,
             x,
@@ -175,7 +175,7 @@ def split_concat(x, y):
         )
         return outs[0], outs[1], outs[2]
     else:
-        print(f"== we are in dynamic to static mode, op_name: {op_name}")
+        # print(f"== we are in dynamic to static mode, op_name: {op_name}")
         helper = LayerHelper(op_name, **locals())
         inputs = {
             "x": x,
