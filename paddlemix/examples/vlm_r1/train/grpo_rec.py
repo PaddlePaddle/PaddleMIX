@@ -23,6 +23,7 @@ from paddlenlp.utils.import_utils import import_module
 sys.path.append('paddlemix/examples/vlm_r1')
 from open_r1_mllm.trainer import GRPOConfig, Qwen2VLGRPOTrainer
 from open_r1_mllm.dataset.qwen2_vl_dataset import Qwen2VLRECDataset
+from open_r1_mllm.utils.tokenizer import get_processor
 from open_r1_mllm.utils.args import TrlParser
 from open_r1_mllm.utils.constant import TEMPLATE_MAPPING
 
@@ -199,7 +200,7 @@ def main(script_args, training_args, model_args):
     model_path = model_args.model_name_or_path
     model_name = os.path.basename(model_path)
 
-    processor, tokenizer = get_processor_and_tokenizer(model_path)
+    processor,tokenizer = get_processor(os.path.basename(model_args.model_name_or_path),model_args.model_name_or_path)
     template_name = TEMPLATE_MAPPING.get(model_name, "qwen2_5_vl")
 
     TEMPLATES = import_module(f"paddlemix.models.{template_name}.template.TEMPLATES")

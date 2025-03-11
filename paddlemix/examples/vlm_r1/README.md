@@ -6,8 +6,9 @@
 本仓库支持的权重
 | Model                       |
 |-----------------------------|
-| Qwen/Qwen2-VL-2B-Instruct |
-| Qwen/Qwen2-VL-7B-Instruct |
+| Qwen/Qwen2-VL-2B-Instruct   |
+| Qwen/Qwen2-VL-7B-Instruct   |
+| Qwen/Qwen2.5-VL-3B-Instruct |
 | Qwen/Qwen2.5-VL-7B-Instruct |
 
 ## 安装
@@ -92,10 +93,10 @@ The bounding box describes the large, white vehicle on the street. The vehicle i
 # 八卡训练指向性目标检测 GRPO
 bash paddlemix/examples/vlm_r1/train/run_grpo_rec.sh
 
-# 八卡训练指向性目标检测 GRPO
+# 八卡训练计数问题 GRPO
 bash paddlemix/examples/vlm_r1/train/run_grpo_counting.sh
 
-# 八卡训练指向性目标检测 GRPO
+# 八卡训练几何推理问题 GRPO
 bash paddlemix/examples/vlm_r1/train/run_grpo_geometry.sh
 ```
 

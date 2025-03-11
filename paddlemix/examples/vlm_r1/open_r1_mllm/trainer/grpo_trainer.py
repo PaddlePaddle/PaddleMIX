@@ -1,11 +1,13 @@
 import copy
 import os
+import random
 import textwrap
 from collections import defaultdict
 from typing import Any, Callable, Optional, Union, Sequence, Dict
 from dataclasses import dataclass, field
 from paddlemix.utils.log import logger
 
+import numpy as np
 import paddle
 import paddle.nn.functional as F
 import paddlenlp
@@ -40,6 +42,11 @@ if paddlenlp.trainer.integrations.is_wandb_available():
 RewardFunc = Union[
     str, paddlenlp.transformers.PretrainedModel, Callable[[list, list], list[float]]
 ]
+
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    paddle.seed(seed)
 
 class RepeatRandomSampler(Sampler):
     """
@@ -91,27 +98,21 @@ class RepeatRandomSampler(Sampler):
 
     def __init__(
         self,
-        data_source,
+        indexes,
         mini_repeat_count: int,
         batch_size: int = 1,
         repeat_count: int = 1,
-        seed: Optional[int] = None,
+        seed:int = None,
     ):
-        self.data_source = data_source
+        self.indexes = indexes
+        self.num_samples = len(indexes)
         self.mini_repeat_count = mini_repeat_count
         self.batch_size = batch_size
         self.repeat_count = repeat_count
-        self.num_samples = len(data_source)
-        self.seed = seed
-        device = paddle.device.get_device()
-        self.generator = paddle.framework.core.default_cuda_generator(int(device[-1]))
-        if seed is not None:
-            self.generator.manual_seed(seed)
 
     def __iter__(self):
         # E.g., [2, 4, 3, 1, 0, 6, 5] (num_samples = 7)
-        indexes = paddle.randperm(self.num_samples).tolist()
-
+        indexes = self.indexes
         #    [2, 4, 3, 1, 0, 6, 5]
         # -> [[2, 4, 3], [1, 0, 6], [5]]  (batch_size = 3)
         indexes = [indexes[i : i + self.batch_size] for i in range(0, len(indexes), self.batch_size)]
@@ -266,7 +267,6 @@ class Qwen2VLGRPOTrainer(Trainer):
         )
         
         # Bug: will cause same llm sampling results if set to same seed for every process
-        args.seed = args.seed + args.dataset_rank
         self.beta = args.beta
         self.epsilon = args.epsilon
         self._metrics = defaultdict(list)
@@ -293,6 +293,11 @@ class Qwen2VLGRPOTrainer(Trainer):
                 f"divisible by the number of generations per prompt ({self.num_generations}). Given the current train "
                 f"batch size, the valid values for the number of generations are: {possible_values}."
             )
+            
+        set_seed(self.args.seed) # for data indexes
+        self.indexes = paddle.randperm(len(self.train_dataset)).tolist()
+        training_seed = self.args.seed + self.args.dataset_rank
+        set_seed(training_seed) # for generate sampling
 
     def _set_signature_columns_if_needed(self):
         if self._signature_columns is None:
@@ -614,7 +619,7 @@ class Qwen2VLGRPOTrainer(Trainer):
             * self.args.gradient_accumulation_steps
         )
         return RepeatRandomSampler(
-            data_source=self.train_dataset,
+            indexes=self.indexes,
             mini_repeat_count=self.num_generations,
             batch_size=effective_batch_size // self.num_generations,
             repeat_count=self.num_iterations,
