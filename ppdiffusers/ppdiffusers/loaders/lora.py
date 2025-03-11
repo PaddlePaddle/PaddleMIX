@@ -994,7 +994,7 @@ class LoraLoaderMixin:
 
         else:
             if version.parse(__version__) > version.parse("0.23"):
-                deprecate("fuse_text_encoder_lora", "0.25", LORA_DEPRECATION_MESSAGE)
+                deprecate("fuse_text_encoder_lora", "1.0", LORA_DEPRECATION_MESSAGE)
 
             def fuse_text_encoder_lora(text_encoder, lora_scale=1.0, safe_fusing=False):
                 for _, attn_module in text_encoder_attn_modules(text_encoder):
@@ -1052,7 +1052,7 @@ class LoraLoaderMixin:
 
         else:
             if version.parse(__version__) > version.parse("0.23"):
-                deprecate("unfuse_text_encoder_lora", "0.25", LORA_DEPRECATION_MESSAGE)
+                deprecate("unfuse_text_encoder_lora", "1.0", LORA_DEPRECATION_MESSAGE)
 
             def unfuse_text_encoder_lora(text_encoder):
                 for _, attn_module in text_encoder_attn_modules(text_encoder):
