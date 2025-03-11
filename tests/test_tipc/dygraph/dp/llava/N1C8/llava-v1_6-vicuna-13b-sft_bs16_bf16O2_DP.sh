@@ -13,7 +13,7 @@
 # limitations under the License.
 
 model=llava
-model_item=llava-v1.6-vicuna-7b-sft
+model_item=llava-v1_6-vicuna-13b-sft
 bs_item=16
 fp_item=bf16O2
 run_mode=DP
