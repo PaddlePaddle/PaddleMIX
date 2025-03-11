@@ -633,7 +633,7 @@ class CogVideoXPipeline(DiffusionPipeline, CogVideoXLoraLoaderMixin):
 
         # 7. Create rotary embeds if required
         image_rotary_emb = (
-            self._prepare_rotary_positional_embeddings(height, width, latents.size(1))
+            self._prepare_rotary_positional_embeddings(height, width, latents.shape[1])
             if self.transformer.config.use_rotary_positional_embeddings
             else None
         )
