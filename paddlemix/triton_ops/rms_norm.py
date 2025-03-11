@@ -70,6 +70,7 @@ def rms_norm(x, weight=None, bias=None, epsilon=1e-5):
     import os
     os.environ["CUDA_VISIBLE_DEVICES"] = "2"
     import paddle
+    import paddlemix
 
     batch = 2
     seq = 3600
@@ -125,12 +126,14 @@ def rms_norm(x, weight=None, bias=None, epsilon=1e-5):
         y = paddle.empty_like(x)
         prepare_ptr_for_triton_kernel = """
         auto y = paddle::empty(x.shape(), x.dtype(), x.place());
-        auto x_ptr = get_tensor_ptr(x);
-        auto y_ptr = get_tensor_ptr(y);
-        CUdeviceptr weight_ptr = (CUdeviceptr)(nullptr);
-        if (weight) weight_ptr = get_tensor_ptr(*weight);
-        CUdeviceptr bias_ptr = (CUdeviceptr)(nullptr);
-        if (bias) bias_ptr = get_tensor_ptr(*bias);
+        CUdeviceptr input_ptrs[4] = {
+            get_tensor_ptr(x),
+            get_tensor_ptr(y),
+            (CUdeviceptr)(nullptr),
+            (CUdeviceptr)(nullptr)
+        };
+        if (weight) input_ptrs[2] = get_tensor_ptr(*weight);
+        if (bias) input_ptrs[3] = get_tensor_ptr(*bias);
         """
         return_tensor_names = "y"
 

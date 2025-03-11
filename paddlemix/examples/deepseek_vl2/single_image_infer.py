@@ -17,7 +17,7 @@ import os
 import sys
 
 from paddlenlp.generation import GenerationConfig
-from paddlenlp.transformers.llama.tokenizer_fast import LlamaTokenizerFast
+from paddlenlp.transformers import DeepseekTokenizerFast
 
 from paddlemix.models.deepseek_vl2 import DeepseekVLV2Config, DeepseekVLV2ForCausalLM
 from paddlemix.processors.deepseek_vl2_processing import DeepseekVLV2Processor
@@ -34,20 +34,19 @@ parser.add_argument("--dtype", type=str, default="bfloat16")
 args = parser.parse_args()
 
 model_path = args.model_path
-tokenizer = LlamaTokenizerFast.from_pretrained(model_path)
+tokenizer = DeepseekTokenizerFast.from_pretrained(model_path)
 config = DeepseekVLV2Config.from_pretrained(model_path)
 
 candidate_resolutions = config["candidate_resolutions"]
 patch_size = config.vision_config["patch_size"]
 downsample_ratio = config["downsample_ratio"]
-vl_chat_processor: DeepseekVLV2Processor = DeepseekVLV2Processor(
+vl_chat_processor = DeepseekVLV2Processor(
     tokenizer=tokenizer,
     candidate_resolutions=candidate_resolutions,
     patch_size=patch_size,
     downsample_ratio=downsample_ratio,
 )
-tokenizer = vl_chat_processor.tokenizer
-vl_gpt: DeepseekVLV2ForCausalLM = DeepseekVLV2ForCausalLM.from_pretrained(model_path, dtype=args.dtype).eval()
+vl_gpt = DeepseekVLV2ForCausalLM.from_pretrained(model_path, dtype=args.dtype).eval()
 
 conversation = [
     {

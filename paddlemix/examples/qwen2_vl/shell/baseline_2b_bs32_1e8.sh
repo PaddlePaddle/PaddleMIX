@@ -16,7 +16,7 @@ set -x
 
 GPUS=${GPUS:-8}
 BATCH_SIZE=${BATCH_SIZE:-32}
-PER_DEVICE_BATCH_SIZE=${PER_DEVICE_BATCH_SIZE:-1}
+PER_DEVICE_BATCH_SIZE=${PER_DEVICE_BATCH_SIZE:-2}
 
 GRADIENT_ACC=$((BATCH_SIZE / PER_DEVICE_BATCH_SIZE / GPUS))
 tensor_parallel_degree=${tensor_parallel_degree:-1}
@@ -75,7 +75,7 @@ ${TRAINING_PYTHON} --log_dir ${OUTPUT_DIR}/paddle_distributed_logs \
   --sharding_parallel_degree=${sharding_parallel_degree} \
   --pipeline_parallel_degree=1 \
   --sep_parallel_degree=1 \
-  --sharding="stage1" \
+  --sharding="stage2" \
   --amp_master_grad=1 \
   --hybrid_parallel_topo_order="sharding_first" \
   2>&1 | tee -a "${OUTPUT_DIR}/training_log.txt"

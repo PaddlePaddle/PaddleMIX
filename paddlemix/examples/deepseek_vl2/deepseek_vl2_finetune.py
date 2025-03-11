@@ -1,4 +1,4 @@
-# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,26 +20,28 @@ import random
 import sys
 import traceback
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Sequence, Any
+from typing import Dict, List, Optional, Union
 
 import numpy as np
 import paddle
 import paddle.distributed as dist
 from paddle.io import Dataset
-from paddlenlp.data import DataCollatorForSeq2Seq
+from paddlenlp.data import DataCollatorForSeq2Seq  # , DataCollatorWithPadding
 from paddlenlp.peft import LoRAConfig, LoRAModel
 from paddlenlp.trainer import PdArgumentParser, TrainingArguments, set_seed
 from paddlenlp.trainer.trainer import Trainer
 from paddlenlp.trainer.trainer_utils import get_last_checkpoint
+from paddlenlp.transformers import DeepseekTokenizerFast
 from PIL import Image, ImageFile, PngImagePlugin, UnidentifiedImageError
 
 from paddlemix.datasets.internvl_dataset import ConcatDataset, WeightedConcatDataset
-from paddlemix.models.qwen2_5_vl import MIXQwen2_5_Tokenizer
-from paddlemix.models.qwen2_5_vl.modeling_qwen2_5_vl import Qwen2_5_VLForConditionalGeneration
-from paddlemix.models.qwen2_5_vl.supervised import _encode_supervised_example
-from paddlemix.models.qwen2_5_vl.template import TEMPLATES
-from paddlemix.processors.qwen2_5_vl_processing import Qwen2_5_VLImageProcessor, Qwen2_5_VLProcessor
-from paddlenlp.transformers.processing_utils import ProcessorMixin
+from paddlemix.models.deepseek_vl2 import DeepseekVLV2Config, DeepseekVLV2ForCausalLM
+from paddlemix.models.qwen2_vl.supervised import _encode_supervised_example
+from paddlemix.models.qwen2_vl.template import TEMPLATES
+from paddlemix.processors.deepseek_vl2_processing import (
+    DeepseekVLChatProcessorOutput,
+    DeepseekVLV2Processor,
+)
 
 Image.MAX_IMAGE_PIXELS = None
 ImageFile.LOAD_TRUNCATED_IMAGES = True
@@ -58,24 +60,12 @@ IMAGE_PLACEHOLDER = "<image>"
 @dataclass
 class ProcessorArguments:
     r"""
-    Arguments pertaining to the image processor.
+    Arguments pertaining to the image processor
     """
 
     image_resolution: int = field(
-        default=768,
+        default=384,
         metadata={"help": "Keeps the height or width of image below this resolution."},
-    )
-    video_resolution: int = field(
-        default=256,
-        metadata={"help": "Keeps the height or width of video below this resolution."},
-    )
-    video_fps: float = field(
-        default=2.0,
-        metadata={"help": "The frames to sample per second for video inputs."},
-    )
-    video_maxlen: int = field(
-        default=128,
-        metadata={"help": "The maximum number of sampled frames for video inputs."},
     )
 
 
@@ -150,7 +140,7 @@ class DataTrainingArguments:
     """
 
     max_seq_length: Optional[int] = field(
-        default=8192,
+        default=2048,
         metadata={
             "help": (
                 "The maximum total input sequence length after tokenization. Sequences longer "
@@ -159,14 +149,14 @@ class DataTrainingArguments:
         },
     )
     max_image_size: Optional[int] = field(
-        default=768,
+        default=384,
         metadata={"help": "Set the desired size for the image. Default is 224."},
     )
     pad2square: Optional[bool] = field(
         default=False,
         metadata={"help": "Pad the image to a square shape if set to True."},
     )
-    conv_style: Optional[str] = field(default="qwen2_5_vl", metadata={"help": "Prompt style for a conversation."})
+    conv_style: Optional[str] = field(default="deepseek", metadata={"help": "Prompt style for a conversation."})
     meta_path: Optional[str] = field(
         default=None,
         metadata={"help": "The path of the meta file of datasets."},
@@ -201,6 +191,22 @@ class PreTrainingArguments(TrainingArguments):
     )
 
 
+def findall(token_list: List[int], sub_token_list: Union[int, List[int]]) -> List[int]:
+    """Find the index of a token in the token_list."""
+    if isinstance(sub_token_list, int):
+        sub_token_list = [sub_token_list]
+    res = []
+    idx = -1
+    try:
+        while True:
+            idx = token_list.index(sub_token_list[0], idx + 1)
+            if len(sub_token_list) == 1 or sub_token_list == token_list[idx : idx + len(sub_token_list)]:
+                res.append(idx)
+    except ValueError:
+        pass
+    return res
+
+
 class LazySupervisedDataset(Dataset):
     """Dataset for supervised fine-tuning."""
 
@@ -211,8 +217,8 @@ class LazySupervisedDataset(Dataset):
         tokenizer,
         ds_name,
         processor,
-        max_image_size=768,
-        max_seq_length=8192,
+        max_image_size=384,
+        max_seq_length=2048,
         repeat_time=1,
         normalize_type="imagenet",
         random_seed=0,
@@ -233,7 +239,7 @@ class LazySupervisedDataset(Dataset):
         else:
             raise ValueError("No annotation found in the meta file.")
 
-        with open(meta_anns, "r") as f:  # qwen2_5_vl 读的是json
+        with open(meta_anns, "r") as f:  # qwen2_vl 读的是json
             self.raw_data = json.load(f)
             if repeat_time < 1:
                 # If repeat_time is less than 1, select a portion of the data
@@ -252,47 +258,29 @@ class LazySupervisedDataset(Dataset):
     def __len__(self):
         return len(self.raw_data)
 
-    def _preprocess_image(self, image):
-        r"""
-        Pre-processes a single image.
-        """
-        image_resolution = self.max_image_size
-        if max(image.width, image.height) > image_resolution:
-            resize_factor = image_resolution / max(image.width, image.height)
-            width, height = int(image.width * resize_factor), int(image.height * resize_factor)
-            image = image.resize((width, height), resample=Image.NEAREST)
-
-        if image.mode != "RGB":
-            image = image.convert("RGB")
-
-        if min(image.width, image.height) < 28:
-            width, height = max(image.width, 28), max(image.height, 28)
-            image = image.resize((width, height), resample=Image.NEAREST)
-
-        if image.width / image.height > 200:
-            width, height = image.height * 180, image.height
-            image = image.resize((width, height), resample=Image.NEAREST)
-
-        if image.height / image.width > 200:
-            width, height = image.width, image.width * 180
-            image = image.resize((width, height), resample=Image.NEAREST)
-
-        return image
-
     def load_image(self, image_path):
-        image = Image.open(image_path).convert("RGB")
-        return self._preprocess_image(image)
+        return Image.open(image_path).convert("RGB")
 
     def get_image_path(self, image_path):
         # image_path = os.path.join(self.root, image_path)
         return image_path
 
-    def get_transform(self):
-        return self.processor.image_processor
-
     def multi_modal_get_item(self, data_item):
-        # Build transformation function
-        transform = self.get_transform()
+        # data_item = {
+        #     "messages": [
+        #         {
+        #             "role": "user",
+        #             "content": "<image>Using LaTeX to perform OCR on the image."
+        #         },
+        #         {
+        #             "role": "assistant",
+        #             "content": "S = \\frac { 2 \\pi R } { n } \\sqrt { E _ { c } ( 2 E - E _ { c } ) } ."
+        #         }
+        #     ],
+        #     "images": [
+        #         "LaTeX_OCR/full/train/014484.png"
+        #     ]
+        # }
 
         # Ensure the first conversation contains an image placeholder
         if "<image>" not in data_item["messages"][0]["content"]:
@@ -303,6 +291,10 @@ class LazySupervisedDataset(Dataset):
 
         messages = data_item["messages"]
 
+        # Load the image using tcs_loader if available, otherwise use PIL
+        images = self.load_image(image_path)
+        images = [images]
+
         input_ids, labels = _encode_supervised_example(
             messages=messages,
             system="",
@@ -316,43 +308,54 @@ class LazySupervisedDataset(Dataset):
             train_on_prompt=False,
             mask_history=False,
         )
-        attention_mask = [1] * len(input_ids)
+        # print('input_ids', input_ids)
+        input_ids[0] = 0  # shit
+
+        processor = self.processor
+        images_seq_mask = [False] * len(input_ids)
+        idx_list = findall(input_ids, processor.image_token_id)  # '<image>'
+        _, images_list, _, images_spatial_crop, num_image_tokens = processor.tokenize_with_images(
+            "<image>" * len(images), images, cropping=len(images) <= 2
+        )
+        new_num_tokens = 0
+        # print('idx_list', idx_list) # [4]
+        # print('input_ids', input_ids)
+        # print('num_image_tokens', num_image_tokens)
+        # print('1 len(input_ids), len(labels), len(images_seq_mask)', len(input_ids), len(labels), len(images_seq_mask))
+
+        for idx, n_image_tokens in zip(idx_list, num_image_tokens):
+            image_tokens = [processor.image_token_id] * n_image_tokens
+            input_ids = input_ids[:idx] + image_tokens + input_ids[idx + 1 :]
+            if labels is not None:
+                labels = labels[:idx] + [-100] * n_image_tokens + labels[idx + 1 :]
+            images_seq_mask = images_seq_mask[:idx] + [True] * n_image_tokens + images_seq_mask[idx + 1 :]
+            new_num_tokens += n_image_tokens - 1
+        # print('2 len(input_ids), len(labels), len(images_seq_mask)', len(input_ids), len(labels), len(images_seq_mask))
+        # print('input_ids', input_ids)
+        # print('labels', labels)
+
+        output = DeepseekVLChatProcessorOutput(
+            sft_format=None,
+            input_ids=paddle.to_tensor(input_ids),
+            target_ids=paddle.to_tensor(input_ids),
+            images=paddle.stack(images_list) if images_list else paddle.zeros((0, 3, 384, 384)),
+            images_seq_mask=paddle.to_tensor(images_seq_mask),
+            images_spatial_crop=paddle.to_tensor(images_spatial_crop),
+            num_image_tokens=num_image_tokens,
+        )
+
+        attention_mask = [1] * len(output["input_ids"])
 
         # Create the final return dictionary
         ret = dict(
-            input_ids=input_ids,
+            input_ids=output["input_ids"],
             labels=labels,
             attention_mask=attention_mask,
-            images=[image_path],
+            images=output["images"],
+            images_seq_mask=output["images_seq_mask"],
+            images_spatial_crop=output["images_spatial_crop"],
         )
-        return ret
-
-    def pure_text_get_item(self, data_item):
-        messages = data_item["messages"]
-
-        input_ids, labels = _encode_supervised_example(
-            messages=messages,
-            system="",
-            tools="",
-            images=[],
-            videos=[],
-            template=self.template,
-            tokenizer=self.tokenizer,
-            processor=self.processor,
-            cutoff_len=self.max_seq_length,
-            train_on_prompt=False,
-            mask_history=False,
-        )
-        attention_mask = [1] * len(input_ids)
-
-        # Create the final return dictionary
-        ret = dict(
-            input_ids=input_ids,
-            labels=labels,
-            attention_mask=attention_mask,
-            images=[],
-        )
-        
+        # batched_output = dict(self.processor.batchify(output))
         return ret
 
     def __getitem__(self, i) -> Dict[str, paddle.Tensor]:
@@ -363,7 +366,8 @@ class LazySupervisedDataset(Dataset):
                 if "images" in data_item and len(data_item["images"]) != 0:
                     ret = self.multi_modal_get_item(data_item)  # TODO: 暂时都是单图
                 else:
-                    ret = self.pure_text_get_item(data_item)  # TODO: 纯文
+                    raise NotImplementedError
+                    # ret = self.pure_text_get_item(data_item)  # TODO: 纯文
                 break
             except Exception as e:
                 print(e, self.ds_name, flush=True)
@@ -377,9 +381,8 @@ class LazySupervisedDataset(Dataset):
                     else:
                         data_path = data_item["images"]
                         print(f"Failed to load image: {data_path}, the dataset is: {self.ds_name}")
-                elif "video" in data_item:
-                    data_path = data_item["video"]
-                    print(f"Failed to load video: {data_path}, the dataset is: {self.ds_name}")
+                else:
+                    raise NotImplementedError
                 i = random.randint(0, len(self.raw_data) - 1)
         return ret
 
@@ -433,106 +436,13 @@ def print_trainable_params(model: paddle.nn.Layer) -> None:
         if not param.stop_gradient:
             # print('{}, shape: {}, requires grad: {}'.format(k, param.shape, not param.stop_gradient))
             trainable_params += num_params
+    # model.image_newline, shape: [1280], requires grad: True
+    # model.view_seperator, shape: [1280], requires grad: True
     print(
         "trainable params: {:d} || all params: {:d} || trainable%: {:.4f}".format(
             trainable_params, all_param, 100 * trainable_params / all_param
         )
     )
-
-
-@dataclass
-class MultiModalDataCollatorForSeq2Seq(DataCollatorForSeq2Seq):
-    r"""
-    Data collator that supports VLMs.
-
-    Features should contain input_ids, attention_mask, labels, and optionally contain images and videos.
-    """
-
-    template: Optional["TEMPLATES"] = None
-    processor: Optional["ProcessorMixin"] = None
-
-    def __post_init__(self):
-        if self.template is None:
-            raise ValueError("Template is required for MultiModalDataCollator.")
-
-    def __call__(self, features: Sequence[Dict[str, Any]]) -> Dict[str, "paddle.Tensor"]:
-        batch_images, batch_videos, batch_imglens, batch_vidlens, batch_input_ids = [], [], [], [], []
-        
-        for feature in features:
-            images = feature.pop("images", None) or []
-            videos = feature.pop("videos", None) or []
-            batch_images.extend(images)
-            batch_videos.extend(videos)
-            batch_imglens.append(len(images))
-            batch_vidlens.append(len(videos))
-            batch_input_ids.append(feature["input_ids"])
-
-        if (
-            self.processor is not None and sum(batch_imglens) == 0 and sum(batch_vidlens) == 0
-        ):  
-            fake_messages = [{"role": "user", "content": IMAGE_PLACEHOLDER}]
-            fake_images = [Image.new("RGB", (64, 64), (255, 255, 255))]
-            fake_messages = self.template.mm_plugin.process_messages(fake_messages, fake_images, [], self.processor)
-            fake_input_ids = self.tokenizer.encode(fake_messages[0]["content"], add_special_tokens=False)
-            fake_input_ids, _ = self.template.mm_plugin.process_token_ids(
-                fake_input_ids, None, fake_images, [], self.tokenizer, self.processor
-            )
-
-            if len(fake_input_ids) != 0:
-                if self.tokenizer.padding_side == "right":
-                    features[0]["input_ids"] = features[0]["input_ids"]+ fake_input_ids["input_ids"]
-                    features[0]["attention_mask"] = features[0]["attention_mask"] + [0] * len(fake_input_ids["input_ids"])
-                    features[0]["labels"] = features[0]["labels"] + [IGNORE_INDEX] * len(fake_input_ids["input_ids"])
-                else:
-                    features[0]["input_ids"] = fake_input_ids["input_ids"] + features[0]["input_ids"]
-                    features[0]["attention_mask"] = [0] * len(fake_input_ids["input_ids"]) + features[0]["attention_mask"]
-                    features[0]["labels"] = [IGNORE_INDEX] * len(fake_input_ids["input_ids"]) + features[0]["labels"]
-
-            batch_images = fake_images
-            batch_imglens[0] = 1
-            batch_input_ids[0] = features[0]["input_ids"]
-
-        mm_inputs = self.template.mm_plugin.get_mm_inputs(
-            batch_images, batch_videos, batch_imglens, batch_vidlens, batch_input_ids, self.processor
-        )
-        if "token_type_ids" in mm_inputs:
-            token_type_ids = mm_inputs.pop("token_type_ids")
-            for i, feature in enumerate(features):
-                feature["token_type_ids"] = token_type_ids[i]
-
-        features: Dict[str, "paddle.Tensor"] = super().__call__(features)
-
-        if self.model is not None and hasattr(self.model, "get_rope_index"):  # for qwen2_5_vl mrope
-            rope_index_kwargs = {
-                "input_ids": features["input_ids"],
-                "image_grid_thw": mm_inputs.get("image_grid_thw"),
-                "video_grid_thw": mm_inputs.get("video_grid_thw"),
-                "attention_mask": features["attention_mask"],
-            }
-            if "second_per_grid_ts" in mm_inputs:
-                rope_index_kwargs["second_per_grid_ts"] = mm_inputs.get("second_per_grid_ts")
-
-            features["position_ids"], features["rope_deltas"] = self.model.get_rope_index(**rope_index_kwargs)
-
-
-
-        if "cross_attention_mask" in mm_inputs:  # for mllama inputs when pad_to_multiple_of is enabled
-            cross_attention_mask = mm_inputs.pop("cross_attention_mask")
-            seq_len = features["input_ids"].size(1)
-            orig_len = cross_attention_mask.size(1)
-            mm_inputs["cross_attention_mask"] = F.pad(cross_attention_mask, (0, 0, 0, 0, 0, seq_len - orig_len))
-
-        features.update(mm_inputs)
-        if isinstance(features.get("pixel_values"), list):  # for pixtral inputs
-            features = features.data  # use default_collate() instead of BatchEncoding.to()
-
-        if "image_bound" in features:  # for minicpmv inputs
-            bsz, seq_length = features["input_ids"].shape
-            features["position_ids"] = paddle.arange(seq_length).long().repeat(bsz, 1)
-            return {"data": features, "input_ids": features["input_ids"], "labels": features["labels"]}
-
-        return features
-
 
 
 def main():
@@ -574,6 +484,7 @@ def main():
         is_bfloat16_supported = True
     else:
         is_bfloat16_supported = paddle.amp.is_bfloat16_supported()
+
     if training_args.fp16_opt_level == "O2":
         if training_args.fp16:
             dtype = "float16"
@@ -592,17 +503,26 @@ def main():
     print(f"Loading Tokenizer: {tokenizer_path}")
 
     MODEL_NAME = model_args.model_name_or_path
-    model = Qwen2_5_VLForConditionalGeneration.from_pretrained(MODEL_NAME, dtype=dtype, attn_implementation="flash_attention_2")
-    image_processor = Qwen2_5_VLImageProcessor()
-    tokenizer = MIXQwen2_5_Tokenizer.from_pretrained(MODEL_NAME, padding_side="right")
-    processor = Qwen2_5_VLProcessor(image_processor, tokenizer)
+    model = DeepseekVLV2ForCausalLM.from_pretrained(MODEL_NAME, dtype=dtype)
+    tokenizer = DeepseekTokenizerFast.from_pretrained(MODEL_NAME)
+    config = DeepseekVLV2Config.from_pretrained(MODEL_NAME)
+
+    candidate_resolutions = config["candidate_resolutions"]
+    patch_size = config.vision_config["patch_size"]
+    downsample_ratio = config["downsample_ratio"]
+    processor = DeepseekVLV2Processor(
+        tokenizer=tokenizer,
+        candidate_resolutions=candidate_resolutions,
+        patch_size=patch_size,
+        downsample_ratio=downsample_ratio,
+    )
 
     tokenizer.tokenizer_path = tokenizer_path
     tokenizer.model_max_length = data_args.max_seq_length
-    print("tokenizer", tokenizer)
-    print("len(tokenizer)", len(tokenizer))
-    print("tokenizer.added_tokens_encoder", tokenizer.added_tokens_encoder)
-    print("tokenizer.added_tokens_decoder", tokenizer.added_tokens_decoder)
+    # print("tokenizer", tokenizer)
+    # print("len(tokenizer)", len(tokenizer))
+    # print("tokenizer.added_tokens_encoder", tokenizer.added_tokens_encoder)
+    # print("tokenizer.added_tokens_decoder", tokenizer.added_tokens_decoder)
 
     data_args.max_image_size = model_args.image_resolution
     train_dataset = build_datasets(
@@ -618,18 +538,16 @@ def main():
             param.stop_gradient = not False
 
     if model_args.freeze_vit:
-        _freeze_params(model.visual)
+        _freeze_params(model.vision)
 
     if model_args.freeze_llm:
-        model.model = model.model.eval()
-        model.lm_head = model.lm_head.eval()
-        _freeze_params(model.model)
-        _freeze_params(model.lm_head)
+        model.language = model.language.eval()
+        _freeze_params(model.language)
 
     # lora
     if model_args.lora:
         if model_args.lora_path is None:
-            target_modules = model_args.lora_target_modules.split(",")
+            target_modules = model_args.lora_target_modules.split(",")  #
             lora_config = LoRAConfig(
                 target_modules=target_modules,
                 r=model_args.lora_rank,
@@ -646,6 +564,10 @@ def main():
         model.print_trainable_parameters()
 
     print_trainable_params(model)
+    # tiny torch: PeftModelForCausalLM: 3408.4452M Params (37.9438M Trainable [1.1132%]), 0.0008M Buffers.
+    # tiny paddle: trainable params: 37943808 || all params: 3408445248 || trainable%: 1.1132
+    # small torch : PeftModelForCausalLM: 16290.2329M Params (141.8834M Trainable [0.8710%]), 14.1566M Buffers.
+    # small paddle: trainable params: 141883392 || all params: 16290232896 || trainable%: 0.8710
 
     # print trainable parameters
     if dist.get_rank() == 0:
@@ -656,13 +578,17 @@ def main():
     # set seed for paddle dataloaders
     set_seed(training_args.seed)
 
-    data_collator = MultiModalDataCollatorForSeq2Seq(
+    data_collator = DataCollatorForSeq2Seq(
         tokenizer=tokenizer,
-        template=TEMPLATES[data_args.conv_style],
-        processor=processor,
-        pad_to_multiple_of=8 if training_args.do_train else None,  # for shift short attention
         label_pad_token_id=IGNORE_INDEX,
+        max_length=4096,
     )
+
+    # data_collator = DataCollatorWithPadding(
+    #     tokenizer=tokenizer,
+    #     padding=True,
+    #     max_length=4096,
+    # )
 
     trainer = Trainer(
         model=model,

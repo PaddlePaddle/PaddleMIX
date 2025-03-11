@@ -17,7 +17,7 @@ import os
 import sys
 
 from paddlenlp.generation import GenerationConfig
-from paddlenlp.transformers.llama.tokenizer_fast import LlamaTokenizerFast
+from paddlenlp.transformers import DeepseekTokenizerFast
 
 from paddlemix.models.deepseek_vl2 import DeepseekVLV2Config, DeepseekVLV2ForCausalLM
 from paddlemix.processors.deepseek_vl2_processing import DeepseekVLV2Processor
@@ -37,7 +37,7 @@ args = parser.parse_args()
 
 model_path = args.model_path
 
-tokenizer = LlamaTokenizerFast.from_pretrained(model_path)
+tokenizer = DeepseekTokenizerFast.from_pretrained(model_path)
 config = DeepseekVLV2Config.from_pretrained(model_path)
 
 candidate_resolutions = config["candidate_resolutions"]

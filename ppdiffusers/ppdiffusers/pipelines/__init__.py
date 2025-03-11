@@ -257,6 +257,10 @@ else:
         "LVDMUncondPipeline",
         "VideoPipelineOutput",
     ]
+    _import_structure["hunyuan_video"] = [
+        "HunyuanVideoPipeline",
+        "HunyuanVideoPipelineOutput",
+    ]
 try:
     if not is_fastdeploy_available():
         raise OptionalDependencyNotAvailable()
@@ -536,6 +540,10 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             WuerstchenCombinedPipeline,
             WuerstchenDecoderPipeline,
             WuerstchenPriorPipeline,
+        )
+        from .hunyuan_video import (
+            HunyuanVideoPipeline,
+            HunyuanVideoPipelineOutput,
         )
 
         try:

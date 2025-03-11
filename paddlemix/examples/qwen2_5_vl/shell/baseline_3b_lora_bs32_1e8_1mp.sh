@@ -79,8 +79,8 @@ ${TRAINING_PYTHON} \
   --amp_master_grad=1 \
   --hybrid_parallel_topo_order="sharding_first" \
   --lora True \
-  --lora_rank=12 \
-  --lora_alpha=256 \
+  --lora_rank=8 \
+  --lora_alpha=32 \
   --lora_dropout=0.0 \
   --lora_target_modules="model.layers.*q_proj.*,model.layers.*k_proj.*,model.layers.*v_proj.*,model.layers.*gate_proj.*,model.layers.*up_proj.*,model.layers.*down_proj.*,model.layers.*o_proj.*" \
   2>&1 | tee -a "${OUTPUT_DIR}/training_log.txt"
