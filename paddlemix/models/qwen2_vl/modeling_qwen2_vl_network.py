@@ -394,10 +394,6 @@ def apply_rotary_pos_emb_vision(tensor: paddle.Tensor, freqs: paddle.Tensor) -> 
         sin = freqs.sin()
         cos = cos.unsqueeze(1).tile(repeat_times=[1, 1, 2]).unsqueeze(0).astype(dtype="float32")
         sin = sin.unsqueeze(1).tile(repeat_times=[1, 1, 2]).unsqueeze(0).astype(dtype="float32")
-        print("=== in apply_rotary_pos_emb_vision : ")
-        print(f"shape of tensor is : {tensor.shape}")
-        print(f"shape of cos is : {cos.shape}")
-        print(f"shape of sin is : {sin.shape}")
         output = tensor * cos + rotate_half(tensor) * sin
     output = paddle.cast(output, orig_dtype)
     return output
