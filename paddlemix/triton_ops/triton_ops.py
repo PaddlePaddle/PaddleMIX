@@ -206,17 +206,19 @@ def fused_adaLN_scale_residual(
         auto resi_out = paddle::empty(x.shape(), x.dtype(), x.place());
         auto adaLN_out = paddle::empty(x.shape(), x.dtype(), x.place());
 
-        auto x_ptr = get_tensor_ptr(x);
-        auto mha_out_ptr = get_tensor_ptr(mha_out);
-        auto resi_out_ptr = get_tensor_ptr(resi_out);
-        auto adaLN_out_ptr = get_tensor_ptr(adaLN_out);
-        auto gate_msa_ptr = get_tensor_ptr(gate_msa);
-        auto scale_mlp_ptr = get_tensor_ptr(scale_mlp);
-        auto shift_mlp_ptr = get_tensor_ptr(shift_mlp);
-        CUdeviceptr weight_ptr = (CUdeviceptr)(nullptr);
-        if (weight) weight_ptr = get_tensor_ptr(*weight);
-        CUdeviceptr bias_ptr = (CUdeviceptr)(nullptr);
-        if (bias) bias_ptr = get_tensor_ptr(*bias);
+        CUdeviceptr input_ptrs[9] = {
+            get_tensor_ptr(x),
+            get_tensor_ptr(mha_out),
+            get_tensor_ptr(gate_msa),
+            get_tensor_ptr(scale_mlp),
+            get_tensor_ptr(shift_mlp),
+            (CUdeviceptr)(nullptr),
+            (CUdeviceptr)(nullptr),
+            get_tensor_ptr(resi_out),
+            get_tensor_ptr(adaLN_out)
+        };
+        if (weight) input_ptrs[5] = get_tensor_ptr(*weight);
+        if (bias) input_ptrs[6] = get_tensor_ptr(*bias);
         """
 
         return_tensor_names = "resi_out, adaLN_out"
@@ -421,14 +423,16 @@ def adaptive_layer_norm(x, scale, shift, weight=None, bias=None, epsilon=1e-05):
         y = paddle.empty_like(x)
         prepare_ptr_for_triton_kernel = """
         auto y = paddle::empty(x.shape(), x.dtype(), x.place());
-        auto x_ptr = get_tensor_ptr(x);
-        auto y_ptr = get_tensor_ptr(y);
-        auto scale_ptr = get_tensor_ptr(scale);
-        auto shift_ptr = get_tensor_ptr(shift);
-        CUdeviceptr weight_ptr = (CUdeviceptr)(nullptr);
-        if (weight) weight_ptr = get_tensor_ptr(*weight);
-        CUdeviceptr bias_ptr = (CUdeviceptr)(nullptr);
-        if (bias) bias_ptr = get_tensor_ptr(*bias);
+        CUdeviceptr input_ptrs[6] = {
+            get_tensor_ptr(x),
+            get_tensor_ptr(y),
+            (CUdeviceptr)(nullptr),
+            (CUdeviceptr)(nullptr),
+            get_tensor_ptr(scale),
+            get_tensor_ptr(shift)
+        };
+        if (weight) input_ptrs[2] = get_tensor_ptr(*weight);
+        if (bias) input_ptrs[3] = get_tensor_ptr(*bias);
         """
         return_tensor_names = "y"
         template_used = rendering_common_template(
@@ -836,11 +840,13 @@ def split_concat(x, y):
         auto out0_tensor = paddle::empty({batch, seq_qkv+seq_eqkv, output_hidden}, x.dtype(), x.place());
         auto out1_tensor = paddle::empty({batch, seq_qkv+seq_eqkv, output_hidden}, x.dtype(), x.place());
         auto out2_tensor = paddle::empty({batch, seq_qkv+seq_eqkv, output_hidden}, x.dtype(), x.place());
-        auto qkv = get_tensor_ptr(x);
-        auto eqkv = get_tensor_ptr(y);
-        auto out0 = get_tensor_ptr(out0_tensor);
-        auto out1 = get_tensor_ptr(out1_tensor);
-        auto out2 = get_tensor_ptr(out2_tensor);
+        CUdeviceptr input_ptrs[5] = {
+            get_tensor_ptr(x),
+            get_tensor_ptr(y),
+            get_tensor_ptr(out0_tensor),
+            get_tensor_ptr(out1_tensor),
+            get_tensor_ptr(out2_tensor)
+        };
         """
         return_tensor_names = "out0_tensor,out1_tensor,out2_tensor"
 

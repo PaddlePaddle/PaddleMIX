@@ -54,7 +54,7 @@ def parse_arguments():
     )
     parser.add_argument("--inference_steps", type=int, default=50, help="The number of unet inference steps.")
     parser.add_argument("--benchmark_steps", type=int, default=10, help="The number of performance benchmark steps.")
-    parser.add_argument("--use_fp16", type=strtobool, default=True, help="Wheter to use FP16 mode")
+    parser.add_argument("--use_fp16", type=strtobool, default=True, help="Whether to use FP16 mode")
     parser.add_argument(
         "--attention_type", type=str, default="raw", choices=["raw", "cutlass", "flash", "all"], help="attention_type."
     )

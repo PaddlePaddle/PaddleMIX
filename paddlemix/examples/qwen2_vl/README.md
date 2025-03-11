@@ -98,12 +98,15 @@ sh paddlemix/examples/qwen2_vl/shell/distributed_qwen2_vl_infer_72B_QVQ.sh
 
 ### 4.1 小型示例数据集
 
-PaddleMIX团队整理了`chartqa`数据集作为小型的示例数据集，下载链接为：
+PaddleMIX团队整理了`chartqa`和`LaTeX_OCR`数据集作为小型的示例数据集，下载链接为：
 
 ```bash
 wget https://paddlenlp.bj.bcebos.com/models/community/paddlemix/benchmark/playground.tar # 1.0G
+wget https://paddlenlp.bj.bcebos.com/datasets/paddlemix/playground/LaTeX_OCR.tar # 1.7G
 ```
 playground/目录下包括了图片目录`data/chartqa/`和标注目录`opensource_json/`，详见`paddlemix/examples/qwen2_vl/configs/demo_chartqa_500.json`。
+LaTeX_OCR/目录下包括了图片目录和标注文件，详见`paddlemix/examples/qwen2_vl/configs/LaTeX_OCR.json`。
+训练时只需修改对应shell脚本中的`meta_path`参数即可。如`meta_path="paddlemix/examples/qwen2_vl/configs/demo_chartqa_500.json"`。
 
 
 ### 4.2 大型公开数据集
@@ -120,13 +123,16 @@ wget https://paddlenlp.bj.bcebos.com/datasets/paddlemix/playground/opensource_js
 
 ### 4.3 微调命令
 
-注意：此微调训练为语言模型微调，冻结视觉编码器而放开LLM训练，2B模型全量微调训练的显存大小约为30G，7B模型全量微调训练的显存大小约为75G。
+注意：
+1）此微调训练为语言模型微调，冻结视觉编码器而放开LLM训练。
+2）默认总bs=32，每卡bs=2，gradient_accumulation_steps=2，默认分布式训练配置为"paddle sharding stage2"策略，对应于“torch DeepSpeed ZeRO-2"策略。在LaTeX_OCR数据集训练下，2B模型微调训练的显存大小约为18G，7B模型全量微调训练的显存大小约为50G。***若训练数据集平均分辨率较大时，显存会进一步增加。***
+3）若默认训练配置下显存不足，可以调节训练shell脚本中的参数，如```PER_DEVICE_BATCH_SIZE=${PER_DEVICE_BATCH_SIZE:-1}```改小每卡bs为1，以及选择"paddle sharding stage3"策略```--sharding="stage3"```。
 
 ```bash
-# 2B (多张40G A卡 显存可运行3B模型)
+# 2B (多张40G A卡 显存可运行2B模型)
 sh paddlemix/examples/qwen2_vl/shell/baseline_2b_bs32_1e8.sh
 
-# 2B lora (多张40G A卡 显存可运行3B模型)
+# 2B lora (多张40G A卡 显存可运行2B模型)
 sh paddlemix/examples/qwen2_vl/shell/baseline_2b_lora_bs32_1e8.sh
 
 # 7B (多张80G A卡 显存可运行7B模型)
@@ -164,8 +170,9 @@ CUDA_VISIBLE_DEVICES=0 python paddlemix/examples/qwen2_vl/single_image_infer.py
 ## 参考文献
 ```BibTeX
 @article{Qwen2-VL,
-  title={Qwen2-VL},
-  author={Qwen team},
+  title={Qwen2-VL: Enhancing Vision-Language Model's Perception of the World at Any Resolution},
+  author={Wang, Peng and Bai, Shuai and Tan, Sinan and Wang, Shijie and Fan, Zhihao and Bai, Jinze and Chen, Keqin and Liu, Xuejing and Wang, Jialin and Ge, Wenbin and Fan, Yang and Dang, Kai and Du, Mengfei and Ren, Xuancheng and Men, Rui and Liu, Dayiheng and Zhou, Chang and Zhou, Jingren and Lin, Junyang},
+  journal={arXiv preprint arXiv:2409.12191},
   year={2024}
 }
 ```
