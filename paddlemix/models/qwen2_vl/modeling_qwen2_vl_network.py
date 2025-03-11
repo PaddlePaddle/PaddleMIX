@@ -394,6 +394,10 @@ def apply_rotary_pos_emb_vision(tensor: paddle.Tensor, freqs: paddle.Tensor) -> 
         sin = freqs.sin()
         cos = cos.unsqueeze(1).tile(repeat_times=[1, 1, 2]).unsqueeze(0).astype(dtype="float32")
         sin = sin.unsqueeze(1).tile(repeat_times=[1, 1, 2]).unsqueeze(0).astype(dtype="float32")
+        print("=== in apply_rotary_pos_emb_vision : ")
+        print(f"shape of tensor is : {tensor.shape}")
+        print(f"shape of cos is : {cos.shape}")
+        print(f"shape of sin is : {sin.shape}")
         output = tensor * cos + rotate_half(tensor) * sin
     output = paddle.cast(output, orig_dtype)
     return output
@@ -562,7 +566,7 @@ class Qwen2VLVisionBlock(nn.Layer):
         self.norm2 = nn.LayerNorm(config.embed_dim, epsilon=1e-6)
         mlp_hidden_dim = int(config.embed_dim * config.mlp_ratio)
 
-        self.attn = create_attention_module(config, "vision")
+        self.attn = create_attention_module(config, "vision", auto=True)
         self.mlp = VisionMlp(dim=config.embed_dim, hidden_dim=mlp_hidden_dim, hidden_act=config.hidden_act)
 
     def forward(self, hidden_states, cu_seqlens, rotary_pos_emb) -> paddle.Tensor:
@@ -1047,7 +1051,7 @@ class Qwen2VLDecoderLayer(nn.Layer):
                 "unexpected results may be encountered."
             )
 
-        self.self_attn = create_attention_module(config, "qwen2vl", layer_idx=layer_idx)
+        self.self_attn = create_attention_module(config, "qwen2vl", layer_idx=layer_idx, auto=True)
         # self.self_attn = Qwen2VLAttention(config, layer_idx)
         self.mlp = Qwen2MLP(config)
         self.input_layernorm = Qwen2RMSNorm(config, config.hidden_size, eps=config.rms_norm_eps)
