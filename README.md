@@ -27,7 +27,7 @@
 - [特色模型](#xxx)
 - [📝许可证书](#许可证书)
 - [📌社区交流](#社区交流)
-
+- [🎯引用](#引用)
 
 ## 📰新闻
 **🔥2025.03.10日Qwen2-VL系列多模态理解大模型功能抢先体验实战营**
@@ -452,3 +452,15 @@ PP-InsCapTagger(Instance Capability Tagger) 是 DataCopilot 基于 PaddleMIX 实
 <div align="center">
     <img src="https://github.com/user-attachments/assets/ecf292da-9ac6-41cb-84b6-df726ef4522d" width="300" height="300" />
 </div>
+
+
+
+## 🎯引用
+```
+@misc{paddlemix2023,
+      title={PaddleMIX, Paddle Multimodal Integration and eXploration.},
+      author={PaddlePaddle Authors},
+      howpublished = {\url{https://github.com/PaddlePaddle/PaddleMIX}},
+      year={2023}
+}
+```
