@@ -458,9 +458,9 @@ PP-InsCapTagger(Instance Capability Tagger) 是 DataCopilot 基于 PaddleMIX 实
 ## 🎯引用
 ```
 @misc{paddlemix2023,
-      title={PaddleMIX, Paddle Multimodal Integration and eXploration.},
-      author={PaddlePaddle Authors},
-      howpublished = {\url{https://github.com/PaddlePaddle/PaddleMIX}},
-      year={2023}
+  title={PaddleMIX, Paddle Multimodal Integration and eXploration.},
+  author={PaddlePaddle Authors},
+  howpublished = {\url{https://github.com/PaddlePaddle/PaddleMIX}},
+  year={2023}
 }
 ```
