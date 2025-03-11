@@ -33,6 +33,6 @@ python -m paddle.distributed.launch \
     --sharding "stage1" \
     --amp_master_grad=1 \
     --hybrid_parallel_topo_order="sharding_first" \
-    --attn_implementation "flash_attention_2" \
+    --attn_implementation "eager" \
     --freeze_vision False \
     --max_steps 500 

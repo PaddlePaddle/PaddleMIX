@@ -53,7 +53,7 @@ class GRPOScriptArguments(ScriptArguments):
         default=None, metadata={"help": "Root directory of the image"}
     )
     attn_implementation: Optional[str] = field(
-        default='flash_attention_2', metadata={"help": "Attention type"}
+        default='eager', metadata={"help": "Attention type"}
     )
 
 SYSTEM_PROMPT = "A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. The reasoning process and answer are enclosed within <think> </think> and <answer> </answer> tags, respectively, i.e., <think> reasoning process here </think><answer> answer here </answer>"
