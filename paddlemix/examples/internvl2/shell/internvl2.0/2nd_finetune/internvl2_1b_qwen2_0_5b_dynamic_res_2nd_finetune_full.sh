@@ -1,10 +1,12 @@
 set -x
 
 # 单卡设置
-GPUS=1
+GPUS=${GPUS:-8}
 BATCH_SIZE=${BATCH_SIZE:-128}
-PER_DEVICE_BATCH_SIZE=${PER_DEVICE_BATCH_SIZE:-2}
+PER_DEVICE_BATCH_SIZE=${PER_DEVICE_BATCH_SIZE:-4}
 GRADIENT_ACC=$((BATCH_SIZE / PER_DEVICE_BATCH_SIZE / GPUS))
+tensor_parallel_degree=${tensor_parallel_degree:-1}
+sharding_parallel_degree=$((GPUS / tensor_parallel_degree))
 
 export PYTHONPATH="${PYTHONPATH}:$(pwd)"
 export TF_CPP_MIN_LOG_LEVEL=3
@@ -45,7 +47,7 @@ ${TRAINING_PYTHON} \
   --evaluation_strategy "no" \
   --save_strategy "epoch" \
   --save_steps 200 \
-  --save_total_limit 2 \
+  --save_total_limit 1 \
   --learning_rate 4e-5 \
   --weight_decay 0.01 \
   --warmup_ratio 0.03 \
@@ -53,9 +55,15 @@ ${TRAINING_PYTHON} \
   --lr_scheduler_type "cosine" \
   --logging_steps 1 \
   --max_seq_length 4096 \
-  --grad_checkpoint True \
   --group_by_length True \
   --dynamic_image_size True \
   --use_thumbnail True \
   --ps_version 'v2' \
-  --report_to "visualdl"
+  --report_to "visualdl" \
+  --tensor_parallel_degree=${tensor_parallel_degree} \
+  --sharding_parallel_degree=${sharding_parallel_degree} \
+  --pipeline_parallel_degree=1 \
+  --sep_parallel_degree=1 \
+  --sharding="stage1" \
+  --amp_master_grad=1 \
+  --hybrid_parallel_topo_order="sharding_first" \
