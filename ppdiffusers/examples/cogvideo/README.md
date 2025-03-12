@@ -16,7 +16,7 @@ python scripts/infer.py \
   --seed 42
 ```
 
-model_path 当前支持: THUDM/CogVideoX-2b、THUDM/CogVideoX-5b、THUDM/CogVideoX-5b-I2V
+model_path 当前支持: THUDM/CogVideoX-2b、THUDM/CogVideoX-5b
 
 
 ### 训练示例

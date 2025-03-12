@@ -14,6 +14,7 @@
 
 rm -rf playground.tar
 rm -rf /root/.paddlemix/datasets/playground
+mkdir -p /root/.paddlemix/datasets/
 # dataset
 wget https://paddlenlp.bj.bcebos.com/models/community/paddlemix/benchmark/playground.tar
 tar -xf playground.tar
