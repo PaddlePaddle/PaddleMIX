@@ -50,7 +50,7 @@ def is_trainable(stage, model_name):
 
 def get_trainer_info(output_path: os.PathLike, do_train: bool) -> Tuple[str, "gr.Slider", Optional["gr.Plot"]]:
     r"""
-    Gets training infomation for monitor.
+    Gets training information for monitor.
     """
     running_log = ""
     running_progress = gr.Slider(visible=False)

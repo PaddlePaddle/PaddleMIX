@@ -44,7 +44,7 @@ class CLIPTrainer(Trainer):
         1、selfdefine optimizer for sharding which can't create by passing by args
 
         Args:
-            kwargs (dict): any arugments to pass to `Trainer`
+            kwargs (dict): any arguments to pass to `Trainer`
 
         Returns:
             None
