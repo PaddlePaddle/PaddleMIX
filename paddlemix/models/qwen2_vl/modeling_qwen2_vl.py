@@ -45,11 +45,7 @@ from paddlemix.models.flash_attn_utils import (
 from ppdiffusers.utils import logging
 
 from ...activations import ACT2FN
-from .bert_padding import (  # index_first_axis,; pad_input,
-    IndexFirstAxis,
-    IndexPutFirstAxis,
-    unpad_input,
-)
+from .bert_padding import index_first_axis, pad_input, unpad_input
 from .configuration_qwen2_vl import Qwen2VLConfig, Qwen2VLVisionConfig
 
 logger = logging.get_logger(__name__)
@@ -315,9 +311,6 @@ class Qwen2VLRotaryEmbedding(nn.Layer):
 
     @paddle.no_grad()
     def forward(self, x, position_ids):
-        # print("=========== in Qwen2VLRotaryEmbedding ===========")
-        # print(f"position_ids.shape is : {position_ids.shape}")
-        # print(f"self.inv_freq.shape is : {self.inv_freq.shape}")
         if "dynamic" in self.rope_type:
             self._dynamic_frequency_update(position_ids, device=x.device)
 
@@ -330,8 +323,6 @@ class Qwen2VLRotaryEmbedding(nn.Layer):
         # Force float32 (see https://github.com/huggingface/transformers/pull/29285)
         device_type = paddle.get_device()
         device_type = device_type if isinstance(device_type, str) and device_type != "mps" else "cpu"
-        # print(f"inv_freq_expanded.shape is : {inv_freq_expanded.shape}")
-        # print(f"position_ids_expanded.shape is : {position_ids_expanded.shape}")
         with paddle.amp.auto_cast():
             # Compute frequencies by matrix multiplication and transpose
             # inv_freq_expanded shape: [3, bs, dim/2, 1]
@@ -347,8 +338,6 @@ class Qwen2VLRotaryEmbedding(nn.Layer):
         # Advanced RoPE types (e.g. yarn) apply a post-processing scaling factor, equivalent to scaling attention
         cos = cos * self.attention_scaling
         sin = sin * self.attention_scaling
-        # print(f"cos.shape is : {cos.shape}")
-        # print(f"sin.shape is : {sin.shape}")
 
         return cos.astype(x.dtype), sin.astype(x.dtype)
 
@@ -396,12 +385,6 @@ def apply_multimodal_rotary_pos_emb(q, k, cos, sin, mrope_section, unsqueeze_dim
 
     # cos = cos[position_ids]
     # sin = sin[position_ids]
-    # paddle.set_printoptions(threshold=1024, edgeitems=3)
-    # print("=========== in apply_multimodal_rotary_pos_emb ===========")
-    # print(f"mrope_section is : {mrope_section}")
-    # print(f"q.shape is : {q.shape}, k.shape is : {k.shape}") # [b, h, s, d]
-    # print(f"cos.shape : {cos.shape}") # [3, b, s, d]
-    # print(f"sin.shape : {sin.shape}") # [3, b, s, d]
     mrope_section = mrope_section * 2
     cos = paddle.concat(x=[m[i % 3] for i, m in enumerate(cos.split(mrope_section, axis=-1))], axis=-1).unsqueeze(
         axis=unsqueeze_dim
@@ -410,9 +393,6 @@ def apply_multimodal_rotary_pos_emb(q, k, cos, sin, mrope_section, unsqueeze_dim
         axis=unsqueeze_dim
     )
 
-    # print("=========== in apply_multimodal_rotary_pos_emb, after split and concat ===========")
-    # print(f"cos.shape : {cos.shape}") # [b, 1, s, d]
-    # print(f"sin.shape : {sin.shape}") # [b, 1, s, d]
     q_embed = (q * cos) + (rotate_half(q) * sin)
     k_embed = (k * cos) + (rotate_half(k) * sin)
     return q_embed, k_embed
@@ -583,7 +563,7 @@ class VisionFlashAttention2(nn.Layer):
                 .squeeze(0)
                 .reshape([seq_length, -1])
             )
-        # attn_output = attn_output.astype(paddle.float32)
+        attn_output = attn_output.astype(paddle.float32)
         attn_output = self.proj(attn_output)
         return attn_output
 
@@ -1038,8 +1018,6 @@ class Qwen2VLFlashAttention2(Qwen2VLAttention):
                 cu_seqlens_q, cu_seqlens_k = cu_seq_lens
                 max_seqlen_in_batch_q, max_seqlen_in_batch_k = max_seq_lens
 
-                # print(f"in _flash_attention_forward max_seqlen_in_batch_q : {max_seqlen_in_batch_q}")
-                # print(f"in _flash_attention_forward max_seqlen_in_batch_k : {max_seqlen_in_batch_k}")
                 attn_output_unpad = flash_attn_varlen_func(  # TODO: flash_attn_unpadded
                     query_states,  # [5998, 16, 128]
                     key_states,  # [5998, 8, 128]
@@ -1053,9 +1031,7 @@ class Qwen2VLFlashAttention2(Qwen2VLAttention):
                     causal=causal,
                 )[0]
 
-                # attn_output = pad_input(attn_output_unpad, indices_q, batch_size, query_length)
-                attn_output = IndexPutFirstAxis.apply(attn_output_unpad, indices_q, batch_size * query_length)
-                attn_output = attn_output.reshape([batch_size, query_length, -1])
+                attn_output = pad_input(attn_output_unpad, indices_q, batch_size, query_length)
             else:
                 attn_output = flash_attn_func(
                     query_states,
@@ -1078,15 +1054,15 @@ class Qwen2VLFlashAttention2(Qwen2VLAttention):
         batch_size, kv_seq_len, num_key_value_heads, head_dim = key_layer.shape
 
         # TODO：cuda error
-        key_layer = IndexFirstAxis.apply(
+        key_layer = index_first_axis(
             key_layer.reshape([batch_size * kv_seq_len, num_key_value_heads, head_dim]), indices_k
         )
-        value_layer = IndexFirstAxis.apply(
+        value_layer = index_first_axis(
             value_layer.reshape([batch_size * kv_seq_len, num_key_value_heads, head_dim]), indices_k
         )
 
         if query_length == kv_seq_len:
-            query_layer = IndexFirstAxis.apply(
+            query_layer = index_first_axis(
                 query_layer.reshape([batch_size * kv_seq_len, self.num_heads, head_dim]), indices_k
             )
             cu_seqlens_q = cu_seqlens_k
@@ -1269,9 +1245,6 @@ class Qwen2VisionTransformerPretrainedModel(Qwen2VLPreTrainedModel):
         pos_ids = paddle.concat(x=pos_ids, axis=0)
         max_grid_size = grid_thw[:, 1:].max()
         rotary_pos_emb_full = self.rotary_pos_emb(max_grid_size)
-        # print("========== in Qwen2VisionTransformerPretrainedModel rot_pos_emb ========")
-        # print(rotary_pos_emb_full.shape)
-        # print(pos_ids.shape)
         rotary_pos_emb = rotary_pos_emb_full[pos_ids].flatten(start_axis=1)
         return rotary_pos_emb
 
@@ -1300,9 +1273,6 @@ class Qwen2VisionTransformerPretrainedModel(Qwen2VLPreTrainedModel):
 
     def forward(self, hidden_states: paddle.Tensor, grid_thw: paddle.Tensor) -> paddle.Tensor:
 
-        # paddle.set_printoptions(threshold=10240, edgeitems=40)
-        # print(f"hidden_states start: {hidden_states}")
-        # print(f"grid_thw : {grid_thw}")
         hidden_states = self.patch_embed(hidden_states)
         rotary_pos_emb = self.rot_pos_emb(grid_thw)
 
@@ -1310,9 +1280,6 @@ class Qwen2VisionTransformerPretrainedModel(Qwen2VLPreTrainedModel):
             axis=0, dtype="int32"
         )
         cu_seqlens = F.pad(cu_seqlens, (1, 0), value=0)
-        # print(rotary_pos_emb.shape)
-        # print(cu_seqlens)
-        # print(hidden_states.shape)
 
         for idx, blk in enumerate(self.blocks):
             if self.enable_recompute and self.training:
@@ -1320,7 +1287,6 @@ class Qwen2VisionTransformerPretrainedModel(Qwen2VLPreTrainedModel):
             else:
                 hidden_states = blk(hidden_states, cu_seqlens=cu_seqlens, rotary_pos_emb=rotary_pos_emb)
 
-        # print(f"hidden_states end: {hidden_states}")
         return self.merger(hidden_states)
 
 
@@ -1479,12 +1445,9 @@ class Qwen2VLModel(Qwen2VLPreTrainedModel):
             past_seen_tokens = past_key_values[0][0].shape[2] if past_key_values[0] is not None else 0
             cache_position = paddle.arange(past_seen_tokens, past_seen_tokens + inputs_embeds.shape[1])
 
-        # print("=========== in Qwen2VLModel ===========")
-        # print(f"if position_ids is not None position_ids is : {position_ids}")
         if position_ids is None:
             # the hard coded `3` is for temporal, height and width.
             position_ids = cache_position.reshape([1, 1, -1]).expand([3, inputs_embeds.shape[0], -1])
-        # print(f"position_ids.shape is : {position_ids.shape}")
 
         hidden_states = inputs_embeds
 
@@ -1912,10 +1875,10 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
         self,
         input_ids: paddle.Tensor = None,  # [1, 400] sum 49356255
         attention_mask: Optional[paddle.Tensor] = None,  # [1, 400] sum 396
-        inputs_embeds: Optional[paddle.Tensor] = None,
-        labels: Optional[paddle.Tensor] = None,  # [1, 400] sum 354841
         position_ids: Optional[paddle.Tensor] = None,
         past_key_values: Optional[List[paddle.Tensor]] = None,
+        inputs_embeds: Optional[paddle.Tensor] = None,
+        labels: Optional[paddle.Tensor] = None,  # [1, 400] sum 354841
         use_cache: Optional[bool] = None,
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
@@ -1965,13 +1928,10 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
         >>> tokenizer.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
         "The image shows a street scene with a red stop sign in the foreground. In the background, there is a large red gate with Chinese characters ..."
         ```"""
-        if isinstance(input_ids, list):
-            # print(f"unzip input_ids : {input_ids}")
-            input_ids, attention_mask, inputs_embeds, labels = input_ids
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states  # fmt:skip
-        # Note：动转静时不能True
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        # Note：始终为True
+        return_dict = True  # return_dict if return_dict is not None else self.config.use_return_dict
 
         if inputs_embeds is None:
             inputs_embeds = self.model.embed_tokens(input_ids)
@@ -1996,26 +1956,6 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
             if attention_mask is not None:
                 attention_mask = attention_mask
 
-        # print("================ in Qwen2VLForConditionalGeneration forward ===================")
-        # paddle.set_printoptions(threshold=10240, edgeitems=20)
-        # print(f"input_ids : {input_ids.shape}")
-        # print(f"attention_mask : {attention_mask.shape}")
-        # if position_ids is not None:
-        #     print(f"position_ids.shape : {position_ids.shape}")
-        # else:
-        #     print(f"position_ids is None")
-        # if past_key_values is not None:
-        #     print(f"past_key_values.shape : {past_key_values.shape}")
-        # else:
-        #     print(f"past_key_values is None")
-        # if inputs_embeds is not None:
-        #     print(f"inputs_embeds : {inputs_embeds.shape}")
-        # else:
-        #     print(f"inputs_embeds is None")
-        # if labels is not None:
-        #     print(f"labels.shape : {labels.shape}")
-        # else:
-        #     print(f"labels is None")
         outputs = self.model(
             input_ids=None,
             position_ids=position_ids,
@@ -2044,8 +1984,6 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
             # Flatten the tokens
             shift_logits = shift_logits.reshape([-1, self.config.vocab_size])
             shift_labels = shift_labels.reshape([-1])
-            # print(f"shift_logits : {shift_logits}")
-            # print(f"shift_labels : {shift_labels}")
             if _IS_NPU:
                 tmp = F.log_softmax(shift_logits, axis=1)
                 loss = F.nll_loss(tmp, shift_labels, reduction="sum")
@@ -2054,14 +1992,12 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
                 loss = loss_fct(shift_logits, shift_labels)
             label_sum = paddle.sum(shift_labels != -100).cast("float32")
             loss = loss / label_sum
-            # print(f"loss : {loss}")
 
         if not return_dict:
             # output = (logits,) + outputs[1:]
             # Note: (changwenbin) fix "can only concatenate tuple (not "list") to tuple".
             output = (logits,) + tuple(outputs[1:])
-            # return (loss,) + output if loss is not None else output
-            return loss if loss is not None else output  # d2s only support return loss
+            return (loss,) + output if loss is not None else output
             # return logits + 28 layers k and v
 
         return Qwen2VLCausalLMOutputWithPast(
