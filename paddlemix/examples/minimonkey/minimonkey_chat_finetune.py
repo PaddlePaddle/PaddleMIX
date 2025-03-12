@@ -43,7 +43,7 @@ from paddlemix.datasets.internvl_dataset import (ConcatDataset,
                                     WeightedConcatDataset, build_transform,
                                     dynamic_preprocess, dynamic_preprocess2, preprocess,
                                     preprocess_internlm, preprocess_mpt,
-                                    preprocess_phi3)
+                                    preprocess_phi3, preprocess_internvl2_5)
 from PIL import Image, ImageFile, PngImagePlugin, UnidentifiedImageError
 from paddle.io import Dataset
 from paddlenlp.transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
@@ -121,10 +121,6 @@ class ModelArguments:
     use_custom_trainer: bool = field(
         default=False,
         metadata={'help': 'Set to True to enable the use of a custom trainer.'},
-    )
-    grad_checkpoint: Optional[bool] = field(
-        default=False,
-        metadata={'help': 'Set to True to use gradient checkpointing.'},
     )
     drop_path_rate: float = field(
         default=0.0,
@@ -316,6 +312,8 @@ class LazySupervisedDataset(Dataset):
             preprocess_function = preprocess_internlm
         elif self.template_name == 'phi3-chat':
             preprocess_function = preprocess_phi3
+        elif self.template_name == 'internvl2_5':
+            preprocess_function = preprocess_internvl2_5
         else:
             preprocess_function = preprocess
         return preprocess_function
@@ -671,7 +669,7 @@ def main():
     print(f'Loading Tokenizer: {tokenizer_path}')
 
 
-    if 'qwen' in tokenizer_path.lower() or '1B' in tokenizer_path:
+    if 'qwen' in tokenizer_path.lower() or '1B' in tokenizer_path or 'InternVL2_5-4B' in tokenizer_path:
         tokenizer = Qwen2Tokenizer.from_pretrained(
             tokenizer_path, add_eos_token=False, trust_remote_code=True)
     else:
@@ -690,20 +688,6 @@ def main():
     # num_new_tokens = tokenizer.add_tokens(token_list, special_tokens=True)
     # img_context_token_id = tokenizer.convert_tokens_to_ids(IMG_CONTEXT_TOKEN) ###
     tcs_loader = None #TCSLoader('~/petreloss.conf') if has_tcs_loader else None
-
-    model_size = tokenizer_path.split('-')[-1]
-    if 'qwen' in tokenizer_path.lower() or model_size in ['1B']:
-        # TODO:
-        tokenizer.added_tokens_encoder =  {'<|endoftext|>': 151643, '<|im_start|>': 151644, '<|im_end|>': 151645, '<img>': 151646, '</img>': 151647, '<IMG_CONTEXT>': 151648, '<quad>': 151649, '</quad>': 151650, '<ref>': 151651, '</ref>': 151652, '<box>': 151653, '</box>': 151654}
-        tokenizer.added_tokens_decoder = {v: k for k, v in tokenizer.added_tokens_encoder.items()}
-    elif model_size in ['2B', '8B', '26B']:
-        # TODO:
-        tokenizer.added_tokens_encoder = {'<unk>': 0, '<s>': 1, '</s>': 2, '<|plugin|>': 92538, '<|interpreter|>': 92539, '<|action_end|>': 92540, '<|action_start|>': 92541, '<|im_end|>': 92542, '<|im_start|>': 92543, '<img>': 92544, '</img>': 92545, '<IMG_CONTEXT>': 92546, '<quad>': 92547, '</quad>': 92548, '<ref>': 92549, '</ref>': 92550, '<box>': 92551, '</box>': 92552}
-        tokenizer.added_tokens_decoder = {v: k for k, v in tokenizer.added_tokens_encoder.items()}
-    elif model_size in ['4B', '40B', '76B']:
-        raise NotImplementedError
-    else:
-        raise ValueError
 
     num_new_tokens = 0 #tokenizer.add_tokens(token_list, special_tokens=True)
     img_context_token_id = tokenizer.convert_tokens_to_ids(IMG_CONTEXT_TOKEN) ###
@@ -817,10 +801,6 @@ def main():
         model.language_model.config.vocab_size = len(tokenizer)
 
     model.language_model.config.use_cache = False
-    model.vision_model.gradient_checkpointing = True
-    model.vision_model.encoder.gradient_checkpointing = True
-    # if model_args.grad_checkpoint:
-    #     model.language_model._set_gradient_checkpointing()
 
     train_dataset = build_datasets(
         data_args, tokenizer, tcs_loader, model, group_by_length=training_args.group_by_length,
@@ -841,14 +821,6 @@ def main():
 
     if model_args.unfreeze_lm_head:
         model.language_model.lm_head.stop_gradient = not True
-
-    if model_args.use_backbone_lora:
-        model.wrap_backbone_lora(r=model_args.use_backbone_lora, lora_alpha=2 * model_args.use_backbone_lora)
-        model.config.use_backbone_lora = model_args.use_backbone_lora
-
-    if model_args.use_llm_lora:
-        model.wrap_llm_lora(r=model_args.use_llm_lora, lora_alpha=2 * model_args.use_llm_lora)
-        model.config.use_llm_lora = model_args.use_llm_lora
 
     if model_args.freeze_mlp:
         _freeze_params(model.mlp1)

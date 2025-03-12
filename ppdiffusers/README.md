@@ -20,9 +20,14 @@
 **PPDiffusers**是一款支持多种模态（如文本图像跨模态、图像、语音）扩散模型（Diffusion Model）训练和推理的国产化工具箱，依托于[**PaddlePaddle**](https://www.paddlepaddle.org.cn/)框架和[**PaddleNLP**](https://github.com/PaddlePaddle/PaddleNLP)自然语言处理开发库。
 
 ## News 📢
+* 🔥 **2025.03.11 发布 0.29.1 版本，发布自研可控视频模型 [PP-VCtrl](https://github.com/westfish/PaddleMIX/tree/develop/ppdiffusers/examples/ppvctrl)，支持在多种控制条件下的视频生成，广泛适用于人物动画、场景转换和视频编辑场景；集成高质量文生视频模型 [CogVideoX](https://github.com/westfish/PaddleMIX/tree/develop/ppdiffusers/examples/cogvideo) 和 HunyuanVideo，进一步提高了文本到视频生成的效果；新增对 SD3 ControlNet 和 SD3.5 的支持，提升了Stable Diffusion 3的兼容性，进一步强化图像生成的精细化控制能力。**
+
 * 🔥 **2024.10.18 发布 0.29.0 版本，新增图像生成模型[Stable Diffusion 3 (SD3)](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/examples/text_to_image/README_sd3.md)，支持DreamBooth训练及高性能推理；SD3、SDXL适配昇腾910B，提供国产计算芯片上的训推能力；DIT支持[高性能推理](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/examples/class_conditional_image_generation/DiT/README.md#23-paddle-inference-%E9%AB%98%E6%80%A7%E8%83%BD%E6%8E%A8%E7%90%86)；支持PaddleNLP 3.0 beta版本。**
 
 * 🔥 **2024.07.15 发布 0.24.1 版本，新增[Open-Sora](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/Open-Sora)，支持模型训练和推理；全面支持Paddle 3.0。**
+
+<details>
+<summary>点击展开更多历史版本更新</summary>
 
 * 🔥 **2024.04.17 发布 0.24.0 版本，支持[Sora相关技术](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/sora)，支持[DiT](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/class_conditional_image_generation/DiT)、[SiT](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/class_conditional_image_generation/DiT#exploring-flow-and-diffusion-based-generative-models-with-scalable-interpolant-transformers-sit)、[UViT](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/text_to_image_mscoco_uvit)训练推理，新增[NaViT](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/navit)、[MAGVIT-v2](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/video_tokenizer/magvit2)模型；
 视频生成能力全面升级；
@@ -39,8 +44,7 @@
 Stable Diffusion支持[BF16 O2训练](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/stable_diffusion)，效果对齐FP32；
 [LoRA加载升级](#加载HF-LoRA权重)，支持加载SDXL的LoRA权重；
 [Controlnet](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/ppdiffusers/pipelines/controlnet)升级，支持ControlNetImg2Img、ControlNetInpaint、StableDiffusionXLControlNet等。**
-
-
+</details>
 
 
 ## 特性

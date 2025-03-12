@@ -67,7 +67,7 @@ class CosineDecayWithWarmup(LRScheduler):
         elif isinstance(warmup, float):
             self.warmup_steps = int(warmup * total_steps)
         else:
-            raise ValueError("Warmup expected a int or float number, but recevied: {}".format(type(warmup)))
+            raise ValueError("Warmup expected a int or float number, but received: {}".format(type(warmup)))
 
         if self.warmup_steps > 0:
             self.last_lr = self.warmup_start_lr
