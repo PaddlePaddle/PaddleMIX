@@ -4,7 +4,7 @@
 ## 0. 多模态理解大模型介绍
 多模态理解大模型是一类能够同时处理和理解多种数据形式（如图像📸、文本📝、视频🎥等）的人工智能模型。这类模型通过深度学习技术，可以实现跨模态的信息理解、关联和生成！相比传统的单模态模型，多模态模型能够更全面地理解和分析复杂场景，在实际应用中具有更强的实用性和普适性。✨典型应用包括：图文理解、视觉问答、文档理解、场景描述等任务。随着技术的发展，多模态大模型在准确性、鲁棒性和通用性等方面都取得了显著进步，为人工智能的发展开辟了新的方向！🎯
 
-下面介绍 InternVL2，一个强大的开源多模态大语言模型（MLLM）。InternVL2 系列包含从适用于参数较小的1B模型到功能更强大的模型。凭借更大规模的语言模型，InternVL2-Pro 展现出卓越的多模态理解能力，在各种基准测试中可与商业闭源模型相媲美。🌈
+下面介绍 InternVL2，一个强大的开源多模态大语言模型（MLLM）。InternVL2 系列包含从适用于参数较小的1B模型到功能更强大的模型。凭借更大规模的语言模型，InternVL2-Pro 展现出卓越的多模态理解能力，在各种基准测试中可与商业闭源模型相媲美。InternVL 2.5 在 InternVL 2.0 的基础上进行了显著增强，主要改进包括训练和测试策略的优化以及数据质量的提升。🌈
 
 <div style="text-align: center; width: 100%;">
     <img src="https://github.com/user-attachments/assets/772bad8a-c55e-4fbc-b148-fbcd7bd424cb" alt="InternVL2 Benchmark" style="width: 80%; height: auto;">
@@ -17,8 +17,8 @@
 </div>
 
 [InternVL2](https://internvl.github.io/blog/2024-07-02-InternVL-2.0/)是 InternVL 系列多模态理解大模型的最新成员。InternVL2 包含多个经过指令微调的模型，参数量从 1B 到 76B 不等。在开源模型中，InternVL2 在文档和图表理解、信息图表问答、场景文本理解和 OCR 任务、科学和数学问题解决等方面表现出色。
-[InternVL2-MPO](https://internvl.github.io/blog/2024-11-14-InternVL-2.0-MPO/)是混合偏好优化后的InternVL2模型，基于InternVL2在多个基准测试中表现出了改进的性能，特别是在多模态推理方面。
-
+[InternVL2.5](https://internvl.github.io/blog/2024-12-05-InternVL-2.5//)在 InternVL 2.0 的基础上进行了显著增强，主要改进包括训练和测试策略的优化以及数据质量的提升。
+[InternVL2.5-MPO](https://internvl.github.io/blog/2024-12-20-InternVL-2.5-MPO/)是混合偏好优化后的 InternVL 2.5模型，在多个基准测试中表现出了改进的性能，特别是在多模态推理方面。
 
 
 **本仓库支持的模型权重:**
@@ -26,19 +26,19 @@
 | Model              |
 |--------------------|
 | OpenGVLab/InternVL2-1B  |
+| OpenGVLab/InternVL2-2B  |
+| OpenGVLab/InternVL2-8B  |
+| OpenGVLab/InternVL2-8B-MPO |
+| OpenGVLab/InternVL2-26B |
+| OpenGVLab/InternVL2-40B |
 | OpenGVLab/InternVL2_5-1B  |
 | OpenGVLab/InternVL2_5-1B-MPO  |
-| OpenGVLab/InternVL2-2B  |
 | OpenGVLab/InternVL2_5-2B  |
 | OpenGVLab/InternVL2_5-2B-MPO  |
 | OpenGVLab/InternVL2_5-4B  |
 | OpenGVLab/InternVL2_5-4B-MPO  |
-| OpenGVLab/InternVL2-8B  |
 | OpenGVLab/InternVL2_5-8B  |
 | OpenGVLab/InternVL2_5-8B-MPO  |
-| OpenGVLab/InternVL2-26B |
-| OpenGVLab/InternVL2-40B |
-| OpenGVLab/InternVL2-8B-MPO |
 
 注意：与huggingface权重同名，但权重为paddle框架的Tensor，使用`xxx.from_pretrained("OpenGVLab/InternVL2-2B")`即可自动下载该权重文件夹到缓存目录。
 
@@ -59,12 +59,12 @@
 
 ```bash
 python paddlemix/examples/internvl2/chat_demo.py \
-    --model_name_or_path "OpenGVLab/InternVL2-8B" \
+    --model_name_or_path "OpenGVLab/InternVL2_5-8B" \
     --image_path 'paddlemix/demo_images/examples_image1.jpg' \
     --text "Please describe this image in detail."
 ```
 可配置参数说明：
-  * `model_name_or_path`: 指定 internvl2 的模型名字或权重路径以及tokenizer组件，默认 OpenGVLab/InternVL2-8B，也可选择 OpenGVLab/InternVL2-2B
+  * `model_name_or_path`: 指定 internvl2 的模型名字或权重路径以及tokenizer组件，默认 OpenGVLab/InternVL2_5-8B，也可选择 OpenGVLab/InternVL2_5-2B
   * `image_path`: 指定图片路径
   * `text`: 用户指令, 例如 "Please describe this image in detail."
 
@@ -80,12 +80,12 @@ python paddlemix/examples/internvl2/chat_demo.py \
 
 ```bash
 python paddlemix/examples/internvl2/chat_demo_video.py \
-    --model_name_or_path "OpenGVLab/InternVL2-8B" \
+    --model_name_or_path "OpenGVLab/InternVL2_5-8B" \
     --video_path 'paddlemix/demo_images/red-panda.mp4' \
     --text "Please describe this video in detail."
 ```
 可配置参数说明：
-  * `model_name_or_path`: 指定 internvl2 的模型名字或权重路径以及tokenizer组件，默认 OpenGVLab/InternVL2-8B，也可选择 OpenGVLab/InternVL2-2B
+  * `model_name_or_path`: 指定 internvl2 的模型名字或权重路径以及tokenizer组件，默认 OpenGVLab/InternVL2_5-8B，也可选择 OpenGVLab/InternVL2_5-2B
   * `video_path`: 指定视频路径
   * `text`: 用户指令, 例如 "Please describe this video in detail."
 
@@ -194,21 +194,21 @@ playground/
 ```bash
 # 多卡
 # 1B InternVl2 (LLM Qwen2.5-0.5B)
-sh paddlemix/examples/internvl2/shell/internvl2.0/pretrain/internvl2_1b_qwen2-5_0_5b_dynamic_res_pretrain.sh
+sh paddlemix/examples/internvl2/shell/internvl2.0/1st_pretrain/internvl2_1b_qwen2-5_0_5b_dynamic_res_pretrain.sh
 
 ## 多卡
 # 2B InternVl2 (LLM internlm-1_8b)
-sh paddlemix/examples/internvl2/shell/internvl2.0/pretrain/internvl2_2b_internlm2_1_8b_dynamic_res_pretrain.sh
+sh paddlemix/examples/internvl2/shell/internvl2.0/1st_pretrain/internvl2_2b_internlm2_1_8b_dynamic_res_pretrain.sh
 # 2B InternVl2 (LLM Qwen2.5-1.5b)
-sh paddlemix/examples/internvl2/shell/internvl2.0/pretrain/internvl2_2b_qwen2-5_1_5b_dynamic_res_pretrain.sh
+sh paddlemix/examples/internvl2/shell/internvl2.0/1st_pretrain/internvl2_2b_qwen2-5_1_5b_dynamic_res_pretrain.sh
 
 ## 多卡
 # 4B InternVl2 (LLM Qwen2.5-3b)
-sh paddlemix/examples/internvl2/shell/internvl2.0/pretrain/internvl2_2b_qwen2-5_3b_dynamic_res_pretrain.sh
+sh paddlemix/examples/internvl2/shell/internvl2.0/1st_pretrain/internvl2_2b_qwen2-5_3b_dynamic_res_pretrain.sh
 
 ## 多卡
 # 8B InternVl2 (LLM Qwen2.5-7b)
-sh paddlemix/examples/internvl2/shell/internvl2.0/pretrain/internvl2_8b_qwen2-5_7b_dynamic_res_pretrain.sh
+sh paddlemix/examples/internvl2/shell/internvl2.0/1st_pretrain/internvl2_8b_qwen2-5_7b_dynamic_res_pretrain.sh
 ```
 ### 4.3 微调命令
 
@@ -216,17 +216,23 @@ sh paddlemix/examples/internvl2/shell/internvl2.0/pretrain/internvl2_8b_qwen2-5_
 2B模型微调训练的显存大小约为40G，8B模型微调训练的显存大小约为80G。
 
 ```bash
-# 单卡
+## 多卡
 # 1B
 sh paddlemix/examples/internvl2/shell/internvl2.0/2nd_finetune/internvl2_1b_qwen2_0_5b_dynamic_res_2nd_finetune_full.sh
+# 或者
+sh paddlemix/examples/internvl2/shell/internvl2.5/2nd_finetune/internvl2_5_1b_dynamic_res_2nd_finetune_full.sh
 
 ## 多卡
 # 2B
 sh paddlemix/examples/internvl2/shell/internvl2.0/2nd_finetune/internvl2_2b_internlm2_1_8b_dynamic_res_2nd_finetune_full.sh
+# 或者
+sh paddlemix/examples/internvl2/shell/internvl2.5/2nd_finetune/internvl2_5_2b_dynamic_res_2nd_finetune_full.sh
 
 ## 多卡
 # 8B
 sh paddlemix/examples/internvl2/shell/internvl2.0/2nd_finetune/internvl2_8b_internlm2_7b_dynamic_res_2nd_finetune_full.sh
+# 或者
+sh paddlemix/examples/internvl2/shell/internvl2.5/2nd_finetune/internvl2_5_8b_dynamic_res_2nd_finetune_full.sh
 ```
 
 ### 4.4 微调后使用
