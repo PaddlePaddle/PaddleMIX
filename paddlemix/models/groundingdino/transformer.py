@@ -516,7 +516,7 @@ class TransformerEncoder(nn.Layer):
             - position_ids: bs, n_text
         Intermedia:
             - reference_points: [bs, sum(hi*wi), num_level, 2]
-        Outpus:
+        Outputs:
             - output: [bs, sum(hi*wi), 256]
         """
 

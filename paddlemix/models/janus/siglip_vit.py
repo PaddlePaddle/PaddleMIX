@@ -564,7 +564,7 @@ class SigLIPVisionTransformer(paddle.nn.Layer):
             img_size: Input image size.
             patch_size: Patch size.
             in_chans: Number of image input channels.
-            num_classes: Mumber of classes for classification head.
+            num_classes: Number of classes for classification head.
             global_pool: Type of global pooling for final sequence (default: 'token').
             embed_dim: Transformer embedding dimension.
             depth: Depth of transformer.
