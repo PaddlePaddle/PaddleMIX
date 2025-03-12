@@ -13,7 +13,7 @@ import paddle
 from paddlenlp.generation import GenerationConfig
 from paddlenlp.utils.import_utils import import_module
 
-sys.path.append('paddlemix/examples/vlm_r1')
+sys.path.append('paddlemix/examples/r1_mllm')
 from r1_mllm.utils.tokenizer import get_processor
 from r1_mllm.utils.constant import TEMPLATE_MAPPING, MODEL_MAPPING, SUPPORTED_MODELS
 
@@ -29,6 +29,7 @@ def parse_args():
     parser.add_argument("--steps", type=int, default=100, help="Checkpoint steps for logging.")
     parser.add_argument("--method", type=str, default="r1", help="Choose test r1 or baseline")
     parser.add_argument("--seed", type=int, default=42, help="Seed for inference.")
+    parser.add_argument("--dtype", type=str, default="bfloat16", help="Data type for inference.")
     return parser.parse_args()
 
 
@@ -67,7 +68,7 @@ def main(args):
     model_cls = import_module(f"paddlemix.models.{MODEL_MAPPING[args.model_name]}")
     model = model_cls.from_pretrained(
         MODEL_PATH,
-        dtype="bfloat16",
+        dtype=args.dtype,
     )
 
     processor, tokenizer = get_processor(args.model_name,SUPPORTED_MODELS[args.model_name])

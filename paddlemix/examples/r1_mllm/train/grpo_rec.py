@@ -20,7 +20,7 @@ from paddlenlp.trl import ModelConfig
 from paddlenlp.trl.utils import ScriptArguments
 from paddlenlp.utils.import_utils import import_module
 
-sys.path.append('paddlemix/examples/vlm_r1')
+sys.path.append('paddlemix/examples/r1_mllm')
 from r1_mllm.trainer import GRPOConfig, Qwen2VLGRPOTrainer
 from r1_mllm.dataset.qwen2_vl_dataset import Qwen2VLRECDataset
 from r1_mllm.utils.tokenizer import get_processor

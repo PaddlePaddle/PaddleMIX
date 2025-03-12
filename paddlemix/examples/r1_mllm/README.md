@@ -1,6 +1,6 @@
-# VLM-R1 
+# R1-MLLM
 ## 简介
-自Deepseek-R1推出以来，许多研究工作都集中在对其的复现和改进上。如VLM-R1,R1-V。PaddleMIX团队决定启动复现R1在视觉语言大模型相关的研究工作，并在此基础上探索可能的优化与创新路径，推动视觉-语言大模型领域的进一步发展。本仓库基于Paddle实现了GRPO算法微调Qwen2.5-VL、Qwen2-VL视觉语言大模型，并支持指向性目标检测任务 (Referring Expression Comprehension)、计数问题 (Item Counting)、几何推理 (Geometry Reasoning)问题。
+本仓库基于Paddle实现了GRPO算法微调Qwen2.5-VL、Qwen2-VL视觉语言大模型，并支持指向性目标检测任务 (Referring Expression Comprehension)、计数问题 (Item Counting)、几何推理 (Geometry Reasoning)问题。
 
 
 本仓库支持的权重
@@ -23,7 +23,7 @@
 ### 指向性目标检测任务
 * 下载 [COCO Train2014 image](https://huggingface.co/datasets/omlab/VLM-R1/resolve/main/train2014.zip)  并且解压到指定路径PaddleMIX下的data/coco目录.
 
-* 下载 [RefGTA] (https://huggingface.co/datasets/omlab/VLM-R1/resolve/main/refgta.zip) 并解压到data/refgta目录。
+* 下载 [RefGTA](https://huggingface.co/datasets/omlab/VLM-R1/resolve/main/refgta.zip) 并解压到data/refgta目录。
 
 * 下载 [RefCOCO/+/g and RefGTA Annotation files](https://huggingface.co/datasets/omlab/VLM-R1/resolve/main/rec_jsons_processed.zip) 解压放置PaddleMIX/data/rec_jsons_processed目录下 (RefGTA 域外测试数据,用于泛化性测试).
 
@@ -91,19 +91,19 @@ The bounding box describes the large, white vehicle on the street. The vehicle i
 
 ```bash
 # 八卡训练指向性目标检测 GRPO
-bash paddlemix/examples/vlm_r1/scripts/run_grpo_rec.sh
+bash paddlemix/examples/r1_mllm/scripts/run_grpo_rec.sh
 
 # 八卡训练计数问题 GRPO
-bash paddlemix/examples/vlm_r1/scripts/run_grpo_counting.sh
+bash paddlemix/examples/r1_mllm/scripts/run_grpo_counting.sh
 
 # 八卡训练几何推理问题 GRPO
-bash paddlemix/examples/vlm_r1/scripts/run_grpo_geometry.sh
+bash paddlemix/examples/r1_mllm/scripts/run_grpo_geometry.sh
 ```
 
 ## 测试命令
 ```bash
-# test baseline refcoco
-python paddlemix/examples/vlm_r1/eval/test_rec.py \
+# test baseline refcoco, 如果在V100机器上使用请加入传参 --dtype "float16"
+python paddlemix/examples/r1_mllm/eval/test_rec.py \
     --model_name "Qwen2.5-VL-3B-Instruct" \
     --method "baseline" \
     --model_path "Qwen/Qwen2.5-VL-3B-Instruct" \
@@ -116,7 +116,7 @@ python paddlemix/examples/vlm_r1/eval/test_rec.py \
     --seed 42
 
 # test r1 refgta
-python paddlemix/examples/vlm_r1/eval/test_rec.py \
+python paddlemix/examples/r1_mllm/eval/test_rec.py \
     --model_name "Qwen2.5-VL-3B-Instruct" \
     --method "r1" \
     --model_path "Qwen/Qwen2.5-VL-3B-Instruct" \
@@ -129,7 +129,7 @@ python paddlemix/examples/vlm_r1/eval/test_rec.py \
     --seed 42
 
 # test r1 counting
-python paddlemix/examples/vlm_r1/eval/test_r1-v.py \
+python paddlemix/examples/r1_mllm/eval/test_r1-v.py \
     --model_name "Qwen2.5-VL-3B-Instruct" \
     --method "r1" \
     --model_path "Qwen/Qwen2.5-VL-3B-Instruct" \
@@ -140,8 +140,8 @@ python paddlemix/examples/vlm_r1/eval/test_r1-v.py \
     --steps 500 \
     --seed 42
 
-# test r1 geoqa
-python paddlemix/examples/vlm_r1/eval/test_r1-v.py \
+# test r1 geoqa 
+python paddlemix/examples/r1_mllm/eval/test_r1-v.py \
     --model_name "Qwen2.5-VL-3B-Instruct" \
     --method "r1" \
     --model_name "Qwen2.5-VL-3B-Instruct" \

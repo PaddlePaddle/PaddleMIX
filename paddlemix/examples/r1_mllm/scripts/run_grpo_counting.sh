@@ -1,15 +1,19 @@
+# export DEBUG_MODE="true"
+# export WANDB_DISABLED="true"
+# export CUDA_VISIBLE_DEVICES=6,7
+# export LOG_PATH="./debug_r1_v.txt"
 GPUS=${GPUS:-8}
 NUM_GENERATIONS=${NUM_GENERATIONS:-8}
-RUN_NAME="Qwen2.5-VL-3B-GRPO-Geometry_${GPUS}"
-IMAGE_ROOT="data/GEOQA_R1V_Train_8K"
-DATASET_NAME="data/GEOQA_R1V_Train_8K"
+RUN_NAME="Qwen2.5-VL-3B-GRPO-Counting_${GPUS}"
+IMAGE_ROOT="data/clevr_cogen_a_train"
+DATASET_NAME="data/clevr_cogen_a_train"
 
 python -m paddle.distributed.launch \
     --nnodes=1 \
     --rank=0 \
     --master=127.0.0.1 \
     --nproc_per_node=$GPUS \
-    paddlemix/examples/vlm_r1/train/grpo_r1-v.py \
+    paddlemix/examples/r1_mllm/train/grpo_r1-v.py \
     --output_dir output/$RUN_NAME \
     --model_name_or_path Qwen/Qwen2-VL-2B-Instruct \
     --dataset_name $DATASET_NAME \
@@ -31,6 +35,7 @@ python -m paddle.distributed.launch \
     --amp_master_grad True \
     --do_train \
     --ignore_save_lr_and_optim True \
-    --freeze_vision False
+    --freeze_vision False \
+    --max_steps 100
     # --recompute \
 

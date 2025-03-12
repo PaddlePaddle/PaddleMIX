@@ -11,10 +11,10 @@ python -m paddle.distributed.launch \
     --nnodes=1 \
     --master=127.0.0.1 \
     --nproc_per_node=$GPUS \
-    paddlemix/examples/vlm_r1/train/grpo_rec.py \
+    paddlemix/examples/r1_mllm/train/grpo_rec.py \
     --output_dir output/$RUN_NAME \
     --model_name_or_path Qwen/Qwen2.5-VL-3B-Instruct \
-    --dataset_name paddlemix/examples/vlm_r1/data_config/rec.yaml \
+    --dataset_name paddlemix/examples/r1_mllm/data_config/rec.yaml \
     --image_root $IMAGE_ROOT \
     --max_prompt_length 1024 \
     --max_completion_length 256 \
