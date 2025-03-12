@@ -16,11 +16,11 @@ from paddlenlp.trainer.argparser import PdArgumentParser,DataClassType,DataClass
 from paddlenlp.utils.import_utils import import_module
 
 sys.path.append('paddlemix/examples/vlm_r1')
-from open_r1_mllm.trainer import GRPOConfig, Qwen2VLGRPOTrainer
-from open_r1_mllm.dataset.qwen2_vl_dataset import Qwen2VLDataCollatorForSeq2Seq
-from open_r1_mllm.utils.tokenizer import get_processor
-from open_r1_mllm.utils.args import TrlParser
-from open_r1_mllm.utils.constant import TEMPLATE_MAPPING
+from r1_mllm.trainer import GRPOConfig, Qwen2VLGRPOTrainer
+from r1_mllm.dataset.qwen2_vl_dataset import Qwen2VLDataCollatorForSeq2Seq
+from r1_mllm.utils.tokenizer import get_processor
+from r1_mllm.utils.args import TrlParser
+from r1_mllm.utils.constant import TEMPLATE_MAPPING
 
 
 @dataclass

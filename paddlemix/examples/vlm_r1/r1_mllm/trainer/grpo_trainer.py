@@ -354,7 +354,7 @@ class Qwen2VLGRPOTrainer(Trainer):
         # Regular generation path
         if paddle.distributed.is_initialized():
             with paddle.no_grad():
-                completion_ids = model._layers.generate(**inputs,generation_config=self.generation_config)[0]
+                completion_ids = unwrap_model(model).generate(**inputs,generation_config=self.generation_config)[0]
         else:
             with paddle.no_grad():
                 completion_ids = model.generate(**inputs,generation_config=self.generation_config)[0]

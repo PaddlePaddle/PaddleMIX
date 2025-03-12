@@ -57,10 +57,10 @@ unzip data/Geo170K/images.zip -d data/Geo170K
 ### 性能指标
 固定随机种子，从验证集中抽取500条数据测试，结果如下：
 
-| Model | refcoco val|  refcoco+ val | refcocog val | RefGTA | 
-|-------|------------|---------------|--------------|--------|
-|  Qwen2.5-VL-3B-Instruct   |88.60% |79.60%     |  81.80%  | 71.80% |
-|  R1-Qwen2.5-VL-3B-Instruct(300steps) |89.60% |84.20%      |  85.00%  | 72.80% |
+| Model                                | refcoco val|  refcoco+ val | refcocog val | RefGTA | 
+|--------------------------------------|------------|---------------|--------------|--------|
+|  Qwen2.5-VL-3B-Instruct              |88.60%      |79.60%         |  81.80%      | 71.80% |
+|  R1-Qwen2.5-VL-3B-Instruct(500steps) |88.40%      |83.60%         |  81.80%      | 74.60% |
 
 ### 训练曲线
 ![Image](https://github.com/user-attachments/assets/9df169fb-7fda-4156-8d62-d8baedf0f5f3)
@@ -91,18 +91,18 @@ The bounding box describes the large, white vehicle on the street. The vehicle i
 
 ```bash
 # 八卡训练指向性目标检测 GRPO
-bash paddlemix/examples/vlm_r1/train/run_grpo_rec.sh
+bash paddlemix/examples/vlm_r1/scripts/run_grpo_rec.sh
 
 # 八卡训练计数问题 GRPO
-bash paddlemix/examples/vlm_r1/train/run_grpo_counting.sh
+bash paddlemix/examples/vlm_r1/scripts/run_grpo_counting.sh
 
 # 八卡训练几何推理问题 GRPO
-bash paddlemix/examples/vlm_r1/train/run_grpo_geometry.sh
+bash paddlemix/examples/vlm_r1/scripts/run_grpo_geometry.sh
 ```
 
 ## 测试命令
 ```bash
-# test refcoco
+# test baseline refcoco
 python paddlemix/examples/vlm_r1/eval/test_rec.py \
     --model_name "Qwen2.5-VL-3B-Instruct" \
     --method "baseline" \
@@ -115,7 +115,7 @@ python paddlemix/examples/vlm_r1/eval/test_rec.py \
     --steps 300 \
     --seed 42
 
-# test refgta
+# test r1 refgta
 python paddlemix/examples/vlm_r1/eval/test_rec.py \
     --model_name "Qwen2.5-VL-3B-Instruct" \
     --method "r1" \
@@ -128,7 +128,7 @@ python paddlemix/examples/vlm_r1/eval/test_rec.py \
     --steps 300 \
     --seed 42
 
-# test counting
+# test r1 counting
 python paddlemix/examples/vlm_r1/eval/test_r1-v.py \
     --model_name "Qwen2.5-VL-3B-Instruct" \
     --method "r1" \
@@ -140,8 +140,9 @@ python paddlemix/examples/vlm_r1/eval/test_r1-v.py \
     --steps 500 \
     --seed 42
 
-# test geoqa
+# test r1 geoqa
 python paddlemix/examples/vlm_r1/eval/test_r1-v.py \
+    --model_name "Qwen2.5-VL-3B-Instruct" \
     --method "r1" \
     --model_name "Qwen2.5-VL-3B-Instruct" \
     --model_path "Qwen/Qwen2.5-VL-3B-Instruct" \
@@ -160,6 +161,14 @@ python paddlemix/examples/vlm_r1/eval/test_r1-v.py \
   title        = {VLM-R1: A stable and generalizable R1-style Large Vision-Language Model},
   howpublished = {\url{https://github.com/om-ai-lab/VLM-R1}},
   note         = {Accessed: 2025-02-15},
+  year         = {2025}
+}
+
+@misc{chen2025r1v,
+  author       = {Chen, Liang and Li, Lei and Zhao, Haozhe and Song, Yifan and Vinci},
+  title        = {R1-V: Reinforcing Super Generalization Ability in Vision-Language Models with Less Than \$3},
+  howpublished = {\url{https://github.com/Deep-Agent/R1-V}},
+  note         = {Accessed: 2025-02-02},
   year         = {2025}
 }
 ```

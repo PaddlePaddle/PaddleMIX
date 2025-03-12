@@ -21,11 +21,11 @@ from paddlenlp.trl.utils import ScriptArguments
 from paddlenlp.utils.import_utils import import_module
 
 sys.path.append('paddlemix/examples/vlm_r1')
-from open_r1_mllm.trainer import GRPOConfig, Qwen2VLGRPOTrainer
-from open_r1_mllm.dataset.qwen2_vl_dataset import Qwen2VLRECDataset
-from open_r1_mllm.utils.tokenizer import get_processor
-from open_r1_mllm.utils.args import TrlParser
-from open_r1_mllm.utils.constant import TEMPLATE_MAPPING
+from r1_mllm.trainer import GRPOConfig, Qwen2VLGRPOTrainer
+from r1_mllm.dataset.qwen2_vl_dataset import Qwen2VLRECDataset
+from r1_mllm.utils.tokenizer import get_processor
+from r1_mllm.utils.args import TrlParser
+from r1_mllm.utils.constant import TEMPLATE_MAPPING
 
 @dataclass
 class GRPOScriptArguments(ScriptArguments):
@@ -53,7 +53,7 @@ class GRPOScriptArguments(ScriptArguments):
         default=None, metadata={"help": "Root directory of the image"}
     )
     attn_implementation: Optional[str] = field(
-        default='eager', metadata={"help": "Attention type"}
+        default='flash_attention_2', metadata={"help": "Attention type"}
     )
 
 SYSTEM_PROMPT = "A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. The reasoning process and answer are enclosed within <think> </think> and <answer> </answer> tags, respectively, i.e., <think> reasoning process here </think><answer> answer here </answer>"

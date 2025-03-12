@@ -31,7 +31,7 @@ python -m paddle.distributed.launch \
     --num_train_epochs 1 \
     --run_name $RUN_NAME \
     --save_steps 100 \
-    --sharding="stage1" \
+    --sharding="stage2" \
     --amp_master_grad True \
     --do_train \
     --ignore_save_lr_and_optim True \

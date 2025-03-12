@@ -13,8 +13,8 @@ from paddlenlp.utils.import_utils import import_module
 from tqdm import tqdm
 
 sys.path.append('paddlemix/examples/vlm_r1')
-from open_r1_mllm.utils.tokenizer import get_processor
-from open_r1_mllm.utils.constant import TEMPLATE_MAPPING, MODEL_MAPPING, SUPPORTED_MODELS
+from r1_mllm.utils.tokenizer import get_processor
+from r1_mllm.utils.constant import TEMPLATE_MAPPING, MODEL_MAPPING, SUPPORTED_MODELS
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run VLM-R1 evaluation.")

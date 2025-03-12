@@ -14,8 +14,8 @@ from paddlenlp.generation import GenerationConfig
 from paddlenlp.utils.import_utils import import_module
 
 sys.path.append('paddlemix/examples/vlm_r1')
-from open_r1_mllm.utils.tokenizer import get_processor
-from open_r1_mllm.utils.constant import TEMPLATE_MAPPING, MODEL_MAPPING, SUPPORTED_MODELS
+from r1_mllm.utils.tokenizer import get_processor
+from r1_mllm.utils.constant import TEMPLATE_MAPPING, MODEL_MAPPING, SUPPORTED_MODELS
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run R1-V evaluation.")
@@ -78,9 +78,7 @@ def main(args):
         # data = json.load(open(ds_path, "r"))
         with open(ds_path, 'r') as file:
             data = [json.loads(line) for line in file]
-        # random.shuffle(data)
         QUESTION_TEMPLATE = get_test_template(args.method)
-        # data = data[:sample_num]
         messages = []
         for x in data:
             if x["image_path"].startswith("./"):

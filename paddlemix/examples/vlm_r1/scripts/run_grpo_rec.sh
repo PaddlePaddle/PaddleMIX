@@ -1,10 +1,10 @@
-export DEBUG_MODE="false"
-# export LOG_PATH="./debug_grpo_rec.txt"
-# export CUDA_VISIBLE_DEVICES=6,7
+# export DEBUG_MODE="true"
+# export LOG_PATH="./debug_grpo_rec_sample.txt"
+# export CUDA_VISIBLE_DEVICES=0,2
 
 GPUS=${GPUS:-8}
 NUM_GENERATIONS=${NUM_GENERATIONS:-8}
-RUN_NAME="Qwen2.5-VL-3B-GRPO-REC_${GPUS}"
+RUN_NAME="Qwen2.5-VL-3B-GRPO-REC_${GPUS}GPUS_stage2"
 IMAGE_ROOT="data/coco"
 
 python -m paddle.distributed.launch \
@@ -30,7 +30,7 @@ python -m paddle.distributed.launch \
     --run_name $RUN_NAME \
     --save_steps 100 \
     --do_train \
-    --sharding "stage1" \
+    --sharding "stage2" \
     --amp_master_grad=1 \
     --hybrid_parallel_topo_order="sharding_first" \
     --attn_implementation "eager" \
