@@ -70,7 +70,7 @@ def iqa_brisque(
     """
     Filter image with BRISQUE `<https://ieeexplore.ieee.org/document/6272356>`_.
     The input item is kept with the score within `[min_score, max_score]`.
-    The higher the score, the better the assesment of the image.
+    The higher the score, the better the assessment of the image.
 
     Args:
         item(Dict[str, Any]): Input dict with key `image`.
