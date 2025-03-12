@@ -304,9 +304,9 @@ class FastStableDiffusionHiresFixPipeline(DiffusionPipeline, FastDeployDiffusion
             hr_scale (`float`, *optional*, defaults to 2.0):
                 The upscaler to expand the width and height of image. if set 2.0, it means that expand width and height of a image to width*2.0 and height*2.0.
             hr_resize_width (`int`, *optional*, defaults to 0):
-                It enable users to specify the upscaled width mannually. if hr_resize_width!=0, program will use it to compute scaled width and height instead of hr_scale.
+                It enable users to specify the upscaled width manually. if hr_resize_width!=0, program will use it to compute scaled width and height instead of hr_scale.
             hr_resize_height (`int`, *optional*, defaults to 0):
-                It enable users to specify the upscaled height mannually. if hr_resize_height!=0, program will use it to compute scaled width and height instead of hr_scale.
+                It enable users to specify the upscaled height manually. if hr_resize_height!=0, program will use it to compute scaled width and height instead of hr_scale.
             denoising_strength (`float`, *optional*, defaults to 0.7):
                 The denoising strength applying on hires.fix steps. It take a value between 0 and 1.
             latent_scale_mode (`str`, *optional*, defaults to nearest):
