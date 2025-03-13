@@ -107,6 +107,7 @@ class Attention(nn.Layer):
         processor: Optional["AttnProcessor"] = None,
         out_dim: int = None,
         context_pre_only=None,
+        pre_only=False,
         elementwise_affine: bool = True,
     ):
         super().__init__()
@@ -125,6 +126,7 @@ class Attention(nn.Layer):
         self.dropout = dropout
         self.out_dim = out_dim if out_dim is not None else query_dim
         self.context_pre_only = context_pre_only
+        self.pre_only = pre_only
 
         # we make use of this private variable to know whether this class is loaded
         # with an deprecated state dict so that we can convert it on the fly
@@ -225,13 +227,22 @@ class Attention(nn.Layer):
             self.add_v_proj = linear_cls(added_kv_proj_dim, self.inner_dim)
             if self.context_pre_only is not None:
                 self.add_q_proj = nn.Linear(added_kv_proj_dim, self.inner_dim)
+        else:
+            self.add_q_proj = None
+            self.add_k_proj = None
+            self.add_v_proj = None
 
-        self.to_out = nn.LayerList([])
-        self.to_out.append(linear_cls(self.inner_dim, query_dim, bias_attr=out_bias))
-        self.to_out.append(nn.Dropout(dropout))
+        if not self.pre_only:
+            self.to_out = nn.LayerList([])
+            self.to_out.append(linear_cls(self.inner_dim, query_dim, bias_attr=out_bias))
+            self.to_out.append(nn.Dropout(dropout))
+        else:
+            self.to_out = None
 
         if self.context_pre_only is not None and not self.context_pre_only:
             self.to_add_out = nn.Linear(self.inner_dim, self.out_dim, bias_attr=out_bias)
+        else:
+            self.to_add_out = None
 
         if qk_norm is not None and added_kv_proj_dim is not None:
             if qk_norm == "fp32_layer_norm":
@@ -661,6 +672,9 @@ class Attention(nn.Layer):
         num_heads = self.heads
         if attention_mask is None:
             return attention_mask
+        
+        ori_type = attention_mask.dtype
+        attention_mask = attention_mask.to(paddle.float32)
 
         current_length = attention_mask.shape[-1]
         if current_length != target_length:
@@ -682,7 +696,7 @@ class Attention(nn.Layer):
         # if attention_mask.ndim == 4:
         #     if not transpose:
         #         attention_mask = attention_mask.transpose([0, 2, 1, 3])
-        return attention_mask
+        return attention_mask.to(ori_type)
 
     def norm_encoder_hidden_states(self, encoder_hidden_states: paddle.Tensor) -> paddle.Tensor:
         r"""
@@ -1285,6 +1299,13 @@ class XFormersAttnProcessor:
         query = attn.head_to_batch_dim(query, transpose=False)
         key = attn.head_to_batch_dim(key, transpose=False)
         value = attn.head_to_batch_dim(value, transpose=False)
+
+        #  adapt the scaled_dot_product_attention_ when attention_mask is a bool tensor
+        if attention_mask is not None and attention_mask.dtype == paddle.bool:
+            L, S = query.shape[1], key.shape[1]
+            attention_mask_tmp = paddle.zeros([1,1, L, S], dtype=query.dtype)
+            attention_mask_tmp = attention_mask_tmp.masked_fill(attention_mask.logical_not(), float("-inf"))
+            attention_mask = attention_mask_tmp
 
         hidden_states = F.scaled_dot_product_attention_(
             query,

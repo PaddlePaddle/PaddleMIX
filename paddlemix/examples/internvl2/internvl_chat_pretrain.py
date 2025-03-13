@@ -256,10 +256,7 @@ def main():
         model.config.llm_config.vocab_size = len(tokenizer)
         model.language_model.config.vocab_size = len(tokenizer)
     model.language_model.config.use_cache = False
-    model.vision_model.gradient_checkpointing = True
-    model.vision_model.encoder.gradient_checkpointing = True
-    # if model_args.grad_checkpoint:
-    #     model.language_model._set_gradient_checkpointing()
+
     train_dataset = build_datasets(
         data_args,
         tokenizer,
@@ -284,12 +281,7 @@ def main():
         _freeze_params(model.language_model)
     if model_args.unfreeze_lm_head:
         model.language_model.lm_head.stop_gradient = not True
-    if model_args.use_backbone_lora:
-        model.wrap_backbone_lora(r=model_args.use_backbone_lora, lora_alpha=2 * model_args.use_backbone_lora)
-        model.config.use_backbone_lora = model_args.use_backbone_lora
-    if model_args.use_llm_lora:
-        model.wrap_llm_lora(r=model_args.use_llm_lora, lora_alpha=2 * model_args.use_llm_lora)
-        model.config.use_llm_lora = model_args.use_llm_lora
+
     if model_args.freeze_mlp:
         _freeze_params(model.mlp1)
     if model_args.unfreeze_vit_layers != 0:

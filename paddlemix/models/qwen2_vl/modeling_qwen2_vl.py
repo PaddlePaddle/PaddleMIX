@@ -569,13 +569,13 @@ class VisionFlashAttention2(nn.Layer):
 
 
 class Qwen2VLVisionBlock(nn.Layer):
-    def __init__(self, config, attn_implementation: str = "sdpa") -> None:
+    def __init__(self, config, attn_implementation: str = "flash_attention_2") -> None:
         super().__init__()
         self.norm1 = nn.LayerNorm(config.embed_dim, epsilon=1e-6)
         self.norm2 = nn.LayerNorm(config.embed_dim, epsilon=1e-6)
         mlp_hidden_dim = int(config.embed_dim * config.mlp_ratio)
 
-        self.attn = create_attention_module(config, "vision")
+        self.attn = create_attention_module(config, "vision") # 只要paddle版本支持flash_attention就会默认使用flash_attention
         self.mlp = VisionMlp(dim=config.embed_dim, hidden_dim=mlp_hidden_dim, hidden_act=config.hidden_act)
 
     def forward(self, hidden_states, cu_seqlens, rotary_pos_emb) -> paddle.Tensor:
@@ -1568,8 +1568,11 @@ class Qwen2LMHead(nn.Layer):
 class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
     _tied_weights_keys = ["lm_head.weight"]
 
-    def __init__(self, config):
+    def __init__(self, config, attn_implementation="flash_attention_2"):
         super().__init__(config)
+        config._attn_implementation = attn_implementation
+        config.vision_config._attn_implementation = attn_implementation
+
         self.visual = Qwen2VisionTransformerPretrainedModel._from_config(config.vision_config)
         self.model = Qwen2VLModel(config)
         self.vocab_size = config.vocab_size
@@ -1676,7 +1679,7 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
         Explanation:
             Each embedding sequence contains vision embedding and text embedding or just contains text embedding.
 
-            For pure text embedding sequence, the rotary position embedding has no difference with mordern LLMs.
+            For pure text embedding sequence, the rotary position embedding has no difference with modern LLMs.
             Examples:
                 input_ids: [T T T T T], here T is for text.
                 temporal position_ids: [0, 1, 2, 3, 4]
@@ -1684,7 +1687,7 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
                 width position_ids: [0, 1, 2, 3, 4]
 
             For vision and text embedding sequence, we calculate 3D rotary position embedding for vision part
-            and 1D rotary position embeddin for text part.
+            and 1D rotary position embedding for text part.
             Examples:
                 Assume we have a video input with 3 temporal patches, 2 height patches and 2 width patches.
                 input_ids: [V V V V V V V V V V V V T T T T T], here V is for vision.

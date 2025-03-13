@@ -298,7 +298,7 @@ class DeepseekVLV2Processor(ProcessorMixin):
                 masked_tokenized_data += tokenized_str
                 images_seq_mask += seq_mask
             elif message["role"] == "system" or message["role"] == "deepseekapi-sys":
-                assert idx == 0, "system information should only exist in the begining of the conversation"
+                assert idx == 0, "system information should only exist in the beginning of the conversation"
                 formatted_system = message["content"].strip()
                 tokenized_str = self.encode(formatted_system, bos=False, eos=False)
                 tokenized_data += tokenized_str

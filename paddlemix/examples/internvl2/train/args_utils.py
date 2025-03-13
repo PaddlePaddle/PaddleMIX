@@ -50,9 +50,6 @@ class ModelArguments:
     unfreeze_lm_head: bool = field(
         default=False, metadata={"help": "Set to True to unfreeze the head of LLM. Default is False."}
     )
-    grad_checkpoint: bool = field(
-        default=True, metadata={"help": "Set to True to use gradient checkpointing. Default is True."}
-    )
     drop_path_rate: float = field(default=0.0, metadata={"help": "Set the drop path rate for the ViT. Default is 0."})
     ps_version: Optional[str] = field(
         default="v2", metadata={"help": "Specify the version of pixel shuffle implementation. Default is v2."}

@@ -159,7 +159,7 @@ class DataTrainingArguments:
         },
     )
     max_image_size: Optional[int] = field(
-        default=512,
+        default=768,
         metadata={"help": "Set the desired size for the image. Default is 224."},
     )
     pad2square: Optional[bool] = field(
@@ -211,7 +211,7 @@ class LazySupervisedDataset(Dataset):
         tokenizer,
         ds_name,
         processor,
-        max_image_size=512,
+        max_image_size=768,
         max_seq_length=8192,
         repeat_time=1,
         normalize_type="imagenet",

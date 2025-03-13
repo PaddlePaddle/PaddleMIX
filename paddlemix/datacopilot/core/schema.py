@@ -107,7 +107,7 @@ properties:
               type: string
               pattern: '\.(jpg|jpeg|png|webp|JPG|JPEG|PNG)$'
               description: '.png or .jpg or .jpeg or .webp'
-            heigh:
+            height:
               type: integer
               minimum: 0
             width:

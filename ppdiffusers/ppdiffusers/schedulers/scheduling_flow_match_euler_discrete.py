@@ -14,7 +14,7 @@
 # limitations under the License.
 
 from dataclasses import dataclass
-from typing import Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 import numpy as np
 import paddle
@@ -137,7 +137,7 @@ class FlowMatchEulerDiscreteScheduler(SchedulerMixin, ConfigMixin):
     def _sigma_to_t(self, sigma):
         return sigma * self.config.num_train_timesteps
 
-    def set_timesteps(self, num_inference_steps: int):
+    def set_timesteps(self, num_inference_steps: int = None, sigmas: Optional[List[float]] = None,):
         """
         Sets the discrete timesteps used for the diffusion chain (to be run before inference).
 
@@ -145,13 +145,15 @@ class FlowMatchEulerDiscreteScheduler(SchedulerMixin, ConfigMixin):
             num_inference_steps (`int`):
                 The number of diffusion steps used when generating samples with a pre-trained model.
         """
+        if sigmas is None:
+            timesteps = np.linspace(self._sigma_to_t(self.sigma_max), self._sigma_to_t(self.sigma_min), num_inference_steps)
+            sigmas = timesteps / self.config.num_train_timesteps
+        else:
+            sigmas = np.array(sigmas).astype(np.float32)
+            num_inference_steps = len(sigmas)
+
         self.num_inference_steps = num_inference_steps
 
-        timesteps = np.linspace(
-            self._sigma_to_t(self.sigma_max), self._sigma_to_t(self.sigma_min), num_inference_steps
-        )
-
-        sigmas = timesteps / self.config.num_train_timesteps
         sigmas = self.config.shift * sigmas / (1 + (self.config.shift - 1) * sigmas)
         sigmas = paddle.to_tensor(sigmas).astype(dtype=paddle.float32)
 
