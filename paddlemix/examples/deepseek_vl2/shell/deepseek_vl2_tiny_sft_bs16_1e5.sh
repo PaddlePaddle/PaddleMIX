@@ -26,7 +26,7 @@ export PYTHONPATH="${PYTHONPATH}:$(pwd)"
 export MASTER_PORT=34229
 export TF_CPP_MIN_LOG_LEVEL=3
 
-OUTPUT_DIR='work_dirs/deepseekvl2_tiny_lora_bs16_1e5'
+OUTPUT_DIR='work_dirs/deepseekvl2_tiny_sft_bs16_1e5'
 
 if [ ! -d "$OUTPUT_DIR" ]; then
   mkdir -p "$OUTPUT_DIR"
@@ -75,9 +75,4 @@ ${TRAINING_PYTHON} --log_dir ${OUTPUT_DIR}/paddle_distributed_logs \
   --sharding="stage1" \
   --amp_master_grad=1 \
   --hybrid_parallel_topo_order="sharding_first" \
-  --lora True \
-  --lora_rank=8 \
-  --lora_alpha=32 \
-  --lora_dropout=0.05 \
-  --lora_target_modules="language.model.layers.*.self_attn.q_proj.*,language.model.layers.*.self_attn.k_proj.*,language.model.layers.*.self_attn.v_proj.*,language.model.layers.*.self_attn.*o_proj.*,language.model.layers.*.mlp.experts.*.gate_proj.*,language.model.layers.*.mlp.experts.*.up_proj.*,language.model.layers.*.mlp.experts.*.down_proj.*,language.model.layers.*.mlp.gate_proj.*,language.model.layers.*.mlp.up_proj.*,language.model.layers.*.mlp.down_proj.*" \
   2>&1 | tee -a "${OUTPUT_DIR}/training_log.txt"
