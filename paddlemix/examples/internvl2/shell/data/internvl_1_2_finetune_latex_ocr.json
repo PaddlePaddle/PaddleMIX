@@ -1,0 +1,9 @@
+{
+  "LaTeX_OCR": {
+    "root": "./",
+    "annotation": "LaTeX_OCR/LaTeX_OCR_TRAIN_155k_internvl2_format.jsonl",
+    "data_augment": false,
+    "repeat_time": 1,
+    "length": 155035
+  }
+}

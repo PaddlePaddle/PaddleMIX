@@ -24,6 +24,60 @@ from paddle.distributed.fleet.meta_optimizers.dygraph_optimizer.dygraph_sharding
 )
 from paddlenlp.trainer.trainer import Trainer, has_length
 from paddlenlp.trainer.trainer_utils import ShardingOption
+from paddlenlp.trainer.integrations import TrainerCallback
+from paddlenlp.trainer import PrinterCallback, ProgressCallback
+from paddlenlp.utils.log import logger
+
+class BenchmarkCallback(TrainerCallback):
+    def __init__(self, benchmark=False):
+        self.benchmark = benchmark
+
+    def on_train_begin(self, args, state, control, **kwargs):
+        # assert args.gradient_accumulation_steps == 1 and not args.do_eval and not args.do_predict
+        if self.benchmark:
+            pass
+
+    def on_epoch_begin(self, args, state, control, **kwargs):
+        if self.benchmark:
+            pass
+
+    def on_step_begin(self, args, state, control, **kwargs):
+        if self.benchmark:
+            pass
+
+    def on_step_end(self, args, state, control, **kwargs):
+        if self.benchmark:
+            pass
+    def on_log(self, args, state, control, logs=None, **kwargs):
+        if self.benchmark:
+            if logs is not None and "interval_samples_per_second" in logs:
+                max_mem_reserved_msg = ""
+                max_mem_allocated_msg = ""
+
+                if paddle.device.is_compiled_with_cuda():
+                    max_mem_reserved_msg = (
+                        f"max_mem_reserved: {paddle.device.cuda.max_memory_reserved() // (1024 ** 2)} MB,"
+                    )
+                    max_mem_allocated_msg = (
+                        f"max_mem_allocated: {paddle.device.cuda.max_memory_allocated() // (1024 ** 2)} MB"
+                    )
+
+                logger.info(
+                    "global step %d,loss:%.5f, ips: %.5f, %s %s"
+                    % (
+                        state.global_step,
+                        logs["loss"],
+                        logs["interval_samples_per_second"],
+                        max_mem_reserved_msg,
+                        max_mem_allocated_msg,
+                    )
+                )
+            else:
+                logger.info(logs)
+
+    def on_epoch_end(self, args, state, control, **kwargs):
+        if self.benchmark:
+            pass
 
 
 def split_to_even_chunks(indices, lengths, num_chunks):
@@ -117,6 +171,19 @@ class LengthGroupedSampler(paddle.io.Sampler):
 
 
 class LLaVATrainer(Trainer):
+    def __init__(self,**kwargs):
+        super().__init__(**kwargs)
+        if self.args.benchmark:
+            self.add_callback(
+                BenchmarkCallback(
+                    benchmark=self.args.benchmark
+                )
+            )
+            if self.args.benchmark:
+                if self.args.disable_tqdm:
+                    self.pop_callback(PrinterCallback)
+                else:
+                    self.pop_callback(ProgressCallback)
     def _get_train_sampler(self) -> Optional[paddle.io.Sampler]:
         if self.train_dataset is None or not has_length(self.train_dataset):
             return None
