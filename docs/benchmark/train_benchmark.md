@@ -9,8 +9,8 @@
 | LLaVA1.6 13B           | Pretrain  | 52  | +18%   | 44  | 33/36 |
 |                        | SFT       | 24  | +4%    | 23  | 50/68 |
 |                        | LoRA      | 36  | +5%    | 34  | 29/30 |
-| Qwen2VL 2B             | SFT       | 41  | +78%   | 23  | - |
-| Qwen2VL 7B             | SFT       | 23  | +109%  | 11  | - |
+| Qwen2VL 2B             | SFT       | 33  | +43%   | 23  | - |
+| Qwen2VL 7B             | SFT       | 13  | +18%   | 11  | - |
 | Stable Diffusion 1.5   | SFT       | 560 | -12%   | 638 | 28/34 |
 |                        | LoRA      | 200 | +6%    | 187 | 30/34 |
 | Stable Diffusion 3     | SFT       | 34  | 0      | 34  | - |
