@@ -18,6 +18,7 @@ try:
     from .ln_partial_rotary_emb import ln_partial_rotary_emb
     from .partial_rotary_emb import partial_rotary_emb
     from .rms_norm import rms_norm
+    from .rotary_emb import apply_rotary_emb_triton
     from .triton_ops import (
         adaptive_layer_norm,
         fused_adaLN_scale_residual,
