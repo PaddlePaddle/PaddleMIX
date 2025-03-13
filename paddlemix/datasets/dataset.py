@@ -563,7 +563,7 @@ class DatasetBuilder:
                 lock_files.append(lock_file)
             # Must register to all procs to make the lock file can be removed
             # when any proc breaks. Otherwise, the single registered proc may
-            # not receive proper singal send by the parent proc to exit.
+            # not receive proper signal send by the parent proc to exit.
             atexit.register(lambda: remove_if_exit(lock_files))
             for split in splits:
                 filename = self._get_data(split)
@@ -595,7 +595,7 @@ class DatasetBuilder:
                 datasets = DatasetTuple(splits)
                 assert len(splits) == len(
                     data_files
-                ), "Number of `splits` and number of `data_files` should be the same if you want to specify the split of loacl data file."
+                ), "Number of `splits` and number of `data_files` should be the same if you want to specify the split of local data file."
                 for i in range(len(data_files)):
                     datasets[splits[i]] = self.read(filename=data_files[i], split=splits[i])
             else:

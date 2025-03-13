@@ -233,7 +233,7 @@ class MultiHeadAttention(paddle.nn.Layer):
 
     def _prepare_qkv(self, query, key, value, use_cache=False, cache=None):
         r"""
-        Prapares linear projected queries, keys and values for usage of subsequnt
+        Prepares linear projected queries, keys and values for usage of subsequent
         multiple parallel attention. If `cache` is not None, using cached results
         to reduce redundant calculations.
 
@@ -279,7 +279,7 @@ class MultiHeadAttention(paddle.nn.Layer):
 
     def gen_cache(self, key, value=None, type=Cache):
         """
-        Generates cache for `forward` usage in inference accroding to arguments.
+        Generates cache for `forward` usage in inference according to arguments.
         The generated cache is an instance of `MultiHeadAttention.Cache` or an
         instance of `MultiHeadAttention.StaticCache`.
         """

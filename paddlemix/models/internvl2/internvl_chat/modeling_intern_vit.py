@@ -409,7 +409,7 @@ class InternVisionEncoder(nn.Layer):
         dpr = [x.item() for x in np.linspace(0, config.drop_path_rate, config.num_hidden_layers)]
         self.layers = nn.LayerList([
             InternVisionEncoderLayer(config, dpr[idx]) for idx in range(config.num_hidden_layers)])
-        self.gradient_checkpointing = True
+        self.enable_recompute = True
 
     def forward(
         self,
@@ -437,7 +437,8 @@ class InternVisionEncoder(nn.Layer):
         for idx, encoder_layer in enumerate(self.layers):
             if output_hidden_states:
                 encoder_states = encoder_states + (hidden_states,)
-            if 0: #self.gradient_checkpointing and self.training: # TODO: fix this
+            has_gradient = not hidden_states.stop_gradient
+            if self.enable_recompute and has_gradient and self.training:
                 layer_outputs = paddle.distributed.fleet.utils.recompute(
                     encoder_layer,
                     hidden_states,

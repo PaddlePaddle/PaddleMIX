@@ -131,7 +131,7 @@ class ConfigMixin(PushToHubMixin, SaveToAistudioMixin):
         """The only reason we overwrite `getattr` here is to gracefully deprecate accessing
         config attributes directly. See https://github.com/huggingface/diffusers/pull/3129
 
-        Tihs funtion is mostly copied from PyTorch's __getattr__ overwrite:
+        This function is mostly copied from PyTorch's __getattr__ overwrite:
         https://pytorch.org/docs/stable/_modules/torch/nn/modules/module.html#Module
         """
 

@@ -63,7 +63,7 @@ def tensor2vid(video: paddle.Tensor, mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]) 
     images = video.transpose([2, 3, 0, 4, 1]).reshape(
         [f, h, i * w, c]
     )  # 1st (frames, h, batch_size, w, c) 2nd (frames, h, batch_size * w, c)
-    images = images.unbind(axis=0)  # prepare a list of indvidual (consecutive frames)
+    images = images.unbind(axis=0)  # prepare a list of individual (consecutive frames)
     images = [(image.cpu().numpy() * 255).astype("uint8") for image in images]  # f h w c
     return images
 

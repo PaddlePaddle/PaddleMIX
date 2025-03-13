@@ -66,7 +66,7 @@ class DataArgument:
 @dataclass
 class ModelArgument:
     model_name_or_path: str = field(
-        default=None, metadata={"help": "Build-in pretrained model name or the path to local model."}
+        default=None, metadata={"help": "Built-in pretrained model name or the path to local model."}
     )
     use_flash_attention: bool = field(default=False, metadata={"help": "Whether to use flash attention"})
     freeze_include: Optional[List[str]] = field(default=None, metadata={"help": "Modules to freeze"})

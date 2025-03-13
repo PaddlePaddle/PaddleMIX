@@ -169,11 +169,11 @@ def sample_box_points(
     Inputs:
     - masks: [B, 1, H,W] boxes, dtype=torch.Tensor
     - noise: noise as a fraction of box width and height, dtype=float
-    - noise_bound: maximum amount of noise (in pure pixesl), dtype=int
+    - noise_bound: maximum amount of noise (in pure pixels), dtype=int
 
     Returns:
     - box_coords: [B, num_pt, 2], contains (x, y) coordinates of top left and bottom right box corners, dtype=torch.float
-    - box_labels: [B, num_pt], label 2 is reserverd for top left and 3 for bottom right corners, dtype=torch.int32
+    - box_labels: [B, num_pt], label 2 is reserved for top left and 3 for bottom right corners, dtype=torch.int32
     """
 
     box_coords = mask_to_box(masks)

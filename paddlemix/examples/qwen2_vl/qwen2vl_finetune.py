@@ -13,8 +13,8 @@
 # limitations under the License.
 
 import json
-import logging
 import math
+import time
 import os
 import random
 import sys
@@ -27,9 +27,11 @@ import paddle
 import paddle.distributed as dist
 from paddle.io import Dataset
 from paddlenlp.data import DataCollatorForSeq2Seq
+from paddlenlp.utils import profiler
 from paddlenlp.peft import LoRAConfig, LoRAModel
 from paddlenlp.trainer import PdArgumentParser, TrainingArguments, set_seed
-from paddlenlp.trainer.trainer import Trainer
+from paddlenlp.trainer.trainer import PrinterCallback, ProgressCallback, Trainer
+from paddlenlp.trainer.integrations import TrainerCallback
 from paddlenlp.trainer.trainer_utils import get_last_checkpoint
 from PIL import Image, ImageFile, PngImagePlugin, UnidentifiedImageError
 
@@ -49,8 +51,7 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 MaximumDecompressedSize = 1024
 MegaByte = 2**20
 PngImagePlugin.MAX_TEXT_CHUNK = MaximumDecompressedSize * MegaByte
-logger = logging.getLogger(__name__)
-
+from paddlenlp.utils.log import logger
 
 # Set constants for image processing and logging
 IGNORE_INDEX = -100
@@ -201,6 +202,10 @@ class PreTrainingArguments(TrainingArguments):
     benchmark: bool = field(
         default=False,
         metadata={"help": "Whether or not run benchmark (True/False)."},
+    )
+    profiler_options: Optional[str] = field(
+        default=None,
+        metadata={"help": "Whether runs profiler"},
     )
 
 
@@ -531,6 +536,114 @@ class MultiModalDataCollatorForSeq2Seq(DataCollatorForSeq2Seq):
         return features
 
 
+class AverageStatistical(object):
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.total_cnt = 0
+        self.time = 0
+
+    def record(self, val, cnt=1):
+        self.time += val
+        self.total_cnt += cnt
+
+    def get_average(self):
+        if self.total_cnt == 0:
+            return 0
+
+        return self.time / self.total_cnt
+
+    def get_average_per_sec(self):
+        if self.time == 0.0:
+            return 0.0
+
+        return float(self.total_cnt) / self.time
+
+    def get_total_cnt(self):
+        return self.total_cnt
+
+    def get_total_time(self):
+        return self.time
+
+
+class BenchmarkCallback(TrainerCallback):
+    def __init__(self, benchmark=True, profiler_options=None):
+        self.benchmark = benchmark
+        self.profiler_options = profiler_options
+
+    def on_train_begin(self, args, state, control, **kwargs):
+        # assert args.gradient_accumulation_steps == 1 and not args.do_eval and not args.do_predict
+        if self.benchmark:
+            self.reader_cost_avg = AverageStatistical()
+
+    def on_epoch_begin(self, args, state, control, **kwargs):
+        if self.benchmark:
+            self.epoch_start = time.time()
+            self.batch_start = time.time()
+
+    def on_step_begin(self, args, state, control, **kwargs):
+        if self.benchmark:
+            self.reader_cost_avg.record(time.time() - self.batch_start)
+
+    def on_step_end(self, args, state, control, **kwargs):
+        if self.profiler_options is not None:
+            profiler.add_profiler_step(self.profiler_options)
+
+        if self.benchmark:
+            self.batch_start = time.time()
+            if control.should_log:
+                self.maybe_log_save_evaluate_start = time.time()
+
+    def on_log(self, args, state, control, logs=None, **kwargs):
+        if self.benchmark:
+            if logs is not None and "interval_steps_per_second" in logs:
+                self.batch_start = self.batch_start + (time.time() - self.maybe_log_save_evaluate_start)
+                ips = logs["interval_steps_per_second"] * args.train_batch_size
+                avg_batch_cost = 1 / logs["interval_steps_per_second"]
+                max_mem_reserved_msg = ""
+                max_mem_allocated_msg = ""
+                if paddle.device.is_compiled_with_cuda():
+                    max_mem_reserved_msg = (
+                        f"max_mem_reserved: {paddle.device.cuda.max_memory_reserved() // (1024 ** 2)} MB,"
+                    )
+                    max_mem_allocated_msg = (
+                        f"max_mem_allocated: {paddle.device.cuda.max_memory_allocated() // (1024 ** 2)} MB"
+                    )
+                logger.info(
+                    "global step %d / %d, loss: %f, avg_reader_cost: %.5f sec, avg_batch_cost: %.5f sec, avg_samples: %.5f, ips: %.5f sample/sec, %s %s"
+                    % (
+                        state.global_step,
+                        state.max_steps,
+                        logs["loss"],
+                        self.reader_cost_avg.get_average(),
+                        avg_batch_cost,
+                        args.train_batch_size,
+                        ips,
+                        max_mem_reserved_msg,
+                        max_mem_allocated_msg,
+                    )
+                )
+                self.reader_cost_avg.reset()
+
+
+class Qwen2VLTrainer(Trainer):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        if self.args.benchmark or self.args.profiler_options is not None:
+            self.add_callback(
+                BenchmarkCallback(
+                    benchmark=self.args.benchmark,
+                    profiler_options=self.args.profiler_options,
+                )
+            )
+            if self.args.benchmark:
+                if self.args.disable_tqdm:
+                    self.pop_callback(PrinterCallback)
+                else:
+                    self.pop_callback(ProgressCallback)
+
 
 def main():
     parser = PdArgumentParser((ModelArguments, DataTrainingArguments, PreTrainingArguments))
@@ -661,7 +774,7 @@ def main():
         label_pad_token_id=IGNORE_INDEX,
     )
 
-    trainer = Trainer(
+    trainer = Qwen2VLTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset if training_args.do_train else None,
@@ -669,6 +782,7 @@ def main():
         tokenizer=tokenizer,
         data_collator=data_collator,
     )
+    total_samples = len(train_dataset)
 
     # Training
     if training_args.do_train:
@@ -678,17 +792,32 @@ def main():
         elif last_checkpoint is not None:
             checkpoint = last_checkpoint
         train_result = trainer.train(resume_from_checkpoint=checkpoint)
-        trainer.save_model()  # Saves the tokenizer too for easy upload
+        if training_args.benchmark:
+            def get_paddle_memory_info():
+                """get_memory_info"""
+                divisor = 2**30
+                return (
+                    paddle.device.cuda.memory_allocated() / divisor,
+                    paddle.device.cuda.max_memory_allocated() / divisor,
+                    paddle.device.cuda.memory_reserved() / divisor,
+                    paddle.device.cuda.max_memory_reserved() / divisor,
+                )
+            memory_allocated, max_memory_allocated, memory_reserved, max_memory_reserved = get_paddle_memory_info()
 
-        metrics = train_result.metrics
-        try:
-            metrics["train_samples"] = len(train_dataset)
-        except:
-            metrics["train_samples"] = -1
-
-        trainer.log_metrics("train", metrics)
-        trainer.save_metrics("train", metrics)
-        trainer.save_state()
+            logger.info(f'memory_allocated:{memory_allocated}GB, max_memory_allocated: {max_memory_allocated}GB, memory_reserved:{memory_reserved}GB, max_memory_reserved: {max_memory_reserved}GB \n')
+            total_effective_samples = total_samples * training_args.num_train_epochs
+            effective_samples_per_second = total_effective_samples / train_result.metrics["train_runtime"]
+            # mem_gpu = (
+            #     train_result.metrics["train_mem_gpu_peaked_delta"] + train_result.metrics["train_mem_gpu_alloc_delta"]
+            # )
+            logger.info(f"ips: {effective_samples_per_second} ")
+            # logger.info(f"train_mem_gpu_peaked: {int(mem_gpu/ (2**20))} MB")
+            logger.info("Benchmark done.")
+        else:
+            trainer.save_model()  # Saves the tokenizer too for easy upload
+            trainer.log_metrics("train", train_result.metrics)
+            trainer.save_metrics("train", train_result.metrics)
+            trainer.save_state()
 
 
 if __name__ == "__main__":
