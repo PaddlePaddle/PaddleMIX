@@ -1,4 +1,4 @@
-# Deepseek-VL2
+# DeepSeek-VL2
 
 ## 1. 模型介绍
 [DeepSeek-VL2](https://github.com/deepseek-ai/DeepSeek-VL2)是一种基于大型混合专家（Mixture-of-Experts，MoE）视觉语言模型，相较于其前身DeepSeek-VL有了显著提升。DeepSeek-VL2在各种任务中展现出了卓越的能力，包括但不限于视觉问答、光学字符识别、文档/表格/图表理解以及视觉定位。我们的模型系列包含三种变体：DeepSeek-VL2-Tiny、DeepSeek-VL2-Small和DeepSeek-VL2，分别拥有10亿、28亿和45亿个激活参数。与现有的开源密集型和基于MoE的模型相比，DeepSeek-VL2在激活参数相似或更少的情况下，实现了具有竞争力甚至最先进的性能。
@@ -17,11 +17,41 @@
 
 ## 2 环境准备
 
-1）[安装 PaddleMIX 环境依赖包](https://github.com/PaddlePaddle/PaddleMIX/tree/develop?tab=readme-ov-file#%E5%AE%89%E8%A3%85)
+1）[安装PaddlePaddle](https://github.com/PaddlePaddle/PaddleMIX?tab=readme-ov-file#3-%EF%B8%8F%E5%AE%89%E8%A3%85paddlepaddle)
+- **python >= 3.10**
+- **paddlepaddle-gpu 要求是3.0.0b2或develop版本**
+```bash
+# 提供三种 PaddlePaddle 安装命令示例，也可参考PaddleMIX主页的安装教程进行安装
 
-2）pip install pillow tqdm paddlenlp==3.0.0b3
+# 3.0.0b2版本安装示例 (CUDA 11.8)
+python -m pip install paddlepaddle-gpu==3.0.0b2 -i https://www.paddlepaddle.org.cn/packages/stable/cu118/
 
-注意：Python版本最好为3.10及以上版本。
+# Develop 版本安装示例
+python -m pip install paddlepaddle-gpu==0.0.0.post118 -f https://www.paddlepaddle.org.cn/whl/linux/gpu/develop.html
+
+# sh 脚本快速安装
+sh build_paddle_env.sh
+```
+
+2）[安装PaddleMIX环境依赖包](https://github.com/PaddlePaddle/PaddleMIX?tab=readme-ov-file#3-%EF%B8%8F%E5%AE%89%E8%A3%85paddlepaddle)
+- **paddlenlp >= 3.0.0b3**
+
+```bash
+# 提供两种 PaddleMIX 依赖安装命令示例
+
+# pip 安装示例，安装paddlemix、ppdiffusers、项目依赖、paddlenlp
+python -m pip install -e . --user
+python -m pip install -e ppdiffusers --user
+python -m pip install -r requirements.txt --user
+python -m pip install paddlenlp==3.0.0b3 --user
+
+# sh 脚本快速安装
+sh build_env.sh
+```
+
+> 注：
+* 请确保安装了以上依赖，否则无法运行。同时，需要安装 paddlemix/external_ops 下的自定义OP, `python setup.py install`。如果安装后仍然找不到算子，需要额外设置PYTHONPATH
+* (默认开启flash_attn)使用flash_attn 要求A100/A800显卡或者H20显卡。V100请用float16推理。
 
 ## 3 快速开始
 
@@ -80,11 +110,14 @@ This is image_3: <image>
 ## 4 训练微调
 
 ### 数据准备
-下载并解压PaddleMIX团队整理的LaTeX_OCR数据集：
+
+PaddleMIX团队整理了`chartqa`数据集作为小型的示例数据集，下载链接为：
 
 ```bash
-wget https://bj.bcebos.com/paddlemix/datasets/playground/LaTeX_OCR.zip
+wget https://paddlenlp.bj.bcebos.com/models/community/paddlemix/benchmark/playground.tar # 1.0G
 ```
+
+playground/目录下包括了图片目录`data/chartqa/`和标注目录`opensource_json/`，详见`paddlemix/examples/qwen2_5_vl/configs/demo_chartqa_500.json`。
 
 ### 训练命令
 
@@ -92,8 +125,8 @@ wget https://bj.bcebos.com/paddlemix/datasets/playground/LaTeX_OCR.zip
 # DeepSeek-VL2-tiny LoRA Training
 sh paddlemix/examples/deepseek_vl2/shell/deepseek_vl2_tiny_lora_bs16_1e5.sh
 
-# DeepSeek-VL2-small LoRA Training
-sh paddlemix/examples/deepseek_vl2/shell/deepseek_vl2_small_lora_bs16_1e5.sh
+# DeepSeek-VL2-tiny SFT Training
+sh paddlemix/examples/deepseek_vl2/shell/deepseek_vl2_tiny_sft_bs16_1e5.sh
 ```
 
 ## 参考文献
