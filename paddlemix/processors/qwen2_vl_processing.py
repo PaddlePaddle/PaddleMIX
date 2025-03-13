@@ -1,11 +1,11 @@
 # Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -148,15 +148,15 @@ class Qwen2VLProcessor(ProcessorMixin):
         Qwen2VLImageProcessor's [`~Qwen2VLImageProcessor.__call__`] if `vision_infos` is not `None`.
 
         Args:
-            images (`PIL.Image.Image`, `np.ndarray`, `torch.Tensor`, `List[PIL.Image.Image]`, `List[np.ndarray]`, `List[torch.Tensor]`):
-                The image or batch of images to be prepared. Each image can be a PIL image, NumPy array or PyTorch
+            images (`PIL.Image.Image`, `np.ndarray`, `paddle.Tensor`, `List[PIL.Image.Image]`, `List[np.ndarray]`, `List[paddle.Tensor]`):
+                The image or batch of images to be prepared. Each image can be a PIL image, NumPy array or Paddle
                 tensor. Both channels-first and channels-last formats are supported.
             text (`str`, `List[str]`, `List[List[str]]`):
                 The sequence or batch of sequences to be encoded. Each sequence can be a string or a list of strings
                 (pretokenized string). If the sequences are provided as list of strings (pretokenized), you must set
                 `is_split_into_words=True` (to lift the ambiguity with a batch of sequences).
-            videos (`np.ndarray`, `torch.Tensor`, `List[np.ndarray]`, `List[torch.Tensor]`):
-                The image or batch of videos to be prepared. Each video can be a 4D NumPy array or PyTorch
+            videos (`np.ndarray`, `paddle.Tensor`, `List[np.ndarray]`, `List[paddle.Tensor]`):
+                The image or batch of videos to be prepared. Each video can be a 4D NumPy array or Paddle
                 tensor, or a nested list of 3D frames. Both channels-first and channels-last formats are supported.
             padding (`bool`, `str` or [`~utils.PaddingStrategy`], *optional*, defaults to `False`):
                 Select a strategy to pad the returned sequences (according to the model's padding side and padding
@@ -174,10 +174,8 @@ class Qwen2VLProcessor(ProcessorMixin):
             return_tensors (`str` or [`~utils.TensorType`], *optional*):
                 If set, will return tensors of a particular framework. Acceptable values are:
 
-                - `'tf'`: Return TensorFlow `tf.constant` objects.
-                - `'pt'`: Return PyTorch `torch.Tensor` objects.
+                - `'pd'`: Return Paddle `paddle.Tensor` objects.
                 - `'np'`: Return NumPy `np.ndarray` objects.
-                - `'jax'`: Return JAX `jnp.ndarray` objects.
 
         Returns:
             [`BatchFeature`]: A [`BatchFeature`] with the following fields:
@@ -436,7 +434,7 @@ class Qwen2VLImageProcessor(BaseImageProcessor):
         processed_images = []
 
         for image in images:
-            
+
             if do_resize:
                 resized_height, resized_width = smart_resize(
                     height,
@@ -445,9 +443,12 @@ class Qwen2VLImageProcessor(BaseImageProcessor):
                     min_pixels=self.min_pixels,
                     max_pixels=self.max_pixels,
                 )
-                image = image.astype('uint8') #TODO : 需要手动加上，否则多除255 导致结果会出错
+                image = image.astype("uint8")  # TODO : 需要手动加上，否则多除255 导致结果会出错
                 image = resize(
-                    image, size=(resized_height, resized_width), resample=resample, data_format=input_data_format,
+                    image,
+                    size=(resized_height, resized_width),
+                    resample=resample,
+                    data_format=input_data_format,
                 )
 
             if do_rescale:
@@ -536,7 +537,7 @@ class Qwen2VLImageProcessor(BaseImageProcessor):
             return_tensors (`str` or `TensorType`, *optional*):
                 The type of tensors to return. Can be one of:
                 - Unset: Return a list of `np.ndarray`.
-                - `TensorType.PADDLE` or `'pt'`: Return a batch of type `torch.Tensor`.
+                - `TensorType.PADDLE` or `'pt'`: Return a batch of type `paddle.Tensor`.
                 - `TensorType.NUMPY` or `'np'`: Return a batch of type `np.ndarray`.
             data_format (`ChannelDimension` or `str`, *optional*, defaults to `ChannelDimension.FIRST`):
                 The channel dimension format for the output image. Can be one of:
@@ -746,6 +747,7 @@ def smart_nframes(
 
 def is_decord_available() -> bool:
     import importlib.util
+
     return importlib.util.find_spec("decord") is not None
 
 
@@ -753,15 +755,16 @@ def _read_video_decord(
     ele: dict,
 ) -> paddle.Tensor:
     import decord
+
     video_path = ele["video"]
     st = time.time()
     vr = decord.VideoReader(video_path)
-    if 'video_start' in ele or 'video_end' in ele:
+    if "video_start" in ele or "video_end" in ele:
         raise NotImplementedError("not support start_pts and end_pts in decord for now.")
     total_frames, video_fps = len(vr), vr.get_avg_fps()
     logger.info(f"decord:  {video_path=}, {total_frames=}, {video_fps=}, time={time.time() - st:.3f}s")
     nframes = smart_nframes(ele, total_frames=total_frames, video_fps=video_fps)
-    idx = paddle.linspace(0, total_frames - 1, nframes).round().astype('int64').tolist()
+    idx = paddle.linspace(0, total_frames - 1, nframes).round().astype("int64").tolist()
     video = vr.get_batch(idx).asnumpy()
     video = paddle.to_tensor(video).transpose([0, 3, 1, 2])  # Convert to TCHW format
     return video
@@ -787,65 +790,65 @@ def get_video_reader_backend() -> str:
     return video_reader_backend
 
 
-def custom_resize(video, size, interpolation='bicubic', antialias=True):
+def custom_resize(video, size, interpolation="bicubic", antialias=True):
     """
     Custom resize function for PaddlePaddle to mimic PyTorch's functionality.
-    
+
     Args:
         video (paddle.Tensor): Input video tensor of shape [T, C, H, W]
         size (list[int]): Target size [H, W]
         interpolation (str): Interpolation method, default is 'bicubic'
         antialias (bool): Whether to use anti-aliasing, default is True
-    
+
     Returns:
         paddle.Tensor: Resized video tensor
     """
     # 确保输入是4D张量 [T, C, H, W]
     if video.ndim != 4:
         raise ValueError(f"Expected 4D tensor, got {video.ndim}D tensor")
-    
+
     # 转换为浮点类型
-    video = video.astype('float32')
-    
+    video = video.astype("float32")
+
     # 获取原始尺寸
     T, C, H, W = video.shape
-    
+
     # 设置插值模式
-    if interpolation == 'bicubic':
-        mode = 'bicubic'
-    elif interpolation == 'bilinear':
-        mode = 'bilinear'
-    elif interpolation == 'nearest':
-        mode = 'nearest'
+    if interpolation == "bicubic":
+        mode = "bicubic"
+    elif interpolation == "bilinear":
+        mode = "bilinear"
+    elif interpolation == "nearest":
+        mode = "nearest"
     else:
         raise ValueError(f"Unsupported interpolation mode: {interpolation}")
-    
+
     # 重塑张量以便于处理
     video = video.reshape([-1, C, H, W])
-    
+
     # 执行resize操作
-    if antialias and mode in ['bicubic', 'bilinear']:
+    if antialias and mode in ["bicubic", "bilinear"]:
         # PaddlePaddle目前没有直接支持antialias的选项，我们可以通过先下采样再上采样来模拟
         if H > size[0] or W > size[1]:
             # 下采样
-            scale_factor = min(size[0]/H, size[1]/W, 1)
+            scale_factor = min(size[0] / H, size[1] / W, 1)
             if scale_factor < 1:
                 video = F.interpolate(video, scale_factor=scale_factor, mode=mode, align_corners=False)
         # 上采样到目标尺寸
         video = F.interpolate(video, size=size, mode=mode, align_corners=False)
     else:
         video = F.interpolate(video, size=size, mode=mode, align_corners=False)
-    
+
     # 恢复原始形状
     video = video.reshape([T, C, size[0], size[1]])
-    
+
     return video
 
 
 def gaussian_kernel_1d(size, sigma):
     """生成1D高斯核"""
     x = np.arange(-(size // 2), size // 2 + 1)
-    kernel = np.exp(-x**2 / (2 * sigma**2))
+    kernel = np.exp(-(x**2) / (2 * sigma**2))
     return kernel / kernel.sum()
 
 
@@ -875,11 +878,11 @@ def fetch_video(ele: dict, image_factor: int = IMAGE_FACTOR) -> Union[paddle.Ten
                 max_pixels=max_pixels,
             )
         video = F.interpolate(
-            video.astype('float32'), 
-            size=[resized_height, resized_width], 
-            mode='bicubic',
+            video.astype("float32"),
+            size=[resized_height, resized_width],
+            mode="bicubic",
             align_corners=False,
-            data_format='NCHW'
+            data_format="NCHW",
         )
 
         video = paddle.clip(video, 0, 255)
