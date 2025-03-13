@@ -12,10 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+export PYTHONPATH=/root/paddlejob/workspace/env_run/output/changwenbin/PaddleMIX/PaddleNLP
+
 export CUDA_VISIBLE_DEVICES=0,1
 #fp16  高性能推理
 python deploy/qwen2_vl/single_image_infer.py\
-    --model_name_or_path Qwen/Qwen2-VL-7B-Instruct \
+    --model_name_or_path Qwen/Qwen2-VL-2B-Instruct \
     --question "Describe this image." \
     --image_file paddlemix/demo_images/examples_image1.jpg \
     --min_length 128 \
