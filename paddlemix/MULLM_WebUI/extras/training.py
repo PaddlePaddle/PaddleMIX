@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import gradio as gr
 import paddle
 
-from .constants import RUNNING_LOG, TRAINBLE_MODELS, TRAINER_LOG, TRAINING_STAGES
+from .constants import RUNNING_LOG, TRAINABLE_MODELS, TRAINER_LOG, TRAINING_STAGES
 from .packages import is_matplotlib_available
 from .ploting import gen_loss_plot
 
@@ -42,7 +42,7 @@ def get_peak_memory() -> Tuple[int, int]:
 
 
 def is_trainable(stage, model_name):
-    if model_name in TRAINBLE_MODELS[TRAINING_STAGES[stage]]:
+    if model_name in TRAINABLE_MODELS[TRAINING_STAGES[stage]]:
         return True
     else:
         return False

@@ -1428,7 +1428,7 @@ class Accelerator:
             reduction (`str`, *optional*, defaults to "sum"):
                 A reduction type, can be one of 'sum', 'mean', or 'none'. If 'none', will not perform any operation.
             scale (`float`, *optional*, defaults to 1.0):
-                A default scaling value to be applied after the reduce, only valied on XLA.
+                A default scaling value to be applied after the reduce, only valid on XLA.
 
         Returns:
             `paddle.Tensor`, or a nested tuple/list/dictionary of `paddle.Tensor`:
@@ -1836,7 +1836,7 @@ class Accelerator:
 
         If a `ProjectConfiguration` was passed to the `Accelerator` object with `automatic_checkpoint_naming` enabled
         then checkpoints will be saved to `self.project_dir/checkpoints`. If the number of current saves is greater
-        than `total_limit` then the oldest save is deleted. Each checkpoint is saved in seperate folders named
+        than `total_limit` then the oldest save is deleted. Each checkpoint is saved in separate folders named
         `checkpoint_<iteration>`.
 
         Otherwise they are just saved to `output_dir`.

@@ -313,7 +313,7 @@ class CLIPConfig(PretrainedConfig):
         projection_dim (`int`, *optional*, defaults to 512):
             Dimentionality of text and vision projection layers.
         logit_scale_init_value (`float`, *optional*, defaults to 2.6592):
-            The inital value of the *logit_scale* paramter. Default is used as per the original CLIP implementation.
+            The initial value of the *logit_scale* parameter. Default is used as per the original CLIP implementation.
         kwargs (*optional*):
             Dictionary of keyword arguments.
 
@@ -378,7 +378,7 @@ class CLIPConfig(PretrainedConfig):
                     else:
                         message = (
                             f"`text_config_dict` is provided which will be used to initialize `CLIPTextConfig`. The "
-                            f'value `text_config["{key}"]` will be overriden.'
+                            f'value `text_config["{key}"]` will be overridden.'
                         )
                     logger.warning(message)
 
@@ -410,7 +410,7 @@ class CLIPConfig(PretrainedConfig):
                     else:
                         message = (
                             f"`vision_config_dict` is provided which will be used to initialize `CLIPVisionConfig`. "
-                            f'The value `vision_config["{key}"]` will be overriden.'
+                            f'The value `vision_config["{key}"]` will be overridden.'
                         )
                     logger.warning(message)
 

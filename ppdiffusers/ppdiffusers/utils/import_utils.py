@@ -431,7 +431,7 @@ def is_paddlesde_available():
     return _paddlesde_available
 
 
-# This is paddle packge
+# This is paddle package
 def is_pp_invisible_watermark_available():
     return _pp_invisible_watermark_available
 

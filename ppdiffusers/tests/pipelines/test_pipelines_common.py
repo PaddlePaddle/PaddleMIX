@@ -871,7 +871,7 @@ class PipelineTesterMixin:
         )
 
         def callback_inputs_subset(pipe, i, t, callback_kwargs):
-            # interate over callback args
+            # iterate over callback args
             for tensor_name, tensor_value in callback_kwargs.items():
                 # check that we're only passing in allowed tensor inputs
                 assert tensor_name in pipe._callback_tensor_inputs
@@ -882,7 +882,7 @@ class PipelineTesterMixin:
             for tensor_name in pipe._callback_tensor_inputs:
                 assert tensor_name in callback_kwargs
 
-            # interate over callback args
+            # iterate over callback args
             for tensor_name, tensor_value in callback_kwargs.items():
                 # check that we're only passing in allowed tensor inputs
                 assert tensor_name in pipe._callback_tensor_inputs

@@ -112,7 +112,7 @@ class YOLOWorldHeadModule(nn.Layer):
     """Head Module for YOLO-World
 
     Args:
-        embed_dims (int): embed dim for text feautures and image features
+        embed_dims (int): embed dim for text features and image features
         use_bn_head (bool): use batch normalization head
     """
 
