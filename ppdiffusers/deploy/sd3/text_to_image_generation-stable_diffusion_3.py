@@ -44,6 +44,12 @@ def parse_args():
     parser.add_argument(
         "--dp_size", type=int, default=1, help="This size refers to the degree of parallelism using data parallel."
     )
+    parser.add_argument(
+        "--output_name_and_path",
+        type=str,
+        default="text_to_image_generation-stable_diffusion_3-result.png",
+        help="Output image path and filename.",
+    )
 
     return parser.parse_args()
 
@@ -142,7 +148,7 @@ if args.benchmark:
     print(f"GPU max_memory_allocated: {paddle.device.cuda.max_memory_allocated() / 1024 ** 3:.2f} GB")
 
 
-
 rank_id = dist.get_rank()
 if rank_id == 0:
-    image.save("text_to_image_generation-stable_diffusion_3-result.png")
+    image.save(args.output_name_and_path)
+    print(f"Output image saved to {args.output_name_and_path}")
