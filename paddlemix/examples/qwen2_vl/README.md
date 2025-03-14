@@ -98,12 +98,15 @@ sh paddlemix/examples/qwen2_vl/shell/distributed_qwen2_vl_infer_72B_QVQ.sh
 
 ### 4.1 小型示例数据集
 
-PaddleMIX团队整理了`chartqa`数据集作为小型的示例数据集，下载链接为：
+PaddleMIX团队整理了`chartqa`和`LaTeX_OCR`数据集作为小型的示例数据集，下载链接为：
 
 ```bash
 wget https://paddlenlp.bj.bcebos.com/models/community/paddlemix/benchmark/playground.tar # 1.0G
+wget https://paddlenlp.bj.bcebos.com/datasets/paddlemix/playground/LaTeX_OCR.tar # 1.7G
 ```
 playground/目录下包括了图片目录`data/chartqa/`和标注目录`opensource_json/`，详见`paddlemix/examples/qwen2_vl/configs/demo_chartqa_500.json`。
+LaTeX_OCR/目录下包括了图片目录和标注文件，详见`paddlemix/examples/qwen2_vl/configs/LaTeX_OCR.json`。
+训练时只需修改对应shell脚本中的`meta_path`参数即可。如`meta_path="paddlemix/examples/qwen2_vl/configs/demo_chartqa_500.json"`。
 
 
 ### 4.2 大型公开数据集
@@ -120,13 +123,16 @@ wget https://paddlenlp.bj.bcebos.com/datasets/paddlemix/playground/opensource_js
 
 ### 4.3 微调命令
 
-注意：此微调训练为语言模型微调，冻结视觉编码器而放开LLM训练，2B模型全量微调训练的显存大小约为30G，7B模型全量微调训练的显存大小约为75G。
+注意：
+1）此微调训练为语言模型微调，冻结视觉编码器而放开LLM训练。
+2）默认总bs=32，每卡bs=2，gradient_accumulation_steps=2，默认分布式训练配置为"paddle sharding stage2"策略，对应于“torch DeepSpeed ZeRO-2"策略。在LaTeX_OCR数据集训练下，2B模型微调训练的显存大小约为18G，7B模型全量微调训练的显存大小约为50G。***若训练数据集平均分辨率较大时，显存会进一步增加。***
+3）若默认训练配置下显存不足，可以调节训练shell脚本中的参数，如```PER_DEVICE_BATCH_SIZE=${PER_DEVICE_BATCH_SIZE:-1}```改小每卡bs为1，以及选择"paddle sharding stage3"策略```--sharding="stage3"```。
 
 ```bash
-# 2B (多张40G A卡 显存可运行3B模型)
+# 2B (多张40G A卡 显存可运行2B模型)
 sh paddlemix/examples/qwen2_vl/shell/baseline_2b_bs32_1e8.sh
 
-# 2B lora (多张40G A卡 显存可运行3B模型)
+# 2B lora (多张40G A卡 显存可运行2B模型)
 sh paddlemix/examples/qwen2_vl/shell/baseline_2b_lora_bs32_1e8.sh
 
 # 7B (多张80G A卡 显存可运行7B模型)
@@ -139,15 +145,48 @@ sh paddlemix/examples/qwen2_vl/shell/baseline_7b_lora_bs32_1e8.sh
 注意：微调2b模型的运行示例如下：
 ![运行示例](../../demo_images/qwen2-vl-2b-lora-ft.png)
 
-
 ### 4.4 微调后使用
-
+/root/paddlejob/guan/py39_guan/PaddleMIX/paddlemix/models/qwen2_vl/
 同按步骤3中的模型推理预测，只需将`paddlemix/examples/qwen2_vl/single_image_infer.py`中的`--model_path`参数修改为微调后的模型路径即可。
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 python paddlemix/examples/qwen2_vl/single_image_infer.py
 ```
 
+### 4.5 自动并行的模型微调
+#### 4.5.1 模型组网介绍
+
+自动并行组网 [modeling_qwen2_vl_network.py](../../models/qwen2_vl/modeling_qwen2_vl_network.py) ，当前主要支持SFT和LoRA两种微调方式。
+#### 4.5.2自动并行微调命令
+```bash
+# 2B (多张40G A卡 显存可运行2B模型)
+sh paddlemix/examples/qwen2_vl/shell/auto_2b_bs32_1e8.sh
+
+# 2B (多张40G A卡 显存可运行2B模型)
+sh paddlemix/examples/qwen2_vl/shell/auto_2b_lora_bs32_1e8.sh
+```
+在sh脚本文件中，与手动并行主要的args配置区别：
+```bash
+  --enable_auto_parallel 1\
+  --auto_parallel_resume_form_hybrid_parallel true \
+  --use_intermediate_api true \
+```
+运行时，运行示例与4.3节一致。
+#### 4.5.3 自动并行模型推理预测
+需要将自动并行训练保存下来的多卡分布式权重进行合并，合并方法为：
+```python
+import paddle
+import paddle.distributed as dist
+ckpt_path='/path/for/dist_ckpt'# 你的自动并行权重路径文件夹
+# offload=1, 参数 offload 到 CPU，减少显存占用
+# prefix="model" 参数可用于过滤掉非模型参数，例如 optimizer 状态等
+merged_state_dict = dist.checkpoint.load_state_dict.load_merged_state_dict(ckpt_path, offload=0, prefix="model")
+paddle.save(merged_state_dict, 'manual_model_state.pdparams')# 合并后的权重，与4.3手动并行一致
+```
+
+拿到合并后的权重之后，需要手动把base模型的配置文件复制到权重所在的文件夹。
+
+在推理预测时，同步骤3当中的模型推理预测相同，将步骤3中对应的的infer文件的--model_path参数修改为合并后的权重路径所在的文件夹即可。
 ### 5 高性能推理优化
 
 [Paddle高性能推理优化后](../../../deploy/qwen2_vl/)，测试结果如下：
@@ -164,8 +203,9 @@ CUDA_VISIBLE_DEVICES=0 python paddlemix/examples/qwen2_vl/single_image_infer.py
 ## 参考文献
 ```BibTeX
 @article{Qwen2-VL,
-  title={Qwen2-VL},
-  author={Qwen team},
+  title={Qwen2-VL: Enhancing Vision-Language Model's Perception of the World at Any Resolution},
+  author={Wang, Peng and Bai, Shuai and Tan, Sinan and Wang, Shijie and Fan, Zhihao and Bai, Jinze and Chen, Keqin and Liu, Xuejing and Wang, Jialin and Ge, Wenbin and Fan, Yang and Dang, Kai and Du, Mengfei and Ren, Xuancheng and Men, Rui and Liu, Dayiheng and Zhou, Chang and Zhou, Jingren and Lin, Junyang},
+  journal={arXiv preprint arXiv:2409.12191},
   year={2024}
 }
 ```
