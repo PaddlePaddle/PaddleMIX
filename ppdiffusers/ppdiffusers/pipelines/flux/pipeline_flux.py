@@ -27,7 +27,7 @@ from  ppdiffusers.transformers import ( # T5TokenizerFast,
 )
 
 from ...image_processor import PipelineImageInput, VaeImageProcessor
-from ...loaders import FromSingleFileMixin, TextualInversionLoaderMixin, FluxIPAdapterMixin # FluxIPAdapterMixin, FluxLoraLoaderMixin
+from ...loaders import FromSingleFileMixin, TextualInversionLoaderMixin # FluxIPAdapterMixin, FluxLoraLoaderMixin
 from ...models.autoencoder_kl import AutoencoderKL
 from ...models.transformer_flux import FluxTransformer2DModel
 from ...schedulers import FlowMatchEulerDiscreteScheduler
@@ -140,7 +140,6 @@ class FluxPipeline(
     DiffusionPipeline,
     FromSingleFileMixin,
     TextualInversionLoaderMixin,
-    FluxIPAdapterMixin,
 ):
     r"""
     The Flux pipeline for text-to-image generation.

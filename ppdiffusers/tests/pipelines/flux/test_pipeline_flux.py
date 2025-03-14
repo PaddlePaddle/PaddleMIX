@@ -223,7 +223,7 @@ class FluxPipelineFastTests(
 @require_paddle_gpu
 class FluxPipelineSlowTests(unittest.TestCase):
     pipeline_class = FluxPipeline
-    repo_id = "black-forest-labs/FLUX.1-schnell"
+    repo_id = "black-forest-labs/FLUX.1-dev"
 
     def setUp(self):
         super().setUp()
