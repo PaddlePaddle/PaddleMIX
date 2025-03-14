@@ -180,8 +180,28 @@ def run_model(predictor_args):
 parser = PdArgumentParser((Mix_PredictorArgument, Mix_ModelArgument))
 predictor_args, model_args = parser.parse_args_into_dataclasses()
 
-# MODEL_NAME = "Qwen/Qwen2.5-VL-3B-Instruct"
-vl_model = Qwen2VLForConditionalGeneration.from_pretrained(predictor_args.model_name_or_path, dtype="bfloat16")
+paddle.set_default_dtype(predictor_args.dtype)
+tensor_parallel_degree = paddle.distributed.get_world_size()
+tensor_parallel_rank = paddle.distributed.get_rank()
+if tensor_parallel_degree > 1:
+    strategy = fleet.DistributedStrategy()
+    strategy.hybrid_configs = {
+        "dp_degree": 1,
+        "mp_degree": tensor_parallel_degree,
+        "pp_degree": 1,
+        "sharding_degree": 1,
+    }
+    fleet.init(is_collective=True, strategy=strategy)
+
+vl_model = Qwen2VLForConditionalGeneration.from_pretrained(
+    predictor_args.model_name_or_path,
+    tensor_parallel_degree=tensor_parallel_degree,
+    tensor_parallel_rank=tensor_parallel_rank,
+    dtype=predictor_args.dtype,
+    tensor_parallel_output=False,
+)
+
+vl_model.eval()
 
 # NOTE: (zhoukangkang、changwenbin) Because we only use the visual model here,
 # in order to reduce video memory,we delete the language model.
@@ -210,21 +230,9 @@ messages = [
 # Preparation for inference
 image_inputs, video_inputs = process_vision_info(messages)
 
-paddle.set_default_dtype(predictor_args.dtype)
-tensor_parallel_degree = paddle.distributed.get_world_size()
-tensor_parallel_rank = paddle.distributed.get_rank()
-if tensor_parallel_degree > 1:
-    strategy = fleet.DistributedStrategy()
-    strategy.hybrid_configs = {
-        "dp_degree": 1,
-        "mp_degree": tensor_parallel_degree,
-        "pp_degree": 1,
-        "sharding_degree": 1,
-    }
-    fleet.init(is_collective=True, strategy=strategy)
-
-
 config = AutoConfig.from_pretrained(predictor_args.model_name_or_path)
+config.tensor_parallel_degree = tensor_parallel_degree
+config.tensor_parallel_rank = tensor_parallel_rank
 predictor_args.total_max_length = config.max_position_embeddings
 
 # NOTE: (changwenbin) This is for using the inference optimization of paddlenlp qwen2.
