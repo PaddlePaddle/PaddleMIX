@@ -123,9 +123,20 @@ def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: Mix_Pr
     model_inputs["bad_tokens"] = paddle.to_tensor([-1], dtype="int64")
     model_inputs["is_block_step"] = paddle.full(shape=[batch_size], fill_value=False, dtype="bool")
 
-    cache_kvs_shape = vl_model.model.get_cache_kvs_shape(vl_model.model.config, batch_size)
+    cache_k_shapes, cache_v_shapes = fast_llm_model.get_cache_kvs_shape(fast_llm_model.config, arg_config.batch_size)
     cachekv_dtype = config.dtype if arg_config.cachekv_int8_type is None else "uint8"
-    model_inputs["cache_kvs"] = [paddle.zeros(shape, dtype=cachekv_dtype) for shape in cache_kvs_shape]
+
+    cache_kvs = []
+    if cache_k_shapes and cache_v_shapes:
+        for cache_k_shape, cache_v_shape in zip(cache_k_shapes, cache_v_shapes):
+            cache_kvs.append(paddle.zeros(cache_k_shape, dtype=cachekv_dtype))
+            cache_kvs.append(paddle.zeros(cache_v_shape, dtype=cachekv_dtype))
+    else:
+        # for mla's absorption
+        assert cache_v_shapes is None
+        cache_kvs = [paddle.zeros(shape, dtype=cachekv_dtype) for shape in cache_k_shapes]
+
+    model_inputs["cache_kvs"] = cache_kvs
 
     block_nums = arg_config.total_max_length // arg_config.block_size
     model_inputs["block_tables"] = paddle.arange(block_nums, dtype="int32").tile([batch_size, 1])
@@ -135,7 +146,7 @@ def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: Mix_Pr
     model_inputs["seq_lens_encoder"] = paddle.to_tensor(np.array(seq_lens).astype("int32").reshape(-1, 1))
     model_inputs["seq_lens_decoder"] = paddle.full(shape=[batch_size, 1], fill_value=0, dtype="int32")
     model_inputs["step_idx"] = paddle.full(shape=[batch_size, 1], fill_value=0, dtype="int64")
-    model_inputs["not_need_stop"] = paddle.full(shape=[1], fill_value=True, dtype="bool")
+    model_inputs["not_need_stop"] = paddle.full(shape=[1], fill_value=True, dtype="bool").cpu()
     model_inputs["stop_flags"] = paddle.full(shape=[batch_size, 1], fill_value=False, dtype="bool")
     model_inputs["stop_nums"] = paddle.full(shape=[1], fill_value=batch_size, dtype="int64")
     model_inputs["pre_ids"] = paddle.full(shape=[batch_size, arg_config.max_length], fill_value=-1, dtype="int64")
