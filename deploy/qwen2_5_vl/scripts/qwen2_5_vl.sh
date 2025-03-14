@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-export CUDA_VISIBLE_DEVICES=0,1,2,3
+export CUDA_VISIBLE_DEVICES=0
 #fp16  高性能推理
 python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
     --model_name_or_path Qwen/Qwen2.5-VL-7B-Instruct \
@@ -51,6 +51,7 @@ python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
 
 
 # # 多卡推理功能
+# export CUDA_VISIBLE_DEVICES=0,1,2,3
 # python -m paddle.distributed.launch --gpus "0,1,2,3" deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
 #     --model_name_or_path Qwen/Qwen2.5-VL-72B-Instruct \
 #     --question "Describe this image." \
