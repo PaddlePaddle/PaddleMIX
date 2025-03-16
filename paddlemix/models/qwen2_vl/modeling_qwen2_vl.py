@@ -21,23 +21,22 @@
 
 import math
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple, Union
 from functools import partial
+from typing import Any, Dict, List, Optional, Tuple, Union
+
 import paddle
+import paddle.distributed.fleet.meta_parallel as mpu
 import paddle.nn as nn
 import paddle.nn.functional as F
+from paddle import Tensor, nn
+from paddle.distributed import fleet
+from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
 from paddle.distributed.fleet.utils import recompute
+from paddlenlp.transformers import linear_utils
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
+from paddlenlp.transformers.linear_utils import Linear
 from paddlenlp.transformers.model_outputs import BaseModelOutputWithPast, ModelOutput
 from paddlenlp.transformers.model_utils import PretrainedModel
-from paddlenlp.transformers import linear_utils
-from paddlenlp.transformers.linear_utils import Linear
-from paddle.distributed import fleet
-
-from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
-import paddle.distributed.fleet.meta_parallel as mpu
-
-from paddle import Tensor, nn
 
 from paddlemix.models.flash_attn_utils import (
     create_attention_module,
@@ -67,6 +66,7 @@ def get_triangle_upper_mask(x, mask=None):
     mask.stop_gradient = True
     return mask
 
+
 def parallel_matmul(x: Tensor, y: Tensor, transpose_y=True, tensor_parallel_output=True):
     is_fleet_init = True
     tensor_parallel_degree = 1
@@ -83,7 +83,7 @@ def parallel_matmul(x: Tensor, y: Tensor, transpose_y=True, tensor_parallel_outp
         y_is_distributed = tensor_parallel_degree > 1
 
     if is_fleet_init and tensor_parallel_degree > 1 and y_is_distributed:
-        
+
         # if not running under distributed.launch, it will raise AttributeError: 'Fleet' object has no attribute '_hcg'
         input_parallel = paddle.distributed.collective._c_identity(x, group=model_parallel_group)
         logits = paddle.matmul(input_parallel, y, transpose_y=transpose_y)
@@ -95,7 +95,7 @@ def parallel_matmul(x: Tensor, y: Tensor, transpose_y=True, tensor_parallel_outp
     else:
         logits = paddle.matmul(x, y, transpose_y=transpose_y)
         return logits
-    
+
 
 def _compute_default_rope_parameters(
     config: Optional[PretrainedConfig] = None,
@@ -308,6 +308,7 @@ class Qwen2VLRotaryEmbedding(nn.Layer):
         if seq_len < self.original_max_seq_len and self.max_seq_len_cached > self.original_max_seq_len:  # reset
             self.inv_freq = self.original_inv_freq
             self.max_seq_len_cached = self.original_max_seq_len
+
     @paddle.no_grad()
     def forward(self, x, position_ids):
         if "dynamic" in self.rope_type:
@@ -562,7 +563,6 @@ class VisionFlashAttention2(nn.Layer):
                 .squeeze(0)
                 .reshape([seq_length, -1])
             )
-        attn_output = attn_output.astype(paddle.float32)
         attn_output = self.proj(attn_output)
         return attn_output
 
@@ -574,7 +574,7 @@ class Qwen2VLVisionBlock(nn.Layer):
         self.norm2 = nn.LayerNorm(config.embed_dim, epsilon=1e-6)
         mlp_hidden_dim = int(config.embed_dim * config.mlp_ratio)
 
-        self.attn = create_attention_module(config, "vision") # 只要paddle版本支持flash_attention就会默认使用flash_attention
+        self.attn = create_attention_module(config, "vision")  # 只要paddle版本支持flash_attention就会默认使用flash_attention
         self.mlp = VisionMlp(dim=config.embed_dim, hidden_dim=mlp_hidden_dim, hidden_act=config.hidden_act)
 
     def forward(self, hidden_states, cu_seqlens, rotary_pos_emb) -> paddle.Tensor:
@@ -673,14 +673,12 @@ class Qwen2MLP(nn.Layer):
         self.fuse_attention_ffn = config.fuse_attention_ffn
         self.tensor_parallel_degree = config.tensor_parallel_degree
 
-        
         # else:
         ColumnParallelLinear = linear_utils.ColumnParallelLinear
         RowParallelLinear = linear_utils.RowParallelLinear
 
-    
         if config.tensor_parallel_degree > 1:
-           
+
             self.gate_proj = ColumnParallelLinear(
                 self.hidden_size,
                 self.intermediate_size,
@@ -702,10 +700,10 @@ class Qwen2MLP(nn.Layer):
         else:
             self.gate_proj = Linear(self.hidden_size, self.intermediate_size, bias_attr=False)  # w1
             self.up_proj = Linear(self.hidden_size, self.intermediate_size, bias_attr=False)  # w3
-            self.down_proj = Linear(self.intermediate_size, self.hidden_size, bias_attr=False)  # w2 
-            
+            self.down_proj = Linear(self.intermediate_size, self.hidden_size, bias_attr=False)  # w2
+
         self.act_fn = ACT2FN[config.hidden_act]
-        self.fuse_swiglu = False 
+        self.fuse_swiglu = False
 
     def forward(self, x):
         x, y = self.gate_proj(x), self.up_proj(x)
@@ -769,14 +767,12 @@ class Qwen2VLAttention(nn.Layer):
                 self.num_key_value_heads % config.tensor_parallel_degree == 0
             ), f"num_key_value_heads: {self.num_key_value_heads}, tensor_parallel_degree: {config.tensor_parallel_degree}"
             self.num_key_value_heads = self.num_key_value_heads // config.tensor_parallel_degree
-        
+
         ColumnParallelLinear = linear_utils.ColumnParallelLinear
         RowParallelLinear = linear_utils.RowParallelLinear
 
         if config.tensor_parallel_degree > 1:
-            self.q_proj = ColumnParallelLinear(
-                self.hidden_size, self.hidden_size, has_bias=True, gather_output=False
-            )
+            self.q_proj = ColumnParallelLinear(self.hidden_size, self.hidden_size, has_bias=True, gather_output=False)
             self.k_proj = ColumnParallelLinear(self.hidden_size, self.config.num_key_value_heads * self.head_dim, has_bias=True, gather_output=False)  # fmt:skip
             self.v_proj = ColumnParallelLinear(self.hidden_size, self.config.num_key_value_heads * self.head_dim, has_bias=True, gather_output=False)  # fmt:skip
             self.o_proj = RowParallelLinear(self.hidden_size, self.hidden_size, has_bias=False, input_is_parallel=True)
@@ -785,7 +781,7 @@ class Qwen2VLAttention(nn.Layer):
             self.k_proj = Linear(self.hidden_size, self.config.num_key_value_heads * self.head_dim, bias_attr=True)
             self.v_proj = Linear(self.hidden_size, self.config.num_key_value_heads * self.head_dim, bias_attr=True)
             self.o_proj = Linear(self.hidden_size, self.hidden_size, bias_attr=False)
-            
+
         self.rotary_emb = Qwen2VLRotaryEmbedding(
             self.head_dim,
             max_position_embeddings=self.max_position_embeddings,
@@ -813,14 +809,12 @@ class Qwen2VLAttention(nn.Layer):
             query_states = self.q_proj(hidden_states)
             key_states = self.k_proj(hidden_states)
             value_states = self.v_proj(hidden_states)
-        
-        
+
         target_query_shape = [0, 0, self.num_heads, self.head_dim]
         target_key_value_shape = [0, 0, self.num_key_value_heads, self.head_dim]
         query_states = query_states.reshape(shape=target_query_shape)
         key_states = key_states.reshape(shape=target_key_value_shape)
         value_states = value_states.reshape(shape=target_key_value_shape)
-        
 
         new_perm = [0, 2, 1, 3]
         query_states = query_states.transpose(new_perm)
@@ -914,7 +908,6 @@ class Qwen2VLFlashAttention2(Qwen2VLAttention):
         query_states = query_states.reshape(shape=target_query_shape)
         key_states = key_states.reshape(shape=target_key_value_shape)
         value_states = value_states.reshape(shape=target_key_value_shape)
-        
 
         new_perm = [0, 2, 1, 3]
         # [1, 3599, 1536] [bsz, q_len, self.num_heads * self.head_dim]
@@ -953,7 +946,7 @@ class Qwen2VLFlashAttention2(Qwen2VLAttention):
             query_states,
             key_states,
             value_states,
-            attention_mask,  
+            attention_mask,
             q_len
             # dropout=0.0 if not self.training else self.attention_dropout,
             # causal=self.is_causal,
@@ -1289,9 +1282,7 @@ class Qwen2VisionTransformerPretrainedModel(Qwen2VLPreTrainedModel):
 
         for idx, blk in enumerate(self.blocks):
             if self.enable_recompute and self.training:
-                hidden_states = self.recompute_training_full(
-                    blk, hidden_states, cu_seqlens, rotary_pos_emb
-                )
+                hidden_states = self.recompute_training_full(blk, hidden_states, cu_seqlens, rotary_pos_emb)
             else:
                 hidden_states = blk(hidden_states, cu_seqlens=cu_seqlens, rotary_pos_emb=rotary_pos_emb)
 
@@ -1985,7 +1976,7 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
         tensor_parallel_output = self.config.tensor_parallel_output and self.config.tensor_parallel_degree > 1
 
         logits = self.lm_head(hidden_states, tensor_parallel_output=tensor_parallel_output)
-    
+
         logits = paddle.cast(logits, "float32")
 
         loss = None
