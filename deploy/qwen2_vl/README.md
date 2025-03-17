@@ -35,10 +35,22 @@ python setup_cuda.py install
 
 ### 3.1. 文本&单张图像输入高性能推理
 ```bash
-CUDA_VISIBLE_DEVICES=0 python deploy/qwen2_vl/single_image_infer.py \
+export CUDA_VISIBLE_DEVICES=0
+python deploy/qwen2_vl/single_image_infer.py\
     --model_name_or_path Qwen/Qwen2-VL-2B-Instruct \
+    --question "Describe this image." \
+    --image_file paddlemix/demo_images/examples_image1.jpg \
+    --min_length 128 \
+    --max_length 128 \
+    --top_k 1 \
+    --top_p 0.001 \
+    --temperature 0.1 \
+    --repetition_penalty 1.05 \
+    --block_attn True \
+    --inference_model True \
+    --mode dynamic \
     --dtype bfloat16 \
-    --benchmark True \
+    --benchmark True
 
 ### 3.2. 文本&视频输入高性能推理
 ```bash
@@ -78,15 +90,15 @@ sh deploy/qwen2_vl/scripts/qwen2_vl.sh
 
 - 在 NVIDIA A800-80GB 上测试的单图端到端速度性能如下：
 
-| model                  | Paddle Inference|    PyTorch   | Paddle 动态图 |
-| ---------------------- | --------------- | ------------ | ------------ |
-| Qwen2-VL-2B-Instruct   |      1.053 s    |    2.086 s   |   5.766 s    |
-| Qwen2-VL-7B-Instruct   |      2.293 s    |    3.132 s   |   6.221 s    |
+| model                  | Paddle Inference wint8 | Paddle Inference|    PyTorch   |
+| ---------------------- | ---------------------- | --------------- | ------------ |
+| Qwen2-VL-2B-Instruct   |         0.815 s        |      0.886 s    |    2.086 s   |
+| Qwen2-VL-7B-Instruct   |         1.210 s        |      1.749 s    |    3.132 s   |
 
 
 - 在 NVIDIA A800-80GB 上测试的单视频端到端速度性能如下：
 
-| model                  | Paddle Inference|    PyTorch   | Paddle 动态图 |
-| ---------------------- | --------------- | ------------ | ------------ |
-| Qwen2-VL-2B-Instruct   |      2.890 s    |     3.143 s  |    6.183 s  |
-| Qwen2-VL-7B-Instruct   |      2.534 s    |     2.715 s  |    5.721 s  |
+| model                  | Paddle Inference|    PyTorch   |
+| ---------------------- | --------------- | ------------ |
+| Qwen2-VL-2B-Instruct   |      2.890 s    |     3.143 s  |
+| Qwen2-VL-7B-Instruct   |      2.534 s    |     2.715 s  |

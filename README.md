@@ -93,26 +93,12 @@ PaddleMIX是基于飞桨的多模态大模型开发套件，聚合图像、文�
 </p>
 
 
-### 多模态理解效果示例如下：
 
-<img src="https://github.com/user-attachments/assets/4c9a0427-57c7-4e1b-80f0-428c03119cc3"></img>
-
-
-多模态理解🤝融合了视觉👀和语言💬处理能力。包含基础感知、细粒度图像理解和复杂视觉推理🧠等功能。这些技术可应用于教育📚、医疗🏥、工业🏭等多个领域，实现从静态图像🖼️到动态视频🎥的全面智能分析。
-
-### 多模态生成效果示例如下：
-<div style="display: flex; justify-content: center; gap: 5px;">
-    <img src="https://github.com/user-attachments/assets/f4768f08-f7a3-45e0-802c-c91554dc5dfc" style="height: 250px; object-fit: fill;">
-    <img src="https://github.com/user-attachments/assets/9bf4a333-af57-4ddd-a514-617dea8da435" style="height: 250px; object-fit: fill;">
-</div>
-
-
-多模态生成✍️融合了文本💬与视觉👀的创造能力。涵盖了从文字生成图像🖼️到文字生成视频🎥的各类技术。功能涉及艺术创作🎨、动画制作📽️、内容生成📝等。可以在教育📚、娱乐🎮、广告📺等领域实现从静态图像到动态视频的创意生成。
 
 ### 特色应用效果示例如下（点击标题可快速跳转在线体验）：
-|                                                  [**ComfyUI创作工作流**](https://aistudio.baidu.com/community/app/106043)                                                  |                                                [**艺术风格二维码模型**](https://aistudio.baidu.com/community/app/1339)                                                |                                                  [**多模态文档理解**](https://aistudio.baidu.com/application/detail/60135)                                                  |
+|                                                  [**ComfyUI创作工作流**](https://aistudio.baidu.com/community/app/106043)                                                  |                                                [**R1+MIX多模态应用**](https://aistudio.baidu.com/application/detail/65916)                                                |                                                  [**多模态文档理解**](https://aistudio.baidu.com/application/detail/60135)                                                  |
 | :--------------------------------------------------------------------------------------------------------------------------------------------: | :----------------------------------------------------------------------------------------------------------------------------------------------: | :--------------------------------------------------------------------------------------------------------------------------------------: |
-| <img src='https://github.com/PaddlePaddle/PaddleMIX/assets/35400185/36ba7261-1744-41a4-b1cb-c9e99f6931f2' width="300px"> | <img src='https://github.com/PaddlePaddle/Paddle/assets/22989727/ba091291-a1ee-49dc-a1af-fc501c62bfc8'  width="300px"> | <img src='https://github.com/user-attachments/assets/0093b2dc-7f89-46ba-b3ab-36afa994e7af'  width="300px"> |
+| <img src='https://github.com/PaddlePaddle/PaddleMIX/assets/35400185/36ba7261-1744-41a4-b1cb-c9e99f6931f2' width="300px"> | <img src='https://github.com/user-attachments/assets/377b6b67-929e-437b-b7f7-ca852f546892'  width="300px"> | <img src='https://github.com/user-attachments/assets/cd2ef018-a657-4037-833e-e7d0c75e6280'  width="300px"> |
 |                                                  [**二次元文生图**](https://aistudio.baidu.com/community/app/2/webUI?source=appCenter)                                                   |                                                     [**AI绘画｜50+Lora风格叠加**](https://aistudio.baidu.com/community/app/2848/webUI?source=appCenter)                                                     |                                               [**视频编辑**](https://aistudio.baidu.com/community/app/1981/webUI?source=appCenter)                                               |
 | <img src='https://github.com/user-attachments/assets/a4af8f8a-08c7-4da7-8575-9dbfedaba56c' width="180px"> | <img src='https://github.com/user-attachments/assets/fa92c229-a885-46a1-b23f-a076855c93ec'  width="180px"> | <img src='https://github.com/user-attachments/assets/38c7c20c-7d72-4ad3-8bd7-237647d37ac3'  width="200px"> |
 
@@ -366,18 +352,14 @@ python setup.py install
 
 PaddleMIX提出了[PP-DocBee](./paddlemix/examples/ppdocbee)，基于多模态大模型实现端到端的文档图像理解。它可以高效地应用在各类场景的文档理解、文档问答等，尤其是对中文的文档类理解的场景，达到了同参数量级别模型的SOTA水平。
 
-<p align="center">
-  <img src="https://github.com/user-attachments/assets/cd2ef018-a657-4037-833e-e7d0c75e6280" align="middle" width = 100% />
-</p>
+
 
 
 ### 💎PP-VCtrl视频生成控制模型
 
 PaddleMIX提出了[PP-VCtrl](./ppdiffusers/examples/ppvctrl/README_CN.md)，一个统一的可控视频生成模型，实现了对各类控制信号的灵活接入和精确控制。可以高效地应用在各类视频生成场景中，尤其是人物动画、场景转换、视频编辑等需要精确控制的任务。
 
-<p align="center">
-  <img src="https://github.com/user-attachments/assets/38c7c20c-7d72-4ad3-8bd7-237647d37ac3" align="middle" width = 100% />
-</p>
+
 
 
 ### 💎多模态数据处理工具箱DataCopilot

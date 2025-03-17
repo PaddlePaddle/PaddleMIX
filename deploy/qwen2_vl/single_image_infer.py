@@ -13,10 +13,12 @@
 # limitations under the License.
 
 import datetime
+import sys
 from dataclasses import dataclass, field
 
 import numpy as np
 import paddle
+from paddle.distributed import fleet
 from paddlenlp.generation import GenerationConfig
 from paddlenlp.trainer import PdArgumentParser
 from paddlenlp.transformers import AutoConfig, AutoInferenceModelForCausalLM
@@ -33,108 +35,26 @@ from paddlemix.processors.qwen2_vl_processing import (
     process_vision_info,
 )
 
+sys.path.append("PaddleNLP/llm/predict")
+from predictor import ModelArgument, PredictorArgument
+
 
 @dataclass
-class PredictorArgument:
-    # NOTE: (zhoukangkang、changwenbin)
-    # These parameters are all copied from https://github.com/PaddlePaddle/PaddleNLP/blob/develop/llm/predict/predictor.py
-    # For simplicity and ease of use, only the necessary parameters are retained here.
-    # If you want to know the exact meaning of these parameters, please refer to the link above.
-
-    model_name_or_path: str = field(default=None, metadata={"help": "The directory of model."})
+class Mix_PredictorArgument(PredictorArgument):
     question: str = field(default="Describe this image.", metadata={"help": "The question for the model."})
     image_file: str = field(
         default="paddlemix/demo_images/examples_image1.jpg", metadata={"help": "The image file for the model."}
     )
 
-    src_length: int = field(default=2048, metadata={"help": "The max length of source text."})
-    min_length: int = field(default=1, metadata={"help": "the min length for decoding."})
-    max_length: int = field(default=1024, metadata={"help": "the max length for decoding."})
-    top_k: int = field(default=1, metadata={"help": "top_k parameter for generation"})
-    top_p: float = field(default=0.001, metadata={"help": "top_p parameter for generation"})
-    temperature: float = field(default=0.1, metadata={"help": "top_p parameter for generation"})
-    repetition_penalty: float = field(default=1.05, metadata={"help": "repetition penalty parameter for generation"})
-    dtype: str = field(default=None, metadata={"help": "Model dtype"})
-    decode_strategy: str = field(
-        default="sampling",
-        metadata={
-            "help": "the decoding strategy of generation, which should be one of ['sampling', 'greedy_search', 'beam_search']. Default to sampling"
-        },
-    )
-    use_flash_attention: bool = field(
-        default=False,
-        metadata={"help": "Whether to use flash attention"},
-    )
-
-    mode: str = field(
-        default="dynamic", metadata={"help": "the type of predictor, it should be one of [dynamic, static]"}
-    )
-    inference_model: bool = field(default=False, metadata={"help": "whether use InferenceModel to do generation"})
-    quant_type: str = field(
-        default="",
-        metadata={
-            "help": "Quantization type. Supported values: a8w8, a8w8c8, a8w8_fp8, a8w8c8_fp8, weight_only_int4, weight_only_int8"
-        },
-    )
-    benchmark: bool = field(
-        default=False,
-        metadata={
-            "help": "If benchmark set as `True`, we will force model decode to max_length, which is helpful to compute throughput. "
-        },
-    )
-    use_fake_parameter: bool = field(default=False, metadata={"help": "use fake parameter, for ptq scales now."})
-    block_attn: bool = field(default=True, metadata={"help": "whether use block attention"})
-    block_size: int = field(default=64, metadata={"help": "the block size for cache_kvs."})
-    cachekv_int8_type: str = field(
-        default=None,
-        metadata={
-            "help": "If cachekv_int8_type set as `dynamic`, cache kv would be quantized to int8 dynamically. If cachekv_int8_type set as `static`, cache kv would be quantized to int8 Statically."
-        },
-    )
-    append_attn: bool = field(default=True, metadata={"help": "whether use append attention"})
-    total_max_length: int = field(
-        default=128000, metadata={"help": "Super parameter. Maximum sequence length(encoder+decoder)."}
-    )
-    speculate_method: str = field(
-        default=None,
-        metadata={"help": "speculate method, it should be one of ['None', 'inference_with_reference']"},
-    )
-    return_full_hidden_states: bool = field(default=False, metadata={"help": "whether return full hidden_states"})
-
 
 @dataclass
-class ModelArgument:
-    model_type: str = field(
-        default=None,
-        metadata={"help": "the type of the model"},
-    )
+class Mix_ModelArgument(ModelArgument):
+    pass
 
 
-def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: PredictorArgument):
-    assert len(inputs_embeds.shape) == 3
-    batch_size = inputs_embeds.shape[0]
-
-    model_inputs = {}
-    model_inputs["input_ids"] = paddle.zeros(shape=[batch_size, arg_config.total_max_length], dtype="int64")
-    model_inputs["inputs_embeds"] = inputs_embeds
-
-    # I dislike write (arg_config.total_max_length + arg_config.block_size -1 ) // arg_config.block_size
-    assert arg_config.total_max_length % arg_config.block_size == 0
-
-    model_inputs["top_p"] = paddle.full(shape=[batch_size, 1], fill_value=arg_config.top_p, dtype="float32")
-    model_inputs["temperature"] = paddle.full(
-        shape=[batch_size, 1], fill_value=arg_config.temperature, dtype="float32"
-    )
-    model_inputs["eos_token_id"] = paddle.to_tensor(
-        np.array(llm_utils.get_eos_token_id(tokenizer, generation_config)).reshape(-1, 1).astype("int64")
-    )
-    model_inputs["penalty_score"] = paddle.full(
-        shape=[batch_size, 1], fill_value=arg_config.repetition_penalty, dtype="float32"
-    )
-    model_inputs["frequency_score"] = paddle.full(shape=[batch_size, 1], fill_value=0.0, dtype="float32")
-    model_inputs["presence_score"] = paddle.full(shape=[batch_size, 1], fill_value=0.0, dtype="float32")
-    model_inputs["min_length"] = paddle.full(shape=[batch_size, 1], fill_value=arg_config.min_length, dtype="int64")
-    model_inputs["max_length"] = paddle.full(shape=[batch_size, 1], fill_value=arg_config.max_length, dtype="int64")
+# NOTE: (zhoukangkang、changwenbin) Copied from PaddleMIX/paddlemix/models/qwen2_vl/modeling_qwen2_vl.py,
+# for calculating M-ROPE.
+def use_m_rope(vision_model_inputs):
 
     position_ids, _ = vl_model.get_rope_index(
         config.vision_config["spatial_merge_size"],
@@ -168,12 +88,42 @@ def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: Predic
 
     rope_emb = paddle.stack([cos, sin], axis=0)
     rope_emb = rope_emb.reshape([rope_emb.shape[0], 1, rope_emb.shape[2], 1, rope_emb.shape[-1]])
-    model_inputs["rope_emb"] = rope_emb
+
+    return rope_emb
+
+
+def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: Mix_PredictorArgument):
+    assert len(inputs_embeds.shape) == 3
+    batch_size = inputs_embeds.shape[0]
+
+    model_inputs = {}
+    model_inputs["input_ids"] = paddle.zeros(shape=[batch_size, arg_config.total_max_length], dtype="int64")
+    model_inputs["inputs_embeds"] = inputs_embeds
+
+    # I dislike write (arg_config.total_max_length + arg_config.block_size -1 ) // arg_config.block_size
+    assert arg_config.total_max_length % arg_config.block_size == 0
+
+    model_inputs["top_p"] = paddle.full(shape=[batch_size, 1], fill_value=arg_config.top_p, dtype="float32")
+    model_inputs["temperature"] = paddle.full(
+        shape=[batch_size, 1], fill_value=arg_config.temperature, dtype="float32"
+    )
+    model_inputs["eos_token_id"] = paddle.to_tensor(
+        np.array(llm_utils.get_eos_token_id(tokenizer, generation_config)).reshape(-1, 1).astype("int64")
+    )
+    model_inputs["penalty_score"] = paddle.full(
+        shape=[batch_size, 1], fill_value=arg_config.repetition_penalty, dtype="float32"
+    )
+    model_inputs["frequency_score"] = paddle.full(shape=[batch_size, 1], fill_value=0.0, dtype="float32")
+    model_inputs["presence_score"] = paddle.full(shape=[batch_size, 1], fill_value=0.0, dtype="float32")
+    model_inputs["min_length"] = paddle.full(shape=[batch_size, 1], fill_value=arg_config.min_length, dtype="int64")
+    model_inputs["max_length"] = paddle.full(shape=[batch_size, 1], fill_value=arg_config.max_length, dtype="int64")
+
+    model_inputs["rope_emb"] = use_m_rope(vision_model_inputs)
 
     model_inputs["bad_tokens"] = paddle.to_tensor([-1], dtype="int64")
     model_inputs["is_block_step"] = paddle.full(shape=[batch_size], fill_value=False, dtype="bool")
 
-    cache_kvs_shape = fast_llm_model.get_cache_kvs_shape(fast_llm_model.config, batch_size)
+    cache_kvs_shape = vl_model.model.get_cache_kvs_shape(vl_model.model.config, batch_size)
     cachekv_dtype = config.dtype if arg_config.cachekv_int8_type is None else "uint8"
     model_inputs["cache_kvs"] = [paddle.zeros(shape, dtype=cachekv_dtype) for shape in cache_kvs_shape]
 
@@ -192,6 +142,7 @@ def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: Predic
     model_inputs["next_tokens"] = paddle.full(shape=[batch_size, 1], fill_value=-1, dtype="int64")
 
     return model_inputs
+
 
 def run_model(predictor_args):
 
@@ -213,7 +164,7 @@ def run_model(predictor_args):
     generated_text = ""
     generated_ids = paddle.to_tensor([], dtype="int64").reshape([1, 0])
     while llm_model_inputs["not_need_stop"]:
-        generated_id = fast_llm_model.generate(**llm_model_inputs)  # already trimmed in paddle
+        generated_id = vl_model.model.generate(**llm_model_inputs)  # already trimmed in paddle
         llm_model_inputs["input_ids"] = generated_id
         llm_model_inputs["inputs_embeds"] = None
         generated_ids = paddle.concat([generated_ids, generated_id], axis=1)
@@ -223,14 +174,34 @@ def run_model(predictor_args):
         generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False
     )[0]
     output_tokens_len = generated_ids.shape[1]
-    return generated_text,input_tokens_len,output_tokens_len
+    return generated_text, input_tokens_len, output_tokens_len
 
 
-parser = PdArgumentParser((PredictorArgument, ModelArgument))
+parser = PdArgumentParser((Mix_PredictorArgument, Mix_ModelArgument))
 predictor_args, model_args = parser.parse_args_into_dataclasses()
 
-# MODEL_NAME = "Qwen/Qwen2.5-VL-3B-Instruct"
-vl_model = Qwen2VLForConditionalGeneration.from_pretrained(predictor_args.model_name_or_path, dtype="bfloat16")
+paddle.set_default_dtype(predictor_args.dtype)
+tensor_parallel_degree = paddle.distributed.get_world_size()
+tensor_parallel_rank = paddle.distributed.get_rank()
+if tensor_parallel_degree > 1:
+    strategy = fleet.DistributedStrategy()
+    strategy.hybrid_configs = {
+        "dp_degree": 1,
+        "mp_degree": tensor_parallel_degree,
+        "pp_degree": 1,
+        "sharding_degree": 1,
+    }
+    fleet.init(is_collective=True, strategy=strategy)
+
+vl_model = Qwen2VLForConditionalGeneration.from_pretrained(
+    predictor_args.model_name_or_path,
+    tensor_parallel_degree=tensor_parallel_degree,
+    tensor_parallel_rank=tensor_parallel_rank,
+    dtype=predictor_args.dtype,
+    tensor_parallel_output=False,
+)
+
+vl_model.eval()
 
 # NOTE: (zhoukangkang、changwenbin) Because we only use the visual model here,
 # in order to reduce video memory,we delete the language model.
@@ -259,20 +230,9 @@ messages = [
 # Preparation for inference
 image_inputs, video_inputs = process_vision_info(messages)
 
-paddle.set_default_dtype(predictor_args.dtype)
-# tensor_parallel_degree = paddle.distributed.get_world_size()
-# if tensor_parallel_degree > 1:
-#     strategy = fleet.DistributedStrategy()
-#     strategy.hybrid_configs = {
-#         "dp_degree": 1,
-#         "mp_degree": tensor_parallel_degree,
-#         "pp_degree": 1,
-#         "sharding_degree": 1,
-#     }
-#     fleet.init(is_collective=True, strategy=strategy)
-
-
 config = AutoConfig.from_pretrained(predictor_args.model_name_or_path)
+config.tensor_parallel_degree = tensor_parallel_degree
+config.tensor_parallel_rank = tensor_parallel_rank
 predictor_args.total_max_length = config.max_position_embeddings
 
 # NOTE: (changwenbin) This is for using the inference optimization of paddlenlp qwen2.
@@ -284,8 +244,8 @@ fast_llm_model = AutoInferenceModelForCausalLM.from_pretrained(
     predictor_args=predictor_args,
     model_args=model_args,
     dtype=predictor_args.dtype,
-    tensor_parallel_degree=1,
-    tensor_parallel_rank=1,
+    tensor_parallel_degree=tensor_parallel_degree,
+    tensor_parallel_rank=tensor_parallel_rank,
 )
 fast_llm_model.eval()
 
@@ -318,8 +278,8 @@ if predictor_args.benchmark:
         "ms",
     )
     print(f"GPU max_memory_allocated: {paddle.device.cuda.max_memory_allocated() / 1024 ** 3:.2f} GB")
-    print("input_tokens_len is :",generated_text[1],"tokens")
-    print("output_tokens_len is :",generated_text[2],"tokens")
+    print("input_tokens_len is :", generated_text[1], "tokens")
+    print("output_tokens_len is :", generated_text[2], "tokens")
 
 else:
     generated_text = run_model(predictor_args)
