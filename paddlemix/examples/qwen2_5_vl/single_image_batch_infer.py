@@ -19,9 +19,12 @@ from paddlemix.processors.qwen2_5_vl_processing import (
     Qwen2_5_VLProcessor,
     process_vision_info,
 )
+import paddle
 
 MODEL_NAME = "Qwen/Qwen2.5-VL-3B-Instruct"
-model = Qwen2_5_VLForConditionalGeneration.from_pretrained(MODEL_NAME, dtype="bfloat16", attn_implementation="flash_attention_2")
+compute_dtype = "bfloat16"
+paddle.set_default_dtype(compute_dtype)
+model = Qwen2_5_VLForConditionalGeneration.from_pretrained(MODEL_NAME, dtype=compute_dtype, attn_implementation="flash_attention_2")
 
 image_processor = Qwen2_5_VLImageProcessor()
 tokenizer = MIXQwen2_5_Tokenizer.from_pretrained(MODEL_NAME)

@@ -36,8 +36,8 @@ def main(args):
     if compute_dtype == "bfloat16" and not is_bfloat16_supported:
         logger.warning("bfloat16 is not supported on your device,change to float32")
         compute_dtype = "float32"
-
-    model = Qwen2_5_VLForConditionalGeneration.from_pretrained(args.model_path, dtype="bfloat16")
+    paddle.set_default_dtype(compute_dtype)
+    model = Qwen2_5_VLForConditionalGeneration.from_pretrained(args.model_path, dtype=compute_dtype, attn_implementation="flash_attention_2")
 
     image_processor = Qwen2_5_VLImageProcessor()
     tokenizer = MIXQwen2_5_Tokenizer.from_pretrained(args.model_path)
