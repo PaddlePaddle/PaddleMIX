@@ -39,6 +39,9 @@
 
 ## 📣最新进展
 
+**🎉 2025.03.17 [Qwen2.5VL高性能升级](deploy/qwen2_5_vl)重磅发布**
+* 得益于PaddlePaddle的最新优化，Qwen2.5VL在PaddleMIX框架中实现了高性能体验，推理速度提升显著，较VLLM框架提升10%-30%。
+
 **🎉 2025.01.20 喜迎外部开发者在星河(AIStudio)社区开发的[创作教程页面](paddlemix_applications.md)更新**
 * 涵盖圣诞主题贺卡生成🎄、人物生成👤等多种应用，期待您的体验！此外，还有AI鉴宝🔍、图生音乐🎶等有趣的应用等待您来探索～
 * 🙏 衷心感谢各位开发者基于套件的精彩创作！🚀 诚挚邀请您也来分享您的创意 - 欢迎将教程发布到公开网页或[飞桨AI Studio](https://aistudio.baidu.com/aistudio/community/multimodal?from=singlemessage)社区
