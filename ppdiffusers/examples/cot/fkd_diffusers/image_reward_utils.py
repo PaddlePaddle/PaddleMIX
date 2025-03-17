@@ -229,12 +229,11 @@ def rm_load(
 
 
     download_root: str
-        path to download the model files; by default, it uses "~/.cache/ImageReward"
+        path to download the model files; by default, it uses "./"
 
     Returns
     -------
-    model : torch.nn.Module
-        The ImageReward model
+    model : The ImageReward model
     """
     if name in _MODELS:
         model_path = _MODELS[name]
