@@ -28,6 +28,7 @@ import paddle
 import paddle.distributed.fleet.meta_parallel as mpu
 import paddle.nn as nn
 import paddle.nn.functional as F
+from paddle.nn.functional.flash_attention import flash_attention
 from paddle import Tensor
 from paddle.distributed import fleet
 from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
@@ -936,21 +937,12 @@ class Qwen2VLFlashAttention2(Qwen2VLAttention):
         key_states = repeat_kv(key_states, self.num_key_value_groups)
         value_states = repeat_kv(value_states, self.num_key_value_groups)
 
-        # Reashape to the expected shape for Flash Attention
-        # [1, 3599, 12, 128]
-        query_states = query_states.transpose(perm=[0, 2, 1, 3])
-        key_states = key_states.transpose(perm=[0, 2, 1, 3])
-        value_states = value_states.transpose(perm=[0, 2, 1, 3])
-
-        attn_output = self._flash_attention_forward(
-            query_states,
-            key_states,
+        attn_output, attn_weights = flash_attention(
+            query_states, 
+            key_states, 
             value_states,
-            attention_mask,
-            q_len
-            # dropout=0.0 if not self.training else self.attention_dropout,
-            # causal=self.is_causal,
-        )
+            causal=True,
+            return_softmax=output_attentions)
 
         attn_output = attn_output.reshape([bsz, q_len, -1])
         attn_output = self.o_proj(attn_output)
