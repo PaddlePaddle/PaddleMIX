@@ -1,7 +1,13 @@
 简体中文 | [English](README.md)
 # PP-VCtrl
+
 <a href='https://hammingbo.github.io/ppvctrl/'>
       <img src='https://img.shields.io/badge/Project_Page-ppvctrl-blue' alt='Project Page'></a>
+
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/38c7c20c-7d72-4ad3-8bd7-237647d37ac3" align="middle" width = 50% />
+</p>
 
 **PP-VCtrl** 是一个通用的视频生成控制模型，通过引入辅助条件编码器，能够灵活对接各类控制模块，并且在不改变原始生成器的前提下避免了大规模重训练。该模型利用稀疏残差连接实现对控制信号的高效传递，同时通过统一的条件编码流程，将多种控制输入转换为标准化表示，再结合任务特定掩码以提升适应性。得益于这种统一而灵活的设计，PP-VCtrl 可广泛应用于**人物动画**、**场景转换**、**视频编辑**等视频生成场景。
 
