@@ -37,6 +37,7 @@ def main(args):
         compute_dtype = "float32"
     print("compute_dtype", compute_dtype)
 
+    paddle.set_default_dtype(compute_dtype)
     model = Qwen2_5_VLForConditionalGeneration.from_pretrained(args.model_path, dtype=compute_dtype, attn_implementation=args.attn_implementation)
 
     image_processor = Qwen2_5_VLImageProcessor()

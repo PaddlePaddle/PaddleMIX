@@ -81,7 +81,7 @@ CUDA_VISIBLE_DEVICES=0 python paddlemix/examples/qwen2_5_vl/video_infer.py
 
 ### d. batch推理 (单卡 32G A卡V卡 显存可运行3B模型)
 ```bash
-CUDA_VISIBLE_DEVICES=0 python paddlemix/examples/qwen2_5_vl/batch_infer.py
+CUDA_VISIBLE_DEVICES=0 python paddlemix/examples/qwen2_5_vl/single_image_batch_infer.py
 ```
 ### 模型推理支持分布式推理
 
