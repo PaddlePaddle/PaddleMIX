@@ -131,6 +131,97 @@ ASPECT_RATIO_512_BIN = {
     "4.0": [1024.0, 256.0],
 }
 
+ASPECT_RATIO_256_BIN = {
+    "0.25": [128.0, 512.0],
+    "0.28": [128.0, 464.0],
+    "0.32": [144.0, 448.0],
+    "0.33": [144.0, 432.0],
+    "0.35": [144.0, 416.0],
+    "0.4": [160.0, 400.0],
+    "0.42": [160.0, 384.0],
+    "0.48": [176.0, 368.0],
+    "0.5": [176.0, 352.0],
+    "0.52": [176.0, 336.0],
+    "0.57": [192.0, 336.0],
+    "0.6": [192.0, 320.0],
+    "0.68": [208.0, 304.0],
+    "0.72": [208.0, 288.0],
+    "0.78": [224.0, 288.0],
+    "0.82": [224.0, 272.0],
+    "0.88": [240.0, 272.0],
+    "0.94": [240.0, 256.0],
+    "1.0": [256.0, 256.0],
+    "1.07": [256.0, 240.0],
+    "1.13": [272.0, 240.0],
+    "1.21": [272.0, 224.0],
+    "1.29": [288.0, 224.0],
+    "1.38": [288.0, 208.0],
+    "1.46": [304.0, 208.0],
+    "1.67": [320.0, 192.0],
+    "1.75": [336.0, 192.0],
+    "2.0": [352.0, 176.0],
+    "2.09": [368.0, 176.0],
+    "2.4": [384.0, 160.0],
+    "2.5": [400.0, 160.0],
+    "3.0": [432.0, 144.0],
+    "4.0": [512.0, 128.0],
+}
+
+def retrieve_timesteps(
+    scheduler,
+    num_inference_steps: Optional[int] = None,
+    timesteps: Optional[List[int]] = None,
+    sigmas: Optional[List[float]] = None,
+    **kwargs,
+):
+    r"""
+    Calls the scheduler's `set_timesteps` method and retrieves timesteps from the scheduler after the call. Handles
+    custom timesteps. Any kwargs will be supplied to `scheduler.set_timesteps`.
+
+    Args:
+        scheduler (`SchedulerMixin`):
+            The scheduler to get timesteps from.
+        num_inference_steps (`int`):
+            The number of diffusion steps used when generating samples with a pre-trained model. If used, `timesteps`
+            must be `None`.
+        timesteps (`List[int]`, *optional*):
+            Custom timesteps used to override the timestep spacing strategy of the scheduler. If `timesteps` is passed,
+            `num_inference_steps` and `sigmas` must be `None`.
+        sigmas (`List[float]`, *optional*):
+            Custom sigmas used to override the timestep spacing strategy of the scheduler. If `sigmas` is passed,
+            `num_inference_steps` and `timesteps` must be `None`.
+
+    Returns:
+        `Tuple[paddle.Tensor, int]`: A tuple where the first element is the timestep schedule from the scheduler and the
+        second element is the number of inference steps.
+    """
+    if timesteps is not None and sigmas is not None:
+        raise ValueError("Only one of `timesteps` or `sigmas` can be passed. Please choose one to set custom values")
+    if timesteps is not None:
+        accepts_timesteps = "timesteps" in set(inspect.signature(scheduler.set_timesteps).parameters.keys())
+        if not accepts_timesteps:
+            raise ValueError(
+                f"The current scheduler class {scheduler.__class__}'s `set_timesteps` does not support custom"
+                f" timestep schedules. Please check whether you are using the correct scheduler."
+            )
+        scheduler.set_timesteps(timesteps=timesteps, **kwargs)
+        timesteps = scheduler.timesteps
+        num_inference_steps = len(timesteps)
+    elif sigmas is not None:
+        accept_sigmas = "sigmas" in set(inspect.signature(scheduler.set_timesteps).parameters.keys())
+        if not accept_sigmas:
+            raise ValueError(
+                f"The current scheduler class {scheduler.__class__}'s `set_timesteps` does not support custom"
+                f" sigmas schedules. Please check whether you are using the correct scheduler."
+            )
+        scheduler.set_timesteps(sigmas=sigmas, **kwargs)
+        timesteps = scheduler.timesteps
+        num_inference_steps = len(timesteps)
+    else:
+        scheduler.set_timesteps(num_inference_steps, **kwargs)
+        timesteps = scheduler.timesteps
+    return timesteps, num_inference_steps
+
 
 class PixArtAlphaPipeline(DiffusionPipeline):
     r"""
