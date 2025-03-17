@@ -1,0 +1,81 @@
+# DMD2 模型蒸馏
+DMD（Distribution Matching Distillation）是一种将昂贵的扩散模型推理过程蒸馏成单步生成器的一种技术。DMD2在DMD的基础上提供了一些列的技巧，简化了训练流程，提升了效果。
+
+## 快速开始
+
+### 推理示例
+
+```shell
+CUDA_VISIBLE_DEVICES=2 PYTHONPATH=./:$PYTHONPATH   python -m edm.imagenet_example  --checkpoint_path YOUR_TRAINED_MODEL_PATH
+```
+
+我们提供了一个预训练好的模型:
+
+
+### 训练示例
+
+
+* 硬件要求：Nvidia A100 80G，如果显存不足可以对应较少batch size
+
+#### 数据准备
+wget https://nvlabs-fi-cdn.nvidia.com/edm/fid-refs/imagenet-64x64.npz -O $CHECKPOINT_PATH/imagenet_fid_refs_edm.npz
+
+###### download the imagenet-64x64 lmdb
+wget https://huggingface.co/tianweiy/DMD2/resolve/main/data/imagenet/imagenet-64x64_lmdb.zip?download=true -O $CHECKPOINT_PATH/imagenet-64x64_lmdb.zip
+unzip $CHECKPOINT_PATH/imagenet-64x64_lmdb.zip -d $CHECKPOINT_PATH
+
+###### 下载edm模型的预训练权重
+wget https://paddlenlp.bj.bcebos.com/models/community/ppdiffusers/edm-imagenet-64x64-cond-adm.pdparams
+
+
+#### 训练
+
+```bash
+#!/bin/bash
+
+CUDA_VISIBLE_DEVICES=1,2,3,4,5,6,7 python -m paddle.distributed.launch edm/train_edm.py \
+    --generator_lr 2e-6 \
+    --guidance_lr 2e-6 \
+    --train_iters 200000 \
+    --output_path output/imagenet_gan_classifier_genloss3e-3_diffusion1000_lr2e-6_scratch \
+    --batch_size 24 \
+    --initialie_generator \
+    --log_iters 500 \
+    --resolution 64 \
+    --label_dim 1000 \
+    --dataset_name "imagenet" \
+    --seed 1 \
+    --model_id datas/edm-imagenet-64x64-cond-adm.pdparams \
+    --wandb_iters 100 \
+    --wandb_entity jll-none \
+    --wandb_project dmd2_imagenet \
+    --wandb_name "imagenet_gan_classifier_genloss3e-3_diffusion1000_lr2e-6_scratch" \
+    --real_image_path datas/imagenet-64x64_lmdb \
+    --dfake_gen_update_ratio 5 \
+    --cls_loss_weight 1e-2 \
+    --gan_classifier \
+    --gen_cls_loss_weight 3e-3 \
+    --diffusion_gan \
+    --diffusion_gan_max_timestep 1000 \
+    --delete_ckpts \
+    --max_checkpoint 500 \
+    --use_fp16
+
+```
+
+
+
+## 评估
+
+训练完后，可用以下脚本进行评估，获得模型的fid.
+
+```bash
+python -u edm/test_folder_edm.py \
+    --folder output/imagenet_gan_classifier_genloss3e-3_diffusion1000_lr2e-6_scratch/time_1741760210_seed1/ \
+    --wandb_name test_imagenet_gan_classifier_genloss3e-3_diffusion1000_lr2e-6_scratch \
+    --wandb_entity jll-none \
+    --wandb_project dmd2 \
+    --resolution 64 \
+    --label_dim 1000 \
+    --ref_path datas/imagenet_fid_refs_edm.npz
+```
