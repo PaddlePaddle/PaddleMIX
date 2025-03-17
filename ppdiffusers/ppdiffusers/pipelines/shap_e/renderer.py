@@ -815,7 +815,7 @@ class ShapERenderer(ModelMixin, ConfigMixin):
     def decode_to_image(
         self, latents, size: int = 64, ray_batch_size: int = 4096, n_coarse_samples=64, n_fine_samples=128
     ):
-        # project the the paramters from the generated latents
+        # project the the parameters from the generated latents
         projected_params = self.params_proj(latents)
 
         # update the mlp layers of the renderer
@@ -846,7 +846,7 @@ class ShapERenderer(ModelMixin, ConfigMixin):
     def decode_to_mesh(
         self, latents, grid_size: int = 128, query_batch_size: int = 4096, texture_channels: Tuple = ("R", "G", "B")
     ):
-        # 1. project the the paramters from the generated latents
+        # 1. project the the parameters from the generated latents
         projected_params = self.params_proj(latents)
 
         # 2. update the mlp layers of the renderer

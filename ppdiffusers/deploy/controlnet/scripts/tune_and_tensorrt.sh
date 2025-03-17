@@ -27,7 +27,7 @@ python infer.py --model_dir static_model/stable-diffusion-v1-5-canny/ --schedule
 # 3. convert the model to tensorrt
 python infer.py --model_dir static_model/stable-diffusion-v1-5-canny/ --scheduler "ddim" --backend paddle_tensorrt --device gpu --task_name all --width 512 --height 512 --inference_steps 50
 
-# perfermance like this:
+# performance like this:
 # --width 512 --height 512 --inference_steps 50 --benchmark_steps 10
 # ==> Test text2img performance.
 # Mean latency: 4.894653 s, p50 latency: 4.891490 s, p90 latency: 4.906489 s, p95 latency: 4.910943 s.

@@ -36,7 +36,7 @@ TRAINING_MODEL_RESUME="None"
 TRAINER_INSTANCES='127.0.0.1'
 MASTER='127.0.0.1:8080'
 
-meta_path="paddlemix/examples/deepseek_vl2/configs/LaTeX_OCR.json"
+meta_path="paddlemix/examples/deepseek_vl2/configs/demo_chartqa_500.json"
 
 TRAINING_PYTHON="python -m paddle.distributed.launch --master ${MASTER} --nnodes 1 --nproc_per_node ${GPUS} --rank 0 --ips ${TRAINER_INSTANCES} --run_mode=collective"
 ${TRAINING_PYTHON} --log_dir ${OUTPUT_DIR}/paddle_distributed_logs \
@@ -47,7 +47,7 @@ ${TRAINING_PYTHON} --log_dir ${OUTPUT_DIR}/paddle_distributed_logs \
   --logging_dir ${OUTPUT_DIR}/logs \
   --meta_path ${meta_path} \
   --overwrite_output_dir True \
-  --dataloader_num_workers 0 \
+  --dataloader_num_workers 8 \
   --bf16 True \
   --fp16 False \
   --fp16_opt_level "O1" \

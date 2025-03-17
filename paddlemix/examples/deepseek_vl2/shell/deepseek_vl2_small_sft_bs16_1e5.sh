@@ -26,7 +26,7 @@ export PYTHONPATH="${PYTHONPATH}:$(pwd)"
 export MASTER_PORT=34229
 export TF_CPP_MIN_LOG_LEVEL=3
 
-OUTPUT_DIR='work_dirs/deepseekvl2_tiny_lora_bs16_1e5'
+OUTPUT_DIR='work_dirs/deepseekvl2_small_sft_bs16_1e5'
 
 if [ ! -d "$OUTPUT_DIR" ]; then
   mkdir -p "$OUTPUT_DIR"
@@ -42,7 +42,7 @@ TRAINING_PYTHON="python -m paddle.distributed.launch --master ${MASTER} --nnodes
 ${TRAINING_PYTHON} --log_dir ${OUTPUT_DIR}/paddle_distributed_logs \
   paddlemix/examples/deepseek_vl2/deepseek_vl2_finetune.py \
   --do_train \
-  --model_name_or_path "deepseek-ai/deepseek-vl2-tiny" \
+  --model_name_or_path "deepseek-ai/deepseek-vl2-small" \
   --output_dir ${OUTPUT_DIR} \
   --logging_dir ${OUTPUT_DIR}/logs \
   --meta_path ${meta_path} \
@@ -50,7 +50,7 @@ ${TRAINING_PYTHON} --log_dir ${OUTPUT_DIR}/paddle_distributed_logs \
   --dataloader_num_workers 8 \
   --bf16 True \
   --fp16 False \
-  --fp16_opt_level "O2" \
+  --fp16_opt_level "O1" \
   --num_train_epochs 1 \
   --per_device_train_batch_size ${PER_DEVICE_BATCH_SIZE} \
   --gradient_accumulation_steps ${GRADIENT_ACC} \
@@ -72,12 +72,7 @@ ${TRAINING_PYTHON} --log_dir ${OUTPUT_DIR}/paddle_distributed_logs \
   --sharding_parallel_degree=${sharding_parallel_degree} \
   --pipeline_parallel_degree=1 \
   --sep_parallel_degree=1 \
-  --sharding="stage1" \
+  --sharding="stage2" \
   --amp_master_grad=1 \
   --hybrid_parallel_topo_order="sharding_first" \
-  --lora True \
-  --lora_rank=8 \
-  --lora_alpha=32 \
-  --lora_dropout=0.05 \
-  --lora_target_modules="language.model.layers.*.self_attn.q_proj.*,language.model.layers.*.self_attn.k_proj.*,language.model.layers.*.self_attn.v_proj.*,language.model.layers.*.self_attn.*o_proj.*,language.model.layers.*.mlp.experts.*.gate_proj.*,language.model.layers.*.mlp.experts.*.up_proj.*,language.model.layers.*.mlp.experts.*.down_proj.*,language.model.layers.*.mlp.gate_proj.*,language.model.layers.*.mlp.up_proj.*,language.model.layers.*.mlp.down_proj.*" \
   2>&1 | tee -a "${OUTPUT_DIR}/training_log.txt"

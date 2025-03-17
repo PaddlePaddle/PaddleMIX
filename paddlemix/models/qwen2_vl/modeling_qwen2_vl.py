@@ -563,7 +563,6 @@ class VisionFlashAttention2(nn.Layer):
                 .squeeze(0)
                 .reshape([seq_length, -1])
             )
-        attn_output = attn_output.astype(paddle.float32)
         attn_output = self.proj(attn_output)
         return attn_output
 
@@ -575,7 +574,7 @@ class Qwen2VLVisionBlock(nn.Layer):
         self.norm2 = nn.LayerNorm(config.embed_dim, epsilon=1e-6)
         mlp_hidden_dim = int(config.embed_dim * config.mlp_ratio)
 
-        self.attn = create_attention_module(config, "vision") # 只要paddle版本支持flash_attention就会默认使用flash_attention
+        self.attn = create_attention_module(config, "vision")  # 只要paddle版本支持flash_attention就会默认使用flash_attention
         self.mlp = VisionMlp(dim=config.embed_dim, hidden_dim=mlp_hidden_dim, hidden_act=config.hidden_act)
 
     def forward(self, hidden_states, cu_seqlens, rotary_pos_emb) -> paddle.Tensor:

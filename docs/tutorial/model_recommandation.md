@@ -2,6 +2,14 @@
 
 ## 多模态理解
 
+### 多模态理解效果示例如下：
+
+<img src="https://github.com/user-attachments/assets/4c9a0427-57c7-4e1b-80f0-428c03119cc3"></img>
+
+
+多模态理解🤝融合了视觉👀和语言💬处理能力。包含基础感知、细粒度图像理解和复杂视觉推理🧠等功能。这些技术可应用于教育📚、医疗🏥、工业🏭等多个领域，实现从静态图像🖼️到动态视频🎥的全面智能分析。
+
+
 #### **1. 视觉问答（Visual Question Answering, VQA）**
 **任务描述**：基于图像或视频内容，回答自然语言问题，需同时理解视觉语义、空间关系及常识知识。核心挑战在于跨模态对齐精度和事实性推理能力，需避免生成与图像无关的"幻觉答案"。
 **关注能力**：
@@ -85,6 +93,16 @@
 
 
 ## 多模态生成
+
+### 多模态生成效果示例如下：
+<div style="display: flex; justify-content: center; gap: 5px;">
+    <img src="https://github.com/user-attachments/assets/f4768f08-f7a3-45e0-802c-c91554dc5dfc" style="height: 250px; object-fit: fill;">
+    <img src="https://github.com/user-attachments/assets/9bf4a333-af57-4ddd-a514-617dea8da435" style="height: 250px; object-fit: fill;">
+</div>
+
+
+多模态生成✍️融合了文本💬与视觉👀的创造能力。涵盖了从文字生成图像🖼️到文字生成视频🎥的各类技术。功能涉及艺术创作🎨、动画制作📽️、内容生成📝等。可以在教育📚、娱乐🎮、广告📺等领域实现从静态图像到动态视频的创意生成。
+
 
 #### **1. 文本图像生成 (Text-to-Image)**
 **任务描述**：根据用户提供的自然语言描述（文本），生成符合语义要求且视觉上合理、高质量、多样化的图像。应用于艺术设计、广告创意等领域。

@@ -19,12 +19,12 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import paddle
 import paddle.distributed.fleet.meta_parallel as mpu
-from paddle.distributed.fleet.utils import recompute
 import paddle.nn as nn
 import paddle.nn.functional as F
 from paddle import Tensor, nn
 from paddle.distributed import fleet
 from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
+from paddle.distributed.fleet.utils import recompute
 from paddlenlp.transformers import linear_utils
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
 from paddlenlp.transformers.linear_utils import Linear
@@ -553,7 +553,7 @@ class Qwen2_5_VLVisionFlashAttention2(nn.Layer):
             .squeeze(0)
             .reshape([seq_length, -1])
         )
-        attn_output = attn_output.astype(paddle.float32)
+        attn_output = attn_output.astype(paddle.bfloat16)
         attn_output = self.proj(attn_output)
         return attn_output
 
@@ -589,10 +589,15 @@ class Qwen2_5_VLVisionSdpaAttention(nn.Layer):
         attention_mask = paddle.where(attention_mask, zero, neg_inf)
         v = v.unsqueeze(0)
 
-        attn_output = paddle.nn.functional.scaled_dot_product_attention(query
-            =q.astype(self.compute_dtype), key=k.astype(self.compute_dtype), value=v.astype(self.compute_dtype), attn_mask=attention_mask.astype(self.compute_dtype), dropout_p=0.0)
+        attn_output = paddle.nn.functional.scaled_dot_product_attention(
+            query=q.astype(self.compute_dtype),
+            key=k.astype(self.compute_dtype),
+            value=v.astype(self.compute_dtype),
+            attn_mask=attention_mask.astype(self.compute_dtype),
+            dropout_p=0.0,
+        )
 
-        attn_output = attn_output.transpose([1, 0, 2]).astype(paddle.float32)
+        attn_output = attn_output.transpose([1, 0, 2]).astype(paddle.bfloat16)
         attn_output = attn_output.reshape([seq_length, -1])
         attn_output = self.proj(attn_output)
 
@@ -612,7 +617,8 @@ class Qwen2_5_VLVisionBlock(paddle.nn.Layer):
         self.norm1 = Qwen2RMSNorm(config.hidden_size, eps=1e-6)
         self.norm2 = Qwen2RMSNorm(config.hidden_size, eps=1e-6)
         self.attn = QWEN2_5_VL_VISION_ATTENTION_CLASSES[attn_implementation](
-            config.hidden_size, num_heads=config.num_heads)
+            config.hidden_size, num_heads=config.num_heads
+        )
 
         self.mlp = Qwen2_5_VLMLP(config, bias=True)
 
@@ -1109,14 +1115,19 @@ class Qwen2_5_VLSdpaAttention(Qwen2_5_VLAttention):
         if output_attentions:
             logger.warning_once(
                 'Qwen2_5_VLModel is using Qwen2_5_VLSdpaAttention, but `paddle.nn.functional.scaled_dot_product_attention` does not support `output_attentions=True`. Falling back to the manual attention implementation, but specifying the manual implementation will be required from Transformers version v5.0.0 onwards. This warning can be removed using the argument `attn_implementation="eager"` when loading the model.'
-                )
-            return super().forward(hidden_states=hidden_states,
-                attention_mask=attention_mask, position_ids=position_ids,
-                past_key_value=past_key_value, output_attentions=
-                output_attentions, use_cache=use_cache, cache_position=
-                cache_position, position_embeddings=position_embeddings)
+            )
+            return super().forward(
+                hidden_states=hidden_states,
+                attention_mask=attention_mask,
+                position_ids=position_ids,
+                past_key_value=past_key_value,
+                output_attentions=output_attentions,
+                use_cache=use_cache,
+                cache_position=cache_position,
+                position_embeddings=position_embeddings,
+            )
         bsz, q_len, _ = hidden_states.shape
-        
+
         try:
             query_states = self.q_proj(hidden_states)
             key_states = self.k_proj(hidden_states)
@@ -1143,7 +1154,6 @@ class Qwen2_5_VLSdpaAttention(Qwen2_5_VLAttention):
             kv_seq_len += cache_position[0] + 1
             # kv_seq_len += past_key_value[0].shape[-2] # qwen2是 [-3]
 
-
         # Because the input can be padded, the absolute sequence length depends on the max position id.
         cos, sin = self.rotary_emb(value_states, position_ids)
         query_states, key_states = apply_multimodal_rotary_pos_emb(
@@ -1166,7 +1176,7 @@ class Qwen2_5_VLSdpaAttention(Qwen2_5_VLAttention):
         query_states = query_states.transpose(perm=[0, 2, 1, 3])
         key_states = key_states.transpose(perm=[0, 2, 1, 3])
         value_states = value_states.transpose(perm=[0, 2, 1, 3])
-        
+
         # For SDPA, when possible, we will rely on its `is_causal` argument instead of its `attn_mask` argument, in
         # order to dispatch on Flash Attention 2. This feature is not compatible with static cache, as SDPA will fail
         # to infer the attention mask.
@@ -1457,9 +1467,7 @@ class Qwen2_5_VisionTransformerPretrainedModel(Qwen2_5_VLPreTrainedModel):
             else:
                 cu_seqlens_now = cu_window_seqlens
             if self.enable_recompute and self.training:
-                hidden_states = self.recompute_training_full(
-                    blk, hidden_states, cu_seqlens_now, rotary_pos_emb
-                )
+                hidden_states = self.recompute_training_full(blk, hidden_states, cu_seqlens_now, rotary_pos_emb)
             else:
                 hidden_states = blk(hidden_states, cu_seqlens=cu_seqlens_now, rotary_pos_emb=rotary_pos_emb)
 
