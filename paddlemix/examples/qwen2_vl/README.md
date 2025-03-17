@@ -146,7 +146,6 @@ sh paddlemix/examples/qwen2_vl/shell/baseline_7b_lora_bs32_1e8.sh
 ![运行示例](../../demo_images/qwen2-vl-2b-lora-ft.png)
 
 ### 4.4 微调后使用
-/root/paddlejob/guan/py39_guan/PaddleMIX/paddlemix/models/qwen2_vl/
 同按步骤3中的模型推理预测，只需将`paddlemix/examples/qwen2_vl/single_image_infer.py`中的`--model_path`参数修改为微调后的模型路径即可。
 
 ```bash
