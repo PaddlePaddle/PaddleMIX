@@ -1,5 +1,5 @@
-# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
-# Copyright 2024 The Qwen team, Alibaba Group and the HuggingFace Inc. team. All rights reserved.
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2025 The Qwen team, Alibaba Group and the HuggingFace Inc. team. All rights reserved.
 #
 # This code is based on EleutherAI's GPT-NeoX library and the GPT-NeoX
 # and OPT implementations in this library. It has been modified from its
@@ -21,18 +21,15 @@
 
 import math
 from dataclasses import dataclass
-from functools import partial
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import paddle
-import paddle.distributed.fleet.meta_parallel as mpu
+import paddle.distributed as dist
 import paddle.nn as nn
 import paddle.nn.functional as F
-from paddle import Tensor
-from paddle.distributed import fleet
+from paddle.distributed.auto_parallel.local_layer import LocalLayer
 from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
 from paddle.distributed.fleet.utils import recompute
-from paddlenlp.transformers import linear_utils
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
 from paddlenlp.transformers.linear_utils import Linear
 from paddlenlp.transformers.model_outputs import BaseModelOutputWithPast, ModelOutput
@@ -45,7 +42,11 @@ from paddlemix.models.flash_attn_utils import (
 from ppdiffusers.utils import logging
 
 from ...activations import ACT2FN
-from .bert_padding import index_first_axis, pad_input, unpad_input
+from .bert_padding import (  # index_first_axis,; pad_input,
+    IndexFirstAxis,
+    IndexPutFirstAxis,
+    unpad_input,
+)
 from .configuration_qwen2_vl import Qwen2VLConfig, Qwen2VLVisionConfig
 
 logger = logging.get_logger(__name__)
@@ -59,42 +60,12 @@ def get_triangle_upper_mask(x, mask=None):
         return mask
     # [bsz, n_head, q_len, kv_seq_len]
     shape = x.shape
-    #  [bsz, 1, q_len, kv_seq_len]
+    # [bsz, 1, q_len, kv_seq_len]
     shape[1] = 1
     mask = paddle.full(shape, paddle.finfo(x.dtype).min, dtype=x.dtype)
     mask = paddle.triu(mask, diagonal=1)
     mask.stop_gradient = True
     return mask
-
-
-def parallel_matmul(x: Tensor, y: Tensor, transpose_y=True, tensor_parallel_output=True):
-    is_fleet_init = True
-    tensor_parallel_degree = 1
-    try:
-        hcg = fleet.get_hybrid_communicate_group()
-        model_parallel_group = hcg.get_model_parallel_group()
-        tensor_parallel_degree = hcg.get_model_parallel_world_size()
-    except:
-        is_fleet_init = False
-
-    if paddle.in_dynamic_mode():
-        y_is_distributed = y.is_distributed
-    else:
-        y_is_distributed = tensor_parallel_degree > 1
-
-    if is_fleet_init and tensor_parallel_degree > 1 and y_is_distributed:
-
-        # if not running under distributed.launch, it will raise AttributeError: 'Fleet' object has no attribute '_hcg'
-        input_parallel = paddle.distributed.collective._c_identity(x, group=model_parallel_group)
-        logits = paddle.matmul(input_parallel, y, transpose_y=transpose_y)
-
-        if tensor_parallel_output:
-            return logits
-        return paddle.distributed.collective._c_concat(logits, group=model_parallel_group)
-
-    else:
-        logits = paddle.matmul(x, y, transpose_y=transpose_y)
-        return logits
 
 
 def _compute_default_rope_parameters(
@@ -563,18 +534,19 @@ class VisionFlashAttention2(nn.Layer):
                 .squeeze(0)
                 .reshape([seq_length, -1])
             )
+        # attn_output = attn_output.astype(paddle.float32)
         attn_output = self.proj(attn_output)
         return attn_output
 
 
 class Qwen2VLVisionBlock(nn.Layer):
-    def __init__(self, config, attn_implementation: str = "flash_attention_2") -> None:
+    def __init__(self, config, attn_implementation: str = "sdpa") -> None:
         super().__init__()
         self.norm1 = nn.LayerNorm(config.embed_dim, epsilon=1e-6)
         self.norm2 = nn.LayerNorm(config.embed_dim, epsilon=1e-6)
         mlp_hidden_dim = int(config.embed_dim * config.mlp_ratio)
 
-        self.attn = create_attention_module(config, "vision")  # 只要paddle版本支持flash_attention就会默认使用flash_attention
+        self.attn = create_attention_module(config, "vision", auto=True)
         self.mlp = VisionMlp(dim=config.embed_dim, hidden_dim=mlp_hidden_dim, hidden_act=config.hidden_act)
 
     def forward(self, hidden_states, cu_seqlens, rotary_pos_emb) -> paddle.Tensor:
@@ -671,36 +643,10 @@ class Qwen2MLP(nn.Layer):
         self.hidden_size = config.hidden_size
         self.intermediate_size = config.intermediate_size
         self.fuse_attention_ffn = config.fuse_attention_ffn
-        self.tensor_parallel_degree = config.tensor_parallel_degree
 
-        # else:
-        ColumnParallelLinear = linear_utils.ColumnParallelLinear
-        RowParallelLinear = linear_utils.RowParallelLinear
-
-        if config.tensor_parallel_degree > 1:
-
-            self.gate_proj = ColumnParallelLinear(
-                self.hidden_size,
-                self.intermediate_size,
-                gather_output=False,
-                has_bias=False,
-            )
-            self.up_proj = ColumnParallelLinear(
-                self.hidden_size,
-                self.intermediate_size,
-                gather_output=False,
-                has_bias=False,
-            )
-            self.down_proj = RowParallelLinear(
-                self.intermediate_size,
-                self.hidden_size,
-                input_is_parallel=True,
-                has_bias=False,
-            )
-        else:
-            self.gate_proj = Linear(self.hidden_size, self.intermediate_size, bias_attr=False)  # w1
-            self.up_proj = Linear(self.hidden_size, self.intermediate_size, bias_attr=False)  # w3
-            self.down_proj = Linear(self.intermediate_size, self.hidden_size, bias_attr=False)  # w2
+        self.gate_proj = Linear(self.hidden_size, self.intermediate_size, bias_attr=False)  # w1
+        self.up_proj = Linear(self.hidden_size, self.intermediate_size, bias_attr=False)  # w3
+        self.down_proj = Linear(self.intermediate_size, self.hidden_size, bias_attr=False)  # w2
 
         self.act_fn = ACT2FN[config.hidden_act]
         self.fuse_swiglu = False
@@ -757,30 +703,10 @@ class Qwen2VLAttention(nn.Layer):
         self.rope_scaling = config.rope_scaling
         # self.sequence_parallel = config.sequence_parallel
 
-        if config.tensor_parallel_degree > 1:
-            assert (
-                self.num_heads % config.tensor_parallel_degree == 0
-            ), f"num_heads: {self.num_heads}, tensor_parallel_degree: {config.tensor_parallel_degree}"
-            self.num_heads = self.num_heads // config.tensor_parallel_degree
-
-            assert (
-                self.num_key_value_heads % config.tensor_parallel_degree == 0
-            ), f"num_key_value_heads: {self.num_key_value_heads}, tensor_parallel_degree: {config.tensor_parallel_degree}"
-            self.num_key_value_heads = self.num_key_value_heads // config.tensor_parallel_degree
-
-        ColumnParallelLinear = linear_utils.ColumnParallelLinear
-        RowParallelLinear = linear_utils.RowParallelLinear
-
-        if config.tensor_parallel_degree > 1:
-            self.q_proj = ColumnParallelLinear(self.hidden_size, self.hidden_size, has_bias=True, gather_output=False)
-            self.k_proj = ColumnParallelLinear(self.hidden_size, self.config.num_key_value_heads * self.head_dim, has_bias=True, gather_output=False)  # fmt:skip
-            self.v_proj = ColumnParallelLinear(self.hidden_size, self.config.num_key_value_heads * self.head_dim, has_bias=True, gather_output=False)  # fmt:skip
-            self.o_proj = RowParallelLinear(self.hidden_size, self.hidden_size, has_bias=False, input_is_parallel=True)
-        else:
-            self.q_proj = Linear(self.hidden_size, self.hidden_size, bias_attr=True)
-            self.k_proj = Linear(self.hidden_size, self.config.num_key_value_heads * self.head_dim, bias_attr=True)
-            self.v_proj = Linear(self.hidden_size, self.config.num_key_value_heads * self.head_dim, bias_attr=True)
-            self.o_proj = Linear(self.hidden_size, self.hidden_size, bias_attr=False)
+        self.q_proj = Linear(self.hidden_size, self.hidden_size, bias_attr=True)
+        self.k_proj = Linear(self.hidden_size, self.config.num_key_value_heads * self.head_dim, bias_attr=True)
+        self.v_proj = Linear(self.hidden_size, self.config.num_key_value_heads * self.head_dim, bias_attr=True)
+        self.o_proj = Linear(self.hidden_size, self.hidden_size, bias_attr=False)
 
         self.rotary_emb = Qwen2VLRotaryEmbedding(
             self.head_dim,
@@ -1030,7 +956,9 @@ class Qwen2VLFlashAttention2(Qwen2VLAttention):
                     causal=causal,
                 )[0]
 
-                attn_output = pad_input(attn_output_unpad, indices_q, batch_size, query_length)
+                # attn_output = pad_input(attn_output_unpad, indices_q, batch_size, query_length)
+                attn_output = IndexPutFirstAxis.apply(attn_output_unpad, indices_q, batch_size * query_length)
+                attn_output = attn_output.reshape([batch_size, query_length, -1])
             else:
                 attn_output = flash_attn_func(
                     query_states,
@@ -1053,15 +981,15 @@ class Qwen2VLFlashAttention2(Qwen2VLAttention):
         batch_size, kv_seq_len, num_key_value_heads, head_dim = key_layer.shape
 
         # TODO：cuda error
-        key_layer = index_first_axis(
+        key_layer = IndexFirstAxis.apply(
             key_layer.reshape([batch_size * kv_seq_len, num_key_value_heads, head_dim]), indices_k
         )
-        value_layer = index_first_axis(
+        value_layer = IndexFirstAxis.apply(
             value_layer.reshape([batch_size * kv_seq_len, num_key_value_heads, head_dim]), indices_k
         )
 
         if query_length == kv_seq_len:
-            query_layer = index_first_axis(
+            query_layer = IndexFirstAxis.apply(
                 query_layer.reshape([batch_size * kv_seq_len, self.num_heads, head_dim]), indices_k
             )
             cu_seqlens_q = cu_seqlens_k
@@ -1101,7 +1029,7 @@ class Qwen2VLDecoderLayer(nn.Layer):
                 "unexpected results may be encountered."
             )
 
-        self.self_attn = create_attention_module(config, "qwen2vl", layer_idx=layer_idx)
+        self.self_attn = create_attention_module(config, "qwen2vl", layer_idx=layer_idx, auto=True)
         # self.self_attn = Qwen2VLAttention(config, layer_idx)
         self.mlp = Qwen2MLP(config)
         self.input_layernorm = Qwen2RMSNorm(config, config.hidden_size, eps=config.rms_norm_eps)
@@ -1289,6 +1217,17 @@ class Qwen2VisionTransformerPretrainedModel(Qwen2VLPreTrainedModel):
         return self.merger(hidden_states)
 
 
+class ReplaceImageMask(LocalLayer):
+    def __init__(self, config, out_dist_attrs, grad_dist_attrs):
+        super().__init__(out_dist_attrs=out_dist_attrs, grad_dist_attrs=grad_dist_attrs)
+
+    def forward(
+        self, image_mask: paddle.Tensor, inputs_embeds: paddle.Tensor, image_embeds: paddle.Tensor
+    ) -> paddle.Tensor:
+        inputs_embeds[image_mask] = image_embeds
+        return inputs_embeds
+
+
 class Qwen2VLModel(Qwen2VLPreTrainedModel):
     def __init__(self, config: Qwen2VLConfig):
         super().__init__(config)
@@ -1297,17 +1236,10 @@ class Qwen2VLModel(Qwen2VLPreTrainedModel):
         self.hidden_size = config.hidden_size
         # Recompute defaults to False and is controlled by Trainer
 
-        if config.tensor_parallel_degree > 1 and config.vocab_size % config.tensor_parallel_degree == 0:
-            self.embed_tokens = mpu.VocabParallelEmbedding(
-                self.vocab_size,
-                self.hidden_size,
-                weight_attr=paddle.ParamAttr(initializer=nn.initializer.XavierNormal()),
-            )
-        else:
-            self.embed_tokens = nn.Embedding(
-                self.vocab_size,
-                self.hidden_size,
-            )
+        self.embed_tokens = nn.Embedding(
+            self.vocab_size,
+            self.hidden_size,
+        )
 
         # self.embed_tokens = nn.Embedding(config.vocab_size, config.hidden_size, self.padding_idx)
         self.layers = nn.LayerList(
@@ -1515,10 +1447,8 @@ class Qwen2LMHead(nn.Layer):
     def __init__(self, config, embedding_weights=None, transpose_y=False):
         super(Qwen2LMHead, self).__init__()
         self.config = config
-        if config.tensor_parallel_degree > 1 and config.vocab_size % config.tensor_parallel_degree == 0:
-            vocab_size = config.vocab_size // config.tensor_parallel_degree
-        else:
-            vocab_size = config.vocab_size
+
+        vocab_size = config.vocab_size
 
         self.transpose_y = transpose_y
         if transpose_y:
@@ -1550,29 +1480,30 @@ class Qwen2LMHead(nn.Layer):
             # for tie_word_embeddings
             self.weight.split_axis = 0 if self.transpose_y else 1
 
-    def forward(self, hidden_states, tensor_parallel_output=None):
-        if tensor_parallel_output is None:
-            tensor_parallel_output = self.config.tensor_parallel_output
-
+    def forward(self, hidden_states):
         # 确保数据类型一致
         if self.weight.dtype != hidden_states.dtype:
             hidden_states = paddle.cast(hidden_states, self.weight.dtype)
 
-        logits = parallel_matmul(
-            hidden_states, self.weight, transpose_y=self.transpose_y, tensor_parallel_output=tensor_parallel_output
-        )
+        logits = paddle.matmul(hidden_states, self.weight, transpose_y=self.transpose_y)
+
         return logits
 
 
 class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
     _tied_weights_keys = ["lm_head.weight"]
 
-    def __init__(self, config, attn_implementation="flash_attention_2"):
+    def __init__(self, config):
         super().__init__(config)
-        config._attn_implementation = attn_implementation
-        config.vision_config._attn_implementation = attn_implementation
-
         self.visual = Qwen2VisionTransformerPretrainedModel._from_config(config.vision_config)
+        mesh = dist.auto_parallel.get_mesh()
+        if "pp" in mesh.dim_names:
+            mesh = mesh.get_mesh_with_dim("pp")[0]
+        placement_rr = [dist.Replicate(), dist.Replicate()]
+        placement_sr = [dist.Shard(0), dist.Replicate()]
+        out_dist_attrs = [(mesh, placement_sr)]
+        grad_dist_attrs = [(mesh, placement_sr), (mesh, placement_sr), (mesh, placement_rr)]
+        self.replace_image_mask = ReplaceImageMask(config, out_dist_attrs, grad_dist_attrs)
         self.model = Qwen2VLModel(config)
         self.vocab_size = config.vocab_size
 
@@ -1605,61 +1536,7 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
 
     @classmethod
     def _get_tensor_parallel_mappings(cls, config: Qwen2VLConfig, is_split=True):
-
-        logger.info("Qwen2 inference model _get_tensor_parallel_mappings")
-
-        from paddlenlp.transformers.conversion_utils import split_or_merge_func
-
-        fn = split_or_merge_func(
-            is_split=is_split,
-            tensor_parallel_degree=config.tensor_parallel_degree,
-            tensor_parallel_rank=config.tensor_parallel_rank,
-            num_attention_heads=config.num_attention_heads,
-        )
-
-        def get_tensor_parallel_split_mappings(num_layers):
-            final_actions = {}
-
-            base_actions = {
-                "lm_head.weight": partial(fn, is_column=True),
-                # Row Linear
-                "embed_tokens.weight": partial(fn, is_column=False),
-                "layers.0.self_attn.o_proj.weight": partial(fn, is_column=False),
-                "layers.0.mlp.down_proj.weight": partial(fn, is_column=False),
-            }
-
-            # Column Linear
-            # if config.fuse_attention_qkv:
-            #     base_actions["layers.0.self_attn.qkv_proj.weight"] = partial(fn, is_column=True)
-            # else:
-            base_actions["layers.0.self_attn.q_proj.weight"] = partial(fn, is_column=True)
-            base_actions["layers.0.self_attn.q_proj.bias"] = partial(fn, is_column=True)
-            # if we have enough num_key_value_heads to split, then split it.
-            if config.num_key_value_heads % config.tensor_parallel_degree == 0:
-                base_actions["layers.0.self_attn.k_proj.weight"] = partial(fn, is_column=True)
-                base_actions["layers.0.self_attn.v_proj.weight"] = partial(fn, is_column=True)
-                base_actions["layers.0.self_attn.k_proj.bias"] = partial(fn, is_column=True)
-                base_actions["layers.0.self_attn.v_proj.bias"] = partial(fn, is_column=True)
-
-            if config.fuse_attention_ffn:
-                base_actions["layers.0.mlp.gate_up_fused_proj.weight"] = partial(
-                    fn, is_column=True, is_naive_2fuse=True
-                )
-            else:
-                base_actions["layers.0.mlp.gate_proj.weight"] = partial(fn, is_column=True)
-                base_actions["layers.0.mlp.up_proj.weight"] = partial(fn, is_column=True)
-
-            for key, action in base_actions.items():
-                if "layers.0." in key:
-                    for i in range(num_layers):
-                        final_actions[key.replace("layers.0.", f"layers.{i}.")] = action
-                final_actions[key] = action
-
-            return final_actions
-
-        mappings = get_tensor_parallel_split_mappings(config.num_hidden_layers)
-
-        return mappings
+        pass
 
     @staticmethod
     def get_rope_index(
@@ -1678,7 +1555,7 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
         Explanation:
             Each embedding sequence contains vision embedding and text embedding or just contains text embedding.
 
-            For pure text embedding sequence, the rotary position embedding has no difference with modern LLMs.
+            For pure text embedding sequence, the rotary position embedding has no difference with mordern LLMs.
             Examples:
                 input_ids: [T T T T T], here T is for text.
                 temporal position_ids: [0, 1, 2, 3, 4]
@@ -1686,7 +1563,7 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
                 width position_ids: [0, 1, 2, 3, 4]
 
             For vision and text embedding sequence, we calculate 3D rotary position embedding for vision part
-            and 1D rotary position embedding for text part.
+            and 1D rotary position embeddin for text part.
             Examples:
                 Assume we have a video input with 3 temporal patches, 2 height patches and 2 width patches.
                 input_ids: [V V V V V V V V V V V V T T T T T], here V is for vision.
@@ -1877,17 +1754,17 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
         self,
         input_ids: paddle.Tensor = None,  # [1, 400] sum 49356255
         attention_mask: Optional[paddle.Tensor] = None,  # [1, 400] sum 396
+        pixel_values: Optional[paddle.Tensor] = None,  # [1, 1224, 1176] sum 2658700.50000000
+        image_grid_thw: Optional[paddle.Tensor] = None,  # [[1 , 36, 34]]
+        labels: Optional[paddle.Tensor] = None,  # [1, 400] sum 354841
+        inputs_embeds: Optional[paddle.Tensor] = None,
         position_ids: Optional[paddle.Tensor] = None,
         past_key_values: Optional[List[paddle.Tensor]] = None,
-        inputs_embeds: Optional[paddle.Tensor] = None,
-        labels: Optional[paddle.Tensor] = None,  # [1, 400] sum 354841
         use_cache: Optional[bool] = None,
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
-        pixel_values: Optional[paddle.Tensor] = None,  # [1, 1224, 1176] sum 2658700.50000000
         pixel_values_videos: Optional[paddle.Tensor] = None,
-        image_grid_thw: Optional[paddle.Tensor] = None,  # [[1 , 36, 34]]
         video_grid_thw: Optional[paddle.Tensor] = None,
         rope_deltas: Optional[paddle.Tensor] = None,
     ):
@@ -1930,23 +1807,25 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
         >>> tokenizer.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
         "The image shows a street scene with a red stop sign in the foreground. In the background, there is a large red gate with Chinese characters ..."
         ```"""
+        if isinstance(input_ids, list):
+            input_ids, attention_mask, pixel_values, image_grid_thw, labels = input_ids
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states  # fmt:skip
-        # Note：始终为True
-        return_dict = True  # return_dict if return_dict is not None else self.config.use_return_dict
+        # Note：动转静时不能True
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         if inputs_embeds is None:
             inputs_embeds = self.model.embed_tokens(input_ids)
             if pixel_values is not None:
+                image_mask = input_ids == self.config.image_token_id
+                if self.training:
+                    inputs_embeds = inputs_embeds.clone()
                 # 确保 pixel_values 和 inputs_embeds 使用相同的数据类型
                 pixel_values = paddle.cast(pixel_values, inputs_embeds.dtype)
                 image_embeds = self.visual(pixel_values, grid_thw=image_grid_thw)
                 # 确保 image_embeds 和 inputs_embeds 使用相同的数据类型
-                image_embeds = paddle.cast(image_embeds, inputs_embeds.dtype)
-                image_mask = input_ids == self.config.image_token_id
-                if self.training:
-                    inputs_embeds = inputs_embeds.clone()
-                inputs_embeds[image_mask] = image_embeds
+                image_embeds = paddle.cast(image_embeds, inputs_embeds.dtype)  # 李振星
+                inputs_embeds = self.replace_image_mask(image_mask, inputs_embeds, image_embeds)
             if pixel_values_videos is not None:
                 # 确保 pixel_values_videos 和 inputs_embeds 使用相同的数据类型
                 pixel_values_videos = paddle.cast(pixel_values_videos, inputs_embeds.dtype)
@@ -1972,10 +1851,7 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
 
         hidden_states = outputs[0]
 
-        tensor_parallel_output = self.config.tensor_parallel_output and self.config.tensor_parallel_degree > 1
-
-        logits = self.lm_head(hidden_states, tensor_parallel_output=tensor_parallel_output)
-
+        logits = self.lm_head(hidden_states)
         logits = paddle.cast(logits, "float32")
 
         loss = None
@@ -1999,7 +1875,8 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
             # output = (logits,) + outputs[1:]
             # Note: (changwenbin) fix "can only concatenate tuple (not "list") to tuple".
             output = (logits,) + tuple(outputs[1:])
-            return (loss,) + output if loss is not None else output
+            # return (loss,) + output if loss is not None else output
+            return loss if loss is not None else output  # d2s only support return loss
             # return logits + 28 layers k and v
 
         return Qwen2VLCausalLMOutputWithPast(
