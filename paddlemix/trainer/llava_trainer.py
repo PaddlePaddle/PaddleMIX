@@ -63,7 +63,7 @@ class BenchmarkCallback(TrainerCallback):
                     )
 
                 logger.info(
-                    "global step %d,loss:%.5f, ips: %.5f, %s %s"
+                    "global step %d, loss: %.5f, ips: %.5f, %s %s"
                     % (
                         state.global_step,
                         logs["loss"],
