@@ -28,7 +28,7 @@ import paddle
 import paddle.distributed.fleet.meta_parallel as mpu
 import paddle.nn as nn
 import paddle.nn.functional as F
-from paddle import Tensor, nn
+from paddle import Tensor
 from paddle.distributed import fleet
 from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
 from paddle.distributed.fleet.utils import recompute
@@ -1930,7 +1930,6 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
         >>> tokenizer.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
         "The image shows a street scene with a red stop sign in the foreground. In the background, there is a large red gate with Chinese characters ..."
         ```"""
-
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states  # fmt:skip
         # Note：始终为True
