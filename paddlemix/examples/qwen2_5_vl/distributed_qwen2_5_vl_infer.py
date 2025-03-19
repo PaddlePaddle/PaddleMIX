@@ -50,6 +50,7 @@ def main(args):
         logger.warning("bfloat16 is not supported on your device,change to float32")
         compute_dtype = "float32"
     print("compute_dtype", compute_dtype)
+    paddle.set_default_dtype(compute_dtype)
     model = Qwen2_5_VLForConditionalGeneration.from_pretrained(args.model_path, tensor_parallel_degree=args.mp_degree, tensor_parallel_rank=tensor_parallel_rank, dtype=compute_dtype, tensor_parallel_output=False)
     model.eval()
     image_processor = Qwen2_5_VLImageProcessor()
