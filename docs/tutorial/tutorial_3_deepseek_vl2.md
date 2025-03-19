@@ -14,7 +14,7 @@ DeepSeek-VL2的前身是去年发布的DeepSeek-VL，其模型结构设计是经
 3. **DeepSeek LLM**：语言模型是DeepSeek-LLM，其设计遵循LLaMA，采用Pre-Norm结构和SwiGLU激活函数，使用旋转嵌入进行位置编码。
 
 <div align="center">
-    <img src="https://github.com/user-attachments/assets/73fdb687-41a0-4932-8183-30db394d241f" alt="Image 2" style="width: 70%;">
+    <img src="https://github.com/user-attachments/assets/73fdb687-41a0-4932-8183-30db394d241f" alt="Image 2" style="width: 35%;">
     <p style="color: #808080;"> DeepSeek-VL 架构 </p>
 </div>
 
@@ -150,7 +150,7 @@ DeepSeek-VL2 在多个常用的多模态基准数据集上进行了评估，包�
 
 
 <div align="center">
-    <img src="https://github.com/user-attachments/assets/d62d6a02-74c5-4f01-a26b-643b307b61db" alt="Image 9" style="width: 90%;">
+    <img src="https://github.com/user-attachments/assets/d62d6a02-74c5-4f01-a26b-643b307b61db" alt="Image 9" style="width: 50%;">
     <p style="color: #808080;"> DeepSeek-VL2 视觉故事生成能力展示
  </p>
 </div>
