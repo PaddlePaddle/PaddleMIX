@@ -13,7 +13,7 @@
 - **python >= 3.10**
 - **paddlepaddle-gpu 要求develop版本**
 ```bash
-# Develop 版本安装示例
+# Develop 版本安装示例，请确保使用的Paddle版本为develop版本
 python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu123/
 ```
 
@@ -84,8 +84,11 @@ python deploy/deepseek_vl2/deepseek_vl2_infer.py \
 ```
 
 ## 4 一键推理 & 推理说明
+进入PaddleMIX目录运行
+```bash
 cd PaddleMIX
 sh deploy/deepseek_vl2/shell/run.sh
+```
 #### 参数设定
 |     parameter      |      Value     |
 | ------------------ | -------------- |
@@ -99,3 +102,10 @@ sh deploy/deepseek_vl2/shell/run.sh
 | ------------------ | -------------- |
 |     min_length     |       128      |
 |     min_length     |       128      |
+
+以下为单张图片的测速情况
+
+|             model              |    Paddle高性能推理    |    Paddle     |
+| ------------------------------ | ---------------------| ------------- |
+| deepseek-ai/deepseek-vl2-small |          9.3 s       |     12.8 s    |
+| deepseek-ai/deepseek-vl2       |           -          |     17.2 s    | 
