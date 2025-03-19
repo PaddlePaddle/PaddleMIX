@@ -80,18 +80,19 @@ VL-Pretrain 数据结合了视觉-语言数据和纯文本数据，以保持VL�
 **OCR 数据**: LaTex OCR 和 12M RenderedText、包括不同文档类型的大规模内部数据集
 
 **VQA 数据**:
-    * DeepSeek-VL 通用的VQA数据
-    * 表格、图表和文档理解数据。PubTabNet、FinTabNet 和 Docmatix
-    * Web-to-code 和 plot-to-Python 生成。Websight，并遵循DeepSeek-VL的方法，使用公开的Jupyter笔记本中的Python图表。通过使用DeepSeek V2.5对Websight 部分数据增强。作者还利用DeepSeek V2.5生成的Python图表代码来减少plot-to-code 中的噪声。
-    * 包括视觉提示的 QA数据：参考Vip-llava构建具有不同视觉提示（箭头、方框、圆圈和涂鸦）的数据，
+* DeepSeek-VL 通用的VQA数据
+* 表格、图表和文档理解数据。PubTabNet、FinTabNet 和 Docmatix
+* Web-to-code 和 plot-to-Python 生成。Websight，并遵循DeepSeek-VL的方法，使用公开的Jupyter笔记本中的Python图表。通过使用DeepSeek V2.5对Websight 部分数据增强。作者还利用DeepSeek V2.5生成的Python图表代码来减少plot-to-code 中的噪声。
+* 包括视觉提示的 QA数据：参考Vip-llava构建具有不同视觉提示（箭头、方框、圆圈和涂鸦）的数据，
 
 **Visual grounding 数据**: 基于Kosmos-2和Objects365构建 视觉定位数据，并采用以下模版构建
-    * Prompt: \texttt{Locate <|ref|><|/ref|> in the given image.}
-    * Response: \texttt{<|ref|><|/ref|><|det|>[[x1, y1, x2, y2],\ldots]<|/det|>}
+* Prompt: \texttt{Locate <|ref|><|/ref|> in the given image.}
+* Response: \texttt{<|ref|><|/ref|><|det|>[[x1, y1, x2, y2],\ldots]<|/det|>}
 
 **Grounded 对话数据**: 基于 Kosmos-2 构建视觉定位对话数据 并采用以下模版构建
-    * Prompt: \texttt{<|grounding|>Can you describe the content of the image?}
-    * Response: $\texttt{Two <|ref|>dogs<|/ref|><|det|>[[x1, y1, x2, y2],\ldots]<|/det|> are running on the grass.}
+
+* Prompt: \texttt{<|grounding|>Can you describe the content of the image?}
+* Response: $\texttt{Two <|ref|>dogs<|/ref|><|det|>[[x1, y1, x2, y2],\ldots]<|/det|> are running on the grass.}
 
 ### 3.1.3 SFT 数据
 
@@ -150,7 +151,7 @@ DeepSeek-VL2 在多个常用的多模态基准数据集上进行了评估，包�
 
 
 <div align="center">
-    <img src="https://github.com/user-attachments/assets/d62d6a02-74c5-4f01-a26b-643b307b61db" alt="Image 9" style="width: 50%;">
+    <img src="https://github.com/user-attachments/assets/d62d6a02-74c5-4f01-a26b-643b307b61db" alt="Image 9" style="width: 60%;">
     <p style="color: #808080;"> DeepSeek-VL2 视觉故事生成能力展示
  </p>
 </div>
