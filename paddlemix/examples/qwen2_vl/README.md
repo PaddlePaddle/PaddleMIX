@@ -180,12 +180,16 @@ ckpt_path='/path/for/dist_ckpt'# 你的自动并行权重路径文件夹
 # offload=1, 参数 offload 到 CPU，减少显存占用
 # prefix="model" 参数可用于过滤掉非模型参数，例如 optimizer 状态等
 merged_state_dict = dist.checkpoint.load_state_dict.load_merged_state_dict(ckpt_path, offload=0, prefix="model")
-paddle.save(merged_state_dict, 'manual_model_state.pdparams')# 合并后的权重，与4.3手动并行一致
+paddle.save(merged_state_dict, 'model_state.pdparams')# 合并后的权重，与4.3手动并行一致
 ```
 
-拿到合并后的权重之后，需要手动把base模型的配置文件复制到权重所在的文件夹。
+拿到合并后的权重之后，将合并后的权重放在/path/for/dist_ckpt文件夹下，在推理预测时，同步骤3当中的模型推理预测相同，将步骤3中对应的的infer文件的--model_path参数修改为合并后的权重路径所在的文件夹(/path/for/dist_ckpt)即可。
 
-在推理预测时，同步骤3当中的模型推理预测相同，将步骤3中对应的的infer文件的--model_path参数修改为合并后的权重路径所在的文件夹即可。
+LoRA微调的权重合并方法类似，但合并之后需要通过python脚本将LoRA权重进行merge，merge完成之后才能用于推理，执行方式如下:
+```sh
+python paddlemix/tools/merge_lora_params.py --model_name_or_path Qwen/Qwen2-VL-2B-Instruct --lora_path  ./checkpoints/your_path --merge_model_path ./checkpoints/merged_model
+
+```
 ### 5 高性能推理优化
 
 [Paddle高性能推理优化后](../../../deploy/qwen2_vl/)，测试结果如下：
