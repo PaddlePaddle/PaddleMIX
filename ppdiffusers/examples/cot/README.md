@@ -79,8 +79,9 @@ python run_sd_cot_predict.py \
 
 | Text prompt | not cot | num_particles=2 | num_particles=4 |
 |:----:|:----:|:----:|:----:|
-| a photo of a train below an airplane| | | |
+| a photo of a train below an airplane|![00000](https://github.com/user-attachments/assets/096058b1-88b5-45a1-9f5b-2fed3d44691f) |![00000 (1)](https://github.com/user-attachments/assets/0e26af2c-99bb-4ab6-a8db-eb60dd16c027) |![00000 (2)](https://github.com/user-attachments/assets/7a0b750e-8f04-4015-b107-a57923269223) |
 </div>
+
 
 
 ### SD2-1
@@ -105,7 +106,7 @@ python run_sd_cot_predict.py \
 
 | Text prompt | not cot | num_particles=2 | num_particles=4 |
 |:----:|:----:|:----:|:----:|
-|a photo of a white pizza and a green umbrella |  |  | |
+|a photo of a white pizza and a green umbrella |![00000](https://github.com/user-attachments/assets/6579748e-edea-4413-81c5-f6299a515cc6)  | ![00000 (1)](https://github.com/user-attachments/assets/5e2713fa-5b6a-49af-be48-d7221ccc139b) |![00000 (2)](https://github.com/user-attachments/assets/b1c12587-e2de-47b3-bbd5-1f5fbffed78f) |
 
 </div>
 
@@ -132,8 +133,9 @@ python run_cot_predict.py \
 
 | Text prompt | not cot | num_particles=2 | num_particles=4 |
 |:----:|:----:|:----:|:----:|
-| a photo of four knifes| | | |
+| a photo of four knifes|![00000](https://github.com/user-attachments/assets/d43545bb-4eac-42c5-88b5-252d27d89774) |![00000 (1)](https://github.com/user-attachments/assets/207101d4-20fb-4386-835f-e2a18c65544d) | ![00000 (2)](https://github.com/user-attachments/assets/e3ff5a38-3589-4947-a813-35af6090be5e)|
 </div>
+
 
 
 # Citation
