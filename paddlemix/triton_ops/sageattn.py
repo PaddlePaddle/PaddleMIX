@@ -897,7 +897,7 @@ def sageattn_forward_causal_false(q, k, v,
 """
 
     op_name = "triton_sageattn_attn_fwd_causal_false"
-    op_name += get_dtype_str(q.dtype)
+    op_name += get_dtype_str(Out.dtype)
     op_name += f"_BSZ{BSZ}_seq{qo_len}_h{h_qo}_dim{HEAD_DIM_K}"
     
     sageattn_attn_fwd_causal_false_config = []
@@ -1290,7 +1290,7 @@ def sageattn_forward_causal_true(q, k, v,
 """
 
     op_name = "triton_sageattn_attn_fwd_causal_true"
-    op_name += get_dtype_str(q.dtype)
+    op_name += get_dtype_str(Out.dtype)
     op_name += f"_BSZ{BSZ}_seq{qo_len}_h{h_qo}_dim{HEAD_DIM_K}"
     
     sageattn_attn_fwd_causal_true_config = []
@@ -1412,7 +1412,6 @@ def sageattn_qk_int8_pv_fp16_triton(
     q: paddle.Tensor,
     k: paddle.Tensor,
     v: paddle.Tensor,
-    quant_gran: str="per_block",
     tensor_layout: str = "HND",
     is_causal: bool = False,
     sm_scale: Optional[float] = None,
@@ -1468,13 +1467,14 @@ def sageattn_qk_int8_pv_fp16_triton(
     if sm_scale is None:
         sm_scale = 1.0 / (head_dim_og ** 0.5)
     
-    if quant_gran == "per_block":
-        q_int8, q_scale, k_int8, k_scale = per_block_int8(q, k, km=km, sm_scale=sm_scale, tensor_layout=tensor_layout)
+    q_int8, q_scale, k_int8, k_scale = per_block_int8(q, k, km=km, sm_scale=sm_scale, tensor_layout=tensor_layout)
+
+    output_dtype = "float16" if dtype == paddle.float16 else "bfloat16"
 
     if is_causal:
-        o, lse = sageattn_forward_causal_true(q_int8, k_int8, v, q_scale, k_scale, output_dtype="float16", tensor_layout=tensor_layout, return_lse=return_lse)
+        o, lse = sageattn_forward_causal_true(q_int8, k_int8, v, q_scale, k_scale, output_dtype=output_dtype, tensor_layout=tensor_layout, return_lse=return_lse)
     else:
-        o, lse = sageattn_forward_causal_false(q_int8, k_int8, v, q_scale, k_scale, output_dtype="float16", tensor_layout=tensor_layout, return_lse=return_lse)
+        o, lse = sageattn_forward_causal_false(q_int8, k_int8, v, q_scale, k_scale, output_dtype=output_dtype, tensor_layout=tensor_layout, return_lse=return_lse)
     
     o = o[..., :head_dim_og]
     
