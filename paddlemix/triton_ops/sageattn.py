@@ -57,7 +57,7 @@ def sageattn_quant_per_block_int8(x,
         BLK: int, the BLK for computing q & k tensor. Default 128 for q, 64 for k, which is an optimized value.
         sm_scale: float, the scale factor for dynamic quant.
         tensor_layout: string. Only in ['HND', 'NHD'], 'HND' -> [bsz, num_heads, seq_len, head_dim],
-                                                        'HND' -> [bsz, seq_len, num_heads, head_dim]
+                                                       'NHD' -> [bsz, seq_len, num_heads, head_dim]
     [Examples]
         batch_size = 2
         num_heads = 24
@@ -293,7 +293,7 @@ def sageattn_quant_query_per_thread_int8(x,
         WARP: int, the WARP for computing q. Default 32.
         sm_scale: float, the scale factor for dynamic quant.
         tensor_layout: string. Only in ['HND', 'NHD'], 'HND' -> [bsz, num_heads, seq_len, head_dim],
-                                                        'HND' -> [bsz, seq_len, num_heads, head_dim]
+                                                       'NHD' -> [bsz, seq_len, num_heads, head_dim]
     """ 
     if tensor_layout == "HND":
         b, h_qo, seq_len, head_dim = x.shape
@@ -508,7 +508,7 @@ def sageattn_quant_key_per_thread_int8(x,
         WARP: int, the WARP for computing q. Default 64.
         sm_scale: float, the scale factor for dynamic quant.
         tensor_layout: string. Only in ['HND', 'NHD'], 'HND' -> [bsz, num_heads, seq_len, head_dim],
-                                                        'HND' -> [bsz, seq_len, num_heads, head_dim]
+                                                       'NHD' -> [bsz, seq_len, num_heads, head_dim]
     """ 
     if tensor_layout == "HND":
         b, h_kv, seq_len, head_dim = x.shape
@@ -771,7 +771,7 @@ def sageattn_forward_causal_false(q, k, v,
         k_scale: paddle.Tensor, dtype in fp16 or bf16, this is the output tensor for scale factor, from quant kernel.
         output_dtype: string. Only in ['float16', 'bfloat16']. The datatype of q, k, v tensor.
         tensor_layout: string. Only in ['HND', 'NHD'], 'HND' -> [bsz, num_heads, seq_len, head_dim],
-                        'HND' -> [bsz, seq_len, num_heads, head_dim]
+                                                       'NHD' -> [bsz, seq_len, num_heads, head_dim]
         return_lse: bool. Return lse correction or not. Useful in parallel computing. Default False.
     [Examples]
         batch_size = 2
@@ -1162,7 +1162,7 @@ def sageattn_forward_causal_true(q, k, v,
         k_scale: paddle.Tensor, dtype in fp16 or bf16, this is the output tensor for scale factor, from quant kernel.
         output_dtype: string. Only in ['float16', 'bfloat16']. The datatype of q, k, v tensor.
         tensor_layout: string. Only in ['HND', 'NHD'], 'HND' -> [bsz, num_heads, seq_len, head_dim],
-                        'HND' -> [bsz, seq_len, num_heads, head_dim]
+                                                       'NHD' -> [bsz, seq_len, num_heads, head_dim]
         return_lse: bool. Return lse correction or not. Useful in parallel computing. Default False.
     [Examples]
         batch_size = 2
