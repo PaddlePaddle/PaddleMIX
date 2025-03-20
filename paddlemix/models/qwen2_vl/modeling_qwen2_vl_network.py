@@ -327,7 +327,7 @@ def apply_multimodal_rotary_pos_emb(q, k, cos, sin, mrope_section, unsqueeze_dim
     Explanation:
         Multimodal 3D rotary position embedding is an extension to 1D rotary position embedding. The input embedding
         sequence contains vision (images / videos) embedding and text embedding or just contains text embedding. For
-        vision embedding part, we apply rotary position embedding on temporal, height and width dimension seperately.
+        vision embedding part, we apply rotary position embedding on temporal, height and width dimension separately.
         Here we split the channel dimension to 3 chunks for the temporal, height and width rotary position embedding.
         For text embedding part, we just apply 1D rotary position embedding. The three rotary position index (temporal,
         height and width) of text embedding is always the same, so the text embedding rotary position embedding has no
@@ -1555,7 +1555,7 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
         Explanation:
             Each embedding sequence contains vision embedding and text embedding or just contains text embedding.
 
-            For pure text embedding sequence, the rotary position embedding has no difference with mordern LLMs.
+            For pure text embedding sequence, the rotary position embedding has no difference with modern LLMs.
             Examples:
                 input_ids: [T T T T T], here T is for text.
                 temporal position_ids: [0, 1, 2, 3, 4]
@@ -1563,7 +1563,7 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
                 width position_ids: [0, 1, 2, 3, 4]
 
             For vision and text embedding sequence, we calculate 3D rotary position embedding for vision part
-            and 1D rotary position embeddin for text part.
+            and 1D rotary position embedding for text part.
             Examples:
                 Assume we have a video input with 3 temporal patches, 2 height patches and 2 width patches.
                 input_ids: [V V V V V V V V V V V V T T T T T], here V is for vision.

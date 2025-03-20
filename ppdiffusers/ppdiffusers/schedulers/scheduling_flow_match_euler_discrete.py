@@ -114,7 +114,7 @@ class FlowMatchEulerDiscreteScheduler(SchedulerMixin, ConfigMixin):
         noise: Optional[paddle.Tensor] = None,
     ) -> paddle.Tensor:
         """
-        Foward process in flow-matching
+        Forward process in flow-matching
 
         Args:
             sample (`paddle.Tensor`):

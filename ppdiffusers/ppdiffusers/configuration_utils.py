@@ -545,7 +545,7 @@ class ConfigMixin(PushToHubMixin, SaveToAistudioMixin):
                 f"{cls.config_name} configuration file."
             )
 
-        # 5. Give nice info if config attributes are initiliazed to default because they have not been passed
+        # 5. Give nice info if config attributes are initialized to default because they have not been passed
         passed_keys = set(init_dict.keys())
         if len(expected_keys - passed_keys) > 0:
             logger.info(
