@@ -3,7 +3,7 @@
 <details >
 <summary>Fig</summary>
 
-![Figure_2](https://github.com/user-attachments/assets/8eb32c77-a74e-4f17-ad1a-09f2db912d7c)
+![Figure_1](https://github.com/user-attachments/assets/be63aafa-1528-4b56-8a12-dd766715d08a)
 
 </details>
 
@@ -77,6 +77,11 @@ for idx, model in enumerate(models):
     # 在每个柱子上显示速度提升百分比
     # for i, contrast in enumerate(contrasts[idx]):
     #     plt.text(x[i], max(filter(None, [paddle_inference[idx], torch_inference[idx], vllm_inference[idx], tensorrt_inference[idx]])) + 0.05, contrast, ha='center', va='bottom', fontsize=8)
+    
+    # 在每个柱子上显示数据值和速度提升百分比
+    for i, value in enumerate([paddle_inference[idx], torch_inference[idx], vllm_inference[idx], tensorrt_inference[idx]]):
+        if value is not None:
+            plt.text(x[i], value + 0.05, f'{value:.2f}', ha='center', va='bottom', fontsize=9)
 
 # 添加标签和标题
 # plt.xlabel('Model')

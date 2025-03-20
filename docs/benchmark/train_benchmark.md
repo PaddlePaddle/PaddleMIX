@@ -4,7 +4,7 @@
 <details >
 <summary>Fig</summary>
 
-![image](https://github.com/user-attachments/assets/38511ff8-5bb6-49f3-8500-7857e7fdb21c)
+![Figure_2](https://github.com/user-attachments/assets/5c2fd610-ccef-4ce0-868c-f99bfd900e37)
 
 </details>
 
@@ -118,8 +118,15 @@ for idx, (model, stages) in enumerate(model_stages):
     plt.bar(x + 0.2, pytorch_speeds[idx], 0.4, label='PyTorch' if idx == 0 else "", color='r')
 
     # 在每个柱子上显示速度提升百分比
-    for i, contrast in enumerate(contrasts[idx]):
-        plt.text(x[i], max(paddle_speeds[idx][i], pytorch_speeds[idx][i]) + 5, contrast, ha='center', va='bottom', fontsize=8)
+    # for i, contrast in enumerate(contrasts[idx]):
+    #     plt.text(x[i], max(paddle_speeds[idx][i], pytorch_speeds[idx][i]) + 5, contrast, ha='center', va='bottom', fontsize=8)
+
+    # 在每个柱子上显示数据值和速度提升百分比
+    for i, (a, b) in enumerate(zip(paddle_speeds[idx], pytorch_speeds[idx])):
+        print(x, a, b)
+        plt.text(x[i] - 0.2, a + 0.05, f'{a}', ha='center', va='bottom', fontsize=9)
+        plt.text(x[i] + 0.2, b + 0.05, f'{b}', ha='center', va='bottom', fontsize=9)
+
 
 # 添加标签和标题
 # plt.xlabel('Model and Stage')
