@@ -168,7 +168,7 @@ def sageattn_quant_per_block_int8(x,
 
     op_name = "triton_sageattn_quant_per_block"
     op_name += get_dtype_str(x.dtype)
-    op_name += f"_BLK{BLK}_seq{seq_len}_h{h_attn}_dim{head_dim}"
+    op_name += f"_BSZ{b}_BLK{BLK}_seq{seq_len}_h{h_attn}_dim{head_dim}"
     
     if op_name not in OpProtoHolder.instance().op_proto_map.keys():
         Output = paddle.empty(x.shape, dtype=paddle.int8)
@@ -1424,6 +1424,7 @@ def sageattn_qk_int8_pv_fp16_triton(
         num_heads = 24
         seq_len = 1376
         head_dim = 64
+        
         q = paddle.randn(shape=(batch_size, seq_len, num_heads, head_dim), dtype="float16")
         k = paddle.randn(shape=(batch_size, seq_len, num_heads, head_dim), dtype="float16")
         v = paddle.randn(shape=(batch_size, seq_len, num_heads, head_dim), dtype="float16")
