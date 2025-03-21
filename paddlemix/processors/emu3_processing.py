@@ -112,7 +112,7 @@ class Emu3Processor(ProcessorMixin):
             ratio (`str`, *optional*):
                 the image width-height ratio for generation
             image_area (`int`, *optional*):
-                image area used to calcualte the generated image height and width
+                image area used to calculate the generated image height and width
             padding_image (`bool`, *optional*):
                 whether pad images to same size for fast preprocessing if they have different sizes
             return_tensors (`str` or [`~utils.TensorType`], *optional*):

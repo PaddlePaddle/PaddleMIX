@@ -1209,7 +1209,7 @@ def main(args):
         if args.with_prior_preservation:
             prompt_embeds = paddle.concat([prompt_embeds, class_prompt_hidden_states], axis=0)
             pooled_prompt_embeds = paddle.concat([pooled_prompt_embeds, class_pooled_prompt_embeds], axis=0)
-        # if we're optmizing the text encoder (both if instance prompt is used for all images or custom prompts) we need to tokenize and encode the
+        # if we're optimizing the text encoder (both if instance prompt is used for all images or custom prompts) we need to tokenize and encode the
         # batch prompts on all training steps
         else:
             tokens_one = tokenize_prompt(tokenizer_one, args.instance_prompt)

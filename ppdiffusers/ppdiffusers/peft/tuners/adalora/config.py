@@ -30,7 +30,7 @@ class AdaLoraConfig(LoraConfig):
         init_r (`int`): The initial rank for each incremental matrix.
         tinit (`int`): The steps of initial fine-tuning warmup.
         tfinal (`int`): The step of final fine-tuning.
-        deltaT (`int`): The time internval between two budget allocations.
+        deltaT (`int`): The time interval between two budget allocations.
         beta1 (`float`): The hyperparameter of EMA for sensitivity smoothing.
         beta2 (`float`): The hyperparameter of EMA for undertainty quantification.
         orth_reg_weight (`float`): The coefficient of orthogonal regularization.
@@ -39,7 +39,7 @@ class AdaLoraConfig(LoraConfig):
     """
 
     target_r: int = field(default=8, metadata={"help": "Target Lora matrix dimension."})
-    init_r: int = field(default=12, metadata={"help": "Intial Lora matrix dimension."})
+    init_r: int = field(default=12, metadata={"help": "Initial Lora matrix dimension."})
     tinit: int = field(default=0, metadata={"help": "The steps of initial warmup."})
     tfinal: int = field(default=0, metadata={"help": "The steps of final warmup."})
     deltaT: int = field(default=1, metadata={"help": "Step interval of rank allocation."})

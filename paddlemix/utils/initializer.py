@@ -225,10 +225,10 @@ def _calculate_gain(nonlinearity, param=None):
 
 def kaiming_uniform_(tensor, a=0, mode="fan_in", nonlinearity="leaky_relu", reverse=False):
     """
-    Modified tensor inspace using kaiming_uniform method
+    Modified tensor inplace using kaiming_uniform method
     Args:
         tensor (paddle.Tensor): paddle Tensor
-        mode (str): ['fan_in', 'fan_out'], 'fin_in' defalut
+        mode (str): ['fan_in', 'fan_out'], 'fin_in' default
         nonlinearity (str): nonlinearity method name
         reverse (bool):  reverse (bool: False): tensor data format order, False by default as [fout, fin, ...].
     Return:

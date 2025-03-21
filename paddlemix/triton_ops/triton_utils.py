@@ -98,7 +98,7 @@ def extract_triton_kernel(kernel, file_name):
     elif type(kernel) == triton.runtime.autotuner.Autotuner:
         fn = kernel.fn.fn
     else:
-        AssertionError("error occures")
+        AssertionError("error occurs")
     py_script = textwrap.dedent(inspect.getsource(fn))
 
     # @triton.jit must only appear once
@@ -226,7 +226,7 @@ def build_package(generated_dir, python_package_name):
 
 def rename_c_to_cu(generated_dir):
     """
-    Rename the .c files int generated_dir to .cu file, becuase the triton aot tool generate the .c files.
+    Rename the .c files int generated_dir to .cu file, because the triton aot tool generate the .c files.
     """
     # rename the .c file to .cu
     for filename in os.listdir(generated_dir):

@@ -123,7 +123,7 @@ python paddlemix/tools/supervised_finetune.py paddlemix/config/llava/v1_5/sft_ar
 export ASCEND_RT_VISIBLE_DEVICES=8
 export FLAGS_npu_storage_format=0
 export FLAGS_use_stride_kernel=0
-export FLAGS_npu_jit_compile=0
+export FLAGS_npu_jit_compile=1
 export FLAGS_npu_scale_aclnn=True
 export FLAGS_npu_split_aclnn=True
 export FLAGS_allocator_strategy=auto_growth

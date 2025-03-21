@@ -48,7 +48,7 @@ def parse_args():
         help="The number of files contained in each part file. Defaults to `1000`.",
     )
     parser.add_argument(
-        "--save_gzip_file", action="store_true", help="Whehter to save gzip file. Defaults to `False`."
+        "--save_gzip_file", action="store_true", help="Whether to save gzip file. Defaults to `False`."
     )
     parser.add_argument("--num_repeat", type=int, default=1, help="Defaults to `1`.")
     args = parser.parse_args()

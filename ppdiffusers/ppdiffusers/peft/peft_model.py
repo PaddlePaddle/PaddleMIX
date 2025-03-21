@@ -282,7 +282,7 @@ class PeftModel(PushToHubMixin, SaveToAistudioMixin, paddle.nn.Layer):
                 Whether the adapter should be trainable or not. If `False`, the adapter will be frozen and can only be
                 used for inference.
             config ([`~peft.PeftConfig`], *optional*):
-                The configuration object to use instead of an automatically loaded configuation. This configuration
+                The configuration object to use instead of an automatically loaded configuration. This configuration
                 object is mutually exclusive with `model_id` and `kwargs`. This is useful when configuration is already
                 loaded before calling `from_pretrained`.
             kwargs: (`optional`):
@@ -473,7 +473,7 @@ class PeftModel(PushToHubMixin, SaveToAistudioMixin, paddle.nn.Layer):
         try:
             if self.peft_config[self.active_adapter].is_prompt_learning:
                 # TODO: consider replacing this patching of methods with a more robust mechanism: setting a flag and
-                # letting the underyling methods deal with it, same as how LoRA does it.
+                # letting the underlying methods deal with it, same as how LoRA does it.
                 old_forward = self.forward
                 self.forward = self.base_model.forward
                 old_prepare_inputs_for_generation = self.prepare_inputs_for_generation
@@ -530,7 +530,7 @@ class PeftModel(PushToHubMixin, SaveToAistudioMixin, paddle.nn.Layer):
             else:
                 self.peft_config[adapter_name] = peft_config
                 self.base_model.inject_adapter(self.base_model.model, adapter_name)
-        except Exception:  # somthing went wrong, roll back
+        except Exception:  # something went wrong, roll back
             if adapter_name in self.peft_config:
                 del self.peft_config[adapter_name]
             raise

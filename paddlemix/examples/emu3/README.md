@@ -57,7 +57,7 @@ python paddlemix/examples/emu3/run_understanding_inference.py \
     --model_path="BAAI/Emu3-Chat" \
     --vq_model_path="BAAI/Emu3-VisionTokenizer" \
     --image_path="paddlemix/demo_images/emu3_demo.png" \
-    --question="Please describe the image breifly" \
+    --question="Please describe the image briefly" \
     --max_new_tokens=512 \
     --dtype="bfloat16"
 ```
@@ -72,9 +72,9 @@ python paddlemix/examples/emu3/run_understanding_inference.py \
 ![emu3_demo](../../demo_images/emu3_demo.png)
 
 ```
-User: Please describe the image breifly
+User: Please describe the image briefly
 
-Assistant: The image features a photograph of a dog with a background of green grass and yellow flowers. The dog appears to be a collie, characterized by its long, fluffy fur that is predominantly brown and white. The dog's fur is particularly long around its neck and chest, giving it a distinctive and endearing appearance. The dog's ears are perked up, and it has a bright, happy expression on its face, with its mouth open and tongue slightly visible, suggesting that it might be panting or smiling. The dog's eyes are bright and alert, and it seems to be looking directly at the camera, creating a sense of connection with the viewer.
+Assistant: The image features a photograph of a dog with a background of green grass and yellow flowers. The dog appears to be a collie, characterized by its long, fluffy fur that is predominantly brown and white. The dog's fur is particularly long around its neck and chest, giving it a distinctive and endearing appearance. The dog's ears are perked up, and it has a bright, happy expression on its face, with its mouth open and tongue slightly visible, suggesting that it might be painting or smiling. The dog's eyes are bright and alert, and it seems to be looking directly at the camera, creating a sense of connection with the viewer.
 
 Above the dog's image, there is a quote in white text that reads: "My dogs have been the reason I have woken up every single day of my life with a smile on my face. Jennifer Skiff." The quote is attributed to Jennifer Skiff, and it suggests that the dog has had a significant positive impact on the person's life, making them smile every day.
 

@@ -529,7 +529,7 @@ if is_ppxformers_available() or is_npu_available():
             )
         else:
             raise ValueError(
-                "ppxformers's attention_op shoulde be in ['auto', 'math', 'cutlass', `memory_efficient`, 'flash']."
+                "ppxformers's attention_op should be in ['auto', 'math', 'cutlass', `memory_efficient`, 'flash']."
             )
         return output
 

@@ -517,7 +517,7 @@ def auto_augment_transform(config_str, hparams):
 
     :param config_str: String defining configuration of auto augmentation. Consists of multiple sections separated by
     dashes ('-'). The first section defines the AutoAugment policy (one of 'v0', 'v0r', 'original', 'originalr').
-    The remaining sections, not order sepecific determine
+    The remaining sections, not order specific determine
         'mstd' -  float std deviation of magnitude noise applied
     Ex 'original-mstd0.5' results in AutoAugment with original policy, magnitude_std 0.5
 
@@ -634,7 +634,7 @@ def rand_augment_transform(config_str, hparams):
 
     :param config_str: String defining configuration of random augmentation. Consists of multiple sections separated by
     dashes ('-'). The first section defines the specific variant of rand augment (currently only 'rand'). The remaining
-    sections, not order sepecific determine
+    sections, not order specific determine
         'm' - integer magnitude of rand augment
         'n' - integer num layers (number of transform ops selected per image)
         'w' - integer probabiliy weight index (index of a set of weights to influence choice of op)
@@ -773,7 +773,7 @@ def augment_and_mix_transform(config_str, hparams):
 
     :param config_str: String defining configuration of random augmentation. Consists of multiple sections separated by
     dashes ('-'). The first section defines the specific variant of rand augment (currently only 'rand'). The remaining
-    sections, not order sepecific determine
+    sections, not order specific determine
         'm' - integer magnitude (severity) of augmentation mix (default: 3)
         'w' - integer width of augmentation chain (default: 3)
         'd' - integer depth of augmentation chain (-1 is random [1, 3], default: -1)

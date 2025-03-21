@@ -792,7 +792,7 @@ class PositionNet(nn.Layer):
 
             objs = self.linears(paddle.concat([positive_embeddings, xyxy_embedding], axis=-1))
 
-        # positionet with text and image infomation
+        # positionet with text and image information
         else:
             phrases_masks = phrases_masks.unsqueeze(-1)
             image_masks = image_masks.unsqueeze(-1)

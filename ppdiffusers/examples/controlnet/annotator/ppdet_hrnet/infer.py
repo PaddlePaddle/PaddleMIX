@@ -209,7 +209,7 @@ class Detector(object):
             repeats (int): repeats number for prediction
         Returns:
             result (dict): include 'boxes': np.ndarray: shape:[N,6], N: number of box,
-                            matix element:[class, score, x_min, y_min, x_max, y_max]
+                            matrix element:[class, score, x_min, y_min, x_max, y_max]
                             MaskRCNN's result include 'masks': np.ndarray:
                             shape: [N, im_h, im_w]
         """
@@ -703,7 +703,7 @@ class DetectorPicoDet(Detector):
             repeats (int): repeat number for prediction
         Returns:
             result (dict): include 'boxes': np.ndarray: shape:[N,6], N: number of box,
-                            matix element:[class, score, x_min, y_min, x_max, y_max]
+                            matrix element:[class, score, x_min, y_min, x_max, y_max]
         """
         np_score_list, np_boxes_list = [], []
 

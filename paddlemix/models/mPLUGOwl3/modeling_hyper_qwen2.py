@@ -226,7 +226,7 @@ def _rotate_half(x):
 def apply_rotary_pos_emb_core(t, freqs, use_fp32=False, debug=False):
     """
     input tensor t is of shape [seq_length, ..., dim]
-    rotary positional embeding tensor freqs is of shape [seq_length, ..., dim]
+    rotary positional embedding tensor freqs is of shape [seq_length, ..., dim]
     check https://kexue.fm/archives/8265 for detailed formulas
     """
     # if use_flash_rotary and use_fp32:

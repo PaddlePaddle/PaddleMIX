@@ -42,7 +42,7 @@ def _chunked_feed_forward(
             dim=chunk_dim,
         )
     else:
-        # TOOD(Patrick): LoRA scale can be removed once PEFT refactor is complete
+        # TODO(Patrick): LoRA scale can be removed once PEFT refactor is complete
         ff_output = paddle.concat(
             [ff(hid_slice, scale=lora_scale) for hid_slice in hidden_states.chunk(num_chunks, axis=chunk_dim)],
             axis=chunk_dim,

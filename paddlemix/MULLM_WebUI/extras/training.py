@@ -19,9 +19,9 @@ from typing import Any, Dict, List, Optional, Tuple
 import gradio as gr
 import paddle
 
-from .constants import RUNNING_LOG, TRAINBLE_MODELS, TRAINER_LOG, TRAINING_STAGES
+from .constants import RUNNING_LOG, TRAINABLE_MODELS, TRAINER_LOG, TRAINING_STAGES
 from .packages import is_matplotlib_available
-from .ploting import gen_loss_plot
+from .plotting import gen_loss_plot
 
 
 def get_current_device() -> "paddle.device":
@@ -42,7 +42,7 @@ def get_peak_memory() -> Tuple[int, int]:
 
 
 def is_trainable(stage, model_name):
-    if model_name in TRAINBLE_MODELS[TRAINING_STAGES[stage]]:
+    if model_name in TRAINABLE_MODELS[TRAINING_STAGES[stage]]:
         return True
     else:
         return False
@@ -50,7 +50,7 @@ def is_trainable(stage, model_name):
 
 def get_trainer_info(output_path: os.PathLike, do_train: bool) -> Tuple[str, "gr.Slider", Optional["gr.Plot"]]:
     r"""
-    Gets training infomation for monitor.
+    Gets training information for monitor.
     """
     running_log = ""
     running_progress = gr.Slider(visible=False)

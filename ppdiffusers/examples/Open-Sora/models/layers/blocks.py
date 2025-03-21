@@ -552,10 +552,10 @@ def default(val, d):
     return val if exists(val) else d
 
 
-# broadcat, as tortoise-tts was using it
+# broadcast, as tortoise-tts was using it
 
 
-def broadcat(tensors, dim=-1):
+def broadcast(tensors, dim=-1):
     broadcasted_tensors = paddle.broadcast_tensors(tensors)
     return paddle.concat(x=broadcasted_tensors, axis=dim)
 

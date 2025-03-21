@@ -230,7 +230,7 @@ def set_weights_and_activate_adapters(model, adapter_names, weights):
     for adapter_name, weight in zip(adapter_names, weights):
         for module in model.sublayers(include_self=True):
             if isinstance(module, BaseTunerLayer):
-                # For backward compatbility with previous PEFT versions
+                # For backward compatibility with previous PEFT versions
                 if hasattr(module, "set_adapter"):
                     module.set_adapter(adapter_name)
                 else:
@@ -240,7 +240,7 @@ def set_weights_and_activate_adapters(model, adapter_names, weights):
     # set multiple active adapters
     for module in model.sublayers(include_self=True):
         if isinstance(module, BaseTunerLayer):
-            # For backward compatbility with previous PEFT versions
+            # For backward compatibility with previous PEFT versions
             if hasattr(module, "set_adapter"):
                 module.set_adapter(adapter_names)
             else:

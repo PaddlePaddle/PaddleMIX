@@ -382,7 +382,7 @@ class StableDiffusionInstructPix2PixPipeline(DiffusionPipeline, TextualInversion
                 )[0]
 
                 # Hack:
-                # For karras style schedulers the model does classifer free guidance using the
+                # For karras style schedulers the model does classifier free guidance using the
                 # predicted_original_sample instead of the noise_pred. So we need to compute the
                 # predicted_original_sample here if we are using a karras style scheduler.
                 if scheduler_is_in_sigma_space:
@@ -400,7 +400,7 @@ class StableDiffusionInstructPix2PixPipeline(DiffusionPipeline, TextualInversion
                     )
 
                 # Hack:
-                # For karras style schedulers the model does classifer free guidance using the
+                # For karras style schedulers the model does classifier free guidance using the
                 # predicted_original_sample instead of the noise_pred. But the scheduler.step function
                 # expects the noise_pred and computes the predicted_original_sample internally. So we
                 # need to overwrite the noise_pred here such that the value of the computed

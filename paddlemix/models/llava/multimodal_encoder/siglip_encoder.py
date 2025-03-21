@@ -362,7 +362,7 @@ class SigLipEncoder(nn.Layer):
         super().__init__()
         self.config = config
         self.layers = nn.LayerList([SigLipEncoderLayer(config) for _ in range(config.num_hidden_layers)])
-        self.gradient_checkpointing = False
+        self.enable_recompute = False
 
     # Ignore copy
     def forward(
@@ -408,9 +408,10 @@ class SigLipEncoder(nn.Layer):
         for encoder_layer in self.layers:
             if output_hidden_states:
                 encoder_states = encoder_states + (hidden_states,)
-            if self.gradient_checkpointing and self.training:
-                layer_outputs = self._gradient_checkpointing_func(
-                    encoder_layer.__call__,
+
+            if self.enable_recompute and self.training:
+                layer_outputs = paddle.distributed.fleet.utils.recompute(
+                    encoder_layer,
                     hidden_states,
                     attention_mask,
                     output_attentions,

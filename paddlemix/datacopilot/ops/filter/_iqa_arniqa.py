@@ -64,7 +64,7 @@ def iqa_arniqa(
     """
     Filter image with ARNIQA `<https://www.arxiv.org/abs/2310.14918>`_.
     The input item is kept with the score within `[min_score, max_score]`.
-    The higher the score, the better the assesment of the image.
+    The higher the score, the better the assessment of the image.
 
     Args:
         item(Dict[str, Any]): Input dict with key `image`.
