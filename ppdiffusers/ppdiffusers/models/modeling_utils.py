@@ -90,7 +90,7 @@ if is_paddlenlp_available():
 
 
 def faster_set_state_dict(model, state_dict):
-    # the state_dict will be destroied.
+    # the state_dict will be destroyed.
     with paddle.no_grad():
         for k, v in model.state_dict(use_hook=False).items():
             if k in state_dict:

@@ -172,7 +172,7 @@ class Attention(nn.Layer):
             self.norm_q = FP32LayerNorm(dim_head, epsilon=eps, **norm_elementwise_affine_kwargs)
             self.norm_k = FP32LayerNorm(dim_head, epsilon=eps, **norm_elementwise_affine_kwargs)
         elif qk_norm == "layer_norm_across_heads":
-            # Lumina applys qk norm across all heads
+            # Lumina applies qk norm across all heads
             self.norm_q = nn.LayerNorm(dim_head * heads, epsilon=eps)
             self.norm_k = nn.LayerNorm(dim_head * kv_heads, epsilon=eps)
         elif qk_norm == "rms_norm":

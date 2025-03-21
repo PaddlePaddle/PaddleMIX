@@ -49,7 +49,7 @@ _run_slow_test = get_bool_from_env("RUN_SLOW_TEST")
 def slow(test):
     """
     Mark a test which spends too much time.
-    Slow tests are skipped by default. Excute the command `export RUN_SLOW_TEST=True` to run them.
+    Slow tests are skipped by default. Execute the command `export RUN_SLOW_TEST=True` to run them.
     """
     if not _run_slow_test:
         return unittest.skip("test spends too much time")(test)

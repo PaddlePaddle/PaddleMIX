@@ -957,7 +957,7 @@ class WebUIStableDiffusionPipeline(DiffusionPipeline, FromSingleFileMixin):
                             print(f"We can't find lora weight: {name}! Please make sure that exists!")
                 else:
                     if len(extra_network_data["lora"]) > 0:
-                        print(f"{self.LORA_DIR} not exists, so we cant load loras!")
+                        print(f"{self.LORA_DIR} not exists, so we can't load loras!")
 
             self.sj.clip.CLIP_stop_at_last_layers = clip_skip
 
@@ -1236,7 +1236,7 @@ class FrozenCLIPEmbedderWithCustomWordsBase(nn.Layer):
 
     def encode_with_text_encoder(self, tokens):
         """
-        converts a batch of token ids (in python lists) into a single tensor with numeric respresentation of those tokens;
+        converts a batch of token ids (in python lists) into a single tensor with numeric representation of those tokens;
         All python lists with tokens are assumed to have same length, usually 77.
         if input is a list with B elements and each element has T tokens, expected output shape is (B, T, C), where C depends on
         model - can be 768 and 1024.
@@ -1383,7 +1383,7 @@ class FrozenCLIPEmbedderWithCustomWordsBase(nn.Layer):
         Returns a tensor with shape of (B, T, C), where B is length of the array; T is length, in tokens, of texts (including padding) - T will
         be a multiple of 77; and C is dimensionality of each token - for SD1 it's 768, and for SD2 it's 1024.
         An example shape returned by this function can be: (2, 77, 768).
-        Webui usually sends just one text at a time through this function - the only time when texts is an array with more than one elemenet
+        Webui usually sends just one text at a time through this function - the only time when texts is an array with more than one element
         is when you do prompt editing: "a picture of a [cat:dog:0.4] eating ice cream"
         """
 
@@ -2214,7 +2214,7 @@ class EmbeddingDatabase:
                 if data:
                     name = data.get("name", name)
                 else:
-                    # if data is None, means this is not an embeding, just a preview image
+                    # if data is None, means this is not an embedding, just a preview image
                     return
         elif ext in [".BIN", ".PT"]:
             data = torch_load(path)
