@@ -24,10 +24,10 @@ random.seed(seed)
 
 import argparse
 
+from paddlenlp.transformers import AutoTokenizer
 from PIL import Image
 
-from paddlemix.auto.modeling import AutoModelMIX
-from paddlemix.auto.tokenizer import AutoTokenizerMIX
+from paddlemix.models.cogvlm.modeling import CogModelForCausalLM
 
 parser = argparse.ArgumentParser()
 
@@ -38,11 +38,11 @@ args = parser.parse_args()
 MODEL_PATH = args.model_name_or_path
 TOKENIZER_PATH = MODEL_PATH
 
-tokenizer = AutoTokenizerMIX.from_pretrained(TOKENIZER_PATH)
+tokenizer = AutoTokenizer.from_pretrained(TOKENIZER_PATH)
 
 data_type = "float16"
 
-model = AutoModelMIX.from_pretrained(
+model = CogModelForCausalLM.from_pretrained(
     MODEL_PATH,
     dtype=data_type,
     low_cpu_mem_usage=False,
