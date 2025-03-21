@@ -1,7 +1,7 @@
 简体中文 | [English](README.md)
 # PP-VCtrl
 
-<a href='https://hammingbo.github.io/ppvctrl/'>
+<a href='https://pp-vctrl.github.io/'>
       <img src='https://img.shields.io/badge/Project_Page-ppvctrl-blue' alt='Project Page'></a>
 
 
@@ -11,7 +11,7 @@
 
 **PP-VCtrl** 是一个通用的视频生成控制模型，通过引入辅助条件编码器，能够灵活对接各类控制模块，并且在不改变原始生成器的前提下避免了大规模重训练。该模型利用稀疏残差连接实现对控制信号的高效传递，同时通过统一的条件编码流程，将多种控制输入转换为标准化表示，再结合任务特定掩码以提升适应性。得益于这种统一而灵活的设计，PP-VCtrl 可广泛应用于**人物动画**、**场景转换**、**视频编辑**等视频生成场景。
 
-<img src="assets/models/model.png" style="width:100%">
+<img src="https://github.com/pp-vctrl/pp-vctrl.github.io/blob/main/static/images/model.jpg?raw=true" style="width:100%">
 
 
 
@@ -26,12 +26,12 @@
 ## 📰 新闻
 `[2025-01-09]`:🎉 发布PP-VCtrl推理代码和PP-VCtrl-5b-v1模型权重。
 
- `[2025-01-08]`:🎉发布 PP-VCtrl：一个即插即用模块，将文本到视频模型转变为定制的视频生成器。
+ `[2025-01-08]`:🎉发布 PP-VCtrl：一个即插即用模块，将视频生成模型转变为定制的视频生成器。
 
 ## 🚩 **TODO/最新进展**
 - [x] Inference code
 - [x] PP-VCtrl v1 模型权重
-- [ ] PP-VCtrl v2 模型权重
+- [x] PP-VCtrl v2 模型权重
 
 
 ## 📷 快速展示
@@ -103,39 +103,35 @@ pip install -r requirements.txt
 #安装paddlex
 pip install paddlex==3.0.0b2
 ```
-### 2. 下载预训练权重
-请按照如下方式下载权重：
+### 2. 预训练权重
 
-#### 2.1. 下载PP-VCtrl-Canny模型权重
+#### 2.1. PP-VCtrl-Canny模型权重
 ```bash
-#创建vctrl-canny模型权重目录
-mkdir -p weights/Canny
-
-#下载PP-VCtrl-5b-Canny-v1模型权重
-wget -P weights/canny https://bj.bcebos.com/v1/dataset/PaddleMIX/vctrl/paddle_weights/vctrl_canny_5b_i2v_vctrl-tiny.pdparams
-wget -P weights/canny https://bj.bcebos.com/v1/dataset/PaddleMIX/vctrl/paddle_weights/vctrl_canny_5b_t2v.pdparams
-
+##PP-VCtrl-i2v
+paddlemix/vctrl-5b-i2v-canny
+paddlemix/vctrl-5b-i2v-canny-v2
+##PP-VCtrl-t2v
+paddlemix/vctrl-5b-t2v-canny
 ```
-#### 2.2. 下载PP-VCtrl-Mask模型权重
+#### 2.2. PP-VCtrl-Mask模型权重
 ```bash
-#创建vctrl-mask模型权重目录
-mkdir -p weights/mask
-
-#下载PP-VCtrl-5b-Mask-v1模型权重
-wget -P weights/mask https://bj.bcebos.com/v1/dataset/PaddleMIX/vctrl/paddle_weights/vctrl_5b_i2v_mask.pdparams
-wget -P weights/mask https://bj.bcebos.com/v1/dataset/PaddleMIX/vctrl/paddle_weights/vctrl_5b_t2v_mask.pdparams
-
-
-```
-#### 2.3. 下载PP-VCtrl-Pose模型权重
-```bash
-#创建vctrl-poses模型权重目录
-mkdir -p weights/poses
-
-#下载PP-VCtrl-5b-Pose-v1模型权重
-wget -P weights/poses https://bj.bcebos.com/v1/dataset/PaddleMIX/vctrl/paddle_weights/vctrl_pose_5b_i2v.pdparams
+##PP-VCtrl-i2v
+paddlemix/vctrl-5b-i2v-mask
+paddlemix/vctrl-5b-i2v-mask-v2
+##PP-VCtrl-t2v
+paddlemix/vctrl-5b-t2v-mask
 ```
 
+#### 2.3. PP-VCtrl-Pose模型权重
+```bash
+##PP-VCtrl-i2v-horizontal
+paddlemix/vctrl-5b-i2v-pose-v1-horizontal
+paddlemix/vctrl-5b-i2v-pose-v2-horizontal
+##PP-VCtrl-i2v-vertical
+paddlemix/vctrl-5b-i2v-pose-v1-vertical
+paddlemix/vctrl-5b-i2v-pose-v2-vertical
+```
+***注意*** : 你可以通过更换 **./scripts/infer_cogvideox_x2v_xxxx_vctrl.sh** 中的 **--vctrl_path**来使用不同的模型权重。
 ### 3. 准备预测试数据
 我们已经为你提供了所需的测试案例。
 #### 3.1. 上传数据
@@ -153,7 +149,7 @@ examples/
 │   ├── prompt.txt
 ```
 
-***注意*** : 首先你应该选择合适的任务类型，然后将你的视频和文本上传至 **/examples/pose** 或 **/examples/mask** 或 **/examples/canny** 其中之一，我们的Mask和Canny模型目前只支持分辨率为**720x480**的视频。Pose模型可同时支持分辨率为**720x480**和**480x720**的视频。
+***注意*** : 首先你应该选择合适的任务类型，然后将你的视频和文本上传至 **./examples/pose** 或 **/examples/mask** 或 **/examples/canny** 其中之一，我们的Mask和Canny模型目前只支持分辨率为**720x480**的视频。Pose模型可同时支持分辨率为**720x480**和**480x720**的视频。
 
 #### 3.2. 提取控制条件
 我们提供控制条件提取脚本帮助你获得视频生成所需的控制条件。根据你所选择的任务执行下面脚本获取相关的控制条件。
@@ -277,11 +273,9 @@ python gradios/gradio_mask2video.py
 针对上述挑战，我们提出了PP-VCtrl：一个统一的视频生成控制框架，它通过引入辅助条件编码器，实现了对各类控制信号的灵活接入和精确控制，同时保持了高效的计算性能。它可以高效地应用在各类视频生成场景，尤其是在人物动画、场景转换、视频编辑等需要精确控制的任务中。
 
 ### 2. 数据策略
-相比于文本/图像-视频生成，可控视频生成的数据除了满足画面质量、文本-视频对齐外，还需要根据不同的可控任务构造不同的数据集。我们通过收集公开视频数据集构建原始数据池，对原始数据进行切分单镜头、去除黑边、水印和字幕后，进行美学质量评分过滤得到可用数据池。基于可用数据池做recaption、人体关节点提取和视频分割，依次满足canny、pose和mask视频编辑任务的数据需求。具体如下图所示：
-<img src="assets/models/data1.png" style="width:100%">
+相比于文本/图像-视频生成，可控视频生成的数据除了满足画面质量、文本-视频对齐外，还需要根据不同的可控任务构造不同的数据集。我们通过收集公开视频数据集构建原始数据池，对原始数据进行切分单镜头、去除黑边、水印和字幕后，进行美学质量评分过滤得到可用数据池。基于可用数据池做recaption、人体关节点提取和视频分割，依次满足canny、pose和mask视频编辑任务的数据需求。具体如下图所示
 
-通过上述的流程，我们得到了可控视频生成数据集在不同任务的训练数据分布：
-<img src="assets/models/data2.png" style="width:100%">
+<img src="assets/models/data1.png" style="width:60%">
 
 ### 3. 训练策略
 为了提升模型的泛化能力和鲁棒性，我们采用了多样化的数据增强和训练策略。在去噪过程中，通过正弦函数采样时间步，以更好地关注视频生成的关键阶段。在空间维度上，默认情况下采用基于正态分布的裁剪策略，根据视频宽高比自适应地进行裁剪，在增强数据多样性的同时也能使模型很好地关注视频主体内容。
@@ -290,11 +284,11 @@ python gradios/gradio_mask2video.py
 ### 4. 定量指标评测
 在边缘控制视频生成（Canny）、人体姿态控制视频生成（Pose）以及蒙版控制视频生成（Mask）三个任务的定量评估中，PPVCtrl模型在控制能力和视频质量指标上均能够媲美或超越现有开源的特定任务方法。
 
-<img src="assets/models/eval1.png" style="width:100%">
+<img src="assets/models/eval_1.png" style="width:100%">
 
 我们进行了人工评估实验，邀请了多位评估者对不同方法生成的视频进行打分，评估维度包括视频整体质量、时序一致性等。结果显示，在所有评估维度上，PPVCtrl的评分均高于现有开源方法。
 
-<img src="assets/models/eval2.png" style="width:100%">
+<img src="assets/models/eval_2.png" style="width:100%">
 
 <!-- 
 ## More version
