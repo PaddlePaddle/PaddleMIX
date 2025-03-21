@@ -1810,7 +1810,7 @@ class Accelerator:
 
         `hook(models: list[paddle.nn.Layer], weights: list[dict[str, paddle.Tensor]], input_dir: str) -> None`
 
-        The `models` argument are the models as saved in the accelerator state under `accelerator._models`, `weigths`
+        The `models` argument are the models as saved in the accelerator state under `accelerator._models`, `weights`
         argument are the state dicts of the `models`, and the `input_dir` argument is the `input_dir` argument passed
         to [`Accelerator.load_state`].
 

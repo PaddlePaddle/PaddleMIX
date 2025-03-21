@@ -48,7 +48,7 @@ def setdistenv(args):
 
         assert (
             world_size % (args.tensor_parallel_degree * args.pipeline_parallel_degree) == 0
-        ), f"Total world_size:{world_size} should be devided by tensor_parallel_degree: {args.tensor_parallel_degree} and pipeline_parallel_degree: {args.pipeline_parallel_degree}."
+        ), f"Total world_size:{world_size} should be divided by tensor_parallel_degree: {args.tensor_parallel_degree} and pipeline_parallel_degree: {args.pipeline_parallel_degree}."
 
         args.dp_degree = world_size // (
             args.tensor_parallel_degree * args.sharding_parallel_degree * args.pipeline_parallel_degree

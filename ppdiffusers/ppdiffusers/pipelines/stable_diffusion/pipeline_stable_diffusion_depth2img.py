@@ -551,7 +551,7 @@ class StableDiffusionDepth2ImgPipeline(DiffusionPipeline, TextualInversionLoader
         if depth_map is None:
             pixel_values = self.feature_extractor(images=image, return_tensors="pd").pixel_values
             # The DPT-Hybrid model uses batch-norm layers which are not compatible with fp16.
-            # TODO DPTModel `expand_as`` donot supoort float16
+            # TODO DPTModel `expand_as`` donot support float16
             with paddle.amp.auto_cast(True, level="O2"):
                 depth_map = self.depth_estimator(pixel_values).predicted_depth.cast("float32")
         else:

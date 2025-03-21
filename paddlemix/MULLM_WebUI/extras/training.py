@@ -21,7 +21,7 @@ import paddle
 
 from .constants import RUNNING_LOG, TRAINABLE_MODELS, TRAINER_LOG, TRAINING_STAGES
 from .packages import is_matplotlib_available
-from .ploting import gen_loss_plot
+from .plotting import gen_loss_plot
 
 
 def get_current_device() -> "paddle.device":

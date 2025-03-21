@@ -353,7 +353,7 @@ class PeftAdapterMixin:
 
         for _, module in self.named_sublayers(include_self=True):
             if isinstance(module, (BaseTunerLayer, ModulesToSaveWrapper)):
-                # For backward compatbility with previous PEFT versions
+                # For backward compatibility with previous PEFT versions
                 if hasattr(module, "set_adapter"):
                     module.set_adapter(adapter_name)
                 else:
