@@ -21,5 +21,6 @@ prompt = (
     "The background includes a small, flowing stream and vibrant green foliage, enhancing the peaceful and magical "
     "atmosphere of this unique musical performance."
 )
-video = pipe(prompt=prompt, guidance_scale=6, num_inference_steps=50).frames[0]
+generator = paddle.Generator().manual_seed(42)
+video = pipe(prompt=prompt, guidance_scale=6, num_inference_steps=50, generator=generator).frames[0]
 export_to_video(video, "output.mp4", fps=8)

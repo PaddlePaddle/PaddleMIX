@@ -71,6 +71,12 @@ def parse_args():
         default=False, 
         help='do deep cache',
     )
+    parser.add_argument(
+        '--seed',
+        type=int,
+        default=None,
+        help='Random seed for generation. Set for reproducible results.',
+    )
     
     args = parser.parse_args()
     return args
@@ -83,6 +89,11 @@ if __name__ == '__main__':
         saved_path = os.path.join(args.saved_path, 'test.png')
     elif args.image:
         saved_path = os.path.join(args.saved_path, 'test.mp4')
+
+    # Create generator if seed is provided
+    generator = None
+    if args.seed is not None:
+        generator = paddle.Generator().manual_seed(args.seed)
 
     if args.model == 'sdxl':
         pipe = StableDiffusionXLPipeline.from_pretrained(
@@ -107,6 +118,7 @@ if __name__ == '__main__':
             fi_interval=args.fi_interval,
             warm_up=args.warm_up if not args.deepcache else 0,
             num_inference_steps=args.inference_step,
+            generator=generator,
         ).images[0]
         image.save(saved_path)
 
@@ -133,6 +145,7 @@ if __name__ == '__main__':
             warm_up=0, 
             num_inference_steps=args.inference_step,
             lcm=True,
+            generator=generator,
         ).images[0]
         image.save(saved_path)
 
@@ -150,6 +163,7 @@ if __name__ == '__main__':
             fi_interval=args.fi_interval,
             warm_up=args.warm_up,   
             num_inference_steps=args.inference_step,
+            generator=generator,
         ).images[0]
         image.save(saved_path)
 
@@ -169,6 +183,7 @@ if __name__ == '__main__':
             num_inference_steps=args.inference_step,
             lcm=True,
             guidance_scale=0.,
+            generator=generator,
         ).images[0]
         image.save(saved_path)
 
@@ -190,7 +205,8 @@ if __name__ == '__main__':
             sp_interval=args.sp_interval,
             fi_interval=args.fi_interval,
             num_frames=25,
-            decode_chunk_size=8, 
+            decode_chunk_size=8,
+            generator=generator,
         ).frames[0]
         export_to_video(frames, saved_path, fps=7)
 

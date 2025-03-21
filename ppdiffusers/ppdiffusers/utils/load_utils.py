@@ -22,6 +22,7 @@ from typing import Union
 from zipfile import ZipFile
 
 import numpy as np
+import paddle
 
 from .constants import get_map_location_default
 from .import_utils import (
