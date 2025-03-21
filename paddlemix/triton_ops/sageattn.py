@@ -18,8 +18,8 @@ def sageattn_quant_per_block_int8_kernel(Input, Output, Scale, L,
                                         stride_oz, stride_oh, stride_on,
                                         stride_sz, stride_sh,
                                         sm_scale,
+                                        bsz,                    # grid num, through compiling
                                         h_attn: tl.constexpr,                 # grid num, through compiling
-                                        bsz: tl.constexpr,                    # grid num, through compiling
                                         C: tl.constexpr,
                                         BLK: tl.constexpr
                                     ):
@@ -168,7 +168,7 @@ def sageattn_quant_per_block_int8(x,
 
     op_name = "triton_sageattn_quant_per_block"
     op_name += get_dtype_str(x.dtype)
-    op_name += f"_BSZ{b}_BLK{BLK}_seq{seq_len}_h{h_attn}_dim{head_dim}"
+    op_name += f"_BLK{BLK}_seq{seq_len}_h{h_attn}_dim{head_dim}"
     
     if op_name not in OpProtoHolder.instance().op_proto_map.keys():
         Output = paddle.empty(x.shape, dtype=paddle.int8)
@@ -205,8 +205,8 @@ def sageattn_quant_per_block_int8(x,
             stride_sz=stride_sz, 
             stride_sh=stride_sh,
             sm_scale=sm_scale,
+            bsz=-1,             # grid num, for compiling
             h_attn=h_attn,      # grid num, for compiling
-            bsz=b,              # grid num, for compiling
             C=C, 
             BLK=BLK
         )
@@ -256,7 +256,8 @@ def sageattn_quant_query_per_thread_int8_kernel(Input, Output, Scale, L,
                                                 stride_iz, stride_ih, stride_in,
                                                 stride_oz, stride_oh, stride_on,
                                                 stride_sz, stride_sh,
-                                                h_qo: tl.constexpr, bsz: tl.constexpr,
+                                                bsz,
+                                                h_qo: tl.constexpr,
                                                 C: tl.constexpr, BLK: tl.constexpr, 
                                                 WARP: tl.constexpr, BKG: tl.constexpr):
     off_blk = tl.program_id(0) // 8
@@ -416,14 +417,13 @@ def sageattn_quant_query_per_thread_int8(x,
             stride_on=stride_seq_qo,
             stride_sz=stride_sz, 
             stride_sh=stride_sh,
+            bsz=-1,             # grid num, for compiling
             h_qo=h_qo,          # grid num, for compiling
-            bsz=b,              # grid num, for compiling
             C=C, 
             BLK=WARP,
             WARP=WARP,          # grid num, for compiling
-            BKG=BLK            # grid num, for compiling
+            BKG=BLK             # grid num, for compiling
         )
-        
         
     if in_dynamic_or_pir_mode():
         outs = _C_ops._run_custom_op(
@@ -460,7 +460,8 @@ def sageattn_quant_key_per_thread_int8_kernel(Input, Output, Scale, L,
                                             stride_iz, stride_ih, stride_in,
                                             stride_oz, stride_oh, stride_on,
                                             stride_sz, stride_sh,
-                                            h_kv: tl.constexpr, bsz: tl.constexpr,
+                                            bsz,
+                                            h_kv: tl.constexpr,
                                             C: tl.constexpr, BLK: tl.constexpr, 
                                             WARP: tl.constexpr, BKG: tl.constexpr):      
     off_blk = tl.program_id(0) // 4
@@ -633,12 +634,12 @@ def sageattn_quant_key_per_thread_int8(x,
             stride_on=stride_seq_ko,
             stride_sz=stride_sz, 
             stride_sh=stride_sh,
+            bsz=-1,             # grid num, for compiling
             h_kv=h_kv,          # grid num, for compiling
-            bsz=b,              # grid num, for compiling
             C=C, 
             BLK=WARP,
             WARP=WARP,          # grid num, for compiling
-            BKG=BLK            # grid num, for compiling
+            BKG=BLK             # grid num, for compiling
         )
         
     if in_dynamic_or_pir_mode():
@@ -898,7 +899,7 @@ def sageattn_forward_causal_false(q, k, v,
 
     op_name = "triton_sageattn_attn_fwd_causal_false"
     op_name += get_dtype_str(Out.dtype)
-    op_name += f"_BSZ{BSZ}_seq{qo_len}_h{h_qo}_dim{HEAD_DIM_K}"
+    op_name += f"_seq{qo_len}_h{h_qo}_dim{HEAD_DIM_K}"
     
     sageattn_attn_fwd_causal_false_config = []
     if head_dim == 64:
@@ -966,7 +967,7 @@ def sageattn_forward_causal_false(q, k, v,
             stride_on=stride_on,
             qo_len=qo_len,
             kv_len=kv_len, 
-            BSZ=BSZ,
+            BSZ=-1,
             h_qo=h_qo, 
             num_kv_groups=num_kv_groups,
             HEAD_DIM=HEAD_DIM_K,
@@ -1291,7 +1292,7 @@ def sageattn_forward_causal_true(q, k, v,
 
     op_name = "triton_sageattn_attn_fwd_causal_true"
     op_name += get_dtype_str(Out.dtype)
-    op_name += f"_BSZ{BSZ}_seq{qo_len}_h{h_qo}_dim{HEAD_DIM_K}"
+    op_name += f"_seq{qo_len}_h{h_qo}_dim{HEAD_DIM_K}"
     
     sageattn_attn_fwd_causal_true_config = []
     if head_dim == 64:
@@ -1359,7 +1360,7 @@ def sageattn_forward_causal_true(q, k, v,
             stride_on=stride_on,
             qo_len=qo_len,
             kv_len=kv_len, 
-            BSZ=BSZ,
+            BSZ=-1,
             h_qo=h_qo, 
             num_kv_groups=num_kv_groups,
             HEAD_DIM=HEAD_DIM_K,
