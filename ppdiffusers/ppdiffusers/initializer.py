@@ -15,6 +15,6 @@
 # limitations under the License.
 
 # NOTE: This file is deprecated and will be removed in a future version.
-# It only exists so that temporarely `from ppdiffusers.utils.initializer_utils import *` works
+# It only exists so that temporarily `from ppdiffusers.utils.initializer_utils import *` works
 # flake8: noqa
 from .utils.initializer_utils import *  # noqa: F401

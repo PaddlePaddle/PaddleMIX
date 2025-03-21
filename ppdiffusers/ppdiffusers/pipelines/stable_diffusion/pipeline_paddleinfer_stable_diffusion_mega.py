@@ -211,7 +211,7 @@ class PaddleInferStableDiffusionMegaPipeline(PaddleInferStableDiffusionPipeline,
     ):
         assert (
             self.unet_num_latent_channels == 4
-        ), f"Detected `unet_num_latent_channels` is {self.unet_num_latent_channels}, Plese use `inpaint` method."
+        ), f"Detected `unet_num_latent_channels` is {self.unet_num_latent_channels}, Please use `inpaint` method."
         expected_components = inspect.signature(
             PaddleInferStableDiffusionInpaintPipelineLegacy.__init__
         ).parameters.keys()

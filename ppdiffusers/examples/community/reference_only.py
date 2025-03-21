@@ -173,7 +173,7 @@ def transformer_2d_model_forward(
     attention_mask=None,
     encoder_attention_mask=None,
     return_dict: bool = True,
-    **kwargs,  # dummmy for comptability
+    **kwargs,  # dummy for compatibility
 ):
     x = self.original_forward(
         hidden_states,
@@ -184,7 +184,7 @@ def transformer_2d_model_forward(
         attention_mask=attention_mask,
         encoder_attention_mask=encoder_attention_mask,
         return_dict=return_dict,
-        **kwargs,  # dummmy for comptability
+        **kwargs,  # dummy for compatibility
     )[0]
     output = None
     if getattr(self, "enable_gn", False):

@@ -337,7 +337,7 @@ class StableDiffusionTilingPipeline(DiffusionPipeline, StableDiffusionExtrasMixi
         if accepts_eta:
             extra_step_kwargs["eta"] = eta
 
-        # Mask for tile weights strenght
+        # Mask for tile weights strength
         tile_weights = self._gaussian_weights(tile_width, tile_height, batch_size)
 
         # Diffusion timesteps

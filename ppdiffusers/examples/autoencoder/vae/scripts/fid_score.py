@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Calculates the Frechet Inception Distance (FID) to evalulate GANs
+"""Calculates the Frechet Inception Distance (FID) to evaluate GANs
 
 The FID metric calculates the distance between two distributions of images.
 Typically, we have summary statistics (mean & covariance matrix) of one
@@ -27,7 +27,7 @@ samples respectively.
 
 See --help to see further details.
 
-Code apapted from https://github.com/bioinf-jku/TTUR to use PyTorch instead
+Code adapted from https://github.com/bioinf-jku/TTUR to use PyTorch instead
 of Tensorflow
 
 Copyright 2018 Institute of Bioinformatics, JKU Linz

@@ -518,7 +518,7 @@ def reduce(tensor, reduction="mean", scale=1.0):
         reduction (`str`, *optional*, defaults to `"mean"`):
             A reduction method. Can be of "mean", "sum", or "none"
         scale (`float`, *optional*):
-            A default scaling value to be applied after the reduce, only valied on XLA.
+            A default scaling value to be applied after the reduce, only valid on XLA.
 
     Returns:
         The same data structure as `data` with all the tensors reduced.

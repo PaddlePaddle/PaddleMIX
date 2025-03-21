@@ -130,7 +130,7 @@ class PaddleInferRuntimeModel:
         model_path: Union[str, Path],
         params_path: Union[str, Path] = None,
         use_optim_cache: bool = False,
-        infer_config: Optional["paddle_infer.Congig"] = None,
+        infer_config: Optional["paddle_infer.Config"] = None,
     ):
         """
         Loads an FastDeploy Inference Model with fastdeploy.RuntimeOption

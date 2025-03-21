@@ -40,7 +40,7 @@ def parse_line(line, filename):
         if "laion400m" in filename:
             return "laion400m"
         else:
-            raise NotImplementedError(f"Unkown data source, {filename}")
+            raise NotImplementedError(f"Unknown data source, {filename}")
 
     try:
         vec = line.strip().split("\t")

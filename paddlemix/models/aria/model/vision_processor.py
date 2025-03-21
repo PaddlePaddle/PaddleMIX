@@ -67,7 +67,7 @@ def _split_image(
         patch_size (int): image patch size
 
     Returns:
-        List[PIL.Image]: List of splitted images.
+        List[PIL.Image]: List of split images.
     """
     if split_image:
         ratio_width, ratio_height = _select_best_resolution(

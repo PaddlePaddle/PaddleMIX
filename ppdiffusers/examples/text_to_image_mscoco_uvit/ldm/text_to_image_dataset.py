@@ -148,7 +148,7 @@ class MSCOCO256Features(DatasetFactory):
             self.train = CFGDataset(self.train, p_uncond, self.empty_context)  # cfg
 
         # text embedding extracted by clip
-        # for visulization in t2i
+        # for visualization in t2i
         self.prompts, self.contexts = [], []
         for f in sorted(os.listdir(os.path.join(path, "run_vis")), key=lambda x: int(x.split(".")[0])):
             prompt, context = np.load(os.path.join(path, "run_vis", f), allow_pickle=True)

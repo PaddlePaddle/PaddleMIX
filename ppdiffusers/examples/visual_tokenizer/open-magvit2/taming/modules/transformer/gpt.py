@@ -415,9 +415,9 @@ class GPT(paddle.nn.Layer):
             cls_token_num)
         self.max_batch_size = -1
         self.max_seq_length = -1
-        self.initalize_weights()
+        self.initialize_weights()
 
-    def initalize_weights(self):
+    def initialize_weights(self):
         self.apply(self._init_weights)
         if self.token_factorization:
             for i in range(self.config.factorized_k):
