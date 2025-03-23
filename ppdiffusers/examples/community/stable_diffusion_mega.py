@@ -1327,7 +1327,7 @@ class StableDiffusionMegaPipeline(
             )
 
             if guess_mode and do_classifier_free_guidance:
-                # Infered ControlNet only for the conditional batch.
+                # Inferred ControlNet only for the conditional batch.
                 # To apply the output of ControlNet to both the unconditional and conditional batches,
                 # add 0 to the unconditional batch to keep it unchanged.
                 down_block_res_samples = [paddle.concat([paddle.zeros_like(d), d]) for d in down_block_res_samples]
@@ -2609,7 +2609,7 @@ class StableDiffusionMegaPipeline(
             raise ValueError(f"`prompt` has to be of type `str` or `list` but is {type(prompt)}")
 
         if hr_scale < 0:
-            raise ValueError("hr_scale shoule be greater that 0, but acceived {hr_scale}")
+            raise ValueError("hr_scale should be greater that 0, but acceived {hr_scale}")
 
         if hr_resize_height % 8 != 0 or hr_resize_width % 8 != 0:
             raise ValueError(
@@ -2765,9 +2765,9 @@ class StableDiffusionMegaPipeline(
             hr_scale (`float`, *optional*, defaults to 2.0):
                 The upscaler to expand the width and height of image. if set 2.0, it means that expand width and height of a image to width*2.0 and height*2.0.
             hr_resize_width (`int`, *optional*, defaults to 0):
-                It enable users to specify the upscaled width mannually. if hr_resize_width!=0, program will use it to compute scaled width and height instead of hr_scale.
+                It enable users to specify the upscaled width manually. if hr_resize_width!=0, program will use it to compute scaled width and height instead of hr_scale.
             hr_resize_height (`int`, *optional*, defaults to 0):
-                It enable users to specify the upscaled height mannually. if hr_resize_height!=0, program will use it to compute scaled width and height instead of hr_scale.
+                It enable users to specify the upscaled height manually. if hr_resize_height!=0, program will use it to compute scaled width and height instead of hr_scale.
             denoising_strength (`float`, *optional*, defaults to 0.7):
                 The denoising strength applying on hires.fix steps. It take a value between 0 and 1.
             latent_scale_mode (`str`, *optional*, defaults to nearest):

@@ -183,7 +183,7 @@ def anchor_rank(anchors, anchors_areas, input_image_size, eps=1e-5):
     return index
 
 
-def select_best_resolution(anchors, anchors_areas, input_image_size):  # TODO For a futher check
+def select_best_resolution(anchors, anchors_areas, input_image_size):  # TODO For a further check
     """
     Selects the best resolution from a list of possible resolutions based on the original size.
 

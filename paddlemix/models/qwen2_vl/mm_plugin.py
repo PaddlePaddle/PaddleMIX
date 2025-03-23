@@ -317,6 +317,7 @@ class Qwen2vlPlugin(BasePlugin):
 PLUGINS = {
     "base": BasePlugin,
     "qwen2_vl": Qwen2vlPlugin,
+    "deepseek": BasePlugin,
 }
 
 

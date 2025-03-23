@@ -119,28 +119,48 @@ def has_flash_attn_func():
         return None, None
 
 
-def create_attention_module(config, module_type, layer_idx=None):
+def create_attention_module(config, module_type, layer_idx=None, auto=False):
     if has_flash_attn_func()[0] is not None:
         if module_type == "qwen2vl":
-            from paddlemix.models.qwen2_vl.modeling_qwen2_vl import (
-                Qwen2VLFlashAttention2,
-            )
+            if auto:
+                from paddlemix.models.qwen2_vl.modeling_qwen2_vl_network import (
+                    Qwen2VLFlashAttention2,
+                )
+            else:
+                from paddlemix.models.qwen2_vl.modeling_qwen2_vl import (
+                    Qwen2VLFlashAttention2,
+                )
 
             return Qwen2VLFlashAttention2(config, layer_idx)
         elif module_type == "vision":
-            from paddlemix.models.qwen2_vl.modeling_qwen2_vl import (
-                VisionFlashAttention2,
-            )
+            if auto:
+                from paddlemix.models.qwen2_vl.modeling_qwen2_vl_network import (
+                    VisionFlashAttention2,
+                )
+            else:
+                from paddlemix.models.qwen2_vl.modeling_qwen2_vl import (
+                    VisionFlashAttention2,
+                )
 
             return VisionFlashAttention2(config.embed_dim, num_heads=config.num_heads)
     else:
         logger.warning(f"Warning: Flash Attention2 is not available for {module_type}, fallback to normal attention.")
 
     if module_type == "qwen2vl":
-        from paddlemix.models.qwen2_vl.modeling_qwen2_vl import Qwen2VLAttention
+        if auto:
+            from paddlemix.models.qwen2_vl.modeling_qwen2_vl_network import (
+                Qwen2VLAttention,
+            )
+        else:
+            from paddlemix.models.qwen2_vl.modeling_qwen2_vl import Qwen2VLAttention
 
         return Qwen2VLAttention(config, layer_idx)
     elif module_type == "vision":
-        from paddlemix.models.qwen2_vl.modeling_qwen2_vl import VisionAttention
+        if auto:
+            from paddlemix.models.qwen2_vl.modeling_qwen2_vl_network import (
+                VisionAttention,
+            )
+        else:
+            from paddlemix.models.qwen2_vl.modeling_qwen2_vl import VisionAttention
 
         return VisionAttention(config.embed_dim, num_heads=config.num_heads)

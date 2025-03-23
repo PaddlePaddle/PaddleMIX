@@ -184,8 +184,9 @@ def load_state_dict(
                     weight = tensor_parallel_split_mapping[key](py_safe_slice_)
                 else:
                     weight = f.get_tensor(key)
-                if map_location == "cpu":
-                    state_dict[key] = paddle.Tensor(weight, zero_copy=True, place=paddle.CPUPlace())
+
+                if map_location=="cpu":   
+                    state_dict[key] = paddle.Tensor(weight, zero_copy=True,place=paddle.CPUPlace())
                 else:
                     state_dict[key] = paddle.Tensor(weight, zero_copy=True)
 

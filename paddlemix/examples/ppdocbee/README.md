@@ -2,13 +2,18 @@
 
 ## 1. 简介
 
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/cd2ef018-a657-4037-833e-e7d0c75e6280" align="middle" width = 100% />
+</p>
+
 PP-DocBee 是PaddleMIX团队自研的一款专注于文档理解的多模态大模型，在中文文档理解任务上具有卓越表现。该模型通过近 500 万条文档理解类多模态数据集进行微调优化，各种数据集包括了通用VQA类、OCR类、图表类、text-rich文档类、数学和复杂推理类、合成数据类、纯文本数据等，并设置了不同训练数据配比。在学术界权威的几个英文文档理解评测榜单上，PP-DocBee基本都达到了同参数量级别模型的SOTA。在内部业务中文场景类的指标上，PP-DocBee也高于目前的热门开源和闭源模型。
 
 **本仓库支持的模型权重:**
 
 | Model              | 模型大小 | Huggingface 仓库地址 |
 |--------------------|----------|--------------------|
-| PaddleMIX/PPDocBee-2B-1129 | 2B | [PPDocBee-2B-1210](https://huggingface.co/PaddleMIX/PPDocBee-2B-1210) |
+| PaddleMIX/PPDocBee-2B-1129 | 2B | [PPDocBee-2B-1129](https://huggingface.co/PaddleMIX/PPDocBee-2B-1129) |
 | PaddleMIX/PPDocBee-7B-1210 | 7B | [PPDocBee-7B-1210](https://huggingface.co/PaddleMIX/PPDocBee-7B-1210) |
 
 
@@ -110,6 +115,16 @@ python paddlemix/examples/ppdocbee/ppdocbee_infer.py \
 | 14 | 西班牙（ESP） | 5 | 11 | 3 | 19 |
 | 15 | 牙买加（JAM） | 5 | 4 | 2 | 11 |
 ```
+
+**模型推理支持分布式推理**
+
+```bash
+# 2B
+sh paddlemix/examples/ppdocbee/shell/distributed_ppdocbee_infer_2B.sh
+# 7B
+sh paddlemix/examples/ppdocbee/shell/distributed_ppdocbee_infer_7B.sh
+```
+> ⚠️注意："mp_degree"需要根据显卡数量"gpus"进行调整，例如2卡推理，则设置为2。
 
 ### 4.2 模型微调
 

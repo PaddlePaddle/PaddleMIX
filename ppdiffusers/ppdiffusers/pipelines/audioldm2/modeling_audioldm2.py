@@ -86,23 +86,23 @@ class AudioLDM2ProjectionModel(ModelMixin, ConfigMixin):
             Dimensionality of the text embeddings from the first text encoder (CLAP).
         text_encoder_1_dim (`int`):
             Dimensionality of the text embeddings from the second text encoder (T5 or VITS).
-        langauge_model_dim (`int`):
+        language_model_dim (`int`):
             Dimensionality of the text embeddings from the language model (GPT2).
     """
 
     @register_to_config
-    def __init__(self, text_encoder_dim, text_encoder_1_dim, langauge_model_dim):
+    def __init__(self, text_encoder_dim, text_encoder_1_dim, language_model_dim):
         super().__init__()
         # additional projection layers for each text encoder
-        self.projection = nn.Linear(text_encoder_dim, langauge_model_dim)
-        self.projection_1 = nn.Linear(text_encoder_1_dim, langauge_model_dim)
+        self.projection = nn.Linear(text_encoder_dim, language_model_dim)
+        self.projection_1 = nn.Linear(text_encoder_1_dim, language_model_dim)
 
         # learnable SOS / EOS token embeddings for each text encoder
-        self.sos_embed = nn.Parameter(paddle.ones((langauge_model_dim,)))
-        self.eos_embed = nn.Parameter(paddle.ones((langauge_model_dim,)))
+        self.sos_embed = nn.Parameter(paddle.ones((language_model_dim,)))
+        self.eos_embed = nn.Parameter(paddle.ones((language_model_dim,)))
 
-        self.sos_embed_1 = nn.Parameter(paddle.ones((langauge_model_dim,)))
-        self.eos_embed_1 = nn.Parameter(paddle.ones((langauge_model_dim,)))
+        self.sos_embed_1 = nn.Parameter(paddle.ones((language_model_dim,)))
+        self.eos_embed_1 = nn.Parameter(paddle.ones((language_model_dim,)))
 
     def forward(
         self,

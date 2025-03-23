@@ -41,7 +41,7 @@ class BaseBinarizer:
     1. *process* and *process_data_split*:
         process entire data, generate the train-test split (support parallel processing);
     2. *process_item*:
-        process singe piece of data;
+        process single piece of data;
     3. *get_pitch*:
         infer the pitch using some algorithm;
     4. *get_align*:

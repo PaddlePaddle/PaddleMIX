@@ -14,5 +14,5 @@
 
 
 from ._lid import FastTextLIDModel
+from .arniqa import ARNIQA
 from .inscaptagger import PPInsCapTagger
-

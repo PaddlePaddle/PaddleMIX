@@ -897,7 +897,7 @@ class StableDiffusionXLInstructPix2PixPipeline(
                 )[0]
 
                 # Hack:
-                # For karras style schedulers the model does classifer free guidance using the
+                # For karras style schedulers the model does classifier free guidance using the
                 # predicted_original_sample instead of the noise_pred. So we need to compute the
                 # predicted_original_sample here if we are using a karras style scheduler.
                 if scheduler_is_in_sigma_space:
@@ -919,7 +919,7 @@ class StableDiffusionXLInstructPix2PixPipeline(
                     noise_pred = rescale_noise_cfg(noise_pred, noise_pred_text, guidance_rescale=guidance_rescale)
 
                 # Hack:
-                # For karras style schedulers the model does classifer free guidance using the
+                # For karras style schedulers the model does classifier free guidance using the
                 # predicted_original_sample instead of the noise_pred. But the scheduler.step function
                 # expects the noise_pred and computes the predicted_original_sample internally. So we
                 # need to overwrite the noise_pred here such that the value of the computed

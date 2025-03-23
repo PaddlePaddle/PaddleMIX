@@ -95,7 +95,7 @@ class MlpProjectorConfig(PretrainedConfig):
         super().__init__(**kwargs)
 
 
-class DeepseekV2Config(PretrainedConfig):
+class DeepseekV2Config(PretrainedConfig): # use_mla # with multi-latent attention
     """
     This is the configuration class to store the configuration of a [`DeepseekV2Model`]. It is used to instantiate an DeepSeek
     model according to the specified arguments, defining the model architecture. Instantiating a configuration with the
@@ -117,6 +117,8 @@ class DeepseekV2Config(PretrainedConfig):
             Dimension of the MoE representations.
         num_hidden_layers (`int`, *optional*, defaults to 32):
             Number of hidden layers in the Transformer decoder.
+        num_nextn_predict_layers (`int`, *optional*, defaults to 1):
+            Number of nextn predict layers in the DeepSeekV3 Model.
         num_attention_heads (`int`, *optional*, defaults to 32):
             Number of attention heads for each attention layer in the Transformer decoder.
         n_shared_experts (`int`, *optional*, defaults to None):
@@ -137,7 +139,7 @@ class DeepseekV2Config(PretrainedConfig):
             The frequency of the MoE layer: one expert layer for every `moe_layer_freq - 1` dense layers.
         first_k_dense_replace (`int`, *optional*, defaults to 0):
             Number of dense layers in shallow layers(embed->dense->dense->...->dense->moe->moe...->lm_head).
-                                                            \\--k dense layers--/
+                                                            \--k dense layers--/
         norm_topk_prob (`bool`, *optional*, defaults to False):
             Whether to normalize the weights of the routed experts.
         scoring_func (`str`, *optional*, defaults to 'softmax'):
@@ -189,11 +191,13 @@ class DeepseekV2Config(PretrainedConfig):
             Whether to use a bias in the query, key, value and output projection layers during self-attention.
         attention_dropout (`float`, *optional*, defaults to 0.0):
             The dropout ratio for the attention probabilities.
+        speculate_model_type (`str`, defaults to `None`, *optional*, defaults to `False`):
+            The model type for speculate. Support ['eagle', 'mtp'] Now.
         use_mla (`bool`, *optional*, defaults to `True`): Use multi-latent attention or multi-head attention. If True,
             the model will use multi-latent attention, otherwise, it will use multi-head attention.
 
     ```python
-    >>> from transformers import DeepseekV2Model, DeepseekV2Config
+    >>> from paddlenlp.transformers import DeepseekV2Model, DeepseekV2Config
 
     >>> # Initializing a Deepseek-V2 style configuration
     >>> configuration = DeepseekV2Config()
@@ -212,6 +216,8 @@ class DeepseekV2Config(PretrainedConfig):
         intermediate_size=11008,
         moe_intermediate_size=1407,
         num_hidden_layers=30,
+        num_nextn_predict_layers=0,
+        num_nextn_predict_lambda=1.0,
         num_attention_heads=32,
         num_key_value_heads=32,
         n_shared_experts=None,
@@ -235,8 +241,9 @@ class DeepseekV2Config(PretrainedConfig):
         seq_aux=True,
         hidden_act="silu",
         max_position_embeddings=2048,
+        seq_length=32768,
         initializer_range=0.02,
-        rms_norm_eps=1e-06,
+        rms_norm_eps=1e-6,
         use_cache=True,
         pad_token_id=None,
         bos_token_id=100000,
@@ -247,15 +254,19 @@ class DeepseekV2Config(PretrainedConfig):
         rope_scaling=None,
         attention_bias=False,
         attention_dropout=0.0,
+        speculate_model_type=False,
         use_mla=True,
-        **kwargs
+        **kwargs,
     ):
         self.vocab_size = vocab_size
         self.max_position_embeddings = max_position_embeddings
+        self.seq_length = seq_length
         self.hidden_size = hidden_size
         self.intermediate_size = intermediate_size
         self.moe_intermediate_size = moe_intermediate_size
         self.num_hidden_layers = num_hidden_layers
+        self.num_nextn_predict_layers = num_nextn_predict_layers
+        self.num_nextn_predict_lambda = num_nextn_predict_lambda
         self.num_attention_heads = num_attention_heads
         self.n_shared_experts = n_shared_experts
         self.n_routed_experts = n_routed_experts
@@ -276,19 +287,23 @@ class DeepseekV2Config(PretrainedConfig):
         self.scoring_func = scoring_func
         self.aux_loss_alpha = aux_loss_alpha
         self.seq_aux = seq_aux
+        # for backward compatibility
         if num_key_value_heads is None:
             num_key_value_heads = num_attention_heads
+
         self.num_key_value_heads = num_key_value_heads
         self.hidden_act = hidden_act
         self.initializer_range = initializer_range
-        self.rms_norm_eps = float(rms_norm_eps)
+        self.rms_norm_eps = rms_norm_eps
         self.pretraining_tp = pretraining_tp
         self.use_cache = use_cache
         self.rope_theta = rope_theta
         self.rope_scaling = rope_scaling
         self.attention_bias = attention_bias
         self.attention_dropout = attention_dropout
+        self.speculate_model_type = speculate_model_type
         self.use_mla = use_mla
+
         super().__init__(
             pad_token_id=pad_token_id,
             bos_token_id=bos_token_id,

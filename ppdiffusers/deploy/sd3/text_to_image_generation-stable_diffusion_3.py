@@ -44,6 +44,12 @@ def parse_args():
     parser.add_argument(
         "--dp_size", type=int, default=1, help="This size refers to the degree of parallelism using data parallel."
     )
+    parser.add_argument(
+        "--output_name_and_path",
+        type=str,
+        default="text_to_image_generation-stable_diffusion_3-result.png",
+        help="Output image path and filename.",
+    )
 
     return parser.parse_args()
 
@@ -137,12 +143,12 @@ if args.benchmark:
         sumtime += duringtime
         print("SD3 end to end time : ", duringtime, "ms")
 
-    print("SD3 ave end to end time : ", sumtime / repeat_times, "ms")
+    print("SD3 average end-to-end time : ", sumtime / repeat_times, "ms")
 
-    cuda_mem_after_used = paddle.device.cuda.max_memory_allocated() / (1024**3)
-    print(f"Max used CUDA memory : {cuda_mem_after_used:.3f} GiB")
+    print(f"GPU max_memory_allocated: {paddle.device.cuda.max_memory_allocated() / 1024 ** 3:.2f} GB")
 
 
 rank_id = dist.get_rank()
 if rank_id == 0:
-    image.save("text_to_image_generation-stable_diffusion_3-result.png")
+    image.save(args.output_name_and_path)
+    print(f"Output image saved to {args.output_name_and_path}")

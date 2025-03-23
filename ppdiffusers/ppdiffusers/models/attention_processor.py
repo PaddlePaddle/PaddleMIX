@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import os
 from importlib import import_module
 from typing import Optional, Union
 
@@ -112,7 +113,7 @@ class Attention(nn.Layer):
         super().__init__()
 
         # To prevent circular import.
-        from .normalization import  RMSNorm, FP32LayerNorm, LpNorm
+        from .normalization import FP32LayerNorm, LpNorm, RMSNorm
 
         self.inner_dim = dim_head * heads
         self.inner_dim = out_dim if out_dim is not None else dim_head * heads
@@ -226,15 +227,15 @@ class Attention(nn.Layer):
             self.add_v_proj = linear_cls(added_kv_proj_dim, self.inner_dim)
             if self.context_pre_only is not None:
                 self.add_q_proj = nn.Linear(added_kv_proj_dim, self.inner_dim)
-        if not self.pre_only:
-            self.to_out = nn.LayerList([])
-            self.to_out.append(linear_cls(self.inner_dim, query_dim, bias_attr=out_bias))
-            self.to_out.append(nn.Dropout(dropout))
-        else:
-            self.to_out = None
+
+        self.to_out = nn.LayerList([])
+        self.to_out.append(linear_cls(self.inner_dim, query_dim, bias_attr=out_bias))
+        self.to_out.append(nn.Dropout(dropout))
 
         if self.context_pre_only is not None and not self.context_pre_only:
             self.to_add_out = nn.Linear(self.inner_dim, self.out_dim, bias_attr=out_bias)
+        else:
+            self.to_add_out = None
 
         if qk_norm is not None and added_kv_proj_dim is not None:
             if qk_norm == "fp32_layer_norm":
@@ -664,6 +665,9 @@ class Attention(nn.Layer):
         num_heads = self.heads
         if attention_mask is None:
             return attention_mask
+        
+        ori_type = attention_mask.dtype
+        attention_mask = attention_mask.to(paddle.float32)
 
         current_length = attention_mask.shape[-1]
         if current_length != target_length:
@@ -685,7 +689,7 @@ class Attention(nn.Layer):
         # if attention_mask.ndim == 4:
         #     if not transpose:
         #         attention_mask = attention_mask.transpose([0, 2, 1, 3])
-        return attention_mask
+        return attention_mask.to(ori_type)
 
     def norm_encoder_hidden_states(self, encoder_hidden_states: paddle.Tensor) -> paddle.Tensor:
         r"""
@@ -1001,12 +1005,20 @@ class JointAttnProcessor2_5:
             encoder_hidden_states_key_proj = attn.add_k_proj(encoder_hidden_states)
             encoder_hidden_states_value_proj = attn.add_v_proj(encoder_hidden_states)
 
-            encoder_hidden_states_query_proj = encoder_hidden_states_query_proj.reshape([batch_size, -1, attn.heads, head_dim])
-            encoder_hidden_states_key_proj = encoder_hidden_states_key_proj.reshape([batch_size, -1, attn.heads, head_dim])
-            encoder_hidden_states_value_proj = encoder_hidden_states_value_proj.reshape([batch_size, -1, attn.heads, head_dim])
+            encoder_hidden_states_query_proj = encoder_hidden_states_query_proj.reshape(
+                [batch_size, -1, attn.heads, head_dim]
+            )
+            encoder_hidden_states_key_proj = encoder_hidden_states_key_proj.reshape(
+                [batch_size, -1, attn.heads, head_dim]
+            )
+            encoder_hidden_states_value_proj = encoder_hidden_states_value_proj.reshape(
+                [batch_size, -1, attn.heads, head_dim]
+            )
 
             if attn.norm_added_q is not None:
-                encoder_hidden_states_query_proj = attn.norm_added_q(encoder_hidden_states_query_proj, begin_norm_axis=3)
+                encoder_hidden_states_query_proj = attn.norm_added_q(
+                    encoder_hidden_states_query_proj, begin_norm_axis=3
+                )
             if attn.norm_added_k is not None:
                 encoder_hidden_states_key_proj = attn.norm_added_k(encoder_hidden_states_key_proj, begin_norm_axis=3)
 
@@ -1280,6 +1292,13 @@ class XFormersAttnProcessor:
         query = attn.head_to_batch_dim(query, transpose=False)
         key = attn.head_to_batch_dim(key, transpose=False)
         value = attn.head_to_batch_dim(value, transpose=False)
+
+        #  adapt the scaled_dot_product_attention_ when attention_mask is a bool tensor
+        if attention_mask is not None and attention_mask.dtype == paddle.bool:
+            L, S = query.shape[1], key.shape[1]
+            attention_mask_tmp = paddle.zeros([1,1, L, S], dtype=query.dtype)
+            attention_mask_tmp = attention_mask_tmp.masked_fill(attention_mask.logical_not(), float("-inf"))
+            attention_mask = attention_mask_tmp
 
         hidden_states = F.scaled_dot_product_attention_(
             query,
@@ -2370,20 +2389,52 @@ class CogVideoXAttnProcessor2_0:
 
         query = query.reshape([batch_size, -1, attn.heads, head_dim]).transpose([0, 2, 1, 3])
         key = key.reshape([batch_size, -1, attn.heads, head_dim]).transpose([0, 2, 1, 3])
-        value = value.reshape([batch_size, -1, attn.heads, head_dim]).transpose([0, 2, 1, 3])
+        value = value.reshape([batch_size, -1, attn.heads, head_dim])
+        inference_optimize = os.getenv("INFERENCE_OPTIMIZE") == "True"
+        if inference_optimize:
+            import paddlemix
 
-        if attn.norm_q is not None:
-            query = attn.norm_q(query)
-        if attn.norm_k is not None:
-            key = attn.norm_k(key)
+            if (
+                attn.norm_q is not None
+                and attn.norm_k is not None
+                and image_rotary_emb is not None
+                and not attn.is_cross_attention
+            ):
+                text_seq_length_tensor = paddle.empty([text_seq_length])
+                query, key = paddlemix.triton_ops.ln_partial_rotary_emb(
+                    query,
+                    key,
+                    text_seq_length_tensor,
+                    image_rotary_emb[0],
+                    image_rotary_emb[1],
+                    attn.norm_q.weight.cuda(),
+                    attn.norm_q.bias.cuda(),
+                    attn.norm_k.weight.cuda(),
+                    attn.norm_k.bias.cuda(),
+                    norm_eps=1e-5,
+                )
+            elif attn.norm_q is None or attn.norm_k is None:
+                if attn.norm_q is not None:
+                    query = attn.norm_q(query)
+                if attn.norm_k is not None:
+                    key = attn.norm_k(key)
+                if image_rotary_emb is not None and not attn.is_cross_attention:
+                    text_seq_length_tensor = paddle.empty([text_seq_length])
+                    query, key = paddlemix.triton_ops.partial_rotary_emb(
+                        query, key, text_seq_length_tensor, image_rotary_emb[0], image_rotary_emb[1]
+                    )
+        else:
+            if attn.norm_q is not None:
+                query = attn.norm_q(query)
+            if attn.norm_k is not None:
+                key = attn.norm_k(key)
+            # Apply RoPE if needed
+            if image_rotary_emb is not None:
+                from .embeddings import apply_rotary_emb
 
-        # Apply RoPE if needed
-        if image_rotary_emb is not None:
-            from .embeddings import apply_rotary_emb
-
-            query[:, :, text_seq_length:] = apply_rotary_emb(query[:, :, text_seq_length:], image_rotary_emb)
-            if not attn.is_cross_attention:
-                key[:, :, text_seq_length:] = apply_rotary_emb(key[:, :, text_seq_length:], image_rotary_emb)
+                query[:, :, text_seq_length:] = apply_rotary_emb(query[:, :, text_seq_length:], image_rotary_emb)
+                if not attn.is_cross_attention:
+                    key[:, :, text_seq_length:] = apply_rotary_emb(key[:, :, text_seq_length:], image_rotary_emb)
 
         # NOTE: There is diff between paddle's and torch's sdpa
         # paddle needs input: [batch_size, seq_len, num_heads, head_dim]
@@ -2391,7 +2442,7 @@ class CogVideoXAttnProcessor2_0:
         hidden_states = F.scaled_dot_product_attention_(
             query.transpose([0, 2, 1, 3]),
             key.transpose([0, 2, 1, 3]),
-            value.transpose([0, 2, 1, 3]),
+            value,
             attn_mask=attention_mask,
             dropout_p=0.0,
             is_causal=False,

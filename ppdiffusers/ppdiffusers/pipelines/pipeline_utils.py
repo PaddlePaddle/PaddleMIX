@@ -166,7 +166,7 @@ def is_safetensors_compatible(filenames, variant=None, passed_components=None) -
             sf_filenames.add(os.path.normpath(filename))
 
     for filename in pt_filenames:
-        #  filename = 'foo/bar/baz.bam' -> path = 'foo/bar', filename = 'baz', extention = '.bam'
+        #  filename = 'foo/bar/baz.bam' -> path = 'foo/bar', filename = 'baz', extension = '.bam'
         path, filename = os.path.split(filename)
         filename, extension = os.path.splitext(filename)
 
@@ -280,7 +280,7 @@ def _get_pipeline_class(
 
         if repo_id is not None and hub_revision is not None:
             # if we load the pipeline code from the Hub
-            # make sure to overwrite the `revison`
+            # make sure to overwrite the `revision`
             revision = hub_revision
 
         return get_class_from_dynamic_module(
@@ -342,7 +342,7 @@ def load_sub_model(
     )
 
     load_method_name = None
-    # retrive load method name
+    # retrieve load method name
     for class_name, class_candidate in class_candidates.items():
         if class_candidate is not None and issubclass(class_obj, class_candidate):
             load_method_name = importable_classes[class_name][1]
@@ -1105,9 +1105,10 @@ class DiffusionPipeline(ConfigMixin):
             if name in passed_class_obj:
                 # if the model is in a pipeline module, then we load it from the pipeline
                 # check that passed_class_obj has correct parent class
-                maybe_raise_or_warn(
-                    library_name, library, class_name, importable_classes, passed_class_obj, name, is_pipeline_module
-                )
+                if not os.environ.get("SKIP_PARENT_CLASS_CHECK", None):
+                    maybe_raise_or_warn(
+                        library_name, library, class_name, importable_classes, passed_class_obj, name, is_pipeline_module
+                    )
 
                 loaded_sub_model = passed_class_obj[name]
             else:
@@ -1157,6 +1158,7 @@ class DiffusionPipeline(ConfigMixin):
 
         # 8. (TODO, junnyu) make sure all modules are in eval mode and cast dtype
         for name, _module in init_kwargs.items():
+            paddle_dtype = _module.dtype if hasattr(_module, "dtype") else None 
             if isinstance(_module, nn.Layer):
                 _module.eval()
                 if paddle_dtype is not None:

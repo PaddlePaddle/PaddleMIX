@@ -19,7 +19,7 @@ import paddle.nn.functional as F
 
 from ..utils import USE_PEFT_BACKEND
 from ..utils.paddle_utils import maybe_allow_in_graph
-from .activations import GEGLU, GELU, ApproximateGELU
+from .activations import GEGLU, GELU, ApproximateGELU, LinearActivation
 from .attention_processor import Attention, JointAttnProcessor2_5
 from .embeddings import SinusoidalPositionalEmbedding
 from .lora import LoRACompatibleLinear
@@ -42,7 +42,7 @@ def _chunked_feed_forward(
             dim=chunk_dim,
         )
     else:
-        # TOOD(Patrick): LoRA scale can be removed once PEFT refactor is complete
+        # TODO(Patrick): LoRA scale can be removed once PEFT refactor is complete
         ff_output = paddle.concat(
             [ff(hid_slice, scale=lora_scale) for hid_slice in hidden_states.chunk(num_chunks, axis=chunk_dim)],
             axis=chunk_dim,
@@ -699,6 +699,8 @@ class FeedForward(nn.Layer):
             act_fn = GEGLU(dim, inner_dim, bias=bias)
         elif activation_fn == "geglu-approximate":
             act_fn = ApproximateGELU(dim, inner_dim, bias=bias)
+        elif activation_fn == "linear-silu":
+            act_fn = LinearActivation(dim, inner_dim, bias=bias, activation="silu")
 
         self.net = nn.LayerList([])
         # project in

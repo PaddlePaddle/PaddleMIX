@@ -98,7 +98,7 @@ def extract_triton_kernel(kernel, file_name):
     elif type(kernel) == triton.runtime.autotuner.Autotuner:
         fn = kernel.fn.fn
     else:
-        AssertionError("error occures")
+        AssertionError("error occurs")
     py_script = textwrap.dedent(inspect.getsource(fn))
 
     # @triton.jit must only appear once
@@ -226,7 +226,7 @@ def build_package(generated_dir, python_package_name):
 
 def rename_c_to_cu(generated_dir):
     """
-    Rename the .c files int generated_dir to .cu file, becuase the triton aot tool generate the .c files.
+    Rename the .c files int generated_dir to .cu file, because the triton aot tool generate the .c files.
     """
     # rename the .c file to .cu
     for filename in os.listdir(generated_dir):
@@ -249,6 +249,8 @@ def get_pointer_hint(dtypes):
             hint += "*fp32:16,"
         elif ele == paddle.bfloat16:
             hint += "*bf16:16,"
+        elif ele == paddle.int32:
+            hint += "*i32:16,"
     return hint
 
 
@@ -276,14 +278,19 @@ CUdeviceptr get_tensor_ptr(const paddle::Tensor& input){
     assert(false);
     return (CUdeviceptr)(nullptr);
   }
-} """
+}
+
+int triton_cdiv(int x, int y) {
+    int result = (x + y - 1) / y;
+    return (int)(result);
+}
+"""
 
 tune_and_invoke_part = """
   std::vector<int> problem_size = {${key}};
   auto run_triton_kernel = [&](int algo_id) -> CUresult{
       return ${op_name}_kernel(run_stream,
                                                ${triton_kernel_args},
-
                                                algo_id);
   };
 
@@ -407,6 +414,12 @@ def rendering_common_template(
         elif type(arg_defaults[i]) == bool:
             input_and_attr += f"bool {arg_names[i]},"
             paddle_attr_sig += f""""{arg_names[i]}: bool","""
+        elif type(arg_defaults[i]) == int:
+            input_and_attr += f"int64_t {arg_names[i]},"
+            paddle_attr_sig += f""""{arg_names[i]}: int64_t","""
+        elif type(arg_defaults[i]) == str:
+            input_and_attr += f"std::string {arg_names[i]},"
+            paddle_attr_sig += f""""{arg_names[i]}: std::string","""
         else:
             input_and_attr += f"const paddle::Tensor & {arg_names[i]},"
             paddle_input_sig += f""""{arg_names[i]}","""
@@ -526,6 +539,7 @@ class KernelInterface:
                             f"We find {i}, {j} in tl.constexpr args, and {j} is a substring of {i}, please modify your triton kernel arguments names to avoid this."
                         )
 
+            modified_arg_exclude_constexpr = self.arg_exclude_constexpr
             const_hint_dict = {}
             for i in range(len(all_input)):
                 ele = all_input[i]
@@ -537,6 +551,11 @@ class KernelInterface:
                     or type(ele) == paddle.base.libpaddle.pir.Value
                 ):
                     dtypes.append(ele.dtype)
+                    modified_arg_exclude_constexpr[i] = f"input_ptrs[{i}]"
+                    if str(ele.place) == "Place(cpu)":
+                        raise ValueError(
+                            f"The place of tensor {ele.name} must be device(Place(gpu) or Place(xpu)..), but now it is {ele.place}"
+                        )
                 elif i in self.constexprs:
                     const_hint_dict[self.arg_names[i]] = ele
                 else:
@@ -578,7 +597,7 @@ class KernelInterface:
             lanuch_grid = ",".join(lanuch_grid)
 
             op_dict = {"op_name": op_name, "reset_zero_when_tune": ""}
-            op_dict["triton_kernel_args"] = ",".join(self.arg_exclude_constexpr)
+            op_dict["triton_kernel_args"] = ",".join(modified_arg_exclude_constexpr)
             op_dict["key"] = ",".join(self.key_args)
             # when tunning, we need to reset the out to zero.
             if "reset_zero_when_tune" in other_config.keys():

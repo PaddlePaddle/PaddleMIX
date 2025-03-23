@@ -28,7 +28,7 @@ from paddlenlp.transformers.activations import ACT2FN
 from paddlenlp.transformers.bit.modeling import drop_path
 
 
-def broadcat(tensors, dim=-1):
+def broadcast(tensors, dim=-1):
     num_tensors = len(tensors)
     shape_lens = set(list(map(lambda t: len(t.shape), tensors)))
     assert len(shape_lens) == 1, "tensors must all have the same number of dimensions"
@@ -38,7 +38,7 @@ def broadcat(tensors, dim=-1):
     expandable_dims = [(i, val) for i, val in enumerate(dims) if i != dim]
     assert all(
         [*map(lambda t: len(set(t[1])) <= 2, expandable_dims)]
-    ), "invalid dimensions for broadcastable concatentation"
+    ), "invalid dimensions for broadcastable concatenation"
     max_dims = list(map(lambda t: (t[0], max(t[1])), expandable_dims))
     expanded_dims = list(map(lambda t: (t[0], (t[1],) * num_tensors), max_dims))
     expanded_dims.insert(dim, (dim, dims[dim]))
@@ -83,7 +83,7 @@ class VisionRotaryEmbeddingFast(paddle.nn.Layer):
         t = paddle.arange(end=ft_seq_len) / ft_seq_len * pt_seq_len
         freqs = paddle.einsum("..., f -> ... f", t, freqs)
         freqs = repeat(freqs, "... n -> ... (n r)", r=2)
-        freqs = broadcat((freqs[:, None, :], freqs[None, :, :]), dim=-1)
+        freqs = broadcast((freqs[:, None, :], freqs[None, :, :]), dim=-1)
         freqs_cos = freqs.cos().reshape([-1, freqs.shape[-1]])
         freqs_sin = freqs.sin().reshape([-1, freqs.shape[-1]])
         self.patch_dropout = patch_dropout
