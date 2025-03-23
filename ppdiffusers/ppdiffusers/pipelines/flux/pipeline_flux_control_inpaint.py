@@ -700,7 +700,7 @@ class FluxControlInpaintPipeline(
                     f" a total batch size of {batch_size}, but {mask_image.shape[0]} mask_image were passed. Make sure the number"
                     " of masks that you pass is divisible by the total requested batch size."
                 )
-            mask_image = mask_image.tile(batch_size // mask_image.shape[0], 1, 1, 1)
+            mask_image = mask_image.tile([batch_size // mask_image.shape[0], 1, 1, 1])
         if masked_image_latents.shape[0] < batch_size:
             if not batch_size % masked_image_latents.shape[0] == 0:
                 raise ValueError(
@@ -1050,7 +1050,7 @@ class FluxControlInpaintPipeline(
                 if i < len(timesteps) - 1:
                     noise_timestep = timesteps[i + 1]
                     init_latents_proper = self.scheduler.scale_noise(
-                        image_latents, torch.to_tensor([noise_timestep]), noise
+                        image_latents, paddle.to_tensor([noise_timestep]), noise
                     )
                 else:
                     init_latents_proper = image_latents

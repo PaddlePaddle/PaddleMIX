@@ -20,11 +20,11 @@ from PIL import Image
 from ppdiffusers.transformers import ( # T5TokenizerFast
     CLIPTextModel,
     CLIPTokenizer,
-    SiglipImageProcessor,
-    SiglipVisionModel,
     T5EncoderModel,
     T5Tokenizer
 )
+from paddlemix.models.llava.multimodal_encoder.siglip_encoder import SigLipImageProcessor as SiglipImageProcessor
+from paddlemix.models.llava.multimodal_encoder.siglip_encoder import SigLipVisionModel as SiglipVisionModel
 
 from ...image_processor import PipelineImageInput
 from ...loaders import  TextualInversionLoaderMixin # FluxLoraLoaderMixin
@@ -182,13 +182,14 @@ class FluxPriorReduxPipeline(DiffusionPipeline):
             )
 
     def encode_image(self, image, num_images_per_prompt):
-        dtype = next(self.image_encoder.parameters()).dtype
+        dtype = self.image_encoder.parameters()[0].dtype
+        # TODO: Add more image preprocessing options
         image = self.feature_extractor.preprocess(
-            images=image, do_resize=True, return_tensors="pt", do_convert_rgb=True
-        )
+            images=image, return_tensors="pd"
+        )['pixel_values']
         image = image.astype(dtype=dtype)
 
-        image_enc_hidden_states = self.image_encoder(**image).last_hidden_state
+        image_enc_hidden_states = self.image_encoder(image, return_dict=True).last_hidden_state
         image_enc_hidden_states = image_enc_hidden_states.repeat_interleave(num_images_per_prompt, axis=0)
 
         return image_enc_hidden_states
@@ -334,7 +335,7 @@ class FluxPriorReduxPipeline(DiffusionPipeline):
                 num_images_per_prompt=num_images_per_prompt,
             )
             prompt_embeds = self._get_t5_prompt_embeds(
-                prompt=prompt_2,
+                prompt=prompt_2, 
                 num_images_per_prompt=num_images_per_prompt,
                 max_sequence_length=max_sequence_length,
             )
