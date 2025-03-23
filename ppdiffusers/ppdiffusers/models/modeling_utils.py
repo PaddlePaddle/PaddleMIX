@@ -95,7 +95,7 @@ def faster_set_state_dict(model, state_dict):
         for k, v in model.state_dict(use_hook=False).items():
             if k in state_dict:
                 v_new = state_dict.pop(k)
-                # with device_guard(): donot do device guard
+                # with device_guard(): do not do device guard
                 if isinstance(v_new, np.ndarray):
                     v_new = paddle.Tensor(v_new, zero_copy=True)
                 if v.dtype != v_new.dtype:

@@ -315,7 +315,7 @@ class Attention(nn.Layer):
                 )
             if not is_ppxformers_available():
                 raise NotImplementedError(
-                    "requires the scaled_dot_product_attention but your PaddlePaddle donot have this. Checkout the instructions on the installation page: https://www.paddlepaddle.org.cn/install/quick and follow the ones that match your environment."
+                    "requires the scaled_dot_product_attention but your PaddlePaddle do not have this. Checkout the instructions on the installation page: https://www.paddlepaddle.org.cn/install/quick and follow the ones that match your environment."
                 )
 
             if is_lora:
