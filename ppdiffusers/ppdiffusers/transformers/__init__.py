@@ -21,5 +21,5 @@ from .roberta import *
 from .t5 import *
 from .xlm_roberta import *
 
-# overrided model_utils
+# overridden model_utils
 from .model_utils import ModuleUtilsMixin, PretrainedConfig, PretrainedModel  # isort:skip

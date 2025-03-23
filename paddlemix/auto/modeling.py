@@ -49,7 +49,7 @@ ASSIGN_MAPPING = {
     "blip2": "Blip2ForConditionalGeneration",
     "clip": "CLIP",
     "coca": "CLIP",
-    "eva02": "EVA02VisionTransformer",  # unsupport EVA02ForPretrain
+    "eva02": "EVA02VisionTransformer",  # unsupported EVA02ForPretrain
     "evaclip": "EVACLIP",
     "groundingdino": "GroundingDinoModel",
     "imagebind": "ImageBindModel",

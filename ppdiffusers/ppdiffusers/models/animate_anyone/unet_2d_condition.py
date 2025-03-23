@@ -521,7 +521,7 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
                 attention_type=attention_type,
             )
         elif mid_block_type == "UNetMidBlock2DSimpleCrossAttn":
-            raise NotImplementedError(f"Unsupport mid_block_type: {mid_block_type}")
+            raise NotImplementedError(f"Unsupported mid_block_type: {mid_block_type}")
         elif mid_block_type == "UNetMidBlock2D":
             self.mid_block = UNetMidBlock2D(
                 in_channels=block_out_channels[-1],
