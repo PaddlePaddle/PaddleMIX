@@ -90,7 +90,7 @@ class FluxControlImg2ImgPipelineFastTests(unittest.TestCase, PipelineTesterMixin
         }
 
     def get_dummy_inputs(self, seed=0):
-        paddle.seed(seed=deed)
+        paddle.seed(seed=seed)
 
         image = Image.new("RGB", (16, 16), 0)
         control_image = Image.new("RGB", (16, 16), 0)

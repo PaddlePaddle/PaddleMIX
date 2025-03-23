@@ -11,25 +11,26 @@ from ppdiffusers.utils.testing_utils import (
     numpy_cosine_similarity_distance,
     slow,
 )
-
+from paddlemix.models.llava.multimodal_encoder.siglip_encoder import SigLipImageProcessor
+from paddlemix.models.llava.multimodal_encoder.siglip_encoder import SigLipVisionModel
 
 @slow
 # @pytest.mark.big_gpu_with_torch_cuda
 class FluxReduxSlowTests(unittest.TestCase):
     pipeline_class = FluxPriorReduxPipeline
-    repo_id = "YiYiXu/yiyi-redux"  # update to "black-forest-labs/FLUX.1-Redux-dev" once PR is merged
+    repo_id = "black-forest-labs/FLUX.1-Redux-dev"
     base_pipeline_class = FluxPipeline
-    base_repo_id = "black-forest-labs/FLUX.1-schnell"
+    base_repo_id = "black-forest-labs/FLUX.1-dev"
 
     def setUp(self):
         super().setUp()
         gc.collect()
-        paddle.cuda.empty_cache()
+        paddle.device.cuda.empty_cache()
 
     def tearDown(self):
         super().tearDown()
         gc.collect()
-        paddle.cuda.empty_cache()
+        paddle.device.cuda.empty_cache()
 
     def get_inputs(self, seed=0):
         init_image = load_image(
@@ -47,11 +48,17 @@ class FluxReduxSlowTests(unittest.TestCase):
         }
 
     def test_flux_redux_inference(self):
-        pipe_redux = self.pipeline_class.from_pretrained(self.repo_id, paddle_dtype=paddle.float16)
-        pipe_base = self.base_pipeline_class.from_pretrained(
-            self.base_repo_id, paddle_dtype=paddle.bfloat16, text_encoder=None, text_encoder_2=None
+        # TODO: Currently only siglip_model can be loaded separately
+        siglip_model = SigLipVisionModel.from_pretrained(self.repo_id + "/image_encoder")
+        siglip_processor = SigLipImageProcessor()
+        pipe_redux = self.pipeline_class.from_pretrained(self.repo_id, paddle_dtype=paddle.bfloat16,
+            feature_extractor = siglip_processor,
+            image_encoder = siglip_model
         )
-        pipe_base.enable_model_cpu_offload()
+        pipe_base = self.base_pipeline_class.from_pretrained(
+            self.base_repo_id, paddle_dtype=paddle.float16, text_encoder=None, text_encoder_2=None
+        )
+        # pipe_base.enable_model_cpu_offload()
 
         inputs = self.get_inputs()
         base_pipeline_inputs = self.get_base_pipeline_inputs()
@@ -62,37 +69,37 @@ class FluxReduxSlowTests(unittest.TestCase):
         image_slice = image[0, :10, :10]
         expected_slice = np.array(
             [
-                0.30078125,
-                0.37890625,
-                0.46875,
-                0.28125,
-                0.36914062,
-                0.47851562,
-                0.28515625,
-                0.375,
-                0.4765625,
-                0.28125,
-                0.375,
-                0.48046875,
-                0.27929688,
-                0.37695312,
-                0.47851562,
-                0.27734375,
-                0.38085938,
-                0.4765625,
-                0.2734375,
-                0.38085938,
-                0.47265625,
-                0.27539062,
-                0.37890625,
-                0.47265625,
-                0.27734375,
-                0.37695312,
-                0.47070312,
-                0.27929688,
-                0.37890625,
-                0.47460938,
-            ],
+            0.3803711,
+            0.5175781,
+            0.62109375,
+            0.36035156,
+            0.5058594,
+            0.62353516,
+            0.36914062,
+            0.50439453,
+            0.6123047,
+            0.3630371,
+            0.4987793,
+            0.6147461,
+            0.35839844,
+            0.4951172,
+            0.61035156,
+            0.3486328,
+            0.4897461,
+            0.6015625,
+            0.3449707,
+            0.48901367,
+            0.6015625,
+            0.34106445,
+            0.48291016,
+            0.5966797,
+            0.3461914,
+            0.48339844,
+            0.59716797,
+            0.35058594,
+            0.48535156,
+            0.59716797,
+        ],
             dtype=np.float32,
         )
         max_diff = numpy_cosine_similarity_distance(expected_slice.flatten(), image_slice.flatten())
