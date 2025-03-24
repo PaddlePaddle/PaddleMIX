@@ -77,7 +77,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def extract_paramaters(model_file="model_state.pdparams", dtype="float32"):
+def extract_parameters(model_file="model_state.pdparams", dtype="float32"):
     state_dict = paddle.load(model_file)
     unet = {}
     vae = {}
@@ -161,7 +161,7 @@ def build_pipelines(
         set_alpha_to_one=False,
         steps_offset=1,
     )
-    unet_dict, vae_dict, text_encoder_dict = extract_paramaters(model_file)
+    unet_dict, vae_dict, text_encoder_dict = extract_parameters(model_file)
     check_keys(unet, unet_dict)
     check_keys(vae, vae_dict)
     check_keys(text_encoder, text_encoder_dict)
