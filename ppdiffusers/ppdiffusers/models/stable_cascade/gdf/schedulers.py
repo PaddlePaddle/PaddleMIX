@@ -35,10 +35,10 @@ class BaseSchedule:
             return None
 
     def setup(self, *args, **kwargs):
-        raise NotImplementedError("this method needs to be overriden")
+        raise NotImplementedError("this method needs to be overridden")
 
     def schedule(self, *args, **kwargs):
-        raise NotImplementedError("this method needs to be overriden")
+        raise NotImplementedError("this method needs to be overridden")
 
     def __call__(self, t, *args, shift=1, **kwargs):
         if isinstance(t, paddle.Tensor):

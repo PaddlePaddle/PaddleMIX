@@ -29,7 +29,7 @@ def visualize_box_mask(im, results, labels, threshold=0.5):
     Args:
         im (str/np.ndarray): path of image/np.ndarray read by cv2
         results (dict): include 'boxes': np.ndarray: shape:[N,6], N: number of box,
-                        matix element:[class, score, x_min, y_min, x_max, y_max]
+                        matrix element:[class, score, x_min, y_min, x_max, y_max]
                         MaskRCNN's results include 'masks': np.ndarray:
                         shape:[N, im_h, im_w]
         labels (list): labels:['class1', ..., 'classn']
@@ -83,7 +83,7 @@ def draw_mask(im, np_boxes, np_masks, labels, threshold=0.5):
     Args:
         im (PIL.Image.Image): PIL image
         np_boxes (np.ndarray): shape:[N,6], N: number of box,
-            matix element:[class, score, x_min, y_min, x_max, y_max]
+            matrix element:[class, score, x_min, y_min, x_max, y_max]
         np_masks (np.ndarray): shape:[N, im_h, im_w]
         labels (list): labels:['class1', ..., 'classn']
         threshold (float): threshold of mask
@@ -120,7 +120,7 @@ def draw_box(im, np_boxes, labels, threshold=0.5):
     Args:
         im (PIL.Image.Image): PIL image
         np_boxes (np.ndarray): shape:[N,6], N: number of box,
-                               matix element:[class, score, x_min, y_min, x_max, y_max]
+                               matrix element:[class, score, x_min, y_min, x_max, y_max]
         labels (list): labels:['class1', ..., 'classn']
         threshold (float): threshold of box
     Returns:

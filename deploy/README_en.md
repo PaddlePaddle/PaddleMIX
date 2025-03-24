@@ -11,7 +11,7 @@ PaddleMIX utilizes Paddle Inference and provides a Python-based deployment solut
 
 For APPflow usage, you can set the `static_mode = True` variable to enable static graph inference and optionally accelerate inference using TensorRT.
 
-### 1.1 Exmaples
+### 1.1 Examples
 
 ```python
 >>> from paddlemix.appflow import Appflow
@@ -50,7 +50,7 @@ Currently supported models:
 - [sam](./sam/README.md)
 - [qwen_vl](./qwen_vl/README.md)
 
-Using groundingdino as an exmaple.
+Using groundingdino as an example.
 
 ### 2.1 Exporting Predictive Model
 

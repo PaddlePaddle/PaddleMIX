@@ -494,7 +494,7 @@ def create_attention_mask_predict_next(
             id_padding = paddle.where(is_padding[i] == True)
             if not id_padding[0].shape[0] == 0:
                 mask_text_image_bi[i][sid_img[i] :, id_padding[0]] = 0
-                # text image mask, tokens after pad token cant not see text pad tokens
+                # text image mask, tokens after pad token can't not see text pad tokens
 
     mask_text[in_image_segment] = mask_text_image_bi[in_image_segment]
     # No token attends to padding tokens and padding tokens do not attend to any token

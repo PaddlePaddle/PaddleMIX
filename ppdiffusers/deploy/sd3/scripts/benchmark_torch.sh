@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# sd3 do ot supprot attention raw
+# sd3 do ot support attention raw
 
 # attention sdp
 python infer_dygraph_torch.py --scheduler "flow" --task_name all --attention_type sdp --use_fp16 True --inference_steps 50 --height 1024 --width 1024 --benchmark_steps 10 

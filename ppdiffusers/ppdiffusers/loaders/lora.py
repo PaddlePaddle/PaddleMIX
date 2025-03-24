@@ -683,7 +683,7 @@ class LoraLoaderMixin:
     @classmethod
     def _remove_text_encoder_monkey_patch_classmethod(cls, text_encoder):
         if version.parse(__version__) > version.parse("0.23"):
-            deprecate("_remove_text_encoder_monkey_patch_classmethod", "0.25", LORA_DEPRECATION_MESSAGE)
+            deprecate("_remove_text_encoder_monkey_patch_classmethod", "1.0", LORA_DEPRECATION_MESSAGE)
 
         for _, attn_module in text_encoder_attn_modules(text_encoder):
             if isinstance(attn_module.q_proj, PatchedLoraProjection):
@@ -712,7 +712,7 @@ class LoraLoaderMixin:
         Monkey-patches the forward passes of attention modules of the text encoder.
         """
         if version.parse(__version__) > version.parse("0.23"):
-            deprecate("_modify_text_encoder", "0.25", LORA_DEPRECATION_MESSAGE)
+            deprecate("_modify_text_encoder", "1.0", LORA_DEPRECATION_MESSAGE)
 
         def create_patched_linear_lora(model, network_alpha, rank, dtype, lora_parameters):
             linear_layer = model.regular_linear_layer if isinstance(model, PatchedLoraProjection) else model
@@ -994,7 +994,7 @@ class LoraLoaderMixin:
 
         else:
             if version.parse(__version__) > version.parse("0.23"):
-                deprecate("fuse_text_encoder_lora", "0.25", LORA_DEPRECATION_MESSAGE)
+                deprecate("fuse_text_encoder_lora", "1.0", LORA_DEPRECATION_MESSAGE)
 
             def fuse_text_encoder_lora(text_encoder, lora_scale=1.0, safe_fusing=False):
                 for _, attn_module in text_encoder_attn_modules(text_encoder):
@@ -1052,7 +1052,7 @@ class LoraLoaderMixin:
 
         else:
             if version.parse(__version__) > version.parse("0.23"):
-                deprecate("unfuse_text_encoder_lora", "0.25", LORA_DEPRECATION_MESSAGE)
+                deprecate("unfuse_text_encoder_lora", "1.0", LORA_DEPRECATION_MESSAGE)
 
             def unfuse_text_encoder_lora(text_encoder):
                 for _, attn_module in text_encoder_attn_modules(text_encoder):
@@ -1310,7 +1310,7 @@ class LoraLoaderMixin:
 class StableDiffusionXLLoraLoaderMixin(LoraLoaderMixin):
     """This class overrides `LoraLoaderMixin` with LoRA loading/saving code that's specific to SDXL"""
 
-    # Overrride to properly handle the loading and unloading of the additional text encoder.
+    # Override to properly handle the loading and unloading of the additional text encoder.
     def load_lora_weights(
         self,
         pretrained_model_name_or_path_or_dict: Union[str, Dict[str, paddle.Tensor]],

@@ -456,7 +456,7 @@ class FastDeployDiffusionPipelineMixin:
                 continue
             module = getattr(self, name)
             if isinstance(module, FastDeployRuntimeModel):
-                infer_op = infer_op_dict.get(name, "zero_copy_infer") if module.is_spport_zero_copy() else "raw"
+                infer_op = infer_op_dict.get(name, "zero_copy_infer") if module.is_support_zero_copy() else "raw"
                 # if parse_prompt_type in ["lpw", "webui"] and name in ["text_encoder"]:
                 #     if infer_op != "raw":
                 #         logger.warning(
@@ -1203,10 +1203,10 @@ class FastDeployRuntimeModel:
             self.latest_params_name = None
             self.model_format = ModelFormat.ONNX
 
-    def is_spport_zero_copy(self):
+    def is_support_zero_copy(self):
         if self.model.runtime_option._option.backend == fd.Backend.PDINFER:
             return self.model.runtime_option._option.paddle_infer_option.enable_trt
-        # currently we donot spport zero copy model with fd.Backend.LITE.
+        # currently we donot support zero copy model with fd.Backend.LITE.
         elif self.model.runtime_option._option.backend == fd.Backend.LITE:
             return False
         else:

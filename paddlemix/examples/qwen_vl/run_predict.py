@@ -128,7 +128,7 @@ def main():
     model = QWenLMHeadModel.from_pretrained(model_args.model_name_or_path, dtype=model_args.dtype)
     model.eval()
 
-    # input qery
+    # input query
     query = []
     if data_args.prompt is None and data_args.input_image is None:
         raise ValueError("prompt or image must be input ")

@@ -41,7 +41,7 @@ class OFTConfig(LycorisConfig):
             The mapping from layer names or regexp expression to ranks which are different from the default rank
             specified by `r`.
         modules_to_save (`List[str]`): The names of modules to be set as trainable except OFT parameters.
-        coft (`bool`): Whether to use the constrainted variant of OFT or not.
+        coft (`bool`): Whether to use the constrained variant of OFT or not.
         eps (`float`):
             The control strength of COFT. The freedom of rotation. Only has an effect if `coft` is set to True.
         block_share (`bool`): Whether to share the OFT parameters between blocks or not.
@@ -89,7 +89,7 @@ class OFTConfig(LycorisConfig):
     )
     coft: bool = field(
         default=False,
-        metadata={"help": "Whether to use the constrainted variant of OFT or not."},
+        metadata={"help": "Whether to use the constrained variant of OFT or not."},
     )
     eps: float = field(
         default=6e-5,

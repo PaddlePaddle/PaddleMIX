@@ -54,8 +54,8 @@ class DataArguments:
     """
 
     input_image: str = field(metadata={"help": "The name of input image."})
-    box_prompt: List[int] = field(default=None, metadata={"help": "box promt format as xyxyxyxy...]."})
-    points_prompt: List[int] = field(default=None, metadata={"help": "point promt format as [[xy],[xy]...]."})
+    box_prompt: List[int] = field(default=None, metadata={"help": "box prompt format as xyxyxyxy...]."})
+    points_prompt: List[int] = field(default=None, metadata={"help": "point prompt format as [[xy],[xy]...]."})
 
 
 @dataclass

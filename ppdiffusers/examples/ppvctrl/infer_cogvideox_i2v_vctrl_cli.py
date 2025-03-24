@@ -117,7 +117,7 @@ def parse_args():
     parser.add_argument("--height", type=int, default=720, required=False)
     parser.add_argument("--width", type=int, default=480, required=False)
     parser.add_argument("--max_frame", type=int, default=9, required=False)
-    parser.add_argument("--strides", type=int, default=40, required=False)
+    parser.add_argument("--strides", type=int, default=49, required=False)
     parser.add_argument("--guidance_scale", type=float, default=3.5, required=False)
     parser.add_argument("--num_inference_steps", type=int, default=25, required=False)
     parser.add_argument("--fps", type=int, default=30, required=False)
@@ -247,12 +247,16 @@ if __name__ == "__main__":
             vctrl_layout_type=args.vctrl_layout_type,
             ).frames[0]
         # reference image for next video generation
-        ref_image=video[args.strides]
+        if step !=inference_times-2:
+            ref_image = video[args.strides - 1]
+        else:
+            ref_image=video[toltal_frames-num_frames-start_frame]
+        
         paddle.device.cuda.empty_cache()
         if end_frame!=toltal_frames:
             final_result.append(video[:args.strides])
         else:
-            final_result.append(video[:end_frame-step*args.strides])
+            final_result.append(video[step*args.strides-start_frame:])
         
         
 save_vid_side_by_side(final_result, validation_control_images[:toltal_frames], args.output_dir,fps=args.fps)

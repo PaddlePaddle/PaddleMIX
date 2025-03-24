@@ -218,7 +218,7 @@ class PeftMixedModel(PushToHubMixin, SaveToAistudioMixin, paddle.nn.Layer):
         try:
             self.peft_config[adapter_name] = peft_config
             self.base_model.inject_adapter(self, adapter_name)
-        except Exception:  # somthing went wrong, roll back
+        except Exception:  # something went wrong, roll back
             if adapter_name in self.peft_config:
                 del self.peft_config[adapter_name]
             raise
@@ -348,7 +348,7 @@ class PeftMixedModel(PushToHubMixin, SaveToAistudioMixin, paddle.nn.Layer):
                 Whether the adapter should be trainable or not. If `False`, the adapter will be frozen and use for
                 inference
             config ([`~peft.PeftConfig`], *optional*):
-                The configuration object to use instead of an automatically loaded configuation. This configuration
+                The configuration object to use instead of an automatically loaded configuration. This configuration
                 object is mutually exclusive with `model_id` and `kwargs`. This is useful when configuration is already
                 loaded before calling `from_pretrained`.
             kwargs: (`optional`):

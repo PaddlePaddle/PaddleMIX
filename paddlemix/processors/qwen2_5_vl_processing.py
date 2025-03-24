@@ -328,7 +328,7 @@ class Qwen2_5_VLImageProcessor(BaseImageProcessor):
         max_pixels (`int`, *optional*, defaults to `28 * 28 * 1280`):
             The max pixels of the image to resize the image.
         patch_size (`int`, *optional*, defaults to 14):
-            The spacial patch size of the vision encoder.
+            The spatial patch size of the vision encoder.
         temporal_patch_size (`int`, *optional*, defaults to 2):
             The temporal patch size of the vision encoder.
         merge_size (`int`, *optional*, defaults to 2):
@@ -766,7 +766,8 @@ def _read_video_decord(
     total_frames, video_fps = len(vr), vr.get_avg_fps()
     logger.info(f"decord:  {video_path=}, {total_frames=}, {video_fps=}, time={time.time() - st:.3f}s")
     nframes = smart_nframes(ele, total_frames=total_frames, video_fps=video_fps)
-    idx = paddle.linspace(0, total_frames - 1, nframes).round().astype('int64').tolist()
+    idx = paddle.linspace(0, total_frames - 1, nframes).round().astype('int64')
+    idx = paddle.clip(idx, 0, total_frames - 1).tolist()
     video = vr.get_batch(idx).asnumpy()
     video = paddle.to_tensor(video).transpose([0, 3, 1, 2])  # Convert to TCHW format
     return video
