@@ -112,6 +112,12 @@ python paddlemix/examples/llava/pretrain.py paddlemix/config/llava/pretrain.json
 # llava lora微调
 python paddlemix/examples/llava/supervised_finetune.py paddlemix/config/llava/v1_5/lora_sft_argument.json
 
+# lora微调后，模型权重合并
+python python paddlemix/examples/llava/merge_lora_params.py \
+--model_name_or_path xxx \  #llava model path
+--lora_path xxxx \  #lora checkpoint path
+--merge_model_path xxxx  #merge model path
+
 # llava full参数微调
 python paddlemix/examples/llava/supervised_finetune.py paddlemix/config/llava/v1_5/sft_argument.json
 ```
