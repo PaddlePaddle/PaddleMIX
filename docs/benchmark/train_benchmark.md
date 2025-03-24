@@ -20,9 +20,9 @@
 |                        | LoRA      | 36  | +5%    | 34  | 29/30 |
 | Qwen2VL 2B             | SFT       | 33  | +43%   | 23  | -     |
 | Qwen2VL 7B             | SFT       | 13  | +18%   | 11  | -     |
-| Stable Diffusion 1.5   | SFT       | 560 | -12%   | 638 | 28/34 |
+| Stable Diffusion 1.5   | Pretrain  | 560 | -12%   | 638 | 28/34 |
 |                        | LoRA      | 200 | +6%    | 187 | 30/34 |
-| Stable Diffusion 3     | SFT       | 34  | 0      | 34  | -     |
+| Stable Diffusion 3     | Pretrain  | 34  | 0      | 34  | -     |
 |                        | LoRA      | 66  | -0.01% | 67  | -     |
 
 ---
