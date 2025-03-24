@@ -22,7 +22,7 @@ def register_forward(
     Detailed information in https://github.com/HaozheLiu-ST/T-GATE
 
     Args:
-        model (`torch.nn.Module`):
+        model (`paddle.nn.Layer`):
             A diffusion model contains cross attention layers.
         filter_name (`str`):
             The name to filter the selected layer.
@@ -60,17 +60,17 @@ def register_forward(
             The forward method of the `Attention` class.
 
             Args:
-                hidden_states (`torch.Tensor`):
+                hidden_states (`paddle.Tensor`):
                     The hidden states of the query.
-                encoder_hidden_states (`torch.Tensor`, *optional*):
+                encoder_hidden_states (`paddle.Tensor`, *optional*):
                     The hidden states of the encoder.
-                attention_mask (`torch.Tensor`, *optional*):
+                attention_mask (`paddle.Tensor`, *optional*):
                     The attention mask to use. If `None`, no mask is applied.
                 **cross_attention_kwargs:
                     Additional keyword arguments to pass along to the cross attention.
 
             Returns:
-                `torch.Tensor`: The output of the attention layer.
+                `paddle.Tensor`: The output of the attention layer.
             """
             # The `Attention` class can call different attention processors / attention functions
             # here we simply pass along all tensors to the selected processor class
@@ -144,21 +144,21 @@ def tgate_processor(
     A customized forward function of the `AttnProcessor2_0` class.
 
     Args:
-        hidden_states (`torch.Tensor`):
+        hidden_states (`paddle.Tensor`):
             The hidden states of the query.
-        encoder_hidden_states (`torch.Tensor`, *optional*):
+        encoder_hidden_states (`paddle.Tensor`, *optional*):
             The hidden states of the encoder.
-        attention_mask (`torch.Tensor`, *optional*):
+        attention_mask (`paddle.Tensor`, *optional*):
             The attention mask to use. If `None`, no mask is applied.
         **cross_attention_kwargs:
             Additional keyword arguments to pass along to the cross attention.
 
     Returns:
-        `torch.Tensor`: The output of the attention layer.
+        `paddle.Tensor`: The output of the attention layer.
     """
 
     if not hasattr(F, "scaled_dot_product_attention"):
-        raise ImportError("AttnProcessor2_0 requires PyTorch 2.0, to use it, please upgrade PyTorch to 2.0.")
+        raise ImportError("Paddle version does not support scaled dot product attention")
 
     if len(args) > 0 or kwargs.get("scale", None) is not None:
         deprecation_message = "The `scale` argument is deprecated and will be ignored. Please remove it, as passing it will raise an error in the future. `scale` should directly be passed while calling the underlying pipeline component i.e., via `cross_attention_kwargs`."

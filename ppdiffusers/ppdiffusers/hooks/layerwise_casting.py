@@ -91,8 +91,8 @@ def apply_layerwise_casting(
     non_blocking: bool = False,
 ) -> None:
     """
-    Applies layerwise casting to a given module. The module expected here is a Diffusers ModelMixin but it can be any
-    nn.Module using ppdiffusers layers or pytorch primitives.
+    Applies layerwise casting to a given module. The module expected here is a PPDiffusers ModelMixin but it can be any
+    nn.Layer using ppdiffusers layers or paddle primitives.
 
     Example:
 

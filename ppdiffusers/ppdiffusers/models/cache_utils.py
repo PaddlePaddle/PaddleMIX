@@ -27,12 +27,10 @@ class CacheMixin:
         Example:
 
         ```python
-        >>> import torch
+        >>> import paddle
         >>> from diffusers import CogVideoXPipeline, PyramidAttentionBroadcastConfig
 
-        >>> pipe = CogVideoXPipeline.from_pretrained("THUDM/CogVideoX-5b", torch_dtype=paddle.bfloat16
-)
-        >>> pipe.to("cuda")
+        >>> pipe = CogVideoXPipeline.from_pretrained("THUDM/CogVideoX-5b", paddle_dtype=paddle.bfloat16)
 
         >>> config = PyramidAttentionBroadcastConfig(
         ...     spatial_attention_block_skip_range=2,
