@@ -15,7 +15,7 @@
 import io
 import json
 import os
-
+from paddlemix.models.qwen_vl.tokenizer import QWenVLTokenizer
 import yaml
 from paddlenlp.transformers import AutoTokenizer
 #fix paddlenlp 3.0b3 auto
@@ -24,6 +24,8 @@ from paddlemix.models.llava.language_model.llava_llama import LlavaConfig
 try:
     AutoTokenizer.register(LlavaConfig, LLavaTokenizer)
     print('LLavaTokenizer register success!!!!')
+    AutoTokenizer.register("qwen_vl", QWenVLTokenizer)
+    print('QWenVLTokenizer register success!!!!')
 except:
     pass
 
