@@ -103,6 +103,7 @@ ASSISTANT: 0.23, 0.33, 0.79, 0.78
 
 预训练命令：
 ```bash
+export FLAGS_use_cuda_managed_memory=true #若显存不够，可设置环境变量
 python paddlemix/examples/llava/pretrain.py paddlemix/config/llava/pretrain.json
 ```
 
@@ -110,6 +111,7 @@ python paddlemix/examples/llava/pretrain.py paddlemix/config/llava/pretrain.json
 
 ```bash
 # llava lora微调
+export FLAGS_use_cuda_managed_memory=true #若显存不够，可设置环境变量
 python paddlemix/examples/llava/supervised_finetune.py paddlemix/config/llava/v1_5/lora_sft_argument.json
 
 # lora微调后，模型权重合并
@@ -119,6 +121,7 @@ python python paddlemix/examples/llava/merge_lora_params.py \
 --merge_model_path xxxx  #merge model path
 
 # llava full参数微调
+export FLAGS_use_cuda_managed_memory=true #若显存不够，可设置环境变量
 python paddlemix/examples/llava/supervised_finetune.py paddlemix/config/llava/v1_5/sft_argument.json
 ```
 

@@ -16,6 +16,7 @@ import sys
 
 import paddle
 from paddlenlp.trainer import PdArgumentParser, get_last_checkpoint
+from paddlenlp.transformers import CLIPImageProcessor
 from paddlenlp.utils.log import logger
 
 from paddlemix.datasets import MixDataset, MIXTokenMapDataset
@@ -90,19 +91,25 @@ def main():
     if model_args.freeze_include or model_args.freeze_exclude:
         freeze_params(model, include=model_args.freeze_include, exclude=model_args.freeze_exclude)
 
-    tokenizer = LLavaTokenizer.from_pretrained(model_args.model_name_or_path)
+    tokenizer = LLavaTokenizer.from_pretrained(model_args.model_name_or_path, model_max_length=data_args.max_length)
+
     # Load processor
-    train_processor = LlavaProcessor.from_pretrained(
-        os.path.join(model_args.model_name_or_path, "processor", "train"),
-        text_model_name_or_path=model_args.text_model_name_or_path,
+    name_or_path = os.path.join(model_args.model_name_or_path, "processor", "train")
+    image_processor = CLIPImageProcessor.from_pretrained(name_or_path)
+    # Load processor
+    train_processor = LlavaProcessor(
+        image_processor,
+        tokenizer,
         max_length=data_args.max_length,
         version=model_config.version,
         image_aspect_ratio=model_config.get("image_aspect_ratio", "square"),
     )
     if training_args.do_eval:
-        eval_processor, _ = LlavaProcessor.from_pretrained(
-            os.path.join(model_args.model_name_or_path, "processor", "eval"),
-            text_model_name_or_path=model_args.text_model_name_or_path,
+        name_or_path = os.path.join(model_args.model_name_or_path, "processor", "eval")
+        image_processor = CLIPImageProcessor.from_pretrained(name_or_path)
+        eval_processor = LlavaProcessor(
+            image_processor,
+            tokenizer,
             max_length=data_args.max_length,
             version=model_config.version,
             image_aspect_ratio=model_config.get("image_aspect_ratio", "square"),

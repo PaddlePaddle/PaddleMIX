@@ -99,7 +99,8 @@ def main():
     if model_args.freeze_include or model_args.freeze_exclude:
         freeze_params(model, include=model_args.freeze_include, exclude=model_args.freeze_exclude)
 
-    tokenizer = LLavaTokenizer.from_pretrained(model_args.model_name_or_path)
+    tokenizer = LLavaTokenizer.from_pretrained(model_args.model_name_or_path, model_max_length=data_args.max_length)
+
     # Load processor
     name_or_path = os.path.join(model_args.model_name_or_path, "processor", "train")
     image_processor = CLIPImageProcessor.from_pretrained(name_or_path)
