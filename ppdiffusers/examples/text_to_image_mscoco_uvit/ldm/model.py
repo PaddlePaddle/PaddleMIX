@@ -290,7 +290,7 @@ class LatentDiffusionModel(nn.Layer):
             latents = paddle.randn(
                 (input_ids.shape[0], self.unet.in_channels, height // 8, width // 8)
             )  # [bs, 4, 32, 32]
-            # ddim donot use this
+            # ddim do not use this
             latents = latents * self.eval_scheduler.init_noise_sigma  # 1.0
 
             accepts_eta = "eta" in set(inspect.signature(self.eval_scheduler.step).parameters.keys())
@@ -301,7 +301,7 @@ class LatentDiffusionModel(nn.Layer):
             for t in self.eval_scheduler.timesteps:
                 # expand the latents if we are doing classifier free guidance
                 latent_model_input = paddle.concat([latents] * 2) if do_classifier_free_guidance else latents
-                # ddim donot use this
+                # ddim do not use this
                 latent_model_input = self.eval_scheduler.scale_model_input(latent_model_input, t)
 
                 # predict the noise residual

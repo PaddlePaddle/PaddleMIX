@@ -289,7 +289,7 @@ def convert_ldmbert_state_dict(ldmbert_state_dict, num_layers=32):
             new_name = new_name[0]
         new_state_dict[new_name] = torch.from_numpy(v.t().numpy()) if need_transpose else torch.from_numpy(v.numpy())
 
-    # dummpy weights, we donot use this!
+    # dummpy weights, we do not use this!
     new_state_dict["cond_stage_model.transformer.to_logits.weight"] = torch.zeros(
         new_state_dict["cond_stage_model.transformer.token_emb.weight"].shape
     )

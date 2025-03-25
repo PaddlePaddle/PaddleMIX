@@ -284,7 +284,7 @@ class LCMModel(nn.Layer):
                     ".*upsamplers.0.conv.*",
                     ".*time_emb_proj.*",
                 ],
-                merge_weights=False,  # make sure we donot merge weights
+                merge_weights=False,  # make sure we do not merge weights
             )
             self.unet.config.tensor_parallel_degree = 1
             self.unet = LoRAModel(self.unet, lora_config)

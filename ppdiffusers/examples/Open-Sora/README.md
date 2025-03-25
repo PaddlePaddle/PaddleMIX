@@ -102,7 +102,7 @@ python scripts/inference-long.py --num-frames 18 --image-size 224 300 --sample-n
 | A breathtaking sunrise scene. | ![demo](./assets/images/condition/sunset1.png) | ![demo](./assets/images/condition/sunset2.png) |![demo](https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/86fe5d88-6622-424e-bea4-95cdacf0888f) |
 
 
-### 4.4  Video extending and editting
+### 4.4  Video extending and editing
 此外支持以视频作为条件进行视频生成，包括视频扩展和视频编辑，运行脚本如下：
 ```bash
 ppdiffusers_path=PaddleMIX/ppdiffusers
@@ -110,7 +110,7 @@ export PYTHONPATH=$ppdiffusers_path:$PYTHONPATH
 # video extending
 python scripts/inference-long.py --num-frames 12 --image-size 240 240 --sample-name video_extend  --prompt 'A car driving on the ocean.{"reference_path": "./assets/videos/d0_proc.mp4","mask_strategy": "0,0,0,-6,6"}'
 
-# video editting
+# video editing
 python scripts/inference-long.py --num-frames 7 --image-size 256 256 --sample-name edit --prompt 'A cyberpunk-style car at New York city.{"reference_path": "./assets/videos/d0_proc.mp4","mask_strategy": "0,0,0,0,7,0.4"}'
 ```
 

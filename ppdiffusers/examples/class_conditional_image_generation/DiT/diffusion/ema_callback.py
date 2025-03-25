@@ -115,7 +115,7 @@ class EmaCallback(TrainerCallback):
 
     def state_dict(self):
         """state_dict"""
-        # NOTE(shenliang03): need save/upate self.num_updates to recovery
+        # NOTE(shenliang03): need save/update self.num_updates to recovery
         self.states["meta"]["num_updates"] = self.num_updates
         self.states["meta"]["decay"] = self.decay
         return self.states

@@ -315,13 +315,13 @@ class LCMTrainer(Trainer):
         output_dir = output_dir if output_dir is not None else self.args.output_dir
         os.makedirs(output_dir, exist_ok=True)
         if self.args.only_save_updated_model:
-            unwraped_model = unwrap_model(self.model)
-            if unwraped_model.is_lora:
+            unwrapped_model = unwrap_model(self.model)
+            if unwrapped_model.is_lora:
                 logger.info(f"Saving lcm unet lora checkpoint to `{output_dir}/lora`.")
-                unwraped_model.unet.save_pretrained(os.path.join(output_dir, "lora"), save_model_config=False)
+                unwrapped_model.unet.save_pretrained(os.path.join(output_dir, "lora"), save_model_config=False)
                 from safetensors.numpy import save_file
 
-                lora_kohya_state_dict = get_module_kohya_state_dict(unwraped_model.unet, prefix="lora_unet")
+                lora_kohya_state_dict = get_module_kohya_state_dict(unwrapped_model.unet, prefix="lora_unet")
                 save_file(
                     lora_kohya_state_dict,
                     os.path.join(output_dir, "lora", "lcm_lora.safetensors"),
@@ -329,8 +329,8 @@ class LCMTrainer(Trainer):
                 )
             else:
                 logger.info(f"Saving unet checkpoint to `{output_dir}/unet` and `{output_dir}/unet_target`.")
-                unwraped_model.unet.save_pretrained(os.path.join(output_dir, "unet"))
-                unwraped_model.target_unet.save_pretrained(os.path.join(output_dir, "unet_target"))
+                unwrapped_model.unet.save_pretrained(os.path.join(output_dir, "unet"))
+                unwrapped_model.target_unet.save_pretrained(os.path.join(output_dir, "unet_target"))
         else:
             logger.info(f"Saving model checkpoint to {output_dir}")
             if state_dict is None:

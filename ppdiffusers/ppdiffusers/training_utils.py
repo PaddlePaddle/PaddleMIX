@@ -211,7 +211,7 @@ class EMAModel:
         """
         Compute the decay factor for the exponential moving average.
         """
-        # NOTE we donot -1! (yujun06) diffirent from diffusers's implementation
+        # NOTE we do not -1! (yujun06) diffirent from diffusers's implementation
         step = max(0, optimization_step - self.update_after_step)
 
         if step <= 0:
