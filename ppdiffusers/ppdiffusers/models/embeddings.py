@@ -1364,6 +1364,7 @@ def get_1d_rotary_pos_embed(
         )
         / linear_factor
     )  # [D/2]
+    pos = pos.astype(freqs_dtype)
     freqs = paddle.outer(x=pos, y=freqs)  # type: ignore   # [S, D/2]
     if use_real and repeat_interleave_real:
         # flux, hunyuan-dit, cogvideox

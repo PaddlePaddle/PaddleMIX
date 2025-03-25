@@ -21,10 +21,10 @@ from ppdiffusers.transformers import ( # T5TokenizerFast
     CLIPTextModel,
     CLIPTokenizer,
     T5EncoderModel,
-    T5Tokenizer
+    T5Tokenizer,
+    SigLipImageProcessor,
+    SigLipVisionModel
 )
-from paddlemix.models.llava.multimodal_encoder.siglip_encoder import SigLipImageProcessor as SiglipImageProcessor
-from paddlemix.models.llava.multimodal_encoder.siglip_encoder import SigLipVisionModel as SiglipVisionModel
 
 from ...image_processor import PipelineImageInput
 from ...loaders import  TextualInversionLoaderMixin # FluxLoraLoaderMixin
@@ -119,8 +119,8 @@ class FluxPriorReduxPipeline(DiffusionPipeline):
 
     def __init__(
         self,
-        image_encoder: SiglipVisionModel,
-        feature_extractor: SiglipImageProcessor,
+        image_encoder: SigLipVisionModel,
+        feature_extractor: SigLipImageProcessor,
         image_embedder: ReduxImageEncoder,
         text_encoder: CLIPTextModel = None,
         tokenizer: CLIPTokenizer = None,
