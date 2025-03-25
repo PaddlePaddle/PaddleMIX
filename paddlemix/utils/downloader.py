@@ -226,7 +226,7 @@ def _decompress(fname):
 
     # For protecting decompressing interrupted,
     # decompress to fpath_tmp directory firstly, if decompress
-    # successed, move decompress files to fpath and delete
+    # successfully, move decompress files to fpath and delete
     # fpath_tmp and remove download compress file.
 
     if tarfile.is_tarfile(fname):
@@ -234,7 +234,7 @@ def _decompress(fname):
     elif zipfile.is_zipfile(fname):
         uncompressed_path = _uncompress_file_zip(fname)
     else:
-        raise TypeError("Unsupport compress file type {}".format(fname))
+        raise TypeError("Unsupported compress file type {}".format(fname))
 
     return uncompressed_path
 

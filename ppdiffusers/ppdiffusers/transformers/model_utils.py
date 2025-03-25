@@ -374,7 +374,7 @@ class PretrainedModel(PPNLPPretrainedModel, ModuleUtilsMixin, PeftAdapterMixin):
         **kwargs,
     ):
         if to_diffusers:
-            # TODO, currently, we donot support to save the model in shared format.
+            # TODO, currently, we do not support to save the model in shared format.
             max_shard_size = "99999GB"
             state_dict = self.state_dict()
             from ppdiffusers.models.modeling_pytorch_paddle_utils import (

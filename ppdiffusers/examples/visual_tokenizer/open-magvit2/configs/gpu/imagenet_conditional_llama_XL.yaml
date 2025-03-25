@@ -55,7 +55,7 @@ model:
     first_stage_config:
       target: taming.models.lfqgan.VQModel
       params:
-        ckpt_path: # FID: 1.17 please specfy your path
+        ckpt_path: # FID: 1.17 please specify your path
         n_embed: 262144
         embed_dim: 18
         learning_rate: 1e-4
