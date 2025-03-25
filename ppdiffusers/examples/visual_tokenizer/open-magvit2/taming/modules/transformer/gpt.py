@@ -362,7 +362,7 @@ class GPT(paddle.nn.Layer):
         drop_path_rate=0.0, n_unmasked=0, token_factorization=False,
         max_batch_size=32, max_seq_len=2048, class_num=1000, token_drop=0.1,
         cls_token_num=1, rope_base=10000, norm_eps=1e-05,
-        ffn_dim_multiplier=None, initalizer_range=0.02, multiple_of=256,
+        ffn_dim_multiplier=None, initializer_range=0.02, multiple_of=256,
         n_kv_head=None, factorized_k=2, factorized_bits=[9, 9]):
         super().__init__()
         self.config = GPTConfig(vocab_size=vocab_size, block_size=
@@ -374,7 +374,7 @@ class GPT(paddle.nn.Layer):
             n_unmasked, token_factorization=token_factorization, class_num=
             class_num, token_drop=token_drop, cls_token_num=cls_token_num,
             rope_base=rope_base, norm_eps=norm_eps, ffn_dim_multiplier=
-            ffn_dim_multiplier, initializer_range=initalizer_range,
+            ffn_dim_multiplier, initializer_range=initializer_range,
             multiple_of=multiple_of, max_batch_size=max_batch_size,
             max_seq_len=max_seq_len, n_kv_head=n_kv_head, factorized_k=
             factorized_k, factorized_bits=factorized_bits)

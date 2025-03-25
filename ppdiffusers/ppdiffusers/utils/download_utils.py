@@ -411,7 +411,7 @@ def aistudio_download(
     download_kwargs = {}
     if revision is not None:
         download_kwargs["revision"] = revision
-    # currently donot support cache_dir
+    # currently do not support cache_dir
     # if cache_dir is not None:
     #     download_kwargs["cache_dir"] = cache_dir
     res = aistudio_base_download(

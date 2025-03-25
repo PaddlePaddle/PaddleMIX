@@ -731,7 +731,7 @@ class DatasetBuilder:
     def _get_data(self, mode: str):
         """
         Downloads examples from the given URL and customized split
-        informations and returns a filepath.
+        information and returns a filepath.
 
         This method must be implemented in self-defined `DatasetBuilder`.
         """

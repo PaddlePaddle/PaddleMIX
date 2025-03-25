@@ -184,7 +184,7 @@ def give_synsets_from_indices(indices, path_to_yaml="data/imagenet_idx_to_synset
         di2s = yaml.load(f)
     for idx in indices:
         synsets.append(str(di2s[idx]))
-    print("Using {} different synsets for construction of Restriced Imagenet.".format(len(synsets)))
+    print("Using {} different synsets for construction of Restricted Imagenet.".format(len(synsets)))
     return synsets
 
 

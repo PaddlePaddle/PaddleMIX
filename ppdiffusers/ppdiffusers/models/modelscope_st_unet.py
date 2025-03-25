@@ -72,7 +72,7 @@ def prob_mask_like(shape, prob, device):
         return paddle.zeros(shape, dtype=paddle.bool)
     else:
         mask = paddle.zeros(shape).astype("float32").uniform_(0, 1) < prob
-        # aviod mask all, which will cause find_unused_parameters error
+        # avoid mask all, which will cause find_unused_parameters error
         if mask.all():
             mask[0] = False
         return mask

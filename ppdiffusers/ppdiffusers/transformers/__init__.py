@@ -22,5 +22,5 @@ from .t5 import *
 from .xlm_roberta import *
 from .siglip import *
 
-# overrided model_utils
+# overridden model_utils
 from .model_utils import ModuleUtilsMixin, PretrainedConfig, PretrainedModel  # isort:skip

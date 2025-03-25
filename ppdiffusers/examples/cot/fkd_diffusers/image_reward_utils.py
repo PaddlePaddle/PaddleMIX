@@ -120,7 +120,7 @@ class IRSMC(paddle.nn.Layer):
             pil_image = Image.open(image)
         else:
             raise TypeError(
-                "This image parameter type has not been supportted yet. Please pass PIL.Image or file path str."
+                "This image parameter type has not been supported yet. Please pass PIL.Image or file path str."
             )
         image = self.preprocess(pil_image).unsqueeze(axis=0)
         image_embeds = self.blip.visual_encoder(image)
@@ -189,7 +189,7 @@ class IRSMC(paddle.nn.Layer):
                     pil_image = Image.open(generation)
             else:
                 raise TypeError(
-                    "This image parameter type has not been supportted yet. Please pass PIL.Image or file path str."
+                    "This image parameter type has not been supported yet. Please pass PIL.Image or file path str."
                 )
             image = self.preprocess(pil_image).unsqueeze(axis=0)
             image_embeds = self.blip.visual_encoder(image)

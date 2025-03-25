@@ -287,7 +287,7 @@ class DDIMScheduler(SchedulerMixin, ConfigMixin):
         abs_sample = sample.abs()  # "a certain percentile absolute pixel value"
 
         s = paddle.quantile(abs_sample, self.config.dynamic_thresholding_ratio, axis=1)
-        # NOTE paddle.clip donot support min > max
+        # NOTE paddle.clip do not support min > max
         if self.config.sample_max_value < 1:
             s = paddle.ones_like(s) * self.config.sample_max_value
         else:
