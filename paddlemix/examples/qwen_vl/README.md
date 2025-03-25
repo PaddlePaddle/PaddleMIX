@@ -109,7 +109,7 @@ prompt2：“框出图中公交车的位置”
     "conversations": [
       {
         "from": "user",
-        "value": "Picture 1: <img>https://bj.bcebos.com/v1/paddlenlp/models/community/GroundingDino/000000004505.jpg\n图中的巴士是什么颜色的？"
+        "value": "Picture 1: <img>https://bj.bcebos.com/v1/paddlenlp/models/community/GroundingDino/000000004505.jpg<img>\n图中的巴士是什么颜色的？"
       },
       {
         "from": "assistant",
@@ -149,7 +149,37 @@ prompt2：“框出图中公交车的位置”
 ### 4.2 训练
 训练时使用`paddlemix/examples/qwen_vl/finetune.py`程序进行训练，**训练前请先检查数据集路径,如果使用url，请确保环境网络正常**。推荐使用A100训练。
 
-训练命令及参数配置示例：
+单卡训练
+命令及参数配置示例：
+```
+export FLAGS_use_cuda_managed_memory=true #若显存不够，可设置环境变量，但会影响训练速度
+MODEL_NAME="qwen-vl/qwen-vl-chat-7b"
+DATA="train.json"
+
+python paddlemix/examples/qwen_vl/finetune.py \
+    --model_name_or_path ${MODEL_NAME} \
+    --data_path ${DATA} \
+    --dtype 'bfloat16' \
+    --fix_vit True \
+    --output_dir output_qwen_vl \
+    --num_train_epochs 5 \
+    --per_device_train_batch_size 1 \
+    --gradient_accumulation_steps 16 \
+    --save_steps 1000 \
+    --save_strategy "steps" \
+    --save_total_limit 10 \
+    --learning_rate 1e-5 \
+    --weight_decay 0.1 \
+    --adam_beta2 0.95 \
+    --warmup_ratio 0.01 \
+    --lr_scheduler_type "cosine" \
+    --logging_steps 1 \
+    --report_to "none" \
+    --model_max_length 2048 \
+    --lazy_preprocess True
+```
+
+多卡训练命令及参数配置示例：
 ```
 MODEL_NAME="qwen-vl/qwen-vl-chat-7b"
 MASTER='127.0.0.1:8080'
@@ -176,11 +206,7 @@ paddlemix/examples/qwen_vl/finetune.py \
     --logging_steps 1 \
     --report_to "none" \
     --model_max_length 2048 \
-    --lazy_preprocess True \
-    --sharding "stage2" \
-    --tensor_parallel_degree 1 \
-    --sharding_parallel_degree 8 \
-    --pipeline_parallel_degree 1
+    --lazy_preprocess True
 ```
 
 
@@ -230,17 +256,9 @@ paddlemix/examples/qwen_vl/finetune.py \
 
 --lazy_preprocess #lazy 数据加载
 
---tensor_parallel_degree  # 模型并行系数，设置为N则进行N卡间模型并行。可选参数。
-
---sharding_parallel_degree  #显存优化策略，详情参考 [《ZeRO: Memory Optimizations Toward Training Trillion Parameter Models》]（https://arxiv.org/abs/1910.02054）可选参数。
-
---sharding  #显存优化策略stage选择，目前支持stage1、stage2。可选参数。
-
---pipeline_parallel_degree #流水线并行。详情参考[飞桨大语言模型工具链]（https://github.com/PaddlePaddle/PaddleNLP/blob/develop/llm/README.md）可选参数。
 
 ```
 
-> 注：若不需要 sharding 策略，则无需指定tensor_parallel_degree、sharding_parallel_degree、sharding、pipeline_parallel_degree参数
 
 ### 参考文献
 ```BibTeX
