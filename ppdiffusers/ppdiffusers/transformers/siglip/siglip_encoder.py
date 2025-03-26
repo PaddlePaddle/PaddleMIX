@@ -48,7 +48,7 @@ from paddlenlp.transformers.model_outputs import (
 from paddlenlp.transformers.model_utils import PretrainedModel
 from PIL import Image
 
-__all__ = ["SigLipVisionTower"]
+__all__ = ["SigLipVisionTower", "SigLipImageProcessor", "SigLipVisionModel"]
 
 
 def rank0_print(*args):
