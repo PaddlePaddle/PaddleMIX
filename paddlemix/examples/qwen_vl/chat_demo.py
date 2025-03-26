@@ -13,13 +13,9 @@
 # limitations under the License.
 
 import paddle
+from paddlenlp.transformers.qwen.configuration import QWenConfig
 
-from paddlemix.auto import (
-    AutoConfigMIX,
-    AutoModelMIX,
-    AutoProcessorMIX,
-    AutoTokenizerMIX,
-)
+from paddlemix.models import QWenLMHeadModel, QwenVLProcessor, QWenVLTokenizer
 from paddlemix.utils.log import logger
 
 paddle.seed(1234)
@@ -29,10 +25,10 @@ if not paddle.amp.is_bfloat16_supported():
     dtype = "float32"
 
 model_name_or_path = "qwen-vl/qwen-vl-chat-7b"
-tokenizer = AutoTokenizerMIX.from_pretrained(model_name_or_path)
-processor, _ = AutoProcessorMIX.from_pretrained(model_name_or_path)
-model_config = AutoConfigMIX.from_pretrained(model_name_or_path, dtype=dtype)
-model = AutoModelMIX.from_pretrained(model_name_or_path, config=model_config, dtype=dtype)
+tokenizer = QWenVLTokenizer.from_pretrained(model_name_or_path)
+processor = QwenVLProcessor.from_pretrained(model_name_or_path)
+model_config = QWenConfig.from_pretrained(model_name_or_path, dtype=dtype)
+model = QWenLMHeadModel.from_pretrained(model_name_or_path, config=model_config, dtype=dtype)
 model.eval()
 
 # 第一轮对话
