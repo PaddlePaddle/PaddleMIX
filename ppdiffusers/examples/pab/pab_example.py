@@ -4,8 +4,6 @@ from ppdiffusers.utils import export_to_video
 
 pipe = CogVideoXPipeline.from_pretrained("THUDM/CogVideoX-2b", paddle_dtype=paddle.bfloat16)
 
-# pipe = CogVideoXPipeline.from_pretrained("paddlemix/cogvideox-5b", paddle_dtype=paddle.bfloat16)
-
 config = PyramidAttentionBroadcastConfig(
     spatial_attention_block_skip_range=2,
     spatial_attention_timestep_skip_range=(100, 800),

@@ -161,7 +161,7 @@ class MultiAdapter(ModelMixin):
                 A path to a *directory* containing model weights saved using
                 [`~ppdiffusers.models.adapter.MultiAdapter.save_pretrained`], e.g., `./my_model_directory/adapter`.
             paddle_dtype (`str` or `paddle.dtype`, *optional*):
-                Override the default `torch.dtype` and load the model under this dtype. If `"auto"` is passed the dtype
+                Override the default `paddle.dtype` and load the model under this dtype. If `"auto"` is passed the dtype
                 will be automatically derived from the model's weights.
             output_loading_info(`bool`, *optional*, defaults to `False`):
                 Whether or not to also return a dictionary containing missing keys, unexpected keys and error messages.
