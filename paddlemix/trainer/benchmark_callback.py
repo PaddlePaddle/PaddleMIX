@@ -271,6 +271,7 @@ class BenchmarkCallback(TrainerCallback):
         self.efficient_token_count = 0
         self.cur_tokens = 0
         self.cur_samples = 0
+        self.benchmark_mode = benchmark_mode
 
     def set_save_time(self, save_time):
         """
@@ -346,7 +347,7 @@ class BenchmarkCallback(TrainerCallback):
         """
         record the infomation of a logging step.
         """
-        if benchmark_mode:
+        if self.benchmark_mode:
             logs.update(self.state.get_result())
             logs[self.ACC_SAMPLES] = state.trial_params[self.ACC_SAMPLES]
             logs[self.ACC_TOKENS] = state.trial_params[self.ACC_TOKENS]
@@ -359,12 +360,15 @@ class BenchmarkCallback(TrainerCallback):
             )
             
             logger.info(
-                "global step %d, loss: %.5f, interval_samples_per_second: %.5f, ips: %.5f, %s %s"
+                "global step %d, loss: %.5f, interval_samples_per_second: %.5f, ips: %.5f, efficient_tokens_per_sec_per_card: %.5f, avg_tokens_per_sec_per_card: %.5f, tokens_per_sec_per_card: %.5f, %s %s"
                 % (
                     state.global_step,
                     logs["loss"],
                     logs["interval_samples_per_second"],
                     logs["avg_efficient_tokens_per_sec_per_card"],
+                    logs["efficient_tokens_per_sec_per_card"],
+                    logs["avg_tokens_per_sec_per_card"],
+                    logs["tokens_per_sec_per_card"],
                     max_mem_reserved_msg,
                     max_mem_allocated_msg,
                 )
