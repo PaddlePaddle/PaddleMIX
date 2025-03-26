@@ -20,11 +20,11 @@ os.environ["FLAGS_use_cuda_managed_memory"] = "true"
 
 import paddle
 
-from paddlemix.auto import AutoConfigMIX, AutoModelMIX
+from paddlemix import QWenLMHeadModel
 
 
 def export(args):
-    model = AutoModelMIX.from_pretrained(args.model_name_or_path, dtype="float16")
+    model = QWenLMHeadModel.from_pretrained(args.model_name_or_path, dtype="float16")
     model.eval()
 
     # convert to static graph with specific input description

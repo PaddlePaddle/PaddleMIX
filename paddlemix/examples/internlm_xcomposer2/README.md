@@ -35,9 +35,6 @@ python paddlemix/examples/internlm_xcomposer2/chat_demo.py \
   * `image_path`: 指定图片路径
   * `text`: 用户指令, 例如 "Please describe this image in detail."
 
-## 4 模型微调
-我们提供 基于 PaddleMIX tool 统一微调工具链，支持全参数、lora微调，数据准备及参数配置等可参考 [tools](../../tools/README.md)
-全参数微调需要A100 80G显存，lora微调支持V100 32G显存。
 
 
 ### 参考文献

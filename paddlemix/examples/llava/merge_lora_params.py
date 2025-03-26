@@ -16,7 +16,10 @@ import argparse
 import paddle
 from paddlenlp.peft import LoRAConfig, LoRAModel
 
-from paddlemix.auto import AutoConfigMIX, AutoModelMIX
+from paddlemix.models.llava.language_model.llava_llama import (
+    LlavaConfig,
+    LlavaLlamaForCausalLM,
+)
 
 
 def parse_arguments():
@@ -38,10 +41,10 @@ def merge():
     lora_config.merge_weights = True
 
     # Load model config
-    model_config = AutoConfigMIX.from_pretrained(args.model_name_or_path, dtype=dtype)
+    model_config = LlavaConfig.from_pretrained(args.model_name_or_path, dtype=dtype)  # freeze_mm_mlp_adapter
 
     # Load model
-    model = AutoModelMIX.from_pretrained(
+    model = LlavaLlamaForCausalLM.from_pretrained(
         args.model_name_or_path,
         config=model_config,
         dtype=dtype,
