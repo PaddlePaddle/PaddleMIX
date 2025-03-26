@@ -24,25 +24,26 @@ random.seed(seed)
 
 import argparse
 
+from paddlenlp.transformers import AutoTokenizer
 from PIL import Image
 
-from paddlemix.auto.modeling import AutoModelMIX
-from paddlemix.auto.tokenizer import AutoTokenizerMIX
+from paddlemix.models.cogvlm.modeling import CogModelForCausalLM
 
 parser = argparse.ArgumentParser()
 
 parser.add_argument(
     "--model_name_or_path", type=str, default="THUDM/cogagent-chat", help="pretrained ckpt and tokenizer"
 )
+
 args = parser.parse_args()
 MODEL_PATH = args.model_name_or_path
 TOKENIZER_PATH = MODEL_PATH
 
-tokenizer = AutoTokenizerMIX.from_pretrained(TOKENIZER_PATH)
+tokenizer = AutoTokenizer.from_pretrained(TOKENIZER_PATH)
 
-data_type = "float16"
+data_type = "float32"
 
-model = AutoModelMIX.from_pretrained(
+model = CogModelForCausalLM.from_pretrained(
     MODEL_PATH,
     dtype=data_type,
     low_cpu_mem_usage=False,
@@ -84,10 +85,10 @@ while True:
             "input_ids": input_by_model["input_ids"].unsqueeze(axis=0),
             "token_type_ids": input_by_model["token_type_ids"].unsqueeze(axis=0),
             "attention_mask": input_by_model["attention_mask"].unsqueeze(axis=0),
-            "images": [[input_by_model["images"][0].to(data_type)]] if image is not None else None,
+            "images": [[input_by_model["images"][0].cast(data_type)]] if image is not None else None,
         }
         if "cross_images" in input_by_model and input_by_model["cross_images"]:
-            inputs["cross_images"] = [[input_by_model["cross_images"][0].to(data_type)]]
+            inputs["cross_images"] = [[input_by_model["cross_images"][0].cast(data_type)]]
         gen_kwargs = {"max_new_tokens": 2048, "do_sample": False}
         with paddle.no_grad():
             outputs, _ = model.generate(**inputs, **gen_kwargs)
