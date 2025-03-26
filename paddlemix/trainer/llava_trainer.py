@@ -125,7 +125,7 @@ class LLaVATrainer(Trainer):
             # self.benchmark_callback = BenchmarkCallback(self, self.args.save_steps, skip_step=self.args.benchmark_skip_steps, self.args.benchmark)
             self.benchmark_callback = BenchmarkCallback(
                 self, 
-                self.args.max_steps if self.args.max_steps>1 else 1000, 
+                self.args.max_steps if self.args.max_steps>1 else 10000, 
                 1, 
                 self.args.benchmark)
             self.add_callback(self.benchmark_callback)

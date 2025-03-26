@@ -347,7 +347,7 @@ class BenchmarkCallback(TrainerCallback):
         """
         record the infomation of a logging step.
         """
-        if self.benchmark_mode:
+        if self.benchmark_mode and "loss" in logs:
             logs.update(self.state.get_result())
             logs[self.ACC_SAMPLES] = state.trial_params[self.ACC_SAMPLES]
             logs[self.ACC_TOKENS] = state.trial_params[self.ACC_TOKENS]
@@ -373,20 +373,3 @@ class BenchmarkCallback(TrainerCallback):
                     max_mem_allocated_msg,
                 )
             )
-
-    def _log(self, logs):
-        """
-        record the information accurately and neatly.
-        """
-        logs_str = []
-        logs_str = []
-        for k, v in logs.items():
-            if isinstance(v, float):
-                if abs(v) < 1e-3:
-                    v = f"{v:e}"
-                elif abs(v) > 100:
-                    v = f"{v:.04f}"
-                else:
-                    v = f"{v:.06f}"
-            logs_str.append(f"{k}: {v}")
-        logger.info(", ".join(logs_str))
