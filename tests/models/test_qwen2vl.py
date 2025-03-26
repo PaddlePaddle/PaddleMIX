@@ -14,9 +14,6 @@
 
 import os
 import sys
-from tkinter.messagebox import NO
-os.environ["FLAGS_use_cuda_managed_memory"] = "True"
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
 import unittest
 import numpy as np
 import paddle
@@ -32,7 +29,6 @@ from tests.models.test_modeling_common import ModelTesterMixin, floats_tensor, i
 from tests.testing_utils import slow
 
 
-paddle.set_default_dtype("bfloat16")
 
 class Qwen2vlModelTester:
     def __init__(self, parent):
@@ -65,7 +61,7 @@ class Qwen2vlModelTester:
             "rope_theta": 1000000.0,
             "sliding_window": 32768,
             "tie_word_embeddings": True,
-            "dtype": "bfloat16",
+            "dtype": "float32",
             "use_cache": True,
             "use_sliding_window": False,
             "vision_config": {
@@ -90,8 +86,8 @@ class Qwen2vlModelTester:
 
     def prepare_config_and_inputs(self):
         input_ids = paddle.randint(1, 400, shape=[2, 10]).astype("int32")
-        attention_mask = paddle.ones_like(input_ids).astype("bfloat16")
-        pixel_values = paddle.randn([1, 1224, 1176]).astype("bfloat16")
+        attention_mask = paddle.ones_like(input_ids).astype("float32")
+        pixel_values = paddle.randn([1, 1224, 1176]).astype("float32")
         image_grid_thw = paddle.to_tensor([[1, 36, 34]], dtype="int32")
         tokenized_out = {
             "input_ids": input_ids,
@@ -106,8 +102,8 @@ class Qwen2vlModelTester:
         config, tokenized_out = self.prepare_config_and_inputs()
         inputs_dict = {
             "input_ids": tokenized_out['input_ids'].astype("int32"),
-            "attention_mask": tokenized_out['attention_mask'].astype("bfloat16"),
-            "pixel_values": tokenized_out['pixel_values'].astype("bfloat16"),
+            "attention_mask": tokenized_out['attention_mask'].astype("float32"),
+            "pixel_values": tokenized_out['pixel_values'].astype("float32"),
             "image_grid_thw": tokenized_out['image_grid_thw'].astype("int32"),
         }
         return config, inputs_dict
