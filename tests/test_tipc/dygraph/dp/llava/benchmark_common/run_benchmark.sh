@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -123,7 +123,7 @@ function _train(){
 
     #训练阶段
     if [ ${train_stage} = "sft" ]; then
-        train_cmd="../paddlemix/tools/supervised_finetune.py \
+        train_cmd="../paddlemix/examples/llava/supervised_finetune.py \
             --do_train true \
             --model_name_or_path liuhaotian/${model_path} \
             --dataset {\"train\":[{\"name\":\"chatml_dataset\",\"data_files\":\"./llava_bench_data/ScienceQA_val_500.json\",\"chat_template\":\"./llava_bench_data/chat_template.json\"}]} \
@@ -159,7 +159,7 @@ function _train(){
         if [ ${model_item} = "llava-v1_6-vicuna-13b-lora_sft" ]; then
             train_config="../paddlemix/config/llava/v1_6/lora_sft_13b_argument_benchmark.json"
         fi
-        train_cmd="../paddlemix/tools/supervised_finetune.py ${train_config}"
+        train_cmd="../paddlemix/examples/llava/supervised_finetune.py ${train_config}"
     fi
         # train_cmd="../paddlemix/tools/supervised_finetune.py \
         #     --do_train true \
