@@ -1070,7 +1070,7 @@ class PaddleInferDiffusionXLPipelineMixin:
             negative_prompt_embeds = negative_prompt_embeds[0]
             negative_prompt_embeds_list.append(negative_prompt_embeds)
 
-            # 3. conbine the two embeddings
+            # 3. combine the two embeddings
             negative_prompt_embeds = paddle.concat(x=negative_prompt_embeds_list, axis=-1)
         prompt_embeds = prompt_embeds.cast(dtype=self.dtype)
         # duplicate text embeddings for each generation per prompt, using mps friendly method

@@ -173,7 +173,7 @@ def transformer_2d_model_forward(
     attention_mask=None,
     encoder_attention_mask=None,
     return_dict: bool = True,
-    **kwargs,  # dummmy for comptability
+    **kwargs,  # dummy for compatibility
 ):
     x = self.original_forward(
         hidden_states,
@@ -184,7 +184,7 @@ def transformer_2d_model_forward(
         attention_mask=attention_mask,
         encoder_attention_mask=encoder_attention_mask,
         return_dict=return_dict,
-        **kwargs,  # dummmy for comptability
+        **kwargs,  # dummy for compatibility
     )[0]
     output = None
     if getattr(self, "enable_gn", False):
@@ -404,7 +404,7 @@ def resize_image(resize_mode, im, width, height, upscaler_name=None):
 
 class ReferenceOnlyPipeline(DiffusionPipeline):
     r"""
-    Pipeline for text-to-image generation using Stable Diffusion with refernce only.
+    Pipeline for text-to-image generation using Stable Diffusion with reference only.
 
     This model inherits from [`DiffusionPipeline`]. Check the superclass documentation for the generic methods the
     library implements for all the pipelines (such as downloading or saving, running on a particular device, etc.)

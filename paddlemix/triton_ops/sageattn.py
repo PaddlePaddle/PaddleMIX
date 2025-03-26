@@ -18,8 +18,8 @@ def sageattn_quant_per_block_int8_kernel(Input, Output, Scale, L,
                                         stride_oz, stride_oh, stride_on,
                                         stride_sz, stride_sh,
                                         sm_scale,
+                                        bsz,                    # grid num, through compiling
                                         h_attn: tl.constexpr,                 # grid num, through compiling
-                                        bsz: tl.constexpr,                    # grid num, through compiling
                                         C: tl.constexpr,
                                         BLK: tl.constexpr
                                     ):
@@ -57,7 +57,7 @@ def sageattn_quant_per_block_int8(x,
         BLK: int, the BLK for computing q & k tensor. Default 128 for q, 64 for k, which is an optimized value.
         sm_scale: float, the scale factor for dynamic quant.
         tensor_layout: string. Only in ['HND', 'NHD'], 'HND' -> [bsz, num_heads, seq_len, head_dim],
-                                                        'HND' -> [bsz, seq_len, num_heads, head_dim]
+                                                       'NHD' -> [bsz, seq_len, num_heads, head_dim]
     [Examples]
         batch_size = 2
         num_heads = 24
@@ -205,8 +205,8 @@ def sageattn_quant_per_block_int8(x,
             stride_sz=stride_sz, 
             stride_sh=stride_sh,
             sm_scale=sm_scale,
+            bsz=-1,             # grid num, for compiling
             h_attn=h_attn,      # grid num, for compiling
-            bsz=b,              # grid num, for compiling
             C=C, 
             BLK=BLK
         )
@@ -256,7 +256,8 @@ def sageattn_quant_query_per_thread_int8_kernel(Input, Output, Scale, L,
                                                 stride_iz, stride_ih, stride_in,
                                                 stride_oz, stride_oh, stride_on,
                                                 stride_sz, stride_sh,
-                                                h_qo: tl.constexpr, bsz: tl.constexpr,
+                                                bsz,
+                                                h_qo: tl.constexpr,
                                                 C: tl.constexpr, BLK: tl.constexpr, 
                                                 WARP: tl.constexpr, BKG: tl.constexpr):
     off_blk = tl.program_id(0) // 8
@@ -293,7 +294,7 @@ def sageattn_quant_query_per_thread_int8(x,
         WARP: int, the WARP for computing q. Default 32.
         sm_scale: float, the scale factor for dynamic quant.
         tensor_layout: string. Only in ['HND', 'NHD'], 'HND' -> [bsz, num_heads, seq_len, head_dim],
-                                                        'HND' -> [bsz, seq_len, num_heads, head_dim]
+                                                       'NHD' -> [bsz, seq_len, num_heads, head_dim]
     """ 
     if tensor_layout == "HND":
         b, h_qo, seq_len, head_dim = x.shape
@@ -416,14 +417,13 @@ def sageattn_quant_query_per_thread_int8(x,
             stride_on=stride_seq_qo,
             stride_sz=stride_sz, 
             stride_sh=stride_sh,
+            bsz=-1,             # grid num, for compiling
             h_qo=h_qo,          # grid num, for compiling
-            bsz=b,              # grid num, for compiling
             C=C, 
             BLK=WARP,
             WARP=WARP,          # grid num, for compiling
-            BKG=BLK            # grid num, for compiling
+            BKG=BLK             # grid num, for compiling
         )
-        
         
     if in_dynamic_or_pir_mode():
         outs = _C_ops._run_custom_op(
@@ -460,7 +460,8 @@ def sageattn_quant_key_per_thread_int8_kernel(Input, Output, Scale, L,
                                             stride_iz, stride_ih, stride_in,
                                             stride_oz, stride_oh, stride_on,
                                             stride_sz, stride_sh,
-                                            h_kv: tl.constexpr, bsz: tl.constexpr,
+                                            bsz,
+                                            h_kv: tl.constexpr,
                                             C: tl.constexpr, BLK: tl.constexpr, 
                                             WARP: tl.constexpr, BKG: tl.constexpr):      
     off_blk = tl.program_id(0) // 4
@@ -508,7 +509,7 @@ def sageattn_quant_key_per_thread_int8(x,
         WARP: int, the WARP for computing q. Default 64.
         sm_scale: float, the scale factor for dynamic quant.
         tensor_layout: string. Only in ['HND', 'NHD'], 'HND' -> [bsz, num_heads, seq_len, head_dim],
-                                                        'HND' -> [bsz, seq_len, num_heads, head_dim]
+                                                       'NHD' -> [bsz, seq_len, num_heads, head_dim]
     """ 
     if tensor_layout == "HND":
         b, h_kv, seq_len, head_dim = x.shape
@@ -633,12 +634,12 @@ def sageattn_quant_key_per_thread_int8(x,
             stride_on=stride_seq_ko,
             stride_sz=stride_sz, 
             stride_sh=stride_sh,
+            bsz=-1,             # grid num, for compiling
             h_kv=h_kv,          # grid num, for compiling
-            bsz=b,              # grid num, for compiling
             C=C, 
             BLK=WARP,
             WARP=WARP,          # grid num, for compiling
-            BKG=BLK            # grid num, for compiling
+            BKG=BLK             # grid num, for compiling
         )
         
     if in_dynamic_or_pir_mode():
@@ -771,7 +772,7 @@ def sageattn_forward_causal_false(q, k, v,
         k_scale: paddle.Tensor, dtype in fp16 or bf16, this is the output tensor for scale factor, from quant kernel.
         output_dtype: string. Only in ['float16', 'bfloat16']. The datatype of q, k, v tensor.
         tensor_layout: string. Only in ['HND', 'NHD'], 'HND' -> [bsz, num_heads, seq_len, head_dim],
-                        'HND' -> [bsz, seq_len, num_heads, head_dim]
+                                                       'NHD' -> [bsz, seq_len, num_heads, head_dim]
         return_lse: bool. Return lse correction or not. Useful in parallel computing. Default False.
     [Examples]
         batch_size = 2
@@ -897,8 +898,8 @@ def sageattn_forward_causal_false(q, k, v,
 """
 
     op_name = "triton_sageattn_attn_fwd_causal_false"
-    op_name += get_dtype_str(q.dtype)
-    op_name += f"_BSZ{BSZ}_seq{qo_len}_h{h_qo}_dim{HEAD_DIM_K}"
+    op_name += get_dtype_str(Out.dtype)
+    op_name += f"_seq{qo_len}_h{h_qo}_dim{HEAD_DIM_K}"
     
     sageattn_attn_fwd_causal_false_config = []
     if head_dim == 64:
@@ -966,7 +967,7 @@ def sageattn_forward_causal_false(q, k, v,
             stride_on=stride_on,
             qo_len=qo_len,
             kv_len=kv_len, 
-            BSZ=BSZ,
+            BSZ=-1,
             h_qo=h_qo, 
             num_kv_groups=num_kv_groups,
             HEAD_DIM=HEAD_DIM_K,
@@ -1162,7 +1163,7 @@ def sageattn_forward_causal_true(q, k, v,
         k_scale: paddle.Tensor, dtype in fp16 or bf16, this is the output tensor for scale factor, from quant kernel.
         output_dtype: string. Only in ['float16', 'bfloat16']. The datatype of q, k, v tensor.
         tensor_layout: string. Only in ['HND', 'NHD'], 'HND' -> [bsz, num_heads, seq_len, head_dim],
-                        'HND' -> [bsz, seq_len, num_heads, head_dim]
+                                                       'NHD' -> [bsz, seq_len, num_heads, head_dim]
         return_lse: bool. Return lse correction or not. Useful in parallel computing. Default False.
     [Examples]
         batch_size = 2
@@ -1290,8 +1291,8 @@ def sageattn_forward_causal_true(q, k, v,
 """
 
     op_name = "triton_sageattn_attn_fwd_causal_true"
-    op_name += get_dtype_str(q.dtype)
-    op_name += f"_BSZ{BSZ}_seq{qo_len}_h{h_qo}_dim{HEAD_DIM_K}"
+    op_name += get_dtype_str(Out.dtype)
+    op_name += f"_seq{qo_len}_h{h_qo}_dim{HEAD_DIM_K}"
     
     sageattn_attn_fwd_causal_true_config = []
     if head_dim == 64:
@@ -1359,7 +1360,7 @@ def sageattn_forward_causal_true(q, k, v,
             stride_on=stride_on,
             qo_len=qo_len,
             kv_len=kv_len, 
-            BSZ=BSZ,
+            BSZ=-1,
             h_qo=h_qo, 
             num_kv_groups=num_kv_groups,
             HEAD_DIM=HEAD_DIM_K,
@@ -1412,7 +1413,6 @@ def sageattn_qk_int8_pv_fp16_triton(
     q: paddle.Tensor,
     k: paddle.Tensor,
     v: paddle.Tensor,
-    quant_gran: str="per_block",
     tensor_layout: str = "HND",
     is_causal: bool = False,
     sm_scale: Optional[float] = None,
@@ -1425,6 +1425,7 @@ def sageattn_qk_int8_pv_fp16_triton(
         num_heads = 24
         seq_len = 1376
         head_dim = 64
+        
         q = paddle.randn(shape=(batch_size, seq_len, num_heads, head_dim), dtype="float16")
         k = paddle.randn(shape=(batch_size, seq_len, num_heads, head_dim), dtype="float16")
         v = paddle.randn(shape=(batch_size, seq_len, num_heads, head_dim), dtype="float16")
@@ -1468,13 +1469,14 @@ def sageattn_qk_int8_pv_fp16_triton(
     if sm_scale is None:
         sm_scale = 1.0 / (head_dim_og ** 0.5)
     
-    if quant_gran == "per_block":
-        q_int8, q_scale, k_int8, k_scale = per_block_int8(q, k, km=km, sm_scale=sm_scale, tensor_layout=tensor_layout)
+    q_int8, q_scale, k_int8, k_scale = per_block_int8(q, k, km=km, sm_scale=sm_scale, tensor_layout=tensor_layout)
+
+    output_dtype = "float16" if dtype == paddle.float16 else "bfloat16"
 
     if is_causal:
-        o, lse = sageattn_forward_causal_true(q_int8, k_int8, v, q_scale, k_scale, output_dtype="float16", tensor_layout=tensor_layout, return_lse=return_lse)
+        o, lse = sageattn_forward_causal_true(q_int8, k_int8, v, q_scale, k_scale, output_dtype=output_dtype, tensor_layout=tensor_layout, return_lse=return_lse)
     else:
-        o, lse = sageattn_forward_causal_false(q_int8, k_int8, v, q_scale, k_scale, output_dtype="float16", tensor_layout=tensor_layout, return_lse=return_lse)
+        o, lse = sageattn_forward_causal_false(q_int8, k_int8, v, q_scale, k_scale, output_dtype=output_dtype, tensor_layout=tensor_layout, return_lse=return_lse)
     
     o = o[..., :head_dim_og]
     

@@ -284,7 +284,7 @@ class LCMModel(nn.Layer):
                     ".*upsamplers.0.conv.*",
                     ".*time_emb_proj.*",
                 ],
-                merge_weights=False,  # make sure we donot merge weights
+                merge_weights=False,  # make sure we do not merge weights
             )
             self.unet.config.tensor_parallel_degree = 1
             self.unet = LoRAModel(self.unet, lora_config)
@@ -304,7 +304,7 @@ class LCMModel(nn.Layer):
                 self.teacher_unet.config,
                 time_cond_proj_dim=time_cond_proj_dim,
             )
-            # inialize the `time_embedding.cond_proj` like `torch.nn.Linear``
+            # initialize the `time_embedding.cond_proj` like `torch.nn.Linear``
             reset_initialized_parameter(self.unet.time_embedding.cond_proj)
             # load teacher_unet weights into unet
             self.unet.load_dict(self.teacher_unet.state_dict())

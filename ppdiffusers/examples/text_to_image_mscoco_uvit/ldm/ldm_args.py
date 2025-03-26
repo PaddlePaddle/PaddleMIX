@@ -173,7 +173,7 @@ class TrainerArguments(TrainingArguments):
     )
     lr_scheduler_type: str = field(
         default="cosine",
-        metadata={"help": "The scheduler type to use. suppor linear, cosine, constant, constant_with_warmup"},
+        metadata={"help": "The scheduler type to use. support linear, cosine, constant, constant_with_warmup"},
     )
     warmup_ratio: float = field(
         default=0.0, metadata={"help": "Linear warmup over warmup_ratio fraction of total steps."}

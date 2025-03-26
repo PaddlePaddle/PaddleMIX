@@ -48,7 +48,7 @@ class MIXToken:
             attention_mask = record.get("attention_mask", np.tril(np.ones([seq_length, seq_length], dtype=bool)))
             batched_features["attention_mask"].append(attention_mask)
             # NOTE: position_ids is optional and not required by every model
-            # We append instead of extend here to accomodate 2D position ids
+            # We append instead of extend here to accommodate 2D position ids
             if "position_ids" in record:
                 batched_features["position_ids"].append(record["position_ids"])
             if "images" in record:

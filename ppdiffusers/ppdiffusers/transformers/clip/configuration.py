@@ -55,7 +55,7 @@ class CLIPTextConfig(PretrainedConfig):
         intermediate_size (`int`, *optional*, defaults to 2048):
             Dimensionality of the "intermediate" (i.e., feed-forward) layer in the Transformer encoder.
         projection_dim (`int`, *optional*, defaults to 512):
-            Dimentionality of text and vision projection layers.
+            Dimensionality of text and vision projection layers.
         num_hidden_layers (`int`, *optional*, defaults to 12):
             Number of hidden layers in the Transformer encoder.
         num_attention_heads (`int`, *optional*, defaults to 8):
@@ -186,7 +186,7 @@ class CLIPVisionConfig(PretrainedConfig):
         intermediate_size (`int`, *optional*, defaults to 3072):
             Dimensionality of the "intermediate" (i.e., feed-forward) layer in the Transformer encoder.
         projection_dim (`int`, *optional*, defaults to 512):
-            Dimentionality of text and vision projection layers.
+            Dimensionality of text and vision projection layers.
         num_hidden_layers (`int`, *optional*, defaults to 12):
             Number of hidden layers in the Transformer encoder.
         num_attention_heads (`int`, *optional*, defaults to 12):
@@ -311,7 +311,7 @@ class CLIPConfig(PretrainedConfig):
         vision_config (`dict`, *optional*):
             Dictionary of configuration options used to initialize [`CLIPVisionConfig`].
         projection_dim (`int`, *optional*, defaults to 512):
-            Dimentionality of text and vision projection layers.
+            Dimensionality of text and vision projection layers.
         logit_scale_init_value (`float`, *optional*, defaults to 2.6592):
             The initial value of the *logit_scale* parameter. Default is used as per the original CLIP implementation.
         kwargs (*optional*):

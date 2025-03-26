@@ -218,16 +218,16 @@ class EVA02PretrainTrainer(Trainer):
         merge_tensor_parallel = merge_tensor_parallel and self.args.use_hybrid_parallel
 
         if self.args.only_save_updated_model:  # default True
-            unwraped_model = unwrap_model(self.model)
+            unwrapped_model = unwrap_model(self.model)
             logger.info(f"Saving eva02_vit checkpoint to {output_dir}/eva02_vit")
-            unwraped_model.student.save_pretrained(
+            unwrapped_model.student.save_pretrained(
                 os.path.join(output_dir, "eva02_vit"),
                 merge_tensor_parallel=merge_tensor_parallel,
             )
         else:
-            unwraped_model = unwrap_model(self.model)
+            unwrapped_model = unwrap_model(self.model)
             logger.info(f"Saving evaclip + eva02_vit checkpoint to {output_dir}")
-            unwraped_model.save_pretrained(
+            unwrapped_model.save_pretrained(
                 output_dir,
                 merge_tensor_parallel=merge_tensor_parallel,
                 variant=self.args.weight_name_suffix,

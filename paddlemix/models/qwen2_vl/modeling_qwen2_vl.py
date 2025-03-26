@@ -563,6 +563,7 @@ class VisionFlashAttention2(nn.Layer):
                 .squeeze(0)
                 .reshape([seq_length, -1])
             )
+        attn_output = attn_output.astype(paddle.float32)
         attn_output = self.proj(attn_output)
         return attn_output
 

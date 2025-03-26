@@ -157,7 +157,7 @@ class FastStableDiffusionHiresFixPipeline(DiffusionPipeline, FastDeployDiffusion
             raise ValueError(f"`prompt` has to be of type `str` or `list` but is {type(prompt)}")
 
         if hr_scale < 0:
-            raise ValueError("hr_scale shoule be greater that 0, but received {hr_scale}")
+            raise ValueError("hr_scale should be greater that 0, but received {hr_scale}")
 
         if hr_resize_height % 8 != 0 or hr_resize_width % 8 != 0:
             raise ValueError(

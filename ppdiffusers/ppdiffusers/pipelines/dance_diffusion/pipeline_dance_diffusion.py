@@ -85,7 +85,7 @@ class DanceDiffusionPipeline(DiffusionPipeline):
         for i, audio in enumerate(audios):
             write(f"maestro_test_{i}.wav", pipe.unet.sample_rate, audio.transpose())
 
-        # To dislay in google colab
+        # To display in google colab
         import IPython.display as ipd
 
         for audio in audios:
@@ -134,7 +134,7 @@ class DanceDiffusionPipeline(DiffusionPipeline):
 
         # set step values
         self.scheduler.set_timesteps(num_inference_steps)
-        # TODO donot cast dtype here
+        # TODO do not cast dtype here
         # self.scheduler.timesteps = self.scheduler.timesteps.cast(dtype)
 
         for t in self.progress_bar(self.scheduler.timesteps):

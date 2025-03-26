@@ -1714,7 +1714,7 @@ class Accelerator:
 
         Arguments:
             model: (`paddle.nn.Layer`):
-                Model to be saved. The model can be wrapped or unwraped.
+                Model to be saved. The model can be wrapped or unwrapped.
             save_directory (`str` or `os.PathLike`):
                 Directory to which to save. Will be created if it doesn't exist.
             max_shard_size (`int` or `str`, *optional*, defaults to `"10GB"`):
@@ -1810,7 +1810,7 @@ class Accelerator:
 
         `hook(models: list[paddle.nn.Layer], weights: list[dict[str, paddle.Tensor]], input_dir: str) -> None`
 
-        The `models` argument are the models as saved in the accelerator state under `accelerator._models`, `weigths`
+        The `models` argument are the models as saved in the accelerator state under `accelerator._models`, `weights`
         argument are the state dicts of the `models`, and the `input_dir` argument is the `input_dir` argument passed
         to [`Accelerator.load_state`].
 

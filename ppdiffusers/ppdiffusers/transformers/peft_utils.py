@@ -177,7 +177,7 @@ class PeftAdapterMixin:
                 </Tip>
 
             token (`str`, `optional`):
-                Whether to use authentication token to load the remote folder. Userful to load private repositories
+                Whether to use authentication token to load the remote folder. Useful to load private repositories
                 that are on HuggingFace Hub. You might need to call `huggingface-cli login` and paste your tokens to
                 cache it.
             peft_config (`Dict[str, Any]`, *optional*):
@@ -353,7 +353,7 @@ class PeftAdapterMixin:
 
         for _, module in self.named_sublayers(include_self=True):
             if isinstance(module, (BaseTunerLayer, ModulesToSaveWrapper)):
-                # For backward compatbility with previous PEFT versions
+                # For backward compatibility with previous PEFT versions
                 if hasattr(module, "set_adapter"):
                     module.set_adapter(adapter_name)
                 else:

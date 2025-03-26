@@ -473,7 +473,7 @@ class PeftModel(PushToHubMixin, SaveToAistudioMixin, paddle.nn.Layer):
         try:
             if self.peft_config[self.active_adapter].is_prompt_learning:
                 # TODO: consider replacing this patching of methods with a more robust mechanism: setting a flag and
-                # letting the underyling methods deal with it, same as how LoRA does it.
+                # letting the underlying methods deal with it, same as how LoRA does it.
                 old_forward = self.forward
                 self.forward = self.base_model.forward
                 old_prepare_inputs_for_generation = self.prepare_inputs_for_generation

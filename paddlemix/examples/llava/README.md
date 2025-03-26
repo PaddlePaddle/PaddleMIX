@@ -103,31 +103,49 @@ ASSISTANT: 0.23, 0.33, 0.79, 0.78
 
 预训练命令：
 ```bash
+export FLAGS_use_cuda_managed_memory=true #若显存不够，可设置环境变量
 python paddlemix/examples/llava/pretrain.py paddlemix/config/llava/pretrain.json
 ```
 
 ## 5 模型微调
-Llava 基于 PaddleMIX tool 统一微调工具链，支持全参数、lora微调，数据准备及参数配置等可参考 [tools](../../tools/README.md)
 
 ```bash
 # llava lora微调
-python paddlemix/tools/supervised_finetune.py paddlemix/config/llava/v1_5/lora_sft_argument.json
+export FLAGS_use_cuda_managed_memory=true #若显存不够，可设置环境变量
+python paddlemix/examples/llava/supervised_finetune.py paddlemix/config/llava/v1_5/lora_sft_argument.json
+
+# lora微调后，模型权重合并
+python python paddlemix/examples/llava/merge_lora_params.py \
+--model_name_or_path xxx \  #llava model path
+--lora_path xxxx \  #lora checkpoint path
+--merge_model_path xxxx  #merge model path
 
 # llava full参数微调
-python paddlemix/tools/supervised_finetune.py paddlemix/config/llava/v1_5/sft_argument.json
+export FLAGS_use_cuda_managed_memory=true #若显存不够，可设置环境变量
+python paddlemix/examples/llava/supervised_finetune.py paddlemix/config/llava/v1_5/sft_argument.json
 ```
 
 ## 6 NPU硬件训练
-请参照[tools](../../tools/README.md)进行NPU硬件Paddle安装和环境变量设置。执行预测和训练前需要设置如下环境变量：
+PaddleMIX支持在NPU硬件上进行训练：
+1. 请先参照[PaddleCustomDevice](https://github.com/PaddlePaddle/PaddleCustomDevice/blob/develop/backends/npu/README_cn.md)安装NPU硬件Paddle
+2. 在config配置文件中增加`device`字段指定设备：
+```json
+{
+    ...
+    "model_name_or_path": "paddlemix/llava/llava-v1.5-7b",
+    "device": "npu",
+    "output_dir": "./checkpoints/llava_sft_ckpts",
+    ...
+}
+```
+3. 启动训练前请设置如下环境变量用于性能加速和精度对齐
 ```shell
-export ASCEND_RT_VISIBLE_DEVICES=8
-export FLAGS_npu_storage_format=0
 export FLAGS_use_stride_kernel=0
-export FLAGS_npu_jit_compile=1
-export FLAGS_npu_scale_aclnn=True
-export FLAGS_npu_split_aclnn=True
-export FLAGS_allocator_strategy=auto_growth
-export CUSTOM_DEVICE_BLACK_LIST=set_value,set_value_with_tensor
+export FLAGS_npu_storage_format=0 # 关闭私有格式
+export FLAGS_npu_jit_compile=0 # 关闭即时编译
+export FLAGS_npu_scale_aclnn=True # aclnn加速
+export FLAGS_npu_split_aclnn=True # aclnn加速
+export CUSTOM_DEVICE_BLACK_LIST=set_value,set_value_with_tensor # set_value加入黑名单
 ```
 
 预测:
@@ -140,10 +158,10 @@ python paddlemix/examples/llava/run_predict_multiround.py \
 微调:
 ```shell
 # llava lora微调
-python paddlemix/tools/supervised_finetune.py paddlemix/config/llava/v1_5/lora_sft_argument.json
+python paddlemix/examples/llava/supervised_finetune.py paddlemix/config/llava/v1_5/lora_sft_argument.json
 
 # llava full参数微调
-python paddlemix/tools/supervised_finetune.py paddlemix/config/llava/v1_5/sft_argument.json
+python paddlemix/examples/llava/supervised_finetune.py paddlemix/config/llava/v1_5/sft_argument.json
 ```
 
 

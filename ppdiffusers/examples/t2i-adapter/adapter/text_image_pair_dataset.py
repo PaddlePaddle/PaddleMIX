@@ -28,7 +28,7 @@ from .data_preprocess import parse_line
 Image.MAX_IMAGE_PIXELS = 2300000000
 
 
-# donot use random.randint
+# do not use random.randint
 class RandomCrop(transforms.RandomCrop):
     def _get_param(self, img, output_size):
         w, h = _get_image_size(img)
