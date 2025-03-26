@@ -109,7 +109,6 @@ def main():
         image_processor,
         tokenizer,
         max_length=data_args.max_length,
-        image_aspect_ratio=model_config.get("image_aspect_ratio", "square"),
     )
     if training_args.do_eval:
         name_or_path = os.path.join(model_args.model_name_or_path, "processor", "eval")
@@ -118,7 +117,6 @@ def main():
             image_processor,
             tokenizer,
             max_length=data_args.max_length,
-            image_aspect_ratio=model_config.get("image_aspect_ratio", "square"),
         )
 
     # Load datasets
