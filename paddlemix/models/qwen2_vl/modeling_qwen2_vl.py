@@ -563,7 +563,12 @@ class VisionFlashAttention2(nn.Layer):
                 .squeeze(0)
                 .reshape([seq_length, -1])
             )
-        attn_output = attn_output.astype(paddle.float32)
+        if self.proj.weight.dtype == paddle.bfloat16:
+            attn_output = attn_output.astype(paddle.bfloat16)
+        elif self.proj.weight.dtype == paddle.float16:
+            attn_output = attn_output.astype(paddle.float16)
+        elif self.proj.weight.dtype == paddle.float32:
+            attn_output = attn_output.astype(paddle.float32)
         attn_output = self.proj(attn_output)
         return attn_output
 
@@ -864,6 +869,15 @@ class Qwen2VLAttention(nn.Layer):
 
         attn_output = attn_output.transpose([0, 2, 1, 3])
         attn_output = attn_output.reshape([bsz, q_len, -1])
+
+        if self.o_proj.weight.dtype == paddle.bfloat16:
+            attn_output = attn_output.astype(paddle.bfloat16)
+        elif self.o_proj.weight.dtype == paddle.float16:
+            attn_output = attn_output.astype(paddle.float16)
+        elif self.o_proj.weight.dtype == paddle.float32:
+            attn_output = attn_output.astype(paddle.float32)
+
+
         attn_output = self.o_proj(attn_output)
         if not output_attentions:
             attn_weights = None
