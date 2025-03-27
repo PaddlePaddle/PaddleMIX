@@ -3,7 +3,7 @@
 <details >
 <summary>Fig</summary>
 
-![Image](https://github.com/user-attachments/assets/c33d7f9b-7943-451d-9f25-f618a55b3a85)
+![Figure_2](https://github.com/user-attachments/assets/c447c3d5-3e9d-4634-81ec-cca906c0533e)
 
 </details>
 

@@ -4,14 +4,14 @@
 <details >
 <summary>Fig</summary>
 
-![Image](https://github.com/user-attachments/assets/be8580a3-0f69-40cf-a1ef-d9c901c04fb9)
+![Figure_1](https://github.com/user-attachments/assets/9f8378e7-6ee4-42ad-ad8e-40a63607faee)
 
 </details>
 
 
 
-| Model | Stage | Paddle training speed（ips）| Contrast |Pytorch training speed（ips） | Paddle GPU memory uage（G） | Script
-|----|---|---|---|---|---|---|
+| Model | Stage | Paddle training speed（ips）| Contrast |Pytorch training speed（ips） | Paddle GPU memory uage（G）
+|----|---|---|---|---|---|
 | LLaVA1.6 7B            | Pretrain  | 82  | +26%   | 65  | 19/22 | 
 |                        | SFT       | 52  | +6%    | 49  | 33/49 |
 |                        | LoRA      | 56  | +14%   | 49  | 16/17 |
@@ -22,7 +22,7 @@
 | Qwen2VL 7B             | SFT       | 13  | +18%   | 11  | -     |
 | Stable Diffusion 1.5   | Pretrain  | 560 | -12%   | 638 | 28/34 |
 |                        | LoRA      | 200 | +6%    | 187 | 30/34 |
-| Stable Diffusion 3     | Pretrain  | 34  | 0      | 34  | -     |
+| Stable Diffusion 3     | SFT (Dreambooth)  | 34  | 0      | 34  | -     |
 |                        | LoRA      | 66  | -0.01% | 67  | -     |
 
 ---
@@ -77,8 +77,8 @@ model_stages = [
     ("LLaVA1.6 13B", ["Pretrain", "SFT", "LoRA"]),
     ("Qwen2VL 2B", ["SFT"]),
     ("Qwen2VL 7B", ["SFT"]),
-    ("Stable Diffusion 1.5", ["SFT", "LoRA"]),
-    ("Stable Diffusion 3", ["SFT", "LoRA"])
+    ("Stable Diffusion 1.5", ["Pretrain", "LoRA"]),
+    ("Stable Diffusion 3", ["SFT (Dreambooth)", "LoRA"])
 ]
 
 paddle_speeds = [
