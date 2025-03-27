@@ -267,12 +267,12 @@ class VQModel(paddle.nn.Layer):
             scheduler_disc = tmp_lr
             
         elif self.scheduler_type == 'linear-warmup_cosine-decay':
-            multipler_min = self.min_learning_rate / self.learning_rate
-            tmp_lr = paddle.optimizer.lr.LambdaDecay(lr_lambda=Scheduler_LinearWarmup_CosineDecay(warmup_steps=warmup_steps, max_steps=training_steps, multipler_min=multipler_min), learning_rate=opt_gen.get_lr())
+            multiplier_min = self.min_learning_rate / self.learning_rate
+            tmp_lr = paddle.optimizer.lr.LambdaDecay(lr_lambda=Scheduler_LinearWarmup_CosineDecay(warmup_steps=warmup_steps, max_steps=training_steps, multiplier_min=multiplier_min), learning_rate=opt_gen.get_lr())
             opt_gen.set_lr_scheduler(tmp_lr)
             scheduler_ae = tmp_lr
             
-            tmp_lr = paddle.optimizer.lr.LambdaDecay(lr_lambda=Scheduler_LinearWarmup_CosineDecay(warmup_steps=warmup_steps, max_steps=training_steps, multipler_min=multipler_min), learning_rate=opt_disc.get_lr())
+            tmp_lr = paddle.optimizer.lr.LambdaDecay(lr_lambda=Scheduler_LinearWarmup_CosineDecay(warmup_steps=warmup_steps, max_steps=training_steps, multiplier_min=multiplier_min), learning_rate=opt_disc.get_lr())
             opt_disc.set_lr_scheduler(tmp_lr)
             scheduler_disc = tmp_lr
         else:

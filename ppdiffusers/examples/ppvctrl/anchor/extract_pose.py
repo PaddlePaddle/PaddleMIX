@@ -608,7 +608,7 @@ class TopDownAffineImage(object):
         records(dict): the dict contained the image and coords
 
     Returns:
-        records (dict): contain the image and coords after tranformed
+        records (dict): contain the image and coords after transformed
 
     """
 

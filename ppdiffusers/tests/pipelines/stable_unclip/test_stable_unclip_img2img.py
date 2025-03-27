@@ -218,7 +218,7 @@ class StableUnCLIPImg2ImgPipelineFastTests(
 #             'fusing/stable-unclip-2-1-l-img2img')
 #         pipe.set_progress_bar_config(disable=None)
 #         generator = paddle.Generator().manual_seed(0)
-#         output = pipe(input_image, "anime turle", generator=generator, output_type="np")
+#         output = pipe(input_image, "anime turtle", generator=generator, output_type="np")
 #         image = output.images[0]
 #         # breakpoint()
 #         assert image.shape == (768, 768, 3)
@@ -235,7 +235,7 @@ class StableUnCLIPImg2ImgPipelineFastTests(
 #             'fusing/stable-unclip-2-1-h-img2img')
 #         pipe.set_progress_bar_config(disable=None)
 #         generator = paddle.Generator().manual_seed(0)
-#         output = pipe(input_image, "anime turle", generator=generator, output_type="np")
+#         output = pipe(input_image, "anime turtle", generator=generator, output_type="np")
 #         image = output.images[0]
 #         assert image.shape == (768, 768, 3)
 #         assert_mean_pixel_difference(image, expected_image)

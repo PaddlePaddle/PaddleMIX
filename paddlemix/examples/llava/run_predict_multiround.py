@@ -13,33 +13,26 @@
 # limitations under the License.
 
 import argparse
+import os
 
 import paddle
 from paddlenlp.generation import TextStreamer
+from paddlenlp.transformers import CLIPImageProcessor
 
-from paddlemix.auto import (
-    AutoConfigMIX,
-    AutoModelMIX,
-    AutoProcessorMIX,
-    AutoTokenizerMIX,
-)
 from paddlemix.models.llava.constants import (
     DEFAULT_IM_END_TOKEN,
     DEFAULT_IM_START_TOKEN,
     DEFAULT_IMAGE_TOKEN,
 )
 from paddlemix.models.llava.conversation import conv_templates
-from paddlemix.models.llava.mm_utils import get_model_name_from_path, load_image
-from paddlemix.utils.log import logger
-
-import os
 from paddlemix.models.llava.language_model.llava_llama import (
     LlavaConfig,
     LlavaLlamaForCausalLM,
 )
 from paddlemix.models.llava.language_model.tokenizer import LLavaTokenizer
+from paddlemix.models.llava.mm_utils import get_model_name_from_path, load_image
 from paddlemix.processors import LlavaProcessor
-from paddlenlp.transformers import CLIPImageProcessor
+from paddlemix.utils.log import logger
 
 
 def main(args):
@@ -54,21 +47,17 @@ def main(args):
         compute_dtype = "float32"
 
     model_name = get_model_name_from_path(args.model_path)
-    
+
     model_name_or_path = args.model_path
     tokenizer = LLavaTokenizer.from_pretrained(model_name_or_path)
     model_config = LlavaConfig.from_pretrained(model_name_or_path)
     model = LlavaLlamaForCausalLM.from_pretrained(model_name_or_path, dtype=compute_dtype)
     model.eval()
-    name_or_path = (os.path.join(model_name_or_path, "processor", "eval"))
+    name_or_path = os.path.join(model_name_or_path, "processor", "eval")
     image_processor = CLIPImageProcessor.from_pretrained(name_or_path)
     processor = LlavaProcessor(
-        image_processor, 
-        tokenizer,
-        max_length=args.max_new_tokens, 
-        image_aspect_ratio=model_config.image_aspect_ratio
-        )
-
+        image_processor, tokenizer, max_length=args.max_new_tokens, image_aspect_ratio=model_config.image_aspect_ratio
+    )
 
     model.resize_token_embeddings(len(tokenizer))
     vision_tower = model.get_vision_tower()

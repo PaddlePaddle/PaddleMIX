@@ -222,12 +222,12 @@ class FastDeployStableDiffusionTilingPipeline(
             guidance_scale_tiles: specific weights for classifier-free guidance in each tile.
             guidance_scale_tiles: specific weights for classifier-free guidance in each tile. If None, the value provided in guidance_scale will be used.
             seed_tiles: specific seeds for the initialization latents in each tile. These will override the latents generated for the whole canvas using the standard seed parameter.
-            seed_tiles_mode: either "full" "exclusive". If "full", all the latents affected by the tile be overridden. If "exclusive", only the latents that are affected exclusively by this tile (and no other tiles) will be overrriden.
+            seed_tiles_mode: either "full" "exclusive". If "full", all the latents affected by the tile be overridden. If "exclusive", only the latents that are affected exclusively by this tile (and no other tiles) will be overridden.
             seed_reroll_regions: a list of tuples in the form (start row, end row, start column, end column, seed) defining regions in pixel space for which the latents will be overridden using the given seed. Takes priority over seed_tiles.
-            # cpu_vae: the decoder from latent space to pixel space can require too mucho GPU RAM for large images. If you find out of memory errors at the end of the generation process, try setting this parameter to True to run the decoder in CPU. Slower, but should run without memory issues.
-            # parse_prompt_type: This parameter specifies the type of prompt parsing to be performed. Choosen from: "None", "lpw", "raw", "webui".
+            # cpu_vae: the decoder from latent space to pixel space can require too much GPU RAM for large images. If you find out of memory errors at the end of the generation process, try setting this parameter to True to run the decoder in CPU. Slower, but should run without memory issues.
+            # parse_prompt_type: This parameter specifies the type of prompt parsing to be performed. Chosen from: "None", "lpw", "raw", "webui".
             # max_embeddings_multiples: This parameter determines the maximum number of embeddings that can be generated. The value of 3 suggests that the maximum number of embeddings allowed will be three times the size of the original number.
-            infer_op_dict: The parameter infer_op_dict is a dictionary that maps module to it's inference op. The purpose of this dictionary is to store inferred operations or operations that have been deduced or determined during some process. The op are choosen from the following: 'None', 'zero_copy_infer', 'raw'.
+            infer_op_dict: The parameter infer_op_dict is a dictionary that maps module to it's inference op. The purpose of this dictionary is to store inferred operations or operations that have been deduced or determined during some process. The op are chosen from the following: 'None', 'zero_copy_infer', 'raw'.
 
         Examples:
 

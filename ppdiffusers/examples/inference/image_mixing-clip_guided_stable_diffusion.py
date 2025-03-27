@@ -40,7 +40,7 @@ mixing_pipeline = DiffusionPipeline.from_pretrained(
 )
 mixing_pipeline.enable_attention_slicing()
 
-# Pipline running
+# Pipeline running
 generator = paddle.Generator().manual_seed(17)
 
 content_image = download_image(

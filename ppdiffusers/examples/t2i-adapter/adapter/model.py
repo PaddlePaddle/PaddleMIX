@@ -294,7 +294,7 @@ class AdapterLDM(nn.Layer):
                 latents = self.preconfig_latents
             else:
                 latents = paddle.randn((input_ids.shape[0], self.unet.config.in_channels, height // 8, width // 8))
-            # ddim donot use this
+            # ddim do not use this
             latents = latents * self.eval_scheduler.init_noise_sigma
 
             accepts_eta = "eta" in set(inspect.signature(self.eval_scheduler.step).parameters.keys())
@@ -306,7 +306,7 @@ class AdapterLDM(nn.Layer):
                 # expand the latents if we are doing classifier free guidance
                 latent_model_input = paddle.concat([latents] * 2) if do_classifier_free_guidance else latents
 
-                # ddim donot use this
+                # ddim do not use this
                 latent_model_input = self.eval_scheduler.scale_model_input(latent_model_input, t)
 
                 # Adapter predict the noise residual

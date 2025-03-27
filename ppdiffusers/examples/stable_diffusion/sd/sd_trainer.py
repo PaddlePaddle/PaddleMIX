@@ -278,18 +278,18 @@ class StableDiffusionTrainer(Trainer):
         output_dir = output_dir if output_dir is not None else self.args.output_dir
         os.makedirs(output_dir, exist_ok=True)
         if self.args.only_save_updated_model:
-            unwraped_model = unwrap_model(self.model)
+            unwrapped_model = unwrap_model(self.model)
             logger.info(f"Saving unet checkpoint to {output_dir}/unet")
-            unwraped_model.unet.save_pretrained(os.path.join(output_dir, "unet"))
+            unwrapped_model.unet.save_pretrained(os.path.join(output_dir, "unet"))
 
-            if unwraped_model.use_ema:
+            if unwrapped_model.use_ema:
                 logger.info(f"Saving ema unet checkpoint to {output_dir}/unet")
-                with unwraped_model.ema_scope():
-                    unwraped_model.unet.save_pretrained(os.path.join(output_dir, "unet"), variant="ema")
+                with unwrapped_model.ema_scope():
+                    unwrapped_model.unet.save_pretrained(os.path.join(output_dir, "unet"), variant="ema")
 
-            if unwraped_model.train_text_encoder:
+            if unwrapped_model.train_text_encoder:
                 logger.info(f"Saving text encoder checkpoint to {output_dir}/text_encoder")
-                unwraped_model.text_encoder.save_pretrained(os.path.join(output_dir, "text_encoder"))
+                unwrapped_model.text_encoder.save_pretrained(os.path.join(output_dir, "text_encoder"))
         else:
             logger.info(f"Saving model checkpoint to {output_dir}")
             if state_dict is None:
