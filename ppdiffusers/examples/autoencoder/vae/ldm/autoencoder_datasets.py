@@ -506,7 +506,7 @@ class ImageNetSR(Dataset):
 
         self.image_rescaler = albumentations.SmallestMaxSize(max_size=size, interpolation=cv2.INTER_AREA)
 
-        self.pil_interpolation = False  # gets reset later if incase interp_op is from pillow
+        self.pil_interpolation = False  # gets reset later if in case interp_op is from pillow
 
         if degradation == "bsrgan":
             self.degradation_process = partial(degradation_fn_bsr, sf=downscale_f)
