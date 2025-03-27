@@ -19,6 +19,8 @@ python -m pip install -e .
 cd examples/stable_diffusion
 pip install -r requirements.txt
 pip install soundfile==0.12.1 #20250103版本升级后报错
+python -m pip uninstall paddlenlp -y
+python -m pip install --pre --upgrade paddlenlp -f https://www.paddlepaddle.org.cn/whl/paddlenlp.html
 python -m pip list
 # 删除当前目录下的data
 # cd ppdiffusers/examples/stable_diffusion

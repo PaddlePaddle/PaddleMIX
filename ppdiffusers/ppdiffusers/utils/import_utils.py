@@ -80,11 +80,11 @@ if USE_PADDLE in ENV_VARS_TRUE_AND_AUTO_VALUES:
                     memory_efficient_attention,
                 )
 
-                _ = memory_efficient_attention(
-                    paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
-                    paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
-                    paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
-                )
+                # _ = memory_efficient_attention(
+                #     paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
+                #     paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
+                #     paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
+                # )
                 _ppxformers_available = True
             except Exception:
                 _ppxformers_available = False
