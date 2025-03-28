@@ -957,7 +957,7 @@ def main(args):
     # westfish: add lr_scheduler to optimizer
     optimizer.set_lr_scheduler(lr_scheduler)
 
-    # westfish: donot prepare, otherwise auto_cast O2 will raise ValueError: (InvalidArgument) The type of data we are trying to retrieve (float16) does not match the type of data (float32) currently contained in the container.
+    # westfish: do not prepare, otherwise auto_cast O2 will raise ValueError: (InvalidArgument) The type of data we are trying to retrieve (float16) does not match the type of data (float32) currently contained in the container.
     # # Prepare everything with our `accelerator`.
     # if args.train_text_encoder:
     #     unet, text_encoder_one, text_encoder_two, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(

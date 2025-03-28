@@ -86,5 +86,5 @@ class DataArguments:
 
     transform_name: str = field(
         default="resize_crop",
-        metadata={"help": "transform_name when buiilding dataset"},
+        metadata={"help": "transform_name when building dataset"},
     )

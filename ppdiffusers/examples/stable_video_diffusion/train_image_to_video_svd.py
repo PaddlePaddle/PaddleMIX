@@ -1088,7 +1088,7 @@ def main():
                 # (this is the forward diffusion process)
                 sigmas = sigmas[:, None, None, None, None]
                 noisy_latents = latents + noise * sigmas
-                # westfish: paddle.Tensor donot support list input
+                # westfish: paddle.Tensor do not support list input
                 timesteps = paddle.Tensor(np.array([0.25 * sigma.log().squeeze() for sigma in sigmas]))
 
                 inp_noisy_latents = noisy_latents / ((sigmas**2 + 1) ** 0.5)

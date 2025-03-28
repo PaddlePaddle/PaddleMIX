@@ -437,7 +437,7 @@ if __name__ == "__main__":
         if "loss." in k:
             for old, new in maps.items():
                 k = k.replace(old, new)
-            # paddle donot support 0d tensor
+            # paddle do not support 0d tensor
             if v.ndim == 0:
                 v = v.reshape((1,))
             # rename

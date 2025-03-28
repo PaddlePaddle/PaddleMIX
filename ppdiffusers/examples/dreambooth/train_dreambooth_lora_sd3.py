@@ -713,7 +713,7 @@ class DreamBoothDataset(Dataset):
             else:
                 example["instance_prompt"] = self.instance_prompt
 
-        else:  # costum prompts were provided, but length does not match size of image dataset
+        else:  # custom prompts were provided, but length does not match size of image dataset
             example["instance_prompt"] = self.instance_prompt
 
         if self.class_data_root:
@@ -1374,7 +1374,7 @@ def main(args):
                 # Preconditioning of the model outputs.
                 model_pred = model_pred * (-sigmas) + noisy_model_input
 
-                # TODO (kashif, sayakpaul): weighting sceme needs to be experimented with :)
+                # TODO (kashif, sayakpaul): weighting scheme needs to be experimented with :)
                 if args.weighting_scheme == "sigma_sqrt":
                     weighting = (sigmas**-2.0).cast(paddle.float32)
                 elif args.weighting_scheme == "logit_normal":
