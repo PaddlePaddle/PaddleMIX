@@ -132,6 +132,17 @@ else:
         "IFPipeline",
         "IFSuperResolutionPipeline",
     ]
+    _import_structure["flux"] = [
+        "FluxControlPipeline",
+        "FluxControlInpaintPipeline",
+        "FluxControlImg2ImgPipeline",
+        "FluxImg2ImgPipeline",
+        "FluxInpaintPipeline",
+        "FluxPipeline",
+        "FluxFillPipeline",
+        "FluxPriorReduxPipeline",
+        "ReduxImageEncoder",
+    ]
     _import_structure["kandinsky"] = [
         "KandinskyCombinedPipeline",
         "KandinskyImg2ImgCombinedPipeline",
@@ -410,6 +421,17 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             IFInpaintingSuperResolutionPipeline,
             IFPipeline,
             IFSuperResolutionPipeline,
+        )
+        from .flux import (
+            FluxControlImg2ImgPipeline,
+            FluxControlInpaintPipeline,
+            FluxControlPipeline,
+            FluxFillPipeline,
+            FluxImg2ImgPipeline,
+            FluxInpaintPipeline,
+            FluxPipeline,
+            FluxPriorReduxPipeline,
+            ReduxImageEncoder,
         )
         from .img_to_video import ImgToVideoSDPipeline, ImgToVideoSDPipelineOutput
         from .kandinsky import (
