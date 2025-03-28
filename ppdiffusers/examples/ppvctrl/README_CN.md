@@ -1,8 +1,15 @@
 简体中文 | [English](README.md)
-# PP-VCtrl
+# PP-VCtrl: Enabling Versatile Controls for Video Diffusion Models
 
-<a href='https://pp-vctrl.github.io/'>
-      <img src='https://img.shields.io/badge/Project_Page-ppvctrl-blue' alt='Project Page'></a>
+
+<h5 align="center">
+
+[![hf_paper](https://img.shields.io/badge/🤗-Models%20In%20HF-red.svg)](https://huggingface.co/PaddleMIX)
+[![arXiv](https://img.shields.io/badge/Arxiv-2411.19108-b31b1b.svg?logo=arXiv)](https://arxiv.org/abs/2503.16983) 
+[![Home Page](https://img.shields.io/badge/Project-<Website>-blue.svg)](https://pp-vctrl.github.io/) 
+[![License](https://img.shields.io/badge/License-Apache%202.0-yellow)](./LICENSE) 
+
+</h5>
 
 
 <p align="center">
