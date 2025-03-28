@@ -138,6 +138,14 @@ class LlavaMetaForCausalLM:
     def get_vision_tower(self):
         return self.get_model().get_vision_tower()
 
+    def get_llm_model(self):
+        if hasattr(self, "llama"):
+            return self.llama
+        elif hasattr(self, "qwen2"):
+            return self.qwen2
+        else:
+            raise ValueError("No LLM model found.")
+
     def is_siglip(self):
         if "siglip" in self.get_model().vision_tower_name.lower():
             return True
@@ -271,7 +279,8 @@ class LlavaMetaForCausalLM:
                             image_feature = paddle.concat(
                                 (
                                     image_feature,
-                                    self.llama.image_newline[:, None, None]
+                                    self.get_llm_model()
+                                    .image_newline[:, None, None]
                                     .expand([*image_feature.shape[:-1], 1])
                                     .cast(image_feature.dtype),
                                 ),
@@ -290,7 +299,8 @@ class LlavaMetaForCausalLM:
                         image_feature = image_feature[0]
                         if "unpad" in mm_patch_merge_type:
                             image_feature = paddle.concat(
-                                x=(image_feature, self.llama.image_newline[None].to(image_feature.place)), axis=0
+                                x=(image_feature, self.get_llm_model().image_newline[None].to(image_feature.place)),
+                                axis=0,
                             )
                     new_image_features.append(image_feature)
                 image_features = new_image_features
