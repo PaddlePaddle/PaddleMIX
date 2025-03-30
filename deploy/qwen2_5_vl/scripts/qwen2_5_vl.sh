@@ -12,8 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-export CUDA_VISIBLE_DEVICES=0
+
+export CUDA_VISIBLE_DEVICES=2
+export USE_FASTER_TOP_P_SAMPLING=1
+
 #fp16  高性能推理
+
 python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
     --model_name_or_path Qwen/Qwen2.5-VL-7B-Instruct \
     --question "Describe this image." \
@@ -27,9 +31,11 @@ python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
     --block_attn True \
     --inference_model True \
     --mode dynamic \
+    --append_attn 1 \
     --dtype bfloat16 \
-    --benchmark True 
-    
+    --benchmark True
+
+
 
 # # weight only int8 量化推理
 # python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
