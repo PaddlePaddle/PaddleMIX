@@ -3,25 +3,37 @@
 <details >
 <summary>Fig</summary>
 
-![Figure_1](https://github.com/user-attachments/assets/be63aafa-1528-4b56-8a12-dd766715d08a)
+![Figure_2](https://github.com/user-attachments/assets/c447c3d5-3e9d-4634-81ec-cca906c0533e)
 
 </details>
 
 
-| Model | Paddle Inference (s/it) | Contrast | torch (s/it) | vllm (s/it) | tensorrt (s/it) | Note |
-|---|---|---|---|---|---|---|
-| LLaVA1.6 7B            | 1.31 | +51.5% <br>+24.7% | 2.17 | 1.74 | -    | bf16, max token=128
-| LLaVA1.6 13B           | 1.65 | +37.0%  | 2.62 | -    | -    | bf16, max token=128
-| Qwen2VL 2B             | 1.44 | +38.7% <br>-48.0% | 2.35 | 0.97 | -    | bf16, max token=128
-| Qwen2VL 7B             | 1.73 | +60.6% <br>+5.4% | 4.50 | 1.82 | -    | bf16, max token=128
-| Stable Diffusion 1.5   | 0.79 | +5.6% | -    | -    | 0.84 | 512 * 512, 50 steps
-| Stable Diffusion 3     | 1.20 | -3.4%  | -    | -    | 1.20 | 0.512 * 512, 50 steps
+| Model | Paddle Inference (s/it) | Pytorch (s/it) | vLLM (s/it) | TensorRT (s/it) | Note |
+|---|---|---|---|---|---|
+| LLaVA 1.6 7B           | 1.31 | 2.17 | 1.74 | -    | bf16, max_token=128
+| LLaVA 1.6 13B          | 1.65 | 2.62 | -    | -    | bf16, max_token=128
+| Qwen2-VL 2B            | 1.44 | 2.35 | 0.97 | -    | bf16, max_token=128
+| Qwen2-VL 7B            | 1.73 | 4.50 | 1.82 | -    | bf16, max_token=128
+| Qwen2.5-VL 3B          | 1.24 | 4.92 | 1.39 | -    | bf16, max_token=128
+| Qwen2.5-VL 7B          | 1.76 | 3.89 | 1.92 | -    | bf16, max_token=128
+| Stable Diffusion 1.5   | 0.79 | -    | -    | 0.84 | 512 * 512, 50 steps
+| Stable Diffusion 3     | 1.20 | -    | -    | 1.16 | 512 * 512, 50 steps
 
-<!-- |                        | 0.87  | -    | -    | 512 * 512, 50 steps, two card -->
 
 Notes:
-- All models were tested on the A800
+- All models were tested on the A800 (80G) platform
+- Please see below for the testing configuration details.
 
+<details open>
+<summary>See</summary>
+
+Software | Version
+---|---
+CUDA         | 12.3
+PaddlePaddle | Nightly
+PaddleNLP    | Nightly
+Python       | 3.10
+</details>
 
 <!-- 
 ```python
@@ -30,18 +42,20 @@ import numpy as np
 
 # 数据
 models = [
-    "LLaVA1.6 7B", 
-    "LLaVA1.6 13B", 
-    "Qwen2VL 2B", 
-    "Qwen2VL 7B", 
+    "LLaVA 1.6 7B", 
+    "LLaVA 1.6 13B", 
+    "Qwen2-VL 2B", 
+    "Qwen2-VL 7B", 
+    "Qwen2.5-VL 3B",
+    "Qwen2.5-VL 7B"
     "Stable Diffusion 1.5", 
     "Stable Diffusion 3"
 ]
 
-paddle_inference = [1.31, 1.65, 1.44, 1.73, 0.79, 1.20]
-torch_inference = [2.17, 2.62, 2.35, 4.50, None, None]
-vllm_inference = [1.74, None, 0.97, 1.82, None, None]
-tensorrt_inference = [0, None, None, None, 0.84, 1.20] # 0 for legend
+paddle_inference = [1.31, 1.65, 1.44, 1.73, 1.24, 1.76, 0.79, 1.20]
+torch_inference = [2.17, 2.62, 2.35, 4.50, 4.92, 3.89, None, None]
+vllm_inference = [1.74, None, 0.97, 1.82, 1.39, 1.92, None, None]
+tensorrt_inference = [0, None, None, None, None, None, 0.84, 1.16] # 0 for legend
 
 # contrasts = [
 #     ["+51.5%", "+24.7%"],

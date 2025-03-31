@@ -14,9 +14,6 @@
 
 import os
 import sys
-from tkinter.messagebox import NO
-os.environ["FLAGS_use_cuda_managed_memory"] = "True"
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
 import unittest
 import numpy as np
 import paddle
@@ -30,6 +27,8 @@ from paddlemix.models.qwen2_vl.modeling_qwen2_vl import Qwen2VLForConditionalGen
 from tests.models.test_configuration_common import ConfigTester
 from tests.models.test_modeling_common import ModelTesterMixin, floats_tensor, ids_tensor, random_attention_mask
 from tests.testing_utils import slow
+
+
 
 class Qwen2vlModelTester:
     def __init__(self, parent):
@@ -102,10 +101,10 @@ class Qwen2vlModelTester:
     def prepare_config_and_inputs_for_common(self):
         config, tokenized_out = self.prepare_config_and_inputs()
         inputs_dict = {
-            "input_ids": tokenized_out['input_ids'],
-            "attention_mask": tokenized_out['attention_mask'],
-            "pixel_values": tokenized_out['pixel_values'],
-            "image_grid_thw": tokenized_out['image_grid_thw'],
+            "input_ids": tokenized_out['input_ids'].astype("int32"),
+            "attention_mask": tokenized_out['attention_mask'].astype("float32"),
+            "pixel_values": tokenized_out['pixel_values'].astype("float32"),
+            "image_grid_thw": tokenized_out['image_grid_thw'].astype("int32"),
         }
         return config, inputs_dict
 
