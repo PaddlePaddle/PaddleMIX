@@ -37,6 +37,7 @@ from paddlemix.models.qwen2_vl.bert_padding import (
     pad_input,
     unpad_input,
 )
+from paddlemix.utils.tools import get_env_device
 from ppdiffusers.utils import logging
 
 from ...activations import ACT2FN
@@ -703,34 +704,39 @@ class Qwen2MLP(nn.Layer):
         self.fuse_attention_ffn = config.fuse_attention_ffn
         self.tensor_parallel_degree = config.tensor_parallel_degree
 
-        # else:
-        ColumnParallelLinear = linear_utils.ColumnParallelLinear
-        RowParallelLinear = linear_utils.RowParallelLinear
+        if get_env_device() == "xpu":
+            self.gate_proj = nn.Linear(self.hidden_size, self.intermediate_size, bias_attr=False)  # w1
+            self.up_proj = nn.Linear(self.hidden_size, self.intermediate_size, bias_attr=False)  # w3
+            self.down_proj = nn.Linear(self.intermediate_size, self.hidden_size, bias_attr=False)  # w2
 
-        if config.tensor_parallel_degree > 1:
-
-            self.gate_proj = ColumnParallelLinear(
-                self.hidden_size,
-                self.intermediate_size,
-                gather_output=False,
-                has_bias=False,
-            )
-            self.up_proj = ColumnParallelLinear(
-                self.hidden_size,
-                self.intermediate_size,
-                gather_output=False,
-                has_bias=False,
-            )
-            self.down_proj = RowParallelLinear(
-                self.intermediate_size,
-                self.hidden_size,
-                input_is_parallel=True,
-                has_bias=False,
-            )
         else:
-            self.gate_proj = Linear(self.hidden_size, self.intermediate_size, bias_attr=False)  # w1
-            self.up_proj = Linear(self.hidden_size, self.intermediate_size, bias_attr=False)  # w3
-            self.down_proj = Linear(self.intermediate_size, self.hidden_size, bias_attr=False)  # w2
+            ColumnParallelLinear = linear_utils.ColumnParallelLinear
+            RowParallelLinear = linear_utils.RowParallelLinear
+
+            if config.tensor_parallel_degree > 1:
+
+                self.gate_proj = ColumnParallelLinear(
+                    self.hidden_size,
+                    self.intermediate_size,
+                    gather_output=False,
+                    has_bias=False,
+                )
+                self.up_proj = ColumnParallelLinear(
+                    self.hidden_size,
+                    self.intermediate_size,
+                    gather_output=False,
+                    has_bias=False,
+                )
+                self.down_proj = RowParallelLinear(
+                    self.intermediate_size,
+                    self.hidden_size,
+                    input_is_parallel=True,
+                    has_bias=False,
+                )
+            else:
+                self.gate_proj = Linear(self.hidden_size, self.intermediate_size, bias_attr=False)  # w1
+                self.up_proj = Linear(self.hidden_size, self.intermediate_size, bias_attr=False)  # w3
+                self.down_proj = Linear(self.intermediate_size, self.hidden_size, bias_attr=False)  # w2
 
         self.act_fn = ACT2FN[config.hidden_act]
         self.fuse_swiglu = False
