@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .configuration import AutoConfigMIX
-from .modeling import AutoModelMIX
-from .processing import AutoProcessorMIX
-from .tokenizer import AutoTokenizerMIX
+
+from .modeling_gme_qwen2_vl import GmeQwen2VL
+
+__all__ = [
+    "GmeQwen2VL",
+]

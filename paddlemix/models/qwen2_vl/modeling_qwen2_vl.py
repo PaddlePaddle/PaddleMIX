@@ -563,7 +563,12 @@ class VisionFlashAttention2(nn.Layer):
                 .squeeze(0)
                 .reshape([seq_length, -1])
             )
-        attn_output = attn_output.astype(paddle.float32)
+        if self.proj.weight.dtype == paddle.bfloat16:
+            attn_output = attn_output.astype(paddle.bfloat16)
+        elif self.proj.weight.dtype == paddle.float16:
+            attn_output = attn_output.astype(paddle.float16)
+        elif self.proj.weight.dtype == paddle.float32:
+            attn_output = attn_output.astype(paddle.float32)
         attn_output = self.proj(attn_output)
         return attn_output
 
@@ -864,6 +869,15 @@ class Qwen2VLAttention(nn.Layer):
 
         attn_output = attn_output.transpose([0, 2, 1, 3])
         attn_output = attn_output.reshape([bsz, q_len, -1])
+
+        if self.o_proj.weight.dtype == paddle.bfloat16:
+            attn_output = attn_output.astype(paddle.bfloat16)
+        elif self.o_proj.weight.dtype == paddle.float16:
+            attn_output = attn_output.astype(paddle.float16)
+        elif self.o_proj.weight.dtype == paddle.float32:
+            attn_output = attn_output.astype(paddle.float32)
+
+
         attn_output = self.o_proj(attn_output)
         if not output_attentions:
             attn_weights = None
@@ -2087,3 +2101,70 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
             }
         )
         return model_inputs
+
+
+    def gme_qwen2_vl_forward(
+        self,
+        input_ids: paddle.Tensor = None,  # [1, 400] sum 49356255
+        attention_mask: Optional[paddle.Tensor] = None,  # [1, 400] sum 396
+        position_ids: Optional[paddle.Tensor] = None,
+        past_key_values: Optional[List[paddle.Tensor]] = None,
+        inputs_embeds: Optional[paddle.Tensor] = None,
+        labels: Optional[paddle.Tensor] = None,  # [1, 400] sum 354841
+        use_cache: Optional[bool] = None,
+        output_attentions: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
+        return_dict: Optional[bool] = None,
+        pixel_values: Optional[paddle.Tensor] = None,  # [1, 1224, 1176] sum 2658700.50000000
+        pixel_values_videos: Optional[paddle.Tensor] = None,
+        image_grid_thw: Optional[paddle.Tensor] = None,  # [[1 , 36, 34]]
+        video_grid_thw: Optional[paddle.Tensor] = None,
+        rope_deltas: Optional[paddle.Tensor] = None,
+    ):
+
+        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+        output_hidden_states = output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states  # fmt:skip
+        # Note：始终为True
+        return_dict = True  # return_dict if return_dict is not None else self.config.use_return_dict
+
+        if inputs_embeds is None:
+            inputs_embeds = self.model.embed_tokens(input_ids)
+            if pixel_values is not None:
+                # 确保 pixel_values 和 inputs_embeds 使用相同的数据类型
+                pixel_values = paddle.cast(pixel_values, inputs_embeds.dtype)
+                image_embeds = self.visual(pixel_values, grid_thw=image_grid_thw)
+                # 确保 image_embeds 和 inputs_embeds 使用相同的数据类型
+                image_embeds = paddle.cast(image_embeds, inputs_embeds.dtype)
+                image_mask = input_ids == self.config.image_token_id
+                if self.training:
+                    inputs_embeds = inputs_embeds.clone()
+
+                inputs_embeds[image_mask] = image_embeds
+
+            if pixel_values_videos is not None:
+                # 确保 pixel_values_videos 和 inputs_embeds 使用相同的数据类型
+                pixel_values_videos = paddle.cast(pixel_values_videos, inputs_embeds.dtype)
+                video_embeds = self.visual(pixel_values_videos, grid_thw=video_grid_thw)
+                # 确保 video_embeds 和 inputs_embeds 使用相同的数据类型
+                video_embeds = paddle.cast(video_embeds, inputs_embeds.dtype)
+                video_mask = input_ids == self.config.video_token_id
+                inputs_embeds[video_mask] = video_embeds
+            if attention_mask is not None:
+                attention_mask = attention_mask
+
+        outputs = self.model(
+            input_ids=None,
+            position_ids=position_ids,
+            attention_mask=attention_mask,
+            past_key_values=past_key_values,
+            inputs_embeds=inputs_embeds,
+            use_cache=use_cache,
+            output_attentions=output_attentions,
+            output_hidden_states=output_hidden_states,
+            return_dict=return_dict,
+        )
+
+        hidden_states = outputs[0]
+        # get last hidden state
+        last_hidden_state = hidden_states[:, -1, :]  #  (2, 1536)
+        return last_hidden_state

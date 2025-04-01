@@ -16,7 +16,7 @@ import argparse
 import paddle
 from paddlenlp.peft import LoRAConfig, LoRAModel
 
-from paddlemix.auto import AutoConfigMIX, AutoModelMIX
+from paddlemix.models.qwen2_vl.modeling_qwen2_vl import Qwen2VLForConditionalGeneration
 
 
 def parse_arguments():
@@ -37,15 +37,8 @@ def merge():
     dtype = lora_config.dtype
     lora_config.merge_weights = True
 
-    # Load model config
-    model_config = AutoConfigMIX.from_pretrained(args.model_name_or_path, dtype=dtype)
+    model = Qwen2VLForConditionalGeneration.from_pretrained(args.model_name_or_path, dtype=dtype)
 
-    # Load model
-    model = AutoModelMIX.from_pretrained(
-        args.model_name_or_path,
-        config=model_config,
-        dtype=dtype,
-    )
 
     model = LoRAModel.from_pretrained(model=model, lora_path=args.lora_path, lora_config=lora_config)
     model.eval()

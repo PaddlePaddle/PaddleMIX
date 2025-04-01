@@ -136,7 +136,8 @@ def log_validation(
 
     # run inference
     generator = paddle.Generator().manual_seed(args.seed) if args.seed else None
-    autocast_ctx = nullcontext()
+    # autocast_ctx = nullcontext()
+    autocast_ctx = paddle.amp.auto_cast(enable=True, custom_white_list=None, custom_black_list=None, level="O2", dtype='float16')
 
     with autocast_ctx:
         images = [pipeline(**pipeline_args, generator=generator).images[0] for _ in range(args.num_validation_images)]
@@ -1039,7 +1040,7 @@ def main(args):
     elif accelerator.mixed_precision == "bf16":
         weight_dtype = paddle.bfloat16
 
-    vae.to(dtype=paddle.float32)
+    # vae.to(dtype=paddle.float32)
     transformer.to(dtype=weight_dtype)
     text_encoder_one.to(dtype=weight_dtype)
     text_encoder_two.to(dtype=weight_dtype)

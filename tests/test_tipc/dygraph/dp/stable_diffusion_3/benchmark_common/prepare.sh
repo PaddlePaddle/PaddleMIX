@@ -42,7 +42,6 @@ if [ "$RUN_SETUP" = "true" ]; then
     python -m pip install einops
     python -m pip install -r ../requirements.txt
     python -m pip install --upgrade pybind11 regex sentencepiece tqdm visualdl attrdict easydict pyyaml paddlesde
-    python -m pip install paddlenlp==3.0.0b2
     python -m pip install huggingface-hub==0.23.0
 
     # uninstall ppdiffusers and install develop paddlemix
@@ -53,6 +52,9 @@ if [ "$RUN_SETUP" = "true" ]; then
     cd ../ppdiffusers/examples/dreambooth
     pip install -r requirements_sd3.txt
     cd -
+    python -m pip uninstall paddlenlp -y
+    python -m pip install --pre --upgrade paddlenlp -f https://www.paddlepaddle.org.cn/whl/paddlenlp.html
+
     python -m pip list
 else
     echo "fast mode, skipping setup and installation steps as RUN_SETUP is set to false."
