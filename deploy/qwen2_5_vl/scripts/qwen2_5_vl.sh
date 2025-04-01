@@ -33,6 +33,7 @@ python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
     --mode dynamic \
     --append_attn 1 \
     --dtype bfloat16 \
+    --enable_stream_output False \
     --benchmark True
 
 
@@ -52,6 +53,7 @@ python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
 #     --inference_model True \
 #     --mode dynamic \
 #     --dtype bfloat16 \
+#     --enable_stream_output False \
 #     --quant_type "weight_only_int8" \
 #     --benchmark True 
 
@@ -73,4 +75,5 @@ python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
 #     --mode dynamic \
 #     --append_attn 1 \
 #     --dtype bfloat16 \
+#     --enable_stream_output False \
 #     --benchmark True 
