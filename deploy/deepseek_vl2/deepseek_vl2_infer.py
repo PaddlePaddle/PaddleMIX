@@ -17,21 +17,20 @@ import sys
 from dataclasses import dataclass, field
 from typing import Dict, List
 
-import PIL.Image
-
 import numpy as np
 import paddle
+import PIL.Image
 from paddlenlp.generation import GenerationConfig
 from paddlenlp.trainer import PdArgumentParser
-from paddlenlp.transformers import AutoInferenceModelForCausalLM
+from paddlenlp.transformers import AutoInferenceModelForCausalLM, DeepseekTokenizerFast
 from paddlenlp.trl import llm_utils
-from paddlenlp.transformers import DeepseekTokenizerFast
 
 from paddlemix.models.deepseek_vl2 import DeepseekVLV2Config, DeepseekVLV2ForCausalLM
 from paddlemix.processors.deepseek_vl2_processing import DeepseekVLV2Processor
 
 sys.path.append("PaddleNLP/llm/predict")
 from predictor import ModelArgument, PredictorArgument
+
 
 def load_pil_images(conversations: List[Dict[str, str]]) -> List[PIL.Image.Image]:
     """
@@ -75,6 +74,7 @@ class Mix_PredictorArgument(PredictorArgument):
 class Mix_ModelArgument(ModelArgument):
     pass
 
+
 def init_llm_model_inputs(inputs_embeds, arg_config: Mix_PredictorArgument):
     assert len(inputs_embeds.shape) == 3
     batch_size = inputs_embeds.shape[0]
@@ -101,7 +101,6 @@ def init_llm_model_inputs(inputs_embeds, arg_config: Mix_PredictorArgument):
     model_inputs["min_length"] = paddle.full(shape=[batch_size, 1], fill_value=arg_config.min_length, dtype="int64")
     model_inputs["max_length"] = paddle.full(shape=[batch_size, 1], fill_value=arg_config.max_length, dtype="int64")
 
-
     model_inputs["bad_tokens"] = paddle.to_tensor([-1], dtype="int64")
     model_inputs["is_block_step"] = paddle.full(shape=[batch_size], fill_value=False, dtype="bool")
 
@@ -116,7 +115,7 @@ def init_llm_model_inputs(inputs_embeds, arg_config: Mix_PredictorArgument):
         # for mla's absorption
         assert cache_v_shapes is None
         cache_kvs = [paddle.zeros(shape, dtype=cachekv_dtype) for shape in cache_k_shapes]
- 
+
     model_inputs["cache_kvs"] = cache_kvs
 
     block_nums = arg_config.total_max_length // arg_config.block_size
@@ -127,13 +126,16 @@ def init_llm_model_inputs(inputs_embeds, arg_config: Mix_PredictorArgument):
     model_inputs["seq_lens_encoder"] = paddle.to_tensor(np.array(seq_lens).astype("int32").reshape(-1, 1))
     model_inputs["seq_lens_decoder"] = paddle.full(shape=[batch_size, 1], fill_value=0, dtype="int32")
     model_inputs["step_idx"] = paddle.full(shape=[batch_size, 1], fill_value=0, dtype="int64")
-    model_inputs["not_need_stop"] = paddle.full(shape=[1], fill_value=True, dtype="bool").cpu() # must at cpu place, paddlenlp_ops bug: update_inputs_v2
+    model_inputs["not_need_stop"] = paddle.full(
+        shape=[1], fill_value=True, dtype="bool"
+    ).cpu()  # must at cpu place, paddlenlp_ops bug: update_inputs_v2
     model_inputs["stop_flags"] = paddle.full(shape=[batch_size, 1], fill_value=False, dtype="bool")
     model_inputs["stop_nums"] = paddle.full(shape=[1], fill_value=batch_size, dtype="int64")
     model_inputs["pre_ids"] = paddle.full(shape=[batch_size, arg_config.max_length], fill_value=-1, dtype="int64")
     model_inputs["next_tokens"] = paddle.full(shape=[batch_size, 1], fill_value=-1, dtype="int64")
 
     return model_inputs
+
 
 def run_model(predictor_args):
     conversation = [
@@ -145,11 +147,8 @@ def run_model(predictor_args):
         {"role": "<|Assistant|>", "content": ""},
     ]
 
-
     pil_images = load_pil_images(conversation)
-    prepare_inputs = processor(
-        conversations=conversation, images=pil_images, force_batchify=True, system_prompt=""
-    )
+    prepare_inputs = processor(conversations=conversation, images=pil_images, force_batchify=True, system_prompt="")
     prepare_inputs.images = prepare_inputs.images.astype(predictor_args.dtype)
     with paddle.no_grad():
         inputs_embeds = vl_model.prepare_inputs_embeds(**prepare_inputs)
@@ -195,10 +194,8 @@ paddle.device.cuda.empty_cache()
 
 # register llm config
 llm_config = config.language_config
-llm_config.architectures = ['DeepseekVLV2ForCausalLM']
-llm_config.rope_scaling = {
-    "factor": 1
-}
+llm_config.architectures = ["DeepseekVLV2ForCausalLM"]
+llm_config.rope_scaling = {"factor": 1}
 llm_config.rope_scaling_type = {}
 llm_config.qk_rope_head_dim = 64
 llm_config.rope_theta = 10000
@@ -239,7 +236,7 @@ if predictor_args.benchmark:
     sumtime = 0.0
     times = repeat_times + warm_up
     for i in range(times):
-        print("run",i)
+        print("run", i)
         if i > 2:
             paddle.device.synchronize()
             starttime = datetime.datetime.now()
