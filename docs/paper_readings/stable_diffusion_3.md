@@ -188,7 +188,9 @@ self.time_text_embed = CombinedTimestepTextProjEmbeddings( embedding_dim=self.in
 
 以下是 `CombinedTimestepTextProjEmbeddings` 的实现：
 
-```
+https://github.com/PaddlePaddle/PaddleMIX/blob/77498418ac49fadd23bbd6f7abda0d7f5b1bc01e/ppdiffusers/ppdiffusers/models/embeddings.py#L530
+
+```python
 class CombinedTimestepTextProjEmbeddings(nn.Layer):
     def __init__(self, embedding_dim, pooled_projection_dim):
         super().__init__()
@@ -216,7 +218,7 @@ class CombinedTimestepTextProjEmbeddings(nn.Layer):
 
 细粒度语义表示则通过一个线性层映射到与图像 Latent Patch Embeddings 的维度一致，作为MM-DiT模型的文本模态。
 
-```
+```python
 self.context_embedder = nn.Linear(self.config.joint_attention_dim, self.config.caption_projection_dim)
 
 encoder_hidden_states = self.context_embedder(encoder_hidden_states)
@@ -237,6 +239,8 @@ encoder_hidden_states = self.context_embedder(encoder_hidden_states)
 <img src=".\images\sd3-vae.png" alt="sd3-vae" style="zoom:20%;" />
 
 ##### PatchEmbed 类设计
+
+https://github.com/PaddlePaddle/PaddleMIX/blob/77498418ac49fadd23bbd6f7abda0d7f5b1bc01e/ppdiffusers/ppdiffusers/models/embeddings.py#L122
 
 ```python
 class PatchEmbed(nn.Layer):
