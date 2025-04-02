@@ -4,34 +4,48 @@
 <details >
 <summary>Fig</summary>
 
-![Figure_2](https://github.com/user-attachments/assets/5c2fd610-ccef-4ce0-868c-f99bfd900e37)
+![Figure_1](https://github.com/user-attachments/assets/9f8378e7-6ee4-42ad-ad8e-40a63607faee)
 
 </details>
 
 
 
-| Model | Stage | Paddle training speed（ips）| Contrast |Pytorch training speed（ips） | Paddle GPU memory uage（G） 
+| Model | Stage | Paddle training speed（ips）| Contrast |Pytorch training speed（ips） | Paddle GPU memory uage（G）
 |----|---|---|---|---|---|
-| LLaVA1.6 7B            | Pretrain  | 82  | +26%   | 65  | 19/22 |
+| LLaVA1.6 7B            | Pretrain  | 82  | +26%   | 65  | 19/22 | 
 |                        | SFT       | 52  | +6%    | 49  | 33/49 |
 |                        | LoRA      | 56  | +14%   | 49  | 16/17 |
 | LLaVA1.6 13B           | Pretrain  | 52  | +18%   | 44  | 33/36 |
 |                        | SFT       | 24  | +4%    | 23  | 50/68 |
 |                        | LoRA      | 36  | +5%    | 34  | 29/30 |
-| Qwen2VL 2B             | SFT       | 33  | +43%   | 23  | - |
-| Qwen2VL 7B             | SFT       | 13  | +18%   | 11  | - |
-| Stable Diffusion 1.5   | SFT       | 560 | -12%   | 638 | 28/34 |
+| Qwen2VL 2B             | SFT       | 33  | +43%   | 23  | -     |
+| Qwen2VL 7B             | SFT       | 13  | +18%   | 11  | -     |
+| Stable Diffusion 1.5   | Pretrain  | 560 | -12%   | 638 | 28/34 |
 |                        | LoRA      | 200 | +6%    | 187 | 30/34 |
-| Stable Diffusion 3     | SFT       | 34  | 0      | 34  | - |
-|                        | LoRA      | 66  | -0.01% | 67  | - |
+| Stable Diffusion 3     | SFT (Dreambooth)  | 34  | 0      | 34  | -     |
+|                        | LoRA      | 66  | -0.01% | 67  | -     |
 
 ---
 
 Notes:
 - All models were tested on the H800 (8 * 80G) platform
 - For `GPU menory usage`, the table shows `max_memory_allocated/max_memory_reserved`
-- Testing config details see blow.
+- Please see below for the testing configuration details.
 
+<details open>
+<summary>See</summary>
+
+Software | Version
+---|---
+CUDA         | 12.3
+CUDNN        | 9.0
+PaddlePaddle | 3.0beta2
+PaddleNLP    | 3.0beta3
+Pytorch      | 2.5
+
+</details>
+
+<!-- 
 <details>
 <summary>Testing config details</summary>
 
@@ -47,7 +61,7 @@ LoRA: N1C8, bf16, resolution512, gbz 96*8
 SFT/LoRA: N1C8, fp16, resolution512, gbz 8
 ```
 
-</details>
+</details> -->
 
 
 
@@ -63,8 +77,8 @@ model_stages = [
     ("LLaVA1.6 13B", ["Pretrain", "SFT", "LoRA"]),
     ("Qwen2VL 2B", ["SFT"]),
     ("Qwen2VL 7B", ["SFT"]),
-    ("Stable Diffusion 1.5", ["SFT", "LoRA"]),
-    ("Stable Diffusion 3", ["SFT", "LoRA"])
+    ("Stable Diffusion 1.5", ["Pretrain", "LoRA"]),
+    ("Stable Diffusion 3", ["SFT (Dreambooth)", "LoRA"])
 ]
 
 paddle_speeds = [

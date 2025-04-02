@@ -398,7 +398,7 @@ class QWenVLTokenizer(PretrainedTokenizer):
                         self.box_start_tag + "(%d,%d),(%d,%d)" % (box[0], box[1], box[2], box[3]) + self.box_end_tag
                     )
             else:
-                raise ValueError("Unsupport element: " + str(ele))
+                raise ValueError("Unsupported element: " + str(ele))
         return text
 
     def _fetch_latest_picture(self, response, history):
