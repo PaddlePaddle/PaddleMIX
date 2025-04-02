@@ -60,7 +60,7 @@ python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
     --inference_model True \
     --mode dynamic \
     --dtype bfloat16 \
-    --enable_stream_output False \
+    --output_via_mq False \
     --benchmark True
 ```
 
@@ -82,7 +82,7 @@ python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
     --inference_model True \
     --mode dynamic \
     --dtype bfloat16 \
-    --enable_stream_output False \
+    --output_via_mq False \
     --quant_type "weight_only_int8" \
     --benchmark True
 ```
@@ -105,7 +105,7 @@ python -m paddle.distributed.launch --gpus "0,1,2,3" deploy/qwen2_5_vl/qwen2_5_v
     --mode dynamic \
     --append_attn 1 \
     --dtype bfloat16 \
-    --enable_stream_output False \
+    --output_via_mq False \
     --benchmark True
 ```
 
