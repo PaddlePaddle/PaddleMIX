@@ -16,7 +16,7 @@ SD3 相关技术的解读重点主要可分为两个部分，一是关于flow ma
 
 作者首先通过 普通微分方程（ODE）定义了从噪声分布p1的样本x1到数据分布p0的样本x0之间的映射：
 
-![image-20250404022444045](images\image-20250404022444045.png)
+<img src="images/image-20250404022444045.png">
 
 速度v 由神经网络的权重 θ 参数化。
 
@@ -24,41 +24,41 @@ SD3 相关技术的解读重点主要可分为两个部分，一是关于flow ma
 
 为了构造这样的  u_t ,作者定义一个正向过程，对应 p0 和 p1 之间的概率路径  p_t , 如下所示：
 
-![image-20250404023031944](images\image-20250404023031944.png)
+<img src="images/image-20250404023031944.png">
 
 而对于Retified flow，则直接使用更简单的 二者的线性插值来表示：
 
-![image-20250404023050449](images\image-20250404023050449.png)
+<img src="images/image-20250404023050449.png">
 
 接着我们用这样的一个ODE来构建一个**概率路径（probability path）** p_t , 它可以实现从一个噪声分布 p1 到另一个数据分布 p0 的流转换。**只要我们获取了  v(z_t, t)  ，我们就可以用ODE的常用求解器（如欧拉方法，Euler method等）实现从一个高斯噪声到真实数据的生成。**
 
 所以我们在这里用一个参数为θ的SD 3模型   v_θ(z_t, t)  来建模这个向量场，希望其能逼近真实向量场 v(z_t,t) ，这时FM的优化目标就很清楚了：
 
-![image-20250404023112855](images\image-20250404023112855.png)
+<img src="images/image-20250404023112855.png">
 
 接着我们再来看一个新的优化目标，那就是**Conditional Flow Matching（CFM）**目标：
 
-![image-20250404023131597](images\image-20250404023131597.png)
+<img src="images/image-20250404023131597.png">
 
 这里的条件向量场 u_t(z|x_0)  产生了条件概率路径 p_t(z|x_0) ，对于FM目标和CFM目标来说，一个很重要的结论是两者之间只相差一个与参数θ无关的常量，这也就意味着使用CFM目标来训练θ和采用CM目标来训练θ是等价的。
 
 经过一系列推导，我们可得到：
 
-![image-20250404023149470](images\image-20250404023149470.png)
+<img src="images/image-20250404023149470.png">
 
 这里我们对 vθ(z,t) 进一步定义为：
 
-![image-20250404023212535](images\image-20250404023212535.png)
+<img src="images/image-20250404023212535.png">
 
 代入CFM优化目标可得到：
 
-![image-20250404023234969](images\image-20250404023234969.png)
+<img src="images/image-20250404023234969.png">
 
 此时相当于神经网络变成了预测噪音，这和扩散模型DDPM预测噪音是一样的，同时优化目标的多了一个和t有关的权重系数。所以，**FM其实可以看成一个采用不同的权重系数的扩散模型**。
 
 Google的工作[[[2303.00848\] Understanding Diffusion Objectives as the ELBO with Simple Data Augmentation](https://arxiv.org/abs/2303.00848))提出了一个统一的视角,即不同的生成模型的优化目标都可以统一为：
 
-![image-20250404023256178](images\image-20250404023256178.png)
+<img src="images/image-20250404023256178.png">
 
 ### 3. Flow Trajectories
 
@@ -80,7 +80,7 @@ Google的工作[[[2303.00848\] Understanding Diffusion Objectives as the ELBO wi
 
 如下图所示，SD3 主要考虑了两种公式: mode（左）和 logit-norm （右）。二者的共同点是中间多，两边少。mode 相比 logit-norm，在开始和结束时概率不会过分接近 0。
 
-![sample](.\images\sample.png)
+<img src="images/sample.png">
 
 ### 4. Text-to-Image Architecture （模型结构）
 
