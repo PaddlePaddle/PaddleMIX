@@ -15,54 +15,50 @@ SD3 相关技术的解读重点主要可分为两个部分，一是关于flow ma
 #### Flow Matching技术讲解
 
 作者首先通过 普通微分方程（ODE）定义了从噪声分布p1的样本x1到数据分布p0的样本x0之间的映射：
-$$
-d_{y_t}  = v_{\theta }(y_t, t) dt
-$$
-速度v 由神经网络的权重 Θ 参数化。
 
-陈等人（2018）的先前工作建议通过可微分的ODE求解器直接解决方程。然而，这个过程在计算上是昂贵的，特别是对于参数化 $$  v_{\theta }(y_t, t) $$ 的大型网络结构而言。一个更有效的替代方案是直接回归生成 p0 和 p1 之间的概率路径的矢量场 $$ u_t$$ 。
+![image-20250404022444045](images\image-20250404022444045.png)
 
-为了构造这样的 $$ u_t $$,作者定义一个正向过程，对应 p0 和 p1 之间的概率路径 $$ p_t $$, 如下所示：
-$$
-z_t = a_t x_0 + b_t \epsilon \quad where \; \epsilon \sim N(0, I)
-$$
-$$ x_0$$ 来自于数据分布，$$ \epsilon $$ 来自于噪声分布，$$ z_t $$ 是二者的线性组合。
+速度v 由神经网络的权重 θ 参数化。
+
+陈等人（2018）的先前工作建议通过可微分的ODE求解器直接解决方程。然而，这个过程在计算上是昂贵的，特别是对于参数化   v_θ (y_t, t)  的大型网络结构而言。一个更有效的替代方案是直接回归生成 p0 和 p1 之间的概率路径的矢量场 u_t 。
+
+为了构造这样的  u_t ,作者定义一个正向过程，对应 p0 和 p1 之间的概率路径  p_t , 如下所示：
+
+![image-20250404023031944](images\image-20250404023031944.png)
 
 而对于Retified flow，则直接使用更简单的 二者的线性插值来表示：
-$$
-z_t = (1-t) x_0 + t \epsilon \quad where \; \epsilon \sim N(0, I)
-$$
-接着我们用这样的一个ODE来构建一个**概率路径（probability path）** $$ p_t $$, 它可以实现从一个噪声分布 p1 到另一个数据分布 p0 的流转换（a flow）。**只要我们获取了 $$  v(z_t, t)  $$，我们就可以用ODE的常用求解器（如欧拉方法，Euler method等）实现从一个高斯噪声到真实数据的生成。**
 
-所以我们在这里用一个参数为θ的SD 3模型 $$   v_{\theta }(z_t, t)  $$ 来建模这个向量场，希望其能逼近真实向量场 $$v(z_t,t) $$，这时FM的优化目标就很清楚了：
-$$
-L_{FM} = E_t,p_t(z) \left \| v_{\theta}(z, t) - u_t(z) \right \|_2^2
-$$
+![image-20250404023050449](images\image-20250404023050449.png)
+
+接着我们用这样的一个ODE来构建一个**概率路径（probability path）** p_t , 它可以实现从一个噪声分布 p1 到另一个数据分布 p0 的流转换。**只要我们获取了  v(z_t, t)  ，我们就可以用ODE的常用求解器（如欧拉方法，Euler method等）实现从一个高斯噪声到真实数据的生成。**
+
+所以我们在这里用一个参数为θ的SD 3模型   v_θ(z_t, t)  来建模这个向量场，希望其能逼近真实向量场 v(z_t,t) ，这时FM的优化目标就很清楚了：
+
+![image-20250404023112855](images\image-20250404023112855.png)
+
 接着我们再来看一个新的优化目标，那就是**Conditional Flow Matching（CFM）**目标：
-$$
-L_{CFM} = E_t,q(x_0)p_t(z|x_0) \left \| v_{\theta}(z, t) - u_t(z|x_0) \right \|_2^2
-$$
-这里的条件向量场 $$ u_t(z|x_0) $$ 产生了条件概率路径$$ p_t(z|x_0) $$，对于FM目标和CFM目标来说，一个很重要的结论是两者之间只相差一个与参数θ无关的常量，这也就意味着使用CFM目标来训练θ和采用CM目标来训练θ是等价的。
+
+![image-20250404023131597](images\image-20250404023131597.png)
+
+这里的条件向量场 u_t(z|x_0)  产生了条件概率路径 p_t(z|x_0) ，对于FM目标和CFM目标来说，一个很重要的结论是两者之间只相差一个与参数θ无关的常量，这也就意味着使用CFM目标来训练θ和采用CM目标来训练θ是等价的。
 
 经过一系列推导，我们可得到：
-$$
-\mathcal{L}_{C F M}=\mathbb{E}_{t, p_{t}(z \mid \epsilon), p(\epsilon)}\left\|v_{\Theta}(z, t)-\frac{a_{t}^{\prime}}{a_{t}} z+\frac{b_{t}}{2} \lambda_{t}^{\prime} \epsilon\right\|_{2}^{2}
-$$
+
+![image-20250404023149470](images\image-20250404023149470.png)
+
 这里我们对 vθ(z,t) 进一步定义为：
-$$
-V_{\theta}(z, t) = \frac{a_{t}^{\prime}}{a_{t}} z_t - \frac{b_{t}}{2} \lambda_{t}^{\prime} \epsilon_{\theta} (z, t)
-$$
+
+![image-20250404023212535](images\image-20250404023212535.png)
 
 代入CFM优化目标可得到：
-$$
-\mathcal{L}_{C F M}=\mathbb{E}_{t, p_{t}(z \mid \epsilon), p(\epsilon)} (-\frac{b_t}{2}\lambda_{t}^{\prime})^2 \left \| \epsilon_{\theta} (z, t) - \epsilon  \right\|_{2}^{2}
-$$
+
+![image-20250404023234969](images\image-20250404023234969.png)
+
 此时相当于神经网络变成了预测噪音，这和扩散模型DDPM预测噪音是一样的，同时优化目标的多了一个和t有关的权重系数。所以，**FM其实可以看成一个采用不同的权重系数的扩散模型**。
 
 Google的工作[[[2303.00848\] Understanding Diffusion Objectives as the ELBO with Simple Data Augmentation](https://arxiv.org/abs/2303.00848))提出了一个统一的视角,即不同的生成模型的优化目标都可以统一为：
-$$
-\mathcal{L}_w(x_0) = -\frac{1}{2} \mathbb{E}_{t \sim \mu (t), \epsilon \sim N(0, I)} [w_t \lambda_{t}^{\prime} \left \| \epsilon_{\theta} (z, t) - \epsilon  \right\|^{2} ]
-$$
+
+![image-20250404023256178](images\image-20250404023256178.png)
 
 ### 3. Flow Trajectories
 
