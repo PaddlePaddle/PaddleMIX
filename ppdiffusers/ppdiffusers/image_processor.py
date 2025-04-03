@@ -267,6 +267,8 @@ class VaeImageProcessor(ConfigMixin):
         image: Union[paddle.Tensor, PIL.Image.Image, np.ndarray],
         height: Optional[int] = None,
         width: Optional[int] = None,
+        resize_mode: str = "default",  # "default", "fill", "crop"
+        crops_coords: Optional[Tuple[int, int, int, int]] = None,
     ) -> paddle.Tensor:
         """
         Preprocess the image input. Accepted formats are PIL images, NumPy arrays or Paddle tensors.
@@ -299,13 +301,16 @@ class VaeImageProcessor(ConfigMixin):
             )
 
         if isinstance(image[0], PIL.Image.Image):
+            if crops_coords is not None:
+                image = [i.crop(crops_coords) for i in image]
+            if self.config.do_resize:
+                height, width = self.get_default_height_width(image[0], height, width)
+                # Todo: resize_mode 
+                image = [self.resize(i, height, width) for i in image]
             if self.config.do_convert_rgb:
                 image = [self.convert_to_rgb(i) for i in image]
             elif self.config.do_convert_grayscale:
                 image = [self.convert_to_grayscale(i) for i in image]
-            if self.config.do_resize:
-                height, width = self.get_default_height_width(image[0], height, width)
-                image = [self.resize(i, height, width) for i in image]
             image = self.pil_to_numpy(image)  # to np
             image = self.numpy_to_pd(image)  # to pt
 

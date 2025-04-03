@@ -85,9 +85,9 @@ ${TRAINING_PYTHON} --log_dir ${OUTPUT_DIR}/paddle_distributed_logs \
   --lr_scheduler_type "cosine" \
   --logging_steps 1 \
   --report_to "visualdl" \
-  --tensor_parallel_degree= ${tensor_parallel_degree} \
-  --sharding_parallel_degree= ${sharding_parallel_degree} \
-  --pipeline_parallel_degree= ${pipeline_parallel_degree} \
+  --tensor_parallel_degree=${tensor_parallel_degree} \
+  --sharding_parallel_degree=${sharding_parallel_degree} \
+  --pipeline_parallel_degree=${pipeline_parallel_degree} \
   --sep_parallel_degree=${sep_parallel_degree} \
   --sharding="stage1" \
   --amp_master_grad=1 \

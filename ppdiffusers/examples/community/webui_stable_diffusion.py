@@ -1306,7 +1306,7 @@ class FrozenCLIPEmbedderWithCustomWordsBase(nn.Layer):
                 if token == self.comma_token:
                     last_comma = len(chunk.tokens)
 
-                # this is when we are at the end of alloted 75 tokens for the current chunk, and the current token is not a comma. opts.comma_padding_backtrack
+                # this is when we are at the end of allotted 75 tokens for the current chunk, and the current token is not a comma. opts.comma_padding_backtrack
                 # is a setting that specifies that if there is a comma nearby, the text after the comma should be moved out of this chunk and into the next.
                 elif (
                     WebUIStableDiffusionPipeline.comma_padding_backtrack != 0

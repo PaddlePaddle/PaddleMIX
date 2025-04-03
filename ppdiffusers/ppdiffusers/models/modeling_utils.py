@@ -148,8 +148,7 @@ def get_parameter_dtype(parameter: nn.Layer) -> paddle.dtype:
 
 
 def load_state_dict(
-    checkpoint_file: Union[str, os.PathLike], state_dict, tensor_parallel_split_mapping=None, ignore_keys=None,map_location=None
-
+    checkpoint_file: Union[str, os.PathLike], state_dict, tensor_parallel_split_mapping=None, ignore_keys=None, map_location=None
 ):
     """
     Reads a PaddlePaddle checkpoint file, returning properly formatted errors if they arise.
