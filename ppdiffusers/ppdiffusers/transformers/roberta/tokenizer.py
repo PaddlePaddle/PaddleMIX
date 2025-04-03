@@ -19,7 +19,6 @@ import os
 from functools import lru_cache
 from typing import List, Optional, Tuple
 
-import regex as re
 from paddlenlp.transformers.tokenizer_utils import AddedToken
 from paddlenlp.transformers.tokenizer_utils import (
     PretrainedTokenizer as PPNLPPretrainedTokenizer,
