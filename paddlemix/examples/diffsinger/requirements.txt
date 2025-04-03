@@ -1,9 +1,9 @@
 click
 h5py
-librosa<0.10.0
+librosa>=0.11.0
 matplotlib
 MonkeyType==23.3.0
-numpy<2.0.0
+numpy>=1.26.4
 praat-parselmouth==0.4.3
 pyworld==0.3.4
 PyYAML
