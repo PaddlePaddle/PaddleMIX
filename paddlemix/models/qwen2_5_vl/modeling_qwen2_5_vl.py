@@ -622,6 +622,11 @@ class Qwen2_5_VLVisionBlock(paddle.nn.Layer):
 
         self.mlp = Qwen2_5_VLMLP(config, bias=True)
 
+    @paddle.incubate.jit.inference(
+        save_model_dir="./tmp/qwen2_5_VL",
+        enable_new_ir=True,
+        cache_static_model=True,
+    )
     def forward(self, hidden_states, cu_seqlens, rotary_pos_emb) -> paddle.Tensor:
         hidden_states = hidden_states + self.attn(
             self.norm1(hidden_states), cu_seqlens=cu_seqlens, rotary_pos_emb=rotary_pos_emb

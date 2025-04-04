@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+export PYTHONPATH=/root/paddlejob/workspace/env_run/output/changwenbin/PaddleMIX/PaddleNLP
 
 export CUDA_VISIBLE_DEVICES=0
 #fp16  高性能推理
@@ -29,6 +30,7 @@ python deploy/qwen2_vl/single_image_infer.py\
     --inference_model True \
     --mode dynamic \
     --dtype bfloat16 \
+    --output_via_mq False \
     --benchmark True 
 
 
@@ -48,6 +50,7 @@ python deploy/qwen2_vl/single_image_infer.py\
 #     --inference_model True \
 #     --mode dynamic \
 #     --dtype bfloat16 \
+#     --output_via_mq False \
 #     --quant_type "weight_only_int8" \
 #     --benchmark True
 
@@ -67,4 +70,5 @@ python deploy/qwen2_vl/single_image_infer.py\
 #     --inference_model True \
 #     --mode dynamic \
 #     --dtype bfloat16 \
+#     --output_via_mq False \
 #     --benchmark True 
