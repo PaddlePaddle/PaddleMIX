@@ -95,6 +95,7 @@ class Attention(nn.Layer):
         cross_attention_norm_num_groups: int = 32,
         qk_norm: Optional[str] = None,
         added_kv_proj_dim: Optional[int] = None,
+        added_proj_bias: Optional[bool] = True,
         norm_num_groups: Optional[int] = None,
         spatial_norm_dim: Optional[int] = None,
         out_bias: bool = True,
@@ -178,6 +179,10 @@ class Attention(nn.Layer):
         elif qk_norm == "rms_norm":
             self.norm_q = RMSNorm(dim_head, epsilon=eps)
             self.norm_k = RMSNorm(dim_head, epsilon=eps)
+        elif qk_norm == "rms_norm_across_heads":
+            # LTX applies qk norm across all heads
+            self.norm_q = RMSNorm(dim_head * heads, epsilon=eps)
+            self.norm_k = RMSNorm(dim_head * kv_heads, epsilon=eps)
         elif qk_norm == "l2":
             self.norm_q = LpNorm(p=2, dim=-1, epsilon=eps)
             self.norm_k = LpNorm(p=2, dim=-1, epsilon=eps)
@@ -222,11 +227,16 @@ class Attention(nn.Layer):
             self.to_k = None
             self.to_v = None
 
+        self.added_proj_bias = added_proj_bias
         if self.added_kv_proj_dim is not None:
-            self.add_k_proj = linear_cls(added_kv_proj_dim, self.inner_dim)
-            self.add_v_proj = linear_cls(added_kv_proj_dim, self.inner_dim)
+            self.add_k_proj = linear_cls(added_kv_proj_dim, self.inner_dim, bias_attr=self.added_proj_bias)
+            self.add_v_proj = linear_cls(added_kv_proj_dim, self.inner_dim, bias_attr=self.added_proj_bias)
             if self.context_pre_only is not None:
-                self.add_q_proj = nn.Linear(added_kv_proj_dim, self.inner_dim)
+                self.add_q_proj = nn.Linear(added_kv_proj_dim, self.inner_dim, bias_attr=self.added_proj_bias)
+        else:
+            self.add_q_proj = None
+            self.add_k_proj = None
+            self.add_v_proj = None
 
         self.to_out = nn.LayerList([])
         self.to_out.append(linear_cls(self.inner_dim, query_dim, bias_attr=out_bias))
@@ -234,16 +244,19 @@ class Attention(nn.Layer):
 
         if self.context_pre_only is not None and not self.context_pre_only:
             self.to_add_out = nn.Linear(self.inner_dim, self.out_dim, bias_attr=out_bias)
-        else:
-            self.to_add_out = None
 
         if qk_norm is not None and added_kv_proj_dim is not None:
             if qk_norm == "fp32_layer_norm":
-                self.norm_added_q = FP32LayerNorm(dim_head, elementwise_affine=False, bias=False, eps=eps)
-                self.norm_added_k = FP32LayerNorm(dim_head, elementwise_affine=False, bias=False, eps=eps)
+                self.norm_added_q = FP32LayerNorm(dim_head, elementwise_affine=False, bias=False, epsilon=eps)
+                self.norm_added_k = FP32LayerNorm(dim_head, elementwise_affine=False, bias=False, epsilon=eps)
             elif qk_norm == "rms_norm":
                 self.norm_added_q = RMSNorm(dim_head, epsilon=eps)
                 self.norm_added_k = RMSNorm(dim_head, epsilon=eps)
+            elif qk_norm == "rms_norm_across_heads":
+                # Wan applies qk norm across all heads
+                # Wan also doesn't apply a q norm
+                self.norm_added_q = None
+                self.norm_added_k = RMSNorm(dim_head * kv_heads, epsilon=eps)
             else:
                 raise ValueError(
                     f"unknown qk_norm: {qk_norm}. Should be one of `None,'layer_norm','fp32_layer_norm','rms_norm'`"
@@ -665,7 +678,7 @@ class Attention(nn.Layer):
         num_heads = self.heads
         if attention_mask is None:
             return attention_mask
-        
+
         ori_type = attention_mask.dtype
         attention_mask = attention_mask.to(paddle.float32)
 
@@ -1296,7 +1309,7 @@ class XFormersAttnProcessor:
         #  adapt the scaled_dot_product_attention_ when attention_mask is a bool tensor
         if attention_mask is not None and attention_mask.dtype == paddle.bool:
             L, S = query.shape[1], key.shape[1]
-            attention_mask_tmp = paddle.zeros([1,1, L, S], dtype=query.dtype)
+            attention_mask_tmp = paddle.zeros([1, 1, L, S], dtype=query.dtype)
             attention_mask_tmp = attention_mask_tmp.masked_fill(attention_mask.logical_not(), float("-inf"))
             attention_mask = attention_mask_tmp
 
@@ -2213,9 +2226,15 @@ class FluxAttnProcessor2_0:
             encoder_hidden_states_key_proj = attn.add_k_proj(encoder_hidden_states)
             encoder_hidden_states_value_proj = attn.add_v_proj(encoder_hidden_states)
 
-            encoder_hidden_states_query_proj = encoder_hidden_states_query_proj.reshape([batch_size, -1, attn.heads, head_dim]).transpose([0, 2, 1, 3])
-            encoder_hidden_states_key_proj = encoder_hidden_states_key_proj.reshape([batch_size, -1, attn.heads, head_dim]).transpose([0, 2, 1, 3])
-            encoder_hidden_states_value_proj = encoder_hidden_states_value_proj.reshape([batch_size, -1, attn.heads, head_dim]).transpose([0, 2, 1, 3])
+            encoder_hidden_states_query_proj = encoder_hidden_states_query_proj.reshape(
+                [batch_size, -1, attn.heads, head_dim]
+            ).transpose([0, 2, 1, 3])
+            encoder_hidden_states_key_proj = encoder_hidden_states_key_proj.reshape(
+                [batch_size, -1, attn.heads, head_dim]
+            ).transpose([0, 2, 1, 3])
+            encoder_hidden_states_value_proj = encoder_hidden_states_value_proj.reshape(
+                [batch_size, -1, attn.heads, head_dim]
+            ).transpose([0, 2, 1, 3])
 
             if attn.norm_added_q is not None:
                 encoder_hidden_states_query_proj = attn.norm_added_q(encoder_hidden_states_query_proj)
@@ -2232,14 +2251,14 @@ class FluxAttnProcessor2_0:
 
             query = apply_rotary_emb(query, image_rotary_emb)
             key = apply_rotary_emb(key, image_rotary_emb)
-        
+
         hidden_states = F.scaled_dot_product_attention_(
             query.transpose([0, 2, 1, 3]),
             key.transpose([0, 2, 1, 3]),
             value.transpose([0, 2, 1, 3]),
-            attn_mask=attention_mask, 
-            dropout_p=0.0, 
-            is_causal=False
+            attn_mask=attention_mask,
+            dropout_p=0.0,
+            is_causal=False,
         )
         hidden_states = hidden_states.reshape([batch_size, -1, attn.heads * head_dim])
         hidden_states = hidden_states.astype(query.dtype)
@@ -2309,9 +2328,15 @@ class FusedFluxAttnProcessor2_0:
                 encoder_hidden_states_value_proj,
             ) = paddle.split(encoder_qkv, 3, dim=-1)
 
-            encoder_hidden_states_query_proj = encoder_hidden_states_query_proj.reshape([batch_size, -1, attn.heads, head_dim])
-            encoder_hidden_states_key_proj = encoder_hidden_states_key_proj.reshape([batch_size, -1, attn.heads, head_dim])
-            encoder_hidden_states_value_proj = encoder_hidden_states_value_proj.reshape([batch_size, -1, attn.heads, head_dim])
+            encoder_hidden_states_query_proj = encoder_hidden_states_query_proj.reshape(
+                [batch_size, -1, attn.heads, head_dim]
+            )
+            encoder_hidden_states_key_proj = encoder_hidden_states_key_proj.reshape(
+                [batch_size, -1, attn.heads, head_dim]
+            )
+            encoder_hidden_states_value_proj = encoder_hidden_states_value_proj.reshape(
+                [batch_size, -1, attn.heads, head_dim]
+            )
 
             if attn.norm_added_q is not None:
                 encoder_hidden_states_query_proj = attn.norm_added_q(encoder_hidden_states_query_proj)

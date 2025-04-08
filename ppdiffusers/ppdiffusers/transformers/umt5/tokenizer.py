@@ -11,17 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from paddlenlp.transformers import *  # isort:skip
 
-from .auto import *
-from .bert import *
-from .clip import *
-from .gpt2 import *
-from .roberta import *
-from .siglip import *
-from .t5 import *
-from .umt5 import *
-from .xlm_roberta import *
+from paddlenlp.transformers.t5.tokenizer import T5Tokenizer as PPNLPT5Tokenizer
 
-# overridden model_utils
-from .model_utils import ModuleUtilsMixin, PretrainedConfig, PretrainedModel  # isort:skip
+__all__ = ["T5Tokenizer"]
+
+
+class T5Tokenizer(PPNLPT5Tokenizer):
+    model_input_names = [
+        "input_ids",
+        "attention_mask",
+    ]

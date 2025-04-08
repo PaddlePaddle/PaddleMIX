@@ -45,6 +45,7 @@ def get_activation(act_fn: str) -> nn.Layer:
     else:
         raise ValueError(f"Unsupported activation function: {act_fn}")
 
+
 class FP32SiLU(nn.Layer):
     r"""
     SiLU activation function with input upcasted to paddle.float32.
@@ -56,6 +57,7 @@ class FP32SiLU(nn.Layer):
     def forward(self, inputs: paddle.Tensor) -> paddle.Tensor:
         return F.silu(inputs.astype(paddle.float32)).astype(inputs.dtype)
 
+
 class GELU(nn.Layer):
     r"""
     GELU activation function with tanh approximation support with `approximate="tanh"`.
@@ -66,7 +68,7 @@ class GELU(nn.Layer):
         approximate (`str`, *optional*, defaults to `"none"`): If `"tanh"`, use tanh approximation.
     """
 
-    def __init__(self, dim_in: int, dim_out: int, approximate: str = "none", bias: bool=True):
+    def __init__(self, dim_in: int, dim_out: int, approximate: str = "none", bias: bool = True):
         super().__init__()
         self.proj = nn.Linear(dim_in, dim_out, bias_attr=bias)
         self.approximate = approximate
@@ -89,7 +91,7 @@ class GEGLU(nn.Layer):
         dim_out (`int`): The number of channels in the output.
     """
 
-    def __init__(self, dim_in: int, dim_out: int, bias: bool=True):
+    def __init__(self, dim_in: int, dim_out: int, bias: bool = True):
         super().__init__()
         linear_cls = LoRACompatibleLinear if not USE_PEFT_BACKEND else nn.Linear
 
@@ -114,22 +116,10 @@ class ApproximateGELU(nn.Layer):
         dim_out (`int`): The number of channels in the output.
     """
 
-    def __init__(self, dim_in: int, dim_out: int, bias: bool=True):
+    def __init__(self, dim_in: int, dim_out: int, bias: bool = True):
         super().__init__()
         self.proj = nn.Linear(dim_in, dim_out, bias_attr=bias)
 
     def forward(self, x: paddle.Tensor) -> paddle.Tensor:
         x = self.proj(x)
         return x * F.sigmoid(1.702 * x)
-
-class LinearActivation(paddle.nn.Layer):
-    def __init__(
-        self, dim_in: int, dim_out: int, bias: bool = True, activation: str = "silu"
-    ):
-        super().__init__()
-        self.proj = paddle.nn.Linear(in_features=dim_in, out_features=dim_out, bias_attr=bias)
-        self.activation = get_activation(activation)
-
-    def forward(self, hidden_states):
-        hidden_states = self.proj(hidden_states)
-        return self.activation(hidden_states)

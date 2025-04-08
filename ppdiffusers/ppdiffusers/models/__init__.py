@@ -24,6 +24,7 @@ if is_paddle_available():
     _import_structure["autoencoder_kl"] = ["AutoencoderKL"]
     _import_structure["autoencoder_kl_cogvideox"] = ["AutoencoderKLCogVideoX"]
     _import_structure["autoencoder_kl_hunyuan_video"] = ["AutoencoderKLHunyuanVideo"]
+    _import_structure["autoencoder_kl_wan"] = ["AutoencoderKLWan"]
     _import_structure["autoencoder_kl_temporal_decoder"] = ["AutoencoderKLTemporalDecoder"]
     _import_structure["autoencoder_tiny"] = ["AutoencoderTiny"]
     _import_structure["consistency_decoder_vae"] = ["ConsistencyDecoderVAE"]
@@ -35,6 +36,7 @@ if is_paddle_available():
     _import_structure["transformer_2d"] = ["Transformer2DModel"]
     _import_structure["transformer_sd3"] = ["SD3Transformer2DModel"]
     _import_structure["cogvideox_transformer_3d"] = ["CogVideoXTransformer3DModel"]
+    _import_structure["transformer_wan"] = ["WanTransformer3DModel"]
     _import_structure["transformer_temporal"] = ["TransformerTemporalModel"]
     _import_structure["unet_1d"] = ["UNet1DModel"]
     _import_structure["unet_2d"] = ["UNet2DModel"]
@@ -67,7 +69,6 @@ if is_paddle_available():
     _import_structure["transformer_flux"] = ["FluxTransformer2DModel"]
 
 
-
 if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
     if is_paddle_available():
         from .adapter import MultiAdapter, T2IAdapter
@@ -76,6 +77,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         from .autoencoder_kl_cogvideox import AutoencoderKLCogVideoX
         from .autoencoder_kl_hunyuan_video import AutoencoderKLHunyuanVideo
         from .autoencoder_kl_temporal_decoder import AutoencoderKLTemporalDecoder
+        from .autoencoder_kl_wan import AutoencoderKLWan
         from .autoencoder_tiny import AutoencoderTiny
         from .cogvideox_transformer_3d import CogVideoXTransformer3DModel
         from .cogvideox_transformer_3d_vctrl import CogVideoXTransformer3DVCtrlModel
@@ -100,10 +102,11 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         from .prior_transformer import PriorTransformer
         from .t5_film_transformer import T5FilmDecoder
         from .transformer_2d import Transformer2DModel
-        from .transformer_hunyuan_video import HunyuanVideoTransformer3DModel
         from .transformer_flux import FluxTransformer2DModel
+        from .transformer_hunyuan_video import HunyuanVideoTransformer3DModel
         from .transformer_sd3 import SD3Transformer2DModel
         from .transformer_temporal import TransformerTemporalModel
+        from .transformer_wan import WanTransformer3DModel
         from .unet_1d import UNet1DModel
         from .unet_2d import UNet2DModel
         from .unet_2d_condition import UNet2DConditionModel
