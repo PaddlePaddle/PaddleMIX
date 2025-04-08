@@ -15,7 +15,7 @@
 export CUDA_VISIBLE_DEVICES=0
 #fp16  高性能推理
 python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
-    --model_name_or_path Qwen/Qwen2.5-VL-72B-Instruct \
+    --model_name_or_path Qwen/Qwen2.5-VL-3B-Instruct \
     --media_type "image" \
     --question "Describe this image." \
     --image_file paddlemix/demo_images/examples_image1.jpg \
