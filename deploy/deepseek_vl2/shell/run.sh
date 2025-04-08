@@ -59,3 +59,4 @@ python deploy/deepseek_vl2/deepseek_vl2_infer.py \
     --repetition_penalty 1.05 \
     --benchmark \
     --quant_type "weight_only_int8" \
+    --output_via_mq False

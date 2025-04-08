@@ -54,6 +54,7 @@ python deploy/deepseek_vl2/deepseek_vl2_infer.py \
     --top_p 0.001 \
     --temperature 0.1 \
     --repetition_penalty 1.05 \
+    --output_via_mq False \
     --benchmark
 
 # 多图推理
@@ -73,6 +74,7 @@ python deploy/deepseek_vl2/deepseek_vl2_infer_multi_image.py \
     --top_p 0.001 \
     --temperature 0.1 \
     --repetition_penalty 1.05 \
+    --output_via_mq False \
     --benchmark
 ```
 
@@ -97,6 +99,7 @@ python deploy/deepseek_vl2/deepseek_vl2_infer.py \
     --temperature 0.1 \
     --repetition_penalty 1.05 \
     --quant_type "weight_only_int8" \
+    --output_via_mq False \
     --benchmark True
 ```
 

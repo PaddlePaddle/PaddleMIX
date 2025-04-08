@@ -64,6 +64,7 @@ python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
     --inference_model True \
     --mode dynamic \
     --dtype bfloat16 \
+    --output_via_mq False \
     --benchmark True
 
 # 2. video infer
@@ -82,6 +83,7 @@ python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
     --inference_model True \
     --mode dynamic \
     --dtype bfloat16 \
+    --output_via_mq False \
     --benchmark True
 ```
 
@@ -105,6 +107,7 @@ python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
     --mode dynamic \
     --dtype bfloat16 \
     --quant_type "weight_only_int8" \
+    --output_via_mq False \
     --benchmark True
 ```
 
@@ -127,6 +130,7 @@ python -m paddle.distributed.launch --gpus "0,1,2,3" deploy/qwen2_5_vl/qwen2_5_v
     --mode dynamic \
     --append_attn 1 \
     --dtype bfloat16 \
+    --output_via_mq False \
     --benchmark True
 ```
 

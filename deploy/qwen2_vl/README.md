@@ -50,6 +50,7 @@ python deploy/qwen2_vl/single_image_infer.py\
     --inference_model True \
     --mode dynamic \
     --dtype bfloat16 \
+    --output_via_mq False \
     --benchmark True
 
 ### 3.2. 文本&视频输入高性能推理
