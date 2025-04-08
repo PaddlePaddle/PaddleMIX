@@ -37,6 +37,8 @@
 
 
 ## 📣最新进展
+**🎉 2025.03.31 [Qwen2.5VL昆仑XPU](docs/hardware_support/KL_usage.md)硬件适配**
+* 为了满足用户对AI国产新硬件的使用需求，Qwen2.5VL在PaddleMIX框架中增加对昆仑P800芯片适配，提供国产计算芯片上的训推能力。
 
 **🎉 2025.03.17 [Qwen2.5VL高性能升级](deploy/qwen2_5_vl)重磅发布**
 * 得益于PaddlePaddle的最新优化，Qwen2.5VL在PaddleMIX框架中实现了高性能体验，推理速度提升显著，较VLLM框架提升10%-30%。
@@ -228,7 +230,7 @@ python setup.py install
 
 **多硬件使用**
 - 昇腾910B支持的模型列表和使用方式，可以参考[昇腾硬件使用](./docs/hardware_support/ascend_usage.md)
-
+- 昆仑P800支持的模型列表和使用方式，可以参考[昆仑硬件使用](./docs/hardware_support/KL_usage.md)
 
 
 ## 📱模型库
