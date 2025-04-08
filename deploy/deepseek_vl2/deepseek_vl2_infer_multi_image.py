@@ -351,8 +351,14 @@ def load_pil_images(conversations: List[Dict[str, str]]) -> List[PIL.Image.Image
 @dataclass
 class Mix_PredictorArgument(PredictorArgument):
     question: str = field(default="Describe this image.", metadata={"help": "The question for the model."})
-    image_file: str = field(
+    image_file_1: str = field(
         default="paddlemix/demo_images/examples_image1.jpg", metadata={"help": "The image file for the model."}
+    )
+    image_file_2: str = field(
+        default="paddlemix/demo_images/examples_image2.jpg", metadata={"help": "The image file for the model."}
+    )
+    image_file_3: str = field(
+        default="paddlemix/demo_images/examples_image3.jpg", metadata={"help": "The image file for the model."}
     )
 
 
@@ -518,8 +524,14 @@ vl_model.language = fast_llm_model
 conversation = [
     {
         "role": "<|User|>",
-        "content": f"<image>\n{predictor_args.question}",
-        "images": [predictor_args.image_file],
+        "content": "This is image_1: <image>\n"
+        "This is image_2: <image>\n"
+        f"This is image_3: <image>\n {predictor_args.question}",
+        "images": [
+            predictor_args.image_file_1,
+            predictor_args.image_file_2,
+            predictor_args.image_file_3,
+        ],
     },
     {"role": "<|Assistant|>", "content": ""},
 ]
