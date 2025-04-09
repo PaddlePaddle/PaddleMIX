@@ -19,6 +19,7 @@ try:
     from .partial_rotary_emb import partial_rotary_emb
     from .rms_norm import rms_norm
     from .sageattn import sageattn_qk_int8_pv_fp16_triton
+    from .varlen_segment_mean import segment_mean
     from .split_concat import split_concat
     from .triton_ops import (
         adaptive_layer_norm,
@@ -49,6 +50,7 @@ try:
         "fused_rotary_emb",
         "triton_split",
         "sageattn_qk_int8_pv_fp16_triton",
+        "segment_mean"
     ]
 except:
     pass
