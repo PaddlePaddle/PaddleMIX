@@ -326,7 +326,7 @@ class WanAttentionBlock(nn.Layer):
         try:
             x = F.scaled_dot_product_attention(q, k, v)
         except:
-            x = F.scaled_dot_product_attention_(q, k, v, attention_op='math')
+            x = F.scaled_dot_product_attention_(q, k, v, attention_op="math")
 
         x = x.squeeze(2).permute(0, 2, 1).reshape([batch_size * time, channels, height, width])
 
