@@ -178,7 +178,6 @@ class WanResample(nn.Layer):
                     ):
                         # cache last frame of last two chunk
                         cache_x = paddle.concat(
-                            # [feat_cache[idx][:, :, -1, :, :].unsqueeze(2).to(cache_x.device), cache_x], axis=2
                             [feat_cache[idx][:, :, -1, :, :].unsqueeze(2), cache_x],
                             axis=2,
                         )
@@ -188,7 +187,6 @@ class WanResample(nn.Layer):
                         and not isinstance(feat_cache[idx], paddle.Tensor)
                         and feat_cache[idx] == "Rep"
                     ):
-                        # cache_x = paddle.concat([paddle.zeros_like(cache_x).to(cache_x.device), cache_x], axis=2)
                         cache_x = paddle.concat([paddle.zeros_like(cache_x), cache_x], axis=2)
                     if not isinstance(feat_cache[idx], paddle.Tensor) and feat_cache[idx] == "Rep":
                         x = self.time_conv(x)
@@ -325,33 +323,10 @@ class WanAttentionBlock(nn.Layer):
         q, k, v = qkv.chunk(3, axis=-1)
 
         # apply attention
-        # print('q.shape', q.shape, k.shape, v.shape)
         try:
             x = F.scaled_dot_product_attention(q, k, v)
         except:
-            import math
-
-            def naive_scaled_dot_product_attention(query, key, value):
-                is_causal = False
-                attn_mask = None
-                dropout_p = 0.0
-                scale = 1 / math.sqrt(query.shape[-1])
-                qt = paddle.transpose(query, [0, 2, 1, 3])
-                kt = paddle.transpose(key, [0, 2, 1, 3])
-                vt = paddle.transpose(value, [0, 2, 1, 3])
-                s = paddle.matmul(qt * scale, kt, transpose_y=True)
-                if is_causal:
-                    p = paddle.incubate.softmax_mask_fuse_upper_triangle(s)
-                else:
-                    if attn_mask is not None:
-                        s = s + attn_mask.cast(s.dtype)
-                    p = F.softmax(s, axis=-1)
-                if dropout_p > 0.0:
-                    p = F.dropout(p, dropout_p, training=False, mode="upscale_in_train")
-                o = paddle.matmul(p, vt)
-                return paddle.transpose(o, [0, 2, 1, 3])
-
-            x = naive_scaled_dot_product_attention(q, k, v)
+            x = F.scaled_dot_product_attention_(q, k, v, attention_op='math')
 
         x = x.squeeze(2).permute(0, 2, 1).reshape([batch_size * time, channels, height, width])
 
