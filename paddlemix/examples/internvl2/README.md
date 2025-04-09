@@ -94,7 +94,17 @@ python paddlemix/examples/internvl2/chat_demo_video.py \
 
 ### 4.1 微调数据准备
 
-#### 数据集下载
+#### 预训练数据集下载
+
+预训练数据集采用 LLaVA-Pretrain 数据集，包含 558k 个图像-文本对。
+PaddleMIX团队整理后的下载链接为：
+```bash
+wget https://paddlenlp.bj.bcebos.com//datasets/paddlemix/LLaVA/LLaVA-Pretrain.tar # 27 G
+wget https://paddlenlp.bj.bcebos.com//datasets/paddlemix/LLaVA/blip_laion_cc_sbu_558k.jsonl # 下载放置于 LLaVA-Pretrain/ 下
+```
+
+#### SFT数据集下载
+
 SFT数据集采用 InternVL2 官方公布的1.3M的SFT数据集，总共包含约 120 万个完全开源的视觉指令调优样本。从宏观角度来看，在 ShareGPT-4V 的基础上，还整合了 LLaVA-ZH、DVQA、ChartQA、AI2D、DocVQA、GeoQA+ 和 SynthDoG-EN。大部分数据与 LLaVA-NeXT 保持一致。
 
 PaddleMIX团队整理后的下载链接为：
@@ -113,7 +123,7 @@ wget https://paddlenlp.bj.bcebos.com/datasets/paddlemix/playground/opensource.ta
 chartqa.tar需下载解压在playground/data/目录下，opensource.tar需下载解压在playground/目录下，opensource里是数据标注的jsonl文件。
 
 ----
-#### 数据集介绍
+#### SFT数据集介绍
 数据集包含以下数据集：
 * AI2D：ai2d_images（由 InternLM-XComposer 提供）
 * ChartQA：ChartQA Dataset
@@ -131,7 +141,7 @@ chartqa.tar需下载解压在playground/data/目录下，opensource.tar需下载
 * GeoQA+：images。我们已转换数据格式并重新发布。
 
 
-#### 数据集组织结构
+#### SFT数据集组织结构
 按照以下方式在 `playground/data` 中组织数据：
 
 ```
@@ -193,23 +203,10 @@ playground/
 
 ```bash
 # 多卡
-# 1B InternVl2 (LLM Qwen2.5-0.5B)
-sh paddlemix/examples/internvl2/shell/internvl2.0/1st_pretrain/internvl2_1b_qwen2-5_0_5b_dynamic_res_pretrain.sh
-
-## 多卡
-# 2B InternVl2 (LLM internlm-1_8b)
-sh paddlemix/examples/internvl2/shell/internvl2.0/1st_pretrain/internvl2_2b_internlm2_1_8b_dynamic_res_pretrain.sh
-# 2B InternVl2 (LLM Qwen2.5-1.5b)
-sh paddlemix/examples/internvl2/shell/internvl2.0/1st_pretrain/internvl2_2b_qwen2-5_1_5b_dynamic_res_pretrain.sh
-
-## 多卡
-# 4B InternVl2 (LLM Qwen2.5-3b)
-sh paddlemix/examples/internvl2/shell/internvl2.0/1st_pretrain/internvl2_2b_qwen2-5_3b_dynamic_res_pretrain.sh
-
-## 多卡
-# 8B InternVl2 (LLM Qwen2.5-7b)
-sh paddlemix/examples/internvl2/shell/internvl2.0/1st_pretrain/internvl2_8b_qwen2-5_7b_dynamic_res_pretrain.sh
+# 1B InternVl2 (LLM Qwen2-0.5B)
+sh paddlemix/examples/internvl2/shell/internvl2.0/1st_pretrain/internvl2_1b_qwen2_0_5b_dynamic_res_1st_pretrain.sh
 ```
+
 ### 4.3 微调命令
 
 注意：此微调训练为全参数微调，冻结视觉编码器而放开LLM训练，1B V100 32G可跑。

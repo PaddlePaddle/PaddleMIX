@@ -29,7 +29,7 @@ from paddlenlp.trainer import (
 from paddlenlp.transformers import AutoModelForCausalLM, LlamaConfig
 from PIL import Image, ImageFile, PngImagePlugin
 from train.args_utils import DataTrainingArguments, ModelArguments
-from train.dataset import TCSLoader, build_datasets
+from train.dataset import build_datasets
 from train.dataset_packed import packed_collate_fn
 
 from paddlemix.models.internvl2.constants import (
@@ -155,7 +155,7 @@ def main():
     tokenizer.added_tokens_decoder = {v: k for k, v in tokenizer.added_tokens_encoder.items()}
     num_new_tokens = tokenizer.add_tokens(token_list, special_tokens=True)
     img_context_token_id = tokenizer.convert_tokens_to_ids(IMG_CONTEXT_TOKEN)
-    tcs_loader = TCSLoader("~/petreloss.conf") if has_tcs_loader else None
+    tcs_loader = None #TCSLoader("~/petreloss.conf") if has_tcs_loader else None
 
     if "npu" in paddle.get_device():
         is_bfloat16_supported = True
