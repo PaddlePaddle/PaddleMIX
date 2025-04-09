@@ -31,7 +31,7 @@ from typing import Any, List, Literal, Optional, Tuple, Union
 from .triton_utils import get_dtype_str, paddle_use_triton, rendering_common_template
 
 @paddle_use_triton(
-    key=["1"]
+    key=["num_heads", "head_dim"]
 )
 def segmented_mean_reduce_kernel(
     input_ptr, 
@@ -98,11 +98,24 @@ def segmented_mean_reduce_kernel(
 
 def segment_mean(
     x: paddle.Tensor,           # [total_seqlen, num_heads, head_dim]
-    cu_seqlen: paddle.Tensor,   # [batch_size + 1]
-    BLOCK_SIZE_SEQ=128,
-    BLOCK_SIZE_HEAD=4,
-    BLOCK_SIZE_DIM=64
+    cu_seqlen: paddle.Tensor    # [batch_size + 1]
 ):
+    """
+    Examples:
+        import paddle
+        import paddlemix
+
+        cu_seqlens = [0, 1024, 2048, 4096]
+        total_seqlen = 4096
+        num_head = 24
+        head_dim = 128
+
+        k = paddle.randn([total_seqlen, num_head, head_dim], dtype="float16")
+
+        cu_seqlen = paddle.to_tensor(cu_seqlens, paddle.int32)
+
+        km = paddlemix.triton_ops.segment_mean(k, cu_seqlen)
+    """
     num_batches = cu_seqlen.shape[0] - 1
 
     num_heads = x.shape[1]
@@ -130,7 +143,14 @@ def segment_mean(
 """
     op_name = "triton_segment_mean"
     op_name += get_dtype_str(x.dtype)
-    op_name += f"_BLK{BLOCK_SIZE_SEQ}_{BLOCK_SIZE_HEAD}_{BLOCK_SIZE_DIM}"
+    
+
+    # auto-tuning
+    segment_mean_configs = []
+    segment_mean_configs.append({'BLOCK_SIZE_SEQ': 128, 'BLOCK_SIZE_HEAD': 4, 'BLOCK_SIZE_DIM': 64, 'num_stages': 2, 'num_warps': 4})
+    segment_mean_configs.append({'BLOCK_SIZE_SEQ': 256, 'BLOCK_SIZE_HEAD': 4, 'BLOCK_SIZE_DIM': 64, 'num_stages': 2, 'num_warps': 4})
+    segment_mean_configs.append({'BLOCK_SIZE_SEQ': 512, 'BLOCK_SIZE_HEAD': 8, 'BLOCK_SIZE_DIM': 64, 'num_stages': 2, 'num_warps': 8})
+    segment_mean_configs.append({'BLOCK_SIZE_SEQ': 256, 'BLOCK_SIZE_HEAD': 8, 'BLOCK_SIZE_DIM': 128, 'num_stages': 2, 'num_warps': 4})
 
     if op_name not in OpProtoHolder.instance().op_proto_map.keys():
         Output = paddle.empty([num_batches, num_heads, head_dim], dtype=x.dtype)
@@ -158,7 +178,7 @@ def segment_mean(
         )
     
         # 调用kernel
-        segmented_mean_reduce_kernel[(op_name, template_used, grid)](
+        segmented_mean_reduce_kernel[(op_name, template_used, grid, segment_mean_configs)](
             input_ptr=x, 
             output_ptr=Output,
             cu_seqlen_ptr=cu_seqlen,
@@ -169,17 +189,11 @@ def segment_mean(
             input_stride_head=input_stride_head,
             output_stride_batch=output_stride_batch,
             output_stride_head=output_stride_head,
-            BLOCK_SIZE_SEQ=BLOCK_SIZE_SEQ,
-            BLOCK_SIZE_HEAD=BLOCK_SIZE_HEAD,
-            BLOCK_SIZE_DIM=BLOCK_SIZE_DIM
         )
 
     if in_dynamic_or_pir_mode():
         outs = _C_ops._run_custom_op(
-            op_name, x, cu_seqlen, 
-            BLOCK_SIZE_SEQ,
-            BLOCK_SIZE_HEAD, 
-            BLOCK_SIZE_DIM
+            op_name, x, cu_seqlen
         )
         return outs[0]
     else:
@@ -193,11 +207,6 @@ def segment_mean(
         helper.append_op(
             type=op_name,
             inputs=inputs,
-            attrs={
-                "BLOCK_SIZE_SEQ": BLOCK_SIZE_SEQ,
-                "BLOCK_SIZE_HEAD": BLOCK_SIZE_HEAD,
-                "BLOCK_SIZE_DIM": BLOCK_SIZE_DIM,
-            },
             outputs={"output_tensor": output}
         )
         return output
