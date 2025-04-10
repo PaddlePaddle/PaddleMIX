@@ -351,8 +351,14 @@ def load_pil_images(conversations: List[Dict[str, str]]) -> List[PIL.Image.Image
 @dataclass
 class Mix_PredictorArgument(PredictorArgument):
     question: str = field(default="Describe this image.", metadata={"help": "The question for the model."})
-    image_file: str = field(
+    image_file_1: str = field(
         default="paddlemix/demo_images/examples_image1.jpg", metadata={"help": "The image file for the model."}
+    )
+    image_file_2: str = field(
+        default="paddlemix/demo_images/examples_image2.jpg", metadata={"help": "The image file for the model."}
+    )
+    image_file_3: str = field(
+        default="paddlemix/demo_images/examples_image3.jpg", metadata={"help": "The image file for the model."}
     )
 
 
@@ -427,8 +433,14 @@ def run_model(predictor_args):
     conversation = [
         {
             "role": "<|User|>",
-            "content": f"<image>\n{predictor_args.question}",
-            "images": [predictor_args.image_file],
+            "content": "This is image_1: <image>\n"
+            "This is image_2: <image>\n"
+            f"This is image_3: <image>\n {predictor_args.question}",
+            "images": [
+                predictor_args.image_file_1,
+                predictor_args.image_file_2,
+                predictor_args.image_file_3,
+            ],
         },
         {"role": "<|Assistant|>", "content": ""},
     ]
@@ -438,9 +450,9 @@ def run_model(predictor_args):
         conversations=conversation, images=pil_images, force_batchify=True, system_prompt=""
     )
     prepare_inputs.images = prepare_inputs.images.astype(predictor_args.dtype)
+
     with paddle.no_grad():
         inputs_embeds = vl_model.prepare_inputs_embeds(**prepare_inputs)
-        
     input_tokens_len = inputs_embeds.shape[1]
     llm_model_inputs = init_llm_model_inputs(inputs_embeds, arg_config=predictor_args)
 
@@ -519,6 +531,7 @@ fast_llm_model.eval()
 
 vl_model.language = fast_llm_model
 
+
 if predictor_args.benchmark:
     print(f"Benchmarking {predictor_args.model_name_or_path} ...")
     warm_up = 3
@@ -526,6 +539,7 @@ if predictor_args.benchmark:
     sumtime = 0.0
     times = repeat_times + warm_up
     for i in range(times):
+        print("run", i)
         if i > 2:
             paddle.device.synchronize()
             starttime = datetime.datetime.now()
