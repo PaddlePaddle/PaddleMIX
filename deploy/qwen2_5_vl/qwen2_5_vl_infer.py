@@ -335,8 +335,3 @@ if predictor_args.benchmark:
 else:
     generated_text = run_model(predictor_args)
     print("Final output_text:\n", generated_text[0])
-
-
-    generated_text = run_model(predictor_args)
-    print("Final output_text:\n", generated_text[0])
-
