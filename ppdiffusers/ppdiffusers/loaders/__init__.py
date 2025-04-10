@@ -45,7 +45,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
                 text_encoder_lora_state_dict,
             )
             from .ip_adapter import IPAdapterMixin
-            from .lora import LoraLoaderMixin, SD3LoraLoaderMixin, StableDiffusionXLLoraLoaderMixin
+            from .lora import LoraLoaderMixin, SD3LoraLoaderMixin, StableDiffusionXLLoraLoaderMixin, FluxLoraLoaderMixin
             from .single_file import FromCkptMixin, FromSingleFileMixin
             from .textual_inversion import TextualInversionLoaderMixin
 else:

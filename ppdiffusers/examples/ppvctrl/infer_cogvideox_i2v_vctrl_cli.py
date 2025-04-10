@@ -207,17 +207,17 @@ if __name__ == "__main__":
         ref_image = Image.open(args.ref_image_path).convert("RGB")
         if args.task == "character_pose":
             validation_control_images = [ref_image] + validation_control_images
-    # Total franes of input video. 
-    toltal_frames = len(validation_control_images)
+    # Total frames of input video. 
+    total_frames = len(validation_control_images)
     
     # Inference times for a long video.
-    inference_times=math.ceil((toltal_frames-args.max_frame)/args.strides)+1
+    inference_times=math.ceil((total_frames-args.max_frame)/args.strides)+1
     num_frames=args.max_frame
     
     
     for step in range(inference_times):
-        end_frame=min(step*args.strides+num_frames,toltal_frames)
-        if end_frame!=toltal_frames:
+        end_frame=min(step*args.strides+num_frames,total_frames)
+        if end_frame!=total_frames:
             start_frame=step*args.strides
         else:
             start_frame=end_frame-num_frames
@@ -228,7 +228,7 @@ if __name__ == "__main__":
             validation_mask_images_slice = validation_mask_images[start_frame:end_frame ]
         print(f"step:{step},start_frame:{start_frame},end_frame:{end_frame}")
         print(len(validation_control_images_slice))
-        print(toltal_frames)
+        print(total_frames)
 
         video = pipeline(
             image=ref_image,
@@ -250,14 +250,14 @@ if __name__ == "__main__":
         if step !=inference_times-2:
             ref_image = video[args.strides - 1]
         else:
-            ref_image=video[toltal_frames-num_frames-start_frame]
+            ref_image=video[total_frames-num_frames-start_frame]
         
         paddle.device.cuda.empty_cache()
-        if end_frame!=toltal_frames:
+        if end_frame!=total_frames:
             final_result.append(video[:args.strides])
         else:
             final_result.append(video[step*args.strides-start_frame:])
         
         
-save_vid_side_by_side(final_result, validation_control_images[:toltal_frames], args.output_dir,fps=args.fps)
+save_vid_side_by_side(final_result, validation_control_images[:total_frames], args.output_dir,fps=args.fps)
         

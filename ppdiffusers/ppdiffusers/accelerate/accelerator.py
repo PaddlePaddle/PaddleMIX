@@ -1714,7 +1714,7 @@ class Accelerator:
 
         Arguments:
             model: (`paddle.nn.Layer`):
-                Model to be saved. The model can be wrapped or unwraped.
+                Model to be saved. The model can be wrapped or unwrapped.
             save_directory (`str` or `os.PathLike`):
                 Directory to which to save. Will be created if it doesn't exist.
             max_shard_size (`int` or `str`, *optional*, defaults to `"10GB"`):

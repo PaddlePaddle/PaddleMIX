@@ -176,7 +176,7 @@ sh paddlemix/examples/qwen2_vl/shell/auto_2b_lora_bs32_1e8.sh
 ```python
 import paddle
 import paddle.distributed as dist
-ckpt_path='/path/for/dist_ckpt'# 你的自动并行权重路径文件夹
+ckpt_path='/path/for/dist_ckpt'# 你的自动并行权重路径文件夹(ex:work_dirs/auto_330k_2b_bs32_1e8/checkpoint-1000/dist_ckpt)
 # offload=1, 参数 offload 到 CPU，减少显存占用
 # prefix="model" 参数可用于过滤掉非模型参数，例如 optimizer 状态等
 merged_state_dict = dist.checkpoint.load_state_dict.load_merged_state_dict(ckpt_path, offload=0, prefix="model")
@@ -187,7 +187,7 @@ paddle.save(merged_state_dict, 'model_state.pdparams')# 合并后的权重，与
 
 LoRA微调的权重合并方法类似，但合并之后需要通过python脚本将LoRA权重进行merge，merge完成之后才能用于推理，执行方式如下:
 ```sh
-python paddlemix/tools/merge_lora_params.py --model_name_or_path Qwen/Qwen2-VL-2B-Instruct --lora_path  ./checkpoints/your_path --merge_model_path ./checkpoints/merged_model
+python paddlemix/examples/qwen2_vl/merge_lora_params.py --model_name_or_path Qwen/Qwen2-VL-2B-Instruct --lora_path  ./checkpoints/your_path --merge_model_path ./checkpoints/merged_model
 
 ```
 ### 5 高性能推理优化

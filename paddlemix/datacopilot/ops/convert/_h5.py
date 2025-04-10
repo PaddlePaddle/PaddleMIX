@@ -253,10 +253,10 @@ def from_h5(
             f'{f} is not valid h5 file'
         
     if load_all_at_once:
-        datas = _H5Data(files)
+        data = _H5Data(files)
         items = parallel_map(
-            lambda i: datas[i], 
-            range(len(datas)), 
+            lambda i: data[i], 
+            range(len(data)), 
             max_workers=max_workers,
             mode=mode,
             progress=progress

@@ -14,7 +14,7 @@ tar -xzvf stable_cascade_weights.tar.gz -C ./stable_cascade_weights
 如果解压到其他目录，请修改config.py中的`WEIGHTS_PATH`。
 如要自行转换预训练权重，请参考以下脚本：
 - scripts/convert_other_weight.py
-- scipts/convert_unet_weight.py
+- scripts/convert_unet_weight.py
 
 ## 模型推理
 ```

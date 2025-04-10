@@ -1206,7 +1206,7 @@ class FastDeployRuntimeModel:
     def is_support_zero_copy(self):
         if self.model.runtime_option._option.backend == fd.Backend.PDINFER:
             return self.model.runtime_option._option.paddle_infer_option.enable_trt
-        # currently we donot support zero copy model with fd.Backend.LITE.
+        # currently we do not support zero copy model with fd.Backend.LITE.
         elif self.model.runtime_option._option.backend == fd.Backend.LITE:
             return False
         else:

@@ -80,11 +80,11 @@ if USE_PADDLE in ENV_VARS_TRUE_AND_AUTO_VALUES:
                     memory_efficient_attention,
                 )
 
-                _ = memory_efficient_attention(
-                    paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
-                    paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
-                    paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
-                )
+                # _ = memory_efficient_attention(
+                #     paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
+                #     paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
+                #     paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
+                # )
                 _ppxformers_available = True
             except Exception:
                 _ppxformers_available = False
@@ -454,7 +454,7 @@ installation page: https://www.paddlepaddle.org.cn/install/quick and follow the 
 
 # docstyle-ignore
 PPXFORMERS_IMPORT_ERROR = """
-{0} requires the scaled_dot_product_attention but your PaddlePaddle donot have this. Checkout the instructions on the
+{0} requires the scaled_dot_product_attention but your PaddlePaddle do not have this. Checkout the instructions on the
 installation page: https://www.paddlepaddle.org.cn/install/quick and follow the ones that match your environment.
 """
 

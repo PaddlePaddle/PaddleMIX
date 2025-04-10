@@ -41,15 +41,22 @@ from predictor import ModelArgument, PredictorArgument
 
 @dataclass
 class Mix_PredictorArgument(PredictorArgument):
+    media_type: str = field(
+        default="image",
+        metadata={"help": "The media type for the model, image or video."},
+    )
     question: str = field(default="Describe this image.", metadata={"help": "The question for the model."})
     image_file: str = field(
         default="paddlemix/demo_images/examples_image1.jpg", metadata={"help": "The image file for the model."}
+    )
+    video_file: str = field(
+        default="paddlemix/demo_images/red-panda.mp4", metadata={"help": "The video file for the model."}
     )
 
 
 @dataclass
 class Mix_ModelArgument(ModelArgument):
-    pass
+    attn_implementation: str = field(default="eager", metadata={"help": "The implementation of attention."})
 
 
 # NOTE: (zhoukangkang、changwenbin) Copied from PaddleMIX/paddlemix/models/qwen2_vl/modeling_qwen2_vl.py,
@@ -125,7 +132,7 @@ def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: Predic
     model_inputs["is_block_step"] = paddle.full(shape=[batch_size], fill_value=False, dtype="bool")
 
     cache_k_shapes, cache_v_shapes = fast_llm_model.get_cache_kvs_shape(fast_llm_model.config, arg_config.batch_size)
-    cachekv_dtype = config.dtype if arg_config.cachekv_int8_type is None else "uint8"
+    cachekv_dtype = arg_config.dtype if arg_config.cachekv_int8_type is None else "uint8"
 
     cache_kvs = []
     if cache_k_shapes and cache_v_shapes:
@@ -178,7 +185,7 @@ def run_model(predictor_args):
         llm_model_inputs["input_ids"] = generated_id
         llm_model_inputs["inputs_embeds"] = None
         generated_ids = paddle.concat([generated_ids, generated_id], axis=1)
-        if paddle.any(generated_id == 151645).item():
+        if paddle.any(generated_id == processor.tokenizer.eos_token_id).item():
             break
     generated_text = processor.batch_decode(
         generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False
@@ -210,6 +217,7 @@ vl_model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
     tensor_parallel_rank=tensor_parallel_rank,
     dtype=predictor_args.dtype,
     tensor_parallel_output=False,
+    attn_implementation=model_args.attn_implementation,
 )
 vl_model.eval()
 
@@ -225,14 +233,25 @@ processor = Qwen2_5_VLProcessor(image_processor, tokenizer)
 # min_pixels = 256*28*28 # 200704
 # max_pixels = 1280*28*28 # 1003520
 
+messages_media = {
+    "type": predictor_args.media_type,
+    predictor_args.media_type: predictor_args.image_file
+    if predictor_args.media_type == "image"
+    else predictor_args.video_file,
+}
+if predictor_args.media_type == "video":
+    messages_media.update(
+        {
+            "max_pixels": 360 * 420,
+            "fps": 1.0,
+        }
+    )
+
 messages = [
     {
         "role": "user",
         "content": [
-            {
-                "type": "image",
-                "image": predictor_args.image_file,
-            },
+            messages_media,
             {"type": "text", "text": predictor_args.question},
         ],
     }

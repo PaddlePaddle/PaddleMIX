@@ -86,8 +86,179 @@ prompt2：“框出图中公交车的位置”
 
 
 ## 4 模型微调
-我们提供 基于 PaddleMIX tool 统一微调工具链，支持全参数、lora微调，数据准备及参数配置等可参考 [tools](../../tools/README.md)
-全参数微调需要A100 80G显存，lora微调支持V100 32G显存。
+我们提供 `finetune.py` 脚本，用于 stage3 微调模型。
+### 4.1 数据准备
+将自己的数据放到一个列表中并存入json文件中，示例如下,或参考[sft_examples](https://bj.bcebos.com/v1/paddlenlp/models/community/qwen-vl/sft_examples.json)：
+```json
+[
+  {
+    "id": "identity_0",
+    "conversations": [
+      {
+        "from": "user",
+        "value": "你好"
+      },
+      {
+        "from": "assistant",
+        "value": "我是Qwen-VL,一个支持视觉输入的大模型。"
+      }
+    ]
+  },
+  {
+    "id": "identity_1",
+    "conversations": [
+      {
+        "from": "user",
+        "value": "Picture 1: <img>https://bj.bcebos.com/v1/paddlenlp/models/community/GroundingDino/000000004505.jpg<img>\n图中的巴士是什么颜色的？"
+      },
+      {
+        "from": "assistant",
+        "value": "红色的。"
+      },
+      {
+        "from": "user",
+        "value": "框出图中的巴士的位置"
+      },
+      {
+        "from": "assistant",
+        "value": "<ref>巴士</ref><box>(178,279),(806,884)</box>"
+      }
+    ]
+  },
+  {
+    "id": "identity_2",
+    "conversations": [
+      {
+        "from": "user",
+        "value": "Picture 1: <img>Chongqing.jpeg</img>\nPicture 2: <img>Beijing.jpeg</img>\n图中都是哪"
+      },
+      {
+        "from": "assistant",
+        "value": "第一张图片是重庆的城市天际线，第二张图片是北京的天际线。"
+      }
+    ]
+  }
+]
+```
+
+对于带图像输入的内容可表示为
+`Picture id: <img>img_path</img>\n{your prompt}`，其中`id`表示对话中的第几张图片。"img_path"可以是本地的图片或网络地址。
+
+对话中的检测框可以表示为`<box>(x1,y1),(x2,y2)</box>`，其中 `(x1, y1)` 和`(x2, y2)`分别对应左上角和右下角的坐标，并且被归一化到`[0, 1000)`的范围内. 检测框对应的文本描述也可以通过`<ref>text_caption</ref>`表示。
+
+### 4.2 训练
+训练时使用`paddlemix/examples/qwen_vl/finetune.py`程序进行训练，**训练前请先检查数据集路径,如果使用url，请确保环境网络正常**。推荐使用A100训练。
+
+单卡训练
+命令及参数配置示例：
+```
+export FLAGS_use_cuda_managed_memory=true #若显存不够，可设置环境变量，但会影响训练速度
+MODEL_NAME="qwen-vl/qwen-vl-chat-7b"
+DATA="train.json"
+
+python paddlemix/examples/qwen_vl/finetune.py \
+    --model_name_or_path ${MODEL_NAME} \
+    --data_path ${DATA} \
+    --dtype 'bfloat16' \
+    --fix_vit True \
+    --output_dir output_qwen_vl \
+    --num_train_epochs 5 \
+    --per_device_train_batch_size 1 \
+    --gradient_accumulation_steps 16 \
+    --save_steps 1000 \
+    --save_strategy "steps" \
+    --save_total_limit 10 \
+    --learning_rate 1e-5 \
+    --weight_decay 0.1 \
+    --adam_beta2 0.95 \
+    --warmup_ratio 0.01 \
+    --lr_scheduler_type "cosine" \
+    --logging_steps 1 \
+    --report_to "none" \
+    --model_max_length 2048 \
+    --lazy_preprocess True
+```
+
+多卡训练命令及参数配置示例：
+```
+MODEL_NAME="qwen-vl/qwen-vl-chat-7b"
+MASTER='127.0.0.1:8080'
+DATA="train.json"
+
+python -m paddle.distributed.launch --master ${MASTER} --nnodes 1 --nproc_per_node 8 \
+paddlemix/examples/qwen_vl/finetune.py \
+    --model_name_or_path ${MODEL_NAME} \
+    --data_path ${DATA} \
+    --dtype 'bfloat16' \
+    --fix_vit True \
+    --output_dir output_qwen_vl \
+    --num_train_epochs 5 \
+    --per_device_train_batch_size 1 \
+    --gradient_accumulation_steps 16 \
+    --save_steps 1000 \
+    --save_strategy "steps" \
+    --save_total_limit 10 \
+    --learning_rate 1e-5 \
+    --weight_decay 0.1 \
+    --adam_beta2 0.95 \
+    --warmup_ratio 0.01 \
+    --lr_scheduler_type "cosine" \
+    --logging_steps 1 \
+    --report_to "none" \
+    --model_max_length 2048 \
+    --lazy_preprocess True
+```
+
+
+```
+# 参数说明
+
+--model_name_or_path #设置实际使用的模型，默认‘model_name_or_path’
+
+--data_path #数据 json文件路径
+
+--dtype    #数据类型，默认‘bfloat16’
+
+--fix_vit #训练时是否固定visual vit的参数，默认True
+
+--output_dir #模型存储路径
+
+--num_train_epochs #训练epoch次数
+
+--per_device_train_batch_size   #训练batch大小
+
+--gradient_accumulation_steps   #在执行backward更新过程之前，用于累积梯度的更新步骤数。默认16，即执行16个step后，更新一次参数
+
+--save_strategy   #训练期间要采用保存模型策略。可选择：
+                  #“no”：在训练期间不进行任何保存。
+                  #“epoch”`：每个epoch后保存。
+                  #“steps”`：每“Save_steps”保存一次。
+
+--save_steps  #每多少个steps保存一次模型
+
+--save_total_limit  #最多保存多少个模型
+
+--learning_rate  #学习率
+
+--adam_beta2   #optimizer中beta2参数
+
+--warmup_ratio  #学习率warm up比例
+
+--weight_decay  #权重衰减
+
+--lr_scheduler_type 1 #学习率衰减策略，可选cosine、linear
+
+--logging_steps #日志打印间隔
+
+--report_to  #日志集成，‘none’表示不集成，‘visualdl’表示集成到visualdl中
+
+--model_max_length  #模型最大长度，默认2048
+
+--lazy_preprocess #lazy 数据加载
+
+
+```
+
 
 ### 参考文献
 ```BibTeX

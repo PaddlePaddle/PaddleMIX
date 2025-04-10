@@ -21,7 +21,7 @@ cd PaddleMIX/ppdiffusers/examples/stable_diffusion
 # 安装所需的依赖, 如果提示权限不够，请在最后增加 --user 选项
 pip install -r requirements.txt
 
-# 安装magevit2 requirments.txt
+# 安装magevit2 requirements.txt
 cd PaddleMIX/ppdiffusers/examples/video_tokenizer/magvit2
 pip install -r requirements.txt
 

@@ -404,7 +404,7 @@ def resize_image(resize_mode, im, width, height, upscaler_name=None):
 
 class ReferenceOnlyPipeline(DiffusionPipeline):
     r"""
-    Pipeline for text-to-image generation using Stable Diffusion with refernce only.
+    Pipeline for text-to-image generation using Stable Diffusion with reference only.
 
     This model inherits from [`DiffusionPipeline`]. Check the superclass documentation for the generic methods the
     library implements for all the pipelines (such as downloading or saving, running on a particular device, etc.)

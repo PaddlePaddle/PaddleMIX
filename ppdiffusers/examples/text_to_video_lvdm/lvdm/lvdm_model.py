@@ -517,7 +517,7 @@ class LatentVideoDiffusion(nn.Layer):
                 # expand the latents if we are doing classifier free guidance
                 latent_model_input = paddle.concat([latents] * 2) if do_classifier_free_guidance else latents
 
-                # ddim donot use this
+                # ddim do not use this
                 latent_model_input = self.eval_scheduler.scale_model_input(latent_model_input, t)
 
                 # predict the noise residual
@@ -579,7 +579,7 @@ class LatentVideoDiffusion(nn.Layer):
                 # expand the latents if we are doing classifier free guidance
                 latent_model_input = latents
 
-                # ddim donot use this
+                # ddim do not use this
                 latent_model_input = self.eval_scheduler.scale_model_input(latent_model_input, t)
 
                 # predict the noise residual
