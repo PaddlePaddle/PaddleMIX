@@ -14,30 +14,39 @@
 
 
 ## 2 环境准备
-1）
 [安装PaddlePaddle](https://github.com/PaddlePaddle/PaddleMIX?tab=readme-ov-file#3-%EF%B8%8F%E5%AE%89%E8%A3%85paddlepaddle)
 - **python >= 3.10**
 - **paddlepaddle-gpu 要求develop版本**
 ```bash
 # Develop 版本安装示例
 python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu123/
-
 ```
 
 2） [安装PaddleMIX环境依赖包](https://github.com/PaddlePaddle/PaddleMIX?tab=readme-ov-file#3-%EF%B8%8F%E5%AE%89%E8%A3%85paddlepaddle)
 ```bash
 # pip 安装示例，安装paddlemix、ppdiffusers、项目依赖
-python -m pip install -e . --user
-python -m pip install -e ppdiffusers --user
-python -m pip install -r requirements.txt --user
+python -m pip install -e .
+python -m pip install -e ppdiffusers
+python -m pip install -r requirements.txt
 
-# 安装PaddleNLP
-git clone https://github.com/PaddlePaddle/PaddleNLP.git
+# 安装PaddleNLP特定版本
+pip uninstall -y paddlenlp && rm -rf PaddleNLP
+git clone --depth=1 https://github.com/PaddlePaddle/PaddleNLP.git
 cd PaddleNLP
-python setup.py install
-cd csrc
-python setup_cuda.py install
+git checkout e67789d58849765c827fc7f8e063e0d51a7daecf
+pip install -e .
+
+# 安装paddlenlp_ops pre-build 
+pip install https://paddlenlp.bj.bcebos.com/ops/cu118/paddlenlp_ops-3.0.0b4.post20250331-py3-none-any.whl
+
+# 或者安装其他版本
+pip install https://paddlenlp.bj.bcebos.com/ops/cu118/paddlenlp_ops-3.0.0b4-py3-none-any.whl
+# 或者安装其他版本
+pip install https://paddlenlp.bj.bcebos.com/ops/cu124/paddlenlp_ops-3.0.0b4-py3-none-any.whl
 ```
+
+> 注：
+* (默认开启flash_attn)使用flash_attn 要求A100/A800显卡或者H20显卡
 
 
 
