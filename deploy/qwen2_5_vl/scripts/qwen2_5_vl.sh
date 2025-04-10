@@ -11,9 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-export CUDA_VISIBLE_DEVICES=0
+export PYTHONPATH=/root/paddlejob/workspace/env_run/output/changwenbin/PaddleMIX/PaddleNLP
+# export CUDA_VISIBLE_DEVICES=1
 #fp16  高性能推理
+# nsys profile -o qwen_static 
 python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
     --model_name_or_path Qwen/Qwen2.5-VL-3B-Instruct \
     --media_type "image" \
@@ -26,12 +27,12 @@ python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
     --temperature 0.1 \
     --repetition_penalty 1.05 \
     --block_attn True \
+    --append_attn 1 \
     --inference_model True \
     --mode dynamic \
     --dtype bfloat16 \
     --output_via_mq False \
     --benchmark True 
-    
 
 # # weight only int8 量化推理
 # python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \

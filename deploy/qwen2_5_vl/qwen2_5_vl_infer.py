@@ -23,6 +23,7 @@ from paddlenlp.generation import GenerationConfig
 from paddlenlp.trainer import PdArgumentParser
 from paddlenlp.transformers import AutoConfig, AutoInferenceModelForCausalLM
 from paddlenlp.trl import llm_utils
+from paddlemix.models.minicpm_v.modeling_navit_siglip import PaddleAttentionMaskConverter
 
 from paddlemix.models.qwen2_5_vl import MIXQwen2_5_Tokenizer
 from paddlemix.models.qwen2_5_vl.modeling_qwen2_5_vl import (
@@ -107,6 +108,7 @@ def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: Predic
     model_inputs = {}
     model_inputs["input_ids"] = paddle.zeros(shape=[batch_size, arg_config.total_max_length], dtype="int64")
     model_inputs["inputs_embeds"] = inputs_embeds
+    model_inputs["multimodal_embeds"] = paddle.to_tensor([True]*batch_size, dtype="bool")
 
     # I dislike write (arg_config.total_max_length + arg_config.block_size -1 ) // arg_config.block_size
     assert arg_config.total_max_length % arg_config.block_size == 0
@@ -181,9 +183,14 @@ def run_model(predictor_args):
     while llm_model_inputs["not_need_stop"]:
 
         generated_id = fast_llm_model.generate(**llm_model_inputs)  # already trimmed in paddle
-
-        llm_model_inputs["input_ids"] = generated_id
-        llm_model_inputs["inputs_embeds"] = None
+        # breakpoint()
+        llm_model_inputs["input_ids"] = generated_id 
+        if llm_model_inputs["inputs_embeds"].shape[2] >1:
+            llm_model_inputs["inputs_embeds"] = llm_model_inputs["inputs_embeds"][:,0:1,:]
+        # breakpoint()
+        # if llm_model_inputs["multimodal_embeds"][0].item() is True:
+        #     llm_model_inputs["multimodal_embeds"][0] = False
+        # breakpoint()
         generated_ids = paddle.concat([generated_ids, generated_id], axis=1)
         if paddle.any(generated_id == processor.tokenizer.eos_token_id).item():
             break
@@ -279,6 +286,17 @@ fast_llm_model = AutoInferenceModelForCausalLM.from_pretrained(
 )
 fast_llm_model.eval()
 
+fast_llm_model = paddle.incubate.jit.inference(
+    fast_llm_model,
+    save_model_dir="./tmp/qwen2_5_vl",
+    enable_new_ir=True,
+    cache_static_model=True,
+    switch_ir_optim=True,
+    skip_prune_program=True,
+    # exp_enable_use_cutlass=False,
+    # delete_pass_lists=["add_norm_fuse_pass"],
+)
+
 vl_model.model = fast_llm_model
 
 if predictor_args.benchmark:
@@ -313,3 +331,8 @@ if predictor_args.benchmark:
 else:
     generated_text = run_model(predictor_args)
     print("Final output_text:\n", generated_text[0])
+
+
+    generated_text = run_model(predictor_args)
+    print("Final output_text:\n", generated_text[0])
+
