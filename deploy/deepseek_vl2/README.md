@@ -27,10 +27,19 @@ python -m pip install -r requirements.txt
 pip uninstall -y paddlenlp && rm -rf PaddleNLP
 git clone --depth=1 https://github.com/PaddlePaddle/PaddleNLP.git
 cd PaddleNLP
+git checkout e67789d58849765c827fc7f8e063e0d51a7daecf
 pip install -e .
 
 # 安装paddlenlp_ops pre-build 
 pip install https://paddlenlp.bj.bcebos.com/ops/cu118/paddlenlp_ops-3.0.0b4-py3-none-any.whl
+# 或者安装其他版本
+pip install https://paddlenlp.bj.bcebos.com/ops/cu124/paddlenlp_ops-3.0.0b4-py3-none-any.whl
+# 或者安装其他版本
+pip install https://paddlenlp.bj.bcebos.com/datasets/paddlemix/envs_a800/paddlenlp_ops-3.0.0b4.post20250331-py3-none-any.whl
+# 或者手动编译
+cd csrc
+bash tools/build_wheel.sh
+pip install gpu_dist/paddlenlp_ops-0.0.0-py3-none-any.whl
 ```
 
 ## 3 高性能推理
