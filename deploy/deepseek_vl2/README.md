@@ -23,15 +23,25 @@ python -m pip install -e .
 python -m pip install -e ppdiffusers
 python -m pip install -r requirements.txt
 
-# 安装PaddleNLP
+# 安装PaddleNLP特定版本
 pip uninstall -y paddlenlp && rm -rf PaddleNLP
 git clone --depth=1 https://github.com/PaddlePaddle/PaddleNLP.git
 cd PaddleNLP
+git checkout e67789d58849765c827fc7f8e063e0d51a7daecf
 pip install -e .
 
 # 安装paddlenlp_ops pre-build 
+pip install https://paddlenlp.bj.bcebos.com/ops/cu118/paddlenlp_ops-3.0.0b4.post20250331-py3-none-any.whl
+
+# 或者安装其他版本
 pip install https://paddlenlp.bj.bcebos.com/ops/cu118/paddlenlp_ops-3.0.0b4-py3-none-any.whl
+# 或者安装其他版本
+pip install https://paddlenlp.bj.bcebos.com/ops/cu124/paddlenlp_ops-3.0.0b4-py3-none-any.whl
 ```
+
+> 注：
+* (默认开启flash_attn)使用flash_attn 要求A100/A800显卡或者H20显卡
+
 
 ## 3 高性能推理
 
