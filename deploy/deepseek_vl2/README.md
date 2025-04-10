@@ -25,9 +25,11 @@ python -m pip install -r requirements.txt
 
 # 安装PaddleNLP
 pip uninstall -y paddlenlp && rm -rf PaddleNLP
-git clone -b release/3.0-beta4-new --depth=1 https://github.com/PaddlePaddle/PaddleNLP.git
+git clone --depth=1 https://github.com/PaddlePaddle/PaddleNLP.git
 cd PaddleNLP
 pip install -e .
+
+# 安装paddlenlp_ops pre-build 
 pip install https://paddlenlp.bj.bcebos.com/ops/cu118/paddlenlp_ops-3.0.0b4-py3-none-any.whl
 ```
 
