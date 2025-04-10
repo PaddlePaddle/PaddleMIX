@@ -53,12 +53,13 @@ class Mix_PredictorArgument(PredictorArgument):
     video_file: str = field(
         default="paddlemix/demo_images/red-panda.mp4", metadata={"help": "The video file for the model."}
     )
+    attn_implementation: str = field(default="flash_attention_2", metadata={"help": "The implementation of attention. Supported values: eager, sdpa, flash_attention_2"})
+    llm_mode: str = field(default="dynamic", metadata={"help": "The mode of llm. Supported values: dynamic, static"})
 
 
 @dataclass
 class Mix_ModelArgument(ModelArgument):
-    attn_implementation: str = field(default="eager", metadata={"help": "The implementation of attention."})
-
+    pass
 
 # NOTE: (zhoukangkang、changwenbin) Copied from PaddleMIX/paddlemix/models/qwen2_vl/modeling_qwen2_vl.py,
 # for calculating M-ROPE.
@@ -183,14 +184,13 @@ def run_model(predictor_args):
     while llm_model_inputs["not_need_stop"]:
 
         generated_id = fast_llm_model.generate(**llm_model_inputs)  # already trimmed in paddle
-        # breakpoint()
+
         llm_model_inputs["input_ids"] = generated_id 
         if llm_model_inputs["inputs_embeds"].shape[2] >1:
             llm_model_inputs["inputs_embeds"] = llm_model_inputs["inputs_embeds"][:,0:1,:]
-        # breakpoint()
         # if llm_model_inputs["multimodal_embeds"][0].item() is True:
         #     llm_model_inputs["multimodal_embeds"][0] = False
-        # breakpoint()
+
         generated_ids = paddle.concat([generated_ids, generated_id], axis=1)
         if paddle.any(generated_id == processor.tokenizer.eos_token_id).item():
             break
@@ -224,7 +224,7 @@ vl_model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
     tensor_parallel_rank=tensor_parallel_rank,
     dtype=predictor_args.dtype,
     tensor_parallel_output=False,
-    attn_implementation=model_args.attn_implementation,
+    attn_implementation=predictor_args.attn_implementation,
 )
 vl_model.eval()
 
@@ -286,16 +286,20 @@ fast_llm_model = AutoInferenceModelForCausalLM.from_pretrained(
 )
 fast_llm_model.eval()
 
-fast_llm_model = paddle.incubate.jit.inference(
-    fast_llm_model,
-    save_model_dir="./tmp/qwen2_5_vl",
-    enable_new_ir=True,
-    cache_static_model=True,
-    switch_ir_optim=True,
-    skip_prune_program=True,
-    # exp_enable_use_cutlass=False,
-    # delete_pass_lists=["add_norm_fuse_pass"],
-)
+if predictor_args.llm_mode == "static":
+    fast_llm_model = paddle.incubate.jit.inference(
+        fast_llm_model,
+        save_model_dir="./tmp/qwen2_5_vl",
+        enable_new_ir=True,
+        cache_static_model=True,
+        skip_prune_program=True,
+        exp_enable_use_cutlass=False,
+    )
+
+    # NOTE: (changwenbin) This is for memory optimization, similar to the earlier VL model cleanup
+    # breakpoint()
+    # del fast_llm_model.qwen2.transformer_block
+    # paddle.device.cuda.empty_cache()
 
 vl_model.model = fast_llm_model
 

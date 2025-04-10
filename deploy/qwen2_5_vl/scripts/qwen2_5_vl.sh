@@ -12,9 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 export PYTHONPATH=/root/paddlejob/workspace/env_run/output/changwenbin/PaddleMIX/PaddleNLP
-# export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=1
+export FLAGS_cascade_attention_max_partition_size=128
+export FLAGS_cascade_attention_deal_each_time=16
+export USE_FASTER_TOP_P_SAMPLING=1
+export LD_LIBRARY_PATH=/root/paddlejob/workspace/env_run/output/changwenbin/Paddle/paddle/phi/kernels/fusion/cutlass/gemm_epilogue/build:$LD_LIBRARY_PATH
 #fp16  高性能推理
-# nsys profile -o qwen_static 
+# nsys profile -o qwen_static_fast 
 python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
     --model_name_or_path Qwen/Qwen2.5-VL-3B-Instruct \
     --media_type "image" \
@@ -29,7 +33,7 @@ python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
     --block_attn True \
     --append_attn 1 \
     --inference_model True \
-    --mode dynamic \
+    --llm_mode static \
     --dtype bfloat16 \
     --output_via_mq False \
     --benchmark True 
