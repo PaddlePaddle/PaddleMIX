@@ -20,6 +20,8 @@ import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
 
+import numbers
+
 from .activations import get_activation
 from .embeddings import CombinedTimestepLabelEmbeddings, CombinedTimestepSizeEmbeddings
 
@@ -373,3 +375,35 @@ class CogVideoXLayerNormZero(paddle.nn.Layer):
             enc_scale)[:, None, :] + enc_shift[:, None, :]
         return hidden_states, encoder_hidden_states, gate[:, None, :
             ], enc_gate[:, None, :]
+
+
+
+class MochiRMSNorm(nn.Layer):
+    def __init__(self, dim, eps: float, elementwise_affine: bool = True):
+        super().__init__()
+
+        self.eps = eps
+
+        if isinstance(dim, numbers.Integral):
+            dim = (dim,)
+
+        self.dim = dim
+
+        if elementwise_affine:
+            self.weight = self.create_parameter(
+                shape=dim,
+                default_initializer=nn.initializer.Constant(value=1.0)
+            )
+        else:
+            self.weight = None
+
+    def forward(self, hidden_states):
+        input_dtype = hidden_states.dtype
+        variance = paddle.pow(hidden_states.astype('float32'), 2).mean(axis=-1, keepdim=True)
+        hidden_states = hidden_states * paddle.rsqrt(variance + self.eps)
+
+        if self.weight is not None:
+            hidden_states = hidden_states * self.weight
+        hidden_states = hidden_states.astype(input_dtype)
+
+        return hidden_states

@@ -18,6 +18,7 @@ from typing import List, Optional, Tuple, Union
 import numpy as np
 import paddle
 from paddle import nn
+import paddle.nn.functional as F
 
 from ..utils import USE_PEFT_BACKEND
 from .activations import FP32SiLU, get_activation
@@ -1383,3 +1384,119 @@ def get_1d_rotary_pos_embed(
             paddle.ones_like(x=freqs) * paddle.sin(freqs),
         )  # complex64     # [S, D/2]
         return freqs_cis
+    
+
+
+class MochiAttentionPool(nn.Layer):
+    def __init__(
+        self,
+        num_attention_heads: int,
+        embed_dim: int,
+        output_dim: int = None,
+    ):
+        super().__init__()
+
+        self.output_dim = output_dim if output_dim is not None else embed_dim
+        self.num_attention_heads = num_attention_heads
+
+        self.to_kv = nn.Linear(embed_dim, 2 * embed_dim)
+        self.to_q = nn.Linear(embed_dim, embed_dim)
+        self.to_out = nn.Linear(embed_dim, self.output_dim)
+
+    @staticmethod
+    def pool_tokens(x: paddle.Tensor, mask: paddle.Tensor, *, keepdim=False) -> paddle.Tensor:
+        """
+        Pool tokens in x using mask.
+
+        Args:
+            x: (B, L, D) tensor of tokens.
+            mask: (B, L) boolean tensor indicating which tokens are not padding.
+
+        Returns:
+            pooled: (B, D) tensor of pooled tokens.
+        """
+        assert x.shape[1] == mask.shape[1]  # Expected mask to have same length as tokens.
+        assert x.shape[0] == mask.shape[0]  # Expected mask to have same batch size as tokens.
+        mask = mask[:, :, None].astype(x.dtype)
+        mask = mask / mask.sum(axis=1, keepdim=True).clamp(min=1)
+        pooled = (x * mask).sum(axis=1, keepdim=keepdim)
+        return pooled
+
+    def forward(self, x: paddle.Tensor, mask: paddle.Tensor) -> paddle.Tensor:
+        r"""
+        Args:
+            x (`paddle.Tensor`):
+                Tensor of shape `(B, S, D)` of input tokens.
+            mask (`paddle.Tensor`):
+                Boolean tensor of shape `(B, S)` indicating which tokens are not padding.
+
+        Returns:
+            `paddle.Tensor`:
+                `(B, D)` tensor of pooled tokens.
+        """
+        D = x.shape[2]
+
+        # Construct attention mask, shape: (B, 1, num_queries=1, num_keys=1+L).
+        attn_mask = mask[:, None, None, :].astype('bool')  # (B, 1, 1, L).
+        attn_mask = F.pad(attn_mask, (1, 0), value=True)  # (B, 1, 1, 1+L).
+
+        # Average non-padding token features. These will be used as the query.
+        x_pool = self.pool_tokens(x, mask, keepdim=True)  # (B, 1, D)
+
+        # Concat pooled features to input sequence.
+        x = paddle.concat([x_pool, x], axis=1)  # (B, L+1, D)
+
+        # Compute queries, keys, values. Only the mean token is used to create a query.
+        kv = self.to_kv(x)  # (B, L+1, 2 * D)
+        q = self.to_q(x[:, 0])  # (B, D)
+
+        # Extract heads.
+        head_dim = D // self.num_attention_heads
+        kv = kv.reshape([0, 0, 2, self.num_attention_heads, head_dim])  # (B, 1+L, 2, H, head_dim)
+        kv = kv.transpose([0, 3, 2, 1, 4])  # (B, H, 2, 1+L, head_dim)
+        k, v = kv.unbind(axis=2)  # (B, H, 1+L, head_dim)
+        q = q.reshape([0, self.num_attention_heads, head_dim])  # (B, H, head_dim)
+        q = q.unsqueeze(axis=2)  # (B, H, 1, head_dim)
+
+        # Compute attention.
+        x = F.multi_head_attention(q, k, v, attn_mask=attn_mask, dropout=0.0)  # (B, H, 1, head_dim)
+
+        # Concatenate heads and run output.
+        x = x.squeeze(axis=2).reshape([0, -1])  # (B, D = H * head_dim)
+        x = self.to_out(x)
+        return x
+
+
+class MochiCombinedTimestepCaptionEmbedding(nn.Layer):
+    def __init__(
+        self,
+        embedding_dim: int,
+        pooled_projection_dim: int,
+        text_embed_dim: int,
+        time_embed_dim: int = 256,
+        num_attention_heads: int = 8,
+    ) -> None:
+        super().__init__()
+
+        self.time_proj = Timesteps(num_channels=time_embed_dim, flip_sin_to_cos=True, downscale_freq_shift=0.0)
+        self.timestep_embedder = TimestepEmbedding(in_channels=time_embed_dim, time_embed_dim=embedding_dim)
+        self.pooler = MochiAttentionPool(
+            num_attention_heads=num_attention_heads, embed_dim=text_embed_dim, output_dim=embedding_dim
+        )
+        self.caption_proj = nn.Linear(text_embed_dim, pooled_projection_dim)
+
+    def forward(
+        self,
+        timestep: paddle.Tensor,
+        encoder_hidden_states: paddle.Tensor,
+        encoder_attention_mask: paddle.Tensor,
+        hidden_dtype: Optional[str] = None,
+    ):
+        time_proj = self.time_proj(timestep)
+        time_emb = self.timestep_embedder(time_proj.astype(hidden_dtype))
+
+        pooled_projections = self.pooler(encoder_hidden_states, encoder_attention_mask)
+        caption_proj = self.caption_proj(encoder_hidden_states)
+
+        conditioning = time_emb + pooled_projections
+        return conditioning, caption_proj

@@ -114,6 +114,7 @@ else:
             "AutoencoderKLHunyuanVideo",
             "AutoencoderKLTemporalDecoder",
             "AutoencoderTiny",
+            "AutoencoderKLMochi",
             "CogVideoXTransformer3DModel",
             "CogVideoXTransformer3DVCtrlModel",
             "ConsistencyDecoderVAE",
@@ -155,6 +156,7 @@ else:
             "VCtrlModel",
             # new add
             "FluxTransformer2DModel",
+            "MochiTransformer3DModel"
         ]
     )
 
@@ -404,6 +406,7 @@ else:
             # new add
             "ImgToVideoSDPipeline",
             "VideoToVideoModelscopePipeline",
+            "MochiPipeline",
         ]
     )
 
@@ -514,6 +517,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             AutoencoderKLHunyuanVideo,
             AutoencoderKLTemporalDecoder,
             AutoencoderTiny,
+            AutoencoderKLMochi,
             CogVideoXTransformer3DModel,
             CogVideoXTransformer3DVCtrlModel,
             ConsistencyDecoderVAE,
@@ -549,6 +553,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             VCtrlModel,
             Vid2VidSTUNet,
             VQModel,
+            MochiTransformer3DModel,
         )
         from .optimization import (
             get_constant_schedule,
@@ -772,6 +777,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             WuerstchenCombinedPipeline,
             WuerstchenDecoderPipeline,
             WuerstchenPriorPipeline,
+            MochiPipeline,
         )
 
     try:
