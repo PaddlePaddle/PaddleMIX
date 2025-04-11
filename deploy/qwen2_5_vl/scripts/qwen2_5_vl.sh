@@ -38,26 +38,26 @@ python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
     --output_via_mq False \
     --benchmark True 
 
-# weight only int8 量化推理
-python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
-    --model_name_or_path Qwen/Qwen2.5-VL-3B-Instruct \
-    --media_type "image" \
-    --question "Describe this image." \
-    --image_file paddlemix/demo_images/examples_image1.jpg \
-    --min_length 128 \
-    --max_length 128 \
-    --top_k 1 \
-    --top_p 0.001 \
-    --temperature 0.1 \
-    --repetition_penalty 1.05 \
-    --block_attn True \
-    --append_attn True \
-    --inference_model True \
-    --llm_mode static \
-    --dtype bfloat16 \
-    --quant_type "weight_only_int8" \
-    --output_via_mq False \
-    --benchmark True 
+# # weight only int8 量化推理
+# python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
+#     --model_name_or_path Qwen/Qwen2.5-VL-3B-Instruct \
+#     --media_type "image" \
+#     --question "Describe this image." \
+#     --image_file paddlemix/demo_images/examples_image1.jpg \
+#     --min_length 128 \
+#     --max_length 128 \
+#     --top_k 1 \
+#     --top_p 0.001 \
+#     --temperature 0.1 \
+#     --repetition_penalty 1.05 \
+#     --block_attn True \
+#     --append_attn True \
+#     --inference_model True \
+#     --llm_mode static \
+#     --dtype bfloat16 \
+#     --quant_type "weight_only_int8" \
+#     --output_via_mq False \
+#     --benchmark True 
 
 
 # # 多卡推理功能
