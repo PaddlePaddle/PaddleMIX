@@ -12,14 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-export PYTHONPATH=/root/paddlejob/workspace/env_run/output/changwenbin/PaddleMIX/PaddleNLP
 
 export CUDA_VISIBLE_DEVICES=1
 export FLAGS_mla_use_tensorcore=0
 export FLAGS_cascade_attention_max_partition_size=128
 export FLAGS_cascade_attention_deal_each_time=16
 export USE_FASTER_TOP_P_SAMPLING=1
-export LD_LIBRARY_PATH=/root/paddlejob/workspace/env_run/output/changwenbin/Paddle/paddle/phi/kernels/fusion/cutlass/gemm_epilogue/build:$LD_LIBRARY_PATH
 
 # nsys profile -o binbin_deepseek_appd 
 python deploy/deepseek_vl2/deepseek_vl2_infer.py \

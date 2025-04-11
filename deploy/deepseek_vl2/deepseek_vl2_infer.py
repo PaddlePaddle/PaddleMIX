@@ -260,7 +260,7 @@ if predictor_args.llm_mode == "static":
         enable_new_ir=True,
         cache_static_model=True,
         skip_prune_program=True,
-        exp_enable_use_cutlass=True,
+        exp_enable_use_cutlass=False,
     )
 
 vl_model.language = fast_llm_model

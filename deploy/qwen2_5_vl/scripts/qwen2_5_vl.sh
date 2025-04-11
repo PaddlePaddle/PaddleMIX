@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-export PYTHONPATH=/root/paddlejob/workspace/env_run/output/changwenbin/PaddleMIX/PaddleNLP
 export CUDA_VISIBLE_DEVICES=1
 export FLAGS_cascade_attention_max_partition_size=128
 export FLAGS_cascade_attention_deal_each_time=16
