@@ -184,15 +184,12 @@ def run_model(predictor_args):
     generated_text = ""
     generated_ids = paddle.to_tensor([], dtype="int64").reshape([1, 0])
     while llm_model_inputs["not_need_stop"]:
+        generated_id = fast_llm_model.generate(**llm_model_inputs)
+        # llm_model_inputs["input_ids"] =
 
-        generated_id = fast_llm_model.generate(**llm_model_inputs)  # already trimmed in paddle
-
-        llm_model_inputs["input_ids"] = generated_id
+        # NOTE: (changwenbin) , Get inputs_embeds from the visual model or input_ids.
+        # Here we uniformly set the input of the language model to inputs_embeds
         llm_model_inputs["inputs_embeds"] = fast_llm_model.qwen2.embed_tokens(generated_id)
-        # if llm_model_inputs["inputs_embeds"].shape[1] > 1:
-        #     llm_model_inputs["inputs_embeds"] = llm_model_inputs["inputs_embeds"][:, 0:1, :]
-        # if llm_model_inputs["multimodal_embeds"][0].item() is True:
-        #     llm_model_inputs["multimodal_embeds"][0] = False
 
         generated_ids = paddle.concat([generated_ids, generated_id], axis=1)
         if paddle.any(generated_id == processor.tokenizer.eos_token_id).item():
@@ -268,7 +265,6 @@ messages = [
 # Preparation for inference
 image_inputs, video_inputs = process_vision_info(messages)
 
-
 config = AutoConfig.from_pretrained(predictor_args.model_name_or_path)
 config.tensor_parallel_degree = tensor_parallel_degree
 config.tensor_parallel_rank = tensor_parallel_rank
@@ -287,6 +283,7 @@ fast_llm_model = AutoInferenceModelForCausalLM.from_pretrained(
     tensor_parallel_rank=tensor_parallel_rank,
 ).eval()
 
+# NOTE: (changwenbin) We convert the language model into a static graph
 if predictor_args.llm_mode == "static":
     fast_llm_model = paddle.incubate.jit.inference(
         fast_llm_model,
@@ -296,11 +293,6 @@ if predictor_args.llm_mode == "static":
         skip_prune_program=True,
         exp_enable_use_cutlass=False,
     )
-
-    # NOTE: (changwenbin) This is for memory optimization, similar to the earlier VL model cleanup
-    # breakpoint()
-    # del fast_llm_model.qwen2.transformer_block
-    # paddle.device.cuda.empty_cache()
 
 vl_model.model = fast_llm_model
 
@@ -315,9 +307,12 @@ if predictor_args.benchmark:
             paddle.device.synchronize()
             starttime = datetime.datetime.now()
         generated_text = run_model(predictor_args)
-        # if fast_llm_model.qwen2.transformer_block is not None and predictor_args.llm_mode == "static":
-        #     fast_llm_model.qwen2.transformer_block = None
-        # paddle.device.cuda.empty_cache()
+
+        # NOTE: (changwenbin) We delete the transformer_block to reduce the memory usage.
+        if (fast_llm_model.qwen2.transformer_block is not None) and (predictor_args.llm_mode == "static"):
+            fast_llm_model.qwen2.transformer_block = None
+        paddle.device.cuda.empty_cache()
+
         if i > 2:
             paddle.device.synchronize()
             endtime = datetime.datetime.now()

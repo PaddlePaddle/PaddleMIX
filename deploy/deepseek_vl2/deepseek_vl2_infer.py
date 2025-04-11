@@ -154,11 +154,11 @@ def run_model(predictor_args):
     while llm_model_inputs["not_need_stop"]:
         with paddle.no_grad():
             generated_id = vl_model.language.generate(**llm_model_inputs)  # already trimmed in paddle
-        llm_model_inputs["input_ids"] = generated_id
+
+        # NOTE: (changwenbin) , Get inputs_embeds from the visual model or input_ids.
+        # Here we uniformly set the input of the language model to inputs_embeds
         llm_model_inputs["inputs_embeds"] = fast_llm_model.deepseek_v2.embed_tokens(generated_id)
-        # llm_model_inputs["inputs_embeds"] = None
-        if llm_model_inputs["inputs_embeds"].shape[1] > 1:
-            llm_model_inputs["inputs_embeds"] = llm_model_inputs["inputs_embeds"][:, 0:1, :]
+
         generated_ids = paddle.concat([generated_ids, generated_id], axis=1)
         if paddle.any(generated_id == tokenizer.eos_token_id).item():
             break
@@ -254,6 +254,7 @@ fast_llm_model = AutoInferenceModelForCausalLM.from_pretrained(
     tensor_parallel_rank=tensor_parallel_rank,
 ).eval()
 
+# NOTE: (changwenbin) We convert the language model into a static graph
 if predictor_args.llm_mode == "static":
     fast_llm_model = paddle.incubate.jit.inference(
         fast_llm_model,
@@ -277,9 +278,12 @@ if predictor_args.benchmark:
             paddle.device.synchronize()
             starttime = datetime.datetime.now()
         generated_text = run_model(predictor_args)
-        if fast_llm_model.deepseek_v2.transformer_block is not None:
+
+        # NOTE: (changwenbin) We delete the transformer_block to reduce the memory usage.
+        if (fast_llm_model.deepseek_v2.transformer_block is not None) and (predictor_args.llm_mode == "static"):
             fast_llm_model.deepseek_v2.transformer_block = None
             paddle.device.cuda.empty_cache()
+
         if i > 2:
             paddle.device.synchronize()
             endtime = datetime.datetime.now()
