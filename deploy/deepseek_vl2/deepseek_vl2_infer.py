@@ -276,8 +276,8 @@ if predictor_args.benchmark:
             paddle.device.synchronize()
             starttime = datetime.datetime.now()
         generated_text = run_model(predictor_args)
-        if fast_llm_model.qwen2.transformer_block is not None:
-            fast_llm_model.qwen2.transformer_block = None
+        if fast_llm_model.deepseek_v2.transformer_block is not None:
+            fast_llm_model.deepseek_v2.transformer_block = None
             paddle.device.cuda.empty_cache()
         if i > 2:
             paddle.device.synchronize()
