@@ -21,11 +21,7 @@ import paddle.nn.functional as F
 from paddle import einsum, nn
 
 from ..utils import USE_PEFT_BACKEND, deprecate, logging
-from ..utils.import_utils import (
-    is_flash_attention_available,
-    is_npu_available,
-    is_ppxformers_available,
-)
+from ..utils.import_utils import is_ppxformers_available
 from ..utils.paddle_utils import maybe_allow_in_graph
 from .lora import LoRACompatibleLinear, LoRALinearLayer
 
@@ -260,8 +256,7 @@ class Attention(nn.Layer):
         # We use the AttnProcessor2_5 by default when paddle 2.5 is used which uses
         # paddle.nn.functional.scaled_dot_product_attention_ for native Flash/memory_efficient_attention
         if processor is None:
-            processor = AttnProcessor2_5() if is_flash_attention_available() else AttnProcessor()
-            processor = AttnProcessor() if is_npu_available() else processor
+            processor = AttnProcessor2_5() if is_ppxformers_available() else AttnProcessor()
         self.set_processor(processor)
 
     @property
@@ -378,8 +373,7 @@ class Attention(nn.Layer):
                 # set attention processor
                 # We use the AttnProcessor2_5 by default when paddle 2.5 is used which uses
                 # paddle.nn.functional.scaled_dot_product_attention for native Flash/memory_efficient_attention
-                processor = AttnProcessor2_5() if is_flash_attention_available() else AttnProcessor()
-                processor = AttnProcessor() if is_npu_available() else processor
+                processor = AttnProcessor2_5() if is_ppxformers_available() else AttnProcessor()
 
         self.set_processor(processor)
 
@@ -404,8 +398,7 @@ class Attention(nn.Layer):
             # set attention processor
             # We use the AttnProcessor2_5 by default when paddle 2.5 is used which uses
             # paddle.nn.functional.scaled_dot_product_attention for native Flash/memory_efficient_attention
-            processor = AttnProcessor2_5() if is_flash_attention_available() else AttnProcessor()
-            processor = AttnProcessor() if is_npu_available() else processor
+            processor = AttnProcessor2_5() if is_ppxformers_available() else AttnProcessor()
 
         self.set_processor(processor)
 
