@@ -46,6 +46,7 @@ python setup_cuda.py install
 ### a. fp16 高性能推理
 ```bash
 cd PaddleMIX
+rm -rf ./tmp/qwen2_5_vl
 
 # 1. image infer
 export CUDA_VISIBLE_DEVICES=0
