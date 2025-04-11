@@ -152,8 +152,7 @@ def run_model(predictor_args):
     generated_text = ""
     generated_ids = paddle.to_tensor([], dtype="int64").reshape([1, 0])
     while llm_model_inputs["not_need_stop"]:
-        with paddle.no_grad():
-            generated_id = vl_model.language.generate(**llm_model_inputs)  # already trimmed in paddle
+        generated_id = vl_model.language.generate(**llm_model_inputs)  # already trimmed in paddle
 
         # NOTE: (changwenbin) , Get inputs_embeds from the visual model or input_ids.
         # Here we uniformly set the input of the language model to inputs_embeds
