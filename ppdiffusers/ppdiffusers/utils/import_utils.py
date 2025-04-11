@@ -42,6 +42,10 @@ def str2bool(v):
         raise ValueError("Not supported value: {}".format(v))
 
 
+def is_npu_available():
+    return paddle.device.get_device().startswith("npu")
+
+
 # The package importlib_metadata is in a different place, depending on the python version.
 if sys.version_info < (3, 8):
     import importlib_metadata
@@ -65,7 +69,6 @@ _paddle_version = "N/A"
 if USE_PADDLE in ENV_VARS_TRUE_AND_AUTO_VALUES:
     _paddle_available = importlib.util.find_spec("paddle") is not None
     _ppxformers_available = False
-    _flash_attention_available = False
     if _paddle_available:
         try:
             import paddle
@@ -76,20 +79,6 @@ if USE_PADDLE in ENV_VARS_TRUE_AND_AUTO_VALUES:
             _paddle_available = False
 
         if _paddle_available:
-            # try:
-            #     from paddle.incubate.nn.memory_efficient_attention import (  # noqa
-            #         memory_efficient_attention,
-            #     )
-
-            #     # _ = memory_efficient_attention(
-            #     #     paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
-            #     #     paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
-            #     #     paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
-            #     # )
-            #     _ppxformers_available = True
-            # except Exception:
-            #     _ppxformers_available = False
-
             try:
                 _ = paddle.nn.functional.scaled_dot_product_attention(
                     paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
@@ -97,15 +86,17 @@ if USE_PADDLE in ENV_VARS_TRUE_AND_AUTO_VALUES:
                     paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
                     attn_mask=paddle.ones((1, 2, 1, 1), dtype=paddle.float16),
                 )
-                _flash_attention_available = True
+                _ppxformers_available = True
             except Exception:
-                _flash_attention_available = False
+                _ppxformers_available = False
+
+            if is_npu_available():
+                _ppxformers_available = False
 
 else:
     logger.info("Disabling Paddle because USE_PADDLE is set")
     _paddle_available = False
     _ppxformers_available = False
-    _flash_attention_available = False
 
 _torch_version = "N/A"
 _torch_available = importlib.util.find_spec("torch") is not None
@@ -389,20 +380,12 @@ def is_librosa_available():
     return _librosa_available
 
 
-def is_npu_available():
-    return paddle.device.get_device().startswith("npu")
-
-
 def is_ppxformers_available():
     USE_PPXFORMERS = str2bool(os.getenv("USE_PPXFORMERS", True))
     if USE_PPXFORMERS:
         return _ppxformers_available
     else:
         return False
-
-
-def is_flash_attention_available():
-    return _flash_attention_available
 
 
 # NOTE this is paddle accelerate
