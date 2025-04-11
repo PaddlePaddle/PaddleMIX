@@ -23,8 +23,10 @@ from paddlenlp.generation import GenerationConfig
 from paddlenlp.trainer import PdArgumentParser
 from paddlenlp.transformers import AutoConfig, AutoInferenceModelForCausalLM
 from paddlenlp.trl import llm_utils
-from paddlemix.models.minicpm_v.modeling_navit_siglip import PaddleAttentionMaskConverter
 
+from paddlemix.models.minicpm_v.modeling_navit_siglip import (
+    PaddleAttentionMaskConverter,
+)
 from paddlemix.models.qwen2_5_vl import MIXQwen2_5_Tokenizer
 from paddlemix.models.qwen2_5_vl.modeling_qwen2_5_vl import (
     Qwen2_5_VLForConditionalGeneration,
@@ -53,13 +55,17 @@ class Mix_PredictorArgument(PredictorArgument):
     video_file: str = field(
         default="paddlemix/demo_images/red-panda.mp4", metadata={"help": "The video file for the model."}
     )
-    attn_implementation: str = field(default="flash_attention_2", metadata={"help": "The implementation of attention. Supported values: eager, sdpa, flash_attention_2"})
+    attn_implementation: str = field(
+        default="flash_attention_2",
+        metadata={"help": "The implementation of attention. Supported values: eager, sdpa, flash_attention_2"},
+    )
     llm_mode: str = field(default="dynamic", metadata={"help": "The mode of llm. Supported values: dynamic, static"})
 
 
 @dataclass
 class Mix_ModelArgument(ModelArgument):
     pass
+
 
 # NOTE: (zhoukangkang、changwenbin) Copied from PaddleMIX/paddlemix/models/qwen2_vl/modeling_qwen2_vl.py,
 # for calculating M-ROPE.
@@ -109,7 +115,7 @@ def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: Predic
     model_inputs = {}
     model_inputs["input_ids"] = paddle.zeros(shape=[batch_size, arg_config.total_max_length], dtype="int64")
     model_inputs["inputs_embeds"] = inputs_embeds
-    model_inputs["multimodal_embeds"] = paddle.to_tensor([True]*batch_size, dtype="bool")
+    model_inputs["multimodal_embeds"] = paddle.to_tensor([True] * batch_size, dtype="bool")
 
     # I dislike write (arg_config.total_max_length + arg_config.block_size -1 ) // arg_config.block_size
     assert arg_config.total_max_length % arg_config.block_size == 0
@@ -185,9 +191,9 @@ def run_model(predictor_args):
 
         generated_id = fast_llm_model.generate(**llm_model_inputs)  # already trimmed in paddle
 
-        llm_model_inputs["input_ids"] = generated_id 
-        if llm_model_inputs["inputs_embeds"].shape[2] >1:
-            llm_model_inputs["inputs_embeds"] = llm_model_inputs["inputs_embeds"][:,0:1,:]
+        llm_model_inputs["input_ids"] = generated_id
+        if llm_model_inputs["inputs_embeds"].shape[1] > 1:
+            llm_model_inputs["inputs_embeds"] = llm_model_inputs["inputs_embeds"][:, 0:1, :]
         # if llm_model_inputs["multimodal_embeds"][0].item() is True:
         #     llm_model_inputs["multimodal_embeds"][0] = False
 
@@ -225,8 +231,7 @@ vl_model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
     dtype=predictor_args.dtype,
     tensor_parallel_output=False,
     attn_implementation=predictor_args.attn_implementation,
-)
-vl_model.eval()
+).eval()
 
 # NOTE: (zhoukangkang、changwenbin) Because we only use the visual model here,
 # in order to reduce video memory,we delete the language model.
@@ -283,8 +288,7 @@ fast_llm_model = AutoInferenceModelForCausalLM.from_pretrained(
     dtype=predictor_args.dtype,
     tensor_parallel_degree=tensor_parallel_degree,
     tensor_parallel_rank=tensor_parallel_rank,
-)
-fast_llm_model.eval()
+).eval()
 
 if predictor_args.llm_mode == "static":
     fast_llm_model = paddle.incubate.jit.inference(
