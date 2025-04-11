@@ -263,11 +263,6 @@ if predictor_args.llm_mode == "static":
         exp_enable_use_cutlass=False,
     )
 
-    # NOTE: (changwenbin) This is for memory optimization, similar to the earlier VL model cleanup
-    # breakpoint()
-    # del fast_llm_model.qwen2.transformer_block
-    # paddle.device.cuda.empty_cache()
-
 vl_model.language = fast_llm_model
 
 if predictor_args.benchmark:
@@ -281,6 +276,9 @@ if predictor_args.benchmark:
             paddle.device.synchronize()
             starttime = datetime.datetime.now()
         generated_text = run_model(predictor_args)
+        if fast_llm_model.qwen2.transformer_block is not None:
+            fast_llm_model.qwen2.transformer_block = None
+            paddle.device.cuda.empty_cache()
         if i > 2:
             paddle.device.synchronize()
             endtime = datetime.datetime.now()
