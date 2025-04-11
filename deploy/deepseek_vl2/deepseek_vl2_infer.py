@@ -155,6 +155,7 @@ def run_model(predictor_args):
         with paddle.no_grad():
             generated_id = vl_model.language.generate(**llm_model_inputs)  # already trimmed in paddle
         llm_model_inputs["input_ids"] = generated_id
+        llm_model_inputs["inputs_embeds"] = fast_llm_model.deepseek_v2.embed_tokens(generated_id)
         # llm_model_inputs["inputs_embeds"] = None
         if llm_model_inputs["inputs_embeds"].shape[1] > 1:
             llm_model_inputs["inputs_embeds"] = llm_model_inputs["inputs_embeds"][:, 0:1, :]

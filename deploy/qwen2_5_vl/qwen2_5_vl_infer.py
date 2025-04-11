@@ -24,9 +24,6 @@ from paddlenlp.trainer import PdArgumentParser
 from paddlenlp.transformers import AutoConfig, AutoInferenceModelForCausalLM
 from paddlenlp.trl import llm_utils
 
-from paddlemix.models.minicpm_v.modeling_navit_siglip import (
-    PaddleAttentionMaskConverter,
-)
 from paddlemix.models.qwen2_5_vl import MIXQwen2_5_Tokenizer
 from paddlemix.models.qwen2_5_vl.modeling_qwen2_5_vl import (
     Qwen2_5_VLForConditionalGeneration,
@@ -115,7 +112,6 @@ def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: Predic
     model_inputs = {}
     model_inputs["input_ids"] = paddle.zeros(shape=[batch_size, arg_config.total_max_length], dtype="int64")
     model_inputs["inputs_embeds"] = inputs_embeds
-    model_inputs["multimodal_embeds"] = paddle.to_tensor([True] * batch_size, dtype="bool")
 
     # I dislike write (arg_config.total_max_length + arg_config.block_size -1 ) // arg_config.block_size
     assert arg_config.total_max_length % arg_config.block_size == 0
@@ -192,8 +188,9 @@ def run_model(predictor_args):
         generated_id = fast_llm_model.generate(**llm_model_inputs)  # already trimmed in paddle
 
         llm_model_inputs["input_ids"] = generated_id
-        if llm_model_inputs["inputs_embeds"].shape[1] > 1:
-            llm_model_inputs["inputs_embeds"] = llm_model_inputs["inputs_embeds"][:, 0:1, :]
+        llm_model_inputs["inputs_embeds"] = fast_llm_model.qwen2.embed_tokens(generated_id)
+        # if llm_model_inputs["inputs_embeds"].shape[1] > 1:
+        #     llm_model_inputs["inputs_embeds"] = llm_model_inputs["inputs_embeds"][:, 0:1, :]
         # if llm_model_inputs["multimodal_embeds"][0].item() is True:
         #     llm_model_inputs["multimodal_embeds"][0] = False
 
@@ -318,9 +315,9 @@ if predictor_args.benchmark:
             paddle.device.synchronize()
             starttime = datetime.datetime.now()
         generated_text = run_model(predictor_args)
-        if fast_llm_model.qwen2.transformer_block is not None:
-            fast_llm_model.qwen2.transformer_block = None
-            paddle.device.cuda.empty_cache()
+        # if fast_llm_model.qwen2.transformer_block is not None and predictor_args.llm_mode == "static":
+        #     fast_llm_model.qwen2.transformer_block = None
+        # paddle.device.cuda.empty_cache()
         if i > 2:
             paddle.device.synchronize()
             endtime = datetime.datetime.now()
