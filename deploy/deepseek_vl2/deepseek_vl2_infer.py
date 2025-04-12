@@ -130,7 +130,7 @@ def init_llm_model_inputs(inputs_embeds, arg_config: Mix_PredictorArgument):
     model_inputs["step_idx"] = paddle.full(shape=[batch_size, 1], fill_value=0, dtype="int64")
     model_inputs["not_need_stop"] = paddle.full(
         shape=[1], fill_value=True, dtype="bool"
-    ).cpu()  # must at cpu place, paddlenlp_ops bug: update_inputs_v2
+    ).cpu()  # must at cpu place
     model_inputs["stop_flags"] = paddle.full(shape=[batch_size, 1], fill_value=False, dtype="bool")
     model_inputs["stop_nums"] = paddle.full(shape=[1], fill_value=batch_size, dtype="int64")
     model_inputs["pre_ids"] = paddle.full(shape=[batch_size, arg_config.max_length], fill_value=-1, dtype="int64")
@@ -152,7 +152,7 @@ def run_model(predictor_args):
     generated_text = ""
     generated_ids = paddle.to_tensor([], dtype="int64").reshape([1, 0])
     while llm_model_inputs["not_need_stop"]:
-        generated_id = vl_model.language.generate(**llm_model_inputs)  # already trimmed in paddle
+        generated_id = vl_model.language.generate(**llm_model_inputs)
 
         # NOTE: (changwenbin) , Get inputs_embeds from the visual model or input_ids.
         # Here we uniformly set the input of the language model to inputs_embeds
