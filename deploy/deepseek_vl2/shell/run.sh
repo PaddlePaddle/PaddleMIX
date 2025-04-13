@@ -19,7 +19,6 @@ export FLAGS_cascade_attention_max_partition_size=128
 export FLAGS_cascade_attention_deal_each_time=16
 export USE_FASTER_TOP_P_SAMPLING=1
 
-# nsys profile -o binbin_deepseek_appd 
 python deploy/deepseek_vl2/deepseek_vl2_infer.py \
     --model_name_or_path deepseek-ai/deepseek-vl2-small \
     --question "Describe this image." \
