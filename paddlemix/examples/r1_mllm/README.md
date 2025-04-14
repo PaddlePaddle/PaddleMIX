@@ -20,14 +20,35 @@
 
 
 ## 数据准备
+
 ### 指向性目标检测任务
+
+* 下载PaddleMIX团队整理好的数据集：
+```bash
+ https://paddlenlp.bj.bcebos.com/datasets/paddlemix/playground/r1_mllm/REC.tar
+```
+
+或者分别下载原始数据集：
+
 * 下载 [COCO Train2014 image](https://huggingface.co/datasets/omlab/VLM-R1/resolve/main/train2014.zip)  并且解压到指定路径PaddleMIX下的data/coco目录.
+```
+wget https://paddlenlp.bj.bcebos.com/datasets/paddlemix/refcoco/train2014.tar
+```
 
 * 下载 [RefGTA](https://huggingface.co/datasets/omlab/VLM-R1/resolve/main/refgta.zip) 并解压到data/refgta目录。
 
 * 下载 [RefCOCO/+/g and RefGTA Annotation files](https://huggingface.co/datasets/omlab/VLM-R1/resolve/main/rec_jsons_processed.zip) 解压放置PaddleMIX/data/rec_jsons_processed目录下 (RefGTA 域外测试数据,用于泛化性测试).
 
+
 ### 计数任务
+
+* 下载PaddleMIX团队整理好的数据集：
+```bash
+ https://paddlenlp.bj.bcebos.com/datasets/paddlemix/playground/r1_mllm/Counting.tar
+```
+
+或者分别下载原始数据集：
+
 * 下载 [CLEVR-70K-Counting](https://huggingface.co/datasets/leonardPKU/clevr_cogen_a_train) 训练数据集，修改your_path为你的实际安装路径路径。例如data/clevr_cogen_a_train
 ```bash
 huggingface-cli download --resume-download leonardPKU/clevr_cogen_a_train --local-dir data/clevr_cogen_a_train --repo-type="dataset"
@@ -39,6 +60,14 @@ huggingface-cli download --resume-download leonardPKU/clevr_cogen_a_train --loca
 
 
 ### 几何推理任务
+
+* 下载PaddleMIX团队整理好的数据集：
+```bash
+ https://paddlenlp.bj.bcebos.com/datasets/paddlemix/playground/r1_mllm/GEO.tar
+```
+
+或者分别下载原始数据集：
+
 * 下载 [GEOQA-8k](https://huggingface.co/datasets/leonardPKU/GEOQA_R1V_Train_8K) 到data/GEOQA_R1V_Train_8K 目录。
 ```bash
 huggingface-cli download --resume-download leonardPKU/GEOQA_R1V_Train_8K --local-dir data/GEOQA_R1V_Train_8K --repo-type="dataset"
@@ -57,7 +86,7 @@ unzip data/Geo170K/images.zip -d data/Geo170K
 ### 性能指标
 固定随机种子，从验证集中抽取500条数据测试，结果如下：
 
-| Model                                | refcoco val|  refcoco+ val | refcocog val | RefGTA | 
+| Model                                | refcoco val|  refcoco+ val | refcocog val | RefGTA |
 |--------------------------------------|------------|---------------|--------------|--------|
 |  Qwen2.5-VL-3B-Instruct              |88.60%      |79.60%         |  81.80%      | 71.80% |
 |  R1-Qwen2.5-VL-3B-Instruct(500steps) |88.40%      |83.60%         |  81.80%      | 74.60% |
@@ -140,7 +169,7 @@ python paddlemix/examples/r1_mllm/eval/test_r1-v.py \
     --steps 500 \
     --seed 42
 
-# test r1 geoqa 
+# test r1 geoqa
 python paddlemix/examples/r1_mllm/eval/test_r1-v.py \
     --model_name "Qwen2.5-VL-3B-Instruct" \
     --method "r1" \
