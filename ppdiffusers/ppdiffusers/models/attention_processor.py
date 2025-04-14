@@ -672,7 +672,7 @@ class Attention(nn.Layer):
         num_heads = self.heads
         if attention_mask is None:
             return attention_mask
-        
+
         ori_type = attention_mask.dtype
         attention_mask = attention_mask.to(paddle.float32)
 
@@ -1303,7 +1303,7 @@ class XFormersAttnProcessor:
         #  adapt the scaled_dot_product_attention_ when attention_mask is a bool tensor
         if attention_mask is not None and attention_mask.dtype == paddle.bool:
             L, S = query.shape[1], key.shape[1]
-            attention_mask_tmp = paddle.zeros([1,1, L, S], dtype=query.dtype)
+            attention_mask_tmp = paddle.zeros([1, 1, L, S], dtype=query.dtype)
             attention_mask_tmp = attention_mask_tmp.masked_fill(attention_mask.logical_not(), float("-inf"))
             attention_mask = attention_mask_tmp
 
