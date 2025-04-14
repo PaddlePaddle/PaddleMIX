@@ -17,7 +17,7 @@ from ppdiffusers import MochiPipeline
 from ppdiffusers.utils import export_to_video
 
 
-pipe = MochiPipeline.from_pretrained("genmo/mochi-1-preview", variant="bf16", torch_dtype=paddle.bfloat16)
+pipe = MochiPipeline.from_pretrained("/data/home/lizhijun/llm/flux-hf/models/mochi-1-preview-pd", variant="bf16", torch_dtype=paddle.bfloat16)
 
 # Enable memory savings
 # pipe.enable_model_cpu_offload()

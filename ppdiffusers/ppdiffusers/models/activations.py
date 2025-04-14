@@ -133,3 +133,15 @@ class LinearActivation(paddle.nn.Layer):
     def forward(self, hidden_states):
         hidden_states = self.proj(hidden_states)
         return self.activation(hidden_states)
+    
+    
+class SwiGLU(paddle.nn.Layer):
+    def __init__(self, dim_in: int, dim_out: int, bias: bool = True):
+        super().__init__()
+        self.proj = paddle.nn.Linear(in_features=dim_in, out_features=dim_out * 2, bias_attr=bias)
+        self.activation = paddle.nn.Silu()
+
+    def forward(self, hidden_states):
+        hidden_states = self.proj(hidden_states)
+        hidden_states, gate = paddle.chunk(hidden_states, chunks=2, axis=-1)
+        return hidden_states * self.activation(gate)

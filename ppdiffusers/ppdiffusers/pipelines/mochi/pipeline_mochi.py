@@ -429,7 +429,7 @@ class MochiPipeline(DiffusionPipeline, Mochi1LoraLoaderMixin):
     
     
     @paddle.no_grad()
-    @replace_example_docstring(EXAMPLE_DOC_STRING)
+    # @replace_example_docstring(EXAMPLE_DOC_STRING)
     def __call__(
         self,
         prompt: Union[str, List[str]] = None,

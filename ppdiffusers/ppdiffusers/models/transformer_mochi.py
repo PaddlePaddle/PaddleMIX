@@ -237,7 +237,6 @@ class MochiTransformer3DModel(ModelMixin, ConfigMixin):
             patch_size=patch_size,
             in_channels=in_channels,
             embed_dim=inner_dim,
-            pos_embed_type=None,
         )
         self.time_embed = MochiCombinedTimestepCaptionEmbedding(
             embedding_dim=inner_dim,
