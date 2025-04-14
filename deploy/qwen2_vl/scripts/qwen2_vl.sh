@@ -35,7 +35,6 @@ python deploy/qwen2_vl/single_image_infer.py\
     --llm_mode static \
     --dtype bfloat16 \
     --output_via_mq False \
-    --quant_type "weight_only_int8" \
     --benchmark True
 
 
