@@ -128,9 +128,7 @@ def init_llm_model_inputs(inputs_embeds, arg_config: Mix_PredictorArgument):
     model_inputs["seq_lens_encoder"] = paddle.to_tensor(np.array(seq_lens).astype("int32").reshape(-1, 1))
     model_inputs["seq_lens_decoder"] = paddle.full(shape=[batch_size, 1], fill_value=0, dtype="int32")
     model_inputs["step_idx"] = paddle.full(shape=[batch_size, 1], fill_value=0, dtype="int64")
-    model_inputs["not_need_stop"] = paddle.full(
-        shape=[1], fill_value=True, dtype="bool"
-    ).cpu()  # must at cpu place
+    model_inputs["not_need_stop"] = paddle.full(shape=[1], fill_value=True, dtype="bool").cpu()  # must at cpu place
     model_inputs["stop_flags"] = paddle.full(shape=[batch_size, 1], fill_value=False, dtype="bool")
     model_inputs["stop_nums"] = paddle.full(shape=[1], fill_value=batch_size, dtype="int64")
     model_inputs["pre_ids"] = paddle.full(shape=[batch_size, arg_config.max_length], fill_value=-1, dtype="int64")
@@ -257,7 +255,7 @@ fast_llm_model = AutoInferenceModelForCausalLM.from_pretrained(
 if predictor_args.llm_mode == "static":
     fast_llm_model = paddle.incubate.jit.inference(
         fast_llm_model,
-        save_model_dir="./tmp/deepseek_vl2",
+        save_model_dir=f"./tmp/{predictor_args.model_name_or_path}/{predictor_args.quant_type}",
         enable_new_ir=True,
         cache_static_model=True,
         skip_prune_program=True,

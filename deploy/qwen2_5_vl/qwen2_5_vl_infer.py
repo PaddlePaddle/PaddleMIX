@@ -286,7 +286,7 @@ fast_llm_model = AutoInferenceModelForCausalLM.from_pretrained(
 if predictor_args.llm_mode == "static":
     fast_llm_model = paddle.incubate.jit.inference(
         fast_llm_model,
-        save_model_dir="./tmp/qwen2_5_vl",
+        save_model_dir=f"./tmp/{predictor_args.model_name_or_path}/{predictor_args.quant_type}",
         enable_new_ir=True,
         cache_static_model=True,
         skip_prune_program=True,
