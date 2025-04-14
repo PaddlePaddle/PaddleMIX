@@ -38,7 +38,6 @@ pip install https://paddlenlp.bj.bcebos.com/ops/cu118/paddlenlp_ops-3.0.0b4-py3-
 ### a. fp16 高性能推理
 
 cd PaddleMIX
-rm -rf ./tmp/deepseek_vl2
 
 ```
 export CUDA_VISIBLE_DEVICES=0
