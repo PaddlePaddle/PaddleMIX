@@ -1,7 +1,22 @@
-from paddlenlp.transformers.configuration_utils import PretrainedConfig
-from ppdiffusers.utils import logging
-logger = logging.get_logger(__name__)
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
+from paddlenlp.transformers.configuration_utils import PretrainedConfig
+
+from ppdiffusers.utils import logging
+
+logger = logging.get_logger(__name__)
 
 
 class Qwen2_5OmniVisionEncoderConfig(PretrainedConfig):
@@ -50,13 +65,26 @@ class Qwen2_5OmniVisionEncoderConfig(PretrainedConfig):
     >>> # Accessing the model configuration
     >>> configuration = model.config
     ```"""
-    model_type = 'qwen2_5_omni_vision_encoder'
-    base_config_key = 'vision_config'
 
-    def __init__(self, depth=32, hidden_size=3584, hidden_act='silu',
-        intermediate_size=3420, num_heads=16, in_channels=3, patch_size=14,
-        spatial_merge_size=2, temporal_patch_size=2, window_size=112,
-        out_hidden_size=3584, fullatt_block_indexes=[7, 15, 23, 31], **kwargs):
+    model_type = "qwen2_5_omni_vision_encoder"
+    base_config_key = "vision_config"
+
+    def __init__(
+        self,
+        depth=32,
+        hidden_size=3584,
+        hidden_act="silu",
+        intermediate_size=3420,
+        num_heads=16,
+        in_channels=3,
+        patch_size=14,
+        spatial_merge_size=2,
+        temporal_patch_size=2,
+        window_size=112,
+        out_hidden_size=3584,
+        fullatt_block_indexes=[7, 15, 23, 31],
+        **kwargs
+    ):
         super().__init__(**kwargs)
         self.depth = depth
         self.hidden_size = hidden_size
@@ -133,14 +161,28 @@ class Qwen2_5OmniAudioEncoderConfig(PretrainedConfig):
     >>> # Accessing the model configuration
     >>> configuration = model.config
     ```"""
-    model_type = 'qwen2_5_omni_audio_encoder'
 
-    def __init__(self, num_mel_bins=128, encoder_layers=32,
-        encoder_attention_heads=20, encoder_ffn_dim=5120, encoder_layerdrop
-        =0, d_model=1280, dropout=0, attention_dropout=0,
-        activation_function='gelu', activation_dropout=0, scale_embedding=
-        False, init_std=0.02, max_source_positions=1500, n_window=100,
-        output_dim=3584, **kwargs):
+    model_type = "qwen2_5_omni_audio_encoder"
+
+    def __init__(
+        self,
+        num_mel_bins=128,
+        encoder_layers=32,
+        encoder_attention_heads=20,
+        encoder_ffn_dim=5120,
+        encoder_layerdrop=0,
+        d_model=1280,
+        dropout=0,
+        attention_dropout=0,
+        activation_function="gelu",
+        activation_dropout=0,
+        scale_embedding=False,
+        init_std=0.02,
+        max_source_positions=1500,
+        n_window=100,
+        output_dim=3584,
+        **kwargs
+    ):
         super().__init__(**kwargs)
         self.num_mel_bins = num_mel_bins
         self.d_model = d_model
@@ -269,16 +311,31 @@ class Qwen2_5OmniTextConfig(PretrainedConfig):
     >>> # Accessing the model configuration
     >>> configuration = model.config
     ```"""
-    model_type = 'qwen2_5_omni_text'
+
+    model_type = "qwen2_5_omni_text"
     is_composition = False
 
-    def __init__(self, vocab_size=152064, hidden_size=3584,
-        intermediate_size=18944, num_hidden_layers=28, num_attention_heads=
-        28, num_key_value_heads=4, hidden_act='silu',
-        max_position_embeddings=32768, rms_norm_eps=1e-06, use_cache=True,
-        rope_theta=1000000.0, use_sliding_window=False, sliding_window=
-        32768, max_window_layers=28, attention_dropout=0.0, rope_scaling=
-        None, init_std=0.02, **kwargs):
+    def __init__(
+        self,
+        vocab_size=152064,
+        hidden_size=3584,
+        intermediate_size=18944,
+        num_hidden_layers=28,
+        num_attention_heads=28,
+        num_key_value_heads=4,
+        hidden_act="silu",
+        max_position_embeddings=32768,
+        rms_norm_eps=1e-06,
+        use_cache=True,
+        rope_theta=1000000.0,
+        use_sliding_window=False,
+        sliding_window=32768,
+        max_window_layers=28,
+        attention_dropout=0.0,
+        rope_scaling=None,
+        init_std=0.02,
+        **kwargs
+    ):
         self.vocab_size = vocab_size
         self.max_position_embeddings = max_position_embeddings
         self.hidden_size = hidden_size
@@ -298,8 +355,7 @@ class Qwen2_5OmniTextConfig(PretrainedConfig):
         self.attention_dropout = attention_dropout
         self.rope_scaling = rope_scaling
         if self.rope_scaling is None:
-            self.rope_scaling = {'mrope_section': [16, 24, 24], 'rope_type':
-                'default', 'type': 'default'}
+            self.rope_scaling = {"mrope_section": [16, 24, 24], "rope_type": "default", "type": "default"}
         self.init_std = init_std
         super().__init__(**kwargs)
 
@@ -366,18 +422,32 @@ class Qwen2_5OmniThinkerConfig(PretrainedConfig):
     >>> # Accessing the model configuration
     >>> configuration = model.config
     ```"""
-    model_type = 'qwen2_5_omni_thinker'
-    sub_configs = {'audio_config': Qwen2_5OmniAudioEncoderConfig,
-        'vision_config': Qwen2_5OmniVisionEncoderConfig, 'text_config':
-        Qwen2_5OmniTextConfig}
+
+    model_type = "qwen2_5_omni_thinker"
+    sub_configs = {
+        "audio_config": Qwen2_5OmniAudioEncoderConfig,
+        "vision_config": Qwen2_5OmniVisionEncoderConfig,
+        "text_config": Qwen2_5OmniTextConfig,
+    }
     is_composition = True
 
-    def __init__(self, audio_config=None, vision_config=None, text_config=
-        None, audio_token_index=151646, image_token_index=151655,
-        video_token_index=151656, tie_word_embeddings=False,
-        position_id_per_seconds=25, seconds_per_chunk=2,
-        audio_start_token_id=151647, audio_end_token_id=151648,
-        user_token_id=872, init_std=0.02, **kwargs):
+    def __init__(
+        self,
+        audio_config=None,
+        vision_config=None,
+        text_config=None,
+        audio_token_index=151646,
+        image_token_index=151655,
+        video_token_index=151656,
+        tie_word_embeddings=False,
+        position_id_per_seconds=25,
+        seconds_per_chunk=2,
+        audio_start_token_id=151647,
+        audio_end_token_id=151648,
+        user_token_id=872,
+        init_std=0.02,
+        **kwargs
+    ):
         self.audio_token_index = audio_token_index
         self.image_token_index = image_token_index
         self.video_token_index = video_token_index
@@ -554,24 +624,51 @@ class Qwen2_5OmniTalkerConfig(PretrainedConfig):
     >>> # Accessing the model configuration
     >>> configuration = model.config
     ```"""
-    model_type = 'qwen2_5_omni_talker'
+
+    model_type = "qwen2_5_omni_talker"
     is_composition = False
 
-    def __init__(self, audio_token_index=151646, image_token_index=151655,
-        video_token_index=151656, vocab_size=8448, tts_text_start_token_id=
-        151860, tts_text_end_token_id=151861, tts_text_pad_token_id=151859,
-        tts_codec_start_token_id=8293, tts_codec_end_token_id=8294,
-        tts_codec_pad_token_id=8292, tts_codec_mask_token_id=8296,
-        vision_start_token_id=151652, vision_end_token_id=151653,
-        embedding_size=3584, hidden_size=3584, intermediate_size=18944,
-        num_hidden_layers=28, num_attention_heads=28, num_key_value_heads=4,
-        hidden_act='silu', max_position_embeddings=32768, rms_norm_eps=
-        1e-06, head_dim=128, use_cache=True, tie_word_embeddings=False,
-        rope_theta=1000000.0, use_sliding_window=False, sliding_window=
-        32768, max_window_layers=28, attention_dropout=0.0, rope_scaling=
-        None, position_id_per_seconds=25, seconds_per_chunk=2,
-        audio_start_token_id=151647, audio_end_token_id=151648, init_std=
-        0.02, spatial_merge_size=2, **kwargs):
+    def __init__(
+        self,
+        audio_token_index=151646,
+        image_token_index=151655,
+        video_token_index=151656,
+        vocab_size=8448,
+        tts_text_start_token_id=151860,
+        tts_text_end_token_id=151861,
+        tts_text_pad_token_id=151859,
+        tts_codec_start_token_id=8293,
+        tts_codec_end_token_id=8294,
+        tts_codec_pad_token_id=8292,
+        tts_codec_mask_token_id=8296,
+        vision_start_token_id=151652,
+        vision_end_token_id=151653,
+        embedding_size=3584,
+        hidden_size=3584,
+        intermediate_size=18944,
+        num_hidden_layers=28,
+        num_attention_heads=28,
+        num_key_value_heads=4,
+        hidden_act="silu",
+        max_position_embeddings=32768,
+        rms_norm_eps=1e-06,
+        head_dim=128,
+        use_cache=True,
+        tie_word_embeddings=False,
+        rope_theta=1000000.0,
+        use_sliding_window=False,
+        sliding_window=32768,
+        max_window_layers=28,
+        attention_dropout=0.0,
+        rope_scaling=None,
+        position_id_per_seconds=25,
+        seconds_per_chunk=2,
+        audio_start_token_id=151647,
+        audio_end_token_id=151648,
+        init_std=0.02,
+        spatial_merge_size=2,
+        **kwargs
+    ):
         self.audio_token_index = audio_token_index
         self.image_token_index = image_token_index
         self.video_token_index = video_token_index
@@ -657,16 +754,36 @@ class Qwen2_5OmniDiTConfig(PretrainedConfig):
         enc_se_channels (`int`, *optional*, defaults to 64):
             The number of output channels after squeeze in the SEBlock.
     """
-    model_type = 'qwen2_5_omni_dit'
 
-    def __init__(self, hidden_size=1024, num_hidden_layers=22,
-        num_attention_heads=16, ff_mult=2, emb_dim=512, head_dim=64,
-        rope_theta=10000.0, max_position_embeddings=32768, block_size=24,
-        look_ahead_layers=[10], look_backward_layers=[0, 20], repeats=2,
-        num_embeds=8193, mel_dim=80, dropout=0.1, enc_emb_dim=192, enc_dim=
-        128, enc_channels=[256, 256, 256, 256, 768], enc_kernel_sizes=[5, 3,
-        3, 3, 1], enc_dilations=[1, 2, 3, 4, 1], enc_attention_channels=64,
-        enc_res2net_scale=2, enc_se_channels=64, **kwargs):
+    model_type = "qwen2_5_omni_dit"
+
+    def __init__(
+        self,
+        hidden_size=1024,
+        num_hidden_layers=22,
+        num_attention_heads=16,
+        ff_mult=2,
+        emb_dim=512,
+        head_dim=64,
+        rope_theta=10000.0,
+        max_position_embeddings=32768,
+        block_size=24,
+        look_ahead_layers=[10],
+        look_backward_layers=[0, 20],
+        repeats=2,
+        num_embeds=8193,
+        mel_dim=80,
+        dropout=0.1,
+        enc_emb_dim=192,
+        enc_dim=128,
+        enc_channels=[256, 256, 256, 256, 768],
+        enc_kernel_sizes=[5, 3, 3, 3, 1],
+        enc_dilations=[1, 2, 3, 4, 1],
+        enc_attention_channels=64,
+        enc_res2net_scale=2,
+        enc_se_channels=64,
+        **kwargs
+    ):
         self.hidden_size = hidden_size
         self.num_hidden_layers = num_hidden_layers
         self.num_attention_heads = num_attention_heads
@@ -712,12 +829,19 @@ class Qwen2_5OmniBigVGANConfig(PretrainedConfig):
         upsample_kernel_sizes (`List[int]`, *optional*, defaults to `[11, 7, 4, 4, 4, 4]`):
             A list of kernel sizes for each upsampling layer.
     """
-    model_type = 'qwen2_5_omni_bigvgan'
 
-    def __init__(self, mel_dim=80, upsample_initial_channel=1536,
-        resblock_kernel_sizes=[3, 7, 11], resblock_dilation_sizes=[[1, 3, 5
-        ], [1, 3, 5], [1, 3, 5]], upsample_rates=[5, 3, 2, 2, 2, 2],
-        upsample_kernel_sizes=[11, 7, 4, 4, 4, 4], **kwargs):
+    model_type = "qwen2_5_omni_bigvgan"
+
+    def __init__(
+        self,
+        mel_dim=80,
+        upsample_initial_channel=1536,
+        resblock_kernel_sizes=[3, 7, 11],
+        resblock_dilation_sizes=[[1, 3, 5], [1, 3, 5], [1, 3, 5]],
+        upsample_rates=[5, 3, 2, 2, 2, 2],
+        upsample_kernel_sizes=[11, 7, 4, 4, 4, 4],
+        **kwargs
+    ):
         self.mel_dim = mel_dim
         self.upsample_initial_channel = upsample_initial_channel
         self.resblock_kernel_sizes = resblock_kernel_sizes
@@ -768,9 +892,9 @@ class Qwen2_5OmniToken2WavConfig(PretrainedConfig):
     >>> # Accessing the model configuration
     >>> configuration = model.config
     """
-    model_type = 'qwen2_5_omni_token2wav'
-    sub_configs = {'dit_config': Qwen2_5OmniDiTConfig, 'bigvgan_config':
-        Qwen2_5OmniBigVGANConfig}
+
+    model_type = "qwen2_5_omni_token2wav"
+    sub_configs = {"dit_config": Qwen2_5OmniDiTConfig, "bigvgan_config": Qwen2_5OmniBigVGANConfig}
     is_composition = True
 
     def __init__(self, dit_config=None, bigvgan_config=None, **kwargs):
@@ -829,29 +953,32 @@ class Qwen2_5OmniConfig(PretrainedConfig):
     >>> configuration = model.config
     ```
     """
-    model_type = 'qwen2_5_omni'
-    sub_configs = {'thinker_config': Qwen2_5OmniThinkerConfig,
-        'talker_config': Qwen2_5OmniTalkerConfig, 'token2wav_config':
-        Qwen2_5OmniToken2WavConfig}
+
+    model_type = "qwen2_5_omni"
+    sub_configs = {
+        "thinker_config": Qwen2_5OmniThinkerConfig,
+        "talker_config": Qwen2_5OmniTalkerConfig,
+        "token2wav_config": Qwen2_5OmniToken2WavConfig,
+    }
     is_composition = True
 
-    def __init__(self, thinker_config=None, talker_config=None,
-        token2wav_config=None, enable_audio_output: bool=True, **kwargs):
+    def __init__(
+        self,
+        thinker_config=None,
+        talker_config=None,
+        token2wav_config=None,
+        enable_audio_output: bool = True,
+        **kwargs
+    ):
         if thinker_config is None:
             thinker_config = {}
-            logger.info(
-                'thinker_config is None. Initializing thinker model with default values'
-                )
+            logger.info("thinker_config is None. Initializing thinker model with default values")
         if talker_config is None:
             talker_config = {}
-            logger.info(
-                'talker_config is None. Initializing talker model with default values'
-                )
+            logger.info("talker_config is None. Initializing talker model with default values")
         if token2wav_config is None:
             token2wav_config = {}
-            logger.info(
-                'token2wav_config is None. Initializing token2wav model with default values'
-                )
+            logger.info("token2wav_config is None. Initializing token2wav model with default values")
         self.thinker_config = Qwen2_5OmniThinkerConfig(**thinker_config)
         self.talker_config = Qwen2_5OmniTalkerConfig(**talker_config)
         self.token2wav_config = Qwen2_5OmniToken2WavConfig(**token2wav_config)
@@ -859,20 +986,27 @@ class Qwen2_5OmniConfig(PretrainedConfig):
         super().__init__(**kwargs)
 
     @classmethod
-    def from_sub_model_configs(cls, thinker_config:
-        Qwen2_5OmniThinkerConfig, talker_config: Qwen2_5OmniTalkerConfig,
-        token2wav_config: Qwen2_5OmniToken2WavConfig, enable_audio_output:
-        bool=True, **kwargs):
+    def from_sub_model_configs(
+        cls,
+        thinker_config: Qwen2_5OmniThinkerConfig,
+        talker_config: Qwen2_5OmniTalkerConfig,
+        token2wav_config: Qwen2_5OmniToken2WavConfig,
+        enable_audio_output: bool = True,
+        **kwargs
+    ):
         """
         Instantiate a [`Qwen2_5OmniConfig`] (or a derived class) from sub-models configuration.
 
         Returns:
             [`Qwen2_5OmniConfig`]: An instance of a configuration object
         """
-        return cls(thinker_config=thinker_config.to_dict(), talker_config=
-            talker_config.to_dict(), token2wav_config=token2wav_config.
-            to_dict(), enable_audio_output=enable_audio_output, **kwargs)
+        return cls(
+            thinker_config=thinker_config.to_dict(),
+            talker_config=talker_config.to_dict(),
+            token2wav_config=token2wav_config.to_dict(),
+            enable_audio_output=enable_audio_output,
+            **kwargs,
+        )
 
 
-__all__ = ['Qwen2_5OmniConfig', 'Qwen2_5OmniThinkerConfig',
-    'Qwen2_5OmniTalkerConfig', 'Qwen2_5OmniToken2WavConfig']
+__all__ = ["Qwen2_5OmniConfig", "Qwen2_5OmniThinkerConfig", "Qwen2_5OmniTalkerConfig", "Qwen2_5OmniToken2WavConfig"]

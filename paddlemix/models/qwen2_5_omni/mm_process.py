@@ -1,10 +1,24 @@
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import audioread
 import av
 import librosa
 import numpy as np
 
-
 from paddlemix.processors.qwen2_5_vl_processing import process_vision_info
+
 
 def _check_if_video_has_audio(video_path):
     container = av.open(video_path)
@@ -55,6 +69,7 @@ def process_audio_info(conversations: list[dict] | list[list[dict]], use_audio_i
     if len(audios) == 0:
         audios = None
     return audios
+
 
 def process_mm_info(conversations, use_audio_in_video, return_video_kwargs=False):
     audios = process_audio_info(conversations, use_audio_in_video)

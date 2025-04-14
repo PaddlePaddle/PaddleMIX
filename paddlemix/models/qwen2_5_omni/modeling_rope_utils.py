@@ -1,28 +1,43 @@
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import math
 from typing import Optional
 
 import paddle
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
 
+
 def _compute_default_rope_parameters(
     config: Optional[PretrainedConfig] = None,
     device: Optional[str] = None,
     seq_len: Optional[int] = None,
     **rope_kwargs,
-) -> tuple["torch.Tensor", float]:
+) -> tuple["paddle.Tensor", float]:
     """
     Computes the inverse frequencies according to the original RoPE implementation
     Args:
         config ([`~transformers.PretrainedConfig`]):
             The model configuration.
-        device (`torch.device`):
+        device (`paddle.device`):
             The device to use for initialization of the inverse frequencies.
         seq_len (`int`, *optional*):
             The current sequence length. Unused for this type of RoPE.
         rope_kwargs (`Dict`, *optional*):
             BC compatibility with the previous RoPE class instantiation, will be removed in v4.45.
     Returns:
-        Tuple of (`torch.Tensor`, `float`), containing the inverse frequencies for the RoPE embeddings and the
+        Tuple of (`paddle.Tensor`, `float`), containing the inverse frequencies for the RoPE embeddings and the
         post-processing scaling factor applied to the computed cos/sin (unused in this type of RoPE).
     """
     if config is not None and len(rope_kwargs) > 0:
@@ -42,7 +57,7 @@ def _compute_default_rope_parameters(
     attention_factor = 1.0  # Unused in this type of RoPE
 
     # Compute the inverse frequencies
-    inv_freq = 1.0 / (base ** (paddle.arange(0, dim, 2, dtype='int64').astype("float32").to(device) / dim))
+    inv_freq = 1.0 / (base ** (paddle.arange(0, dim, 2, dtype="int64").astype("float32").to(device) / dim))
     return inv_freq, attention_factor
 
 
@@ -51,7 +66,7 @@ def _compute_linear_scaling_rope_parameters(
     device: Optional[str] = None,
     seq_len: Optional[int] = None,
     **rope_kwargs,
-) -> tuple["torch.Tensor", float]:
+) -> tuple["paddle.Tensor", float]:
     """
     Computes the inverse frequencies with linear scaling. Credits to the Reddit user /u/kaiokendev
     Args:
@@ -92,7 +107,7 @@ def _compute_dynamic_ntk_parameters(
     device: Optional[str] = None,
     seq_len: Optional[int] = None,
     **rope_kwargs,
-) -> tuple["torch.Tensor", float]:
+) -> tuple["paddle.Tensor", float]:
     """
     Computes the inverse frequencies with NTK scaling. Credits to the Reddit users /u/bloc97 and /u/emozilla
     Args:
@@ -134,7 +149,7 @@ def _compute_dynamic_ntk_parameters(
 
     # Compute the inverse frequencies
     base = base * ((factor * seq_len / max_position_embeddings) - (factor - 1)) ** (dim / (dim - 2))
-    inv_freq = 1.0 / (base ** (paddle.arange(0, dim, 2, dtype='int64').float().to(device) / dim))
+    inv_freq = 1.0 / (base ** (paddle.arange(0, dim, 2, dtype="int64").float().to(device) / dim))
     return inv_freq, attention_factor
 
 
@@ -213,13 +228,13 @@ def _compute_yarn_parameters(
         if min == max:
             max += 0.001  # Prevent singularity
 
-        linear_func = (paddle.arange(dim, dtype='float32') - min) / (max - min)
+        linear_func = (paddle.arange(dim, dtype="float32") - min) / (max - min)
         ramp_func = paddle.clamp(linear_func, 0, 1)
         return ramp_func
 
     # Note on variable naming: "interpolation" comes from the original technique, where we interpolate the position IDs
     # to expand the possible context length. In other words, interpolation = apply scaling factor.
-    pos_freqs = base ** (paddle.arange(0, dim, 2).astype('float32').to(device) / dim)
+    pos_freqs = base ** (paddle.arange(0, dim, 2).astype("float32").to(device) / dim)
     inv_freq_extrapolation = 1.0 / pos_freqs
     inv_freq_interpolation = 1.0 / (factor * pos_freqs)
 
@@ -288,10 +303,10 @@ def _compute_longrope_parameters(
 
     # Compute the inverse frequencies -- scaled based on the target sequence length
     if seq_len and seq_len > original_max_position_embeddings:
-        ext_factors = paddle.to_tensor(long_factor, dtype='float32', device=device)
+        ext_factors = paddle.to_tensor(long_factor, dtype="float32", device=device)
     else:
-        ext_factors = paddle.to_tensor(short_factor, dtype='float32', device=device)
-    inv_freq_shape = paddle.arange(0, dim, 2, dtype='int64', device=device).float() / dim
+        ext_factors = paddle.to_tensor(short_factor, dtype="float32", device=device)
+    inv_freq_shape = paddle.arange(0, dim, 2, dtype="int64", device=device).float() / dim
     inv_freq = 1.0 / (ext_factors * base**inv_freq_shape)
 
     return inv_freq, attention_factor
@@ -338,7 +353,6 @@ def _compute_llama3_parameters(
     inv_freq_llama = paddle.where(is_medium_freq, smoothed_inv_freq, inv_freq_llama)
 
     return inv_freq_llama, attention_factor
-
 
 
 ROPE_INIT_FUNCTIONS = {

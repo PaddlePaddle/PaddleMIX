@@ -1,13 +1,33 @@
-import paddle
-import numpy as np
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from typing import List, Optional, Union
 
-
-from paddlenlp.transformers.feature_extraction_sequence_utils import SequenceFeatureExtractor
+import numpy as np
+import paddle
+from paddlenlp.transformers.audio_utils import (
+    mel_filter_bank,
+    spectrogram,
+    window_function,
+)
+from paddlenlp.transformers.feature_extraction_sequence_utils import (
+    SequenceFeatureExtractor,
+)
 from paddlenlp.transformers.feature_extraction_utils import BatchFeature
-from paddlenlp.transformers.audio_utils import mel_filter_bank, spectrogram, window_function
 from paddlenlp.transformers.tokenizer_utils_base import TensorType
 from paddlenlp.utils.import_utils import is_paddle_available
+
 from ppdiffusers.utils import logging
 
 logger = logging.get_logger(__name__)
@@ -123,9 +143,8 @@ class WhisperFeatureExtractor(SequenceFeatureExtractor):
         Compute the log-mel spectrogram of the audio using PyTorch's GPU-accelerated STFT implementation with batching,
         yielding results similar to cpu computing with 1e-5 tolerance.
         """
-        waveform = paddle.to_tensor(waveform,dtype="float32")
-        window = paddle.audio.functional.get_window("hann",self.n_fft)
-
+        waveform = paddle.to_tensor(waveform, dtype="float32")
+        window = paddle.audio.functional.get_window("hann", self.n_fft)
         # Note: it would be better to dither the chunked waveform,
         # so overlapping signal does not get the same dithering.
         # But, chunking is happening inside pytorch, so it is here.
@@ -135,12 +154,13 @@ class WhisperFeatureExtractor(SequenceFeatureExtractor):
         stft = paddle.signal.stft(waveform, self.n_fft, self.hop_length, window=window)
         magnitudes = stft[..., :-1].abs() ** 2
 
-        mel_filters = paddle.to_tensor(self.mel_filters,dtype="float32")
+        mel_filters = paddle.to_tensor(self.mel_filters, dtype="float32")
         mel_spec = mel_filters.T @ magnitudes
 
         log_spec = paddle.clip(mel_spec, min=1e-10).log10()
         if waveform.dim() == 2:
-            max_val = log_spec.max(axis=2, keepdim=True)[0].max(axis=1, keepdim=True)[0]
+            # diff
+            max_val = log_spec.max(axis=2, keepdim=True).max(axis=1, keepdim=True)
             log_spec = paddle.maximum(log_spec, max_val - 8.0)
         else:
             log_spec = paddle.maximum(log_spec, log_spec.max() - 8.0)
@@ -281,7 +301,6 @@ class WhisperFeatureExtractor(SequenceFeatureExtractor):
             pad_to_multiple_of=pad_to_multiple_of,
             return_attention_mask=return_attention_mask or do_normalize,
         )
-
         # zero-mean and unit-variance normalization
         if do_normalize:
             padded_inputs["input_features"] = self.zero_mean_unit_var_norm(
@@ -298,7 +317,6 @@ class WhisperFeatureExtractor(SequenceFeatureExtractor):
             self._paddle_extract_fbank_features if is_paddle_available() else self._np_extract_fbank_features
         )
         input_features = extract_fbank_features(input_features[0], device)
-
         if isinstance(input_features[0], List):
             padded_inputs["input_features"] = [np.asarray(feature, dtype=np.float32) for feature in input_features]
 
@@ -316,4 +334,3 @@ class WhisperFeatureExtractor(SequenceFeatureExtractor):
             padded_inputs = padded_inputs.convert_to_tensors(return_tensors)
 
         return padded_inputs
-

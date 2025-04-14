@@ -35,6 +35,7 @@ from .processing_minicpmv import *
 from .qwen2_vl_processing import *
 from .qwen_vl_processing import *
 from .qwen2_5_vl_processing import *
+from .qwen2_5_omni_processing import *
 from .sam_processing import *
 from .tokenizer import SimpleTokenizer, tokenize
 from .visualglm_image_processing import *
