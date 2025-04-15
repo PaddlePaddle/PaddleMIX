@@ -1,41 +1,71 @@
-# export DEBUG_MODE="true"
-# export WANDB_DISABLED="true"
-# export CUDA_VISIBLE_DEVICES=6,7
-# export LOG_PATH="./debug_r1_v.txt"
-GPUS=${GPUS:-8}
-NUM_GENERATIONS=${NUM_GENERATIONS:-8}
-RUN_NAME="Qwen2.5-VL-3B-GRPO-Counting_${GPUS}"
-IMAGE_ROOT="data/clevr_cogen_a_train"
-DATASET_NAME="data/clevr_cogen_a_train"
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+# 
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# 
+#     http://www.apache.org/licenses/LICENSE-2.0
+# 
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-python -m paddle.distributed.launch \
-    --nnodes=1 \
-    --rank=0 \
-    --master=127.0.0.1 \
-    --nproc_per_node=$GPUS \
+GPUS=${GPUS:-8}
+BATCH_SIZE=${BATCH_SIZE:-16}
+PER_DEVICE_BATCH_SIZE=${PER_DEVICE_BATCH_SIZE:-1}
+GRADIENT_ACC=$((BATCH_SIZE / PER_DEVICE_BATCH_SIZE / GPUS))
+tensor_parallel_degree=${tensor_parallel_degree:-1}
+sharding_parallel_degree=$((GPUS / tensor_parallel_degree))
+
+NUM_GENERATIONS=${NUM_GENERATIONS:-8}
+
+OUTPUT_DIR="work_dirs/Qwen2-VL-2B-GRPO-Counting_${GPUS}GPUS"
+if [ ! -d "$OUTPUT_DIR" ]; then
+  mkdir -p "$OUTPUT_DIR"
+fi
+
+DATASET_NAME="data/Counting/clevr_cogen_a_train"
+
+TRAINING_MODEL_RESUME="None"
+TRAINER_INSTANCES='127.0.0.1'
+MASTER='127.0.0.1:8080'
+
+TRAINING_PYTHON="python -m paddle.distributed.launch --master ${MASTER} --nnodes 1 --nproc_per_node ${GPUS} --rank 0 --ips ${TRAINER_INSTANCES} --run_mode=collective"
+${TRAINING_PYTHON} --log_dir ${OUTPUT_DIR}/paddle_distributed_logs \
     paddlemix/examples/r1_mllm/train/grpo_r1-v.py \
-    --output_dir output/$RUN_NAME \
+    --do_train \
     --model_name_or_path Qwen/Qwen2-VL-2B-Instruct \
+    --output_dir ${OUTPUT_DIR} \
+    --logging_dir ${OUTPUT_DIR}/logs \
     --dataset_name $DATASET_NAME \
     --max_prompt_length 512 \
     --max_completion_length 512 \
     --num_generations $NUM_GENERATIONS \
+    --overwrite_output_dir True \
+    --dataloader_num_workers 8 \
+    --bf16 True \
+    --fp16 False \
     --fp16_opt_level "O2" \
-    --per_device_train_batch_size 1 \
-    --gradient_accumulation_steps 2 \
+    --num_train_epochs 1 \
+    --max_steps 100 \
+    --per_device_train_batch_size ${PER_DEVICE_BATCH_SIZE} \
+    --gradient_accumulation_steps ${GRADIENT_ACC} \
+    --freeze_vision False \
+    --recompute True \
     --logging_steps 1 \
-    --bf16 \
-    --seed 42 \
-    --report_to tensorboard \
+    --report_to "visualdl" \
+    --save_strategy "steps" \
+    --save_steps 100 \
+    --save_total_limit 1 \
     --max_pixels 401408 \
     --num_train_epochs 1 \
     --run_name $RUN_NAME \
-    --save_steps 100 \
-    --sharding="stage2" \
-    --amp_master_grad True \
-    --do_train \
-    --ignore_save_lr_and_optim True \
-    --freeze_vision False \
-    --max_steps 100
-    # --recompute \
-
+    --tensor_parallel_degree=${tensor_parallel_degree} \
+    --sharding_parallel_degree=${sharding_parallel_degree} \
+    --pipeline_parallel_degree=1 \
+    --sep_parallel_degree=1 \
+    --sharding "stage2" \
+    --amp_master_grad=1 \
+    --hybrid_parallel_topo_order="sharding_first" \

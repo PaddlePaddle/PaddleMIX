@@ -1,4 +1,4 @@
 datasets:
-     - json_path: data/rec_jsons_processed/refcoco_train.json
-     - json_path: data/rec_jsons_processed/refcocop_train.json
-     - json_path: data/rec_jsons_processed/refcocog_train.json
+     - json_path: data/REC/rec_jsons_processed/refcoco_train.json
+     - json_path: data/REC/rec_jsons_processed/refcocop_train.json
+     - json_path: data/REC/rec_jsons_processed/refcocog_train.json
