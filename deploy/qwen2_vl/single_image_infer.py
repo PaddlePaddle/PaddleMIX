@@ -274,7 +274,6 @@ if predictor_args.llm_mode == "static":
         save_model_dir=f"./tmp/{predictor_args.model_name_or_path}/{predictor_args.quant_type}",
         enable_new_ir=True,
         cache_static_model=True,
-        skip_prune_program=True,
         exp_enable_use_cutlass=False,
     )
 
@@ -292,10 +291,13 @@ if predictor_args.benchmark:
             starttime = datetime.datetime.now()
         generated_text = run_model(predictor_args)
 
-        # NOTE: (changwenbin) We delete the transformer_block to reduce the memory usage.
+        # NOTE: (changwenbin) We delete some weights of the original dynamic graph,
+        # after fast_llm_model is converted to a static graph to reduce memory usage.
         if (fast_llm_model.qwen2.transformer_block is not None) and (predictor_args.llm_mode == "static"):
             fast_llm_model.qwen2.transformer_block = None
-        paddle.device.cuda.empty_cache()
+            fast_llm_model.qwen2.norm = None
+            fast_llm_model.lm_head = None
+            paddle.device.cuda.empty_cache()
 
         if i > 2:
             paddle.device.synchronize()
@@ -313,6 +315,7 @@ if predictor_args.benchmark:
         "ms",
     )
     print(f"GPU max_memory_allocated: {paddle.device.cuda.max_memory_allocated() / 1024 ** 3:.2f} GB")
+    print(f"GPU memory_allocated: {paddle.device.cuda.memory_allocated() / 1024 ** 3:.2f} GB")
     print("input_tokens_len is :", generated_text[1], "tokens")
     print("output_tokens_len is :", generated_text[2], "tokens")
 

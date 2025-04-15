@@ -276,9 +276,13 @@ if predictor_args.benchmark:
             starttime = datetime.datetime.now()
         generated_text = run_model(predictor_args)
 
-        # NOTE: (changwenbin) We delete the transformer_block to reduce the memory usage.
+        # NOTE: (changwenbin) We delete some weights of the original dynamic graph,
+        # after fast_llm_model is converted to a static graph to reduce memory usage.
         if (fast_llm_model.deepseek_v2.transformer_block is not None) and (predictor_args.llm_mode == "static"):
             fast_llm_model.deepseek_v2.transformer_block = None
+            fast_llm_model.deepseek_v2.norm = None
+            fast_llm_model.rotary_emb = None
+            fast_llm_model.lm_head = None
             paddle.device.cuda.empty_cache()
 
         if i > 2:
@@ -297,6 +301,7 @@ if predictor_args.benchmark:
         "ms",
     )
     print(f"GPU max_memory_allocated: {paddle.device.cuda.max_memory_allocated() / 1024 ** 3:.2f} GB")
+    print(f"GPU memory_allocated: {paddle.device.cuda.memory_allocated() / 1024 ** 3:.2f} GB")
     print("input_tokens_len is :", generated_text[1], "tokens")
     print("output_tokens_len is :", generated_text[2], "tokens")
 
