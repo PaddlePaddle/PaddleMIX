@@ -67,12 +67,47 @@ class CogVideoXCausalConv3d(paddle.nn.Layer):
         pad_mode (`str`, defaults to `"constant"`): Padding mode.
     """
 
+    # def __init__(
+    #     self,
+    #     in_channels: int,
+    #     out_channels: int,
+    #     kernel_size: Union[int, Tuple[int, int, int]],
+    #     stride: int = 1,
+    #     dilation: int = 1,
+    #     pad_mode: str = "constant",
+    # ):
+    #     super().__init__()
+    #     if isinstance(kernel_size, int):
+    #         kernel_size = (kernel_size,) * 3
+    #     time_kernel_size, height_kernel_size, width_kernel_size = kernel_size
+    #     self.pad_mode = pad_mode
+    #     time_pad = dilation * (time_kernel_size - 1) + (1 - stride)
+    #     height_pad = height_kernel_size // 2
+    #     width_pad = width_kernel_size // 2
+    #     self.height_pad = height_pad
+    #     self.width_pad = width_pad
+    #     self.time_pad = time_pad
+    #     self.time_causal_padding = (width_pad, width_pad, height_pad, height_pad, time_pad, 0)
+    #     self.temporal_dim = 2
+    #     self.time_kernel_size = time_kernel_size
+    #     stride = stride, 1, 1
+    #     dilation = dilation, 1, 1
+    #     self.conv = CogVideoXSafeConv3d(
+    #         in_channels=in_channels,
+    #         out_channels=out_channels,
+    #         kernel_size=kernel_size,
+    #         stride=stride,
+    #         dilation=dilation,
+    #     )
+    #     self.conv_cache = None
+    
+    
     def __init__(
         self,
         in_channels: int,
         out_channels: int,
         kernel_size: Union[int, Tuple[int, int, int]],
-        stride: int = 1,
+        stride: Union[int, Tuple[int, int, int]] = 1,
         dilation: int = 1,
         pad_mode: str = "constant",
     ):
@@ -81,7 +116,10 @@ class CogVideoXCausalConv3d(paddle.nn.Layer):
             kernel_size = (kernel_size,) * 3
         time_kernel_size, height_kernel_size, width_kernel_size = kernel_size
         self.pad_mode = pad_mode
-        time_pad = dilation * (time_kernel_size - 1) + (1 - stride)
+        
+        # 使用与PyTorch一致的计算方法
+        time_pad = time_kernel_size - 1  
+        
         height_pad = height_kernel_size // 2
         width_pad = width_kernel_size // 2
         self.height_pad = height_pad
@@ -90,8 +128,11 @@ class CogVideoXCausalConv3d(paddle.nn.Layer):
         self.time_causal_padding = (width_pad, width_pad, height_pad, height_pad, time_pad, 0)
         self.temporal_dim = 2
         self.time_kernel_size = time_kernel_size
-        stride = stride, 1, 1
-        dilation = dilation, 1, 1
+        
+        # 处理stride可能是元组的情况
+        stride = stride if isinstance(stride, tuple) else (stride, 1, 1)
+        dilation = (dilation, 1, 1)
+        
         self.conv = CogVideoXSafeConv3d(
             in_channels=in_channels,
             out_channels=out_channels,
@@ -100,6 +141,7 @@ class CogVideoXCausalConv3d(paddle.nn.Layer):
             dilation=dilation,
         )
         self.conv_cache = None
+
 
     def fake_context_parallel_forward(self, inputs: paddle.Tensor) -> paddle.Tensor:
         kernel_size = self.time_kernel_size

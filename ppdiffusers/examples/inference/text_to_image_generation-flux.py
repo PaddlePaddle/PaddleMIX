@@ -17,14 +17,14 @@ import paddle
 from ppdiffusers import FluxPipeline
 
 pipe = FluxPipeline.from_pretrained(
-    "black-forest-labs/FLUX.1-dev", paddle_dtype=paddle.float16
+    "black-forest-labs/FLUX.1-dev", paddle_dtype=paddle.float16, low_cpu_mem_usage=True, map_location="cpu"
 )
 
 prompt = "A cat holding a sign that says hello world"
 image = pipe(
     prompt,
-    height=1024,
-    width=1024,
+    height=512,
+    width=512,
     guidance_scale=3.5,
     num_inference_steps=50,
     max_sequence_length=512,
