@@ -416,10 +416,6 @@ class MochiPipeline(DiffusionPipeline, Mochi1LoraLoaderMixin):
         return self._num_timesteps
     
     @property
-    def attention_kwargs(self):
-        return self._attention_kwargs
-    
-    @property
     def current_timestep(self):
         return self._current_timestep
 
@@ -449,7 +445,6 @@ class MochiPipeline(DiffusionPipeline, Mochi1LoraLoaderMixin):
         negative_prompt_attention_mask: Optional[paddle.Tensor] = None,
         output_type: Optional[str] = "pil",
         return_dict: bool = True,
-        attention_kwargs: Optional[Dict[str, Any]] = None,
         callback_on_step_end: Optional[Callable[[int, int, Dict], None]] = None,
         callback_on_step_end_tensor_inputs: List[str] = ["latents"],
         max_sequence_length: int = 256,
@@ -475,7 +470,6 @@ class MochiPipeline(DiffusionPipeline, Mochi1LoraLoaderMixin):
         )
 
         self._guidance_scale = guidance_scale
-        self._attention_kwargs = attention_kwargs
         self._current_timestep = None
         self._interrupt = False
 
@@ -551,7 +545,6 @@ class MochiPipeline(DiffusionPipeline, Mochi1LoraLoaderMixin):
                     encoder_hidden_states=prompt_embeds,
                     timestep=timestep,
                     encoder_attention_mask=prompt_attention_mask,
-                    attention_kwargs=attention_kwargs,
                     return_dict=False,
                 )[0]
                 noise_pred = noise_pred.cast('float32')

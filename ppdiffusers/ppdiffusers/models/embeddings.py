@@ -1418,7 +1418,7 @@ class MochiAttentionPool(nn.Layer):
         assert x.shape[1] == mask.shape[1]  # Expected mask to have same length as tokens.
         assert x.shape[0] == mask.shape[0]  # Expected mask to have same batch size as tokens.
         mask = mask[:, :, None].astype(x.dtype)
-        mask = mask / mask.sum(axis=1, keepdim=True).clamp(min=1)
+        mask = mask / mask.sum(axis=1, keepdim=True).clip(min=1)
         pooled = (x * mask).sum(axis=1, keepdim=keepdim)
         return pooled
 
@@ -1438,7 +1438,9 @@ class MochiAttentionPool(nn.Layer):
 
         # Construct attention mask, shape: (B, 1, num_queries=1, num_keys=1+L).
         attn_mask = mask[:, None, None, :].astype('bool')  # (B, 1, 1, L).
-        attn_mask = F.pad(attn_mask, (1, 0), value=True)  # (B, 1, 1, 1+L).
+        # attn_mask = F.pad(attn_mask, (1, 0), value=True)  # (B, 1, 1, 1+L).
+        attn_mask = F.pad(attn_mask.astype('int32'), (1, 0), value=1)  # Using 1 as True
+        attn_mask = attn_mask.astype('bool')  # Convert back to boolean if needed
 
         # Average non-padding token features. These will be used as the query.
         x_pool = self.pool_tokens(x, mask, keepdim=True)  # (B, 1, D)
@@ -1457,12 +1459,26 @@ class MochiAttentionPool(nn.Layer):
         k, v = kv.unbind(axis=2)  # (B, H, 1+L, head_dim)
         q = q.reshape([0, self.num_attention_heads, head_dim])  # (B, H, head_dim)
         q = q.unsqueeze(axis=2)  # (B, H, 1, head_dim)
+        
+        # 在调用 scaled_dot_product_attention 前添加这些打印语句
+        print("数据类型检查:")
+        print(f"q 数据类型: {q.dtype}")
+        print(f"k 数据类型: {k.dtype}")
+        print(f"v 数据类型: {v.dtype}")
+        print(f"attn_mask 数据类型: {attn_mask.dtype}")
+
+        # 还可以打印张量的形状，这对调试也很有帮助
+        print(f"q 形状: {q.shape}")
+        print(f"k 形状: {k.shape}")
+        print(f"v 形状: {v.shape}")
+        print(f"attn_mask 形状: {attn_mask.shape}")
+
 
         # Compute attention.
-        x = F.multi_head_attention(q, k, v, attn_mask=attn_mask, dropout=0.0)  # (B, H, 1, head_dim)
+        x = F.scaled_dot_product_attention(q, k, v, attn_mask=attn_mask, dropout_p=0.0)  # (B, H, 1, head_dim)
 
         # Concatenate heads and run output.
-        x = x.squeeze(axis=2).reshape([0, -1])  # (B, D = H * head_dim)
+        x = x.squeeze(axis=2).flatten(start_axis=1, stop_axis=2)  # (B, D = H * head_dim)
         x = self.to_out(x)
         return x
 
