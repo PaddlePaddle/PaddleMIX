@@ -109,6 +109,7 @@ class Attention(nn.Layer):
         context_pre_only=None,
         pre_only=False,
         elementwise_affine: bool = True,
+        is_causal: bool = False,
     ):
         super().__init__()
 
@@ -127,6 +128,7 @@ class Attention(nn.Layer):
         self.out_dim = out_dim if out_dim is not None else query_dim
         self.context_pre_only = context_pre_only
         self.pre_only = pre_only
+        self.is_causal = is_causal
 
         # we make use of this private variable to know whether this class is loaded
         # with an deprecated state dict so that we can convert it on the fly
@@ -179,8 +181,8 @@ class Attention(nn.Layer):
             self.norm_q = RMSNorm(dim_head, epsilon=eps)
             self.norm_k = RMSNorm(dim_head, epsilon=eps)
         elif qk_norm == "l2":
-            self.norm_q = LpNorm(p=2, dim=-1, epsilon=eps)
-            self.norm_k = LpNorm(p=2, dim=-1, epsilon=eps)
+            self.norm_q = LpNorm(p=2, axis=-1, epsilon=eps)
+            self.norm_k = LpNorm(p=2, axis=-1, epsilon=eps)
         else:
             raise ValueError(f"unknown qk_norm: {qk_norm}. Should be None,'layer_norm','fp32_layer_norm','rms_norm'")
 
@@ -2673,10 +2675,9 @@ class MochiAttnProcessor2_0:
             valid_key = paddle.concat([key[idx:idx+1], valid_encoder_key], axis=2)
             valid_value = paddle.concat([value[idx:idx+1], valid_encoder_value], axis=2)
             
-            # Manually implement scaled_dot_product_attention
-            attn_weights = paddle.matmul(valid_query, valid_key.transpose((0, 1, 3, 2))) / (dim ** 0.5)
-            attn_weights = F.softmax(attn_weights, axis=-1)
-            attn_output = paddle.matmul(attn_weights, valid_value)
+            attn_output = F.scaled_dot_product_attention(
+                valid_query, valid_key, valid_value, dropout_p=0.0, is_causal=False
+            )
             
             valid_sequence_length = attn_output.shape[2]
             attn_output = F.pad(attn_output, (0, 0, 0, total_length - valid_sequence_length))
@@ -2704,8 +2705,7 @@ class MochiVaeAttnProcessor2_0:
     """
 
     def __init__(self):
-        if not hasattr(F, "scaled_dot_product_attention"):
-            raise ImportError("AttnProcessor2_0 requires PaddlePaddle with scaled_dot_product_attention support.")
+        pass
 
     def __call__(
         self,
