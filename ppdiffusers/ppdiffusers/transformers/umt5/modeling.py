@@ -1,5 +1,6 @@
 # coding=utf-8
-# Copyright 2018 Mesh TensorFlow authors, T5 Authors and HuggingFace Inc. team.
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2023 Mesh TensorFlow authors, T5 Authors and HuggingFace Inc. team.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,6 +15,7 @@
 # limitations under the License.
 """ Paddle T5 model."""
 
+# heavily base on https://github.com/huggingface/transformers/blob/main/src/transformers/models/umt5/modeling_umt5.py
 
 import copy
 import math

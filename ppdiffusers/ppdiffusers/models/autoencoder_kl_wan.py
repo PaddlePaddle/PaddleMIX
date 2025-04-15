@@ -1,3 +1,4 @@
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2025 The Wan Team and The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,13 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# heavily base on https://github.com/huggingface/diffusers/blob/main/src/diffusers/models/autoencoders/autoencoder_kl_wan.py
+
 from typing import List, Optional, Tuple, Union
 
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
 
-# from ...configuration_utils import ConfigMixin, register_to_config
 from ..configuration_utils import ConfigMixin, register_to_config
 from ..utils import logging
 from ..utils.accelerate_utils import apply_forward_hook
@@ -26,8 +28,6 @@ from .activations import get_activation
 from .modeling_outputs import AutoencoderKLOutput
 from .modeling_utils import ModelMixin
 from .vae import DecoderOutput, DiagonalGaussianDistribution
-
-# import paddle.utils.checkpoint
 
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
@@ -73,8 +73,7 @@ class WanCausalConv3d(nn.Conv3D):
     def forward(self, x, cache_x=None):
         padding = list(self._padding)
         if cache_x is not None and self._padding[4] > 0:
-            # cache_x = cache_x.to(x.device)
-            cache_x = cache_x  # .to(x.device)
+            cache_x = cache_x
             x = paddle.concat([cache_x, x], axis=2)
             padding[4] -= cache_x.shape[2]
         x = F.pad(x, padding)
@@ -140,13 +139,11 @@ class WanResample(nn.Layer):
         # layers
         if mode == "upsample2d":
             self.resample = nn.Sequential(
-                # WanUpsample(scale_factor=(2.0, 2.0), mode="nearest-exact"), nn.Conv2D(dim, dim // 2, 3, padding=1)
                 WanUpsample(scale_factor=(2.0, 2.0), mode="nearest"),
                 nn.Conv2D(dim, dim // 2, 3, padding=1),
             )
         elif mode == "upsample3d":
             self.resample = nn.Sequential(
-                # WanUpsample(scale_factor=(2.0, 2.0), mode="nearest-exact"), nn.Conv2D(dim, dim // 2, 3, padding=1)
                 WanUpsample(scale_factor=(2.0, 2.0), mode="nearest"),
                 nn.Conv2D(dim, dim // 2, 3, padding=1),
             )
@@ -259,7 +256,6 @@ class WanResidualBlock(nn.Layer):
             idx = feat_idx[0]
             cache_x = x[:, :, -CACHE_T:, :, :].clone()
             if cache_x.shape[2] < 2 and feat_cache[idx] is not None:
-                # cache_x = paddle.concat([feat_cache[idx][:, :, -1, :, :].unsqueeze(2).to(cache_x.device), cache_x], axis=2)
                 cache_x = paddle.concat([feat_cache[idx][:, :, -1, :, :].unsqueeze(2), cache_x], axis=2)
 
             x = self.conv1(x, feat_cache[idx])
@@ -279,7 +275,6 @@ class WanResidualBlock(nn.Layer):
             idx = feat_idx[0]
             cache_x = x[:, :, -CACHE_T:, :, :].clone()
             if cache_x.shape[2] < 2 and feat_cache[idx] is not None:
-                # cache_x = paddle.concat([feat_cache[idx][:, :, -1, :, :].unsqueeze(2).to(cache_x.device), cache_x], axis=2)
                 cache_x = paddle.concat([feat_cache[idx][:, :, -1, :, :].unsqueeze(2), cache_x], axis=2)
 
             x = self.conv2(x, feat_cache[idx])
@@ -318,11 +313,11 @@ class WanAttentionBlock(nn.Layer):
         # compute query, key, value
         qkv = self.to_qkv(x)
         qkv = qkv.reshape([batch_size * time, 1, channels * 3, -1])
-        # qkv = qkv.permute(0, 1, 3, 2).contiguous()
         qkv = qkv.permute(0, 3, 1, 2).contiguous()
         q, k, v = qkv.chunk(3, axis=-1)
 
         # apply attention
+        # TODO, when mea fixed, remove try
         try:
             x = F.scaled_dot_product_attention(q, k, v)
         except:
@@ -450,9 +445,7 @@ class WanEncoder3d(nn.Layer):
             cache_x = x[:, :, -CACHE_T:, :, :].clone()
             if cache_x.shape[2] < 2 and feat_cache[idx] is not None:
                 # cache last frame of last two chunk
-                # cache_x = paddle.concat([feat_cache[idx][:, :, -1, :, :].unsqueeze(2).to(cache_x.device), cache_x], axis=2)
                 cache_x = paddle.concat([feat_cache[idx][:, :, -1, :, :].unsqueeze(2), cache_x], axis=2)
-            # print('dddebug_dtype:', x.dtype)
             x = self.conv_in(x, feat_cache[idx])
             feat_cache[idx] = cache_x
             feat_idx[0] += 1
@@ -477,7 +470,6 @@ class WanEncoder3d(nn.Layer):
             cache_x = x[:, :, -CACHE_T:, :, :].clone()
             if cache_x.shape[2] < 2 and feat_cache[idx] is not None:
                 # cache last frame of last two chunk
-                # cache_x = paddle.concat([feat_cache[idx][:, :, -1, :, :].unsqueeze(2).to(cache_x.device), cache_x], axis=2)
                 cache_x = paddle.concat([feat_cache[idx][:, :, -1, :, :].unsqueeze(2), cache_x], axis=2)
             x = self.conv_out(x, feat_cache[idx])
             feat_cache[idx] = cache_x
@@ -661,7 +653,6 @@ class WanDecoder3d(nn.Layer):
             cache_x = x[:, :, -CACHE_T:, :, :].clone()
             if cache_x.shape[2] < 2 and feat_cache[idx] is not None:
                 # cache last frame of last two chunk
-                # cache_x = paddle.concat([feat_cache[idx][:, :, -1, :, :].unsqueeze(2).to(cache_x.device), cache_x], axis=2)
                 cache_x = paddle.concat([feat_cache[idx][:, :, -1, :, :].unsqueeze(2), cache_x], axis=2)
             x = self.conv_out(x, feat_cache[idx])
             feat_cache[idx] = cache_x

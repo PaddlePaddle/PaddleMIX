@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2020, The T5 Authors and HuggingFace Inc.
+# Copyright 2023, The T5 Authors and HuggingFace Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,6 +12,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+# heavily base on https://github.com/huggingface/transformers/blob/main/src/transformers/models/umt5/configuration_umt5.py
+
 """UMT5 model configuration"""
 
 from ...utils import logging

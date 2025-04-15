@@ -1,3 +1,4 @@
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2025 The Wan Team and The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -11,6 +12,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+# heavily base on https://github.com/huggingface/diffusers/blob/main/src/diffusers/pipelines/wan/pipeline_wan_i2v.py
+
 import html
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
@@ -32,19 +36,12 @@ from ...loaders import WanLoraLoaderMixin
 from ...models import AutoencoderKLWan, WanTransformer3DModel
 from ...schedulers import UniPCMultistepScheduler
 
-# from ...utils import is_torch_xla_available, logging, replace_example_docstring
 from ...utils import logging, replace_example_docstring
 from ...utils.paddle_utils import randn_tensor
 from ...video_processor import VideoProcessor
 from ..pipeline_utils import DiffusionPipeline
 from .pipeline_output import WanPipelineOutput
 
-# if is_torch_xla_available():
-#     import torch_xla.core.xla_model as xm
-
-#     XLA_AVAILABLE = True
-# else:
-#     XLA_AVAILABLE = False
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -60,7 +57,6 @@ EXAMPLE_DOC_STRING = """
         >>> model_id = "Wan-AI/Wan2.1-T2V-14B-Diffusers"
         >>> vae = AutoencoderKLWan.from_pretrained(model_id, subfolder="vae", paddle_dtype=paddle.float32)
         >>> pipe = WanPipeline.from_pretrained(model_id, vae=vae, paddle_dtype=paddle.bfloat16)
-        >>> pipe.to("cuda")
 
         >>> prompt = "A cat walks on the grass, realistic"
         >>> negative_prompt = "Bright tones, overexposed, static, blurred details, subtitles, style, works, paintings, images, static, overall gray, worst quality, low quality, JPEG compression residue, ugly, incomplete, extra fingers, poorly drawn hands, poorly drawn faces, deformed, disfigured, misshapen limbs, fused fingers, still picture, messy background, three legs, many people in the background, walking backwards"
@@ -73,7 +69,7 @@ EXAMPLE_DOC_STRING = """
         ...     num_frames=81,
         ...     guidance_scale=5.0,
         ... ).frames[0]
-        >>> export_to_video(output, "output.mp4", fps=15)
+        >>> export_to_video_2(output, "output.mp4", fps=15)
         ```
 """
 
@@ -148,7 +144,6 @@ class WanImageToVideoPipeline(DiffusionPipeline, WanLoraLoaderMixin):
         transformer: WanTransformer3DModel,
         vae: AutoencoderKLWan,
         scheduler: UniPCMultistepScheduler,
-        # scheduler: FlowMatchEulerDiscreteScheduler,
     ):
         super().__init__()
 
@@ -194,8 +189,6 @@ class WanImageToVideoPipeline(DiffusionPipeline, WanLoraLoaderMixin):
         text_input_ids, mask = text_inputs.input_ids, text_inputs.attention_mask
         seq_lens = mask.greater_than(paddle.zeros_like(mask)).sum(axis=1).cast(paddle.int64)
 
-        # prompt_embeds = self.text_encoder(text_input_ids.to(device), mask.to(device)).last_hidden_state
-        # prompt_embeds = prompt_embeds.to(dtype=dtype, device=device)
         prompt_embeds = self.text_encoder(text_input_ids, mask).last_hidden_state
         prompt_embeds = prompt_embeds.to(dtype=dtype)
         prompt_embeds = [u[:v] for u, v in zip(prompt_embeds, seq_lens)]
@@ -205,7 +198,6 @@ class WanImageToVideoPipeline(DiffusionPipeline, WanLoraLoaderMixin):
                 for u in prompt_embeds
             ],
             axis=0
-            # [paddle.concat([u, u.new_zeros(max_sequence_length - u.size(0), u.size(1))]) for u in prompt_embeds], axis=0
         )
 
         # duplicate text embeddings for each generation per prompt, using mps friendly method
@@ -216,9 +208,8 @@ class WanImageToVideoPipeline(DiffusionPipeline, WanLoraLoaderMixin):
         return prompt_embeds
 
     def encode_image(self, image: PipelineImageInput):
-        image = self.image_processor(images=image, return_tensors="pd")  # .to(self.device)
-        # print(type(image))
-        # image = paddle.to_tensor(image)
+        image = self.image_processor(images=image, return_tensors="pd")
+
         image_embeds = self.image_encoder(**image, output_hidden_states=True)
         return image_embeds.hidden_states[-2]
 
@@ -260,8 +251,6 @@ class WanImageToVideoPipeline(DiffusionPipeline, WanLoraLoaderMixin):
             dtype: (`paddle.dtype`, *optional*):
                 paddle dtype
         """
-        # device = device or self._execution_device
-
         prompt = [prompt] if isinstance(prompt, str) else prompt
         if prompt is not None:
             batch_size = len(prompt)
@@ -315,7 +304,7 @@ class WanImageToVideoPipeline(DiffusionPipeline, WanLoraLoaderMixin):
         callback_on_step_end_tensor_inputs=None,
     ):
         if not isinstance(image, paddle.Tensor) and not isinstance(image, PIL.Image.Image):
-            raise ValueError("`image` has to be of type `torch.Tensor` or `PIL.Image.Image` but is" f" {type(image)}")
+            raise ValueError("`image` has to be of type `paddle.Tensor` or `PIL.Image.Image` but is" f" {type(image)}")
         if height % 16 != 0 or width % 16 != 0:
             raise ValueError(f"`height` and `width` have to be divisible by 16 but are {height} and {width}.")
 
@@ -495,8 +484,7 @@ class WanImageToVideoPipeline(DiffusionPipeline, WanLoraLoaderMixin):
             num_videos_per_prompt (`int`, *optional*, defaults to 1):
                 The number of images to generate per prompt.
             generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
-                A [`paddle.Generator`](https://pytorch.org/docs/stable/generated/torch.Generator.html) to make
-                generation deterministic.
+                A [`paddle.Generator`]to make generation deterministic.
             latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents sampled from a Gaussian distribution, to be used as inputs for image
                 generation. Can be used to tweak the same generation with different prompts. If not provided, a latents
@@ -553,7 +541,6 @@ class WanImageToVideoPipeline(DiffusionPipeline, WanLoraLoaderMixin):
         self._current_timestep = None
         self._interrupt = False
 
-        # device = self._execution_device
         device = None
 
         # 2. Define call parameters
@@ -605,27 +592,6 @@ class WanImageToVideoPipeline(DiffusionPipeline, WanLoraLoaderMixin):
             generator,
             latents,
         )
-        # import pickle
-        # latents = pickle.load(open('/root/paddlejob/workspace/env_run/jll/Wan2.1/align_datas/latents001.pkl', 'rb'))
-        # latents = paddle.to_tensor(latents)
-
-        # import pickle
-        # latents = pickle.load(open("/root/paddlejob/workspace/env_run/jll/Wan2.1/align_datas_i2v/latens.pkl", "rb"))
-        # latents = paddle.to_tensor(latents)
-
-        # dtype = prompt_embeds.dtype
-        # prompt_embeds = pickle.load(open("/root/paddlejob/workspace/env_run/jll/Wan2.1/align_datas_i2v/prompt_embeds.pkl", "rb"))
-        # prompt_embeds = paddle.to_tensor(prompt_embeds, dtype=dtype)
-
-        # negative_prompt_embeds = pickle.load(open("/root/paddlejob/workspace/env_run/jll/Wan2.1/align_datas_i2v/negative_prompt_embeds.pkl", "rb"))
-        # negative_prompt_embeds = paddle.to_tensor(negative_prompt_embeds, dtype=dtype)
-
-        # dtype = image_embeds.dtype
-        # image_embeds = pickle.load(open("/root/paddlejob/workspace/env_run/jll/Wan2.1/align_datas_i2v/image_embeds.pkl", "rb"))
-        # image_embeds = paddle.to_tensor(image_embeds, dtype=dtype)
-
-        # condition = pickle.load(open("/root/paddlejob/workspace/env_run/jll/Wan2.1/align_datas_i2v/condition.pkl", "rb"))
-        # condition = paddle.to_tensor(condition)
 
         # 6. Denoising loop
         num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
@@ -678,12 +644,6 @@ class WanImageToVideoPipeline(DiffusionPipeline, WanLoraLoaderMixin):
                 # call the callback, if provided
                 if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
                     progress_bar.update()
-
-                # if XLA_AVAILABLE:
-                #     xm.mark_step()
-        # import pickle
-        # latents = pickle.load(open("/root/paddlejob/workspace/env_run/jll/Wan2.1/align_datas_i2v/latens_out.pkl", "rb"))
-        # latents = paddle.to_tensor(latents)
 
         self._current_timestep = None
 

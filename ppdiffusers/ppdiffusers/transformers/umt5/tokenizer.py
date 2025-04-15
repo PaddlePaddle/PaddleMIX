@@ -1,4 +1,6 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# coding=utf-8
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2023 Mesh TensorFlow authors, T5 Authors and HuggingFace Inc. team.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
