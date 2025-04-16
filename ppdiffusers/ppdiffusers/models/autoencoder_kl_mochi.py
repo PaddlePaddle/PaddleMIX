@@ -34,6 +34,27 @@ from .vae import DecoderOutput, DiagonalGaussianDistribution
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
 
+# class MochiChunkedGroupNorm3D(nn.Layer):
+#     def __init__(
+#         self,
+#         num_channels: int,
+#         num_groups: int = 32,
+#         affine: bool = True,
+#         chunk_size: int = 8,
+#     ):
+#         super().__init__()
+#         self.norm_layer = nn.GroupNorm(num_channels=num_channels, num_groups=num_groups, weight_attr=affine, bias_attr=affine)
+#         self.chunk_size = chunk_size
+
+#     def forward(self, x: paddle.Tensor = None) -> paddle.Tensor:
+#         batch_size = x.shape[0]
+
+#         x = x.transpose([0, 2, 1, 3, 4]).flatten(0, 1)
+#         output = paddle.concat([self.norm_layer(chunk) for chunk in paddle.split(x, num_or_sections=self.chunk_size, axis=0)], axis=0)
+#         output = output.reshape([batch_size, -1] + list(output.shape[1:])).transpose([0, 2, 1, 3, 4])
+
+#         return output
+
 class MochiChunkedGroupNorm3D(nn.Layer):
     def __init__(
         self,
@@ -50,10 +71,38 @@ class MochiChunkedGroupNorm3D(nn.Layer):
         batch_size = x.shape[0]
 
         x = x.transpose([0, 2, 1, 3, 4]).flatten(0, 1)
-        output = paddle.concat([self.norm_layer(chunk) for chunk in paddle.split(x, num_or_sections=self.chunk_size, axis=0)], axis=0)
+        
+        # Handle cases where batch size may not be divisible by chunk_size
+        if x.shape[0] <= self.chunk_size:
+            # If total size is less than or equal to chunk_size, process the entire batch directly
+            output = self.norm_layer(x)
+        elif x.shape[0] % self.chunk_size == 0:
+            # If evenly divisible, process using the original chunking method
+            output = paddle.concat([self.norm_layer(chunk) for chunk in paddle.split(x, num_or_sections=self.chunk_size, axis=0)], axis=0)
+        else:
+            # Manually handle cases where batch size is not divisible by chunk_size
+            chunks = []
+            num_full_chunks = x.shape[0] // self.chunk_size
+            
+            # Process the evenly divisible portion
+            for i in range(num_full_chunks):
+                start_idx = i * self.chunk_size
+                end_idx = start_idx + self.chunk_size
+                chunk = x[start_idx:end_idx]
+                chunks.append(self.norm_layer(chunk))
+            
+            # Process the remaining portion
+            remainder = x.shape[0] % self.chunk_size
+            if remainder > 0:
+                last_chunk = x[-remainder:]
+                chunks.append(self.norm_layer(last_chunk))
+            
+            output = paddle.concat(chunks, axis=0)
+            
         output = output.reshape([batch_size, -1] + list(output.shape[1:])).transpose([0, 2, 1, 3, 4])
 
         return output
+
 
 
 class MochiResnetBlock3D(nn.Layer):
@@ -83,7 +132,6 @@ class MochiResnetBlock3D(nn.Layer):
     def forward(
         self,
         inputs: paddle.Tensor,
-        conv_cache: Optional[Dict[str, paddle.Tensor]] = None,
     ) -> paddle.Tensor:
 
         hidden_states = inputs
@@ -152,10 +200,8 @@ class MochiDownBlock3D(nn.Layer):
     def forward(
         self,
         hidden_states: paddle.Tensor,
-        conv_cache: Optional[Dict[str, paddle.Tensor]] = None,
         chunk_size: int = 2**15,
     ) -> paddle.Tensor:
-        conv_cache = conv_cache or {}
 
         hidden_states = self.conv_in(hidden_states)
 
@@ -239,7 +285,6 @@ class MochiMidBlock3D(nn.Layer):
     def forward(
         self,
         hidden_states: paddle.Tensor,
-        conv_cache: Optional[Dict[str, paddle.Tensor]] = None,
     ) -> paddle.Tensor:
 
         for i, (resnet, norm, attn) in enumerate(zip(self.resnets, self.norms, self.attentions)):
@@ -297,7 +342,6 @@ class MochiUpBlock3D(nn.Layer):
     def forward(
         self,
         hidden_states: paddle.Tensor,
-        conv_cache: Optional[Dict[str, paddle.Tensor]] = None,
     ) -> paddle.Tensor:
 
         for i, resnet in enumerate(self.resnets):
@@ -397,7 +441,7 @@ class MochiEncoder3D(nn.Layer):
         self.proj_out = nn.Linear(block_out_channels[-1], 2 * out_channels, bias_attr=False)
 
     def forward(
-        self, hidden_states: paddle.Tensor, conv_cache: Optional[Dict[str, paddle.Tensor]] = None
+        self, hidden_states: paddle.Tensor,
     ) -> paddle.Tensor:
 
         hidden_states = self.fourier_features(hidden_states)
@@ -490,7 +534,7 @@ class MochiDecoder3D(nn.Layer):
         self.gradient_checkpointing = False
 
     def forward(
-        self, hidden_states: paddle.Tensor, conv_cache: Optional[Dict[str, paddle.Tensor]] = None
+        self, hidden_states: paddle.Tensor
     ) -> paddle.Tensor:
 
         hidden_states = self.conv_in(hidden_states)
@@ -666,7 +710,7 @@ class AutoencoderKLMochi(ModelMixin, ConfigMixin):
                 "As intermediate frames are not independent from each other, they cannot be encoded frame-wise."
             )
         else:
-            enc, _ = self.encoder(x)
+            enc = self.encoder(x)
 
         return enc
 
@@ -693,17 +737,16 @@ class AutoencoderKLMochi(ModelMixin, ConfigMixin):
             return self.tiled_decode(z, return_dict=return_dict)
 
         if self.use_framewise_decoding:
-            conv_cache = None
             dec = []
 
             for i in range(0, num_frames, self.num_latent_frames_batch_size):
                 z_intermediate = z[:, :, i : i + self.num_latent_frames_batch_size]
-                z_intermediate, conv_cache = self.decoder(z_intermediate, conv_cache=conv_cache)
+                z_intermediate = self.decoder(z_intermediate)
                 dec.append(z_intermediate)
 
             dec = paddle.concat(dec, axis=2)
         else:
-            dec, _ = self.decoder(z)
+            dec = self.decoder(z)
 
         if self.drop_last_temporal_frames and dec.shape[2] >= self.temporal_compression_ratio:
             dec = dec[:, :, self.temporal_compression_ratio - 1 :]
@@ -765,7 +808,7 @@ class AutoencoderKLMochi(ModelMixin, ConfigMixin):
                         "As intermediate frames are not independent from each other, they cannot be encoded frame-wise."
                     )
                 else:
-                    time, _ = self.encoder(
+                    time = self.encoder(
                         x[:, :, :, i : i + self.tile_sample_min_height, j : j + self.tile_sample_min_width]
                     )
 
@@ -805,7 +848,6 @@ class AutoencoderKLMochi(ModelMixin, ConfigMixin):
             for j in range(0, width, tile_latent_stride_width):
                 if self.use_framewise_decoding:
                     time = []
-                    conv_cache = None
 
                     for k in range(0, num_frames, self.num_latent_frames_batch_size):
                         tile = z[
@@ -815,12 +857,12 @@ class AutoencoderKLMochi(ModelMixin, ConfigMixin):
                             i : i + tile_latent_min_height,
                             j : j + tile_latent_min_width,
                         ]
-                        tile, conv_cache = self.decoder(tile, conv_cache=conv_cache)
+                        tile = self.decoder(tile)
                         time.append(tile)
 
                     time = paddle.concat(time, axis=2)
                 else:
-                    time, _ = self.decoder(z[:, :, :, i : i + tile_latent_min_height, j : j + tile_latent_min_width])
+                    time = self.decoder(z[:, :, :, i : i + tile_latent_min_height, j : j + tile_latent_min_width])
 
                 if self.drop_last_temporal_frames and time.shape[2] >= self.temporal_compression_ratio:
                     time = time[:, :, self.temporal_compression_ratio - 1 :]

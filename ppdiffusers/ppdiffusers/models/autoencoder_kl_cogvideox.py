@@ -1152,21 +1152,82 @@ class AutoencoderKLCogVideoX(ModelMixin, ConfigMixin):
         enc = paddle.concat(x=result_rows, axis=3)
         return enc
 
+    # def tiled_decode(self, z: paddle.Tensor, return_dict: bool = True) -> Union[DecoderOutput, paddle.Tensor]:
+    #     """
+    #     Decode a batch of images using a tiled decoder.
+
+    #     Args:
+    #         z (`torch.Tensor`): Input batch of latent vectors.
+    #         return_dict (`bool`, *optional*, defaults to `True`):
+    #             Whether or not to return a [`~models.vae.DecoderOutput`] instead of a plain tuple.
+
+    #     Returns:
+    #         [`~models.vae.DecoderOutput`] or `tuple`:
+    #             If return_dict is True, a [`~models.vae.DecoderOutput`] is returned, otherwise a plain `tuple` is
+    #             returned.
+    #     """
+    #     batch_size, num_channels, num_frames, height, width = tuple(z.shape)
+    #     overlap_height = int(self.tile_latent_min_height * (1 - self.tile_overlap_factor_height))
+    #     overlap_width = int(self.tile_latent_min_width * (1 - self.tile_overlap_factor_width))
+    #     blend_extent_height = int(self.tile_sample_min_height * self.tile_overlap_factor_height)
+    #     blend_extent_width = int(self.tile_sample_min_width * self.tile_overlap_factor_width)
+    #     row_limit_height = self.tile_sample_min_height - blend_extent_height
+    #     row_limit_width = self.tile_sample_min_width - blend_extent_width
+    #     frame_batch_size = self.num_latent_frames_batch_size
+    #     rows = []
+    #     for i in range(0, height, overlap_height):
+    #         row = []
+    #         for j in range(0, width, overlap_width):
+    #             num_batches = num_frames // frame_batch_size
+    #             time = []
+    #             for k in range(num_batches):
+    #                 remaining_frames = num_frames % frame_batch_size
+    #                 start_frame = frame_batch_size * k + (0 if k == 0 else remaining_frames)
+    #                 end_frame = frame_batch_size * (k + 1) + remaining_frames
+    #                 tile = z[
+    #                     :,
+    #                     :,
+    #                     start_frame:end_frame,
+    #                     i : i + self.tile_latent_min_height,
+    #                     j : j + self.tile_latent_min_width,
+    #                 ]
+    #                 if self.post_quant_conv is not None:
+    #                     tile = self.post_quant_conv(tile)
+    #                 tile = self.decoder(tile)
+    #                 time.append(tile)
+    #             self._clear_fake_context_parallel_cache()
+    #             row.append(paddle.concat(x=time, axis=2))
+    #         rows.append(row)
+    #     result_rows = []
+    #     for i, row in enumerate(rows):
+    #         result_row = []
+    #         for j, tile in enumerate(row):
+    #             if i > 0:
+    #                 tile = self.blend_v(rows[i - 1][j], tile, blend_extent_height)
+    #             if j > 0:
+    #                 tile = self.blend_h(row[j - 1], tile, blend_extent_width)
+    #             result_row.append(tile[:, :, :, :row_limit_height, :row_limit_width])
+    #         result_rows.append(paddle.concat(x=result_row, axis=4))
+    #     dec = paddle.concat(x=result_rows, axis=3)
+    #     if not return_dict:
+    #         return (dec,)
+    #     return DecoderOutput(sample=dec)
+    
     def tiled_decode(self, z: paddle.Tensor, return_dict: bool = True) -> Union[DecoderOutput, paddle.Tensor]:
         """
-        Decode a batch of images using a tiled decoder.
-
+        Decode a batch of images using a tiled decoder with optimized memory usage.
+        
         Args:
-            z (`torch.Tensor`): Input batch of latent vectors.
+            z (`paddle.Tensor`): Input batch of latent vectors.
             return_dict (`bool`, *optional*, defaults to `True`):
-                Whether or not to return a [`~models.vae.DecoderOutput`] instead of a plain tuple.
-
+                Whether or not to return a DecoderOutput instead of a plain tuple.
+                
         Returns:
-            [`~models.vae.DecoderOutput`] or `tuple`:
-                If return_dict is True, a [`~models.vae.DecoderOutput`] is returned, otherwise a plain `tuple` is
-                returned.
+            DecoderOutput or tuple: Decoded output.
         """
-        batch_size, num_channels, num_frames, height, width = tuple(z.shape)
+        batch_size, num_channels, num_frames, height, width = z.shape
+        
+        # Calculate overlap and blending parameters
         overlap_height = int(self.tile_latent_min_height * (1 - self.tile_overlap_factor_height))
         overlap_width = int(self.tile_latent_min_width * (1 - self.tile_overlap_factor_width))
         blend_extent_height = int(self.tile_sample_min_height * self.tile_overlap_factor_height)
@@ -1174,44 +1235,90 @@ class AutoencoderKLCogVideoX(ModelMixin, ConfigMixin):
         row_limit_height = self.tile_sample_min_height - blend_extent_height
         row_limit_width = self.tile_sample_min_width - blend_extent_width
         frame_batch_size = self.num_latent_frames_batch_size
+        
+        # Process each tile with proper boundary handling
         rows = []
         for i in range(0, height, overlap_height):
             row = []
             for j in range(0, width, overlap_width):
-                num_batches = num_frames // frame_batch_size
-                time = []
-                for k in range(num_batches):
-                    remaining_frames = num_frames % frame_batch_size
-                    start_frame = frame_batch_size * k + (0 if k == 0 else remaining_frames)
-                    end_frame = frame_batch_size * (k + 1) + remaining_frames
-                    tile = z[
-                        :,
-                        :,
-                        start_frame:end_frame,
-                        i : i + self.tile_latent_min_height,
-                        j : j + self.tile_latent_min_width,
-                    ]
-                    if self.post_quant_conv is not None:
-                        tile = self.post_quant_conv(tile)
-                    tile = self.decoder(tile)
-                    time.append(tile)
+                # Ensure we don't go out of bounds
+                end_i = min(i + self.tile_latent_min_height, height)
+                end_j = min(j + self.tile_latent_min_width, width)
+                
+                # Clear any cached context from previous tiles
                 self._clear_fake_context_parallel_cache()
-                row.append(paddle.concat(x=time, axis=2))
+                
+                # Process frames in batches to save memory
+                time_slices = []
+                remaining_frames = num_frames % frame_batch_size
+                
+                # Calculate frame batch indices
+                frame_batches = [(k * frame_batch_size + (0 if k == 0 else remaining_frames), 
+                                min((k + 1) * frame_batch_size + remaining_frames, num_frames))
+                                for k in range((num_frames + frame_batch_size - 1) // frame_batch_size)]
+                
+                # Process each frame batch
+                for start_frame, end_frame in frame_batches:
+                    # Extract the tile for this batch of frames
+                    tile = z[:, :, start_frame:end_frame, i:end_i, j:end_j]
+                    
+                    # Apply post quantization if needed
+                    if hasattr(self, 'post_quant_conv') and self.post_quant_conv is not None:
+                        tile = self.post_quant_conv(tile)
+                    
+                    # Process with decoder
+                    with paddle.no_grad():
+                        tile_output = self.decoder(tile)
+                    time_slices.append(tile_output)
+                    
+                    # Free memory after each batch
+                    paddle.device.cuda.empty_cache()
+                
+                # Combine all frame batches
+                row.append(paddle.concat(x=time_slices, axis=2))
             rows.append(row)
+        
+        # Blend tiles together
         result_rows = []
         for i, row in enumerate(rows):
             result_row = []
             for j, tile in enumerate(row):
+                # Only blend if there's a tile above or to the left
                 if i > 0:
-                    tile = self.blend_v(rows[i - 1][j], tile, blend_extent_height)
+                    # Make sure shapes match before blending
+                    if rows[i-1][j].shape[3] >= blend_extent_height and tile.shape[3] >= blend_extent_height:
+                        tile = self.blend_v(rows[i-1][j], tile, blend_extent_height)
+                
                 if j > 0:
-                    tile = self.blend_h(row[j - 1], tile, blend_extent_width)
-                result_row.append(tile[:, :, :, :row_limit_height, :row_limit_width])
-            result_rows.append(paddle.concat(x=result_row, axis=4))
-        dec = paddle.concat(x=result_rows, axis=3)
+                    # Make sure shapes match before blending
+                    if row[j-1].shape[4] >= blend_extent_width and tile.shape[4] >= blend_extent_width:
+                        tile = self.blend_h(row[j-1], tile, blend_extent_width)
+                
+                # Ensure we don't exceed the boundary
+                height_limit = min(row_limit_height, tile.shape[3])
+                width_limit = min(row_limit_width, tile.shape[4])
+                result_row.append(tile[:, :, :, :height_limit, :width_limit])
+                
+                # Free memory after processing each tile
+                paddle.device.cuda.empty_cache()
+                
+            # Concatenate tiles in a row
+            if result_row:
+                result_rows.append(paddle.concat(x=result_row, axis=4))
+        
+        # Concatenate all rows
+        if result_rows:
+            dec = paddle.concat(x=result_rows, axis=3)
+        else:
+            # Handle edge case of no results
+            dec = paddle.zeros([batch_size, z.shape[1], num_frames, 0, 0], dtype=z.dtype)
+        
         if not return_dict:
             return (dec,)
+        
         return DecoderOutput(sample=dec)
+
+
 
     def forward(
         self,

@@ -1422,8 +1422,74 @@ class MochiAttentionPool(nn.Layer):
         pooled = (x * mask).sum(axis=1, keepdim=keepdim)
         return pooled
 
+    # def forward(self, x: paddle.Tensor, mask: paddle.Tensor) -> paddle.Tensor:
+    #     r"""
+    #     Args:
+    #         x (`paddle.Tensor`):
+    #             Tensor of shape `(B, S, D)` of input tokens.
+    #         mask (`paddle.Tensor`):
+    #             Boolean tensor of shape `(B, S)` indicating which tokens are not padding.
+
+    #     Returns:
+    #         `paddle.Tensor`:
+    #             `(B, D)` tensor of pooled tokens.
+    #     """
+    #     D = x.shape[2]
+
+    #     # Construct attention mask, shape: (B, 1, num_queries=1, num_keys=1+L).
+    #     attn_mask = mask[:, None, None, :].astype('bool')  # (B, 1, 1, L).
+    #     # attn_mask = F.pad(attn_mask, (1, 0), value=True)  # (B, 1, 1, 1+L).
+    #     attn_mask = F.pad(attn_mask.astype('int32'), (1, 0), value=1)  # Using 1 as True
+    #     attn_mask = attn_mask.astype('bool')  # Convert back to boolean if needed
+
+    #     # Average non-padding token features. These will be used as the query.
+    #     x_pool = self.pool_tokens(x, mask, keepdim=True)  # (B, 1, D)
+
+    #     # Concat pooled features to input sequence.
+    #     x = paddle.concat([x_pool, x], axis=1)  # (B, L+1, D)
+
+    #     # Compute queries, keys, values. Only the mean token is used to create a query.
+    #     kv = self.to_kv(x)  # (B, L+1, 2 * D)
+    #     q = self.to_q(x[:, 0])  # (B, D)
+
+    #     # Extract heads.
+    #     head_dim = D // self.num_attention_heads
+    #     kv = kv.reshape([0, 0, 2, self.num_attention_heads, head_dim])  # (B, 1+L, 2, H, head_dim)
+    #     kv = kv.transpose([0, 3, 2, 1, 4])  # (B, H, 2, 1+L, head_dim)
+    #     k, v = kv.unbind(axis=2)  # (B, H, 1+L, head_dim)
+    #     q = q.reshape([0, self.num_attention_heads, head_dim])  # (B, H, head_dim)
+    #     q = q.unsqueeze(axis=2)  # (B, H, 1, head_dim)
+        
+    #     # 在调用 scaled_dot_product_attention 前添加这些打印语句
+    #     print("数据类型检查:")
+    #     print(f"q 数据类型: {q.dtype}")
+    #     print(f"k 数据类型: {k.dtype}")
+    #     print(f"v 数据类型: {v.dtype}")
+    #     print(f"attn_mask 数据类型: {attn_mask.dtype}")
+
+    #     # 还可以打印张量的形状，这对调试也很有帮助
+    #     print(f"q 形状: {q.shape}")
+    #     print(f"k 形状: {k.shape}")
+    #     print(f"v 形状: {v.shape}")
+    #     print(f"attn_mask 形状: {attn_mask.shape}")
+        
+    #     # 转换输入为支持 Flash Attention 的类型
+    #     q_dtype = q.dtype
+    #     # 将掩码转换为与q相同的数据类型！这是关键修复
+    #     attn_mask = attn_mask.astype(q_dtype)  
+    #     print(f"attn_mask 数据类型: {attn_mask.dtype}")
+
+
+    #     # Compute attention.
+    #     x = F.scaled_dot_product_attention(q, k, v, attn_mask=attn_mask, dropout_p=0.0)  # (B, H, 1, head_dim)
+
+    #     # Concatenate heads and run output.
+    #     x = x.squeeze(axis=2).flatten(start_axis=1, stop_axis=2)  # (B, D = H * head_dim)
+    #     x = self.to_out(x)
+    #     return x
+    
     def forward(self, x: paddle.Tensor, mask: paddle.Tensor) -> paddle.Tensor:
-        r"""
+        """
         Args:
             x (`paddle.Tensor`):
                 Tensor of shape `(B, S, D)` of input tokens.
@@ -1436,49 +1502,45 @@ class MochiAttentionPool(nn.Layer):
         """
         D = x.shape[2]
 
-        # Construct attention mask, shape: (B, 1, num_queries=1, num_keys=1+L).
+        # 构造注意力掩码
         attn_mask = mask[:, None, None, :].astype('bool')  # (B, 1, 1, L).
-        # attn_mask = F.pad(attn_mask, (1, 0), value=True)  # (B, 1, 1, 1+L).
         attn_mask = F.pad(attn_mask.astype('int32'), (1, 0), value=1)  # Using 1 as True
         attn_mask = attn_mask.astype('bool')  # Convert back to boolean if needed
 
-        # Average non-padding token features. These will be used as the query.
+        # 平均非填充标记特征，用作查询
         x_pool = self.pool_tokens(x, mask, keepdim=True)  # (B, 1, D)
 
-        # Concat pooled features to input sequence.
+        # 将池化特征连接到输入序列
         x = paddle.concat([x_pool, x], axis=1)  # (B, L+1, D)
 
-        # Compute queries, keys, values. Only the mean token is used to create a query.
+        # 计算查询、键、值。只使用均值标记创建查询
         kv = self.to_kv(x)  # (B, L+1, 2 * D)
         q = self.to_q(x[:, 0])  # (B, D)
 
-        # Extract heads.
+        # 提取头
         head_dim = D // self.num_attention_heads
         kv = kv.reshape([0, 0, 2, self.num_attention_heads, head_dim])  # (B, 1+L, 2, H, head_dim)
         kv = kv.transpose([0, 3, 2, 1, 4])  # (B, H, 2, 1+L, head_dim)
-        k, v = kv.unbind(axis=2)  # (B, H, 1+L, head_dim)
+        k, v = paddle.unstack(kv, axis=2)  # (B, H, 1+L, head_dim) 
         q = q.reshape([0, self.num_attention_heads, head_dim])  # (B, H, head_dim)
         q = q.unsqueeze(axis=2)  # (B, H, 1, head_dim)
+
+        # 手动实现注意力计算 (替代 Flash Attention)
+        scale = head_dim ** -0.5
+        attn_weights = paddle.matmul(q, k.transpose([0, 1, 3, 2])) * scale  # (B, H, 1, 1+L)
         
-        # 在调用 scaled_dot_product_attention 前添加这些打印语句
-        print("数据类型检查:")
-        print(f"q 数据类型: {q.dtype}")
-        print(f"k 数据类型: {k.dtype}")
-        print(f"v 数据类型: {v.dtype}")
-        print(f"attn_mask 数据类型: {attn_mask.dtype}")
+        # 应用注意力掩码
+        if attn_mask is not None:
+            # 确保掩码的形状正确 (B, 1, 1, 1+L)
+            # 将 -inf 应用于需要被掩码的位置
+            attn_weights = attn_weights + attn_mask.astype(attn_weights.dtype) * -10000.0
+        
+        # softmax 和注意力应用
+        attn_weights = F.softmax(attn_weights, axis=-1)
+        x = paddle.matmul(attn_weights, v)  # (B, H, 1, head_dim)
 
-        # 还可以打印张量的形状，这对调试也很有帮助
-        print(f"q 形状: {q.shape}")
-        print(f"k 形状: {k.shape}")
-        print(f"v 形状: {v.shape}")
-        print(f"attn_mask 形状: {attn_mask.shape}")
-
-
-        # Compute attention.
-        x = F.scaled_dot_product_attention(q, k, v, attn_mask=attn_mask, dropout_p=0.0)  # (B, H, 1, head_dim)
-
-        # Concatenate heads and run output.
-        x = x.squeeze(axis=2).flatten(start_axis=1, stop_axis=2)  # (B, D = H * head_dim)
+        # 连接头并应用输出层
+        x = x.squeeze(axis=2).reshape([0, -1])  # (B, D = H * head_dim)
         x = self.to_out(x)
         return x
 

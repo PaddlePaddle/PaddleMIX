@@ -451,6 +451,12 @@ class MochiPipeline(DiffusionPipeline, Mochi1LoraLoaderMixin):
     ):
         # ... (docstring remains the same)
 
+        print("====== 管道执行开始 ======")
+        print(f"传入的 prompt 类型: {type(prompt)}")
+        print(f"当前 transformer 的默认数据类型: {self.transformer._dtype}")
+
+
+
         if isinstance(callback_on_step_end, (PipelineCallback, MultiPipelineCallbacks)):
             callback_on_step_end_tensor_inputs = callback_on_step_end.tensor_inputs
 
@@ -539,6 +545,12 @@ class MochiPipeline(DiffusionPipeline, Mochi1LoraLoaderMixin):
                 self._current_timestep = 1000 - t
                 latent_model_input = paddle.concat([latents] * 2) if self.do_classifier_free_guidance else latents
                 timestep = paddle.full((latent_model_input.shape[0],), t, dtype=latents.dtype)
+                
+                print("\n====== 调用 transformer 前 ======")
+                print(f"latent_model_input 类型: {latent_model_input.dtype}")
+                print(f"prompt_embeds 类型: {prompt_embeds.dtype}")
+                print(f"timestep 类型: {timestep.dtype}")
+
 
                 noise_pred = self.transformer(
                     hidden_states=latent_model_input,
