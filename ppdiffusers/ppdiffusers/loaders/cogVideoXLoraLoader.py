@@ -407,21 +407,6 @@ class CogVideoXLoraLoaderMixin(LoraLoaderMixin):
                 The adapter(s) weights to use with the UNet. If `None`, the weights are set to `1.0` for all the
                 adapters.
 
-        Example:
-
-        ```py
-        from ppdiffusers import AutoPipelineForText2Image
-        import torch
-
-        pipeline = AutoPipelineForText2Image.from_pretrained(
-            "stabilityai/stable-diffusion-xl-base-1.0", paddle_dtype=paddle.float16
-        )
-        pipeline.load_lora_weights(
-            "jbilcke-hf/sdxl-cinematic-1", weight_name="pytorch_lora_weights.safetensors", adapter_name="cinematic"
-        )
-        pipeline.load_lora_weights("nerijs/pixel-art-xl", weight_name="pixel-art-xl.safetensors", adapter_name="pixel")
-        pipeline.set_adapters(["cinematic", "pixel"], adapter_weights=[0.5, 0.5])
-        ```
         """
         if not USE_PEFT_BACKEND:
             raise ValueError("PEFT backend is required for `set_adapters()`.")

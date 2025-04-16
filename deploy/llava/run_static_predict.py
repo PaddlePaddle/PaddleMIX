@@ -75,7 +75,7 @@ class Predictor(object):
         import_module("paddlenlp_ops.transpose_remove_padding")
         import_module("paddlenlp_ops.write_cache_kv")
 
-        model_file = model_path + ".json"
+        model_file = model_path + ".json" if os.exists(model_path + ".json") else model_path + ".pdmodel"
         params_file = model_path + ".pdiparams"
         if not os.path.exists(model_file):
             raise ValueError("not find model file path {}".format(model_file))
