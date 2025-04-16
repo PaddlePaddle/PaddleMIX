@@ -17,21 +17,21 @@ import sys
 from dataclasses import dataclass, field
 from typing import Dict, List
 
-import PIL.Image
-
 import numpy as np
 import paddle
+import PIL.Image
+from paddle.distributed import fleet
 from paddlenlp.generation import GenerationConfig
 from paddlenlp.trainer import PdArgumentParser
-from paddlenlp.transformers import AutoInferenceModelForCausalLM
+from paddlenlp.transformers import AutoInferenceModelForCausalLM, DeepseekTokenizerFast
 from paddlenlp.trl import llm_utils
-from paddlenlp.transformers import DeepseekTokenizerFast
 
 from paddlemix.models.deepseek_vl2 import DeepseekVLV2Config, DeepseekVLV2ForCausalLM
 from paddlemix.processors.deepseek_vl2_processing import DeepseekVLV2Processor
 
 sys.path.append("PaddleNLP/llm/predict")
 from predictor import ModelArgument, PredictorArgument
+
 
 def load_pil_images(conversations: List[Dict[str, str]]) -> List[PIL.Image.Image]:
     """
@@ -69,11 +69,13 @@ class Mix_PredictorArgument(PredictorArgument):
     image_file: str = field(
         default="paddlemix/demo_images/examples_image1.jpg", metadata={"help": "The image file for the model."}
     )
+    llm_mode: str = field(default="dynamic", metadata={"help": "The mode of llm. Supported values: dynamic, static"})
 
 
 @dataclass
 class Mix_ModelArgument(ModelArgument):
     pass
+
 
 def init_llm_model_inputs(inputs_embeds, arg_config: Mix_PredictorArgument):
     assert len(inputs_embeds.shape) == 3
@@ -101,7 +103,6 @@ def init_llm_model_inputs(inputs_embeds, arg_config: Mix_PredictorArgument):
     model_inputs["min_length"] = paddle.full(shape=[batch_size, 1], fill_value=arg_config.min_length, dtype="int64")
     model_inputs["max_length"] = paddle.full(shape=[batch_size, 1], fill_value=arg_config.max_length, dtype="int64")
 
-
     model_inputs["bad_tokens"] = paddle.to_tensor([-1], dtype="int64")
     model_inputs["is_block_step"] = paddle.full(shape=[batch_size], fill_value=False, dtype="bool")
 
@@ -116,7 +117,7 @@ def init_llm_model_inputs(inputs_embeds, arg_config: Mix_PredictorArgument):
         # for mla's absorption
         assert cache_v_shapes is None
         cache_kvs = [paddle.zeros(shape, dtype=cachekv_dtype) for shape in cache_k_shapes]
- 
+
     model_inputs["cache_kvs"] = cache_kvs
 
     block_nums = arg_config.total_max_length // arg_config.block_size
@@ -127,7 +128,7 @@ def init_llm_model_inputs(inputs_embeds, arg_config: Mix_PredictorArgument):
     model_inputs["seq_lens_encoder"] = paddle.to_tensor(np.array(seq_lens).astype("int32").reshape(-1, 1))
     model_inputs["seq_lens_decoder"] = paddle.full(shape=[batch_size, 1], fill_value=0, dtype="int32")
     model_inputs["step_idx"] = paddle.full(shape=[batch_size, 1], fill_value=0, dtype="int64")
-    model_inputs["not_need_stop"] = paddle.full(shape=[1], fill_value=True, dtype="bool").cpu() # must at cpu place, paddlenlp_ops bug: update_inputs_v2
+    model_inputs["not_need_stop"] = paddle.full(shape=[1], fill_value=True, dtype="bool").cpu()  # must at cpu place
     model_inputs["stop_flags"] = paddle.full(shape=[batch_size, 1], fill_value=False, dtype="bool")
     model_inputs["stop_nums"] = paddle.full(shape=[1], fill_value=batch_size, dtype="int64")
     model_inputs["pre_ids"] = paddle.full(shape=[batch_size, arg_config.max_length], fill_value=-1, dtype="int64")
@@ -135,32 +136,26 @@ def init_llm_model_inputs(inputs_embeds, arg_config: Mix_PredictorArgument):
 
     return model_inputs
 
-def run_model(predictor_args):
-    conversation = [
-        {
-            "role": "<|User|>",
-            "content": f"<image>\n{predictor_args.question}.",
-            "images": [predictor_args.image_file],
-        },
-        {"role": "<|Assistant|>", "content": ""},
-    ]
 
+def run_model(predictor_args):
 
     pil_images = load_pil_images(conversation)
-    prepare_inputs = processor(
-        conversations=conversation, images=pil_images, force_batchify=True, system_prompt=""
-    )
+    prepare_inputs = processor(conversations=conversation, images=pil_images, force_batchify=True, system_prompt="")
     prepare_inputs.images = prepare_inputs.images.astype(predictor_args.dtype)
     with paddle.no_grad():
         inputs_embeds = vl_model.prepare_inputs_embeds(**prepare_inputs)
     input_tokens_len = inputs_embeds.shape[1]
     llm_model_inputs = init_llm_model_inputs(inputs_embeds, arg_config=predictor_args)
+
     generated_text = ""
     generated_ids = paddle.to_tensor([], dtype="int64").reshape([1, 0])
     while llm_model_inputs["not_need_stop"]:
-        generated_id = vl_model.language.generate(**llm_model_inputs)  # already trimmed in paddle
-        llm_model_inputs["input_ids"] = generated_id
-        llm_model_inputs["inputs_embeds"] = None
+        generated_id = vl_model.language.generate(**llm_model_inputs)
+
+        # NOTE: (changwenbin) , Get inputs_embeds from the visual model or input_ids.
+        # Here we uniformly set the input of the language model to inputs_embeds
+        llm_model_inputs["inputs_embeds"] = fast_llm_model.deepseek_v2.embed_tokens(generated_id)
+
         generated_ids = paddle.concat([generated_ids, generated_id], axis=1)
         if paddle.any(generated_id == tokenizer.eos_token_id).item():
             break
@@ -174,31 +169,60 @@ def run_model(predictor_args):
 parser = PdArgumentParser((Mix_PredictorArgument, Mix_ModelArgument))
 predictor_args, model_args = parser.parse_args_into_dataclasses()
 
-model_path = predictor_args.model_name_or_path
-tokenizer = DeepseekTokenizerFast.from_pretrained(model_path)
-config = DeepseekVLV2Config.from_pretrained(model_path)
-
-candidate_resolutions = config["candidate_resolutions"]
-patch_size = config.vision_config["patch_size"]
-downsample_ratio = config["downsample_ratio"]
-processor = DeepseekVLV2Processor(
-    tokenizer=tokenizer,
-    candidate_resolutions=candidate_resolutions,
-    patch_size=patch_size,
-    downsample_ratio=downsample_ratio,
-)
 paddle.set_default_dtype(predictor_args.dtype)
-vl_model = DeepseekVLV2ForCausalLM.from_pretrained(model_path, dtype=predictor_args.dtype).eval()
+tensor_parallel_degree = paddle.distributed.get_world_size()
+tensor_parallel_rank = paddle.distributed.get_rank()
+if tensor_parallel_degree > 1:
+    strategy = fleet.DistributedStrategy()
+    strategy.hybrid_configs = {
+        "dp_degree": 1,
+        "mp_degree": tensor_parallel_degree,
+        "pp_degree": 1,
+        "sharding_degree": 1,
+    }
+    fleet.init(is_collective=True, strategy=strategy)
 
+
+paddle.set_default_dtype(predictor_args.dtype)
+vl_model = DeepseekVLV2ForCausalLM.from_pretrained(
+    predictor_args.model_name_or_path,
+    tensor_parallel_degree=tensor_parallel_degree,
+    tensor_parallel_rank=tensor_parallel_rank,
+    dtype=predictor_args.dtype,
+    tensor_parallel_output=False,
+).eval()
+
+# NOTE: (changwenbin) Because we only use the visual model here,
+# in order to reduce video memory, we delete the language model.
 del vl_model.language
 paddle.device.cuda.empty_cache()
 
+
+model_path = predictor_args.model_name_or_path
+tokenizer = DeepseekTokenizerFast.from_pretrained(predictor_args.model_name_or_path)
+config = DeepseekVLV2Config.from_pretrained(predictor_args.model_name_or_path)
+processor = DeepseekVLV2Processor(
+    tokenizer=tokenizer,
+    candidate_resolutions=config["candidate_resolutions"],
+    patch_size=config.vision_config["patch_size"],
+    downsample_ratio=config["downsample_ratio"],
+)
+
+
+conversation = [
+    {
+        "role": "<|User|>",
+        "content": f"<image>\n{predictor_args.question}",
+        "images": [predictor_args.image_file],
+    },
+    {"role": "<|Assistant|>", "content": ""},
+]
+
+
 # register llm config
 llm_config = config.language_config
-llm_config.architectures = ['DeepseekVLV2ForCausalLM']
-llm_config.rope_scaling = {
-    "factor": 1
-}
+llm_config.architectures = ["DeepseekVLV2ForCausalLM"]
+llm_config.rope_scaling = {"factor": 1}
 llm_config.rope_scaling_type = {}
 llm_config.qk_rope_head_dim = 64
 llm_config.rope_theta = 10000
@@ -217,8 +241,6 @@ generation_config = GenerationConfig(
     return_dict=True,
 )
 
-tensor_parallel_degree = paddle.distributed.get_world_size()
-tensor_parallel_rank = paddle.distributed.get_rank()
 fast_llm_model = AutoInferenceModelForCausalLM.from_pretrained(
     predictor_args.model_name_or_path,
     config=llm_config,
@@ -227,8 +249,18 @@ fast_llm_model = AutoInferenceModelForCausalLM.from_pretrained(
     dtype=predictor_args.dtype,
     tensor_parallel_degree=tensor_parallel_degree,
     tensor_parallel_rank=tensor_parallel_rank,
-)
-fast_llm_model.eval()
+).eval()
+
+# NOTE: (changwenbin) We convert the language model into a static graph
+if predictor_args.llm_mode == "static":
+    fast_llm_model = paddle.incubate.jit.inference(
+        fast_llm_model,
+        save_model_dir=f"./tmp/{predictor_args.model_name_or_path}/{predictor_args.quant_type}",
+        enable_new_ir=True,
+        cache_static_model=True,
+        skip_prune_program=True,
+        exp_enable_use_cutlass=False,
+    )
 
 vl_model.language = fast_llm_model
 
@@ -239,11 +271,16 @@ if predictor_args.benchmark:
     sumtime = 0.0
     times = repeat_times + warm_up
     for i in range(times):
-        print("run",i)
         if i > 2:
             paddle.device.synchronize()
             starttime = datetime.datetime.now()
         generated_text = run_model(predictor_args)
+
+        # NOTE: (changwenbin) We delete the transformer_block to reduce the memory usage.
+        if (fast_llm_model.deepseek_v2.transformer_block is not None) and (predictor_args.llm_mode == "static"):
+            fast_llm_model.deepseek_v2.transformer_block = None
+            paddle.device.cuda.empty_cache()
+
         if i > 2:
             paddle.device.synchronize()
             endtime = datetime.datetime.now()

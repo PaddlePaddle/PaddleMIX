@@ -19,7 +19,6 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import paddle
 import paddle.distributed.fleet.meta_parallel as mpu
-import paddle.nn as nn
 import paddle.nn.functional as F
 from paddle import Tensor, nn
 from paddle.distributed import fleet
@@ -2072,13 +2071,13 @@ class Qwen2_5_VLForConditionalGeneration(Qwen2_5_VLPreTrainedModel):
 
             inputs_embeds = self.model.qwen2.embed_tokens(input_ids)
             if pixel_values is not None:
-                pixel_values = paddle.cast(pixel_values, paddle.bfloat16)
+                pixel_values = paddle.cast(pixel_values, self.visual.patch_embed.proj.weight.dtype)
                 image_embeds = self.visual(pixel_values, grid_thw=image_grid_thw)
                 image_mask = input_ids == self.config.image_token_id
 
                 inputs_embeds[image_mask] = image_embeds
             if pixel_values_videos is not None:
-                pixel_values_videos = paddle.cast(pixel_values_videos, paddle.bfloat16)
+                pixel_values_videos = paddle.cast(pixel_values_videos, self.visual.patch_embed.proj.weight.dtype)
                 video_embeds = self.visual(pixel_values_videos, grid_thw=video_grid_thw)
                 video_mask = input_ids == self.config.video_token_id
                 inputs_embeds[video_mask] = video_embeds

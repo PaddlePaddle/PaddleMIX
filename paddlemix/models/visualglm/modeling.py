@@ -114,6 +114,19 @@ class VisualGLMPretrainedModel(MixPretrainedModel):
 
     def _init_weights(self, module):
         """Initialize the weights"""
+
+        def trunc_normal_(tensor, mean=0.0, std=1.0, min=-2, max=2):
+            origin_dtype = paddle.get_default_dtype()
+            paddle.set_default_dtype("float32")
+            with paddle.no_grad():
+                normal = paddle.normal(mean=mean, std=std, shape=tensor.shape)
+                trunc = paddle.clip(normal, min=min, max=max)
+                if origin_dtype != "float32":
+                    trunc = trunc.astype(origin_dtype)
+                tensor.set_value(trunc)
+            paddle.set_default_dtype(origin_dtype)
+            return tensor
+
         factor = self.config.initializer_range
         if isinstance(module, nn.Conv2D) or isinstance(module, nn.Embedding) or isinstance(module, nn.Linear):
             normal_(module.weight, mean=0.0, std=factor)
@@ -123,11 +136,12 @@ class VisualGLMPretrainedModel(MixPretrainedModel):
         if isinstance(module, VisualGLMVisionEmbeddings):
             if hasattr(self.config, "vision_config"):
                 factor = self.config.vision_config.initializer_range
-            trunc_normal_ = nn.initializer.TruncatedNormal(mean=0.0, std=factor)
+
             trunc_normal_(module.position_embedding)
             trunc_normal_(
                 module.class_embedding,
             )
+
         elif isinstance(module, nn.LayerNorm):
             zeros_(module.bias)
             ones_(module.weight)
@@ -588,7 +602,7 @@ class VisualGLMQFormerMultiHeadAttention(nn.Layer):
 
         if attention_mask is not None:
             # Apply the attention mask is (precomputed for all layers in BertModel forward() function)
-            attention_scores = attention_scores + attention_mask
+            attention_scores = paddle.cast((attention_scores + attention_mask), attention_scores.dtype)
 
         # Normalize the attention scores to probabilities.
         attention_probs = nn.Softmax(axis=-1)(attention_scores)
