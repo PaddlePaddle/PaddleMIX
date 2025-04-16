@@ -22,6 +22,7 @@ from PIL import Image
 from paddlemix.datasets.internvl_dataset import dynamic_preprocess
 from paddlemix.models.internvl2.internlm2 import InternLM2Tokenizer
 from paddlemix.models.internvl2.internvl_chat import InternVLChatModel
+from paddlemix.models.qwen2_vl import MIXQwen2Tokenizer
 
 paddle.set_grad_enabled(False)
 
@@ -98,25 +99,44 @@ def load_tokenizer(model_path):
     import re
 
     match = re.search(r"\d+B", model_path)
-    model2_5 = "InternVL2_5" in model_path
+    model_v2_5 = "InternVL2_5" in model_path
+    model_v3 = "InternVL3" in model_path
     if match:
         model_size = match.group()
     else:
         model_size = "2B"
-    if model2_5 and model_size in ["1B", "4B"]:
-        tokenizer = Qwen2Tokenizer.from_pretrained(model_path)
-    elif model_size in ["1B"]:
-        tokenizer = Qwen2Tokenizer.from_pretrained(model_path)
-    elif model_size in ["2B", "8B", "26B"]:
-        tokenizer = InternLM2Tokenizer.from_pretrained(model_path)
-    elif model_size in ["40B"]:
-        tokenizer = LlamaTokenizer.from_pretrained(model_path)
-    elif model_size in ["76B"]:
-        tokenizer = Llama3Tokenizer.from_pretrained(model_path)
-    else:
-        raise ValueError
 
-    return tokenizer
+    if not model_v2_5 and not model_v3:
+        # InternVL2，暂不支持4B的phi3
+        if model_size in ["1B"]:
+            tokenizer = MIXQwen2Tokenizer.from_pretrained(model_path)
+        elif model_size in ["2B", "8B", "26B"]:
+            tokenizer = InternLM2Tokenizer.from_pretrained(model_path)
+        elif model_size in ["40B"]:
+            tokenizer = LlamaTokenizer.from_pretrained(model_path)
+        elif model_size in ["76B"]:
+            tokenizer = Llama3Tokenizer.from_pretrained(model_path)
+        else:
+            raise ValueError
+        return tokenizer
+
+    if model_v2_5:
+        if model_size in ["1B", "4B", "38B", "78B"]:
+            tokenizer = MIXQwen2Tokenizer.from_pretrained(model_path)
+        elif model_size in ["2B", "8B", "26B"]:
+            tokenizer = InternLM2Tokenizer.from_pretrained(model_path)
+        else:
+            raise ValueError
+        return tokenizer
+
+    if model_v3:
+        if model_size in ["1B", "2B", "8B", "14B", "38B", "78B"]:
+            tokenizer = MIXQwen2Tokenizer.from_pretrained(model_path)
+        elif model_size in ["9B"]:
+            tokenizer = InternLM2Tokenizer.from_pretrained(model_path)
+        else:
+            raise ValueError
+        return tokenizer
 
 
 def main(args):
@@ -129,8 +149,6 @@ def main(args):
 
     # init model and tokenizer
     MODEL_PATH = args.model_name_or_path
-    model_size = MODEL_PATH.split("-")[-1]
-    print(f"model size: {model_size}")
     tokenizer = load_tokenizer(MODEL_PATH)
     print("tokenizer:\n", tokenizer)
     print("len(tokenizer): ", len(tokenizer))
@@ -156,7 +174,7 @@ if __name__ == "__main__":
     parser.add_argument("--image_path", type=str, default=None)
     parser.add_argument("--text", type=str, default="Please describe the image shortly.", required=True)
     parser.add_argument(
-        "--dtype", type=str, default="float16", choices=["float32", "bfloat16", "float16"], help="Model dtype"
+        "--dtype", type=str, default="bfloat16", choices=["float32", "bfloat16", "float16"], help="Model dtype"
     )
     args = parser.parse_args()
 
