@@ -23,12 +23,12 @@ python -m pip install -r requirements.txt
 
 # 安装PaddleNLP特定版本
 pip uninstall -y paddlenlp && rm -rf PaddleNLP
-git clone --depth=1 https://github.com/PaddlePaddle/PaddleNLP.git
+git clone https://github.com/PaddlePaddle/PaddleNLP.git
 cd PaddleNLP
 git checkout e67789d58849765c827fc7f8e063e0d51a7daecf
 pip install -e .
 
-# 安装paddlenlp_ops pre-build 
+# 安装paddlenlp_ops pre-build
 pip install https://paddlenlp.bj.bcebos.com/ops/cu118/paddlenlp_ops-3.0.0b4.post20250331-py3-none-any.whl
 
 # 或者安装其他版本
@@ -69,7 +69,19 @@ python deploy/qwen2_vl/single_image_infer.py\
 ```bash
 CUDA_VISIBLE_DEVICES=0 python deploy/qwen2_vl/video_infer.py \
     --model_name_or_path Qwen/Qwen2-VL-2B-Instruct \
+    --question "Describe this video." \
+    --video_file paddlemix/demo_images/red-panda.mp4 \
+    --min_length 128 \
+    --max_length 128 \
+    --top_k 1 \
+    --top_p 0.001 \
+    --temperature 0.1 \
+    --repetition_penalty 1.05 \
+    --block_attn True \
+    --inference_model True \
+    --mode dynamic \
     --dtype bfloat16 \
+    --output_via_mq False \
     --benchmark True
 ```
 
