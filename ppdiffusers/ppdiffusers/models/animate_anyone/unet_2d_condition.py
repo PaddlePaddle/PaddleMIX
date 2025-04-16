@@ -521,7 +521,7 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
                 attention_type=attention_type,
             )
         elif mid_block_type == "UNetMidBlock2DSimpleCrossAttn":
-            raise NotImplementedError(f"Unsupport mid_block_type: {mid_block_type}")
+            raise NotImplementedError(f"Unsupported mid_block_type: {mid_block_type}")
         elif mid_block_type == "UNetMidBlock2D":
             self.mid_block = UNetMidBlock2D(
                 in_channels=block_out_channels[-1],
@@ -865,7 +865,7 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
             cross_attention_kwargs (`dict`, *optional*):
                 A kwargs dictionary that if specified is passed along to the [`AttnProcessor`].
             added_cond_kwargs: (`dict`, *optional*):
-                A kwargs dictionary containin additional embeddings that if specified are added to the embeddings that
+                A kwargs dictionary containing additional embeddings that if specified are added to the embeddings that
                 are passed along to the UNet blocks.
             down_block_additional_residuals (`tuple` of `paddle.Tensor`, *optional*):
                 additional residuals to be added to UNet long skip connections from down blocks to up blocks for

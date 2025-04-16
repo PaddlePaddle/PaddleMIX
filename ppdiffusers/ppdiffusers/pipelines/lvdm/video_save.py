@@ -170,7 +170,7 @@ def make_grid(
 
         def norm_ip(img, low, high):
             img.clip_(min=low, max=high)
-            img = img.substract(low).divide(max(high - low, 1e-05))
+            img = img.subtract(low).divide(max(high - low, 1e-05))
 
         def norm_range(t, value_range):
             if value_range is not None:

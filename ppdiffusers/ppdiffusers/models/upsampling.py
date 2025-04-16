@@ -274,7 +274,7 @@ class KUpsample2D(paddle.nn.Layer):
 
 class CogVideoXUpsample3D(paddle.nn.Layer):
     """
-    A 3D Upsample layer using in CogVideoX by Tsinghua University & ZhipuAI # Todo: Wait for paper relase.
+    A 3D Upsample layer using in CogVideoX by Tsinghua University & ZhipuAI # Todo: Wait for paper release.
 
     Args:
         in_channels (`int`):

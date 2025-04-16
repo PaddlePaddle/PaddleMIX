@@ -61,7 +61,7 @@ def save_video_from_bgr(frames, output_path, frame_rate=25, width=None, height=N
         height, width, _ = frames[0].shape
 
     # 使用moviepy创建视频剪辑
-    video_clip = mp.ImageSequenceClip(frames, fps=frame_rate)
+    video_clip = mp.ImageSequenceClip(frames[:-1], fps=frame_rate)
 
     # 设置视频输出尺寸（如果需要）
     video_clip = video_clip.resize(newsize=(width, height))

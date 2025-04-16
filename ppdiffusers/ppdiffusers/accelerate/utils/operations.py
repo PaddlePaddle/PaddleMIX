@@ -518,7 +518,7 @@ def reduce(tensor, reduction="mean", scale=1.0):
         reduction (`str`, *optional*, defaults to `"mean"`):
             A reduction method. Can be of "mean", "sum", or "none"
         scale (`float`, *optional*):
-            A default scaling value to be applied after the reduce, only valied on XLA.
+            A default scaling value to be applied after the reduce, only valid on XLA.
 
     Returns:
         The same data structure as `data` with all the tensors reduced.
@@ -563,7 +563,7 @@ def convert_to_fp32(tensor):
 
 class ConvertOutputsToFp32:
     """
-    Decorator to apply to a function outputing tensors (like a model forward pass) that ensures the outputs in FP16
+    Decorator to apply to a function outputting tensors (like a model forward pass) that ensures the outputs in FP16
     precision will be convert back to FP32.
 
     Args:

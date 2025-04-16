@@ -52,7 +52,7 @@ def load_state_dict(self: paddle.nn.Layer, state_dict: dict, use_structured_name
     print(f"missing_keys: {missing_keys}")
     print(f"unexpected_keys: {unexpected_keys}")
     if strict and (len(missing_keys) > 0 or len(unexpected_keys) > 0):
-        raise ValueError("state_dict donot match the orignial state_dict!")
+        raise ValueError("state_dict do not match the original state_dict!")
     return self.load_dict(state_dict, use_structured_name=use_structured_name)
 
 

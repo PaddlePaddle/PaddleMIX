@@ -428,9 +428,9 @@ class LatentDiffusionTrainer(Trainer):
         if merge_tensor_parallel:
             output_dir = output_dir if output_dir is not None else self.args.output_dir
             os.makedirs(output_dir, exist_ok=True)
-            unwraped = unwrap_model(self.model)
+            unwrapped = unwrap_model(self.model)
             logger.info(f"Saving merged checkpoint to {output_dir}")
-            unwraped.dit.save_pretrained(
+            unwrapped.dit.save_pretrained(
                 output_dir,
                 merge_tensor_parallel=merge_tensor_parallel,
                 tensor_parallel_degree=self.args.tensor_parallel_degree,

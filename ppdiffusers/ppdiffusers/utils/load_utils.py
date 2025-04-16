@@ -168,7 +168,7 @@ class UnpicklerWrapperStage(pickle.Unpickler):
 def _rebuild_tensor_stage(storage, storage_offset, size, stride, requires_grad, backward_hooks):
     # if a tensor has shape [M, N] and stride is [1, N], it's column-wise / fortran-style
     # if a tensor has shape [M, N] and stride is [M, 1], it's row-wise / C-style
-    # defautls to C-style
+    # defaults to C-style
     if stride is not None and len(stride) > 1 and stride[0] == 1 and stride[1] > 1:
         order = "F"
     else:
@@ -381,18 +381,18 @@ def smart_load(
                 state_dict["is_torch_weight"] = is_torch_weight
             return state_dict
         except Exception:
-            logger.info(f"Cant load file {name} with safetensors!")
+            logger.info(f"Can't load file {name} with safetensors!")
         try:
             state_dict = convert_to_paddle(torch_load(path), return_numpy, return_global_step)
             if return_is_torch_weight:
                 state_dict["is_torch_weight"] = True
             return state_dict
         except Exception:
-            logger.info(f"Cant load file {name} with torch! We will try to load this with safetensors!")
+            logger.info(f"Can't load file {name} with torch! We will try to load this with safetensors!")
         try:
             state_dict = paddle.load(path, return_numpy=return_numpy)
             return state_dict
         except Exception:
-            logger.info(f"Cant load file {name} with paddle! We will try to load this with torch/safetensors!")
+            logger.info(f"Can't load file {name} with paddle! We will try to load this with torch/safetensors!")
     if state_dict is None:
-        raise ValueError(f"Cant load {name}, currently we only support ['torch', 'safetensors', 'paddle']!")
+        raise ValueError(f"Can't load {name}, currently we only support ['torch', 'safetensors', 'paddle']!")

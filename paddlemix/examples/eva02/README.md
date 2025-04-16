@@ -96,7 +96,7 @@ pip install -r requirements.txt
 # 安装fusedln到python环境
 python setup.py install --prefix=$INSTALL_DIR
 # 添加安装路径到系统环境路径中
-export $PATH=$PATH:$INSTALL_DIR
+export PATH=$PATH:$INSTALL_DIR
 ```
 
 

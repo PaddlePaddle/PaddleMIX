@@ -1,9 +1,9 @@
 {
-  "chartqa_train_18k": {
-    "root": "playground/data/chartqa/",
-    "annotation": "playground/opensource/chartqa_train_18k.jsonl",
+  "blip_laion_cc_sbu_558k": {
+    "root": "LLaVA-Pretrain/images",
+    "annotation": "LLaVA-Pretrain/blip_laion_cc_sbu_558k.jsonl",
     "data_augment": false,
     "repeat_time": 1,
-    "length": 18317
+    "length": 558128
   }
 }

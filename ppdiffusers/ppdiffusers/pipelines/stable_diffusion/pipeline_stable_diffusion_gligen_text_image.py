@@ -163,7 +163,7 @@ class StableDiffusionGLIGENTextImagePipeline(DiffusionPipeline):
         tokenizer ([`~transformers.CLIPTokenizer`]):
             A `CLIPTokenizer` to tokenize text.
         processor ([`~transformers.CLIPProcessor`]):
-            A `CLIPProcessor` to procces reference image.
+            A `CLIPProcessor` to process reference image.
         image_encoder ([`~transformers.CLIPVisionModelWithProjection`]):
             Frozen image-encoder ([clip-vit-large-patch14](https://huggingface.co/openai/clip-vit-large-patch14)).
         image_project ([`CLIPImageProjection`]):

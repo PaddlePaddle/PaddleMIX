@@ -224,7 +224,7 @@ def gen_sineembed_for_position(pos_tensor):
     pos_x = paddle.stack((pos_x[:, :, 0::2].sin(), pos_x[:, :, 1::2].cos()), axis=3).flatten(2)
     pos_y = paddle.stack((pos_y[:, :, 0::2].sin(), pos_y[:, :, 1::2].cos()), axis=3).flatten(2)
     if pos_tensor.shape[-1] == 2:
-        pos = paddle.concat((pos_y, pos_x), aixs=2)
+        pos = paddle.concat((pos_y, pos_x), axis=2)
     elif pos_tensor.shape[-1] == 4:
         w_embed = pos_tensor[:, :, 2] * scale
         pos_w = w_embed[:, :, None] / dim_t

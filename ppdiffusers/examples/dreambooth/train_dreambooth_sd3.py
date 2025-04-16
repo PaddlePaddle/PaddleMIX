@@ -126,7 +126,8 @@ def log_validation(
 
     # run inference
     generator = paddle.Generator().manual_seed(args.seed) if args.seed else None
-    autocast_ctx = nullcontext()
+    # autocast_ctx = nullcontext()
+    autocast_ctx = paddle.amp.auto_cast(enable=True, custom_white_list=None, custom_black_list=None, level="O2", dtype='float16')
 
     with autocast_ctx:
         images = [pipeline(**pipeline_args, generator=generator).images[0] for _ in range(args.num_validation_images)]
@@ -702,7 +703,7 @@ class DreamBoothDataset(Dataset):
             else:
                 example["instance_prompt"] = self.instance_prompt
 
-        else:  # costum prompts were provided, but length does not match size of image dataset
+        else:  # custom prompts were provided, but length does not match size of image dataset
             example["instance_prompt"] = self.instance_prompt
 
         if self.class_data_root:
@@ -1031,7 +1032,7 @@ def main(args):
         weight_dtype = paddle.float16
     elif accelerator.mixed_precision == "bf16":
         weight_dtype = paddle.bfloat16
-    vae.to(dtype=paddle.float32)
+    # vae.to(dtype=paddle.float32)
     if not args.train_text_encoder:
         text_encoder_one.to(dtype=weight_dtype)
         text_encoder_two.to(dtype=weight_dtype)
@@ -1220,7 +1221,7 @@ def main(args):
             if args.with_prior_preservation:
                 prompt_embeds = paddle.concat([prompt_embeds, class_prompt_hidden_states], axis=0)
                 pooled_prompt_embeds = paddle.concat([pooled_prompt_embeds, class_pooled_prompt_embeds], axis=0)
-        # if we're optmizing the text encoder (both if instance prompt is used for all images or custom prompts) we need to tokenize and encode the
+        # if we're optimizing the text encoder (both if instance prompt is used for all images or custom prompts) we need to tokenize and encode the
         # batch prompts on all training steps
         else:
             tokens_one = tokenize_prompt(tokenizer_one, args.instance_prompt)
@@ -1433,7 +1434,7 @@ def main(args):
                 # Preconditioning of the model outputs.
                 model_pred = model_pred * (-sigmas) + noisy_model_input
 
-                # TODO (kashif, sayakpaul): weighting sceme needs to be experimented with :)
+                # TODO (kashif, sayakpaul): weighting scheme needs to be experimented with :)
                 if args.weighting_scheme == "sigma_sqrt":
                     weighting = (sigmas**-2.0).cast(paddle.float32)
                 elif args.weighting_scheme == "logit_normal":

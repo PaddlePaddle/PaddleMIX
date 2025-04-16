@@ -553,7 +553,7 @@ class DatasetBuilder:
             datasets = DatasetTuple(splits)
             parallel_env = dist.ParallelEnv()
             unique_endpoints = _get_unique_endpoints(parallel_env.trainer_endpoints[:])
-            # move register hook to first and register togather
+            # move register hook to first and register together
             lock_files = []
             for split in splits:
                 lock_file = os.path.join(DATA_HOME, self.__class__.__name__)
@@ -731,7 +731,7 @@ class DatasetBuilder:
     def _get_data(self, mode: str):
         """
         Downloads examples from the given URL and customized split
-        informations and returns a filepath.
+        information and returns a filepath.
 
         This method must be implemented in self-defined `DatasetBuilder`.
         """

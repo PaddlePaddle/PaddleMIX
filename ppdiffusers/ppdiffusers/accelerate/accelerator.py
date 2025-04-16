@@ -1428,7 +1428,7 @@ class Accelerator:
             reduction (`str`, *optional*, defaults to "sum"):
                 A reduction type, can be one of 'sum', 'mean', or 'none'. If 'none', will not perform any operation.
             scale (`float`, *optional*, defaults to 1.0):
-                A default scaling value to be applied after the reduce, only valied on XLA.
+                A default scaling value to be applied after the reduce, only valid on XLA.
 
         Returns:
             `paddle.Tensor`, or a nested tuple/list/dictionary of `paddle.Tensor`:
@@ -1714,7 +1714,7 @@ class Accelerator:
 
         Arguments:
             model: (`paddle.nn.Layer`):
-                Model to be saved. The model can be wrapped or unwraped.
+                Model to be saved. The model can be wrapped or unwrapped.
             save_directory (`str` or `os.PathLike`):
                 Directory to which to save. Will be created if it doesn't exist.
             max_shard_size (`int` or `str`, *optional*, defaults to `"10GB"`):
@@ -1810,7 +1810,7 @@ class Accelerator:
 
         `hook(models: list[paddle.nn.Layer], weights: list[dict[str, paddle.Tensor]], input_dir: str) -> None`
 
-        The `models` argument are the models as saved in the accelerator state under `accelerator._models`, `weigths`
+        The `models` argument are the models as saved in the accelerator state under `accelerator._models`, `weights`
         argument are the state dicts of the `models`, and the `input_dir` argument is the `input_dir` argument passed
         to [`Accelerator.load_state`].
 
@@ -1836,7 +1836,7 @@ class Accelerator:
 
         If a `ProjectConfiguration` was passed to the `Accelerator` object with `automatic_checkpoint_naming` enabled
         then checkpoints will be saved to `self.project_dir/checkpoints`. If the number of current saves is greater
-        than `total_limit` then the oldest save is deleted. Each checkpoint is saved in seperate folders named
+        than `total_limit` then the oldest save is deleted. Each checkpoint is saved in separate folders named
         `checkpoint_<iteration>`.
 
         Otherwise they are just saved to `output_dir`.

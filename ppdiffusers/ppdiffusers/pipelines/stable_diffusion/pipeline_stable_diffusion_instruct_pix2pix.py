@@ -188,7 +188,7 @@ class StableDiffusionInstructPix2PixPipeline(DiffusionPipeline, TextualInversion
                 A higher guidance scale value encourages the model to generate images closely linked to the text
                 `prompt` at the expense of lower image quality. Guidance scale is enabled when `guidance_scale > 1`.
             image_guidance_scale (`float`, *optional*, defaults to 1.5):
-                Push the generated image towards the inital `image`. Image guidance scale is enabled by setting
+                Push the generated image towards the initial `image`. Image guidance scale is enabled by setting
                 `image_guidance_scale > 1`. Higher image guidance scale encourages generated images that are closely
                 linked to the source `image`, usually at the expense of lower image quality. This pipeline requires a
                 value of at least `1`.
@@ -382,7 +382,7 @@ class StableDiffusionInstructPix2PixPipeline(DiffusionPipeline, TextualInversion
                 )[0]
 
                 # Hack:
-                # For karras style schedulers the model does classifer free guidance using the
+                # For karras style schedulers the model does classifier free guidance using the
                 # predicted_original_sample instead of the noise_pred. So we need to compute the
                 # predicted_original_sample here if we are using a karras style scheduler.
                 if scheduler_is_in_sigma_space:
@@ -400,7 +400,7 @@ class StableDiffusionInstructPix2PixPipeline(DiffusionPipeline, TextualInversion
                     )
 
                 # Hack:
-                # For karras style schedulers the model does classifer free guidance using the
+                # For karras style schedulers the model does classifier free guidance using the
                 # predicted_original_sample instead of the noise_pred. But the scheduler.step function
                 # expects the noise_pred and computes the predicted_original_sample internally. So we
                 # need to overwrite the noise_pred here such that the value of the computed

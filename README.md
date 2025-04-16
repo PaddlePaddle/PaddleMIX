@@ -30,14 +30,18 @@
 - [🎯引用](#引用)
 
 ## 📰新闻
-**🔥2025.03.10日Qwen2-VL系列多模态理解大模型功能抢先体验实战营**
+**🔥2025.04.21日FLUX多模态文生图大模型功能抢先体验**
 
-- 🔥🔥多模态大模型PaddleMIX产业实战精品课第二弹：《Qwen2-VL系列多模态理解大模型功能抢先体验》。本期课程将带你在PaddleMIX框架中快速体验Qwen2-VL系列模型的多模态理解能力。深度解析模型实现细节与技术创新，带您实操多模态理解任务处理。3月10日正式开营，名额有限，先到先得：https://www.wjx.top/vm/tUIxXxF.aspx?udsid=121597
-
+- 🔥🔥多模态大模型PaddleMIX产业实战精品课第五弹：《FLUX多模态文生图大模型功能抢先体验》。本期课程将带你在PaddleMIX框架中快速体验FLUX系列模型的多模态文生图能力。深度解析模型实现细节与技术创新，带您实操多模态生成任务处理。4月21日正式开营，名额有限，先到先得：https://www.wjx.top/vm/QTuwoyG.aspx?udsid=997416
 
 
 
 ## 📣最新进展
+**🎉 2025.03.31 [Qwen2.5VL昆仑XPU](docs/hardware_support/KL_usage.md)硬件适配**
+* 为了满足用户对AI国产新硬件的使用需求，Qwen2.5VL在PaddleMIX框架中增加对昆仑P800芯片适配，提供国产计算芯片上的训推能力。
+
+**🎉 2025.03.17 [Qwen2.5VL高性能升级](deploy/qwen2_5_vl)重磅发布**
+* 得益于PaddlePaddle的最新优化，Qwen2.5VL在PaddleMIX框架中实现了高性能体验，推理速度提升显著，较VLLM框架提升10%-30%。
 
 **🎉 2025.01.20 喜迎外部开发者在星河(AIStudio)社区开发的[创作教程页面](paddlemix_applications.md)更新**
 * 涵盖圣诞主题贺卡生成🎄、人物生成👤等多种应用，期待您的体验！此外，还有AI鉴宝🔍、图生音乐🎶等有趣的应用等待您来探索～
@@ -226,7 +230,7 @@ python setup.py install
 
 **多硬件使用**
 - 昇腾910B支持的模型列表和使用方式，可以参考[昇腾硬件使用](./docs/hardware_support/ascend_usage.md)
-
+- 昆仑P800支持的模型列表和使用方式，可以参考[昆仑硬件使用](./docs/hardware_support/KL_usage.md)
 
 
 ## 📱模型库

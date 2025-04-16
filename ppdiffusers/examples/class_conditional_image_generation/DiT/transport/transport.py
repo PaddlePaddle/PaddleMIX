@@ -225,7 +225,7 @@ class Sampler:
     ):
         """Constructor for a general sampler; supporting different sampling methods
         Args:
-        - transport: an tranport object specify model prediction & interpolant type
+        - transport: an transport object specify model prediction & interpolant type
         """
         self.transport = transport
         self.drift = self.transport.get_drift()

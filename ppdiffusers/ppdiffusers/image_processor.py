@@ -267,6 +267,8 @@ class VaeImageProcessor(ConfigMixin):
         image: Union[paddle.Tensor, PIL.Image.Image, np.ndarray],
         height: Optional[int] = None,
         width: Optional[int] = None,
+        resize_mode: str = "default",  # "default", "fill", "crop"
+        crops_coords: Optional[Tuple[int, int, int, int]] = None,
     ) -> paddle.Tensor:
         """
         Preprocess the image input. Accepted formats are PIL images, NumPy arrays or Paddle tensors.
@@ -278,7 +280,7 @@ class VaeImageProcessor(ConfigMixin):
             if isinstance(image, paddle.Tensor):
                 # if image is a paddle tensor could have 2 possible shapes:
                 #    1. batch x height x width: we should insert the channel dimension at position 1
-                #    2. channnel x height x width: we should insert batch dimension at position 0,
+                #    2. channel x height x width: we should insert batch dimension at position 0,
                 #       however, since both channel and batch dimension has same size 1, it is same to insert at position 1
                 #    for simplicity, we insert a dimension of size 1 at position 1 for both cases
                 image = image.unsqueeze(1)
@@ -299,13 +301,16 @@ class VaeImageProcessor(ConfigMixin):
             )
 
         if isinstance(image[0], PIL.Image.Image):
+            if crops_coords is not None:
+                image = [i.crop(crops_coords) for i in image]
+            if self.config.do_resize:
+                height, width = self.get_default_height_width(image[0], height, width)
+                # Todo: resize_mode 
+                image = [self.resize(i, height, width) for i in image]
             if self.config.do_convert_rgb:
                 image = [self.convert_to_rgb(i) for i in image]
             elif self.config.do_convert_grayscale:
                 image = [self.convert_to_grayscale(i) for i in image]
-            if self.config.do_resize:
-                height, width = self.get_default_height_width(image[0], height, width)
-                image = [self.resize(i, height, width) for i in image]
             image = self.pil_to_numpy(image)  # to np
             image = self.numpy_to_pd(image)  # to pt
 

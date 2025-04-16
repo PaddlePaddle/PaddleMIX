@@ -54,7 +54,7 @@ plt.plot(
 )
 plt.xlabel("CLIP Score")
 plt.ylabel("FID@1k")
-plt.title("12W Globel Step Pareto Curves - DDIM")
+plt.title("12W Global Step Pareto Curves - DDIM")
 plt.legend()
 plt.savefig("ddim-12w.png")
 plt.show()

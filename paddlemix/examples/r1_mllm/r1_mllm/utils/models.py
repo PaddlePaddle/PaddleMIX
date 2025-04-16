@@ -18,7 +18,7 @@ def get_model(model_name,model_path:str = None,**kwargs):
         model_module = import_module(f"paddlemix.models.{MODEL_MAPPING[model_name]}")
     else:
         raise ValueError(
-            f"The input model {model_id} is currently not avaible, please try {SUPPORTED_MODELS.keys()}"
+            f"The input model {model_id} is currently not available, please try {SUPPORTED_MODELS.keys()}"
         )
     if model_path is None:
         model_path = SUPPORTED_MODELS[model_name]

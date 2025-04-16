@@ -292,7 +292,7 @@ class PreconfigLMSDiscreteScheduler(SchedulerMixin, ConfigMixin):
             self.derivatives.pop(0)
 
         if not self.preconfig:
-            # 3. If not preconfiged, compute linear multistep coefficients.
+            # 3. If not preconfigured, compute linear multistep coefficients.
             order = min(step_index + 1, order)
             lms_coeffs = [self.get_lms_coefficient(order, step_index, curr_order) for curr_order in range(order)]
             # 4. Compute previous sample based on the derivatives path
@@ -300,7 +300,7 @@ class PreconfigLMSDiscreteScheduler(SchedulerMixin, ConfigMixin):
                 coeff * derivative for coeff, derivative in zip(lms_coeffs, reversed(self.derivatives))
             )
         else:
-            # 3. If preconfiged, direct compute previous sample based on the derivatives path
+            # 3. If preconfigured, direct compute previous sample based on the derivatives path
             prev_sample = sample + sum(
                 coeff * derivative
                 for coeff, derivative in zip(self.lms_coeffs[step_index], reversed(self.derivatives))

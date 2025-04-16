@@ -85,7 +85,7 @@ DEFAULT_TEMPLATE = {
     "Qwen2.5-VL-72B-Instruct": "qwen2_5_vl",
 }
 
-TRAINBLE_MODELS = {
+TRAINABLE_MODELS = {
     "sft": ["PPDocBee-2B-1129", "Qwen2-VL-2B-Instruct", "Qwen2-VL-7B-Instruct"],
 }
 

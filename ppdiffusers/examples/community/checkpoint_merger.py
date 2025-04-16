@@ -144,7 +144,7 @@ class CheckpointMergerPipeline(DiffusionPipeline):
         print(f"Combining with alpha={alpha}, interpolation mode={interp}")
 
         checkpoint_count = len(pretrained_model_name_or_path_list)
-        # Ignore result from model_index_json comparision of the two checkpoints
+        # Ignore result from model_index_json comparison of the two checkpoints
         force = kwargs.pop("force", False)
 
         # If less than 2 checkpoints, nothing to merge. If more than 3, not supported for now.
