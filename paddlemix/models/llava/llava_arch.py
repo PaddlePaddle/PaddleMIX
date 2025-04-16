@@ -154,12 +154,14 @@ class LlavaMetaForCausalLM:
     def encode_images(self, images):
         image_features, image_forward_outs = self.get_model().get_vision_tower()(images)
 
-        mm_dense_connector_type = self.get_model().config.get("mm_dense_connector_type", "none")
-        # dense connector
-        if mm_dense_connector_type in ["dci"]:
-            image_features = dense_connector(
-                image_features, image_forward_outs, self.is_siglip(), mm_dense_connector_type
-            )
+        if paddle.framework.in_dynamic_mode():
+            mm_dense_connector_type = self.get_model().config.get("mm_dense_connector_type", "none")
+
+            # dense connector
+            if mm_dense_connector_type in ["dci"]:
+                image_features = dense_connector(
+                    image_features, image_forward_outs, self.is_siglip(), mm_dense_connector_type
+                )
 
         image_features = self.get_model().mm_projector(image_features)
         return image_features
