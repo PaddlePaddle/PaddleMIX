@@ -37,6 +37,8 @@ from PIL import Image, ImageDraw, ImageFont
 def prepare_images_for_saving(images_tensor, resolution, grid_size=4, range_type="neg1pos1"):
     if range_type != "uint8":
         images_tensor = (images_tensor * 0.5 + 0.5).clip(0, 1) * 255
+        if images_tensor.shape[-1] != resolution:
+            images_tensor = nn.functional.interpolate(images_tensor, (resolution, resolution))
 
     images = images_tensor[: grid_size * grid_size].permute(0, 2, 3, 1).detach().cpu().numpy().astype("uint8")
     grid = images.reshape(grid_size, grid_size, resolution, resolution, 3)
@@ -284,7 +286,7 @@ class SDTextDataset(Dataset):
             padding="max_length",
             max_length=self.tokenizer_one.model_max_length,
             truncation=True,
-            return_tensors="pt",
+            return_tensors="pd",
         ).input_ids
 
         output_dict = {
@@ -299,7 +301,7 @@ class SDTextDataset(Dataset):
                 padding="max_length",
                 max_length=self.tokenizer_two.model_max_length,
                 truncation=True,
-                return_tensors="pt",
+                return_tensors="pd",
             ).input_ids
             output_dict["text_input_ids_two"] = text_input_ids_two
 
@@ -307,7 +309,7 @@ class SDTextDataset(Dataset):
 
 
 def get_x0_from_noise(sample, model_output, alphas_cumprod, timestep):
-    alpha_prod_t = alphas_cumprod[timestep].reshape(-1, 1, 1, 1)
+    alpha_prod_t = alphas_cumprod[timestep].reshape([-1, 1, 1, 1])
     beta_prod_t = 1 - alpha_prod_t
 
     pred_original_sample = (sample - beta_prod_t ** (0.5) * model_output) / alpha_prod_t ** (0.5)
