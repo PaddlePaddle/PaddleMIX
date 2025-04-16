@@ -665,7 +665,7 @@ class Attention(nn.Layer):
         num_heads = self.heads
         if attention_mask is None:
             return attention_mask
-        
+
         ori_type = attention_mask.dtype
         attention_mask = attention_mask.to(paddle.float32)
 
@@ -1296,20 +1296,46 @@ class XFormersAttnProcessor:
         #  adapt the scaled_dot_product_attention_ when attention_mask is a bool tensor
         if attention_mask is not None and attention_mask.dtype == paddle.bool:
             L, S = query.shape[1], key.shape[1]
-            attention_mask_tmp = paddle.zeros([1,1, L, S], dtype=query.dtype)
+            attention_mask_tmp = paddle.zeros([1, 1, L, S], dtype=query.dtype)
             attention_mask_tmp = attention_mask_tmp.masked_fill(attention_mask.logical_not(), float("-inf"))
             attention_mask = attention_mask_tmp
-
-        hidden_states = F.scaled_dot_product_attention_(
-            query,
-            key,
-            value,
-            attn_mask=attention_mask,
-            scale=attn.scale,
-            dropout_p=0.0,
-            training=attn.training,
-            attention_op=self.attention_op,
-        )
+        if os.environ.get("FLAGS_ENABLE_USE_FA", False):
+            try:
+                dtype = query.dtype
+                hidden_states = F.scaled_dot_product_attention_(
+                    query.cast(paddle.bfloat16),
+                    key.cast(paddle.bfloat16),
+                    value.cast(paddle.bfloat16),
+                    attn_mask=attention_mask,
+                    scale=attn.scale,
+                    dropout_p=0.0,
+                    training=attn.training,
+                    attention_op=self.attention_op,
+                )
+                if dtype != hidden_states.dtype:
+                    hidden_states = hidden_states.cast(dtype)
+            except:
+                hidden_states = F.scaled_dot_product_attention_(
+                    query.cast(paddle.bfloat16),
+                    key.cast(paddle.bfloat16),
+                    value.cast(paddle.bfloat16),
+                    attn_mask=attention_mask,
+                    scale=attn.scale,
+                    dropout_p=0.0,
+                    training=attn.training,
+                    attention_op="math",
+                )
+        else:
+            hidden_states = F.scaled_dot_product_attention_(
+                query,
+                key,
+                value,
+                attn_mask=attention_mask,
+                scale=attn.scale,
+                dropout_p=0.0,
+                training=attn.training,
+                attention_op=self.attention_op,
+            )
 
         hidden_states = hidden_states.cast(query.dtype)
         hidden_states = attn.batch_to_head_dim(hidden_states, transpose=False)
@@ -2213,9 +2239,15 @@ class FluxAttnProcessor2_0:
             encoder_hidden_states_key_proj = attn.add_k_proj(encoder_hidden_states)
             encoder_hidden_states_value_proj = attn.add_v_proj(encoder_hidden_states)
 
-            encoder_hidden_states_query_proj = encoder_hidden_states_query_proj.reshape([batch_size, -1, attn.heads, head_dim]).transpose([0, 2, 1, 3])
-            encoder_hidden_states_key_proj = encoder_hidden_states_key_proj.reshape([batch_size, -1, attn.heads, head_dim]).transpose([0, 2, 1, 3])
-            encoder_hidden_states_value_proj = encoder_hidden_states_value_proj.reshape([batch_size, -1, attn.heads, head_dim]).transpose([0, 2, 1, 3])
+            encoder_hidden_states_query_proj = encoder_hidden_states_query_proj.reshape(
+                [batch_size, -1, attn.heads, head_dim]
+            ).transpose([0, 2, 1, 3])
+            encoder_hidden_states_key_proj = encoder_hidden_states_key_proj.reshape(
+                [batch_size, -1, attn.heads, head_dim]
+            ).transpose([0, 2, 1, 3])
+            encoder_hidden_states_value_proj = encoder_hidden_states_value_proj.reshape(
+                [batch_size, -1, attn.heads, head_dim]
+            ).transpose([0, 2, 1, 3])
 
             if attn.norm_added_q is not None:
                 encoder_hidden_states_query_proj = attn.norm_added_q(encoder_hidden_states_query_proj)
@@ -2232,14 +2264,14 @@ class FluxAttnProcessor2_0:
 
             query = apply_rotary_emb(query, image_rotary_emb)
             key = apply_rotary_emb(key, image_rotary_emb)
-        
+
         hidden_states = F.scaled_dot_product_attention_(
             query.transpose([0, 2, 1, 3]),
             key.transpose([0, 2, 1, 3]),
             value.transpose([0, 2, 1, 3]),
-            attn_mask=attention_mask, 
-            dropout_p=0.0, 
-            is_causal=False
+            attn_mask=attention_mask,
+            dropout_p=0.0,
+            is_causal=False,
         )
         hidden_states = hidden_states.reshape([batch_size, -1, attn.heads * head_dim])
         hidden_states = hidden_states.astype(query.dtype)
@@ -2309,9 +2341,15 @@ class FusedFluxAttnProcessor2_0:
                 encoder_hidden_states_value_proj,
             ) = paddle.split(encoder_qkv, 3, dim=-1)
 
-            encoder_hidden_states_query_proj = encoder_hidden_states_query_proj.reshape([batch_size, -1, attn.heads, head_dim])
-            encoder_hidden_states_key_proj = encoder_hidden_states_key_proj.reshape([batch_size, -1, attn.heads, head_dim])
-            encoder_hidden_states_value_proj = encoder_hidden_states_value_proj.reshape([batch_size, -1, attn.heads, head_dim])
+            encoder_hidden_states_query_proj = encoder_hidden_states_query_proj.reshape(
+                [batch_size, -1, attn.heads, head_dim]
+            )
+            encoder_hidden_states_key_proj = encoder_hidden_states_key_proj.reshape(
+                [batch_size, -1, attn.heads, head_dim]
+            )
+            encoder_hidden_states_value_proj = encoder_hidden_states_value_proj.reshape(
+                [batch_size, -1, attn.heads, head_dim]
+            )
 
             if attn.norm_added_q is not None:
                 encoder_hidden_states_query_proj = attn.norm_added_q(encoder_hidden_states_query_proj)

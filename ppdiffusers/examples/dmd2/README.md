@@ -47,7 +47,7 @@ CUDA_VISIBLE_DEVICES=1,2,3,4,5,6,7 python -m paddle.distributed.launch edm/train
     --seed 1 \
     --model_id datas/edm-imagenet-64x64-cond-adm.pdparams \
     --wandb_iters 100 \
-    --wandb_entity jll-none \
+    --wandb_entity YOUR_ENTITY \
     --wandb_project dmd2_imagenet \
     --wandb_name "imagenet_gan_classifier_genloss3e-3_diffusion1000_lr2e-6_scratch" \
     --real_image_path datas/imagenet-64x64_lmdb \
