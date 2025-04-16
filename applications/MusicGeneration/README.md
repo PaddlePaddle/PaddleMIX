@@ -6,7 +6,7 @@ Enter audio and prompt words for question and answer.
 
 *****
 - No training is need.
-- Integration with the moedel of [minigpt4](), [chatglm](), [audioldm]().
+- Integration with the model of [minigpt4](), [chatglm](), [audioldm]().
 
 ----
 
@@ -72,7 +72,7 @@ prompt = "Given the scene description in the following paragraph, please create 
 task2 = Appflow(app="music_generation", models=["THUDM/chatglm-6b", "cvssp/audioldm"])
 result = task2(prompt=prompt, negative_prompt=negative_prompt, num_inference_steps=num_inference_steps, audio_length_in_s=audio_length_in_s, generator = paddle.Generator().manual_seed(120))['result']
 scipy.io.wavfile.write(output_path, rate=16000, data=result)
-# chatglm ouptput: The music is playing, and the crowd is dancing like never before. The lights are bright and the atmosphere is electric, with people swaying to the rhythm of the music and the energy of the night. The dance floor is a sea of movement, with people moving to the music and feeling the rhythm of their feet. The stage is a place of magic, with people on it, performing their best. The neon lights of the nightclub are a testament to the energy and excitement of the night, with people's faces lit up as they perform. And as the music continues to play, the crowd continues to dance, never letting up, until the night is over. 
+# chatglm output: The music is playing, and the crowd is dancing like never before. The lights are bright and the atmosphere is electric, with people swaying to the rhythm of the music and the energy of the night. The dance floor is a sea of movement, with people moving to the music and feeling the rhythm of their feet. The stage is a place of magic, with people on it, performing their best. The neon lights of the nightclub are a testament to the energy and excitement of the night, with people's faces lit up as they perform. And as the music continues to play, the crowd continues to dance, never letting up, until the night is over. 
 ```
 
 
