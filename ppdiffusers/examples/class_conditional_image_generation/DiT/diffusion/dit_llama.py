@@ -33,8 +33,8 @@ from .dit import (
     is_model_parrallel,
     modulate,
 )
-
 from .transformer_engine_utils import TransformerEngineHelper
+
 
 def rms_norm_fused(x_in, w, eps):
     fused_ln = try_import("fused_ln")
@@ -52,6 +52,16 @@ def TypePromote(x, y):
         "INT64FP16": "float64",
         "INT64FP32": "float64",
         "INT64FP64": "float64",
+        # for pir
+        "INT16FLOAT16": "float16",
+        "INT16FLOAT32": "float32",
+        "INT16FLOAT64": "float64",
+        "INT32FLOAT16": "float32",
+        "INT32FLOAT32": "float32",
+        "INT32FLOAT64": "float64",
+        "INT64FLOAT16": "float64",
+        "INT64FLOAT32": "float64",
+        "INT64FLOAT64": "float64",
     }
     if x.dtype.name + y.dtype.name in TYPE_PROMOTE_DICT:
         promote_type = TYPE_PROMOTE_DICT[x.dtype.name + y.dtype.name]
@@ -323,6 +333,7 @@ class FeedForward(nn.Layer):
         output = self.w2(xw1 * xw3)
         return output
 
+
 class FeedForwardWithNVTEBackend(nn.Layer):
     def __init__(self, dim, hidden_dim, multiple_of=256, ffn_dim_multiplier=None):
         """
@@ -351,9 +362,9 @@ class FeedForwardWithNVTEBackend(nn.Layer):
             hidden_dim = int(ffn_dim_multiplier * hidden_dim)
         hidden_dim = int(multiple_of * ((hidden_dim + multiple_of - 1) // multiple_of))
         if is_model_parrallel():
-            self.w1 = te.Linear(dim, hidden_dim, bias_attr=False, parallel_mode='column')
-            self.w2 = te.Linear(hidden_dim, dim, bias_attr=False, parallel_mode='row')
-            self.w3 = te.Linear(dim, hidden_dim, bias_attr=False, parallel_mode='column')
+            self.w1 = te.Linear(dim, hidden_dim, bias_attr=False, parallel_mode="column")
+            self.w2 = te.Linear(hidden_dim, dim, bias_attr=False, parallel_mode="row")
+            self.w3 = te.Linear(dim, hidden_dim, bias_attr=False, parallel_mode="column")
         else:
             self.w1 = te.Linear(dim, hidden_dim, bias_attr=False)
             self.w2 = te.Linear(hidden_dim, dim, bias_attr=False)
@@ -364,6 +375,7 @@ class FeedForwardWithNVTEBackend(nn.Layer):
         xw3 = self.w3(x)
         output = self.w2(xw1 * xw3)
         return output
+
 
 class TransformerBlock(nn.Layer):
     def __init__(
@@ -462,6 +474,7 @@ class TransformerBlock(nn.Layer):
             out = h + self.feed_forward(self.ffn_norm(h))
         return out
 
+
 class TransformerBlockWithNVTEBackend(nn.Layer):
     def __init__(
         self,
@@ -512,7 +525,9 @@ class TransformerBlockWithNVTEBackend(nn.Layer):
         self.use_fp8 = use_fp8
         self.dim = dim
         self.head_dim = dim // n_heads
-        self.attention = te.MultiHeadAttention(dim, n_heads, attention_dropout=0.0, bias_attr=True, attn_mask_type='padding')
+        self.attention = te.MultiHeadAttention(
+            dim, n_heads, attention_dropout=0.0, bias_attr=True, attn_mask_type="padding"
+        )
 
         mlp_hidden_dim = int(dim * mlp_ratio)
         self.feed_forward = FeedForwardWithNVTEBackend(
@@ -525,7 +540,7 @@ class TransformerBlockWithNVTEBackend(nn.Layer):
         if is_model_parrallel():
             self.adaLN_modulation = nn.Sequential(
                 nn.Silu(),
-                te.Linear(min(dim, 1024), 6 * dim, bias_attr=True, parallel_mode='column', gather_output=True),
+                te.Linear(min(dim, 1024), 6 * dim, bias_attr=True, parallel_mode="column", gather_output=True),
             )
         else:
             self.adaLN_modulation = nn.Sequential(
@@ -548,13 +563,11 @@ class TransformerBlockWithNVTEBackend(nn.Layer):
                 feedforward layers.
 
         """
-        with TransformerEngineHelper.fp8_autocast(
-            self.use_fp8, TransformerEngineHelper.get_fp8_group()
-        ):
+        with TransformerEngineHelper.fp8_autocast(self.use_fp8, TransformerEngineHelper.get_fp8_group()):
             if adaln_input is not None:
-                shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.adaLN_modulation(adaln_input).chunk(
-                    6, axis=1
-                )
+                shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.adaLN_modulation(
+                    adaln_input
+                ).chunk(6, axis=1)
                 h = x + gate_msa.unsqueeze(1) * self.attention(
                     modulate(self.attention_norm(x), shift_msa, scale_msa), freqs_cis
                 )
@@ -661,7 +674,7 @@ class DiT_Llama(ModelMixin, ConfigMixin, ConversionMixin):
         self.y_embedder = ParallelLabelEmbedder(num_classes, min(dim, 1024), class_dropout_prob)
 
         # 2. Define transformers blocks
-        if (transformer_engine_backend):
+        if transformer_engine_backend:
             self.layers = nn.LayerList(
                 [
                     TransformerBlockWithNVTEBackend(
@@ -713,12 +726,18 @@ class DiT_Llama(ModelMixin, ConfigMixin, ConversionMixin):
             else:
                 TE_LINEAR = type(None)
             if isinstance(
-                module, (nn.Linear, fleet.meta_parallel.ColumnParallelLinear, fleet.meta_parallel.RowParallelLinear, TE_LINEAR)
+                module,
+                (
+                    nn.Linear,
+                    fleet.meta_parallel.ColumnParallelLinear,
+                    fleet.meta_parallel.RowParallelLinear,
+                    TE_LINEAR,
+                ),
             ):
                 if isinstance(module, (TE_LINEAR)):
-                    transpose_weight = paddle.transpose(module.weight, perm=[1,0])
+                    transpose_weight = paddle.transpose(module.weight, perm=[1, 0])
                     initializer.XavierUniform()(transpose_weight)
-                    module.weight.set_value(paddle.transpose(transpose_weight, perm=[1,0]))
+                    module.weight.set_value(paddle.transpose(transpose_weight, perm=[1, 0]))
                 else:
                     initializer.XavierUniform()(module.weight)
                 if module.bias is not None:
@@ -831,14 +850,14 @@ class DiT_Llama(ModelMixin, ConfigMixin, ConversionMixin):
 
         # 2. Blocks
         recompute = (
-            TransformerEngineHelper.get_te_recompute_func() if self.transformer_engine_backend
-            else paddle.distributed.fleet.utils.recompute)
+            TransformerEngineHelper.get_te_recompute_func()
+            if self.transformer_engine_backend
+            else paddle.distributed.fleet.utils.recompute
+        )
 
         for i, layer in enumerate(self.layers):
             if self.gradient_checkpointing:
-                x = recompute(
-                    layer, x, self.freqs_cis[: x.shape[1]].cast(dtype), adaln_input, use_reentrant=False
-                )
+                x = recompute(layer, x, self.freqs_cis[: x.shape[1]].cast(dtype), adaln_input, use_reentrant=False)
             else:
                 x = layer(
                     x,

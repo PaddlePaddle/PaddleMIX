@@ -28,6 +28,16 @@ from .transformer_2d import Transformer2DModelOutput
 
 def TypePromote(x, y):
     TYPE_PROMOTE_DICT = {
+        "INT16FP16": "float16",
+        "INT16FP32": "float32",
+        "INT16FP64": "float64",
+        "INT32FP16": "float32",
+        "INT32FP32": "float32",
+        "INT32FP64": "float64",
+        "INT64FP16": "float64",
+        "INT64FP32": "float64",
+        "INT64FP64": "float64",
+        # for pir
         "INT16FLOAT16": "float16",
         "INT16FLOAT32": "float32",
         "INT16FLOAT64": "float64",
