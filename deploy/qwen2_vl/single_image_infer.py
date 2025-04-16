@@ -45,6 +45,11 @@ class Mix_PredictorArgument(PredictorArgument):
     image_file: str = field(
         default="paddlemix/demo_images/examples_image1.jpg", metadata={"help": "The image file for the model."}
     )
+    attn_implementation: str = field(
+        default="flash_attention_2",
+        metadata={"help": "The implementation of attention. Supported values: eager, sdpa, flash_attention_2"},
+    )
+    llm_mode: str = field(default="dynamic", metadata={"help": "The mode of llm. Supported values: dynamic, static"})
 
 
 @dataclass
@@ -175,9 +180,12 @@ def run_model(predictor_args):
     generated_text = ""
     generated_ids = paddle.to_tensor([], dtype="int64").reshape([1, 0])
     while llm_model_inputs["not_need_stop"]:
-        generated_id = vl_model.model.generate(**llm_model_inputs)  # already trimmed in paddle
-        llm_model_inputs["input_ids"] = generated_id
-        llm_model_inputs["inputs_embeds"] = None
+        generated_id = vl_model.model.generate(**llm_model_inputs)
+
+        # NOTE: (changwenbin) , Get inputs_embeds from the visual model or input_ids.
+        # Here we uniformly set the input of the language model to inputs_embeds
+        llm_model_inputs["inputs_embeds"] = fast_llm_model.qwen2.embed_tokens(generated_id)
+
         generated_ids = paddle.concat([generated_ids, generated_id], axis=1)
         if paddle.any(generated_id == 151645).item():
             break
@@ -210,9 +218,9 @@ vl_model = Qwen2VLForConditionalGeneration.from_pretrained(
     tensor_parallel_rank=tensor_parallel_rank,
     dtype=predictor_args.dtype,
     tensor_parallel_output=False,
-)
+    attn_implementation=predictor_args.attn_implementation,
+).eval()
 
-vl_model.eval()
 
 # NOTE: (zhoukangkang、changwenbin) Because we only use the visual model here,
 # in order to reduce video memory,we delete the language model.
@@ -257,8 +265,17 @@ fast_llm_model = AutoInferenceModelForCausalLM.from_pretrained(
     dtype=predictor_args.dtype,
     tensor_parallel_degree=tensor_parallel_degree,
     tensor_parallel_rank=tensor_parallel_rank,
-)
-fast_llm_model.eval()
+).eval()
+
+# NOTE: (changwenbin) We convert the language model into a static graph
+if predictor_args.llm_mode == "static":
+    fast_llm_model = paddle.incubate.jit.inference(
+        fast_llm_model,
+        save_model_dir=f"./tmp/{predictor_args.model_name_or_path}/{predictor_args.quant_type}",
+        enable_new_ir=True,
+        cache_static_model=True,
+        exp_enable_use_cutlass=False,
+    )
 
 vl_model.model = fast_llm_model
 
@@ -273,6 +290,15 @@ if predictor_args.benchmark:
             paddle.device.synchronize()
             starttime = datetime.datetime.now()
         generated_text = run_model(predictor_args)
+
+        # NOTE: (changwenbin) We delete some weights of the original dynamic graph,
+        # after fast_llm_model is converted to a static graph to reduce memory usage.
+        if (fast_llm_model.qwen2.transformer_block is not None) and (predictor_args.llm_mode == "static"):
+            fast_llm_model.qwen2.transformer_block = None
+            fast_llm_model.qwen2.norm = None
+            fast_llm_model.lm_head = None
+            paddle.device.cuda.empty_cache()
+
         if i > 2:
             paddle.device.synchronize()
             endtime = datetime.datetime.now()
@@ -289,6 +315,7 @@ if predictor_args.benchmark:
         "ms",
     )
     print(f"GPU max_memory_allocated: {paddle.device.cuda.max_memory_allocated() / 1024 ** 3:.2f} GB")
+    print(f"GPU memory_allocated: {paddle.device.cuda.memory_allocated() / 1024 ** 3:.2f} GB")
     print("input_tokens_len is :", generated_text[1], "tokens")
     print("output_tokens_len is :", generated_text[2], "tokens")
 
