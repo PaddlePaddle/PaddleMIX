@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import datetime
+import sys
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -33,112 +34,24 @@ from paddlemix.processors.qwen2_vl_processing import (
     process_vision_info,
 )
 
-MODEL_NAME = "Qwen/Qwen2-VL-2B-Instruct"
-vl_model = Qwen2VLForConditionalGeneration.from_pretrained(MODEL_NAME, dtype="bfloat16")
-
-# NOTE: (zhoukangkang、changwenbin) Because we only use the visual model here,
-# in order to reduce video memory,we delete the language model.
-del vl_model.model
-paddle.device.cuda.empty_cache()
-
-image_processor = Qwen2VLImageProcessor()
-tokenizer = MIXQwen2Tokenizer.from_pretrained(MODEL_NAME)
-processor = Qwen2VLProcessor(image_processor, tokenizer)
-
-# min_pixels = 256 * 28 * 28  # 200704
-# max_pixels = 1280 * 28 * 28  # 1003520
-# processor = Qwen2VLProcessor(image_processor, tokenizer, min_pixels=min_pixels, max_pixels=max_pixels)
-
-# Messages containing a video and a text query
-messages = [
-    {
-        "role": "user",
-        "content": [
-            {
-                "type": "video",
-                "video": "paddlemix/demo_images/red-panda.mp4",
-                "max_pixels": 360 * 420,
-                "fps": 1.0,
-            },
-            {"type": "text", "text": "Describe this video."},
-        ],
-    }
-]
-
-image_inputs, video_inputs = process_vision_info(messages)
-question = "Describe this video."
-video_pad_token = "<|vision_start|><|video_pad|><|vision_end|>"
-text = f"<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n{video_pad_token}{question}<|im_end|>\n<|im_start|>assistant\n"
+sys.path.append("PaddleNLP/llm/predict")
+from predictor import ModelArgument, PredictorArgument
 
 
 @dataclass
-class PredictorArgument:
-    # NOTE: (zhoukangkang、changwenbin)
-    # These parameters are all copied from https://github.com/PaddlePaddle/PaddleNLP/blob/develop/llm/predict/predictor.py
-    # For simplicity and ease of use, only the necessary parameters are retained here.
-    # If you want to know the exact meaning of these parameters, please refer to the link above.
-
-    model_name_or_path: str = field(default=None, metadata={"help": "The directory of model."})
-    src_length = 1024
-    min_length = 2
-    max_length = 200
-    top_k = 0
-    top_p = 0.0
-    temperature = 0.95
-    repetition_penalty = 1.0
-    dtype: str = field(default=None, metadata={"help": "Model dtype"})
-    decode_strategy = "sampling"
-    mode = "dynamic"
-    inference_model = True
-    quant_type = ""
-    benchmark: bool = field(
-        default=False,
-        metadata={
-            "help": "If benchmark set as `True`, we will force model decode to max_length, which is helpful to compute throughput. "
-        },
+class Mix_PredictorArgument(PredictorArgument):
+    question: str = field(default="Describe this video.", metadata={"help": "The question for the model."})
+    video_file: str = field(
+        default="paddlemix/demo_images/red-panda.mp4", metadata={"help": "The video file for the model."}
     )
-    use_fake_parameter = False
-    block_attn = True
-    block_size = 64
-    cachekv_int8_type = None
-    append_attn = True
-    total_max_length = 32768
-    speculate_method = None
 
 
 @dataclass
-class ModelArgument:
-    model_type: str = field(
-        default=None,
-        metadata={"help": "the type of the model"},
-    )
+class Mix_ModelArgument(ModelArgument):
+    pass
 
 
-def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: PredictorArgument):
-    assert len(inputs_embeds.shape) == 3
-    batch_size = inputs_embeds.shape[0]
-
-    model_inputs = {}
-    model_inputs["input_ids"] = paddle.zeros(shape=[batch_size, arg_config.total_max_length], dtype="int64")
-    model_inputs["inputs_embeds"] = inputs_embeds
-
-    # I dislike write (arg_config.total_max_length + arg_config.block_size -1 ) // arg_config.block_size
-    assert arg_config.total_max_length % arg_config.block_size == 0
-
-    model_inputs["top_p"] = paddle.full(shape=[batch_size, 1], fill_value=arg_config.top_p, dtype="float32")
-    model_inputs["temperature"] = paddle.full(
-        shape=[batch_size, 1], fill_value=arg_config.temperature, dtype="float32"
-    )
-    model_inputs["eos_token_id"] = paddle.to_tensor(
-        np.array(llm_utils.get_eos_token_id(tokenizer, generation_config)).reshape(-1, 1).astype("int64")
-    )
-    model_inputs["penalty_score"] = paddle.full(
-        shape=[batch_size, 1], fill_value=arg_config.repetition_penalty, dtype="float32"
-    )
-    model_inputs["frequency_score"] = paddle.full(shape=[batch_size, 1], fill_value=0.0, dtype="float32")
-    model_inputs["presence_score"] = paddle.full(shape=[batch_size, 1], fill_value=0.0, dtype="float32")
-    model_inputs["min_length"] = paddle.full(shape=[batch_size, 1], fill_value=arg_config.min_length, dtype="int64")
-    model_inputs["max_length"] = paddle.full(shape=[batch_size, 1], fill_value=arg_config.max_length, dtype="int64")
+def use_m_rope(vision_model_inputs):
 
     position_ids, _ = vl_model.get_rope_index(
         config.vision_config["spatial_merge_size"],
@@ -172,14 +85,55 @@ def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: Predic
 
     rope_emb = paddle.stack([cos, sin], axis=0)
     rope_emb = rope_emb.reshape([rope_emb.shape[0], 1, rope_emb.shape[2], 1, rope_emb.shape[-1]])
-    model_inputs["rope_emb"] = rope_emb
+
+    return rope_emb
+
+
+def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: Mix_PredictorArgument):
+    assert len(inputs_embeds.shape) == 3
+    batch_size = inputs_embeds.shape[0]
+
+    model_inputs = {}
+    model_inputs["input_ids"] = paddle.zeros(shape=[batch_size, arg_config.total_max_length], dtype="int64")
+    model_inputs["inputs_embeds"] = inputs_embeds
+
+    # I dislike write (arg_config.total_max_length + arg_config.block_size -1 ) // arg_config.block_size
+    assert arg_config.total_max_length % arg_config.block_size == 0
+
+    model_inputs["top_p"] = paddle.full(shape=[batch_size, 1], fill_value=arg_config.top_p, dtype="float32")
+    model_inputs["temperature"] = paddle.full(
+        shape=[batch_size, 1], fill_value=arg_config.temperature, dtype="float32"
+    )
+    model_inputs["eos_token_id"] = paddle.to_tensor(
+        np.array(llm_utils.get_eos_token_id(tokenizer, generation_config)).reshape(-1, 1).astype("int64")
+    )
+    model_inputs["penalty_score"] = paddle.full(
+        shape=[batch_size, 1], fill_value=arg_config.repetition_penalty, dtype="float32"
+    )
+    model_inputs["frequency_score"] = paddle.full(shape=[batch_size, 1], fill_value=0.0, dtype="float32")
+    model_inputs["presence_score"] = paddle.full(shape=[batch_size, 1], fill_value=0.0, dtype="float32")
+    model_inputs["min_length"] = paddle.full(shape=[batch_size, 1], fill_value=arg_config.min_length, dtype="int64")
+    model_inputs["max_length"] = paddle.full(shape=[batch_size, 1], fill_value=arg_config.max_length, dtype="int64")
+
+    model_inputs["rope_emb"] = use_m_rope(vision_model_inputs)
 
     model_inputs["bad_tokens"] = paddle.to_tensor([-1], dtype="int64")
     model_inputs["is_block_step"] = paddle.full(shape=[batch_size], fill_value=False, dtype="bool")
 
-    cache_kvs_shape = fast_llm_model.get_cache_kvs_shape(fast_llm_model.config, batch_size)
+    cache_k_shapes, cache_v_shapes = fast_llm_model.get_cache_kvs_shape(fast_llm_model.config, arg_config.batch_size)
     cachekv_dtype = config.dtype if arg_config.cachekv_int8_type is None else "uint8"
-    model_inputs["cache_kvs"] = [paddle.zeros(shape, dtype=cachekv_dtype) for shape in cache_kvs_shape]
+
+    cache_kvs = []
+    if cache_k_shapes and cache_v_shapes:
+        for cache_k_shape, cache_v_shape in zip(cache_k_shapes, cache_v_shapes):
+            cache_kvs.append(paddle.zeros(cache_k_shape, dtype=cachekv_dtype))
+            cache_kvs.append(paddle.zeros(cache_v_shape, dtype=cachekv_dtype))
+    else:
+        # for mla's absorption
+        assert cache_v_shapes is None
+        cache_kvs = [paddle.zeros(shape, dtype=cachekv_dtype) for shape in cache_k_shapes]
+
+    model_inputs["cache_kvs"] = cache_kvs
 
     block_nums = arg_config.total_max_length // arg_config.block_size
     model_inputs["block_tables"] = paddle.arange(block_nums, dtype="int32").tile([batch_size, 1])
@@ -189,7 +143,7 @@ def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: Predic
     model_inputs["seq_lens_encoder"] = paddle.to_tensor(np.array(seq_lens).astype("int32").reshape(-1, 1))
     model_inputs["seq_lens_decoder"] = paddle.full(shape=[batch_size, 1], fill_value=0, dtype="int32")
     model_inputs["step_idx"] = paddle.full(shape=[batch_size, 1], fill_value=0, dtype="int64")
-    model_inputs["not_need_stop"] = paddle.full(shape=[1], fill_value=True, dtype="bool")
+    model_inputs["not_need_stop"] = paddle.full(shape=[1], fill_value=True, dtype="bool").cpu()
     model_inputs["stop_flags"] = paddle.full(shape=[batch_size, 1], fill_value=False, dtype="bool")
     model_inputs["stop_nums"] = paddle.full(shape=[1], fill_value=batch_size, dtype="int64")
     model_inputs["pre_ids"] = paddle.full(shape=[batch_size, arg_config.max_length], fill_value=-1, dtype="int64")
@@ -198,8 +152,25 @@ def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: Predic
     return model_inputs
 
 
-parser = PdArgumentParser((PredictorArgument, ModelArgument))
+parser = PdArgumentParser((Mix_PredictorArgument, Mix_ModelArgument))
 predictor_args, model_args = parser.parse_args_into_dataclasses()
+
+
+MODEL_NAME = predictor_args.model_name_or_path
+vl_model = Qwen2VLForConditionalGeneration.from_pretrained(MODEL_NAME, dtype=predictor_args.dtype)
+
+# NOTE: (zhoukangkang、changwenbin) Because we only use the visual model here,
+# in order to reduce video memory,we delete the language model.
+del vl_model.model
+paddle.device.cuda.empty_cache()
+
+image_processor = Qwen2VLImageProcessor()
+tokenizer = MIXQwen2Tokenizer.from_pretrained(MODEL_NAME)
+processor = Qwen2VLProcessor(image_processor, tokenizer)
+
+# min_pixels = 256 * 28 * 28  # 200704
+# max_pixels = 1280 * 28 * 28  # 1003520
+# processor = Qwen2VLProcessor(image_processor, tokenizer, min_pixels=min_pixels, max_pixels=max_pixels)
 
 paddle.set_default_dtype(predictor_args.dtype)
 config = AutoConfig.from_pretrained(predictor_args.model_name_or_path)
@@ -221,8 +192,28 @@ fast_llm_model.eval()
 vl_model.model = fast_llm_model
 
 
-def run_model():
+def run_model(predictor_args):
 
+    # Messages containing a video and a text query
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "video",
+                    "video": predictor_args.video_file,
+                    "max_pixels": 360 * 420,
+                    "fps": 1.0,
+                },
+                {"type": "text", "text": predictor_args.question},
+            ],
+        }
+    ]
+
+    image_inputs, video_inputs = process_vision_info(messages)
+    question = predictor_args.question
+    video_pad_token = "<|vision_start|><|video_pad|><|vision_end|>"
+    text = f"<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n{video_pad_token}{question}<|im_end|>\n<|im_start|>assistant\n"
     vision_model_inputs = processor(
         text=[text],
         images=image_inputs,
@@ -240,7 +231,7 @@ def run_model():
         llm_model_inputs["input_ids"] = generated_id
         llm_model_inputs["inputs_embeds"] = None
         generated_ids = paddle.concat([generated_ids, generated_id], axis=1)
-        if paddle.any(generated_id == 151653).item():
+        if paddle.any(generated_id == tokenizer.eos_token_id).item():
             break
     generated_text = processor.batch_decode(
         generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False
@@ -258,7 +249,7 @@ if predictor_args.benchmark:
         if i > 2:
             paddle.device.synchronize()
             starttime = datetime.datetime.now()
-        generated_text = run_model()
+        generated_text = run_model(predictor_args)
         if i > 2:
             paddle.device.synchronize()
             endtime = datetime.datetime.now()
@@ -279,5 +270,5 @@ if predictor_args.benchmark:
     )
 
 else:
-    generated_text = run_model()
+    generated_text = run_model(predictor_args)
     print("Final output_text:\n", generated_text)

@@ -37,6 +37,16 @@ def TypePromote(x, y):
         "INT64FP16": "float64",
         "INT64FP32": "float64",
         "INT64FP64": "float64",
+        # for pir
+        "INT16FLOAT16": "float16",
+        "INT16FLOAT32": "float32",
+        "INT16FLOAT64": "float64",
+        "INT32FLOAT16": "float32",
+        "INT32FLOAT32": "float32",
+        "INT32FLOAT64": "float64",
+        "INT64FLOAT16": "float64",
+        "INT64FLOAT32": "float64",
+        "INT64FLOAT64": "float64",
     }
     if x.dtype.name + y.dtype.name in TYPE_PROMOTE_DICT:
         promote_type = TYPE_PROMOTE_DICT[x.dtype.name + y.dtype.name]
