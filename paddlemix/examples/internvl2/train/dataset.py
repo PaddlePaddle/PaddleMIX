@@ -41,14 +41,9 @@ from paddlemix.datasets.internvl_dataset import (
     preprocess_internlm,
     preprocess_mpt,
     preprocess_phi3,
+    preprocess_internvl2_5,
 )
-from paddlemix.models.internvl2.constants import (
-    IMG_CONTEXT_TOKEN,
-    IMG_END_TOKEN,
-    IMG_START_TOKEN,
-)
-from paddlemix.models.internvl2.conversation import get_conv_template
-
+from paddlemix.models.internvl2.constants import IMG_END_TOKEN
 from .dataset_packed import PackedDataset
 from .trainer_utils import LabelSmoother
 
@@ -197,40 +192,6 @@ def read_frames_folder(
         frame_indices = get_frame_indices(t_num_frames, vlen, sample=sample, fix_start=fix_start)
         frames = [frames[i] for i in frame_indices]
     return frames
-
-
-class TCSLoader(object):
-    def __init__(self, conf_path, sc_config_key="sensecore"):
-        print(f"[TCSLoader] config_path: {conf_path}")
-        print("--> before Client(conf_path)")
-        self.client = Client(conf_path)
-        self.sc_config_key = sc_config_key
-        print("--> after Client(conf_path)")
-
-    def __call__(self, fn, image_type="image", max_num_frames=-1, min_num_frames=8, sample="rand", clip=None):
-        if image_type == "image":
-            img_value_str = self.client.get(fn)
-            img = pil_loader(img_value_str)
-            return img
-        elif image_type == "video":
-            if fn.endswith("/"):
-                frames = read_frames_folder(
-                    fn, num_frames=max_num_frames, min_num_frames=min_num_frames, client=self.client, sample=sample
-                )
-            elif fn.endswith(".gif"):
-                frames = read_frames_gif(
-                    fn, num_frames=max_num_frames, min_num_frames=min_num_frames, client=self.client, sample=sample
-                )
-            else:
-                frames = read_frames_decord(
-                    fn,
-                    num_frames=max_num_frames,
-                    min_num_frames=min_num_frames,
-                    client=self.client,
-                    sample=sample,
-                    clip=clip,
-                )
-            return frames
 
 
 class LazySupervisedDataset(paddle.io.Dataset):

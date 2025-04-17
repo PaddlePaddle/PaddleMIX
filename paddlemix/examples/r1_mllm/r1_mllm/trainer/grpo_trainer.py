@@ -1,52 +1,45 @@
-import copy
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import os
 import random
-import textwrap
 from collections import defaultdict
-from typing import Any, Callable, Optional, Union, Sequence, Dict
-from dataclasses import dataclass, field
-from paddlemix.utils.log import logger
+from typing import Any, Callable, Optional, Union
 
 import numpy as np
 import paddle
 import paddle.nn.functional as F
 import paddlenlp
-from paddlenlp.data import DataCollatorForSeq2Seq
-import datasets
-import PIL.Image
-from packaging import version
 from paddle.io import Sampler
-from paddlenlp.trainer import Trainer,TrainerCallback
-from paddlenlp.transformers.model_utils import (
-    PretrainedModel,
-    _add_variant,
-    load_sharded_checkpoint,
-    unwrap_model,
-)
+from paddlenlp.trainer import Trainer, TrainerCallback
+from paddlenlp.transformers.model_utils import PretrainedModel, unwrap_model
 from paddlenlp.transformers.tokenizer_utils_base import PretrainedTokenizerBase
-from paddlemix.models.qwen2_vl import Qwen2VLForConditionalGeneration
-from paddlemix.models.qwen2_5_vl import Qwen2_5_VLForConditionalGeneration
-from paddlemix.models.aria.model.modeling_aria import AriaForConditionalGeneration
-from paddlemix.models.qwen2_vl.template import TEMPLATES
 
-from .grpo_config import GRPOConfig
-from ..utils.tokenizer import get_tokenizer,get_processor
-from ..utils.models import create_reference_model,freeze_params,get_model
-from ..utils.data import apply_chat_template,is_conversational,maybe_apply_chat_template
+from ..utils.data import apply_chat_template, is_conversational
 from ..utils.distributed import all_gather
+from ..utils.models import create_reference_model, freeze_params, get_model
+from ..utils.tokenizer import get_processor
+from .grpo_config import GRPOConfig
 
+RewardFunc = Union[str, paddlenlp.transformers.PretrainedModel, Callable[[list, list], list[float]]]
 
-if paddlenlp.trainer.integrations.is_wandb_available():
-    import wandb
-
-RewardFunc = Union[
-    str, paddlenlp.transformers.PretrainedModel, Callable[[list, list], list[float]]
-]
 
 def set_seed(seed):
     random.seed(seed)
     np.random.seed(seed)
     paddle.seed(seed)
+
 
 class RepeatRandomSampler(Sampler):
     """
@@ -102,7 +95,7 @@ class RepeatRandomSampler(Sampler):
         mini_repeat_count: int,
         batch_size: int = 1,
         repeat_count: int = 1,
-        seed:int = None,
+        seed: int = None,
     ):
         self.indexes = indexes
         self.num_samples = len(indexes)
@@ -137,14 +130,12 @@ class Qwen2VLGRPOTrainer(Trainer):
         model: Union[str, paddlenlp.transformers.PretrainedModel],
         reward_funcs: Union[RewardFunc, list[RewardFunc]],
         args: GRPOConfig = None,
-        train_dataset: Optional[
-            Union[datasets.Dataset, datasets.IterableDataset]
-        ] = None,
+        train_dataset: Optional[Union[paddle.io.Dataset, paddle.io.IterableDataset]] = None,
         eval_dataset: Optional[
             Union[
-                datasets.Dataset,
-                datasets.IterableDataset,
-                dict[str, Union[datasets.Dataset, datasets.IterableDataset]],
+                paddle.io.Dataset,
+                paddle.io.IterableDataset,
+                dict[str, Union[paddle.io.Dataset, paddle.io.IterableDataset]],
             ]
         ] = None,
         processing_class: PretrainedTokenizerBase = None,
@@ -161,7 +152,7 @@ class Qwen2VLGRPOTrainer(Trainer):
         ] = (None, None),
         max_pixels: Optional[int] = 12845056,
         min_pixels: Optional[int] = 3136,
-        attn_implementation = None,
+        attn_implementation=None,
         dtype: str = "bfloat16",
         data_collator=None,
     ):
@@ -172,20 +163,15 @@ class Qwen2VLGRPOTrainer(Trainer):
         model_init_kwargs = args.model_init_kwargs or {}
         if attn_implementation:
             model_init_kwargs["attn_implementation"] = attn_implementation
-            print("attn_implementation:",attn_implementation)
+            print("attn_implementation:", attn_implementation)
 
         if model_init_kwargs.get("dtype") is None:
             model_init_kwargs["dtype"] = dtype
-        
-        
+
         if isinstance(model, str):
             model_id = model
             dtype = model_init_kwargs.get("dtype")
-            if (
-                isinstance(dtype, paddle.dtype)
-                or dtype == "auto"
-                or dtype is None
-            ):
+            if isinstance(dtype, paddle.dtype) or dtype == "auto" or dtype is None:
                 pass
             elif isinstance(dtype, str):
                 # dtype = getattr(paddle, dtype)
@@ -194,27 +180,23 @@ class Qwen2VLGRPOTrainer(Trainer):
                 raise ValueError(
                     f"Invalid `dtype` passed to `GRPOConfig`. Expected either 'auto' or a string representing a `paddle.dtype` (e.g., 'float32'), but got {dtype}."
                 )
-            model_init_kwargs["use_cache"] = (
-                False
-                if args.recompute
-                else model_init_kwargs.get("use_cache")
-            )
+            model_init_kwargs["use_cache"] = False if args.recompute else model_init_kwargs.get("use_cache")
         processor_kwargs = {
             "max_pixels": max_pixels,
             "min_pixels": min_pixels,
         }
         model_path = model_id
         model_name = os.path.basename(model_path)
-        model = get_model(model_name,model_path,**model_init_kwargs) # model_id: Qwen/Qwen2.5-VL-3B-Instruct
+        model = get_model(model_name, model_path, **model_init_kwargs)  # model_id: Qwen/Qwen2.5-VL-3B-Instruct
         if args.freeze_vision:
             freeze_params(model.visual)
-        
+
         self.ref_model = create_reference_model(model)
 
         if processing_class is None:
-            processor,tokenizer = get_processor(model_name,model_path,**processor_kwargs)
+            processor, tokenizer = get_processor(model_name, model_path, **processor_kwargs)
             processing_class = processor
-        
+
         if not isinstance(reward_funcs, list):
             reward_funcs = [reward_funcs]
         for i, reward_func in enumerate(reward_funcs):
@@ -229,23 +211,15 @@ class Qwen2VLGRPOTrainer(Trainer):
         elif not isinstance(reward_processing_classes, list):
             reward_processing_classes = [reward_processing_classes]
         elif len(reward_processing_classes) != len(reward_funcs):
-            raise ValueError(
-                "The number of reward processing classes must match the number of reward functions."
-            )
-        for i, (reward_processing_class, reward_func) in enumerate(
-            zip(reward_processing_classes, reward_funcs)
-        ):
+            raise ValueError("The number of reward processing classes must match the number of reward functions.")
+        for i, (reward_processing_class, reward_func) in enumerate(zip(reward_processing_classes, reward_funcs)):
             if isinstance(reward_func, paddlenlp.transformers.PretrainedModel):
                 if reward_processing_class is None:
-                    reward_processing_class = (
-                        paddlenlp.transformers.AutoTokenizer.from_pretrained(
-                            reward_func.config._name_or_path
-                        )
+                    reward_processing_class = paddlenlp.transformers.AutoTokenizer.from_pretrained(
+                        reward_func.config._name_or_path
                     )
                 if reward_processing_class.pad_token_id is None:
-                    reward_processing_class.pad_token = (
-                        reward_processing_class.eos_token
-                    )
+                    reward_processing_class.pad_token = reward_processing_class.eos_token
                 reward_func.config.pad_token_id = reward_processing_class.pad_token_id
                 reward_processing_classes[i] = reward_processing_class
         self.reward_processing_classes = reward_processing_classes
@@ -255,17 +229,17 @@ class Qwen2VLGRPOTrainer(Trainer):
         self.num_generations = args.num_generations
         self.num_iterations = args.num_iterations
         self.generation_config = paddlenlp.generation.GenerationConfig(
-            use_cache = True,
+            use_cache=True,
             max_new_tokens=self.max_completion_length,
             decode_strategy="sampling",
             do_sample=True,
             top_p=1,
             top_k=50,
-            eos_token_id=[tokenizer.pad_token_id,tokenizer.eos_token_id],
+            eos_token_id=[tokenizer.pad_token_id, tokenizer.eos_token_id],
             pad_token_id=tokenizer.pad_token_id,
             temperature=1.0,
         )
-        
+
         # Bug: will cause same llm sampling results if set to same seed for every process
         self.beta = args.beta
         self.epsilon = args.epsilon
@@ -293,25 +267,28 @@ class Qwen2VLGRPOTrainer(Trainer):
                 f"divisible by the number of generations per prompt ({self.num_generations}). Given the current train "
                 f"batch size, the valid values for the number of generations are: {possible_values}."
             )
-            
-        set_seed(self.args.seed) # for data indexes
+
+        set_seed(self.args.seed)  # for data indexes
         self.indexes = paddle.randperm(len(self.train_dataset)).tolist()
         training_seed = self.args.seed + self.args.dataset_rank
-        set_seed(training_seed) # for generate sampling
+        set_seed(training_seed)  # for generate sampling
 
     def _set_signature_columns_if_needed(self):
         if self._signature_columns is None:
             self._signature_columns = ["prompt"]
 
-    def _get_per_token_logps(
-        self, model, input_ids, attention_mask, pixel_values, image_grid_thw
-    ):
-        logits = model(input_ids,attention_mask=attention_mask,pixel_values=pixel_values,image_grid_thw=image_grid_thw,).logits
+    def _get_per_token_logps(self, model, input_ids, attention_mask, pixel_values, image_grid_thw):
+        logits = model(
+            input_ids,
+            attention_mask=attention_mask,
+            pixel_values=pixel_values,
+            image_grid_thw=image_grid_thw,
+        ).logits
         logits = logits[:, :-1, :]
         input_ids = input_ids[:, 1:]
         per_token_logps = []
         for logits_row, input_ids_row in zip(logits, input_ids):
-            log_probs = F.log_softmax(logits_row,axis=-1)
+            log_probs = F.log_softmax(logits_row, axis=-1)
             token_log_prob = paddle.take_along_axis(
                 arr=log_probs,
                 axis=1,
@@ -322,27 +299,25 @@ class Qwen2VLGRPOTrainer(Trainer):
         return paddle.stack(x=per_token_logps)
 
     def _prepare_inputs(
-        self, inputs: dict[str, Union[paddle.Tensor, Any]],
+        self,
+        inputs: dict[str, Union[paddle.Tensor, Any]],
     ) -> dict[str, Union[paddle.Tensor, Any]]:
         return inputs
 
-
     def _generate_and_score_completions(
-        self,
-        inputs: dict[str, Union[paddle.Tensor, Any]],
-        model
-    ) -> dict[str,Union[paddle.Tensor,Any]]:
-        device = inputs['pixel_values'].place
+        self, inputs: dict[str, Union[paddle.Tensor, Any]], model
+    ) -> dict[str, Union[paddle.Tensor, Any]]:
+        device = inputs["pixel_values"].place
         input_ids = inputs["input_ids"]
         prompts = self.processing_class.batch_decode(input_ids, skip_special_tokens=True)
         prompt_ids, prompt_mask = inputs["input_ids"], inputs["attention_mask"]
 
         # process visual input
-        _, pixel_seq_len,pixel_dim = inputs["pixel_values"].shape
-        inputs["pixel_values"] = inputs["pixel_values"].reshape([-1,pixel_dim])
+        _, pixel_seq_len, pixel_dim = inputs["pixel_values"].shape
+        inputs["pixel_values"] = inputs["pixel_values"].reshape([-1, pixel_dim])
 
-        _, _,g2 = inputs["image_grid_thw"].shape
-        inputs["image_grid_thw"] = inputs["image_grid_thw"].reshape([-1,g2])
+        _, _, g2 = inputs["image_grid_thw"].shape
+        inputs["image_grid_thw"] = inputs["image_grid_thw"].reshape([-1, g2])
 
         pixel_values = inputs["pixel_values"]
         image_grid_thw = inputs["image_grid_thw"]
@@ -354,26 +329,22 @@ class Qwen2VLGRPOTrainer(Trainer):
         # Regular generation path
         if paddle.distributed.is_initialized():
             with paddle.no_grad():
-                completion_ids = unwrap_model(model).generate(**inputs,generation_config=self.generation_config)[0]
+                completion_ids = unwrap_model(model).generate(**inputs, generation_config=self.generation_config)[0]
         else:
             with paddle.no_grad():
-                completion_ids = model.generate(**inputs,generation_config=self.generation_config)[0]
+                completion_ids = model.generate(**inputs, generation_config=self.generation_config)[0]
 
         prompt_length = prompt_ids.shape[1]
-        
-        prompt_completion_ids = paddle.concat([prompt_ids,completion_ids],axis=1)
+
+        prompt_completion_ids = paddle.concat([prompt_ids, completion_ids], axis=1)
         is_eos = completion_ids == self.processing_class.eos_token_id
         eos_idx = paddle.full(shape=(is_eos.shape[0],), fill_value=is_eos.shape[1], dtype="int64")
-        eos_idx[is_eos.astype("bool").any(axis=1)] = is_eos.astype(dtype="int64").argmax(axis=1)[is_eos.astype("bool").any(axis=1)]
-        sequence_indices = paddle.arange(end=is_eos.shape[1]).expand(
-            shape=[is_eos.shape[0], -1]
-        )
-        completion_mask = (sequence_indices <= eos_idx.unsqueeze(axis=1)).astype(
-            dtype="int64"
-        )
+        eos_idx[is_eos.astype("bool").any(axis=1)] = is_eos.astype(dtype="int64").argmax(axis=1)[
+            is_eos.astype("bool").any(axis=1)
+        ]
+        sequence_indices = paddle.arange(end=is_eos.shape[1]).expand(shape=[is_eos.shape[0], -1])
+        completion_mask = (sequence_indices <= eos_idx.unsqueeze(axis=1)).astype(dtype="int64")
         attention_mask = paddle.concat(x=[prompt_mask, completion_mask], axis=1)
-
-
 
         with paddle.no_grad():
             # When using num_iterations == 1, old_per_token_logps == per_token_logps, so we can skip its
@@ -382,7 +353,7 @@ class Qwen2VLGRPOTrainer(Trainer):
                 old_per_token_logps = self._get_per_token_logps(
                     model, prompt_completion_ids, attention_mask, pixel_values, image_grid_thw
                 )
-                old_per_token_logps = old_per_token_logps[:, prompt_length - 1:]
+                old_per_token_logps = old_per_token_logps[:, prompt_length - 1 :]
             else:
                 old_per_token_logps = None
 
@@ -398,14 +369,11 @@ class Qwen2VLGRPOTrainer(Trainer):
                     ref_per_token_logps = self._get_per_token_logps(
                         model, prompt_completion_ids, attention_mask, pixel_values, image_grid_thw
                     )
-        ref_per_token_logps = ref_per_token_logps[:, prompt_length - 1:]
-        
+        ref_per_token_logps = ref_per_token_logps[:, prompt_length - 1 :]
+
         # Decode the generated completions
         completions = self.processing_class.batch_decode(completion_ids, skip_special_tokens=True)
-        completions = [
-            [{"role": "assistant", "content": completion}]
-            for completion in completions
-        ]
+        completions = [[{"role": "assistant", "content": completion}] for completion in completions]
 
         rewards_per_func = paddle.zeros(shape=[len(prompts), len(self.reward_funcs)])
 
@@ -426,23 +394,16 @@ class Qwen2VLGRPOTrainer(Trainer):
                     rewards_per_func[:, i] = reward_func(**reward_inputs).logits[:, 0]  # Shape (B*G,)
             else:
                 # Repeat all input columns (but "prompt" and "completion") to match the number of generations
-                solution = self.processing_class.batch_decode(inputs['labels'])
-                reward_kwargs = {
-                    "prompts":prompts,
-                    "solution":solution
-                }
+                solution = self.processing_class.batch_decode(inputs["labels"])
+                reward_kwargs = {"prompts": prompts, "solution": solution}
                 if paddle.distributed.is_initialized():
-                    reward_kwargs['rank'] = paddle.distributed.get_rank()
+                    reward_kwargs["rank"] = paddle.distributed.get_rank()
 
-                output_reward_func = reward_func(
-                    completions=completions, **reward_kwargs
-                )
-                rewards_per_func[:,i] = paddle.to_tensor(
-                    data=output_reward_func, dtype="float32", place=device
-                )
+                output_reward_func = reward_func(completions=completions, **reward_kwargs)
+                rewards_per_func[:, i] = paddle.to_tensor(data=output_reward_func, dtype="float32", place=device)
 
         # Gather rewards across processes
-        rewards_per_func = paddle.concat(all_gather(rewards_per_func),axis=0)
+        rewards_per_func = paddle.concat(all_gather(rewards_per_func), axis=0)
 
         # Sum the rewards from all reward functions
         rewards = rewards_per_func.sum(axis=1)
@@ -450,12 +411,12 @@ class Qwen2VLGRPOTrainer(Trainer):
         # Each group consists of num_generations completions for the same prompt
         mean_grouped_rewards = rewards.reshape([-1, self.num_generations]).mean(axis=1)
         std_grouped_rewards = rewards.reshape([-1, self.num_generations]).std(axis=1)
-        
+
         # Normalize the rewards to compute the advantages
         mean_grouped_rewards = mean_grouped_rewards.repeat_interleave(self.num_generations, axis=0)
         std_grouped_rewards = std_grouped_rewards.repeat_interleave(self.num_generations, axis=0)
         advantages = (rewards - mean_grouped_rewards) / (std_grouped_rewards + 1e-4)
-        
+
         # Get only the local slice of advantages
         process_slice = slice(
             self.args.dataset_rank * len(prompts),
@@ -487,12 +448,10 @@ class Qwen2VLGRPOTrainer(Trainer):
             "ref_per_token_logps": ref_per_token_logps,
             "advantages": advantages,
             "pixel_values": pixel_values,
-            "image_grid_thw": image_grid_thw
+            "image_grid_thw": image_grid_thw,
         }
-    
-    def compute_loss(
-        self, model, inputs, return_outputs=False, num_items_in_batch=None
-    ):
+
+    def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
         # Check if we need to generate new completions or use buffered ones
         if self.state.global_step % self.num_iterations == 0:
             inputs = self._generate_and_score_completions(inputs, model)
@@ -501,13 +460,12 @@ class Qwen2VLGRPOTrainer(Trainer):
             inputs = self._buffered_inputs[self._step % self.args.gradient_accumulation_steps]
         self._step += 1
 
-
         # Get the prepared inputs
         prompt_ids, prompt_mask = inputs["prompt_ids"], inputs["prompt_mask"]
         completion_ids, completion_mask = inputs["completion_ids"], inputs["completion_mask"]
         pixel_values = inputs["pixel_values"]
         image_grid_thw = inputs["image_grid_thw"]
-        
+
         # Concatenate for full sequence
         input_ids = paddle.concat(x=[prompt_ids, completion_ids], axis=1)
         attention_mask = paddle.concat(x=[prompt_mask, completion_mask], axis=1)
@@ -515,7 +473,7 @@ class Qwen2VLGRPOTrainer(Trainer):
         # Get the current policy's log probabilities
         per_token_logps = self._get_per_token_logps(model, input_ids, attention_mask, pixel_values, image_grid_thw)
         # Get rid of the prompt (-1 because of the shift done in get_per_token_logps)
-        per_token_logps = per_token_logps[:, prompt_ids.shape[1] - 1:]
+        per_token_logps = per_token_logps[:, prompt_ids.shape[1] - 1 :]
 
         # Get the advantages from inputs
         advantages = inputs["advantages"]
@@ -529,12 +487,14 @@ class Qwen2VLGRPOTrainer(Trainer):
         coef_2 = paddle.clip(coef_1, 1 - self.epsilon, 1 + self.epsilon)
         per_token_loss1 = coef_1 * advantages.unsqueeze(1)
         per_token_loss2 = coef_2 * advantages.unsqueeze(1)
-        per_token_loss = -paddle.min(paddle.stack([per_token_loss1, per_token_loss2]),axis=0)
+        per_token_loss = -paddle.min(paddle.stack([per_token_loss1, per_token_loss2]), axis=0)
         completion_mask = completion_mask.astype("float32")
         # Add KL penalty if beta > 0
         if self.beta > 0:
             ref_per_token_logps = inputs["ref_per_token_logps"]
-            per_token_kl = paddle.exp(ref_per_token_logps - per_token_logps) - (ref_per_token_logps - per_token_logps) - 1
+            per_token_kl = (
+                paddle.exp(ref_per_token_logps - per_token_logps) - (ref_per_token_logps - per_token_logps) - 1
+            )
             per_token_loss = per_token_loss + self.beta * per_token_kl
 
             # Log KL divergence
@@ -551,66 +511,11 @@ class Qwen2VLGRPOTrainer(Trainer):
 
         return loss
 
-    def log(self, logs: dict[str, float], start_time: Optional[float] = None,**kwargs) -> None:
+    def log(self, logs: dict[str, float], start_time: Optional[float] = None, **kwargs) -> None:
         metrics = {key: (sum(val) / len(val)) for key, val in self._metrics.items()}
         logs = {**logs, **metrics}
         super().log(logs)
         self._metrics.clear()
-
-    def create_model_card(
-        self,
-        model_name: Optional[str] = None,
-        dataset_name: Optional[str] = None,
-        tags: Union[str, list[str], None] = None,
-    ):
-        """
-        Creates a draft of a model card using the information available to the `Trainer`.
-
-        Args:
-            model_name (`str` or `None`, *optional*, defaults to `None`):
-                Name of the model.
-            dataset_name (`str` or `None`, *optional*, defaults to `None`):
-                Name of the dataset used for training.
-            tags (`str`, `list[str]` or `None`, *optional*, defaults to `None`):
-                Tags to be associated with the model card.
-        """
-        if not self.is_world_process_zero():
-            return
-        if hasattr(self.model.config, "_name_or_path") and not os.path.isdir(
-            self.model.config._name_or_path
-        ):
-            base_model = self.model.config._name_or_path
-        else:
-            base_model = None
-        tags = tags or []
-        if isinstance(tags, str):
-            tags = [tags]
-        if hasattr(self.model.config, "unsloth_version"):
-            tags.append("unsloth")
-        citation = textwrap.dedent(
-            """            @article{zhihong2024deepseekmath,
-                title        = {{DeepSeekMath: Pushing the Limits of Mathematical Reasoning in Open Language Models}},
-                author       = {Zhihong Shao and Peiyi Wang and Qihao Zhu and Runxin Xu and Junxiao Song and Mingchuan Zhang and Y. K. Li and Y. Wu and Daya Guo},
-                year         = 2024,
-                eprint       = {arXiv:2402.03300},
-            """
-        )
-        model_card = generate_model_card(
-            base_model=base_model,
-            model_name=model_name,
-            hub_model_id=self.hub_model_id,
-            dataset_name=dataset_name,
-            tags=tags,
-            wandb_url=wandb.run.get_url()
-            if paddlenlp.trainer.integrations.is_wandb_available and wandb.run is not None
-            else None,
-            comet_url=get_comet_experiment_url(),
-            trainer_name="GRPO",
-            trainer_citation=citation,
-            paper_title="DeepSeekMath: Pushing the Limits of Mathematical Reasoning in Open Language Models",
-            paper_id="2402.03300",
-        )
-        model_card.save(os.path.join(self.args.output_dir, "README.md"))
 
     def _get_train_sampler(self) -> Sampler:
         effective_batch_size = (

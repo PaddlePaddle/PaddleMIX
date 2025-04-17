@@ -1703,9 +1703,19 @@ class SD3LoraLoaderMixin:
                 )
 
             rank = {}
+            index = 1 if from_diffusers else 0
             for key, val in state_dict.items():
                 if "lora_B" in key:
-                    rank[key] = val.shape[1]
+                    # linear
+                    if len(val.shape) == 2:
+                        rank[key] = val.shape[index]
+                    # conv2d
+                    elif len(val.shape) == 4:
+                        rank[key] = val.shape[1]
+                    else:
+                        raise ValueError(
+                            f"LoRA B matrix shape should be 2D or 4D, got {len(val.shape)}D instead."
+                        )
 
             lora_config_kwargs = get_peft_kwargs(rank, network_alpha_dict=None, peft_state_dict=state_dict)
             if "use_dora" in lora_config_kwargs:

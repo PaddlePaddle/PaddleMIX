@@ -8,7 +8,7 @@ Enter audio and prompt words for question and answer.
 
 *****
 - No training is need.
-- Integration with the moedel of [conformer_u2pp_online_wenetspeech](), [chatglm]().
+- Integration with the model of [conformer_u2pp_online_wenetspeech](), [chatglm]().
 
 ----
 
