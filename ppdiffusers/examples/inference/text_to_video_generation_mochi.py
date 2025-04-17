@@ -24,7 +24,7 @@ pipe = MochiPipeline.from_pretrained("/data/home/lizhijun/llm/flux-hf/models/moc
                                      map_location="cpu")
 
 # 启用 VAE tiling
-pipe.enable_vae_tiling()
+# pipe.enable_vae_tiling()
 
 print("====== 模型加载后参数类型检查 ======")
 # 检查主要组件的参数类型
@@ -45,6 +45,6 @@ for component_name in ['transformer', 'text_encoder', 'vae', 'scheduler']:
 
 
 prompt = "Close-up of a chameleon's eye, with its scaly skin changing color. Ultra high resolution 4k."
-frames = pipe(prompt, num_frames=64).frames[0]
+frames = pipe(prompt, num_frames=15).frames[0]
 
 export_to_video(frames, "mochi.mp4", fps=30)
