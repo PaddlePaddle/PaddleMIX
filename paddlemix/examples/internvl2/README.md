@@ -250,7 +250,7 @@ python paddlemix/examples/internvl2/chat_demo.py \
 
 
 ## 5 NPU硬件训练
-请参照[tools](../../tools/README.md)进行NPU硬件Paddle安装和环境变量设置。
+请参照[tools](../../../docs/hardware_support/ascend_usage.md)进行NPU硬件Paddle安装和环境变量设置。
 配置完成后可直接按步骤4中的微调命令进行训练。
 
 
