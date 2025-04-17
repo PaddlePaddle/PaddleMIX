@@ -89,25 +89,23 @@ class WanAttnProcessor2_0:
             key_img = attn.norm_added_k(key_img)
             value_img = attn.add_v_proj(encoder_hidden_states_img)
 
-            key_img = key_img.unflatten(2, (attn.heads, -1))  # .transpose([0, 2, 1])
-            value_img = value_img.unflatten(2, (attn.heads, -1))  # .transpose([0, 2, 1])
+            key_img = key_img.unflatten(2, (attn.heads, -1)) 
+            value_img = value_img.unflatten(2, (attn.heads, -1))
 
             hidden_states_img = F.scaled_dot_product_attention(
                 query, key_img, value_img, attn_mask=None, dropout_p=0.0, is_causal=False
             )
-            # hidden_states_img = hidden_states_img.transpose([0, 2, 1]).flatten(2, 3)
+
             hidden_states_img = hidden_states_img.flatten(2, 3)
             hidden_states_img = hidden_states_img.cast(query.dtype)
-        # print('query shape:', query.shape)
-        # print('key shape:', key.shape)
-        # print('value shape:', value.shape)
+
         if attention_mask is not None:
             print("attention_mask shape:", attention_mask.shape)
 
         hidden_states = F.scaled_dot_product_attention(
             query, key, value, attn_mask=attention_mask, dropout_p=0.0, is_causal=False
         )
-        # hidden_states = hidden_states.transpose([0, 2, 1]).flatten(2, 3)
+ 
         hidden_states = hidden_states.flatten(2, 3)
         hidden_states = hidden_states.cast(query.dtype)
 
@@ -202,7 +200,7 @@ class WanRotaryPosEmbed(nn.Layer):
         p_t, p_h, p_w = self.patch_size
         ppf, pph, ppw = num_frames // p_t, height // p_h, width // p_w
 
-        self.freqs = self.freqs  # .to(hidden_states.device)
+        self.freqs = self.freqs
         freqs = self.freqs.split(
             [
                 self.attention_head_dim // 2 - 2 * (self.attention_head_dim // 6),
@@ -262,13 +260,11 @@ class WanTransformerBlock(nn.Layer):
             added_proj_bias=True,
             processor=WanAttnProcessor2_0(),
         )
-        # self.norm2 = FP32LayerNorm(dim, eps, elementwise_affine=True) if cross_attn_norm else nn.Identity()
         self.norm2 = FP32LayerNorm(dim, eps) if cross_attn_norm else nn.Identity()
 
         # 3. Feed-forward
         self.ffn = FeedForward(dim, inner_dim=ffn_dim, activation_fn="gelu-approximate")
         self.norm3 = FP32LayerNorm(dim, eps, weight_attr=False, bias_attr=False)
-        # self.norm3 = FP32LayerNorm(dim, eps, elementwise_affine=False)
 
         self.scale_shift_table = nn.Parameter(paddle.randn([1, 6, dim]) / dim**0.5)
 
@@ -415,105 +411,11 @@ class WanTransformer3DModel(ModelMixin, ConfigMixin):
         )
 
         # 4. Output norm & projection
-        # self.norm_out = FP32LayerNorm(inner_dim, eps, elementwise_affine=False)
         self.norm_out = FP32LayerNorm(inner_dim, eps, weight_attr=False, bias_attr=False)
         self.proj_out = nn.Linear(inner_dim, out_channels * math.prod(patch_size))
         self.scale_shift_table = nn.Parameter(paddle.randn([1, 2, inner_dim]) / inner_dim**0.5)
 
         self.gradient_checkpointing = False
-
-    # def _set_gradient_checkpointing(self, module, value=False):
-    #     self.gradient_checkpointing = value
-
-    # @property
-    # def attn_processors(self) ->Dict[str, AttentionProcessor]:
-    #     """
-    #     Returns:
-    #         `dict` of attention processors: A dictionary containing all attention processors used in the model with
-    #         indexed by its weight name.
-    #     """
-    #     processors = {}
-
-    #     def fn_recursive_add_processors(name: str, module: paddle.nn.Layer,
-    #         processors: Dict[str, AttentionProcessor]):
-    #         if hasattr(module, 'get_processor'):
-    #             processors[f'{name}.processor'] = module.get_processor()
-    #         for sub_name, child in module.named_children():
-    #             fn_recursive_add_processors(f'{name}.{sub_name}', child,
-    #                 processors)
-    #         return processors
-    #     for name, module in self.named_children():
-    #         fn_recursive_add_processors(name, module, processors)
-    #     return processors
-
-    # def set_attn_processor(self, processor: Union[AttentionProcessor, Dict[
-    #     str, AttentionProcessor]]):
-    #     """
-    #     Sets the attention processor to use to compute attention.
-
-    #     Parameters:
-    #         processor (`dict` of `AttentionProcessor` or only `AttentionProcessor`):
-    #             The instantiated processor class or a dictionary of processor classes that will be set as the processor
-    #             for **all** `Attention` layers.
-
-    #             If `processor` is a dict, the key needs to define the path to the corresponding cross attention
-    #             processor. This is strongly recommended when setting trainable attention processors.
-
-    #     """
-    #     count = len(self.attn_processors.keys())
-    #     if isinstance(processor, dict) and len(processor) != count:
-    #         raise ValueError(
-    #             f'A dict of processors was passed, but the number of processors {len(processor)} does not match the number of attention layers: {count}. Please make sure to pass {count} processor classes.'
-    #             )
-
-    #     def fn_recursive_attn_processor(name: str, module: paddle.nn.Layer,
-    #         processor):
-    #         if hasattr(module, 'set_processor'):
-    #             if not isinstance(processor, dict):
-    #                 module.set_processor(processor)
-    #             else:
-    #                 module.set_processor(processor.pop(f'{name}.processor'))
-    #         for sub_name, child in module.named_children():
-    #             fn_recursive_attn_processor(f'{name}.{sub_name}', child,
-    #                 processor)
-    #     for name, module in self.named_children():
-    #         fn_recursive_attn_processor(name, module, processor)
-
-    # def fuse_qkv_projections(self):
-    #     """
-    #     Enables fused QKV projections. For self-attention modules, all projection matrices (i.e., query, key, value)
-    #     are fused. For cross-attention modules, key and value projection matrices are fused.
-
-    #     <Tip warning={true}>
-
-    #     This API is 🧪 experimental.
-
-    #     </Tip>
-    #     """
-    #     self.original_attn_processors = None
-    #     for _, attn_processor in self.attn_processors.items():
-    #         if 'Added' in str(attn_processor.__class__.__name__):
-    #             raise ValueError(
-    #                 '`fuse_qkv_projections()` is not supported for models having added KV projections.'
-    #                 )
-    #     self.original_attn_processors = self.attn_processors
-    #     for module in self.sublayers():
-    #         if isinstance(module, Attention):
-    #             module.fuse_projections(fuse=True)
-    #     self.set_attn_processor(FusedCogVideoXAttnProcessor2_0())
-
-    # def unfuse_qkv_projections(self):
-    #     """Disables the fused QKV projection if enabled.
-
-    #     <Tip warning={true}>
-
-    #     This API is 🧪 experimental.
-
-    #     </Tip>
-
-    #     """
-    #     if self.original_attn_processors is not None:
-    #         self.set_attn_processor(self.original_attn_processors)
 
     def forward(
         self,

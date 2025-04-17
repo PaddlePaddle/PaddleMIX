@@ -170,7 +170,6 @@ class WanImageToVideoPipeline(DiffusionPipeline, WanLoraLoaderMixin):
         device: Optional = None,
         dtype: Optional[paddle.dtype] = None,
     ):
-        # device = device or self._execution_device
         dtype = dtype or self.text_encoder.dtype
 
         prompt = [prompt] if isinstance(prompt, str) else prompt

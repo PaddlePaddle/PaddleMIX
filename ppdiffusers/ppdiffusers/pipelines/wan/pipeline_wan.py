@@ -29,19 +29,11 @@ from ...loaders import WanLoraLoaderMixin
 from ...models import AutoencoderKLWan, WanTransformer3DModel
 from ...schedulers import UniPCMultistepScheduler
 
-# from ...utils import is_torch_xla_available, logging, replace_example_docstring
 from ...utils import logging, replace_example_docstring
 from ...utils.paddle_utils import randn_tensor
 from ...video_processor import VideoProcessor
 from ..pipeline_utils import DiffusionPipeline
 from .pipeline_output import WanPipelineOutput
-
-# if is_torch_xla_available():
-#     import torch_xla.core.xla_model as xm
-
-#     XLA_AVAILABLE = True
-# else:
-#     XLA_AVAILABLE = False
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -147,7 +139,6 @@ class WanPipeline(DiffusionPipeline, WanLoraLoaderMixin):
         device: Optional = None,
         dtype: Optional[paddle.dtype] = None,
     ):
-        # device = device or self._execution_device
         dtype = dtype or self.text_encoder.dtype
 
         prompt = [prompt] if isinstance(prompt, str) else prompt
@@ -222,8 +213,6 @@ class WanPipeline(DiffusionPipeline, WanLoraLoaderMixin):
             dtype: (`paddle.dtype`, *optional*):
                 paddle dtype
         """
-        # device = device or self._execution_device
-
         prompt = [prompt] if isinstance(prompt, str) else prompt
         if prompt is not None:
             batch_size = len(prompt)
@@ -469,7 +458,6 @@ class WanPipeline(DiffusionPipeline, WanLoraLoaderMixin):
         self._current_timestep = None
         self._interrupt = False
 
-        # device = self._execution_device
         device = None
 
         # 2. Define call parameters
@@ -489,7 +477,6 @@ class WanPipeline(DiffusionPipeline, WanLoraLoaderMixin):
             prompt_embeds=prompt_embeds,
             negative_prompt_embeds=negative_prompt_embeds,
             max_sequence_length=max_sequence_length,
-            # device=device,
         )
 
         transformer_dtype = self.transformer.dtype
@@ -514,9 +501,7 @@ class WanPipeline(DiffusionPipeline, WanLoraLoaderMixin):
             generator,
             latents,
         )
-        # import pickle
-        # latents = pickle.load(open('/root/paddlejob/workspace/env_run/jll/Wan2.1/align_datas/latents001.pkl', 'rb'))
-        # latents = paddle.to_tensor(latents)
+
         # 6. Denoising loop
         num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
         self._num_timesteps = len(timesteps)
