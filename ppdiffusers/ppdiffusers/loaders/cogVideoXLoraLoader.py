@@ -20,7 +20,14 @@ import paddle
 from ppdiffusers.loaders import LoraLoaderMixin
 
 from ..models.modeling_pytorch_paddle_utils import convert_paddle_state_dict_to_pytorch
-from ..utils import USE_PEFT_BACKEND, logging
+from ..utils import (
+    FROM_DIFFUSERS,
+    USE_PEFT_BACKEND,
+    get_adapter_name,
+    get_peft_kwargs,
+    logging,
+    set_weights_and_activate_adapters,
+)
 
 logger = logging.get_logger(__name__)
 
@@ -148,7 +155,7 @@ class CogVideoXLoraLoaderMixin(LoraLoaderMixin):
             use_safetensors = True
 
         user_agent = {"file_type": "attn_procs_weights", "framework": "paddle"}
-        state_dict = super().lora_state_dict(
+        state_dict, _, _ = super().lora_state_dict(
             pretrained_model_name_or_path_or_dict=pretrained_model_name_or_path_or_dict,
             weight_name=weight_name,
             use_safetensors=use_safetensors,
@@ -217,11 +224,10 @@ class CogVideoXLoraLoaderMixin(LoraLoaderMixin):
         transformer,
         adapter_name=None,
         _pipeline=None,
-        low_cpu_mem_usage=False,
+        from_diffusers=None,
     ):
         """
         This will load the LoRA layers specified in `state_dict` into `transformer`.
-
         Parameters:
             state_dict (`dict`):
                 A standard state dict containing the lora layer parameters. The keys can either be indexed directly
@@ -232,19 +238,56 @@ class CogVideoXLoraLoaderMixin(LoraLoaderMixin):
             adapter_name (`str`, *optional*):
                 Adapter name to be used for referencing the loaded adapter model. If not specified, it will use
                 `default_{i}` where i is the total number of adapters being loaded.
-            low_cpu_mem_usage (`bool`, *optional*):
-                Speed up model loading by only loading the pretrained LoRA weights and not initializing the random
-                weights.
         """
+        if from_diffusers is None:
+            from_diffusers = FROM_DIFFUSERS
 
-        logger.info(f"Loading {cls.transformer_name}.")
-        transformer.load_lora_adapter(
-            state_dict,
-            network_alphas=None,
-            adapter_name=adapter_name,
-            _pipeline=_pipeline,
-            low_cpu_mem_usage=low_cpu_mem_usage,
+        from ppdiffusers.peft import (
+            LoraConfig,
+            inject_adapter_in_model,
+            set_peft_model_state_dict,
         )
+
+        keys = list(state_dict.keys())
+
+        transformer_keys = [k for k in keys if k.startswith(cls.transformer_name)]
+        state_dict = {
+            k.replace(f"{cls.transformer_name}.", ""): v for k, v in state_dict.items() if k in transformer_keys
+        }
+
+        if len(state_dict.keys()) > 0:
+            if adapter_name in getattr(transformer, "peft_config", {}):
+                raise ValueError(
+                    f"Adapter name {adapter_name} already in use in the transformer - please select a new adapter name."
+                )
+
+            rank = {}
+            for key, val in state_dict.items():
+                if "lora_B" in key:
+                    rank[key] = val.shape[1]
+
+            lora_config_kwargs = get_peft_kwargs(rank, network_alpha_dict=None, peft_state_dict=state_dict)
+            if "use_dora" in lora_config_kwargs:
+                raise ValueError("ppdiffusers.peft does not support dora yet")
+            lora_config = LoraConfig(**lora_config_kwargs)
+
+            # adapter_name
+            if adapter_name is None:
+                adapter_name = get_adapter_name(transformer)
+
+            inject_adapter_in_model(lora_config, transformer, adapter_name=adapter_name)
+            incompatible_keys = set_peft_model_state_dict(transformer, state_dict, adapter_name)
+
+            if incompatible_keys is not None:
+                # check only for unexpected keys
+                unexpected_keys = getattr(incompatible_keys, "unexpected_keys", None)
+                if unexpected_keys:
+                    logger.warning(
+                        f"Loading adapter weights from state_dict led to unexpected keys not found in the model: "
+                        f" {unexpected_keys}. "
+                    )
+
+            # Unsafe code />
 
     @classmethod
     def save_lora_weights(
@@ -348,3 +391,36 @@ class CogVideoXLoraLoaderMixin(LoraLoaderMixin):
             unfuse_transformer (`bool`, defaults to `True`): Whether to unfuse the UNet LoRA parameters.
         """
         super().unfuse_lora(components=components)
+
+    def set_adapters(
+        self,
+        adapter_names: Union[List[str], str],
+        weights: Optional[Union[List[float], float]] = None,
+    ):
+        """
+        Set the currently active adapters for use in the UNet.
+
+        Args:
+            adapter_names (`List[str]` or `str`):
+                The names of the adapters to use.
+            adapter_weights (`Union[List[float], float]`, *optional*):
+                The adapter(s) weights to use with the UNet. If `None`, the weights are set to `1.0` for all the
+                adapters.
+
+        """
+        if not USE_PEFT_BACKEND:
+            raise ValueError("PEFT backend is required for `set_adapters()`.")
+
+        adapter_names = [adapter_names] if isinstance(adapter_names, str) else adapter_names
+
+        if weights is None:
+            weights = [1.0] * len(adapter_names)
+        elif isinstance(weights, float):
+            weights = [weights] * len(adapter_names)
+
+        if len(adapter_names) != len(weights):
+            raise ValueError(
+                f"Length of adapter names {len(adapter_names)} is not equal to the length of their weights {len(weights)}."
+            )
+
+        set_weights_and_activate_adapters(self.transformer, adapter_names, weights)

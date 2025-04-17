@@ -11,9 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+export CUDA_VISIBLE_DEVICES=1
+export FLAGS_cascade_attention_max_partition_size=128
+export FLAGS_cascade_attention_deal_each_time=16
+export USE_FASTER_TOP_P_SAMPLING=1
 
-export CUDA_VISIBLE_DEVICES=0
-#fp16  高性能推理
+# fp16  高性能推理
 python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
     --model_name_or_path Qwen/Qwen2.5-VL-3B-Instruct \
     --media_type "image" \
@@ -26,12 +29,12 @@ python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
     --temperature 0.1 \
     --repetition_penalty 1.05 \
     --block_attn True \
+    --append_attn True \
     --inference_model True \
-    --mode dynamic \
+    --llm_mode static \
     --dtype bfloat16 \
     --output_via_mq False \
     --benchmark True 
-    
 
 # # weight only int8 量化推理
 # python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
@@ -46,17 +49,21 @@ python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
 #     --temperature 0.1 \
 #     --repetition_penalty 1.05 \
 #     --block_attn True \
+#     --append_attn True \
 #     --inference_model True \
-#     --mode dynamic \
+#     --llm_mode static \
 #     --dtype bfloat16 \
 #     --quant_type "weight_only_int8" \
 #     --output_via_mq False \
 #     --benchmark True 
 
 
+
+
+
 # # 多卡推理功能
-# export CUDA_VISIBLE_DEVICES=0,1,2,3
-# python -m paddle.distributed.launch --gpus "0,1,2,3" deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
+# export CUDA_VISIBLE_DEVICES=0,1
+# python -m paddle.distributed.launch --gpus "0,1" deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
 #     --model_name_or_path Qwen/Qwen2.5-VL-72B-Instruct \
 #     --media_type "image" \
 #     --question "Describe this image." \
@@ -68,9 +75,9 @@ python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
 #     --temperature 0.1 \
 #     --repetition_penalty 1.05 \
 #     --block_attn True \
+#     --append_attn True \
 #     --inference_model True \
-#     --mode dynamic \
-#     --append_attn 1 \
+#     --llm_mode static \
 #     --dtype bfloat16 \
 #     --output_via_mq False \
 #     --benchmark True 
