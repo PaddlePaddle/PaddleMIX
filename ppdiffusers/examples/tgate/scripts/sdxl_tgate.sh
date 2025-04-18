@@ -1,4 +1,3 @@
-which python
 python main.py \
 --prompt 'Astronaut in a jungle, cold color palette, muted colors, detailed, 8k' \
 --model 'sdxl' \
