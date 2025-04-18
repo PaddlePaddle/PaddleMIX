@@ -320,39 +320,24 @@ class RMSNorm(nn.Layer):
         super().__init__()
         self.epsilon = epsilon
         self.dim = dim
-        self.elementwise_affine = elementwise_affine
-        
-        # Always create weight parameter regardless of elementwise_affine setting
-        if dim > 0:  # Ensure dimension is valid
+        if elementwise_affine:
             self.weight = paddle.create_parameter(
                 shape=[dim],
                 dtype=paddle.get_default_dtype(),
                 default_initializer=nn.initializer.Constant(1.0),
             )
-            if not elementwise_affine:
-                self.weight.stop_gradient = True  # Stop gradient if learning is not needed
         else:
-            # For zero dimension (to be inferred later), mark as dynamic weight
             self.weight = None
-            self.dynamic_weight = True
 
     def forward(self, hidden_states, begin_norm_axis=None):
-        # If dimension is 0, create weight parameter on-the-fly
-        if self.dim == 0 or (hasattr(self, 'dynamic_weight') and self.dynamic_weight):
-            hidden_dim = hidden_states.shape[-1]
-            weight = paddle.ones([hidden_dim], dtype=hidden_states.dtype)
-            if not self.elementwise_affine:
-                weight.stop_gradient = True
-        else:
-            weight = self.weight
-            
         return paddle.incubate.nn.functional.fused_rms_norm(
             x=hidden_states,
-            norm_weight=weight,
+            norm_weight=self.weight,
             norm_bias=None,
             epsilon=self.epsilon,
             begin_norm_axis=len(hidden_states.shape)-1 if begin_norm_axis is None else begin_norm_axis,
         )[0]
+
 
 
 

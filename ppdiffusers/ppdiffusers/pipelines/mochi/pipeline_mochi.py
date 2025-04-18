@@ -112,7 +112,6 @@ def save_video_frames(video_tensor, prefix="frame"):
     print(f"Saved video frames with prefix: {prefix}")
 
 
-
 def debug_print(name, tensor, detailed=False, percentiles=False):
     """统一打印张量信息的辅助函数"""
     if tensor is None:
@@ -122,31 +121,50 @@ def debug_print(name, tensor, detailed=False, percentiles=False):
     shape_str = str(tensor.shape) if hasattr(tensor, "shape") else "无形状信息"
     dtype_str = str(tensor.dtype) if hasattr(tensor, "dtype") else "未知类型"
     
-    # 基本统计信息
+    # 打印基本信息
+    print(f"{name}: shape={shape_str}, dtype={dtype_str}")
+    
+    # 检查是否为布尔类型
+    is_bool_type = (hasattr(tensor, "dtype") and 
+                    (str(tensor.dtype) == "bool" or
+                     (hasattr(paddle, "bool") and tensor.dtype == paddle.bool)))
+    
+    # 基本统计信息 - 处理布尔类型的特殊情况
     if hasattr(tensor, "min") and hasattr(tensor, "max"):
-        min_val = tensor.min().item()
-        max_val = tensor.max().item()
-        mean_val = tensor.mean().item()
-        std_val = tensor.std().item() if hasattr(tensor, "std") else "N/A"
-        print(f"{name}: shape={shape_str}, dtype={dtype_str}")
-        print(f"  统计: min={min_val:.6f}, max={max_val:.6f}, mean={mean_val:.6f}, std={std_val if isinstance(std_val, str) else std_val:.6f}")
+        if is_bool_type:
+            # 对于布尔类型，直接计算True的比例
+            true_count = paddle.sum(tensor).item()
+            total_count = tensor.numel()
+            true_percentage = (true_count / total_count) * 100 if total_count > 0 else 0
+            print(f"  统计: 布尔类型, True比例={true_percentage:.2f}%, True计数={true_count}/{total_count}")
+        else:
+            # 对于数值类型，正常计算统计量
+            min_val = tensor.min().item()
+            max_val = tensor.max().item()
+            mean_val = tensor.mean().item()
+            std_val = tensor.std().item() if hasattr(tensor, "std") else "N/A"
+            print(f"  统计: min={min_val:.6f}, max={max_val:.6f}, mean={mean_val:.6f}, std={std_val if isinstance(std_val, str) else std_val:.6f}")
     else:
-        print(f"{name}: shape={shape_str}, dtype={dtype_str}, 无法计算统计值")
+        print(f"  无法计算统计值")
     
     # 详细信息
     if detailed and hasattr(tensor, "flatten") and hasattr(tensor, "reshape"):
         flat = tensor.reshape([-1]) if hasattr(tensor, "reshape") else tensor.flatten()
-        nonzero = float((flat != 0).sum().item()) / flat.numel() * 100
-        print(f"  非零元素: {nonzero:.2f}%")
-        
-        # 检查极端值
-        extreme = paddle.logical_or(paddle.abs(flat) > 10.0, paddle.isnan(flat))
-        if paddle.any(extreme).item():
-            extreme_percent = float(paddle.sum(extreme).item()) / extreme.numel() * 100
-            print(f"  ⚠️ 极端值比例: {extreme_percent:.4f}% (|x| > 10 或 NaN)")
+        if is_bool_type:
+            # 对布尔类型无需计算更多统计信息
+            pass
+        else:
+            nonzero = float((flat != 0).sum().item()) / flat.numel() * 100
+            print(f"  非零元素: {nonzero:.2f}%")
+            
+            # 检查极端值
+            extreme = paddle.logical_or(paddle.abs(flat) > 10.0, paddle.isnan(flat))
+            if paddle.any(extreme).item():
+                extreme_percent = float(paddle.sum(extreme).item()) / extreme.numel() * 100
+                print(f"  ⚠️ 极端值比例: {extreme_percent:.4f}% (|x| > 10 或 NaN)")
     
     # 百分位数分析
-    if percentiles and hasattr(tensor, "reshape") or hasattr(tensor, "flatten"):
+    if percentiles and not is_bool_type and (hasattr(tensor, "reshape") or hasattr(tensor, "flatten")):
         try:
             flat = tensor.reshape([-1]).astype('float32') if hasattr(tensor, "reshape") else tensor.flatten().astype('float32')
             pcts = [0, 1, 5, 25, 50, 75, 95, 99, 100]

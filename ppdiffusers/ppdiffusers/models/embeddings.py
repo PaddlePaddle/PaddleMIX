@@ -1457,7 +1457,9 @@ class MochiAttentionPool(nn.Layer):
         
         # 使用Paddle格式调用注意力函数
         x = F.scaled_dot_product_attention(
-            q_paddle, k_paddle, v_paddle, 
+            q_paddle, 
+            k_paddle, 
+            v_paddle, 
             attn_mask=attn_mask_paddle,
             dropout_p=0.0
         )  # 输出应为 [B,1,H,D]

@@ -2617,9 +2617,6 @@ class MochiAttnProcessor2_0:
         query = attn.to_q(hidden_states)
         key = attn.to_k(hidden_states)
         value = attn.to_v(hidden_states)
-        # query = query.reshape((query.shape[0], query.shape[1], attn.heads, -1))
-        # key = key.reshape((key.shape[0], key.shape[1], attn.heads, -1))
-        # value = value.reshape((value.shape[0], value.shape[1], attn.heads, -1))
         query = paddle.unflatten(query, 2, (attn.heads, -1))
         key = paddle.unflatten(key, 2, (attn.heads, -1))
         value = paddle.unflatten(value, 2, (attn.heads, -1))
@@ -2632,9 +2629,6 @@ class MochiAttnProcessor2_0:
         encoder_query = attn.add_q_proj(encoder_hidden_states)
         encoder_key = attn.add_k_proj(encoder_hidden_states)
         encoder_value = attn.add_v_proj(encoder_hidden_states)
-        # encoder_query = encoder_query.reshape((encoder_query.shape[0], encoder_query.shape[1], attn.heads, -1))
-        # encoder_key = encoder_key.reshape((encoder_key.shape[0], encoder_key.shape[1], attn.heads, -1))
-        # encoder_value = encoder_value.reshape((encoder_value.shape[0], encoder_value.shape[1], attn.heads, -1))
         encoder_query = paddle.unflatten(encoder_query, 2, (attn.heads, -1))
         encoder_key = paddle.unflatten(encoder_key, 2, (attn.heads, -1))
         encoder_value = paddle.unflatten(encoder_value, 2, (attn.heads, -1))
@@ -2668,27 +2662,121 @@ class MochiAttnProcessor2_0:
         batch_size, heads, _, dim = query.shape
 
         attn_outputs = []
+        # for idx in range(batch_size):
+        #     mask = attention_mask[idx][None, :]
+        #     valid_prompt_token_indices = paddle.nonzero(mask.flatten()).flatten()
+        #     valid_encoder_query = encoder_query[idx:idx+1, :, valid_prompt_token_indices, :]
+        #     valid_encoder_key = encoder_key[idx:idx+1, :, valid_prompt_token_indices, :]
+        #     valid_encoder_value = encoder_value[idx:idx+1, :, valid_prompt_token_indices, :]
+        #     valid_query = paddle.concat([query[idx:idx+1], valid_encoder_query], axis=2)
+        #     valid_key = paddle.concat([key[idx:idx+1], valid_encoder_key], axis=2)
+        #     valid_value = paddle.concat([value[idx:idx+1], valid_encoder_value], axis=2)
+            
+        #     attn_output = F.scaled_dot_product_attention(
+        #         valid_query.transpose([0, 2, 1, 3]), 
+        #         valid_key.transpose([0, 2, 1, 3]), 
+        #         valid_value.transpose([0, 2, 1, 3]), 
+        #         dropout_p=0.0, 
+        #         is_causal=False
+        #     )
+            
+        #     attn_output = attn_output.transpose((0, 2, 1, 3))
+            
+        #     valid_sequence_length = attn_output.shape[2]
+        #     attn_output = F.pad(attn_output, (0, 0, 0, total_length - valid_sequence_length))
+        #     attn_outputs.append(attn_output)
+
+        # hidden_states = paddle.concat(attn_outputs, axis=0)
+        # hidden_states = hidden_states.transpose((0, 2, 1, 3)).flatten(2, 3)
+        # hidden_states, encoder_hidden_states = paddle.split(hidden_states, [sequence_length, encoder_sequence_length], axis=1)
+        
         for idx in range(batch_size):
+            # print(f"\n==== 处理批次 {idx}/{batch_size-1} ====")
+            
             mask = attention_mask[idx][None, :]
+            # print(f"mask shape: {mask.shape}")
+            
             valid_prompt_token_indices = paddle.nonzero(mask.flatten()).flatten()
+            # print(f"valid_prompt_token_indices shape: {valid_prompt_token_indices.shape}, count: {valid_prompt_token_indices.shape[0]}")
+
+            # # 打印初始query/key/value维度
+            # print(f"query[idx:idx+1] shape: {query[idx : idx + 1].shape}")
+            # print(f"encoder_query shape: {encoder_query[idx : idx + 1].shape}")
+            
             valid_encoder_query = encoder_query[idx:idx+1, :, valid_prompt_token_indices, :]
             valid_encoder_key = encoder_key[idx:idx+1, :, valid_prompt_token_indices, :]
             valid_encoder_value = encoder_value[idx:idx+1, :, valid_prompt_token_indices, :]
+            
+            # print(f"valid_encoder_query shape: {valid_encoder_query.shape}")
+            # print(f"valid_encoder_key shape: {valid_encoder_key.shape}")
+            # print(f"valid_encoder_value shape: {valid_encoder_value.shape}")
+
             valid_query = paddle.concat([query[idx:idx+1], valid_encoder_query], axis=2)
             valid_key = paddle.concat([key[idx:idx+1], valid_encoder_key], axis=2)
             valid_value = paddle.concat([value[idx:idx+1], valid_encoder_value], axis=2)
             
-            attn_output = F.scaled_dot_product_attention(
-                valid_query, valid_key, valid_value, dropout_p=0.0, is_causal=False
+            # print(f"concat后 valid_query shape: {valid_query.shape}")
+            # print(f"concat后 valid_key shape: {valid_key.shape}")
+            # print(f"concat后 valid_value shape: {valid_value.shape}")
+
+            # # 打印输入SDPA前的数值范围
+            # print(f"valid_query 数值范围: min={valid_query.min().item():.4f}, max={valid_query.max().item():.4f}")
+            # print(f"valid_key 数值范围: min={valid_key.min().item():.4f}, max={valid_key.max().item():.4f}")
+            # print(f"valid_value 数值范围: min={valid_value.min().item():.4f}, max={valid_value.max().item():.4f}")
+            
+            # 在SDPA前转换格式 (如果需要)
+            # print("注意：转换到Paddle SDPA格式前")
+            valid_query_paddle = valid_query.transpose([0, 2, 1, 3])  # [B,H,S,D] -> [B,S,H,D]
+            valid_key_paddle = valid_key.transpose([0, 2, 1, 3])      # [B,H,S,D] -> [B,S,H,D]
+            valid_value_paddle = valid_value.transpose([0, 2, 1, 3])  # [B,H,S,D] -> [B,S,H,D]
+            
+            # print(f"转换后 valid_query_paddle shape: {valid_query_paddle.shape}")
+            # print(f"转换后 valid_key_paddle shape: {valid_key_paddle.shape}")
+            # print(f"转换后 valid_value_paddle shape: {valid_value_paddle.shape}")
+
+            attn_output = paddle.nn.functional.scaled_dot_product_attention(
+                valid_query_paddle, valid_key_paddle, valid_value_paddle, 
+                attn_mask=None, dropout_p=0.0, is_causal=False
             )
             
+            # print(f"SDPA后 attn_output shape: {attn_output.shape}")
+            # print(f"attn_output 数值范围: min={attn_output.min().item():.4f}, max={attn_output.max().item():.4f}, mean={attn_output.mean().item():.4f}")
+            
+            # 将结果转换回PyTorch期望的格式
+            attn_output = attn_output.transpose([0, 2, 1, 3])  # [B,S,H,D] -> [B,H,S,D]
+            # print(f"转换回PyTorch格式后 attn_output shape: {attn_output.shape}")
+            
             valid_sequence_length = attn_output.shape[2]
-            attn_output = F.pad(attn_output, (0, 0, 0, total_length - valid_sequence_length))
+            pad_length = total_length - valid_sequence_length
+            # print(f"valid_sequence_length: {valid_sequence_length}, total_length: {total_length}, padding: {pad_length}")
+            
+            if pad_length > 0:
+                attn_output = paddle.nn.functional.pad(
+                    attn_output, pad=[0, 0, 0, pad_length], mode='constant', value=0
+                )
+            # print(f"padding后 attn_output shape: {attn_output.shape}")
+            
             attn_outputs.append(attn_output)
 
+        # 打印合并后的结果
         hidden_states = paddle.concat(attn_outputs, axis=0)
-        hidden_states = hidden_states.transpose((0, 2, 1, 3)).flatten(2, 3)
+        # print(f"\n==== 所有批次合并后 ====")
+        # print(f"合并后 hidden_states shape: {hidden_states.shape}")
+
+        hidden_states = hidden_states.transpose([0, 2, 1, 3])
+        # print(f"transpose后 hidden_states shape: {hidden_states.shape}")
+
+        hidden_states = paddle.flatten(hidden_states, start_axis=2, stop_axis=3)
+        # print(f"flatten后 hidden_states shape: {hidden_states.shape}")
+
         hidden_states, encoder_hidden_states = paddle.split(hidden_states, [sequence_length, encoder_sequence_length], axis=1)
+        # print(f"split后 hidden_states_split[0] shape: {hidden_states[0].shape}")
+        # print(f"split后 hidden_states_split[1] shape: {hidden_states[1].shape}")
+
+        # # 检查分割后的数据范围
+        # print(f"hidden_states_split[0] 数值范围: min={hidden_states[0].min().item():.4f}, max={hidden_states[0].max().item():.4f}")
+        # print(f"hidden_states_split[1] 数值范围: min={hidden_states[1].min().item():.4f}, max={hidden_states[1].max().item():.4f}")
+
 
         # linear proj
         hidden_states = attn.to_out[0](hidden_states)
