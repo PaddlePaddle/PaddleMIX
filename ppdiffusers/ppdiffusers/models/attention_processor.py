@@ -238,9 +238,12 @@ class Attention(nn.Layer):
             self.add_k_proj = None
             self.add_v_proj = None
 
-        self.to_out = nn.LayerList([])
-        self.to_out.append(linear_cls(self.inner_dim, query_dim, bias_attr=out_bias))
-        self.to_out.append(nn.Dropout(dropout))
+        if not self.pre_only:
+            self.to_out = nn.LayerList([])
+            self.to_out.append(linear_cls(self.inner_dim, query_dim, bias_attr=out_bias))
+            self.to_out.append(nn.Dropout(dropout))
+        else:
+            self.to_out = None
 
         if self.context_pre_only is not None and not self.context_pre_only:
             self.to_add_out = nn.Linear(self.inner_dim, self.out_dim, bias_attr=out_bias)
