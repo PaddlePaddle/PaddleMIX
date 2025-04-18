@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 import paddle
+from paddle.base import core
 from paddle.distributed import fleet
 from paddlenlp.generation import GenerationConfig
 from paddlenlp.trainer import PdArgumentParser
@@ -179,8 +180,12 @@ def run_model(predictor_args):
     )
     input_tokens_len = vision_model_inputs.input_ids.shape[1]
     with paddle.no_grad():
+        core.nvprof_nvtx_push("vision_forward")
         inputs_embeds = vl_model.vision_forward(**vision_model_inputs)
+        core.nvprof_nvtx_pop()
+    core.nvprof_nvtx_push("init_llm_model_inputs")
     llm_model_inputs = init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config=predictor_args)
+    core.nvprof_nvtx_pop()
     generated_text = ""
     generated_ids = paddle.to_tensor([], dtype="int64").reshape([1, 0])
     while llm_model_inputs["not_need_stop"]:
@@ -302,29 +307,30 @@ if predictor_args.benchmark:
     sumtime = 0.0
     times = repeat_times + warm_up
     for i in range(times):
-        if i > 2:
-            paddle.device.synchronize()
-            starttime = datetime.datetime.now()
-        generated_text = run_model(predictor_args)
+        with paddle.profiler.utils._nvprof_range(i, 5, 10):
+            if i > 2:
+                paddle.device.synchronize()
+                starttime = datetime.datetime.now()
+            generated_text = run_model(predictor_args)
 
-        # NOTE: (changwenbin) We delete some weights of the original dynamic graph,
-        # after fast_llm_model is converted to a static graph to reduce memory usage.
-        if (fast_llm_model.qwen2.transformer_block is not None) and (predictor_args.llm_mode == "static"):
-            fast_llm_model.qwen2.transformer_block = None
-            fast_llm_model.qwen2.norm = None
-            fast_llm_model.lm_head = None
-            paddle.device.cuda.empty_cache()
+            # NOTE: (changwenbin) We delete some weights of the original dynamic graph,
+            # after fast_llm_model is converted to a static graph to reduce memory usage.
+            if (fast_llm_model.qwen2.transformer_block is not None) and (predictor_args.llm_mode == "static"):
+                fast_llm_model.qwen2.transformer_block = None
+                fast_llm_model.qwen2.norm = None
+                fast_llm_model.lm_head = None
+                paddle.device.cuda.empty_cache()
 
-        if i > 2:
-            paddle.device.synchronize()
-            endtime = datetime.datetime.now()
-            print("Final output_text:\n", generated_text[0])
+            if i > 2:
+                paddle.device.synchronize()
+                endtime = datetime.datetime.now()
+                print("Final output_text:\n", generated_text[0])
 
-        if i > 2:
-            duringtime = endtime - starttime
-            duringtime = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
-            sumtime += duringtime
-            print(f"Single Image Inference: {predictor_args.model_name_or_path} end-to-end time : ", duringtime, "ms")
+            if i > 2:
+                duringtime = endtime - starttime
+                duringtime = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
+                sumtime += duringtime
+                print(f"Single Image Inference: {predictor_args.model_name_or_path} end-to-end time : ", duringtime, "ms")
     print(
         f"Single Image Inference: {predictor_args.model_name_or_path} average end-to-end time : ",
         sumtime / repeat_times,

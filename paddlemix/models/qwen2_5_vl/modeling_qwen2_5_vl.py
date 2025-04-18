@@ -29,6 +29,9 @@ from paddlenlp.transformers.configuration_utils import PretrainedConfig
 from paddlenlp.transformers.linear_utils import Linear
 from paddlenlp.transformers.model_outputs import BaseModelOutputWithPast, ModelOutput
 from paddlenlp.transformers.model_utils import PretrainedModel
+from paddlenlp.experimental.transformers.qwen2.modeling import (
+    Qwen2_5_VLForConditionalGenerationBlockInferenceModel,
+)
 
 from paddlemix.models.flash_attn_utils import has_flash_attn_func
 from paddlemix.models.qwen2_vl.bert_padding import (
@@ -682,9 +685,10 @@ class Qwen2RMSNorm(nn.Layer):
 
     def forward(self, hidden_states):
         if paddle.in_dynamic_mode():
-            with paddle.amp.auto_cast(False):
-                variance = hidden_states.astype("float32").pow(2).mean(-1, keepdim=True)
-                hidden_states = paddle.rsqrt(variance + self.variance_epsilon) * hidden_states
+            # NOTE(SigureMo): Temporarily disable auto_cast to avoid break graph in SOT
+            # with paddle.amp.auto_cast(False):
+            variance = hidden_states.astype("float32").pow(2).mean(-1, keepdim=True)
+            hidden_states = paddle.rsqrt(variance + self.variance_epsilon) * hidden_states
         else:
             variance = hidden_states.astype("float32").pow(2).mean(-1, keepdim=True)
             hidden_states = paddle.rsqrt(variance + self.variance_epsilon) * hidden_states
@@ -2044,6 +2048,7 @@ class Qwen2_5_VLForConditionalGeneration(Qwen2_5_VLPreTrainedModel):
         return model_kwargs
 
     # NOTE（changwenbin）: Vision module added for high-performance inference.
+    @paddle.jit.to_static
     def vision_forward(
         self,
         input_ids: paddle.Tensor,
@@ -2061,9 +2066,6 @@ class Qwen2_5_VLForConditionalGeneration(Qwen2_5_VLPreTrainedModel):
         if inputs_embeds is None:
             # NOTE: (zhoukangkang、changwenbin) In the high-performance reasoning of Qwen2-vl,
             # in order to reduce video memory, the qwen2 embed_tokens method in Paddlenlp is reused here.
-            from paddlenlp.experimental.transformers.qwen2.modeling import (
-                Qwen2_5_VLForConditionalGenerationBlockInferenceModel,
-            )
 
             assert isinstance(
                 self.model, Qwen2_5_VLForConditionalGenerationBlockInferenceModel
