@@ -30,27 +30,6 @@ class MochiModulatedRMSNorm(nn.Layer):
         hidden_states = hidden_states.astype(hidden_states_dtype)
         return hidden_states
 
-class MochiModulatedRMSNorm(nn.Layer):
-    def __init__(self, eps: float):
-        super().__init__()
-        self.eps = eps
-        # 不指定任何权重，在 forward 中动态处理
-    
-    def forward(self, hidden_states, scale=None):
-        hidden_states_dtype = hidden_states.dtype
-        hidden_states = hidden_states.astype('float32')
-        
-        # 直接在这里实现 RMSNorm 逻辑
-        variance = hidden_states.pow(2).mean(-1, keepdim=True)
-        hidden_states = hidden_states * paddle.rsqrt(variance + self.eps)
-        
-        if scale is not None:
-            hidden_states = hidden_states * scale
-            
-        hidden_states = hidden_states.astype(hidden_states_dtype)
-        return hidden_states
-
-
 
 class MochiLayerNormContinuous(nn.Layer):
     def __init__(
@@ -304,11 +283,7 @@ class MochiTransformer3DModel(ModelMixin, ConfigMixin):
         encoder_attention_mask: paddle.Tensor,
         return_dict: bool = True,
     ) -> paddle.Tensor:
-        print("====== Transformer forward 开始 ======")
-        print(f"hidden_states 类型: {hidden_states.dtype}")
-        print(f"encoder_hidden_states 类型: {encoder_hidden_states.dtype}")
-        print(f"timestep 类型: {timestep.dtype}")
-    
+
         batch_size, num_channels, num_frames, height, width = hidden_states.shape
         p = self.config.patch_size
         post_patch_height = height // p

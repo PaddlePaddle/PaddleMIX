@@ -17,11 +17,12 @@ from ppdiffusers import MochiPipeline
 from ppdiffusers.utils import export_to_video
 
 
-pipe = MochiPipeline.from_pretrained("/data/home/lizhijun/llm/flux-hf/models/mochi-1-preview-pd", 
+pipe = MochiPipeline.from_pretrained("/home/lcjgrp/lizhijun/llm/mochi-1-preview-pd", 
                                      variant="bf16", 
                                      paddle_dtype=paddle.bfloat16,
                                      low_cpu_mem_usage=True, 
-                                     map_location="cpu")
+                                     map_location="cpu"
+                                     )
 
 # 启用 VAE tiling
 # pipe.enable_vae_tiling()
@@ -45,6 +46,6 @@ for component_name in ['transformer', 'text_encoder', 'vae', 'scheduler']:
 
 
 prompt = "Close-up of a chameleon's eye, with its scaly skin changing color. Ultra high resolution 4k."
-frames = pipe(prompt, num_frames=15).frames[0]
+frames = pipe(prompt, num_frames=30).frames[0]
 
 export_to_video(frames, "mochi.mp4", fps=30)

@@ -2605,11 +2605,7 @@ class MochiAttention(nn.Layer):
 
 class MochiAttnProcessor2_0:
     """Attention processor used in Mochi."""
-    def __init__(self):
-        # PaddlePaddle doesn't have a direct equivalent to PyTorch's scaled_dot_product_attention
-        # We'll implement this functionality manually in the __call__ method
-        pass
-
+    
     def __call__(
         self,
         attn: "MochiAttention",
@@ -2621,9 +2617,12 @@ class MochiAttnProcessor2_0:
         query = attn.to_q(hidden_states)
         key = attn.to_k(hidden_states)
         value = attn.to_v(hidden_states)
-        query = query.reshape((query.shape[0], query.shape[1], attn.heads, -1))
-        key = key.reshape((key.shape[0], key.shape[1], attn.heads, -1))
-        value = value.reshape((value.shape[0], value.shape[1], attn.heads, -1))
+        # query = query.reshape((query.shape[0], query.shape[1], attn.heads, -1))
+        # key = key.reshape((key.shape[0], key.shape[1], attn.heads, -1))
+        # value = value.reshape((value.shape[0], value.shape[1], attn.heads, -1))
+        query = paddle.unflatten(query, 2, (attn.heads, -1))
+        key = paddle.unflatten(key, 2, (attn.heads, -1))
+        value = paddle.unflatten(value, 2, (attn.heads, -1))
         
         if attn.norm_q is not None:
             query = attn.norm_q(query)
@@ -2633,9 +2632,13 @@ class MochiAttnProcessor2_0:
         encoder_query = attn.add_q_proj(encoder_hidden_states)
         encoder_key = attn.add_k_proj(encoder_hidden_states)
         encoder_value = attn.add_v_proj(encoder_hidden_states)
-        encoder_query = encoder_query.reshape((encoder_query.shape[0], encoder_query.shape[1], attn.heads, -1))
-        encoder_key = encoder_key.reshape((encoder_key.shape[0], encoder_key.shape[1], attn.heads, -1))
-        encoder_value = encoder_value.reshape((encoder_value.shape[0], encoder_value.shape[1], attn.heads, -1))
+        # encoder_query = encoder_query.reshape((encoder_query.shape[0], encoder_query.shape[1], attn.heads, -1))
+        # encoder_key = encoder_key.reshape((encoder_key.shape[0], encoder_key.shape[1], attn.heads, -1))
+        # encoder_value = encoder_value.reshape((encoder_value.shape[0], encoder_value.shape[1], attn.heads, -1))
+        encoder_query = paddle.unflatten(encoder_query, 2, (attn.heads, -1))
+        encoder_key = paddle.unflatten(encoder_key, 2, (attn.heads, -1))
+        encoder_value = paddle.unflatten(encoder_value, 2, (attn.heads, -1))
+        
 
         if attn.norm_added_q is not None:
             encoder_query = attn.norm_added_q(encoder_query)
@@ -2703,9 +2706,6 @@ class MochiVaeAttnProcessor2_0:
     """
     Attention processor used in Mochi VAE.
     """
-
-    def __init__(self):
-        pass
 
     def __call__(
         self,

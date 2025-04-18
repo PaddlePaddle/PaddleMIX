@@ -39,7 +39,14 @@ class CogVideoXSafeConv3d(paddle.nn.Conv3D):
         memory_count = paddle.prod(x=paddle.to_tensor(data=tuple(input.shape))).item() * 2 / 1024**3
         if memory_count > 2:
             kernel_size = self._kernel_size[0]
+            # 初始计算 part_num
             part_num = int(memory_count / 2) + 1
+            
+            # 确保 part_num 能够整除帧数
+            frames = input.shape[2]
+            while frames % part_num != 0 and part_num > 1:
+                part_num -= 1
+                
             input_chunks = paddle.chunk(x=input, chunks=part_num, axis=2)
             if kernel_size > 1:
                 input_chunks = [input_chunks[0]] + [
@@ -53,6 +60,7 @@ class CogVideoXSafeConv3d(paddle.nn.Conv3D):
             return output
         else:
             return super().forward(input)
+
 
 
 class CogVideoXCausalConv3d(paddle.nn.Layer):
@@ -141,6 +149,7 @@ class CogVideoXCausalConv3d(paddle.nn.Layer):
             dilation=dilation,
         )
         self.conv_cache = None
+
 
     def fake_context_parallel_forward(self, inputs: paddle.Tensor) -> paddle.Tensor:
         kernel_size = self.time_kernel_size
@@ -1211,6 +1220,7 @@ class AutoencoderKLCogVideoX(ModelMixin, ConfigMixin):
         if not return_dict:
             return (dec,)
         return DecoderOutput(sample=dec)
+
 
     def forward(
         self,
