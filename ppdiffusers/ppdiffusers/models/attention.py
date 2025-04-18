@@ -14,16 +14,21 @@
 from typing import Any, Dict, Optional
 
 import paddle
-from paddle import nn
 import paddle.nn.functional as F
+from paddle import nn
 
 from ..utils import USE_PEFT_BACKEND
 from ..utils.paddle_utils import maybe_allow_in_graph
-from .activations import GEGLU, GELU, ApproximateGELU, LinearActivation
+from .activations import GEGLU, GELU, ApproximateGELU
 from .attention_processor import Attention, JointAttnProcessor2_5
 from .embeddings import SinusoidalPositionalEmbedding
 from .lora import LoRACompatibleLinear
-from .normalization import AdaLayerNorm, AdaLayerNormContinuous, AdaLayerNormZero, SD35AdaLayerNormZeroX
+from .normalization import (
+    AdaLayerNorm,
+    AdaLayerNormContinuous,
+    AdaLayerNormZero,
+    SD35AdaLayerNormZeroX,
+)
 
 
 def _chunked_feed_forward(
@@ -42,7 +47,7 @@ def _chunked_feed_forward(
             dim=chunk_dim,
         )
     else:
-        # TODO(Patrick): LoRA scale can be removed once PEFT refactor is complete
+        # TOOD(Patrick): LoRA scale can be removed once PEFT refactor is complete
         ff_output = paddle.concat(
             [ff(hid_slice, scale=lora_scale) for hid_slice in hidden_states.chunk(num_chunks, axis=chunk_dim)],
             axis=chunk_dim,
@@ -92,6 +97,7 @@ class GatedSelfAttentionDense(nn.Layer):
 
         return x
 
+
 @maybe_allow_in_graph
 class JointTransformerBlock(nn.Layer):
     r"""
@@ -124,7 +130,7 @@ class JointTransformerBlock(nn.Layer):
             self.norm1 = SD35AdaLayerNormZeroX(dim)
         else:
             self.norm1 = AdaLayerNormZero(dim)
-        
+
         if context_norm_type == "ada_norm_continous":
             self.norm1_context = AdaLayerNormContinuous(
                 dim, dim, elementwise_affine=False, eps=1e-6, bias=True, norm_type="layer_norm"
@@ -135,14 +141,14 @@ class JointTransformerBlock(nn.Layer):
             raise ValueError(
                 f"Unknown context_norm_type: {context_norm_type}, currently only support `ada_norm_continous`, `ada_norm_zero`"
             )
-        
+
         if hasattr(F, "scaled_dot_product_attention"):
             processor = JointAttnProcessor2_5()
         else:
             raise ValueError(
                 "The current PyTorch version does not support the `scaled_dot_product_attention` function."
             )
-        
+
         self.attn = Attention(
             query_dim=dim,
             cross_attention_dim=None,
@@ -192,9 +198,7 @@ class JointTransformerBlock(nn.Layer):
         self._chunk_size = chunk_size
         self._chunk_dim = dim
 
-    def forward(
-        self, hidden_states: paddle.Tensor, encoder_hidden_states: paddle.Tensor, temb: paddle.Tensor
-    ):
+    def forward(self, hidden_states: paddle.Tensor, encoder_hidden_states: paddle.Tensor, temb: paddle.Tensor):
         if self.use_dual_attention:
             norm_hidden_states, gate_msa, shift_mlp, scale_mlp, gate_mlp, norm_hidden_states2, gate_msa2 = self.norm1(
                 hidden_states, emb=temb
@@ -211,7 +215,8 @@ class JointTransformerBlock(nn.Layer):
 
         # Attention.
         attn_output, context_attn_output = self.attn(
-            hidden_states=norm_hidden_states, encoder_hidden_states=norm_encoder_hidden_states, 
+            hidden_states=norm_hidden_states,
+            encoder_hidden_states=norm_encoder_hidden_states,
         )
 
         # Process attention outputs for the `hidden_states`.
@@ -253,6 +258,7 @@ class JointTransformerBlock(nn.Layer):
             encoder_hidden_states = encoder_hidden_states + c_gate_mlp.unsqueeze(1) * context_ff_output
 
         return encoder_hidden_states, hidden_states
+
 
 @maybe_allow_in_graph
 class BasicTransformerBlock(nn.Layer):
@@ -699,8 +705,6 @@ class FeedForward(nn.Layer):
             act_fn = GEGLU(dim, inner_dim, bias=bias)
         elif activation_fn == "geglu-approximate":
             act_fn = ApproximateGELU(dim, inner_dim, bias=bias)
-        elif activation_fn == "linear-silu":
-            act_fn = LinearActivation(dim, inner_dim, bias=bias, activation="silu")
 
         self.net = nn.LayerList([])
         # project in

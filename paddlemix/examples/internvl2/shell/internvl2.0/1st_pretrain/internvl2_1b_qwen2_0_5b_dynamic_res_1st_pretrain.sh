@@ -14,15 +14,7 @@
 
 set -x
 
-# PARTITION=${PARTITION:-"INTERN2"}
-# GPUS=${GPUS:-8}
-# GPUS_PER_NODE=${GPUS_PER_NODE:-8}
-# QUOTA_TYPE=${QUOTA_TYPE:-"reserved"}
-# NODES=$((GPUS / GPUS_PER_NODE))
-# CPUS_PER_TASK=${CPUS_PER_TASK:-10}
-# SRUN_ARGS=${SRUN_ARGS:-""}
-
-GPUS=${GPUS:-4}
+GPUS=${GPUS:-8}
 BATCH_SIZE=${BATCH_SIZE:-512}
 
 PER_DEVICE_BATCH_SIZE=${PER_DEVICE_BATCH_SIZE:-1}
@@ -36,29 +28,11 @@ export TF_CPP_MIN_LOG_LEVEL=3
 export LAUNCHER=paddle
 
 EXAMPLE_DIR="paddlemix/examples/internvl2"
-OUTPUT_DIR='work_dirs/pretrain_internvl2_1b_qwen2-5_1_5b_dynamic_res_bs512'
+OUTPUT_DIR='work_dirs/pretrain_internvl2_1b_qwen2_0_5b_dynamic_res_bs512'
 
 if [ ! -d "$OUTPUT_DIR" ]; then
   mkdir -p "$OUTPUT_DIR"
 fi
-
-# number of gpus: 128
-# batch size per gpu: 8
-# gradient accumulation steps: 2
-# total batch size: 2048
-# epoch: 1
-# srun -p ${PARTITION} \
-#   --gres=gpu:${GPUS_PER_NODE} \
-#   --nodes=${NODES} \
-#   --ntasks=${GPUS} \
-#   --ntasks-per-node=${GPUS_PER_NODE} \
-#   --cpus-per-task=${CPUS_PER_TASK} \
-#   --kill-on-bad-exit=1 \
-#   --quotatype=${QUOTA_TYPE} \
-#   ${SRUN_ARGS} \
-#   python -u 
-
-#   --conv_style "Hermes-2" \
 
 python -m paddle.distributed.launch \
   --nnodes=1 \
@@ -67,9 +41,9 @@ python -m paddle.distributed.launch \
   --nproc_per_node=${GPUS} \
   --master_port=${MASTER_PORT} \
   ${EXAMPLE_DIR}/internvl_chat_pretrain.py \
-  --vision_path "OpenGVLab/InternViT-300M-448px-V2_5" \
-  --llm_path "Qwen/Qwen2.5-1.5B-Instruct" \
-  --conv_style "internvl2_5" \
+  --vision_path "OpenGVLab/InternViT-300M-448px" \
+  --llm_path "Qwen/Qwen2-0.5B-Instruct" \
+  --conv_style "Hermes-2" \
   --output_dir ${OUTPUT_DIR} \
   --meta_path "${EXAMPLE_DIR}/shell/data/internvl_pretrain.json" \
   --overwrite_output_dir True \
@@ -99,7 +73,7 @@ python -m paddle.distributed.launch \
   --logging_steps 1 \
   --max_seq_length 4096 \
   --do_train True \
-  --grad_checkpoint True \
+  --recompute True \
   --dynamic_image_size True \
   --use_thumbnail True \
   --ps_version "v2" \

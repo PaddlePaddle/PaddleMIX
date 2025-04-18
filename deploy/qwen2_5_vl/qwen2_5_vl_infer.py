@@ -41,10 +41,22 @@ from predictor import ModelArgument, PredictorArgument
 
 @dataclass
 class Mix_PredictorArgument(PredictorArgument):
+    media_type: str = field(
+        default="image",
+        metadata={"help": "The media type for the model, image or video."},
+    )
     question: str = field(default="Describe this image.", metadata={"help": "The question for the model."})
     image_file: str = field(
         default="paddlemix/demo_images/examples_image1.jpg", metadata={"help": "The image file for the model."}
     )
+    video_file: str = field(
+        default="paddlemix/demo_images/red-panda.mp4", metadata={"help": "The video file for the model."}
+    )
+    attn_implementation: str = field(
+        default="flash_attention_2",
+        metadata={"help": "The implementation of attention. Supported values: eager, sdpa, flash_attention_2"},
+    )
+    llm_mode: str = field(default="dynamic", metadata={"help": "The mode of llm. Supported values: dynamic, static"})
 
 
 @dataclass
@@ -125,7 +137,7 @@ def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: Predic
     model_inputs["is_block_step"] = paddle.full(shape=[batch_size], fill_value=False, dtype="bool")
 
     cache_k_shapes, cache_v_shapes = fast_llm_model.get_cache_kvs_shape(fast_llm_model.config, arg_config.batch_size)
-    cachekv_dtype = config.dtype if arg_config.cachekv_int8_type is None else "uint8"
+    cachekv_dtype = arg_config.dtype if arg_config.cachekv_int8_type is None else "uint8"
 
     cache_kvs = []
     if cache_k_shapes and cache_v_shapes:
@@ -172,13 +184,14 @@ def run_model(predictor_args):
     generated_text = ""
     generated_ids = paddle.to_tensor([], dtype="int64").reshape([1, 0])
     while llm_model_inputs["not_need_stop"]:
+        generated_id = fast_llm_model.generate(**llm_model_inputs)
 
-        generated_id = fast_llm_model.generate(**llm_model_inputs)  # already trimmed in paddle
+        # NOTE: (changwenbin) , Get inputs_embeds from the visual model or input_ids.
+        # Here we uniformly set the input of the language model to inputs_embeds
+        llm_model_inputs["inputs_embeds"] = fast_llm_model.qwen2.embed_tokens(generated_id)
 
-        llm_model_inputs["input_ids"] = generated_id
-        llm_model_inputs["inputs_embeds"] = None
         generated_ids = paddle.concat([generated_ids, generated_id], axis=1)
-        if paddle.any(generated_id == 151645).item():
+        if paddle.any(generated_id == processor.tokenizer.eos_token_id).item():
             break
     generated_text = processor.batch_decode(
         generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False
@@ -210,8 +223,8 @@ vl_model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
     tensor_parallel_rank=tensor_parallel_rank,
     dtype=predictor_args.dtype,
     tensor_parallel_output=False,
-)
-vl_model.eval()
+    attn_implementation=predictor_args.attn_implementation,
+).eval()
 
 # NOTE: (zhoukangkang、changwenbin) Because we only use the visual model here,
 # in order to reduce video memory,we delete the language model.
@@ -225,21 +238,31 @@ processor = Qwen2_5_VLProcessor(image_processor, tokenizer)
 # min_pixels = 256*28*28 # 200704
 # max_pixels = 1280*28*28 # 1003520
 
+messages_media = {
+    "type": predictor_args.media_type,
+    predictor_args.media_type: predictor_args.image_file
+    if predictor_args.media_type == "image"
+    else predictor_args.video_file,
+}
+if predictor_args.media_type == "video":
+    messages_media.update(
+        {
+            "max_pixels": 360 * 420,
+            "fps": 1.0,
+        }
+    )
+
 messages = [
     {
         "role": "user",
         "content": [
-            {
-                "type": "image",
-                "image": predictor_args.image_file,
-            },
+            messages_media,
             {"type": "text", "text": predictor_args.question},
         ],
     }
 ]
 # Preparation for inference
 image_inputs, video_inputs = process_vision_info(messages)
-
 
 config = AutoConfig.from_pretrained(predictor_args.model_name_or_path)
 config.tensor_parallel_degree = tensor_parallel_degree
@@ -257,8 +280,18 @@ fast_llm_model = AutoInferenceModelForCausalLM.from_pretrained(
     dtype=predictor_args.dtype,
     tensor_parallel_degree=tensor_parallel_degree,
     tensor_parallel_rank=tensor_parallel_rank,
-)
-fast_llm_model.eval()
+).eval()
+
+# NOTE: (changwenbin) We convert the language model into a static graph
+if predictor_args.llm_mode == "static":
+    fast_llm_model = paddle.incubate.jit.inference(
+        fast_llm_model,
+        save_model_dir=f"./tmp/{predictor_args.model_name_or_path}/{predictor_args.quant_type}",
+        enable_new_ir=True,
+        cache_static_model=True,
+        skip_prune_program=True,
+        exp_enable_use_cutlass=False,
+    )
 
 vl_model.model = fast_llm_model
 
@@ -273,6 +306,15 @@ if predictor_args.benchmark:
             paddle.device.synchronize()
             starttime = datetime.datetime.now()
         generated_text = run_model(predictor_args)
+
+        # NOTE: (changwenbin) We delete some weights of the original dynamic graph,
+        # after fast_llm_model is converted to a static graph to reduce memory usage.
+        if (fast_llm_model.qwen2.transformer_block is not None) and (predictor_args.llm_mode == "static"):
+            fast_llm_model.qwen2.transformer_block = None
+            fast_llm_model.qwen2.norm = None
+            fast_llm_model.lm_head = None
+            paddle.device.cuda.empty_cache()
+
         if i > 2:
             paddle.device.synchronize()
             endtime = datetime.datetime.now()
@@ -289,6 +331,7 @@ if predictor_args.benchmark:
         "ms",
     )
     print(f"GPU max_memory_allocated: {paddle.device.cuda.max_memory_allocated() / 1024 ** 3:.2f} GB")
+    print(f"GPU memory_allocated: {paddle.device.cuda.memory_allocated() / 1024 ** 3:.2f} GB")
     print("input_tokens_len is :", generated_text[1], "tokens")
     print("output_tokens_len is :", generated_text[2], "tokens")
 else:
