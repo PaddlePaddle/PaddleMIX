@@ -1387,6 +1387,89 @@ def get_1d_rotary_pos_embed(
     
 
 
+# class MochiAttentionPool(nn.Layer):
+#     def __init__(
+#         self,
+#         num_attention_heads: int,
+#         embed_dim: int,
+#         output_dim: int = None,
+#     ):
+#         super().__init__()
+
+#         self.output_dim = output_dim if output_dim is not None else embed_dim
+#         self.num_attention_heads = num_attention_heads
+
+#         self.to_kv = nn.Linear(embed_dim, 2 * embed_dim)
+#         self.to_q = nn.Linear(embed_dim, embed_dim)
+#         self.to_out = nn.Linear(embed_dim, self.output_dim)
+
+#     @staticmethod
+#     def pool_tokens(x: paddle.Tensor, mask: paddle.Tensor, *, keepdim=False) -> paddle.Tensor:
+#         """
+#         Pool tokens in x using mask.
+
+#         Args:
+#             x: (B, L, D) tensor of tokens.
+#             mask: (B, L) boolean tensor indicating which tokens are not padding.
+
+#         Returns:
+#             pooled: (B, D) tensor of pooled tokens.
+#         """
+#         assert x.shape[1] == mask.shape[1]  # Expected mask to have same length as tokens.
+#         assert x.shape[0] == mask.shape[0]  # Expected mask to have same batch size as tokens.
+#         mask = mask[:, :, None].astype(x.dtype)
+#         mask = mask / mask.sum(axis=1, keepdim=True).clip(min=1)
+#         pooled = (x * mask).sum(axis=1, keepdim=keepdim)
+#         return pooled
+
+#     def forward(self, x: paddle.Tensor, mask: paddle.Tensor) -> paddle.Tensor:
+#         D = x.shape[2]
+
+#         # 掩码部分保持不变
+#         attn_mask = mask[:, None, None, :].astype('bool')
+#         attn_mask = F.pad(attn_mask.astype('int32'), (1, 0), value=1)
+#         attn_mask = attn_mask.astype('bool')
+
+#         # 平均非填充标记特征
+#         x_pool = self.pool_tokens(x, mask, keepdim=True)
+#         x = paddle.concat([x_pool, x], axis=1)
+        
+#         # 计算查询、键、值
+#         kv = self.to_kv(x)
+#         q = self.to_q(x[:, 0])
+        
+#         # 提取头信息 - 这部分基本保持不变
+#         head_dim = D // self.num_attention_heads
+#         # kv = kv.reshape([0, 0, 2, self.num_attention_heads, head_dim])
+#         kv = paddle.unflatten(kv, 2, (2, self.num_attention_heads, head_dim))
+#         kv = kv.transpose([0, 3, 2, 1, 4])
+#         k, v = kv.unbind(axis=2)
+#         # q = q.reshape([0, self.num_attention_heads, head_dim])
+#         q = paddle.unflatten(q, 1, (self.num_attention_heads, head_dim))
+#         q = q.unsqueeze(axis=2)
+        
+        
+#         # 调整掩码形状以匹配Paddle的期望格式
+#         # 注意掩码应该适配转置后的注意力分数的形状
+#         # attn_mask_paddle = attn_mask.transpose([0, 2, 1, 3])  # 调整掩码维度顺序
+        
+#         # 使用Paddle格式调用注意力函数
+#         x = F.scaled_dot_product_attention(
+#             q.transpose([0, 2, 1, 3]), 
+#             k.transpose([0, 2, 1, 3]), 
+#             v.transpose([0, 2, 1, 3]), 
+#             attn_mask=attn_mask,
+#             dropout_p=0.0
+#         )  # 输出应为 [B,1,H,D]
+        
+#         # 将结果转回原始顺序
+#         x = x.transpose([0, 2, 1, 3])  # [B,1,H,D] -> [B,H,1,D]
+        
+#         # 后续处理保持不变
+#         x = x.squeeze(axis=2).flatten(start_axis=1, stop_axis=2)
+#         x = self.to_out(x)
+#         return x
+
 class MochiAttentionPool(nn.Layer):
     def __init__(
         self,
@@ -1425,52 +1508,51 @@ class MochiAttentionPool(nn.Layer):
     def forward(self, x: paddle.Tensor, mask: paddle.Tensor) -> paddle.Tensor:
         D = x.shape[2]
 
-        # 掩码部分保持不变
+        # Mask part remains unchanged
         attn_mask = mask[:, None, None, :].astype('bool')
         attn_mask = F.pad(attn_mask.astype('int32'), (1, 0), value=1)
         attn_mask = attn_mask.astype('bool')
 
-        # 平均非填充标记特征
+        # Average non-padding token features
         x_pool = self.pool_tokens(x, mask, keepdim=True)
         x = paddle.concat([x_pool, x], axis=1)
         
-        # 计算查询、键、值
+        # Compute query, key, value
         kv = self.to_kv(x)
         q = self.to_q(x[:, 0])
         
-        # 提取头信息 - 这部分基本保持不变
+        # Extract head information - this part mostly remains unchanged
         head_dim = D // self.num_attention_heads
-        kv = kv.reshape([0, 0, 2, self.num_attention_heads, head_dim])
+        # kv = kv.reshape([0, 0, 2, self.num_attention_heads, head_dim])
+        kv = paddle.unflatten(kv, 2, (2, self.num_attention_heads, head_dim))
         kv = kv.transpose([0, 3, 2, 1, 4])
         k, v = kv.unbind(axis=2)
-        q = q.reshape([0, self.num_attention_heads, head_dim])
+        # q = q.reshape([0, self.num_attention_heads, head_dim])
+        q = paddle.unflatten(q, 1, (self.num_attention_heads, head_dim))
         q = q.unsqueeze(axis=2)
         
-        # 关键修改：转置张量以匹配Paddle的期望格式 [B,H,S,D] -> [B,S,H,D]
-        q_paddle = q.transpose([0, 2, 1, 3])  # [B,H,1,D] -> [B,1,H,D]
-        k_paddle = k.transpose([0, 2, 1, 3])  # [B,H,S,D] -> [B,S,H,D]
-        v_paddle = v.transpose([0, 2, 1, 3])  # [B,H,S,D] -> [B,S,H,D]
         
-        # 调整掩码形状以匹配Paddle的期望格式
-        # 注意掩码应该适配转置后的注意力分数的形状
-        attn_mask_paddle = attn_mask.transpose([0, 2, 1, 3])  # 调整掩码维度顺序
+        # Adjust mask shape to match Paddle's expected format
+        # Note that the mask should be adapted to the shape of transposed attention scores
+        # attn_mask_paddle = attn_mask.transpose([0, 2, 1, 3])  # Adjust mask dimension order
         
-        # 使用Paddle格式调用注意力函数
+        # Call attention function using Paddle format
         x = F.scaled_dot_product_attention(
-            q_paddle, 
-            k_paddle, 
-            v_paddle, 
-            attn_mask=attn_mask_paddle,
+            q.transpose([0, 2, 1, 3]), 
+            k.transpose([0, 2, 1, 3]), 
+            v.transpose([0, 2, 1, 3]), 
+            attn_mask=attn_mask,
             dropout_p=0.0
-        )  # 输出应为 [B,1,H,D]
+        )  # Output should be [B,1,H,D]
         
-        # 将结果转回原始顺序
+        # Convert result back to original order
         x = x.transpose([0, 2, 1, 3])  # [B,1,H,D] -> [B,H,1,D]
         
-        # 后续处理保持不变
+        # Subsequent processing remains unchanged
         x = x.squeeze(axis=2).flatten(start_axis=1, stop_axis=2)
         x = self.to_out(x)
         return x
+
 
 
 class MochiCombinedTimestepCaptionEmbedding(nn.Layer):

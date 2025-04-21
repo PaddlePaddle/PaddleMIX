@@ -24,25 +24,8 @@ pipe = MochiPipeline.from_pretrained("/home/lcjgrp/lizhijun/llm/mochi-1-preview-
                                      map_location="cpu"
                                      )
 
-# 启用 VAE tiling
-# pipe.enable_vae_tiling()
-
-print("====== 模型加载后参数类型检查 ======")
-# 检查主要组件的参数类型
-for component_name in ['transformer', 'text_encoder', 'vae', 'scheduler']:
-    if hasattr(pipe, component_name):
-        component = getattr(pipe, component_name)
-        print(f"\n{component_name} 组件类型: {type(component)}")
-        
-        if hasattr(component, 'named_parameters'):
-            # 只打印部分参数，防止输出过多
-            param_count = 0
-            for name, param in component.named_parameters():
-                if param_count < 5:  # 限制每个组件只打印5个参数
-                    print(f"  - {name} 类型: {param.dtype}, 形状: {param.shape}")
-                param_count += 1
-            print(f"  总共 {param_count} 个参数")
-
+# VAE tiling
+pipe.enable_vae_tiling()
 
 
 prompt = "Close-up of a chameleon's eye, with its scaly skin changing color. Ultra high resolution 4k."

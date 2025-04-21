@@ -122,11 +122,11 @@ class MochiResnetBlock3D(nn.Layer):
 
         self.norm1 = MochiChunkedGroupNorm3D(num_channels=in_channels)
         self.conv1 = CogVideoXCausalConv3d(
-            in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, pad_mode="replicate"
+            in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, pad_mode="replicate", is_mochi=True
         )
         self.norm2 = MochiChunkedGroupNorm3D(num_channels=out_channels)
         self.conv2 = CogVideoXCausalConv3d(
-            in_channels=out_channels, out_channels=out_channels, kernel_size=3, stride=1, pad_mode="replicate"
+            in_channels=out_channels, out_channels=out_channels, kernel_size=3, stride=1, pad_mode="replicate", is_mochi=True
         )
 
     def forward(
@@ -168,6 +168,7 @@ class MochiDownBlock3D(nn.Layer):
             kernel_size=(temporal_expansion, spatial_expansion, spatial_expansion),
             stride=(temporal_expansion, spatial_expansion, spatial_expansion),
             pad_mode="replicate",
+            is_mochi=True
         )
 
         resnets = []
