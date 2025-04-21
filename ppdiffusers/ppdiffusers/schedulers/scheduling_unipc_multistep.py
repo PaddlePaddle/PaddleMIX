@@ -774,7 +774,7 @@ class UniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
             )
 
         # NOTE(laixinlu) convert sigmas to the dtype of the model output
-        if not self.use_flow_sigmas and self.sigmas.dtype != model_output.dtype:
+        if not self.config.use_flow_sigmas and self.sigmas.dtype != model_output.dtype:
             self.sigmas = self.sigmas.cast(model_output.dtype)
 
         if self.step_index is None:
