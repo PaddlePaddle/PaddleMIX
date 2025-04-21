@@ -314,7 +314,7 @@ def encode_prompt(
 ### FlowMatchEulerDiscreteScheduler采样
 FLUX 使用 FlowMatchEulerDiscreteScheduler 作为扩散采样器。这个调度器基于Euler离散解算方法，并结合了Flow Matching思想。下面我们讲解其时间步设置和单步更新公式。
 时间步与sigma设置
-不同于DDIM或PNDM这类按固定$\alpha$衰减步长的调度器，FlowMatchEulerDiscreteScheduler采用了sigma序列（噪声标准差）来表示时间。其包含 set_timesteps 函数，主要生成一串从高噪声到低噪声的sigma列表。例如，默认训练扩散步数 num_train_timesteps=1000，sigma通常从接近1降到0。其主要代码如下：
+不同于DDIM或PNDM这类按固定 $\alpha$ 衰减步长的调度器，FlowMatchEulerDiscreteScheduler采用了sigma序列（噪声标准差）来表示时间。其包含 set_timesteps 函数，主要生成一串从高噪声到低噪声的sigma列表。例如，默认训练扩散步数 num_train_timesteps=1000，sigma通常从接近1降到0。其主要代码如下：
 ```python
 def set_timesteps(
     self, 
@@ -394,8 +394,7 @@ def step(
 
     return FlowMatchEulerDiscreteSchedulerOutput(prev_sample=prev_sample)
 ```
-$\sqrt{3x-1}+(1+x)^2$
-这里，model_output 通常是扩散模型预测的某种噪声或变化。在标准扩散中，模型通常预测噪声$\epsilon_\theta(x_t, t)$，而Euler更新实际上在模拟解$$dx/dt$$，可以简单把 model_output 当作给定当前状态的变化量。由于 $sigma_next < sigma_t$（噪声水平递减），所以 $dt$ 为负值，$prev_sample = sample + dt * model_output$ 实际相当于减去一定比例的噪声，从而逐步去噪。这和DDIM解算类似，只是这里步长是线性近似而非严格解公式。
+这里，model_output 通常是扩散模型预测的某种噪声或变化。在标准扩散中，模型通常预测噪声 $\epsilon_\theta(x_t, t)$ ，而Euler更新实际上在模拟解 $dx/dt$ ，可以简单把 model_output 当作给定当前状态的变化量。由于 $sigma_{next} < sigma_t$ （噪声水平递减），所以 $dt$ 为负值， $prev_sample = sample + dt * model_output$ 实际相当于减去一定比例的噪声，从而逐步去噪。这和DDIM解算类似，只是这里步长是线性近似而非严格解公式。
 
 FlowMatchEulerDiscreteScheduler之所以命名为FlowMatch，因为它结合了Flow Matching方法。然而，从代码层面我们可以把它当作Euler离散采样，加上一些sigma序列的技巧，用法上与普通Euler调度类似。总之，FluxPipeline在每个扩散步都会调用 scheduler.step(model_output, t, latents) 以得到上一时刻的latent。这一过程持续迭代，直到达到最小sigma（接近0噪声）完成去噪。
 
