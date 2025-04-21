@@ -1,4 +1,4 @@
-# Copyright 2024 Genmo and The HuggingFace Team. All rights reserved.
+# Copyright 2024 Black Forest Labs, The HuggingFace Team and The InstantX Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 
 import inspect
 from typing import Any, Callable, Dict, List, Optional, Union
@@ -40,16 +41,16 @@ logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 EXAMPLE_DOC_STRING = """
     Examples:
         ```py
-        >>> import torch
+        >>> import paddle
         >>> from diffusers import MochiPipeline
         >>> from diffusers.utils import export_to_video
 
-        >>> pipe = MochiPipeline.from_pretrained("genmo/mochi-1-preview", torch_dtype=torch.bfloat16)
-        >>> pipe.enable_model_cpu_offload()
+        >>> pipe = pipe = MochiPipeline.from_pretrained("genmo/mochi-1-preview",variant="bf16",paddle_dtype=paddle.bfloat16,low_cpu_mem_usage=True,map_location="cpu")
         >>> pipe.enable_vae_tiling()
         >>> prompt = "Close-up of a chameleon's eye, with its scaly skin changing color. Ultra high resolution 4k."
-        >>> frames = pipe(prompt, num_inference_steps=28, guidance_scale=3.5).frames[0]
-        >>> export_to_video(frames, "mochi.mp4")
+        >>> frames = pipe(prompt, num_frames=30).frames[0]
+        
+        >>> export_to_video(frames, "mochi.mp4", fps=30)
         ```
 """
 
@@ -128,28 +129,6 @@ def retrieve_timesteps(
 
 
 class MochiPipeline(DiffusionPipeline, Mochi1LoraLoaderMixin):
-    r"""
-    The mochi pipeline for text-to-video generation.
-
-    Reference: https://github.com/genmoai/models
-
-    Args:
-        transformer ([`MochiTransformer3DModel`]):
-            Conditional Transformer architecture to denoise the encoded video latents.
-        scheduler ([`FlowMatchEulerDiscreteScheduler`]):
-            A scheduler to be used in combination with `transformer` to denoise the encoded image latents.
-        vae ([`AutoencoderKLMochi`]):
-            Variational Auto-Encoder (VAE) Model to encode and decode videos to and from latent representations.
-        text_encoder ([`T5EncoderModel`]):
-            [T5](https://huggingface.co/docs/transformers/en/model_doc/t5#transformers.T5EncoderModel), specifically
-            the [google/t5-v1_1-xxl](https://huggingface.co/google/t5-v1_1-xxl) variant.
-        tokenizer (`CLIPTokenizer`):
-            Tokenizer of class
-            [CLIPTokenizer](https://huggingface.co/docs/transformers/en/model_doc/clip#transformers.CLIPTokenizer).
-        tokenizer (`T5TokenizerFast`):
-            Second Tokenizer of class
-            [T5TokenizerFast](https://huggingface.co/docs/transformers/en/model_doc/t5#transformers.T5TokenizerFast).
-    """
 
     model_cpu_offload_seq = "text_encoder->transformer->vae"
     _optional_components = []
@@ -424,297 +403,8 @@ class MochiPipeline(DiffusionPipeline, Mochi1LoraLoaderMixin):
         return self._interrupt
     
     
-    # @paddle.no_grad()
-    # # @replace_example_docstring(EXAMPLE_DOC_STRING)
-    # def __call__(
-    #     self,
-    #     prompt: Union[str, List[str]] = None,
-    #     negative_prompt: Optional[Union[str, List[str]]] = None,
-    #     height: Optional[int] = None,
-    #     width: Optional[int] = None,
-    #     num_frames: int = 19,
-    #     num_inference_steps: int = 64,
-    #     timesteps: List[int] = None,
-    #     guidance_scale: float = 4.5,
-    #     num_videos_per_prompt: Optional[int] = 1,
-    #     generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
-    #     latents: Optional[paddle.Tensor] = None,
-    #     prompt_embeds: Optional[paddle.Tensor] = None,
-    #     prompt_attention_mask: Optional[paddle.Tensor] = None,
-    #     negative_prompt_embeds: Optional[paddle.Tensor] = None,
-    #     negative_prompt_attention_mask: Optional[paddle.Tensor] = None,
-    #     output_type: Optional[str] = "pil",
-    #     return_dict: bool = True,
-    #     callback_on_step_end: Optional[Callable[[int, int, Dict], None]] = None,
-    #     callback_on_step_end_tensor_inputs: List[str] = ["latents"],
-    #     max_sequence_length: int = 256,
-    # ):
-    #     # ... (docstring remains the same)
-
-    #     print("====== 管道执行开始 ======")
-    #     print(f"传入的 prompt 类型: {type(prompt)}")
-    #     print(f"当前 transformer 的默认数据类型: {self.transformer._dtype}")
-
-
-
-
-    #     if isinstance(callback_on_step_end, (PipelineCallback, MultiPipelineCallbacks)):
-    #         callback_on_step_end_tensor_inputs = callback_on_step_end.tensor_inputs
-
-    #     height = height or self.default_height
-    #     width = width or self.default_width
-
-    #     # 1. Check inputs
-    #     self.check_inputs(
-    #         prompt=prompt,
-    #         height=height,
-    #         width=width,
-    #         callback_on_step_end_tensor_inputs=callback_on_step_end_tensor_inputs,
-    #         prompt_embeds=prompt_embeds,
-    #         negative_prompt_embeds=negative_prompt_embeds,
-    #         prompt_attention_mask=prompt_attention_mask,
-    #         negative_prompt_attention_mask=negative_prompt_attention_mask,
-    #     )
-        
-
-
-    #     self._guidance_scale = guidance_scale
-    #     self._current_timestep = None
-    #     self._interrupt = False
-
-    #     # 2. Define call parameters
-    #     if prompt is not None and isinstance(prompt, str):
-    #         batch_size = 1
-    #     elif prompt is not None and isinstance(prompt, list):
-    #         batch_size = len(prompt)
-    #     else:
-    #         batch_size = prompt_embeds.shape[0]
-
-    #     # 3. Prepare text embeddings
-    #     (
-    #         prompt_embeds,
-    #         prompt_attention_mask,
-    #         negative_prompt_embeds,
-    #         negative_prompt_attention_mask,
-    #     ) = self.encode_prompt(
-    #         prompt=prompt,
-    #         negative_prompt=negative_prompt,
-    #         do_classifier_free_guidance=self.do_classifier_free_guidance,
-    #         num_videos_per_prompt=num_videos_per_prompt,
-    #         prompt_embeds=prompt_embeds,
-    #         negative_prompt_embeds=negative_prompt_embeds,
-    #         prompt_attention_mask=prompt_attention_mask,
-    #         negative_prompt_attention_mask=negative_prompt_attention_mask,
-    #         max_sequence_length=max_sequence_length,
-    #     )
-        
-    #     # encode_prompt 之后
-    #     print("\n====== 编码后的提示词 ======")
-    #     debug_print("prompt_embeds", prompt_embeds, detailed=True)
-    #     debug_print("prompt_attention_mask", prompt_attention_mask)
-    #     debug_print("negative_prompt_embeds", negative_prompt_embeds, detailed=True)
-    #     debug_print("negative_prompt_attention_mask", negative_prompt_attention_mask)
-
-
-    #     # 4. Prepare latent variables
-    #     num_channels_latents = self.transformer.config.in_channels
-    #     latents = self.prepare_latents(
-    #         batch_size * num_videos_per_prompt,
-    #         num_channels_latents,
-    #         height,
-    #         width,
-    #         num_frames,
-    #         prompt_embeds.dtype,
-    #         generator,
-    #         latents,
-    #     )
-        
-    #     # prepare_latents之后
-    #     print("\n====== 初始化的latents ======")
-    #     debug_print("latents", latents, detailed=True, percentiles=True)
-
-
-    #     if self.do_classifier_free_guidance:
-    #         prompt_embeds = paddle.concat([negative_prompt_embeds, prompt_embeds], axis=0)
-    #         prompt_attention_mask = paddle.concat([negative_prompt_attention_mask, prompt_attention_mask], axis=0)
-        
-        
-    #     # 5. Prepare timestep
-    #     threshold_noise = 0.025
-    #     sigmas = linear_quadratic_schedule(num_inference_steps, threshold_noise)
-    #     sigmas = np.array(sigmas)
-
-    #     timesteps, num_inference_steps = retrieve_timesteps(
-    #         self.scheduler,
-    #         num_inference_steps,
-    #         timesteps,
-    #         sigmas,
-    #     )
-    #     num_warmup_steps = max(len(timesteps) - num_inference_steps * self.scheduler.order, 0)
-    #     self._num_timesteps = len(timesteps)
-
-    #     # 6. Denoising loop
-    #     with self.progress_bar(total=num_inference_steps) as progress_bar:
-    #         for i, t in enumerate(timesteps):
-    #             if self.interrupt:
-    #                 continue
-            
-
-    #             self._current_timestep = 1000 - t
-    #             latent_model_input = paddle.concat([latents] * 2) if self.do_classifier_free_guidance else latents
-    #             timestep = paddle.full((latent_model_input.shape[0],), t, dtype=latents.dtype)
-                
-    #             noise_pred = self.transformer(
-    #                 hidden_states=latent_model_input,
-    #                 encoder_hidden_states=prompt_embeds,
-    #                 timestep=timestep,
-    #                 encoder_attention_mask=prompt_attention_mask,
-    #                 return_dict=False,
-    #             )[0]
-                
-    #             # Transformer输出后
-    #             print("\n====== Transformer输出 ======")
-    #             debug_print("noise_pred (原始)", noise_pred, detailed=True, percentiles=True)
-
-    #             # 类型转换
-    #             noise_pred_before = noise_pred
-    #             noise_pred = noise_pred.cast('float32')
-    #             print(f"类型转换: {noise_pred_before.dtype} -> {noise_pred.dtype}")
-    #             debug_print("noise_pred (转换后)", noise_pred)
-
-    #             if self.do_classifier_free_guidance:
-    #                 noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
-
-    #                 # 在这里添加CFG打印代码，这里是正确的位置
-    #                 print(f"\n====== CFG 组件详细信息 ======")
-    #                 print(f"无条件预测: min={noise_pred_uncond.min().item():.4f}, max={noise_pred_uncond.max().item():.4f}, mean={noise_pred_uncond.mean().item():.4f}")
-    #                 print(f"条件预测: min={noise_pred_text.min().item():.4f}, max={noise_pred_text.max().item():.4f}, mean={noise_pred_text.mean().item():.4f}")
-    #                 print(f"差值统计: min={(noise_pred_text - noise_pred_uncond).min().item():.4f}, max={(noise_pred_text - noise_pred_uncond).max().item():.4f}")
-                    
-    #                 # 计算CFG
-    #                 print(f"引导尺度: {self.guidance_scale}")
-                    
-    #                 # 检查是否有极端值
-    #                 diff = noise_pred_text - noise_pred_uncond
-    #                 extreme_diff = paddle.logical_or(diff > 10.0, diff < -10.0)
-    #                 if paddle.any(extreme_diff):
-    #                     print(f"⚠️ 检测到极端差值! 超过范围±10的元素比例: {paddle.sum(extreme_diff).item() / diff.numel():.6f}")
-                    
-    #                 # 执行CFG计算
-    #                 noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_text - noise_pred_uncond)
-                    
-    #                 # CFG计算后检查
-    #                 print(f"CFG后噪声预测: min={noise_pred.min().item():.4f}, max={noise_pred.max().item():.4f}, mean={noise_pred.mean().item():.4f}")
-                    
-    #             # Scheduler步骤前
-    #             print(f"\n====== Scheduler步骤前 (步骤 {i}) ======")
-    #             print(f"噪声预测: min={noise_pred.min().item():.4f}, max={noise_pred.max().item():.4f}, mean={noise_pred.mean().item():.4f}")
-    #             print(f"当前latents: min={latents.min().item():.4f}, max={latents.max().item():.4f}, mean={latents.mean().item():.4f}")
-    #             print(f"时间步: t={t}")
-
-    #             latents_dtype = latents.dtype
-    #             latents = self.scheduler.step(noise_pred, t, latents.cast('float32'), return_dict=False)[0]
-    #             latents = latents.cast(latents_dtype)
-                
-    #             # 添加这些调试代码
-    #             # Scheduler步骤后
-    #             print(f"====== Scheduler步骤后 (步骤 {i}) ======")
-    #             print(f"更新后latents: min={latents.min().item():.4f}, max={latents.max().item():.4f}, mean={latents.mean().item():.4f}")
-
-    #             # 检查是否有数值异常增长
-    #             if latents.max().item() > 10.0 or latents.min().item() < -10.0:
-    #                 print(f"⚠️ 检测到latents数值异常! 超过±10范围")
-
-    #             if callback_on_step_end is not None:
-    #                 callback_kwargs = {}
-    #                 for k in callback_on_step_end_tensor_inputs:
-    #                     callback_kwargs[k] = locals()[k]
-    #                 callback_outputs = callback_on_step_end(self, i, t, callback_kwargs)
-
-    #                 latents = callback_outputs.pop("latents", latents)
-    #                 prompt_embeds = callback_outputs.pop("prompt_embeds", prompt_embeds)
-                    
-    #             # 在去噪循环中
-    #             print(f"Step {i}/{len(timesteps)}, noise_pred stats: min={noise_pred.min().item()}, max={noise_pred.max().item()}")
-    #             print(f"After scheduler step: min={latents.min().item()}, max={latents.max().item()}")
-                
-    #             # 每10步或关键步骤进行详细分析
-    #             if i % 10 == 0 or i == len(timesteps) - 1 or (i > 0 and (latents.max().item() > 15.0 or latents.min().item() < -15.0)):
-    #                 print(f"\n====== 步骤 {i} 详细分析 ======")
-    #                 # 分析latents的分布情况
-    #                 percentiles = [0, 1, 5, 25, 50, 75, 95, 99, 100]
-    #                 latents_flat = latents.reshape([-1])
-    #                 for p in percentiles:
-    #                     q = float(p) / 100.0
-    #                     val = paddle.quantile(latents_flat, q).item()
-    #                     print(f"latents {p}% 分位数: {val:.4f}")
-                    
-    #                 # 检查是否有NaN或Inf
-    #                 if paddle.isnan(latents).any().item() or paddle.isinf(latents).any().item():
-    #                     print("⚠️ 检测到NaN或Inf值!")
-                        
-    #                 # 保存当前latent可视化
-    #                 latent_frame = latents[0, :, 0]
-    #                 save_latent_visualization(latent_frame, f"critical_latent_step_{i}")
-
-
-    #             if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
-    #                 progress_bar.update()
-
-    #     self._current_timestep = None
-
-    #     if output_type == "latent":
-    #         video = latents
-    #     else:
-    #         has_latents_mean = hasattr(self.vae.config, "latents_mean") and self.vae.config.latents_mean is not None
-    #         has_latents_std = hasattr(self.vae.config, "latents_std") and self.vae.config.latents_std is not None
-    #         if has_latents_mean and has_latents_std:
-    #             latents_mean = paddle.to_tensor(self.vae.config.latents_mean).reshape([1, 12, 1, 1, 1]).astype(latents.dtype)
-    #             latents_std = paddle.to_tensor(self.vae.config.latents_std).reshape([1, 12, 1, 1, 1]).astype(latents.dtype)
-    #             latents = latents * latents_std / self.vae.config.scaling_factor + latents_mean
-    #         else:
-    #             latents = latents / self.vae.config.scaling_factor
-                
-    #         # VAE解码前
-    #         print("\n====== VAE解码前 ======")
-    #         print(f"解码前latents统计: min={latents.min().item():.4f}, max={latents.max().item():.4f}, mean={latents.mean().item():.4f}")
-    #         print("VAE配置检查:")
-    #         print(f"scaling_factor: {self.vae.config.scaling_factor}")
-    #         if hasattr(self.vae.config, "latents_mean"):
-    #             print(f"latents_mean: {self.vae.config.latents_mean}")
-    #         if hasattr(self.vae.config, "latents_std"):
-    #             print(f"latents_std: {self.vae.config.latents_std}")
-
-    #         video = self.vae.decode(latents, return_dict=False)[0]
-            
-    #         # 添加:
-    #         print("\n====== VAE解码后 ======")
-    #         if output_type == "pil":
-    #             first_frame = video[0][0]
-    #             print(f"输出视频第一帧类型: {type(first_frame)}, 尺寸: {first_frame.size if hasattr(first_frame, 'size') else 'unknown'}")
-    #             save_video_frames(video[0], "final_video")  # 假设video[0]是第一个生成的视频的所有帧
-    #         else:
-    #             print(f"输出视频类型: {type(video)}, 形状: {video.shape if hasattr(video, 'shape') else 'unknown'}")
-    #             # 尝试适应可能的输出格式
-    #             if hasattr(video, "shape"):
-    #                 tensor_stat = f"min={video.min().item() if hasattr(video, 'min') else 'N/A'}, max={video.max().item() if hasattr(video, 'max') else 'N/A'}"
-    #                 print(f"视频tensor统计: {tensor_stat}")
-    #             save_video_frames(video, "final_video")
-            
-    #         video = self.video_processor.postprocess_video(video, output_type=output_type)
-
-    #     # Offload all models
-    #     self.maybe_free_model_hooks()
-
-    #     if not return_dict:
-    #         return (video,)
-
-    #     return MochiPipelineOutput(frames=video)
-    
-    
-    
     @paddle.no_grad()
-    # @replace_example_docstring(EXAMPLE_DOC_STRING)
+    @replace_example_docstring(EXAMPLE_DOC_STRING)
     def __call__(
         self,
         prompt: Union[str, List[str]] = None,
@@ -738,11 +428,67 @@ class MochiPipeline(DiffusionPipeline, Mochi1LoraLoaderMixin):
         callback_on_step_end_tensor_inputs: List[str] = ["latents"],
         max_sequence_length: int = 256,
     ):
-        # ... (docstring remains the same)
+        """
+        Generate video frames based on text prompts using the Mochi pipeline.
+        
+        Args:
+            prompt (`str` or `List[str]`, *optional*):
+                The prompt or prompts to guide video generation. If not provided, prompt embeddings must be passed.
+            negative_prompt (`str` or `List[str]`, *optional*):
+                The prompt or prompts to guide what to not include in video generation. Ignored when
+                not using guidance (guidance_scale < 1).
+            height (`int`, *optional*, defaults to self.default_height):
+                The height in pixels of the generated video frames.
+            width (`int`, *optional*, defaults to self.default_width):
+                The width in pixels of the generated video frames.
+            num_frames (`int`, *optional*, defaults to 19):
+                The number of video frames to generate.
+            num_inference_steps (`int`, *optional*, defaults to 64):
+                The number of denoising steps. More denoising steps usually lead to a higher quality video
+                at the expense of slower inference.
+            timesteps (`List[int]`, *optional*):
+                Custom timesteps to use for the denoising process. If not defined, equal spaced `num_inference_steps`
+                timesteps are used.
+            guidance_scale (`float`, *optional*, defaults to 4.5):
+                Guidance scale as defined in [Classifier-Free Diffusion Guidance](https://arxiv.org/abs/2207.12598).
+                Higher values lead to more guided generation at the cost of lower diversity.
+            num_videos_per_prompt (`int`, *optional*, defaults to 1):
+                The number of videos to generate per prompt.
+            generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
+                A paddle generator to make generation deterministic.
+            latents (`paddle.Tensor`, *optional*):
+                Pre-generated noise tensor to be used as input for video generation.
+                If not provided, a noise tensor will be generated based on the batch size and dimensions.
+            prompt_embeds (`paddle.Tensor`, *optional*):
+                Pre-computed embeddings for prompt. If not provided, text embeddings will be generated from the prompt.
+            prompt_attention_mask (`paddle.Tensor`, *optional*):
+                Attention mask for prompt embeddings.
+            negative_prompt_embeds (`paddle.Tensor`, *optional*):
+                Pre-computed embeddings for negative prompt. If not provided and negative_prompt is given, 
+                embeddings will be computed from negative_prompt.
+            negative_prompt_attention_mask (`paddle.Tensor`, *optional*):
+                Attention mask for negative prompt embeddings.
+            output_type (`str`, *optional*, defaults to `"pil"`):
+                The output format of the generated video. Choose between "pil" (PIL.Image.Image), "np" (numpy.ndarray), 
+                "pt" (paddle.Tensor) or "latent" (latent space output).
+            return_dict (`bool`, *optional*, defaults to `True`):
+                Whether or not to return a [`~pipelines.mochi.MochiPipelineOutput`] instead of a tuple.
+            callback_on_step_end (`Callable`, *optional*):
+                A function that is called at the end of each denoising step. It takes the following arguments:
+                `callback(self, i, t, callback_kwargs)` where `i` is the step index, `t` is the current timestep and
+                `callback_kwargs` is a dictionary of additional keywords arguments including tensors.
+            callback_on_step_end_tensor_inputs (`List[str]`, *optional*, defaults to `["latents"]`):
+                List of tensor argument names to pass to `callback_on_step_end`.
+            max_sequence_length (`int`, *optional*, defaults to 256):
+                The maximum sequence length for text embeddings.
 
-        print("====== Pipeline Execution Start ======")
-        print(f"Transformer default dtype: {self.transformer._dtype}")
-
+        Returns:
+            [`~pipelines.mochi.MochiPipelineOutput`] or `tuple`:
+            If return_dict is True, a [`~pipelines.mochi.MochiPipelineOutput`] is returned, otherwise a
+            tuple is returned containing the generated video frames.
+            
+        Examples:
+        """
         if isinstance(callback_on_step_end, (PipelineCallback, MultiPipelineCallbacks)):
             callback_on_step_end_tensor_inputs = callback_on_step_end.tensor_inputs
 
@@ -804,9 +550,6 @@ class MochiPipeline(DiffusionPipeline, Mochi1LoraLoaderMixin):
             latents,
         )
         
-        print("\n====== Initialized latents ======")
-        print(f"min={latents.min().item():.4f}, max={latents.max().item():.4f}, mean={latents.mean().item():.4f}")
-
         if self.do_classifier_free_guidance:
             prompt_embeds = paddle.concat([negative_prompt_embeds, prompt_embeds], axis=0)
             prompt_attention_mask = paddle.concat([negative_prompt_attention_mask, prompt_attention_mask], axis=0)
@@ -857,16 +600,6 @@ class MochiPipeline(DiffusionPipeline, Mochi1LoraLoaderMixin):
                 latents = self.scheduler.step(noise_pred, t, latents.cast('float32'), return_dict=False)[0]
                 latents = latents.cast(latents_dtype)
                 
-                # Print simple stats every 10 steps
-                if i % 10 == 0 or i == len(timesteps) - 1:
-                    print(f"Step {i}: noise_pred: {noise_pred.mean().item():.4f} | latents: {latents.mean().item():.4f} [{latents.min().item():.4f}, {latents.max().item():.4f}]")
-                    
-                    # Check for numerical issues
-                    if latents.max().item() > 15.0 or latents.min().item() < -15.0:
-                        print(f"⚠️ Large values detected in step {i}")
-                        
-                    if paddle.isnan(latents).any().item() or paddle.isinf(latents).any().item():
-                        print(f"⚠️ NaN/Inf detected in step {i}")
 
                 if callback_on_step_end is not None:
                     callback_kwargs = {}
@@ -895,14 +628,7 @@ class MochiPipeline(DiffusionPipeline, Mochi1LoraLoaderMixin):
                 latents = latents / self.vae.config.scaling_factor
                 
             # VAE decode
-            print("\n====== Pre-VAE decode ======")
-            print(f"latents: min={latents.min().item():.4f}, max={latents.max().item():.4f}, mean={latents.mean().item():.4f}")
-            print(f"scaling_factor: {self.vae.config.scaling_factor}")
-
             video = self.vae.decode(latents, return_dict=False)[0]
-            
-            print("\n====== Post-VAE decode ======")
-            print(f"video: min={video.min().item() if hasattr(video, 'min') else 'N/A'}, max={video.max().item() if hasattr(video, 'max') else 'N/A'}")
             
             video = self.video_processor.postprocess_video(video, output_type=output_type)
 

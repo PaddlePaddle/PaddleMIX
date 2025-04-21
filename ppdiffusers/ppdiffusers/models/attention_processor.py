@@ -2771,7 +2771,6 @@ class MochiVaeAttnProcessor2_0:
         if attn.norm_k is not None:
             key = attn.norm_k(key)
 
-        # the output of sdp = (batch, num_heads, seq_len, head_dim)
         hidden_states = F.scaled_dot_product_attention(
             query.transpose((0, 2, 1, 3)), 
             key.transpose((0, 2, 1, 3)), 

@@ -1,4 +1,4 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2024 Black Forest Labs, The HuggingFace Team and The InstantX Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,7 +26,6 @@ pipe = MochiPipeline.from_pretrained("/home/lcjgrp/lizhijun/llm/mochi-1-preview-
 
 # VAE tiling
 pipe.enable_vae_tiling()
-
 
 prompt = "Close-up of a chameleon's eye, with its scaly skin changing color. Ultra high resolution 4k."
 frames = pipe(prompt, num_frames=30).frames[0]

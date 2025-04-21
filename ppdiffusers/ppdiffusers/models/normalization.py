@@ -348,8 +348,6 @@ class RMSNorm(nn.Layer):
             return hidden_states
 
 
-
-
 class LpNorm(nn.Layer):
     def __init__(self, p: int = 2, axis: int = -1, epsilon: float = 1e-12):
         super().__init__()
