@@ -16,9 +16,10 @@ import argparse
 import os
 
 import paddle
+from paddlenlp.transformers import CLIPImageProcessor
+from paddlenlp.transformers.clip.configuration import CLIPVisionConfig
 from utils import load_real_time_tokens
 
-from paddlemix.auto import AutoConfigMIX, AutoProcessorMIX, AutoTokenizerMIX
 from paddlemix.models.llava.constants import (
     DEFAULT_IM_END_TOKEN,
     DEFAULT_IM_START_TOKEN,
@@ -26,8 +27,11 @@ from paddlemix.models.llava.constants import (
     IMAGE_TOKEN_INDEX,
 )
 from paddlemix.models.llava.conversation import conv_templates
-from paddlemix.models.llava.mm_utils import load_image,get_anyres_image_grid_shape
+from paddlemix.models.llava.language_model.llava_llama import LlavaConfig
+from paddlemix.models.llava.language_model.tokenizer import LLavaTokenizer
 from paddlemix.models.llava.llava_arch import unpad_image
+from paddlemix.models.llava.mm_utils import get_anyres_image_grid_shape, load_image
+from paddlemix.processors import LlavaProcessor
 from paddlemix.utils.log import logger
 
 
@@ -40,13 +44,18 @@ class Predictor(object):
             self.compute_dtype = "float32"
 
         self.args = args
-        self.config = AutoConfigMIX.from_pretrained(args.model_name_or_path)
-        self.clip_config = AutoConfigMIX.from_pretrained(self.config.mm_vision_tower)
+        self.config = LlavaConfig.from_pretrained(args.model_name_or_path)
+        self.clip_config = CLIPVisionConfig.from_pretrained(self.config.mm_vision_tower)
 
-
-        self.tokenizer = AutoTokenizerMIX.from_pretrained(args.model_name_or_path)
-        self.processor, _ = AutoProcessorMIX.from_pretrained(args.model_name_or_path, image_aspect_ratio=self.config.image_aspect_ratio,eval="eval")
-
+        self.tokenizer = LLavaTokenizer.from_pretrained(args.model_name_or_path)
+        name_or_path = os.path.join(args.model_name_or_path, "processor", "eval")
+        image_processor = CLIPImageProcessor.from_pretrained(name_or_path)
+        self.processor = LlavaProcessor(
+            image_processor,
+            self.tokenizer,
+            max_length=args.max_new_tokens,
+            image_aspect_ratio=self.config.image_aspect_ratio,
+        )
         self.first_predictor = self.create_predictor(args.first_model_path)
         print(f"first_model_path: {args.first_model_path}, {self.first_predictor}")
 
@@ -66,7 +75,7 @@ class Predictor(object):
         import_module("paddlenlp_ops.transpose_remove_padding")
         import_module("paddlenlp_ops.write_cache_kv")
 
-        model_file = model_path + ".pdmodel"
+        model_file = model_path + ".json" if os.exists(model_path + ".json") else model_path + ".pdmodel"
         params_file = model_path + ".pdiparams"
         if not os.path.exists(model_file):
             raise ValueError("not find model file path {}".format(model_file))
@@ -74,7 +83,7 @@ class Predictor(object):
             raise ValueError("not find params file path {}".format(params_file))
         config = paddle.inference.Config(model_file, params_file)
 
-        config.switch_ir_optim(True)
+        config.switch_ir_optim(False)
 
         if self.args.device == "gpu":
             config.enable_use_gpu(100, 0)
@@ -91,7 +100,7 @@ class Predictor(object):
             concat_images = paddle.concat(x=[image for image in images], axis=0)
 
             image_features = self.first_predictor.run(concat_images)[0]
-      
+
             split_sizes = [image.shape[0] for image in images]
             image_features = paddle.split(image_features, split_sizes, axis=0)
             mm_patch_merge_type = getattr(self.config, "mm_patch_merge_type", "flat")
@@ -127,9 +136,9 @@ class Predictor(object):
                             image_feature = paddle.concat(
                                 x=(
                                     image_feature,
-                                    self.image_newline[:, (None), (None)].expand(
-                                        shape=[*image_feature.shape[:-1], 1]
-                                    ).astype(image_feature.dtype),
+                                    self.image_newline[:, (None), (None)]
+                                    .expand(shape=[*image_feature.shape[:-1], 1])
+                                    .astype(image_feature.dtype),
                                 ),
                                 axis=-1,
                             )
@@ -155,7 +164,7 @@ class Predictor(object):
                 raise ValueError(f"Unexpected mm_patch_merge_type: {self.config.mm_patch_merge_type}")
         else:
             image_features = self.first_predictor.run(images)[0]
-        
+
         return image_features
 
     @paddle.no_grad()
@@ -304,42 +313,44 @@ class Predictor(object):
         record = {"image": self.args.image_file, "conversations": prompt}
         image_size = load_image(args.image_file).size
         data_dict = self.processor(record=record, image_aspect_ratio=self.config.image_aspect_ratio)
-        data_dict['image_size'] = [image_size]
+        data_dict["image_size"] = [image_size]
         return data_dict
 
     def post_processing(self, generate_ids):
         msg = self.tokenizer.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)
         return msg
-    
+
     def run_benchmark(self):
         first_message = True
         import time
+
         start = 0.0
         total = 0.0
         for i in range(20):
-            if i>10:
+            if i > 10:
                 start = time.time()
             inp = "user: Generate the caption in English with grounding"
             data_dict = self.pre_processing(inp, first_message)
             image = paddle.cast(data_dict["images"], self.compute_dtype)
-          
-            image_features = self.encode_images(image,data_dict['image_size'])
+
+            image_features = self.encode_images(image, data_dict["image_size"])
 
             generate_ids, _ = self.generate_with_image_features(
                 image_features,
                 data_dict["input_ids"],
             )
-            
-            msg = self.post_processing(generate_ids)
+
+            self.post_processing(generate_ids)
             if i > 10:
-                total += time.time()-start
-            
+                total += time.time() - start
+
         print(f"average end-to-end time :  {total/10 *1000 :2f} ms.")
         print(f"GPU max_memory_allocated: {paddle.device.cuda.max_memory_allocated() / 1024 ** 3:.2f} GB")
+
     def predict(self):
         roles = "user", "assistant"
         first_message = True
-        
+
         if self.args.benchmark:
             self.run_benchmark()
         else:
@@ -354,9 +365,9 @@ class Predictor(object):
                 print(f"{roles[1]}: ", end="")
                 data_dict = self.pre_processing(inp, first_message)
                 image = paddle.cast(data_dict["images"], self.compute_dtype)
-               
-                image_features = self.encode_images(image,data_dict['image_size'])
-           
+
+                image_features = self.encode_images(image, data_dict["image_size"])
+
                 generate_ids, _ = self.generate_with_image_features(
                     image_features,
                     data_dict["input_ids"],
@@ -389,6 +400,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--device", default="gpu", choices=["gpu", "cpu", "xpu"], help="Device selected for inference."
     )
+    parser.add_argument("--max_new_tokens", type=int, default=512)
     parser.add_argument("--seed", default=0)
     parser.add_argument("--fp16", action="store_true")
     parser.add_argument("--image_file", type=str, required=True)

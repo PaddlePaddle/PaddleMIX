@@ -1,3 +1,17 @@
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+# 
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# 
+#     http://www.apache.org/licenses/LICENSE-2.0
+# 
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 set -x
 
 GPUS=${GPUS:-8}
@@ -22,8 +36,13 @@ fi
 # gradient accumulation steps: 4
 # total batch size: 128
 # epoch: 1
-TRAINING_PYTHON="python"
-${TRAINING_PYTHON} \
+
+TRAINING_MODEL_RESUME="None"
+TRAINER_INSTANCES='127.0.0.1'
+MASTER='127.0.0.1:8080'
+
+TRAINING_PYTHON="python -m paddle.distributed.launch --master ${MASTER} --nnodes 1 --nproc_per_node ${GPUS} --rank 0 --ips ${TRAINER_INSTANCES} --run_mode=collective"
+${TRAINING_PYTHON} --log_dir ${OUTPUT_DIR}/paddle_distributed_logs \
   paddlemix/examples/internvl2/internvl_chat_finetune.py \
   --model_name_or_path "OpenGVLab/InternVL2_5-1B" \
   --conv_style "internvl2_5" \

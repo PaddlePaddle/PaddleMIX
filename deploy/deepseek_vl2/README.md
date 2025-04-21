@@ -8,7 +8,7 @@
 | deepseek-ai/deepseek-vl2-small  |
 
 ## 环境安装
-[安装PaddlePaddle](https://github.com/PaddlePaddle/PaddleMIX?tab=readme-ov-file#3-%EF%B8%8F%E5%AE%89%E8%A3%85paddlepaddle)
+1） [安装PaddlePaddle](https://github.com/PaddlePaddle/PaddleMIX?tab=readme-ov-file#3-%EF%B8%8F%E5%AE%89%E8%A3%85paddlepaddle)
 - **python >= 3.10**
 - **paddlepaddle-gpu 要求develop版本**
 ```bash
@@ -25,15 +25,19 @@ python -m pip install -r requirements.txt
 
 # 安装PaddleNLP
 pip uninstall -y paddlenlp && rm -rf PaddleNLP
-git clone -b release/3.0-beta4-new --depth=1 https://github.com/PaddlePaddle/PaddleNLP.git
+git clone --depth=1 https://github.com/PaddlePaddle/PaddleNLP.git
 cd PaddleNLP
 pip install -e .
+
+# 安装paddlenlp_ops pre-build
 pip install https://paddlenlp.bj.bcebos.com/ops/cu118/paddlenlp_ops-3.0.0b4-py3-none-any.whl
 ```
 
 ## 3 高性能推理
 
 ### a. fp16 高性能推理
+
+cd PaddleMIX
 
 ```
 export CUDA_VISIBLE_DEVICES=0
@@ -54,6 +58,7 @@ python deploy/deepseek_vl2/deepseek_vl2_infer.py \
     --top_p 0.001 \
     --temperature 0.1 \
     --repetition_penalty 1.05 \
+    --output_via_mq False \
     --benchmark
 
 # 多图推理
@@ -73,6 +78,7 @@ python deploy/deepseek_vl2/deepseek_vl2_infer_multi_image.py \
     --top_p 0.001 \
     --temperature 0.1 \
     --repetition_penalty 1.05 \
+    --output_via_mq False \
     --benchmark
 ```
 
@@ -97,6 +103,7 @@ python deploy/deepseek_vl2/deepseek_vl2_infer.py \
     --temperature 0.1 \
     --repetition_penalty 1.05 \
     --quant_type "weight_only_int8" \
+    --output_via_mq False \
     --benchmark True
 ```
 
@@ -116,3 +123,15 @@ sh deploy/deepseek_vl2/shell/run.sh
 | ------------------ | -------------- |
 |     min_length     |       128      |
 |     min_length     |       128      |
+
+## 在 NVIDIA A800-SXM4-80GB 上测试的性能如下：
+
+#### 下方表格中所示性能对应的输入输出大小。
+|     parameter      |      Value     |
+| ------------------ | -------------- |
+|  input_tokens_len  |  1428 tokens    |
+|  output_tokens_len |  128 tokens    |
+
+|             model              | Paddle Inference wint8 | Paddle Inference|    PyTorch     | VLLM     |
+| -----------------------------  | ---------------------  | --------------- | -------------- |-------------- |
+| deepseek-ai/deepseek-vl2-small |          1.52 s        |     1.77 s      |      4.92 s    | 1.39s     |

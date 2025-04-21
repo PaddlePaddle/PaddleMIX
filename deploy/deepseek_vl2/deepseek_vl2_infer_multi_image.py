@@ -429,21 +429,32 @@ def init_llm_model_inputs(inputs_embeds, arg_config: Mix_PredictorArgument):
     return model_inputs
 
 
-def run_model(predictor_args, llm_model_inputs):
-    # conversation = [
-    #     {
-    #         "role": "<|User|>",
-    #         "content": f"<image>\n{predictor_args.question}.",
-    #         "images": [predictor_args.image_file],
-    #     },
-    #     {"role": "<|Assistant|>", "content": ""},
-    # ]
+def run_model(predictor_args):
+    conversation = [
+        {
+            "role": "<|User|>",
+            "content": "This is image_1: <image>\n"
+            "This is image_2: <image>\n"
+            f"This is image_3: <image>\n {predictor_args.question}",
+            "images": [
+                predictor_args.image_file_1,
+                predictor_args.image_file_2,
+                predictor_args.image_file_3,
+            ],
+        },
+        {"role": "<|Assistant|>", "content": ""},
+    ]
 
-    # pil_images = load_pil_images(conversation)
-    # prepare_inputs = processor(
-    #     conversations=conversation, images=pil_images, force_batchify=True, system_prompt=""
-    # )
-    # prepare_inputs.images = prepare_inputs.images.astype(predictor_args.dtype)
+    pil_images = load_pil_images(conversation)
+    prepare_inputs = processor(
+        conversations=conversation, images=pil_images, force_batchify=True, system_prompt=""
+    )
+    prepare_inputs.images = prepare_inputs.images.astype(predictor_args.dtype)
+
+    with paddle.no_grad():
+        inputs_embeds = vl_model.prepare_inputs_embeds(**prepare_inputs)
+    input_tokens_len = inputs_embeds.shape[1]
+    llm_model_inputs = init_llm_model_inputs(inputs_embeds, arg_config=predictor_args)
 
     generated_text = ""
     generated_ids = paddle.to_tensor([], dtype="int64").reshape([1, 0])
@@ -521,21 +532,6 @@ fast_llm_model.eval()
 vl_model.language = fast_llm_model
 
 
-conversation = [
-    {
-        "role": "<|User|>",
-        "content": "This is image_1: <image>\n"
-        "This is image_2: <image>\n"
-        f"This is image_3: <image>\n {predictor_args.question}",
-        "images": [
-            predictor_args.image_file_1,
-            predictor_args.image_file_2,
-            predictor_args.image_file_3,
-        ],
-    },
-    {"role": "<|Assistant|>", "content": ""},
-]
-
 if predictor_args.benchmark:
     print(f"Benchmarking {predictor_args.model_name_or_path} ...")
     warm_up = 3
@@ -544,20 +540,10 @@ if predictor_args.benchmark:
     times = repeat_times + warm_up
     for i in range(times):
         print("run", i)
-        pil_images = load_pil_images(conversation)
-        prepare_inputs = processor(
-            conversations=conversation, images=pil_images, force_batchify=True, system_prompt=""
-        )
-        prepare_inputs.images = prepare_inputs.images.astype(predictor_args.dtype)
-        with paddle.no_grad():
-            inputs_embeds = vl_model.prepare_inputs_embeds(**prepare_inputs)
-        input_tokens_len = inputs_embeds.shape[1]
-        llm_model_inputs = init_llm_model_inputs(inputs_embeds, arg_config=predictor_args)
-
         if i > 2:
             paddle.device.synchronize()
             starttime = datetime.datetime.now()
-        generated_text = run_model(predictor_args, llm_model_inputs)
+        generated_text = run_model(predictor_args)
         if i > 2:
             paddle.device.synchronize()
             endtime = datetime.datetime.now()
@@ -578,12 +564,5 @@ if predictor_args.benchmark:
     print("output_tokens_len is :", generated_text[2], "tokens")
 
 else:
-    pil_images = load_pil_images(conversation)
-    prepare_inputs = processor(conversations=conversation, images=pil_images, force_batchify=True, system_prompt="")
-    prepare_inputs.images = prepare_inputs.images.astype(predictor_args.dtype)
-    with paddle.no_grad():
-        inputs_embeds = vl_model.prepare_inputs_embeds(**prepare_inputs)
-    input_tokens_len = inputs_embeds.shape[1]
-    llm_model_inputs = init_llm_model_inputs(inputs_embeds, arg_config=predictor_args)
-    generated_text = run_model(predictor_args, llm_model_inputs)
+    generated_text = run_model(predictor_args)
     print("Final output_text:\n", generated_text[0])

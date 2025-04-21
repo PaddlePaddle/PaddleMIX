@@ -50,6 +50,7 @@ python deploy/qwen2_vl/single_image_infer.py\
     --inference_model True \
     --mode dynamic \
     --dtype bfloat16 \
+    --output_via_mq False \
     --benchmark True
 
 ### 3.2. 文本&视频输入高性能推理
@@ -92,8 +93,8 @@ sh deploy/qwen2_vl/scripts/qwen2_vl.sh
 
 | model                  | Paddle Inference wint8 | Paddle Inference|    PyTorch   |
 | ---------------------- | ---------------------- | --------------- | ------------ |
-| Qwen2-VL-2B-Instruct   |         0.815 s        |      0.886 s    |    2.086 s   |
-| Qwen2-VL-7B-Instruct   |         1.210 s        |      1.749 s    |    3.132 s   |
+| Qwen2-VL-2B-Instruct   |         0.636 s        |      0.777 s    |    2.086 s   |
+| Qwen2-VL-7B-Instruct   |         1.121 s        |      1.677 s    |    3.132 s   |
 
 
 - 在 NVIDIA A800-80GB 上测试的单视频端到端速度性能如下：

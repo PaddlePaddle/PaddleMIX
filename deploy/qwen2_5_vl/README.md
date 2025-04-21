@@ -46,6 +46,7 @@ python setup_cuda.py install
 ### a. fp16 高性能推理
 ```bash
 cd PaddleMIX
+rm -rf ./tmp/qwen2_5_vl
 
 # 1. image infer
 export CUDA_VISIBLE_DEVICES=0
@@ -64,6 +65,7 @@ python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
     --inference_model True \
     --mode dynamic \
     --dtype bfloat16 \
+    --output_via_mq False \
     --benchmark True
 
 # 2. video infer
@@ -82,6 +84,7 @@ python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
     --inference_model True \
     --mode dynamic \
     --dtype bfloat16 \
+    --output_via_mq False \
     --benchmark True
 ```
 
@@ -105,13 +108,14 @@ python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
     --mode dynamic \
     --dtype bfloat16 \
     --quant_type "weight_only_int8" \
+    --output_via_mq False \
     --benchmark True
 ```
 
 ### c. TP并行，多卡高性能推理
 ```bash
-export CUDA_VISIBLE_DEVICES=0,1,2,3
-python -m paddle.distributed.launch --gpus "0,1,2,3" deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
+export CUDA_VISIBLE_DEVICES=0,1
+python -m paddle.distributed.launch --gpus "0,1" deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
     --model_name_or_path Qwen/Qwen2.5-VL-3B-Instruct \
     --media_type "image" \
     --question "Describe this image." \
@@ -127,6 +131,7 @@ python -m paddle.distributed.launch --gpus "0,1,2,3" deploy/qwen2_5_vl/qwen2_5_v
     --mode dynamic \
     --append_attn 1 \
     --dtype bfloat16 \
+    --output_via_mq False \
     --benchmark True
 ```
 
@@ -160,6 +165,6 @@ sh deploy/qwen2_5_vl/scripts/qwen2_5_vl.sh
 
 |             model           | Paddle Inference wint8 | Paddle Inference|    PyTorch     | VLLM     |
 | --------------------------- | ---------------------  | --------------- | -------------- |-------------- |
-| Qwen/Qwen2.5-VL-3B-Instruct |          0.994 s       |     1.247 s     |      4.92 s    | 1.39s     |
-| Qwen/Qwen2.5-VL-7B-Instruct |          1.244 s       |     1.768 s     |      3.89 s    | 1.92s     |
+| Qwen/Qwen2.5-VL-3B-Instruct |          0.823 s       |     1.15 s      |      4.92 s    | 1.39s     |
+| Qwen/Qwen2.5-VL-7B-Instruct |          1.144 s       |     1.16 s      |      3.89 s    | 1.92s     |
 | Qwen/Qwen2.5-VL-72B-Instruct|             -          |     4.806 s     |        -       | -        |
