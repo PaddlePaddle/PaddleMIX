@@ -41,9 +41,10 @@ EXAMPLE_DOC_STRING = """
 
         >>> model_id = "hunyuanvideo-community/HunyuanVideo"
         >>> transformer = HunyuanVideoTransformer3DModel.from_pretrained(
-        ...     model_id, subfolder="transformer", torch_dtype=torch.bfloat16
+        ...     model_id, subfolder="transformer", paddle_dtype=paddle.bfloat16
+
         ... )
-        >>> pipe = HunyuanVideoPipeline.from_pretrained(model_id, transformer=transformer, torch_dtype=torch.float16)
+        >>> pipe = HunyuanVideoPipeline.from_pretrained(model_id, transformer=transformer, paddle_dtype=paddle.float16)
         >>> pipe.vae.enable_tiling()
         >>> pipe.to("cuda")
 
@@ -445,6 +446,10 @@ class HunyuanVideoPipeline(DiffusionPipeline):  # HunyuanVideoLoraLoaderMixin
         return self._attention_kwargs
 
     @property
+    def current_timestep(self):
+        return self._current_timestep
+
+    @property
     def interrupt(self):
         return self._interrupt
 
@@ -565,6 +570,7 @@ class HunyuanVideoPipeline(DiffusionPipeline):  # HunyuanVideoLoraLoaderMixin
 
         self._guidance_scale = guidance_scale
         self._attention_kwargs = attention_kwargs
+        self._current_timestep = None
         self._interrupt = False
 
 
@@ -630,6 +636,7 @@ class HunyuanVideoPipeline(DiffusionPipeline):  # HunyuanVideoLoraLoaderMixin
                 if self.interrupt:
                     continue
 
+                self._current_timestep = t
                 latent_model_input = latents.to(transformer_dtype)
                 # broadcast to batch dimension in a way that's compatible with ONNX/Core ML
                 timestep = t.expand(shape=tuple(latents.shape)[0]).to(latents.dtype)
@@ -660,6 +667,9 @@ class HunyuanVideoPipeline(DiffusionPipeline):  # HunyuanVideoLoraLoaderMixin
                 # call the callback, if provided
                 if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
                     progress_bar.update()
+
+        self._current_timestep = None
+
         if not output_type == "latent":
             latents = latents.to(self.vae.dtype) / self.vae.config.scaling_factor
             video = self.vae.decode(latents, return_dict=False)[0]
