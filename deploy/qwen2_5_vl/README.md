@@ -35,8 +35,13 @@ python -m pip install -r requirements.txt --user
 git clone https://github.com/PaddlePaddle/PaddleNLP.git
 cd PaddleNLP
 python setup.py install
+
+# 手动编译安装paddlenlp_ops
 cd csrc
 python setup_cuda.py install
+
+# 安装pre-build paddlenlp_ops
+pip install https://paddlenlp.bj.bcebos.com/ops/cu118/paddlenlp_ops-3.0.0b4.post20250331-py3-none-any.whl
 ```
 
 
@@ -73,6 +78,10 @@ python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
     --benchmark True
 
 # 2. video infer
+export CUDA_VISIBLE_DEVICES=0
+export FLAGS_cascade_attention_max_partition_size=128
+export FLAGS_cascade_attention_deal_each_time=16
+export USE_FASTER_TOP_P_SAMPLING=1
 python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
     --model_name_or_path Qwen/Qwen2.5-VL-3B-Instruct \
     --media_type "video" \
@@ -85,8 +94,9 @@ python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
     --temperature 0.1 \
     --repetition_penalty 1.05 \
     --block_attn True \
+    --append_attn True \
     --inference_model True \
-    --mode dynamic \
+    --llm_mode static \
     --dtype bfloat16 \
     --output_via_mq False \
     --benchmark True
@@ -96,6 +106,9 @@ python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
 ### b. wint8 高性能推理
 ```bash
 export CUDA_VISIBLE_DEVICES=0
+export FLAGS_cascade_attention_max_partition_size=128
+export FLAGS_cascade_attention_deal_each_time=16
+export USE_FASTER_TOP_P_SAMPLING=1
 python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
     --model_name_or_path Qwen/Qwen2.5-VL-3B-Instruct \
     --media_type "image" \
@@ -108,8 +121,9 @@ python deploy/qwen2_5_vl/qwen2_5_vl_infer.py \
     --temperature 0.1 \
     --repetition_penalty 1.05 \
     --block_attn True \
+    --append_attn True \
     --inference_model True \
-    --mode dynamic \
+    --llm_mode static \
     --dtype bfloat16 \
     --quant_type "weight_only_int8" \
     --output_via_mq False \
