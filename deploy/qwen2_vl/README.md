@@ -20,9 +20,14 @@ python -m pip install paddlepaddle-gpu==0.0.0.post118 -f https://www.paddlepaddl
 # 安装示例
 git clone https://github.com/PaddlePaddle/PaddleNLP.git
 cd PaddleNLP
+
+# 手动编译安装paddlenlp_ops
 python setup.py install
 cd csrc
 python setup_cuda.py install
+
+# 安装paddlenlp_ops pre-build 
+pip install https://paddlenlp.bj.bcebos.com/ops/cu118/paddlenlp_ops-3.0.0b4.post20250331-py3-none-any.whl
 ```
 
 > 注：
@@ -56,7 +61,7 @@ python deploy/qwen2_vl/single_image_infer.py\
     --dtype bfloat16 \
     --output_via_mq False \
     --benchmark True
-
+```
 ### 3.2. 文本&视频输入高性能推理
 ```bash
 export CUDA_VISIBLE_DEVICES=0
