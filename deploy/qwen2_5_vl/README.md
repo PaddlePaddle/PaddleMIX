@@ -36,6 +36,8 @@ git clone https://github.com/PaddlePaddle/PaddleNLP.git
 cd PaddleNLP
 python setup.py install
 
+# 此处提供两种paddlenlp_ops安装方法，建议使用预编译的paddlenlp_ops进行安装
+
 # 手动编译安装paddlenlp_ops
 cd csrc
 python setup_cuda.py install
