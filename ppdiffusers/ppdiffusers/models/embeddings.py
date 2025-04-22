@@ -1321,10 +1321,10 @@ def get_1d_rotary_pos_embed(
         repeat_interleave_real (`bool`, *optional*, defaults to `True`):
             If `True` and `use_real`, real part and imaginary part are each interleaved with themselves to reach `dim`.
             Otherwise, they are concateanted with themselves.
-        freqs_dtype (`torch.float32` or `torch.float64`, *optional*, defaults to `torch.float32`):
+        freqs_dtype (`paddle.float32` or `paddle.float64`, *optional*, defaults to `paddle.float32`):
             the dtype of the frequency tensor.
     Returns:
-        `torch.Tensor`: Precomputed frequency tensor with complex exponentials. [S, D/2]
+        `paddle.Tensor`: Precomputed frequency tensor with complex exponentials. [S, D/2]
     """
     assert dim % 2 == 0
     if isinstance(pos, int):

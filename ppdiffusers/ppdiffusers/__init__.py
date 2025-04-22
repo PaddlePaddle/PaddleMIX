@@ -51,6 +51,7 @@ from .version import VERSION as __version__
 
 _import_structure = {
     "configuration_utils": ["ConfigMixin"],
+    "hooks": [],
     "models": [],
     "pipelines": [],
     "schedulers": [],
@@ -106,6 +107,13 @@ except OptionalDependencyNotAvailable:
     ]
 
 else:
+    _import_structure["hooks"].extend(
+        [
+            "HookRegistry",
+            "PyramidAttentionBroadcastConfig",
+            "apply_pyramid_attention_broadcast",
+        ]
+    )
     _import_structure["models"].extend(
         [
             "AsymmetricAutoencoderKL",
@@ -115,6 +123,7 @@ else:
             "AutoencoderKLWan",
             "AutoencoderKLTemporalDecoder",
             "AutoencoderTiny",
+            "CacheMixin",
             "CogVideoXTransformer3DModel",
             "CogVideoXTransformer3DVCtrlModel",
             "ConsistencyDecoderVAE",
