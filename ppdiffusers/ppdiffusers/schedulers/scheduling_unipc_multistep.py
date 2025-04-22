@@ -153,8 +153,11 @@ class UniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
         disable_corrector: List[int] = [],
         solver_p: SchedulerMixin = None,
         use_karras_sigmas: Optional[bool] = False,
+        use_flow_sigmas: Optional[bool] = False,
+        flow_shift: Optional[float] = 1.0,
         timestep_spacing: str = "linspace",
         steps_offset: int = 0,
+        final_sigmas_type: Optional[str] = "zero",  # "zero", "sigma_min"
     ):
         if trained_betas is not None:
             self.betas = paddle.to_tensor(trained_betas, dtype=paddle.float32)
@@ -249,6 +252,20 @@ class UniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
             sigmas = self._convert_to_karras(in_sigmas=sigmas, num_inference_steps=num_inference_steps)
             timesteps = np.array([self._sigma_to_t(sigma, log_sigmas) for sigma in sigmas]).round()
             sigmas = np.concatenate([sigmas, sigmas[-1:]]).astype(np.float32)
+        elif self.config.use_flow_sigmas:
+            alphas = np.linspace(1, 1 / self.config.num_train_timesteps, num_inference_steps + 1)
+            sigmas = 1.0 - alphas
+            sigmas = np.flip(self.config.flow_shift * sigmas / (1 + (self.config.flow_shift - 1) * sigmas))[:-1].copy()
+            timesteps = (sigmas * self.config.num_train_timesteps).copy()
+            if self.config.final_sigmas_type == "sigma_min":
+                sigma_last = sigmas[-1]
+            elif self.config.final_sigmas_type == "zero":
+                sigma_last = 0
+            else:
+                raise ValueError(
+                    f"`final_sigmas_type` must be one of 'zero', or 'sigma_min', but got {self.config.final_sigmas_type}"
+                )
+            sigmas = np.concatenate([sigmas, [sigma_last]]).astype(np.float32)
         else:
             sigmas = np.interp(timesteps, np.arange(0, len(sigmas)), sigmas)
             sigma_last = ((1 - self.alphas_cumprod[0]) / self.alphas_cumprod[0]) ** 0.5
@@ -334,8 +351,12 @@ class UniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
 
     # Copied from ppdiffusers.schedulers.scheduling_dpmsolver_multistep.DPMSolverMultistepScheduler._sigma_to_alpha_sigma_t
     def _sigma_to_alpha_sigma_t(self, sigma):
-        alpha_t = 1 / ((sigma**2 + 1) ** 0.5)
-        sigma_t = sigma * alpha_t
+        if self.config.use_flow_sigmas:
+            alpha_t = 1 - sigma
+            sigma_t = sigma
+        else:
+            alpha_t = 1 / ((sigma**2 + 1) ** 0.5)
+            sigma_t = sigma * alpha_t
 
         return alpha_t, sigma_t
 
@@ -410,6 +431,9 @@ class UniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
                 x0_pred = model_output
             elif self.config.prediction_type == "v_prediction":
                 x0_pred = alpha_t * sample - sigma_t * model_output
+            elif self.config.prediction_type == "flow_prediction":
+                sigma_t = self.sigmas[self.step_index]
+                x0_pred = sample - sigma_t * model_output
             else:
                 raise ValueError(
                     f"prediction_type given as {self.config.prediction_type} must be one of `epsilon`, `sample`, or"
@@ -679,7 +703,7 @@ class UniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
         if order == 1:
             rhos_c = paddle.to_tensor([0.5], dtype=x.dtype)
         else:
-            rhos_c = paddle.linalg.solve(R, b)
+            rhos_c = paddle.linalg.solve(R, b.cast("float32"))
         rhos_c = rhos_c.cast(x.dtype)
         if self.predict_x0:
             x_t_ = sigma_t / sigma_s0 * x - alpha_t * h_phi_1 * m0
@@ -750,9 +774,9 @@ class UniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
             )
 
         # NOTE(laixinlu) convert sigmas to the dtype of the model output
-        if self.sigmas.dtype != model_output.dtype:
+        if not self.use_flow_sigmas and self.sigmas.dtype != model_output.dtype:
             self.sigmas = self.sigmas.cast(model_output.dtype)
-            
+
         if self.step_index is None:
             self._init_step_index(timestep)
 
