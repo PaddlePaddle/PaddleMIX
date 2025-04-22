@@ -36,6 +36,9 @@ python setup_cuda.py install
 ### 3.1. 文本&单张图像输入高性能推理
 ```bash
 export CUDA_VISIBLE_DEVICES=0
+export FLAGS_cascade_attention_max_partition_size=128
+export FLAGS_cascade_attention_deal_each_time=16
+export USE_FASTER_TOP_P_SAMPLING=1
 python deploy/qwen2_vl/single_image_infer.py\
     --model_name_or_path Qwen/Qwen2-VL-2B-Instruct \
     --question "Describe this image." \
@@ -47,17 +50,35 @@ python deploy/qwen2_vl/single_image_infer.py\
     --temperature 0.1 \
     --repetition_penalty 1.05 \
     --block_attn True \
+    --append_attn True \
     --inference_model True \
-    --mode dynamic \
+    --llm_mode static \
     --dtype bfloat16 \
     --output_via_mq False \
     --benchmark True
 
 ### 3.2. 文本&视频输入高性能推理
 ```bash
-CUDA_VISIBLE_DEVICES=0 python deploy/qwen2_vl/video_infer.py \
+export CUDA_VISIBLE_DEVICES=0
+export FLAGS_cascade_attention_max_partition_size=128
+export FLAGS_cascade_attention_deal_each_time=16
+export USE_FASTER_TOP_P_SAMPLING=1
+python deploy/qwen2_vl/video_infer.py\
     --model_name_or_path Qwen/Qwen2-VL-2B-Instruct \
+    --question "Describe this video." \
+    --video_file paddlemix/demo_images/red-panda.mp4 \
+    --min_length 128 \
+    --max_length 128 \
+    --top_k 1 \
+    --top_p 0.001 \
+    --temperature 0.1 \
+    --repetition_penalty 1.05 \
+    --block_attn True \
+    --append_attn True \
+    --inference_model True \
+    --llm_mode static \
     --dtype bfloat16 \
+    --output_via_mq False \
     --benchmark True
 ```
 
@@ -84,10 +105,11 @@ sh deploy/qwen2_vl/scripts/qwen2_vl.sh
 
 
 #### 下方表格中所示性能对应的输入输出大小。
-|     parameter      |      Value     |
-| ------------------ | -------------- |
-|  input_tokens_len  |  997 tokens    |
-|  output_tokens_len |  128 tokens    |
+|     parameter            |      Value     |
+| -------------------------| -------------- |
+|  image_input_tokens_len  |  997 tokens    |
+|  video_input_tokens_len  | 2725 tokens    |
+|  output_tokens_len       |  128 tokens    |
 
 - 在 NVIDIA A800-80GB 上测试的单图端到端速度性能如下：
 
@@ -101,5 +123,5 @@ sh deploy/qwen2_vl/scripts/qwen2_vl.sh
 
 | model                  | Paddle Inference|    PyTorch   |
 | ---------------------- | --------------- | ------------ |
-| Qwen2-VL-2B-Instruct   |      2.890 s    |     3.143 s  |
-| Qwen2-VL-7B-Instruct   |      2.534 s    |     2.715 s  |
+| Qwen2-VL-2B-Instruct   |      1.306 s    |     3.143 s  |
+| Qwen2-VL-7B-Instruct   |      2.337 s    |     2.715 s  |
