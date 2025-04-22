@@ -155,6 +155,8 @@ else:
             "VCtrlModel",
             # new add
             "FluxTransformer2DModel",
+            "FluxControlNetModel",
+            "FluxMultiControlNetModel",
         ]
     )
 
