@@ -8,6 +8,11 @@
 
 ## 代码实现
 
+### 安装PaddlePaddle
+```
+ python -m pip install paddlepaddle-gpu==3.0.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
+```
+
 ### 安装PaddleMIX 2.0
 ```
 git clone https://github.com/PaddlePaddle/PaddleMIX
