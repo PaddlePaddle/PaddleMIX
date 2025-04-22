@@ -10,7 +10,7 @@
 
 ### 安装PaddleMIX 2.0
 ```
-!git clone https://github.com/PaddlePaddle/PaddleMIX
+git clone https://github.com/PaddlePaddle/PaddleMIX
 ```
 ### 安装依赖
 ```
