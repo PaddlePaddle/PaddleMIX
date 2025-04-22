@@ -26,6 +26,7 @@ from ..utils import logging, USE_PEFT_BACKEND
 from ..utils.paddle_utils import maybe_allow_in_graph, dim2perm
 from .attention import FeedForward
 from .attention_processor import Attention, AttentionProcessor
+from .cache_utils import CacheMixin
 from .embeddings import (
     CombinedTimestepGuidanceTextProjEmbeddings,
     CombinedTimestepTextProjEmbeddings,
@@ -563,7 +564,7 @@ class HunyuanVideoTransformerBlock(paddle.nn.Layer):
         return hidden_states, encoder_hidden_states
 
 
-class HunyuanVideoTransformer3DModel(ModelMixin, ConfigMixin):  # FromOriginalModelMixin, PeftAdapterMixin
+class HunyuanVideoTransformer3DModel(ModelMixin, ConfigMixin, CacheMixin):  # FromOriginalModelMixin, PeftAdapterMixin
     r"""
     A Transformer model for video-like data used in [HunyuanVideo](https://huggingface.co/tencent/HunyuanVideo).
 

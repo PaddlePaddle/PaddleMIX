@@ -387,7 +387,7 @@ if is_npu_available():
         )[0]
         return out
     paddle.nn.functional.scaled_dot_product_attention_npu = scaled_dot_product_attention_npu
-
+    
 if is_ppxformers_available() or is_npu_available():
     from paddle.incubate.nn.memory_efficient_attention import memory_efficient_attention
 
