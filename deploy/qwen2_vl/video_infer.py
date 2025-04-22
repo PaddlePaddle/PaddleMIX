@@ -169,17 +169,12 @@ def run_model(predictor_args):
         {
             "role": "user",
             "content": [
-                {
-                    "type": "video",
-                    "video": predictor_args.video_file,
-                    "fps": 1,
-                    "max_pixels": 360 * 420
-                },
+                {"type": "video", "video": predictor_args.video_file, "fps": 1, "max_pixels": 360 * 420},
                 {"type": "text", "text": predictor_args.question},
             ],
         }
     ]
-    
+
     # Preparation for inference
     image_inputs, video_inputs = process_vision_info(messages)
     vision_model_inputs = processor(
