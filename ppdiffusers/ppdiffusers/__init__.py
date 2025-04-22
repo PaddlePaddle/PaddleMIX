@@ -112,6 +112,7 @@ else:
             "AutoencoderKL",
             "AutoencoderKLCogVideoX",
             "AutoencoderKLHunyuanVideo",
+            "AutoencoderKLWan",
             "AutoencoderKLTemporalDecoder",
             "AutoencoderTiny",
             "AutoencoderKLMochi",
@@ -157,6 +158,7 @@ else:
             # new add
             "FluxTransformer2DModel",
             "MochiTransformer3DModel"
+            "WanTransformer3DModel",
         ]
     )
 
@@ -292,6 +294,8 @@ else:
             "FluxInpaintPipeline",
             "FluxPipeline",
             "FluxPriorReduxPipeline",
+            "WanPipeline",
+            "WanImageToVideoPipeline",
             "IFImg2ImgPipeline",
             "IFImg2ImgSuperResolutionPipeline",
             "IFInpaintingPipeline",
@@ -554,6 +558,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             Vid2VidSTUNet,
             VQModel,
             MochiTransformer3DModel,
+            WanTransformer3DModel,
         )
         from .optimization import (
             get_constant_schedule,
@@ -774,6 +779,8 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             VersatileDiffusionTextToImagePipeline,
             VideoToVideoSDPipeline,
             VQDiffusionPipeline,
+            WanImageToVideoPipeline,
+            WanPipeline,
             WuerstchenCombinedPipeline,
             WuerstchenDecoderPipeline,
             WuerstchenPriorPipeline,

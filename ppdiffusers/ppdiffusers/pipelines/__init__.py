@@ -106,6 +106,10 @@ else:
         "CogVideoXVCtrlPipeline",
         "CogVideoXVCtrlImageToVideoPipeline",
     ]
+    _import_structure["wan"] = [
+        "WanPipeline",
+        "WanImageToVideoPipeline",
+    ]
     _import_structure["controlnet"].extend(
         [
             "BlipDiffusionControlNetPipeline",
@@ -434,6 +438,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             FluxPriorReduxPipeline,
             ReduxImageEncoder,
         )
+        from .hunyuan_video import HunyuanVideoPipeline, HunyuanVideoPipelineOutput
         from .img_to_video import ImgToVideoSDPipeline, ImgToVideoSDPipelineOutput
         from .kandinsky import (
             KandinskyCombinedPipeline,
@@ -559,14 +564,11 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             VideoToVideoModelscopePipelineOutput,
         )
         from .vq_diffusion import VQDiffusionPipeline
+        from .wan import WanImageToVideoPipeline, WanPipeline
         from .wuerstchen import (
             WuerstchenCombinedPipeline,
             WuerstchenDecoderPipeline,
             WuerstchenPriorPipeline,
-        )
-        from .hunyuan_video import (
-            HunyuanVideoPipeline,
-            HunyuanVideoPipelineOutput,
         )
         from .mochi import MochiPipeline
 
