@@ -35,6 +35,7 @@ def export_encode_text(model, config, compute_dtype):
 def export_encode_image(model, compute_dtype):
     paddle.save(model.llama.image_newline, args.save_path + "/encode_image/clip/image_newline.pdparams")
     # convert to static graph with specific input description
+
     model = paddle.jit.to_static(
         model.encode_images,
         input_spec=[
@@ -88,7 +89,9 @@ if __name__ == "__main__":
         config.tensor_parallel_degree = 1
         config.tensor_parallel_rank = 0
         config.weight_only_quant_bits = -1
-        config.quant_type = None
+        config.quant_type = "none"
+        config.cachekv_int8_type = "none"
+        config.append_attn = False
 
         model = LlamaForClipInferenceModel.from_pretrained(args.model_name_or_path, config=config)
 
