@@ -20,13 +20,14 @@ python -m pip install paddlepaddle-gpu==0.0.0.post118 -f https://www.paddlepaddl
 # 安装示例
 git clone https://github.com/PaddlePaddle/PaddleNLP.git
 cd PaddleNLP
-
-# 手动编译安装paddlenlp_ops
 python setup.py install
+
+# 此处提供两种paddlenlp_ops安装方法，建议使用预编译的paddlenlp_ops进行安装
+# 手动编译安装paddlenlp_ops
 cd csrc
 python setup_cuda.py install
 
-# 安装paddlenlp_ops pre-build 
+# 安装pre-build paddlenlp_ops
 pip install https://paddlenlp.bj.bcebos.com/ops/cu118/paddlenlp_ops-3.0.0b4.post20250331-py3-none-any.whl
 ```
 
