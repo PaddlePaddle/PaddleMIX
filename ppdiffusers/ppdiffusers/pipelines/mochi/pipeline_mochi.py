@@ -36,7 +36,7 @@ from ..pipeline_utils import DiffusionPipeline
 from .pipeline_output import MochiPipelineOutput
 
 
-logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
+logger = logging.get_logger(__name__) 
 
 EXAMPLE_DOC_STRING = """
     Examples:

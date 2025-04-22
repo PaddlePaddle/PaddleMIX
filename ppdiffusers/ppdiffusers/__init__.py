@@ -157,7 +157,7 @@ else:
             "VCtrlModel",
             # new add
             "FluxTransformer2DModel",
-            "MochiTransformer3DModel"
+            "MochiTransformer3DModel",
             "WanTransformer3DModel",
         ]
     )

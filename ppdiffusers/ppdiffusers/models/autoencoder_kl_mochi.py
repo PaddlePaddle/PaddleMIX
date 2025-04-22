@@ -31,29 +31,8 @@ from .autoencoder_kl_cogvideox import CogVideoXCausalConv3d
 from .vae import DecoderOutput, DiagonalGaussianDistribution
 
 
-logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
+logger = logging.get_logger(__name__) 
 
-
-# class MochiChunkedGroupNorm3D(nn.Layer):
-#     def __init__(
-#         self,
-#         num_channels: int,
-#         num_groups: int = 32,
-#         affine: bool = True,
-#         chunk_size: int = 8,
-#     ):
-#         super().__init__()
-#         self.norm_layer = nn.GroupNorm(num_channels=num_channels, num_groups=num_groups, weight_attr=affine, bias_attr=affine)
-#         self.chunk_size = chunk_size
-
-#     def forward(self, x: paddle.Tensor = None) -> paddle.Tensor:
-#         batch_size = x.shape[0]
-
-#         x = x.transpose([0, 2, 1, 3, 4]).flatten(0, 1)
-#         output = paddle.concat([self.norm_layer(chunk) for chunk in paddle.split(x, num_or_sections=self.chunk_size, axis=0)], axis=0)
-#         output = output.reshape([batch_size, -1] + list(output.shape[1:])).transpose([0, 2, 1, 3, 4])
-
-#         return output
 
 class MochiChunkedGroupNorm3D(nn.Layer):
     def __init__(
@@ -72,15 +51,11 @@ class MochiChunkedGroupNorm3D(nn.Layer):
 
         x = x.transpose([0, 2, 1, 3, 4]).flatten(0, 1)
         
-        # Handle cases where batch size may not be divisible by chunk_size
         if x.shape[0] <= self.chunk_size:
-            # If total size is less than or equal to chunk_size, process the entire batch directly
             output = self.norm_layer(x)
         elif x.shape[0] % self.chunk_size == 0:
-            # If evenly divisible, process using the original chunking method
             output = paddle.concat([self.norm_layer(chunk) for chunk in paddle.split(x, num_or_sections=self.chunk_size, axis=0)], axis=0)
         else:
-            # Manually handle cases where batch size is not divisible by chunk_size
             chunks = []
             num_full_chunks = x.shape[0] // self.chunk_size
             
