@@ -13,6 +13,8 @@
 # limitations under the License.
 
 import argparse
+import json
+import os
 
 import numpy as np
 import paddle
@@ -30,6 +32,14 @@ paddle.set_grad_enabled(False)
 
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD = (0.229, 0.224, 0.225)
+
+TOKENIZER_MAPPING = {
+    "InternLM2Tokenizer": InternLM2Tokenizer,
+    "Llama3Tokenizer": Llama3Tokenizer,
+    "LlamaTokenizer": LlamaTokenizer,
+    "MIXQwen2Tokenizer": MIXQwen2Tokenizer,
+    "Qwen2Tokenizer": Qwen2Tokenizer,
+}
 
 
 def check_dtype_compatibility():
@@ -140,7 +150,15 @@ def load_tokenizer(model_path):
     if match:
         model_size = match.group()
     else:
-        model_size = "2B"
+        tokenzer_path = os.path.join(model_path, "tokenizer_config.json")
+        if os.path.exists(tokenzer_path):
+            with open(tokenzer_path) as f:
+                tokenizer_class_name = json.load(f)["tokenizer_class"]
+            tokenizer_class = TOKENIZER_MAPPING.get(tokenizer_class_name, MIXQwen2Tokenizer)
+            tokenizer = tokenizer_class.from_pretrained(model_path)
+            return tokenizer
+        else:
+            raise ValueError
 
     if not model_v2_5 and not model_v3:
         # InternVL2，暂不支持4B的phi3
