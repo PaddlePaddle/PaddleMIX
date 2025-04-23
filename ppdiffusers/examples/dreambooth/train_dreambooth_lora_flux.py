@@ -1143,7 +1143,8 @@ def main(args):
         r=args.rank,
         lora_alpha=args.rank,
         init_lora_weights="gaussian",
-        target_modules=target_modules,
+        # target_modules=target_modules,
+        target_modules=["to_k", "to_q", "to_v", "to_out.0"],
     )
     transformer.add_adapter(transformer_lora_config)
 
@@ -1576,7 +1577,8 @@ def main(args):
 
                 # Predict the noise residual
                 # westfish: add amp
-                with paddle.amp.auto_cast(enable=args.mixed_precision in ['fp16', 'bf16'], custom_white_list=None, custom_black_list=None, level="O2", dtype='float16' if args.mixed_precision == 'fp16' else 'bfloat16'):
+                with paddle.amp.auto_cast(enable=args.mixed_precision in ['fp16', 'bf16'], custom_white_list=["lookup_table", "lookup_table_v2"], custom_black_list=["reduce_sum", "c_softmax_with_cross_entropy"], level="O2", dtype='float16' if args.mixed_precision == 'fp16' else 'bfloat16'):
+                # with null_context():
                     model_pred = transformer(
                         hidden_states=packed_noisy_model_input,
                         # YiYi notes: divide it by 1000 for now because we scale it by 1000 in the transforme rmodel (we should not keep it but I want to keep the inputs same for the model for testing)
@@ -1629,6 +1631,15 @@ def main(args):
 
                 # westfish: add amp
                 # accelerator.backward(loss)
+
+
+                print("DEBUG loss:", loss, type(loss))
+                assert loss is not None, "loss tensor is None!"
+                has_trainable = any(not p.stop_gradient for p in transformer.parameters())
+                print("Has trainable params:", has_trainable)
+                # breakpoint()
+                loss.backward()
+
                 # if args.mixed_precision in ['fp16', 'bf16']:
                 #     scaled = scaler.scale(loss)
                 #     scaled.backward()
@@ -1636,7 +1647,6 @@ def main(args):
                 #     scaler.update()
                 # else:
                 #     loss.backward()
-                loss.backward()
 
                 optimizer.step()
                 lr_scheduler.step()
@@ -1748,16 +1758,9 @@ def main(args):
         )
 
         if not args.not_validation_final:
-            pipeline = FluxPipeline.from_pretrained(
-                args.pretrained_model_name_or_path,
-                revision=args.revision,
-                variant=args.variant,
-                paddle_dtype=weight_dtype,
-            )
-
             # Final inference
             # Load previous pipeline
-            pipeline = StableDiffusion3Pipeline.from_pretrained(
+            pipeline = FluxPipeline.from_pretrained(
                 args.pretrained_model_name_or_path,
                 revision=args.revision,
                 variant=args.variant,
