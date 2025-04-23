@@ -13,7 +13,7 @@
 # limitations under the License.
 
 
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=0
 export FLAGS_mla_use_tensorcore=0
 export FLAGS_cascade_attention_max_partition_size=128
 export FLAGS_cascade_attention_deal_each_time=16

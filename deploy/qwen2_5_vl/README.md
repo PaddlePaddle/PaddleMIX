@@ -53,7 +53,7 @@ pip install https://paddlenlp.bj.bcebos.com/ops/cu118/paddlenlp_ops-3.0.0b4.post
 ### a. fp16 高性能推理
 ```bash
 cd PaddleMIX
-rm -rf ./tmp/qwen2_5_vl
+rm -rf ./tmp
 
 # 1. image infer
 export CUDA_VISIBLE_DEVICES=0
@@ -178,13 +178,24 @@ sh deploy/qwen2_5_vl/scripts/qwen2_5_vl.sh
 ## 在 NVIDIA A800-SXM4-80GB 上测试的性能如下：
 
 #### 下方表格中所示性能对应的输入输出大小。
-|     parameter      |      Value     |
-| ------------------ | -------------- |
-|  input_tokens_len  |  997 tokens    |
-|  output_tokens_len |  128 tokens    |
+|     parameter            |      Value     |
+| -------------------------| -------------- |
+|  image_input_tokens_len  |  997 tokens    |
+|  video_input_tokens_len  | 2725 tokens    |
+|  output_tokens_len       |  128 tokens    |
 
-|             model           | Paddle Inference wint8 | Paddle Inference|    PyTorch     | VLLM     |
+
+#### 单图测试性能比较
+|             model           | Paddle Inference wint8 | Paddle Inference|    PyTorch     | VLLM          |
 | --------------------------- | ---------------------  | --------------- | -------------- |-------------- |
-| Qwen/Qwen2.5-VL-3B-Instruct |          0.823 s       |     1.15 s      |      4.92 s    | 1.39s     |
-| Qwen/Qwen2.5-VL-7B-Instruct |          1.144 s       |     1.16 s      |      3.89 s    | 1.92s     |
-| Qwen/Qwen2.5-VL-72B-Instruct|             -          |     4.806 s     |        -       | -        |
+| Qwen/Qwen2.5-VL-3B-Instruct |          0.823 s       |     1.15 s      |      4.92 s    |    1.39s      |
+| Qwen/Qwen2.5-VL-7B-Instruct |          1.144 s       |     1.16 s      |      3.89 s    |    1.70s      |
+| Qwen/Qwen2.5-VL-72B-Instruct|             -          |     4.806 s     |        -       |      -        |
+
+
+#### 单视频测试性能比较
+
+|             model           | Paddle Inference wint8 | Paddle Inference|    PyTorch     | VLLM          |
+| --------------------------- | ---------------------  | --------------- | -------------- |-------------- |
+| Qwen/Qwen2.5-VL-3B-Instruct |          1.26 s        |     1.62 s      |      6.07 s    |    3.41s      |
+| Qwen/Qwen2.5-VL-7B-Instruct |          1.59 s        |     2.11 s      |      4.59 s    |    2.82s      |
