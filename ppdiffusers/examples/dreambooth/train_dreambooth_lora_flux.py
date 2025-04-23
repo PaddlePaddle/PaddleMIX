@@ -26,6 +26,7 @@ import warnings
 import contextlib
 from contextlib import nullcontext
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
 import paddle
@@ -313,6 +314,12 @@ def parse_args(input_args=None):
         help="The prompt to specify images in the same class as provided instance images.",
     )
     parser.add_argument(
+        "--max_sequence_length",
+        type=int,
+        default=77,
+        help="Maximum sequence length to use with with the T5 text encoder",
+    )
+    parser.add_argument(
         "--validation_prompt",
         type=str,
         default=None,
@@ -560,6 +567,12 @@ def parse_args(input_args=None):
             "[TensorBoard](https://www.tensorflow.org/tensorboard) log directory. Will default to"
             " *output_dir/runs/**CURRENT_DATETIME_HOSTNAME***."
         ),
+    )
+    parser.add_argument(
+        "--cache_latents",
+        action="store_true",
+        default=False,
+        help="Cache the VAE latents",
     )
     parser.add_argument(
         "--report_to",
@@ -882,7 +895,7 @@ def _encode_prompt_with_clip(
     text_encoder,
     tokenizer,
     prompt: str,
-    device=None,
+    text_input_ids=None,
     num_images_per_prompt: int = 1,
 ):
     prompt = [prompt] if isinstance(prompt, str) else prompt
@@ -903,7 +916,7 @@ def _encode_prompt_with_clip(
         if text_input_ids is None:
             raise ValueError("text_input_ids must be provided when the tokenizer is not specified")
 
-    prompt_embeds = text_encoder(text_input_ids.to(device), output_hidden_states=False)
+    prompt_embeds = text_encoder(text_input_ids, output_hidden_states=False)
 
     # Use pooled output of CLIPTextModel
     prompt_embeds = prompt_embeds.pooler_output
@@ -1524,7 +1537,6 @@ def main(args):
                     model_input.shape[0],
                     model_input.shape[2] // 2,
                     model_input.shape[3] // 2,
-                    accelerator.device,
                     weight_dtype,
                 )
 
@@ -1557,7 +1569,7 @@ def main(args):
 
                 # handle guidance
                 if accelerator.unwrap_model(transformer).config.guidance_embeds:
-                    guidance = paddle.to_tensor([args.guidance_scale)
+                    guidance = paddle.to_tensor([args.guidance_scale])
                     guidance = guidance.expand(model_input.shape[0])
                 else:
                     guidance = None
@@ -1566,7 +1578,7 @@ def main(args):
                 # westfish: add amp
                 with paddle.amp.auto_cast(enable=args.mixed_precision in ['fp16', 'bf16'], custom_white_list=None, custom_black_list=None, level="O2", dtype='float16' if args.mixed_precision == 'fp16' else 'bfloat16'):
                     model_pred = transformer(
-                        hidden_states=noisy_model_input,
+                        hidden_states=packed_noisy_model_input,
                         # YiYi notes: divide it by 1000 for now because we scale it by 1000 in the transforme rmodel (we should not keep it but I want to keep the inputs same for the model for testing)
                         timestep=timesteps / 1000,
                         guidance=guidance,
@@ -1617,13 +1629,14 @@ def main(args):
 
                 # westfish: add amp
                 # accelerator.backward(loss)
-                if args.mixed_precision in ['fp16', 'bf16']:
-                    scaled = scaler.scale(loss)
-                    scaled.backward()
-                    scaler.step(optimizer)
-                    scaler.update()
-                else:
-                    loss.backward()
+                # if args.mixed_precision in ['fp16', 'bf16']:
+                #     scaled = scaler.scale(loss)
+                #     scaled.backward()
+                #     scaler.step(optimizer)
+                #     scaler.update()
+                # else:
+                #     loss.backward()
+                loss.backward()
 
                 optimizer.step()
                 lr_scheduler.step()
