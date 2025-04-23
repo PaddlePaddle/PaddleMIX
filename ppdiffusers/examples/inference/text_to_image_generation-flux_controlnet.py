@@ -20,9 +20,9 @@ from ppdiffusers.pipelines import FluxControlNetPipeline
 
 
 controlnet = FluxControlNetModel.from_pretrained("/home/lcjgrp/lizhijun/llm/FLUX.1-dev-Controlnet-Canny-pd", 
-                                                 paddle_dtype=paddle.float16)
+                                                 paddle_dtype=paddle.bfloat16)
 pipe = FluxControlNetPipeline.from_pretrained(
-    "black-forest-labs/FLUX.1-dev", controlnet=controlnet, paddle_dtype=paddle.float16
+    "black-forest-labs/FLUX.1-dev", controlnet=controlnet, paddle_dtype=paddle.bfloat16
 )
 
 control_image = load_image("canny.jpg")
@@ -30,11 +30,12 @@ prompt = "A girl in city, 25 years old, cool, futuristic"
 image = pipe(
     prompt,
     control_image=control_image,
-    height=1024,
-    width=1024,
+    controlnet_conditioning_scale=0.5,
+    width=control_image.size[0],
+    height=control_image.size[1],
     guidance_scale=3.5,
     num_inference_steps=50,
     max_sequence_length=512,
-    generator=paddle.Generator().manual_seed(42)
+    # generator=paddle.Generator().manual_seed(42)
 ).images[0]
 image.save("text_to_image_generation-flux-dev-controlnet-result.png")

@@ -32,7 +32,6 @@ _dummy_objects = {}
 _import_structure = {
     "controlnet": [],
     "controlnet_sd3": [],
-    "controlnet_flux": [],
     "latent_diffusion": [],
     "stable_diffusion": [],
     "stable_diffusion_xl": [],
@@ -137,6 +136,9 @@ else:
         "FluxControlPipeline",
         "FluxControlInpaintPipeline",
         "FluxControlImg2ImgPipeline",
+        "FluxControlNetPipeline",
+        "FluxControlNetInpaintingPipeline",
+        "FluxControlNetImg2ImgPipeline",
         "FluxImg2ImgPipeline",
         "FluxInpaintPipeline",
         "FluxPipeline",
@@ -144,12 +146,6 @@ else:
         "FluxPriorReduxPipeline",
         "ReduxImageEncoder",
     ]
-    _import_structure["controlnet_flux"].extend(
-        [
-            "FluxControlNetPipeline",
-            "FluxControlNetInpaintingPipeline",
-        ]
-    )
     _import_structure["kandinsky"] = [
         "KandinskyCombinedPipeline",
         "KandinskyImg2ImgCombinedPipeline",

@@ -1295,25 +1295,55 @@ class FluxPosEmbed(nn.Layer):
 class CombinedTimestepGuidanceTextProjEmbeddings(paddle.nn.Layer):
     def __init__(self, embedding_dim, pooled_projection_dim):
         super().__init__()
+        print(f"PADDLE INIT: embedding_dim = {embedding_dim}, pooled_projection_dim = {pooled_projection_dim}")
 
         self.time_proj = Timesteps(num_channels=256, flip_sin_to_cos=True, downscale_freq_shift=0)
         self.timestep_embedder = TimestepEmbedding(in_channels=256, time_embed_dim=embedding_dim)
+        print(f"PADDLE INIT: timestep_embedder.time_embed_dim = {embedding_dim}")
+        
         self.guidance_embedder = TimestepEmbedding(in_channels=256, time_embed_dim=embedding_dim)
         self.text_embedder = PixArtAlphaTextProjection(pooled_projection_dim, embedding_dim, act_fn="silu")
 
     def forward(self, timestep, guidance, pooled_projection):
+        print(f"PADDLE: Input timestep: {timestep}, shape: {timestep.shape}, dtype: {timestep.dtype}")
+        print(f"PADDLE: Input guidance: {guidance}, shape: {guidance.shape}, dtype: {guidance.dtype}")
+        print(f"PADDLE: Input pooled_projection shape: {pooled_projection.shape}, dtype: {pooled_projection.dtype}")
+        print(f"PADDLE: Input pooled_projection stats - min: {pooled_projection.min().item():.4f}, max: {pooled_projection.max().item():.4f}, mean: {pooled_projection.mean().item():.4f}")
+        
+        # 时间嵌入
         timesteps_proj = self.time_proj(timestep)
+        print(f"PADDLE: timesteps_proj type = {type(timesteps_proj)}")
+        print(f"PADDLE: timesteps_proj dtype = {timesteps_proj.dtype}")
+        print(f"PADDLE: timesteps_proj shape = {timesteps_proj.shape}")
+        print(f"PADDLE: timesteps_proj raw data = {timesteps_proj}")
+        
         timesteps_emb = self.timestep_embedder(timesteps_proj.to(dtype=pooled_projection.dtype))
+        print(f"PADDLE: timesteps_emb shape: {timesteps_emb.shape}, min: {timesteps_emb.min().item():.4f}, max: {timesteps_emb.max().item():.4f}, mean: {timesteps_emb.mean().item():.4f}")
 
+        # guidance嵌入
         guidance_proj = self.time_proj(guidance)
+        print(f"PADDLE: guidance_proj shape: {guidance_proj.shape}, min: {guidance_proj.min().item():.4f}, max: {guidance_proj.max().item():.4f}, mean: {guidance_proj.mean().item():.4f}")
+        
         guidance_emb = self.guidance_embedder(guidance_proj.to(dtype=pooled_projection.dtype))
+        print(f"PADDLE: guidance_emb shape: {guidance_emb.shape}, min: {guidance_emb.min().item():.4f}, max: {guidance_emb.max().item():.4f}, mean: {guidance_emb.mean().item():.4f}")
 
+        # 时间和guidance的组合
         time_guidance_emb = timesteps_emb + guidance_emb
+        print(f"PADDLE: time_guidance_emb shape: {time_guidance_emb.shape}, min: {time_guidance_emb.min().item():.4f}, max: {time_guidance_emb.max().item():.4f}, mean: {time_guidance_emb.mean().item():.4f}")
 
+        # 文本嵌入
         pooled_projections = self.text_embedder(pooled_projection)
+        print(f"PADDLE: text_embedder output shape: {pooled_projections.shape}, min: {pooled_projections.min().item():.4f}, max: {pooled_projections.max().item():.4f}, mean: {pooled_projections.mean().item():.4f}")
+
+        # 最终组合
         conditioning = time_guidance_emb + pooled_projections
+        print(f"PADDLE: Final conditioning shape: {conditioning.shape}, min: {conditioning.min().item():.4f}, max: {conditioning.max().item():.4f}, mean: {conditioning.mean().item():.4f}")
+        print(f"PADDLE: First 5 values of conditioning: {conditioning[0, :5]}")
 
         return conditioning
+
+    
+    
 
 def get_1d_rotary_pos_embed(
     dim: int,
