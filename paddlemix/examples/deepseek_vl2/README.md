@@ -129,6 +129,17 @@ sh paddlemix/examples/deepseek_vl2/shell/deepseek_vl2_tiny_lora_bs16_1e5.sh
 sh paddlemix/examples/deepseek_vl2/shell/deepseek_vl2_tiny_sft_bs16_1e5.sh
 ```
 
+### LoRA参数合并
+
+```bash
+# tiny
+python paddlemix/examples/deepseek_vl2/lora_merge.py \
+    --model_name_or_path deepseek-ai/deepseek-vl2-tiny \
+    --lora_path work_dirs/deepseekvl2_tiny_lora_bs16_1e5/checkpoint-xx \
+    --merge_model_path work_dirs/lora_merge_deepseekvl2_tiny_lora_bs16_1e5 \
+    --device "gpu"
+```
+
 ## 参考文献
 ```BibTeX
 @misc{wu2024deepseekvl2mixtureofexpertsvisionlanguagemodels,

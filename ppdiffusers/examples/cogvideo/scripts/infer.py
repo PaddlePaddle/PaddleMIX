@@ -156,7 +156,7 @@ if __name__ == "__main__":
         help="The path of the image to be used as the background of the video",
     )
     parser.add_argument(
-        "--model_path", type=str, default="THUDM/CogVideoX-5b", help="The path of the pre-trained model to be used"
+        "--model_path", type=str, default="THUDM/CogVideoX-2b", help="The path of the pre-trained model to be used"
     )
     parser.add_argument("--lora_path", type=str, default=None, help="The path of the LoRA weights to be used")
     parser.add_argument("--lora_rank", type=int, default=128, help="The rank of the LoRA weights")
