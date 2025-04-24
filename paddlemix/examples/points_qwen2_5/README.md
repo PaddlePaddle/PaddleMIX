@@ -44,7 +44,7 @@ sh build_paddle_env.sh
 python -m pip install -e . --user
 python -m pip install -e ppdiffusers --user
 python -m pip install -r requirements.txt --user
-python -m pip install paddlenlp==3.0.0b3 --user
+python -m pip install paddlenlp==3.0.0b4 --user
 
 # sh 脚本快速安装
 sh build_env.sh
@@ -57,12 +57,26 @@ sh build_env.sh
 ## 3 快速开始
 
 ### 推理
+
 ```bash
 # 单图推理
 python paddlemix/examples/points_qwen2_5/image_infer.py
 ```
 
+![](../../demo_images/minicpm_demo.jpeg)
+
+**Prompt:**
+
+>please describe the image in detail
+
+**Result:**
+
+>The image features a young, brown and white dog with a distinctive red collar adorned with gold accents. The dog is sitting on a lush green lawn, with a few scattered yellow leaves, suggesting it might be autumn. The dog's eyes are a deep brown, and it has a soft, white muzzle. Its ears are perked up, and it has a gentle, yet attentive expression. The background is blurred, with hints of more greenery, focusing the viewer's attention on the dog.
+
+
+
 ### 参考文献
+
 ```BibTeX
 @article{liu2024points,
   title={POINTS: Improving Your Vision-language Model with Affordable Strategies},
