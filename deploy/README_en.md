@@ -4,10 +4,10 @@
 
 PaddleMIX utilizes Paddle Inference and provides a Python-based deployment solution. There are two deployment methods:
 
-1. **APPflow Deployment**: 
+1. **APPflow Deployment**:
    - By setting the `static_mode = True` variable in APPflow, you can enable static graph inference. Additionally, you can accelerate inference using TensorRT. Note that not all models support static graph or TensorRT. Please refer to the [Multi Modal And Scenario](../applications/README_en.md/#multi-modal-and-scenario) section for specific model support.
 
-2. **Single Model Deployment**: 
+2. **Single Model Deployment**:
 
 For APPflow usage, you can set the `static_mode = True` variable to enable static graph inference and optionally accelerate inference using TensorRT.
 
@@ -48,7 +48,6 @@ Currently supported models:
 - [blip2](./blip2/README.md)
 - [groundingdino](./groundingdino/README.md)
 - [sam](./sam/README.md)
-- [qwen_vl](./qwen_vl/README.md)
 
 Using groundingdino as an example.
 
@@ -76,10 +75,10 @@ Will be exported to the following directory, including `model_state.pdiparams`, 
 
 ## 3. BenchMark
 
-> Note: 
+> Note:
 > environment
 Paddle 3.0
-PaddleMIX release/2.0 
+PaddleMIX release/2.0
 PaddleNLP 2.7.2
 A100 80G。
 
@@ -101,8 +100,5 @@ example: GroundingDino benchmark：
 
 |Model|image size|dtype |Paddle Deploy |
 |-|-|-|-|
-|qwen-vl-7b|448*448|fp16|669.8 ms|
-|llava-1.5-7b|336*336|fp16|981.2 ms|
-|llava-1.6-7b|336*336|fp16|778.7 ms|
 |groundingDino/groundingdino-swint-ogc|800*1193|fp32|100 ms|
 |Sam/SamVitH-1024|1024*1024|fp32|121 ms|
