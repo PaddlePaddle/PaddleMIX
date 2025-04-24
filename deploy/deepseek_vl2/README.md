@@ -38,6 +38,47 @@ python setup_cuda.py install
 pip install https://paddlenlp.bj.bcebos.com/ops/cu118/paddlenlp_ops-3.0.0b4.post20250331-py3-none-any.whl
 ```
 
+
+3） paddlenlp_ops预编译包安装表格，根据paddlenlp、CUDA版本选择配套paddlenlp_ops 
+
+<table class="docutils">
+    <thead>
+        <tr>
+            <th width="80">CUDA</th>
+            <th width="200">paddlenlp_3.0.0b4</th>
+            <th width="200">paddlenlp_develop</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td align="center">12.4</td>
+            <td>
+                <details>
+                    <summary>Install</summary>
+                    <pre><code>pip install https://paddlenlp.bj.bcebos.com/ops/cu124/paddlenlp_ops-3.0.0b4-py3-none-any.whl</code></pre>
+                </details>
+            </td>
+            <td></td>
+            <td></td>
+        </tr>
+        <tr>
+            <td align="center">11.8</td>
+            <td>
+                <details>
+                    <summary>Install</summary>
+                    <pre><code>pip install https://paddlenlp.bj.bcebos.com/ops/cu118/paddlenlp_ops-3.0.0b4-py3-none-any.whl</code></pre>
+                </details>
+            </td>
+            <td>
+                <details>
+                    <summary>Install</summary>
+                    <pre><code>pip install https://paddlenlp.bj.bcebos.com/ops/cu118/paddlenlp_ops-3.0.0b4.post20250331-py3-none-any.whl</code></pre>
+                </details>
+            </td>
+        </tr>
+    </tbody>
+</table>
+
 ## 3 高性能推理
 
 ### a. fp16 高性能推理
@@ -76,7 +117,7 @@ export FLAGS_cascade_attention_deal_each_time=16
 export USE_FASTER_TOP_P_SAMPLING=1
 python deploy/deepseek_vl2/deepseek_vl2_infer_multi_image.py \
     --model_name_or_path deepseek-ai/deepseek-vl2-small \
-    --question "What are in these images." \
+    --question "Can you tell me what are in the images?" \
     --image_file_1 paddlemix/demo_images/examples_image1.jpg \
     --image_file_2 paddlemix/demo_images/examples_image2.jpg \
     --image_file_3 paddlemix/demo_images/examples_image1.jpg \
@@ -145,7 +186,7 @@ sh deploy/deepseek_vl2/shell/run.sh
 |     parameter                   |      Value      |
 | ------------------------------- | --------------- |
 |  single_image_input_tokens_len  |  1428 tokens    |
-|  multi_image_input_tokens_len   |  1428 tokens    |
+|  multi_image_input_tokens_len   |  1304 tokens    |
 |  output_tokens_len              |  128 tokens     |
 
 #### 单图测试性能
@@ -156,4 +197,4 @@ sh deploy/deepseek_vl2/shell/run.sh
 #### 多图测试性能
 |             model              | Paddle Inference wint8 | Paddle Inference|    PyTorch     | VLLM          |
 | -----------------------------  | ---------------------  | --------------- | -------------- |-------------- |
-| deepseek-ai/deepseek-vl2-small |          - s        |     - s      |      7.44 s    | 2.05s         |
+| deepseek-ai/deepseek-vl2-small |          1.67 s        |     1.85 s      |      7.44 s    | 2.05s         |

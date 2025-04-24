@@ -31,6 +31,46 @@ python setup_cuda.py install
 pip install https://paddlenlp.bj.bcebos.com/ops/cu118/paddlenlp_ops-3.0.0b4.post20250331-py3-none-any.whl
 ```
 
+3） paddlenlp_ops预编译包安装表格，根据paddlenlp、CUDA版本选择配套paddlenlp_ops 
+
+<table class="docutils">
+    <thead>
+        <tr>
+            <th width="80">CUDA</th>
+            <th width="200">paddlenlp_3.0.0b4</th>
+            <th width="200">paddlenlp_develop</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td align="center">12.4</td>
+            <td>
+                <details>
+                    <summary>Install</summary>
+                    <pre><code>pip install https://paddlenlp.bj.bcebos.com/ops/cu124/paddlenlp_ops-3.0.0b4-py3-none-any.whl</code></pre>
+                </details>
+            </td>
+            <td></td>
+            <td></td>
+        </tr>
+        <tr>
+            <td align="center">11.8</td>
+            <td>
+                <details>
+                    <summary>Install</summary>
+                    <pre><code>pip install https://paddlenlp.bj.bcebos.com/ops/cu118/paddlenlp_ops-3.0.0b4-py3-none-any.whl</code></pre>
+                </details>
+            </td>
+            <td>
+                <details>
+                    <summary>Install</summary>
+                    <pre><code>pip install https://paddlenlp.bj.bcebos.com/ops/cu118/paddlenlp_ops-3.0.0b4.post20250331-py3-none-any.whl</code></pre>
+                </details>
+            </td>
+        </tr>
+    </tbody>
+</table>
+
 > 注：
 * 请确保安装了以上依赖，否则无法运行。同时，需要安装 paddlemix/external_ops 下的自定义OP, `python setup.py install`。如果安装后仍然找不到算子，需要额外设置PYTHONPATH
 * (默认开启flash_attn)使用flash_attn 要求A100/A800显卡或者H20显卡

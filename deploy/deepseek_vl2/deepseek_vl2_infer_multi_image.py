@@ -75,6 +75,7 @@ class Mix_PredictorArgument(PredictorArgument):
     image_file_3: str = field(
         default="paddlemix/demo_images/examples_image3.jpg", metadata={"help": "The image file for the model."}
     )
+    llm_mode: str = field(default="dynamic", metadata={"help": "The mode of llm. Supported values: dynamic, static"})
 
 
 @dataclass
@@ -133,9 +134,7 @@ def init_llm_model_inputs(inputs_embeds, arg_config: Mix_PredictorArgument):
     model_inputs["seq_lens_encoder"] = paddle.to_tensor(np.array(seq_lens).astype("int32").reshape(-1, 1))
     model_inputs["seq_lens_decoder"] = paddle.full(shape=[batch_size, 1], fill_value=0, dtype="int32")
     model_inputs["step_idx"] = paddle.full(shape=[batch_size, 1], fill_value=0, dtype="int64")
-    model_inputs["not_need_stop"] = paddle.full(
-        shape=[1], fill_value=True, dtype="bool"
-    ).cpu()  # must at cpu place, paddlenlp_ops bug: update_inputs_v2
+    model_inputs["not_need_stop"] = paddle.full(shape=[1], fill_value=True, dtype="bool").cpu()  # must at cpu place
     model_inputs["stop_flags"] = paddle.full(shape=[batch_size, 1], fill_value=False, dtype="bool")
     model_inputs["stop_nums"] = paddle.full(shape=[1], fill_value=batch_size, dtype="int64")
     model_inputs["pre_ids"] = paddle.full(shape=[batch_size, arg_config.max_length], fill_value=-1, dtype="int64")
@@ -145,27 +144,10 @@ def init_llm_model_inputs(inputs_embeds, arg_config: Mix_PredictorArgument):
 
 
 def run_model(predictor_args):
-    conversation = [
-        {
-            "role": "<|User|>",
-            "content": "This is image_1: <image>\n"
-            "This is image_2: <image>\n"
-            f"This is image_3: <image>\n {predictor_args.question}",
-            "images": [
-                predictor_args.image_file_1,
-                predictor_args.image_file_2,
-                predictor_args.image_file_3,
-            ],
-        },
-        {"role": "<|Assistant|>", "content": ""},
-    ]
 
     pil_images = load_pil_images(conversation)
-    prepare_inputs = processor(
-        conversations=conversation, images=pil_images, force_batchify=True, system_prompt=""
-    )
+    prepare_inputs = processor(conversations=conversation, images=pil_images, force_batchify=True, system_prompt="")
     prepare_inputs.images = prepare_inputs.images.astype(predictor_args.dtype)
-
     with paddle.no_grad():
         inputs_embeds = vl_model.prepare_inputs_embeds(**prepare_inputs)
     input_tokens_len = inputs_embeds.shape[1]
@@ -174,9 +156,12 @@ def run_model(predictor_args):
     generated_text = ""
     generated_ids = paddle.to_tensor([], dtype="int64").reshape([1, 0])
     while llm_model_inputs["not_need_stop"]:
-        generated_id = vl_model.language.generate(**llm_model_inputs)  # already trimmed in paddle
-        llm_model_inputs["input_ids"] = generated_id
-        llm_model_inputs["inputs_embeds"] = None
+        generated_id = vl_model.language.generate(**llm_model_inputs)
+
+        # NOTE: (changwenbin) , Get inputs_embeds from the visual model or input_ids.
+        # Here we uniformly set the input of the language model to inputs_embeds
+        llm_model_inputs["inputs_embeds"] = fast_llm_model.deepseek_v2.embed_tokens(generated_id)
+
         generated_ids = paddle.concat([generated_ids, generated_id], axis=1)
         if paddle.any(generated_id == tokenizer.eos_token_id).item():
             break
@@ -229,6 +214,23 @@ processor = DeepseekVLV2Processor(
     downsample_ratio=config["downsample_ratio"],
 )
 
+
+conversation = [
+    {
+        "role": "<|User|>",
+        "content": "This is image_1: <image>\n"
+        "This is image_2: <image>\n"
+        "This is image_3: <image>\n {}".format(predictor_args.question),
+        "images": [
+            predictor_args.image_file_1,
+            predictor_args.image_file_2,
+            predictor_args.image_file_3,
+        ],
+    },
+    {"role": "<|Assistant|>", "content": ""},
+]
+
+
 # register llm config
 llm_config = config.language_config
 llm_config.architectures = ["DeepseekVLV2ForCausalLM"]
@@ -251,8 +253,6 @@ generation_config = GenerationConfig(
     return_dict=True,
 )
 
-tensor_parallel_degree = paddle.distributed.get_world_size()
-tensor_parallel_rank = paddle.distributed.get_rank()
 fast_llm_model = AutoInferenceModelForCausalLM.from_pretrained(
     predictor_args.model_name_or_path,
     config=llm_config,
@@ -283,11 +283,20 @@ if predictor_args.benchmark:
     sumtime = 0.0
     times = repeat_times + warm_up
     for i in range(times):
-        print("run", i)
         if i > 2:
             paddle.device.synchronize()
             starttime = datetime.datetime.now()
         generated_text = run_model(predictor_args)
+
+        # NOTE: (changwenbin) We delete some weights of the original dynamic graph,
+        # after fast_llm_model is converted to a static graph to reduce memory usage.
+        if (fast_llm_model.deepseek_v2.transformer_block is not None) and (predictor_args.llm_mode == "static"):
+            fast_llm_model.deepseek_v2.transformer_block = None
+            fast_llm_model.deepseek_v2.norm = None
+            fast_llm_model.rotary_emb = None
+            fast_llm_model.lm_head = None
+            paddle.device.cuda.empty_cache()
+
         if i > 2:
             paddle.device.synchronize()
             endtime = datetime.datetime.now()
@@ -304,6 +313,7 @@ if predictor_args.benchmark:
         "ms",
     )
     print(f"GPU max_memory_allocated: {paddle.device.cuda.max_memory_allocated() / 1024 ** 3:.2f} GB")
+    print(f"GPU memory_allocated: {paddle.device.cuda.memory_allocated() / 1024 ** 3:.2f} GB")
     print("input_tokens_len is :", generated_text[1], "tokens")
     print("output_tokens_len is :", generated_text[2], "tokens")
 
