@@ -404,7 +404,7 @@ class PhiSdpaAttention(PhiAttention):
                 causal=is_causal,  # no softmax_scale=
             )[0]
         else:
-            attn_output = F.scaled_dot_product_attention(
+            attn_output = F.scaled_dot_product_attention_(  # scaled_dot_product_attention_ support float32
                 query_states,
                 key_states,
                 value_states,
