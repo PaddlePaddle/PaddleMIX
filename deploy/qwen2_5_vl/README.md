@@ -66,7 +66,6 @@ pip install https://paddlenlp.bj.bcebos.com/ops/cu118/paddlenlp_ops-3.0.0b4.post
                 </details>
             </td>
             <td></td>
-            <td></td>
         </tr>
         <tr>
             <td align="center">11.8</td>
