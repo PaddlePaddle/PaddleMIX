@@ -462,7 +462,7 @@ class UMT5Block(nn.Layer):
         if hidden_states.dtype == paddle.float16:
             max_dtype = paddle.finfo(hidden_states.dtype).max
             clamp_value = paddle.where(paddle.isinf(hidden_states).any(), max_dtype - 1000, max_dtype)
-            hidden_states = paddle.clamp(hidden_states, min=-clamp_value, max=clamp_value)
+            hidden_states = paddle.clip(hidden_states, min=-clamp_value, max=clamp_value)
 
         # Cross-Attention Block
         cross_attn_weights = None
