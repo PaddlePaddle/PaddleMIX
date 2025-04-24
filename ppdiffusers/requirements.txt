@@ -4,7 +4,7 @@ ftfy
 regex
 Pillow
 opencv-python
-av
+av==13.1.0
 # for test
 parameterized
 requests_mock
