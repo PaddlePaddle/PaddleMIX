@@ -49,7 +49,6 @@ Python端预测部署主要包含两个步骤：
 - [blip2](./blip2/README.md)
 - [groundingdino](./groundingdino/README.md)
 - [sam](./sam/README.md)
-- [qwen_vl](./qwen_vl/README.md)
 
 以 groundingdino 为例子。
 
@@ -77,10 +76,10 @@ python export.py \
 
 ## 3. 推理 BenchMark
 
-> Note: 
+> Note:
 > 测试环境为:
 Paddle 3.0，
-PaddleMIX release/2.0 
+PaddleMIX release/2.0
 PaddleNLP2.7.2
 A100 80G单卡。
 
@@ -103,8 +102,5 @@ A100 80G单卡。
 # A100性能数据
 |模型|图片分辨率|数据类型 |Paddle Deploy |
 |-|-|-|-|
-|qwen-vl-7b|448*448|fp16|669.8 ms|
-|llava-1.5-7b|336*336|fp16|981.2 ms|
-|llava-1.6-7b|336*336|fp16|778.7 ms|
 |groundingDino/groundingdino-swint-ogc|800*1193|fp32|100 ms|
 |Sam/SamVitH-1024|1024*1024|fp32|121 ms|
