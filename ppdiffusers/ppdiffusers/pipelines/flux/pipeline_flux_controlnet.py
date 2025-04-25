@@ -559,42 +559,7 @@ class FluxControlNetPipeline(
         """
         self.vae.disable_tiling()
 
-    # def prepare_latents(
-    #     self,
-    #     batch_size,
-    #     num_channels_latents,
-    #     height,
-    #     width,
-    #     dtype,
-    #     generator,
-    #     latents=None,
-    # ):
-    #     """
-    #     Prepares the latent tensor for diffusion.
-    #     """
-    #     height = 2 * (height // (self.vae_scale_factor * 2))
-    #     width = 2 * (width // (self.vae_scale_factor * 2))
 
-    #     shape = (batch_size, num_channels_latents, height, width)
-
-    #     if latents is not None:
-    #         latent_image_ids = self._prepare_latent_image_ids(batch_size, height // 2, width // 2, dtype)
-    #         return latents.astype(dtype), latent_image_ids
-        
-    #     if isinstance(generator, list) and len(generator) != batch_size:
-    #         raise ValueError(
-    #             f"You have passed a list of generators of length {len(generator)}, but requested an effective batch"
-    #             f" size of {batch_size}. Make sure the batch size matches the length of the generators."
-    #         )
-        
-        
-    #     latents = randn_tensor(shape, generator=generator, dtype=dtype)
-    #     latents = self._pack_latents(latents, batch_size, num_channels_latents, height, width)
-
-    #     latent_image_ids = self._prepare_latent_image_ids(batch_size, height // 2, width // 2, dtype)
-
-    #     return latents, latent_image_ids
-    
     
     def prepare_latents(
         self,
@@ -609,18 +574,13 @@ class FluxControlNetPipeline(
         """
         Prepares the latent tensor for diffusion.
         """
-        print(f"DEBUG: Input parameters - batch_size: {batch_size}, num_channels_latents: {num_channels_latents}")
-        print(f"DEBUG: Original height/width: {height}/{width}, vae_scale_factor: {self.vae_scale_factor}")
-        
+
         height = 2 * (height // (self.vae_scale_factor * 2))
         width = 2 * (width // (self.vae_scale_factor * 2))
-        print(f"DEBUG: Adjusted height/width: {height}/{width}")
 
         shape = (batch_size, num_channels_latents, height, width)
-        print(f"DEBUG: Target shape for latents: {shape}")
 
         if latents is not None:
-            print(f"DEBUG: Using provided latents with shape: {latents.shape}")
             latent_image_ids = self._prepare_latent_image_ids(batch_size, height // 2, width // 2, dtype)
             return latents.astype(dtype), latent_image_ids
         
@@ -630,21 +590,10 @@ class FluxControlNetPipeline(
                 f" size of {batch_size}. Make sure the batch size matches the length of the generators."
             )
         
-        # 添加这个函数来检查randn_tensor的实现
-        print(f"DEBUG: About to call randn_tensor with shape={shape}, dtype={dtype}")
-        print(f"DEBUG: randn_tensor implementation: {randn_tensor.__module__}.{randn_tensor.__name__}")
-        
         latents = randn_tensor(shape, generator=generator, dtype=dtype)
-        print(f"DEBUG: Generated latents - shape: {latents.shape}, min: {latents.min().item():.4f}, max: {latents.max().item():.4f}, mean: {latents.mean().item():.4f}")
         
-        # 保存原始latents副本
-        latents_before_pack = latents.clone()
         latents = self._pack_latents(latents, batch_size, num_channels_latents, height, width)
-        print(f"DEBUG: After packing - shape: {latents.shape}, min: {latents.min().item():.4f}, max: {latents.max().item():.4f}, mean: {latents.mean().item():.4f}")
-        print(f"DEBUG: Packing changes: shape {latents_before_pack.shape} -> {latents.shape}")
-
         latent_image_ids = self._prepare_latent_image_ids(batch_size, height // 2, width // 2, dtype)
-        print(f"DEBUG: Generated latent_image_ids - shape: {latent_image_ids.shape}")
 
         return latents, latent_image_ids
     
@@ -838,25 +787,19 @@ class FluxControlNetPipeline(
 
         height = height or self.default_sample_size * self.vae_scale_factor
         width = width or self.default_sample_size * self.vae_scale_factor
-        print(f"DEBUG: Initial dimensions - height: {height}, width: {width}")
 
         if not isinstance(control_guidance_start, list) and isinstance(control_guidance_end, list):
             control_guidance_start = len(control_guidance_end) * [control_guidance_start]
-            print(f"DEBUG: Adjusted control_guidance_start: {control_guidance_start} to match end: {control_guidance_end}")
         elif not isinstance(control_guidance_end, list) and isinstance(control_guidance_start, list):
             control_guidance_end = len(control_guidance_start) * [control_guidance_end]
-            print(f"DEBUG: Adjusted control_guidance_end: {control_guidance_end} to match start: {control_guidance_start}")
         elif not isinstance(control_guidance_start, list) and not isinstance(control_guidance_end, list):
             mult = len(self.controlnet.nets) if hasattr(self.controlnet, 'nets') else 1
-            print(f"DEBUG: Calculated mult: {mult}, controlnet type: {type(self.controlnet).__name__}")
             control_guidance_start, control_guidance_end = (
                 mult * [control_guidance_start],
                 mult * [control_guidance_end],
             )
-            print(f"DEBUG: Final guidance ranges - start: {control_guidance_start}, end: {control_guidance_end}")
 
-        # 1. Check inputs. Raise error if not correct
-        print("DEBUG: Checking inputs...")
+        # 1. Check inputs. 
         self.check_inputs(
             prompt,
             prompt_2,
@@ -871,12 +814,9 @@ class FluxControlNetPipeline(
             callback_on_step_end_tensor_inputs=callback_on_step_end_tensor_inputs,
             max_sequence_length=max_sequence_length,
         )
-        print("DEBUG: Input check passed")
-
         self._guidance_scale = guidance_scale
         self._joint_attention_kwargs = joint_attention_kwargs
         self._interrupt = False
-        print(f"DEBUG: Config - guidance_scale: {guidance_scale}, true_cfg_scale: {true_cfg_scale}")
 
         # 2. Define call parameters
         if prompt is not None and isinstance(prompt, str):
@@ -885,17 +825,13 @@ class FluxControlNetPipeline(
             batch_size = len(prompt)
         else:
             batch_size = prompt_embeds.shape[0]
-        print(f"DEBUG: Determined batch_size: {batch_size}, num_images_per_prompt: {num_images_per_prompt}")
 
         dtype = self.transformer.dtype
-        print(f"DEBUG: Using dtype: {dtype}")
 
         # 3. Prepare text embeddings
-        print("DEBUG: Preparing text embeddings...")
         lora_scale = (
             self.joint_attention_kwargs.get("scale", None) if self.joint_attention_kwargs is not None else None
         )
-        print(f"DEBUG: LoRA scale: {lora_scale}")
         do_true_cfg = true_cfg_scale > 1 and negative_prompt is not None
         print(f"DEBUG: do_true_cfg: {do_true_cfg}, true_cfg_scale: {true_cfg_scale}")
 

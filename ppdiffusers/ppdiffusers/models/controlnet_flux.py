@@ -277,13 +277,15 @@ class FluxControlNetModel(ModelMixin, ConfigMixin):
             print(f"PADDLE DEBUG: guidance shape: {guidance.shape}, dtype: {guidance.dtype}")
             print(f"PADDLE DEBUG: guidance min: {guidance.min().item():.4f}, max: {guidance.max().item():.4f}, mean: {guidance.mean().item():.4f}")
 
-        
+        print('--------------从这里开始精度不对齐-----------------------')
         temb = (
             self.time_text_embed(timestep, pooled_projections)
             if guidance is None
             else self.time_text_embed(timestep, guidance, pooled_projections)
         )
         print(f"DEBUG: ControlNet paddle - time_text_embed output - shape: {temb.shape}, min: {temb.min().item():.4f}, max: {temb.max().item():.4f}, mean: {temb.mean().item():.4f}")
+        
+        print('--------------从这里结束精度不对齐-----------------------')
 
         # Context embedding
         encoder_hidden_states_before = encoder_hidden_states.clone()
