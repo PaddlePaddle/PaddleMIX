@@ -28,7 +28,7 @@ model = POINTSChatModel.from_pretrained(model_path)
 tokenizer = Qwen2Tokenizer.from_pretrained(model_path)
 image_processor = CLIPImageProcessor.from_pretrained(model_path)
 
-image_path = "paddlemix/demo_images/minicpm_demo.jpeg"
+image_path = "paddlemix/demo_images/examples_image2.jpg"
 pil_image = Image.open(image_path)
 prompt = "please describe the image in detail"
 

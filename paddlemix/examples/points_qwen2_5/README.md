@@ -54,7 +54,16 @@ sh build_env.sh
 * 请确保安装了以上依赖，否则无法运行。同时，需要安装 paddlemix/external_ops 下的自定义OP, `python setup.py install`。如果安装后仍然找不到算子，需要额外设置PYTHONPATH
 * (默认开启flash_attn)使用flash_attn 要求A100/A800显卡或者H20显卡。V100请用float16推理。
 
-## 3 快速开始
+## 3 模型转换
+
+将torch模型转换成paddle模型，请采用下述命令。
+
+```bash
+# 单图推理
+python paddlemix/examples/points_qwen2_5/convert_torch_to_paddle.py --torch_model_path ./models/POINTS-Qwen-2-5-7B-Chat/ --paddle_model_path ./models/POINTS-Qwen-2-5-7B-Chat_pd
+```
+
+## 4 快速开始
 
 ### 推理
 
@@ -63,7 +72,7 @@ sh build_env.sh
 python paddlemix/examples/points_qwen2_5/image_infer.py
 ```
 
-![](../../demo_images/minicpm_demo.jpeg)
+![](../../demo_images/examples_image2.jpg)
 
 **Prompt:**
 
@@ -71,7 +80,7 @@ python paddlemix/examples/points_qwen2_5/image_infer.py
 
 **Result:**
 
->The image features a young, brown and white dog with a distinctive red collar adorned with gold accents. The dog is sitting on a lush green lawn, with a few scattered yellow leaves, suggesting it might be autumn. The dog's eyes are a deep brown, and it has a soft, white muzzle. Its ears are perked up, and it has a gentle, yet attentive expression. The background is blurred, with hints of more greenery, focusing the viewer's attention on the dog.
+>The image features a giant panda sitting amidst a lush environment. The panda, with its distinctive black and white fur, is holding a bamboo shoot, which is a staple in its diet. The panda's eyes are looking slightly to the side, giving it a contemplative expression. Surrounding the panda are various green plants, including bamboo shoots and other foliage, which contribute to the natural of a natural habitat. The ground is covered with what appears to be a layer of mulch or soil, and the overall setting suggests a well-maintained enclosure, likely within a zoo or conservation area.
 
 
 
