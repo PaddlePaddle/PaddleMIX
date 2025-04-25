@@ -17,7 +17,6 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import paddle
 import paddle.nn as nn
-import paddle.nn.functional as F
 from paddle.distributed.fleet.utils import recompute
 
 from ..configuration_utils import ConfigMixin, register_to_config
@@ -207,11 +206,6 @@ class FluxControlNetModel(ModelMixin, ConfigMixin):
         joint_attention_kwargs: Optional[Dict[str, Any]] = None,
         return_dict: bool = True,
     ) -> Union[FluxControlNetOutput, Tuple]:
-        print(f"*****************进入models了*********************")
-        # Preprocessing
-        print(f"DEBUG: ControlNet paddle input - hidden_states shape: {hidden_states.shape}, min: {hidden_states.min().item():.4f}, max: {hidden_states.max().item():.4f}, mean: {hidden_states.mean().item():.4f}")
-        print(f"DEBUG: ControlNet paddle input - controlnet_cond shape: {controlnet_cond.shape}, min: {controlnet_cond.min().item():.4f}, max: {controlnet_cond.max().item():.4f}, mean: {controlnet_cond.mean().item():.4f}")
-        
 
         if joint_attention_kwargs is not None:
             joint_attention_kwargs = joint_attention_kwargs.copy()
@@ -229,15 +223,10 @@ class FluxControlNetModel(ModelMixin, ConfigMixin):
                 )
 
         # Input embedding
-        hidden_states_before = hidden_states.clone()
         hidden_states = self.x_embedder(hidden_states)
-        print(f"DEBUG: ControlNet paddle - x_embedder - before/after mean: {hidden_states_before.mean().item():.4f}/{hidden_states.mean().item():.4f}")
-
         # Process conditional input
         if self.input_hint_block is not None:
-            controlnet_cond_before = controlnet_cond.clone()
             controlnet_cond = self.input_hint_block(controlnet_cond)
-            print(f"DEBUG: ControlNet paddle - input_hint_block - before/after mean: {controlnet_cond_before.mean().item():.4f}/{controlnet_cond.mean().item():.4f}")
             
             batch_size, channels, height_pw, width_pw = controlnet_cond.shape
             height = height_pw // self.config.patch_size
@@ -247,15 +236,10 @@ class FluxControlNetModel(ModelMixin, ConfigMixin):
             )
             controlnet_cond = controlnet_cond.permute(0, 2, 4, 1, 3, 5)
             controlnet_cond = controlnet_cond.reshape(batch_size, height * width, -1)
-            print(f"DEBUG: ControlNet paddle - after reshape - shape: {controlnet_cond.shape}, mean: {controlnet_cond.mean().item():.4f}")
         
         # Add conditional embedding
-        hidden_states_before = hidden_states.clone()
         controlnet_x_embed = self.controlnet_x_embedder(controlnet_cond)
-        print(f"DEBUG: ControlNet paddle - controlnet_x_embedder - output shape: {controlnet_x_embed.shape}, mean: {controlnet_x_embed.mean().item():.4f}")
         hidden_states += controlnet_x_embed
-        print(f"DEBUG: ControlNet paddle - after adding controlnet embedding - before/after mean: {hidden_states_before.mean().item():.4f}/{hidden_states.mean().item():.4f}")
-
         # Time embeddings
         timestep = timestep.astype(hidden_states.dtype) * 1000
         
@@ -264,34 +248,14 @@ class FluxControlNetModel(ModelMixin, ConfigMixin):
         else:
             guidance = None
             
-        # 在调用time_text_embed前添加
-        print(f"PADDLE DEBUG: timestep raw: {timestep}")
-        print(f"PADDLE DEBUG: timestep shape: {timestep.shape}, dtype: {timestep.dtype}")
-        print(f"PADDLE DEBUG: timestep min: {timestep.min().item():.4f}, max: {timestep.max().item():.4f}, mean: {timestep.mean().item():.4f}")
-
-        print(f"PADDLE DEBUG: pooled_projections shape: {pooled_projections.shape}, dtype: {pooled_projections.dtype}")
-        print(f"PADDLE DEBUG: pooled_projections min: {pooled_projections.min().item():.4f}, max: {pooled_projections.max().item():.4f}, mean: {pooled_projections.mean().item():.4f}")
-
-        if guidance is not None:
-            print(f"PADDLE DEBUG: guidance raw: {guidance}")
-            print(f"PADDLE DEBUG: guidance shape: {guidance.shape}, dtype: {guidance.dtype}")
-            print(f"PADDLE DEBUG: guidance min: {guidance.min().item():.4f}, max: {guidance.max().item():.4f}, mean: {guidance.mean().item():.4f}")
-
-        print('--------------从这里开始精度不对齐-----------------------')
         temb = (
             self.time_text_embed(timestep, pooled_projections)
             if guidance is None
             else self.time_text_embed(timestep, guidance, pooled_projections)
         )
-        print(f"DEBUG: ControlNet paddle - time_text_embed output - shape: {temb.shape}, min: {temb.min().item():.4f}, max: {temb.max().item():.4f}, mean: {temb.mean().item():.4f}")
-        
-        print('--------------从这里结束精度不对齐-----------------------')
 
         # Context embedding
-        encoder_hidden_states_before = encoder_hidden_states.clone()
         encoder_hidden_states = self.context_embedder(encoder_hidden_states)
-        print(f"DEBUG: ControlNet paddle - context_embedder - before/after shape: {encoder_hidden_states_before.shape}/{encoder_hidden_states.shape}")
-        print(f"DEBUG: ControlNet paddle - context_embedder - before/after mean: {encoder_hidden_states_before.mean().item():.4f}/{encoder_hidden_states.mean().item():.4f}")
         
         if txt_ids.ndim == 3:
             logger.warning(
@@ -313,30 +277,19 @@ class FluxControlNetModel(ModelMixin, ConfigMixin):
                 raise ValueError("`controlnet_mode` cannot be `None` when applying ControlNet-Union")
             # union mode emb
             controlnet_mode_emb = self.controlnet_mode_embedder(controlnet_mode)
-            print(f"DEBUG: ControlNet paddle - controlnet_mode_embedder - output shape: {controlnet_mode_emb.shape}, mean: {controlnet_mode_emb.mean().item():.4f}")
             
-            encoder_hidden_states_before = encoder_hidden_states.clone()
             encoder_hidden_states = paddle.concat([controlnet_mode_emb, encoder_hidden_states], axis=1)
-            print(f"DEBUG: ControlNet paddle - after union concat - before/after shape: {encoder_hidden_states_before.shape}/{encoder_hidden_states.shape}")
             
-            txt_ids_before = txt_ids.clone()
             txt_ids = paddle.concat([txt_ids[:1], txt_ids], axis=0)
-            print(f"DEBUG: ControlNet paddle - after union txt_ids concat - before/after shape: {txt_ids_before.shape}/{txt_ids.shape}")
-
         # Positional embedding
         ids = paddle.concat([txt_ids, img_ids], axis=0)
-        print(f"DEBUG: ControlNet paddle - combined ids shape: {ids.shape}, txt_ids shape: {txt_ids.shape}, img_ids shape: {img_ids.shape}")
         
         image_rotary_emb = self.pos_embed(ids)
-        print(f"DEBUG: ControlNet paddle - pos_embed output - shape: {image_rotary_emb[0].shape if isinstance(image_rotary_emb, tuple) else image_rotary_emb.shape}")
 
         # Transformer blocks processing
         block_samples = ()
-        print(f"DEBUG: ControlNet paddle - starting transformer_blocks processing with hidden_states shape: {hidden_states.shape}, mean: {hidden_states.mean().item():.4f}")
         
         for i, block in enumerate(self.transformer_blocks):
-            hidden_states_before = hidden_states.clone()
-            encoder_hidden_states_before = encoder_hidden_states.clone()
             
             if self.gradient_checkpointing and self.training and not use_old_recompute():
                 ckpt_kwargs = {} if recompute_use_reentrant() else {"use_reentrant": False}
@@ -356,23 +309,15 @@ class FluxControlNetModel(ModelMixin, ConfigMixin):
                     image_rotary_emb=image_rotary_emb
                 )
             
-            print(f"DEBUG: ControlNet paddle - transformer block[{i}] - hidden_states before/after mean: {hidden_states_before.mean().item():.4f}/{hidden_states.mean().item():.4f}")
-            print(f"DEBUG: ControlNet paddle - transformer block[{i}] - encoder_hidden_states before/after mean: {encoder_hidden_states_before.mean().item():.4f}/{encoder_hidden_states.mean().item():.4f}")
-            
+
             block_samples += (hidden_states,)
 
         # Combine encoder states
-        hidden_states_before = hidden_states.clone()
         hidden_states = paddle.concat([encoder_hidden_states, hidden_states], axis=1)
-        print(f"DEBUG: ControlNet paddle - after concat - before shape: {hidden_states_before.shape}, encoder shape: {encoder_hidden_states.shape}")
-        print(f"DEBUG: ControlNet paddle - after concat - after shape: {hidden_states.shape}, mean: {hidden_states.mean().item():.4f}")
-
         # Single transformer blocks processing
         single_block_samples = ()
-        print(f"DEBUG: ControlNet paddle - starting single_transformer_blocks processing")
-        
+
         for i, block in enumerate(self.single_transformer_blocks):
-            hidden_states_before = hidden_states.clone()
             
             if self.gradient_checkpointing and self.training:
                 ckpt_kwargs = {} if recompute_use_reentrant() else {"use_reentrant": False}
@@ -390,55 +335,33 @@ class FluxControlNetModel(ModelMixin, ConfigMixin):
                     image_rotary_emb=image_rotary_emb
                 )
             
-            print(f"DEBUG: ControlNet paddle - single block[{i}] - hidden_states before/after mean: {hidden_states_before.mean().item():.4f}/{hidden_states.mean().item():.4f}")
             single_block_sample = hidden_states[:, encoder_hidden_states.shape[1]:]
             single_block_samples += (single_block_sample,)
             
-            if i == 0:
-                print(f"DEBUG: ControlNet paddle - single_block_sample shape: {single_block_sample.shape}, mean: {single_block_sample.mean().item():.4f}")
-
         # controlnet block
         controlnet_block_samples = ()
-        print(f"DEBUG: ControlNet paddle - applying controlnet_blocks")
         
         for i, (block_sample, controlnet_block) in enumerate(zip(block_samples, self.controlnet_blocks)):
-            block_sample_before = block_sample.clone()
             block_sample = controlnet_block(block_sample)
-            
-            if i == 0:
-                print(f"DEBUG: ControlNet paddle - controlnet_block[{i}] - before/after mean: {block_sample_before.mean().item():.4f}/{block_sample.mean().item():.4f}")
             
             controlnet_block_samples = controlnet_block_samples + (block_sample,)
 
         controlnet_single_block_samples = ()
-        print(f"DEBUG: ControlNet paddle - applying controlnet_single_blocks")
         
         for i, (single_block_sample, controlnet_block) in enumerate(zip(single_block_samples, self.controlnet_single_blocks)):
-            single_block_sample_before = single_block_sample.clone()
             single_block_sample = controlnet_block(single_block_sample)
             
-            if i == 0:
-                print(f"DEBUG: ControlNet paddle - controlnet_single_block[{i}] - before/after mean: {single_block_sample_before.mean().item():.4f}/{single_block_sample.mean().item():.4f}")
             
             controlnet_single_block_samples = controlnet_single_block_samples + (single_block_sample,)
 
         # scaling
-        print(f"DEBUG: ControlNet paddle - applying conditioning_scale: {conditioning_scale}")
         controlnet_block_samples = [sample * conditioning_scale for sample in controlnet_block_samples]
         controlnet_single_block_samples = [sample * conditioning_scale for sample in controlnet_single_block_samples]
-
-        print(f"DEBUG: ControlNet paddle - final controlnet_block_samples length: {len(controlnet_block_samples)}")
-        print(f"DEBUG: ControlNet paddle - final controlnet_single_block_samples length: {len(controlnet_single_block_samples)}")
-        
-        if len(controlnet_block_samples) > 0:
-            first_sample = controlnet_block_samples[0]
-            print(f"DEBUG: ControlNet paddle - first controlnet_block_sample - shape: {first_sample.shape}, min: {first_sample.min().item():.4f}, max: {first_sample.max().item():.4f}, mean: {first_sample.mean().item():.4f}")
 
         controlnet_block_samples = None if len(controlnet_block_samples) == 0 else controlnet_block_samples
         controlnet_single_block_samples = (
             None if len(controlnet_single_block_samples) == 0 else controlnet_single_block_samples
         )
-        print(f"*****************离开models了*********************")
 
         if USE_PEFT_BACKEND:
             # remove `lora_scale` from each PEFT layer

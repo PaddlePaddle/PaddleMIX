@@ -164,7 +164,7 @@ def retrieve_timesteps(
 
 
 
-class FluxControlNetPipeline(
+class FluxControlNetImg2ImgPipeline(
     DiffusionPipeline,
     FromSingleFileMixin,
     TextualInversionLoaderMixin,
@@ -413,6 +413,31 @@ class FluxControlNetPipeline(
 
         return ip_adapter_image_embeds
     
+    def _encode_vae_image(self, image: paddle.Tensor, generator: paddle.Generator):
+        if isinstance(generator, list):
+            image_latents = [
+                retrieve_latents(self.vae.encode(image[i : i + 1]), generator=generator[i])
+                for i in range(image.shape[0])
+            ]
+            image_latents = paddle.concat(image_latents, axis=0)
+        else:
+            image_latents = retrieve_latents(self.vae.encode(image), generator=generator)
+
+        image_latents = (image_latents - self.vae.config.shift_factor) * self.vae.config.scaling_factor
+
+        return image_latents
+    
+    
+    def get_timesteps(self, num_inference_steps, strength):
+        # get the original timestep using init_timestep
+        init_timestep = min(num_inference_steps * strength, num_inference_steps)
+
+        t_start = int(max(num_inference_steps - init_timestep, 0))
+        timesteps = self.scheduler.timesteps[t_start * self.scheduler.order:]
+        if hasattr(self.scheduler, "set_begin_index"):
+            self.scheduler.set_begin_index(t_start * self.scheduler.order)
+
+        return timesteps, num_inference_steps - t_start
 
     def check_inputs(
         self,
@@ -562,39 +587,49 @@ class FluxControlNetPipeline(
 
     
     def prepare_latents(
-        self,
-        batch_size,
-        num_channels_latents,
-        height,
-        width,
-        dtype,
-        generator,
-        latents=None,
+            self,
+            image,
+            timestep,
+            batch_size,
+            num_channels_latents,
+            height,
+            width,
+            dtype,
+            generator,
+            latents=None,
     ):
-        """
-        Prepares the latent tensor for diffusion.
-        """
-
-        height = 2 * (height // (self.vae_scale_factor * 2))
-        width = 2 * (width // (self.vae_scale_factor * 2))
-
-        shape = (batch_size, num_channels_latents, height, width)
-
-        if latents is not None:
-            latent_image_ids = self._prepare_latent_image_ids(batch_size, height // 2, width // 2, dtype)
-            return latents.astype(dtype), latent_image_ids
-        
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
                 f"You have passed a list of generators of length {len(generator)}, but requested an effective batch"
                 f" size of {batch_size}. Make sure the batch size matches the length of the generators."
             )
-        
-        latents = randn_tensor(shape, generator=generator, dtype=dtype)
-        
-        latents = self._pack_latents(latents, batch_size, num_channels_latents, height, width)
+
+        # VAE applies 8x compression on images but we must also account for packing which requires
+        # latent height and width to be divisible by 2.
+        height = 2 * (int(height) // (self.vae_scale_factor * 2))
+        width = 2 * (int(width) // (self.vae_scale_factor * 2))
+        shape = (batch_size, num_channels_latents, height, width)
         latent_image_ids = self._prepare_latent_image_ids(batch_size, height // 2, width // 2, dtype)
 
+        if latents is not None:
+            return latents.astype(dtype=dtype), latent_image_ids
+
+        image = image.astype(dtype=dtype)
+        image_latents = self._encode_vae_image(image=image, generator=generator)
+        if batch_size > image_latents.shape[0] and batch_size % image_latents.shape[0] == 0:
+            # expand init_latents for batch_size
+            additional_image_per_prompt = batch_size // image_latents.shape[0]
+            image_latents = paddle.concat([image_latents] * additional_image_per_prompt, axis=0)
+        elif batch_size > image_latents.shape[0] and batch_size % image_latents.shape[0] != 0:
+            raise ValueError(
+                f"Cannot duplicate `image` of batch size {image_latents.shape[0]} to {batch_size} text prompts."
+            )
+        else:
+            image_latents = paddle.concat([image_latents], axis=0)
+
+        noise = randn_tensor(shape, generator=generator, dtype=dtype)
+        latents = self.scheduler.scale_noise(image_latents, timestep, noise)
+        latents = self._pack_latents(latents, batch_size, num_channels_latents, height, width)
         return latents, latent_image_ids
     
     
@@ -655,17 +690,16 @@ class FluxControlNetPipeline(
         self,
         prompt: Union[str, List[str]] = None,
         prompt_2: Optional[Union[str, List[str]]] = None,
-        negative_prompt: Union[str, List[str]] = None,
-        negative_prompt_2: Optional[Union[str, List[str]]] = None,
-        true_cfg_scale: float = 1.0,
+        image: PipelineImageInput = None,
+        control_image: PipelineImageInput = None,
         height: Optional[int] = None,
         width: Optional[int] = None,
+        strength: float = 0.6,
         num_inference_steps: int = 28,
         sigmas: Optional[List[float]] = None,
         guidance_scale: float = 7.0,
         control_guidance_start: Union[float, List[float]] = 0.0,
         control_guidance_end: Union[float, List[float]] = 1.0,
-        control_image: PipelineImageInput = None,
         control_mode: Optional[Union[int, List[int]]] = None,
         controlnet_conditioning_scale: Union[float, List[float]] = 1.0,
         num_images_per_prompt: Optional[int] = 1,
@@ -673,12 +707,6 @@ class FluxControlNetPipeline(
         latents: Optional[paddle.Tensor] = None,
         prompt_embeds: Optional[paddle.Tensor] = None,
         pooled_prompt_embeds: Optional[paddle.Tensor] = None,
-        ip_adapter_image: Optional[PipelineImageInput] = None,
-        ip_adapter_image_embeds: Optional[List[paddle.Tensor]] = None,
-        negative_ip_adapter_image: Optional[PipelineImageInput] = None,
-        negative_ip_adapter_image_embeds: Optional[List[paddle.Tensor]] = None,
-        negative_prompt_embeds: Optional[paddle.Tensor] = None,
-        negative_pooled_prompt_embeds: Optional[paddle.Tensor] = None,
         output_type: Optional[str] = "pil",
         return_dict: bool = True,
         joint_attention_kwargs: Optional[Dict[str, Any]] = None,
@@ -686,21 +714,25 @@ class FluxControlNetPipeline(
         callback_on_step_end_tensor_inputs: List[str] = ["latents"],
         max_sequence_length: int = 512,
     ):
-        r"""
+        """
         Function invoked when calling the pipeline for generation.
 
         Args:
             prompt (`str` or `List[str]`, *optional*):
-                The prompt or prompts to guide the image generation. If not defined, one has to pass `prompt_embeds`.
-                instead.
+                The prompt or prompts to guide the image generation.
             prompt_2 (`str` or `List[str]`, *optional*):
-                The prompt or prompts to be sent to `tokenizer_2` and `text_encoder_2`. If not defined, `prompt` is
-                will be used instead
-            height (`int`, *optional*, defaults to self.unet.config.sample_size * self.vae_scale_factor):
-                The height in pixels of the generated image. This is set to 1024 by default for the best results.
-            width (`int`, *optional*, defaults to self.unet.config.sample_size * self.vae_scale_factor):
-                The width in pixels of the generated image. This is set to 1024 by default for the best results.
-            num_inference_steps (`int`, *optional*, defaults to 50):
+                The prompt or prompts to be sent to the `tokenizer_2` and `text_encoder_2`.
+            image (`PIL.Image.Image` or `List[PIL.Image.Image]` or `paddle.Tensor`):
+                The image(s) to modify with the pipeline.
+            control_image (`PIL.Image.Image` or `List[PIL.Image.Image]` or `paddle.Tensor`):
+                The ControlNet input condition. Image to control the generation.
+            height (`int`, *optional*, defaults to self.default_sample_size * self.vae_scale_factor):
+                The height in pixels of the generated image.
+            width (`int`, *optional*, defaults to self.default_sample_size * self.vae_scale_factor):
+                The width in pixels of the generated image.
+            strength (`float`, *optional*, defaults to 0.6):
+                Conceptually, indicates how much to transform the reference `image`. Must be between 0 and 1.
+            num_inference_steps (`int`, *optional*, defaults to 28):
                 The number of denoising steps. More denoising steps usually lead to a higher quality image at the
                 expense of slower inference.
             sigmas (`List[float]`, *optional*):
@@ -709,72 +741,34 @@ class FluxControlNetPipeline(
                 will be used.
             guidance_scale (`float`, *optional*, defaults to 7.0):
                 Guidance scale as defined in [Classifier-Free Diffusion Guidance](https://arxiv.org/abs/2207.12598).
-                `guidance_scale` is defined as `w` of equation 2. of [Imagen
-                Paper](https://arxiv.org/pdf/2205.11487.pdf). Guidance scale is enabled by setting `guidance_scale >
-                1`. Higher guidance scale encourages to generate images that are closely linked to the text `prompt`,
-                usually at the expense of lower image quality.
-            control_guidance_start (`float` or `List[float]`, *optional*, defaults to 0.0):
-                The percentage of total steps at which the ControlNet starts applying.
-            control_guidance_end (`float` or `List[float]`, *optional*, defaults to 1.0):
-                The percentage of total steps at which the ControlNet stops applying.
-            control_image (`paddle.Tensor`, `PIL.Image.Image`, `np.ndarray`, `List[paddle.Tensor]`, `List[PIL.Image.Image]`, `List[np.ndarray]`,:
-                    `List[List[paddle.Tensor]]`, `List[List[np.ndarray]]` or `List[List[PIL.Image.Image]]`):
-                The ControlNet input condition to provide guidance to the `unet` for generation. If the type is
-                specified as `paddle.Tensor`, it is passed to ControlNet as is. `PIL.Image.Image` can also be accepted
-                as an image. The dimensions of the output image defaults to `image`'s dimensions. If height and/or
-                width are passed, `image` is resized accordingly. If multiple ControlNets are specified in `init`,
-                images must be passed as a list such that each element of the list can be correctly batched for input
-                to a single ControlNet.
+            control_mode (`int` or `List[int]`, *optional*):
+                The mode for the ControlNet. If multiple ControlNets are used, this should be a list.
             controlnet_conditioning_scale (`float` or `List[float]`, *optional*, defaults to 1.0):
                 The outputs of the ControlNet are multiplied by `controlnet_conditioning_scale` before they are added
-                to the residual in the original `unet`. If multiple ControlNets are specified in `init`, you can set
-                the corresponding scale as a list.
-            control_mode (`int` or `List[int]`,, *optional*, defaults to None):
-                The control mode when applying ControlNet-Union.
+                to the residual in the original transformer.
             num_images_per_prompt (`int`, *optional*, defaults to 1):
                 The number of images to generate per prompt.
             generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
-                One or a list of paddle generators to make generation deterministic.
+                One or more paddle generators to make generation deterministic.
             latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents, sampled from a Gaussian distribution, to be used as inputs for image
-                generation. Can be used to tweak the same generation with different prompts. If not provided, a latents
-                tensor will ge generated by sampling using the supplied random `generator`.
+                generation. Can be used to tweak the same generation with different prompts.
             prompt_embeds (`paddle.Tensor`, *optional*):
-                Pre-generated text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt weighting. If not
-                provided, text embeddings will be generated from `prompt` input argument.
+                Pre-generated text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt weighting.
             pooled_prompt_embeds (`paddle.Tensor`, *optional*):
-                Pre-generated pooled text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt weighting.
-                If not provided, pooled text embeddings will be generated from `prompt` input argument.
-            ip_adapter_image: (`PipelineImageInput`, *optional*): Optional image input to work with IP Adapters.
-            ip_adapter_image_embeds (`List[paddle.Tensor]`, *optional*):
-                Pre-generated image embeddings for IP-Adapter. It should be a list of length same as number of
-                IP-adapters. Each element should be a tensor of shape `(batch_size, num_images, emb_dim)`. If not
-                provided, embeddings are computed from the `ip_adapter_image` input argument.
-            negative_ip_adapter_image:
-                (`PipelineImageInput`, *optional*): Optional image input to work with IP Adapters.
-            negative_ip_adapter_image_embeds (`List[paddle.Tensor]`, *optional*):
-                Pre-generated image embeddings for IP-Adapter. It should be a list of length same as number of
-                IP-adapters. Each element should be a tensor of shape `(batch_size, num_images, emb_dim)`. If not
-                provided, embeddings are computed from the `ip_adapter_image` input argument.
+                Pre-generated pooled text embeddings.
             output_type (`str`, *optional*, defaults to `"pil"`):
-                The output format of the generate image. Choose between
-                [PIL](https://pillow.readthedocs.io/en/stable/): `PIL.Image.Image` or `np.array`.
+                The output format of the generate image. Choose between `PIL.Image` or `np.array`.
             return_dict (`bool`, *optional*, defaults to `True`):
                 Whether or not to return a [`~pipelines.flux.FluxPipelineOutput`] instead of a plain tuple.
             joint_attention_kwargs (`dict`, *optional*):
-                A kwargs dictionary that if specified is passed along to the `AttentionProcessor` as defined under
-                `self.processor` in
-                [diffusers.models.attention_processor](https://github.com/huggingface/diffusers/blob/main/src/diffusers/models/attention_processor.py).
+                Additional keyword arguments to be passed to the joint attention mechanism.
             callback_on_step_end (`Callable`, *optional*):
-                A function that calls at the end of each denoising steps during the inference. The function is called
-                with the following arguments: `callback_on_step_end(self: DiffusionPipeline, step: int, timestep: int,
-                callback_kwargs: Dict)`. `callback_kwargs` will include a list of all tensors as specified by
-                `callback_on_step_end_tensor_inputs`.
-            callback_on_step_end_tensor_inputs (`List`, *optional*):
-                The list of tensor inputs for the `callback_on_step_end` function. The tensors specified in the list
-                will be passed as `callback_kwargs` argument. You will only be able to include variables listed in the
-                `._callback_tensor_inputs` attribute of your pipeline class.
-            max_sequence_length (`int` defaults to 512): Maximum sequence length to use with the `prompt`.
+                A function that calls at the end of each denoising step during the inference.
+            callback_on_step_end_tensor_inputs (`List[str]`, *optional*):
+                The list of tensor inputs for the `callback_on_step_end` function.
+            max_sequence_length (`int`, *optional*, defaults to 512):
+                The maximum length of the sequence to be generated.
 
         Examples:
 
@@ -783,8 +777,6 @@ class FluxControlNetPipeline(
             is True, otherwise a `tuple`. When returning a tuple, the first element is a list with the generated
             images.
         """
-        
-
         height = height or self.default_sample_size * self.vae_scale_factor
         width = width or self.default_sample_size * self.vae_scale_factor
 
@@ -799,26 +791,22 @@ class FluxControlNetPipeline(
                 mult * [control_guidance_end],
             )
 
-        # 1. Check inputs. 
         self.check_inputs(
             prompt,
             prompt_2,
+            strength,
             height,
             width,
-            negative_prompt=negative_prompt,
-            negative_prompt_2=negative_prompt_2,
+            callback_on_step_end_tensor_inputs,
             prompt_embeds=prompt_embeds,
-            negative_prompt_embeds=negative_prompt_embeds,
             pooled_prompt_embeds=pooled_prompt_embeds,
-            negative_pooled_prompt_embeds=negative_pooled_prompt_embeds,
-            callback_on_step_end_tensor_inputs=callback_on_step_end_tensor_inputs,
             max_sequence_length=max_sequence_length,
         )
+
         self._guidance_scale = guidance_scale
         self._joint_attention_kwargs = joint_attention_kwargs
         self._interrupt = False
 
-        # 2. Define call parameters
         if prompt is not None and isinstance(prompt, str):
             batch_size = 1
         elif prompt is not None and isinstance(prompt, list):
@@ -828,12 +816,9 @@ class FluxControlNetPipeline(
 
         dtype = self.transformer.dtype
 
-        # 3. Prepare text embeddings
         lora_scale = (
             self.joint_attention_kwargs.get("scale", None) if self.joint_attention_kwargs is not None else None
         )
-        do_true_cfg = true_cfg_scale > 1 and negative_prompt is not None
-
         (
             prompt_embeds,
             pooled_prompt_embeds,
@@ -848,22 +833,9 @@ class FluxControlNetPipeline(
             lora_scale=lora_scale,
         )
 
-        if do_true_cfg:
-            (
-                negative_prompt_embeds,
-                negative_pooled_prompt_embeds,
-                _,
-            ) = self.encode_prompt(
-                prompt=negative_prompt,
-                prompt_2=negative_prompt_2,
-                prompt_embeds=negative_prompt_embeds,
-                pooled_prompt_embeds=negative_pooled_prompt_embeds,
-                num_images_per_prompt=num_images_per_prompt,
-                max_sequence_length=max_sequence_length,
-                lora_scale=lora_scale,
-            )
+        init_image = self.image_processor.preprocess(image, height=height, width=width)
+        init_image = init_image.astype(paddle.float32)
 
-        # 3. Prepare control image
         num_channels_latents = self.transformer.config.in_channels // 4
 
         if isinstance(self.controlnet, FluxControlNetModel):
@@ -877,37 +849,26 @@ class FluxControlNetPipeline(
             )
             height, width = control_image.shape[-2:]
 
-            # xlab controlnet has a input_hint_block and instantx controlnet does not
-            controlnet_blocks_repeat = False if self.controlnet.input_hint_block is None else True
-            
-            if self.controlnet.input_hint_block is None:
-                # vae encode
-                vae_output = self.vae.encode(control_image)
-                control_image = retrieve_latents(vae_output, generator=generator)
-                control_image = (control_image - self.vae.config.shift_factor) * self.vae.config.scaling_factor
-                # pack
-                height_control_image, width_control_image = control_image.shape[2:]
-                control_image = self._pack_latents(
-                    control_image,
-                    batch_size * num_images_per_prompt,
-                    num_channels_latents,
-                    height_control_image,
-                    width_control_image,
-                )
+            control_image = retrieve_latents(self.vae.encode(control_image), generator=generator)
+            control_image = (control_image - self.vae.config.shift_factor) * self.vae.config.scaling_factor
 
+            height_control_image, width_control_image = control_image.shape[2:]
+            control_image = self._pack_latents(
+                control_image,
+                batch_size * num_images_per_prompt,
+                num_channels_latents,
+                height_control_image,
+                width_control_image,
+            )
 
             if control_mode is not None:
-                if not isinstance(control_mode, int):
-                    raise ValueError(" For `FluxControlNet`, `control_mode` should be an `int` or `None`")
                 control_mode = paddle.to_tensor(control_mode, dtype=paddle.int64)
-                control_mode = control_mode.reshape([-1, 1]).expand([control_image.shape[0], 1])
+                control_mode = control_mode.reshape([-1, 1])
 
         elif isinstance(self.controlnet, FluxMultiControlNetModel):
             control_images = []
-            # xlab controlnet has a input_hint_block and instantx controlnet does not
-            controlnet_blocks_repeat = False if self.controlnet.nets[0].input_hint_block is None else True
 
-            for i, control_image_ in enumerate(control_image):
+            for control_image_ in control_image:
                 control_image_ = self.prepare_image(
                     image=control_image_,
                     width=width,
@@ -918,46 +879,53 @@ class FluxControlNetPipeline(
                 )
                 height, width = control_image_.shape[-2:]
 
-                if self.controlnet.nets[0].input_hint_block is None:
-                    # vae encode
-                    vae_output = self.vae.encode(control_image_)
-                    control_image_ = retrieve_latents(vae_output, generator=generator)
-                    
-                    control_image_ = (control_image_ - self.vae.config.shift_factor) * self.vae.config.scaling_factor
-                    # pack
-                    height_control_image, width_control_image = control_image_.shape[2:]
-                    control_image_ = self._pack_latents(
-                        control_image_,
-                        batch_size * num_images_per_prompt,
-                        num_channels_latents,
-                        height_control_image,
-                        width_control_image,
-                    )
-                    
+                control_image_ = retrieve_latents(self.vae.encode(control_image_), generator=generator)
+                control_image_ = (control_image_ - self.vae.config.shift_factor) * self.vae.config.scaling_factor
+
+                height_control_image, width_control_image = control_image_.shape[2:]
+                control_image_ = self._pack_latents(
+                    control_image_,
+                    batch_size * num_images_per_prompt,
+                    num_channels_latents,
+                    height_control_image,
+                    width_control_image,
+                )
+
                 control_images.append(control_image_)
 
             control_image = control_images
-            # Here we ensure that `control_mode` has the same length as the control_image.
-            if isinstance(control_mode, list) and len(control_mode) != len(control_image):
-                raise ValueError(
-                    "For Multi-ControlNet, `control_mode` must be a list of the same "
-                    + " length as the number of controlnets (control images) specified"
-                )
-            if not isinstance(control_mode, list):
-                control_mode = [control_mode] * len(control_image)
 
-            # set control mode
-            control_modes = []
-            for i, cmode in enumerate(control_mode):
-                if cmode is None:
-                    cmode = -1
-                control_mode_tensor = paddle.to_tensor(cmode).expand([control_images[0].shape[0]]).astype(paddle.int64)
-                control_modes.append(control_mode_tensor)
-            control_mode = control_modes
+            control_mode_ = []
+            if isinstance(control_mode, list):
+                for cmode in control_mode:
+                    if cmode is None:
+                        control_mode_.append(-1)
+                    else:
+                        control_mode_.append(cmode)
+            control_mode = paddle.to_tensor(control_mode_, dtype=paddle.int64)
+            control_mode = control_mode.reshape([-1, 1])
 
-        # 4. Prepare latent variables
-        num_channels_latents = self.transformer.config.in_channels // 4
+        sigmas = np.linspace(1.0, 1 / num_inference_steps, num_inference_steps) if sigmas is None else sigmas
+        image_seq_len = (int(height) // self.vae_scale_factor // 2) * (int(width) // self.vae_scale_factor // 2)
+        mu = calculate_shift(
+            image_seq_len,
+            self.scheduler.config.base_image_seq_len,
+            self.scheduler.config.max_image_seq_len,
+            self.scheduler.config.base_shift,
+            self.scheduler.config.max_shift,
+        )
+        timesteps, num_inference_steps = retrieve_timesteps(
+            self.scheduler,
+            num_inference_steps,
+            sigmas=sigmas,
+            mu=mu,
+        )
+        timesteps, num_inference_steps = self.get_timesteps(num_inference_steps, strength)
+
+        latent_timestep = timesteps[:1].expand([batch_size * num_images_per_prompt])
         latents, latent_image_ids = self.prepare_latents(
+            init_image,
+            latent_timestep,
             batch_size * num_images_per_prompt,
             num_channels_latents,
             height,
@@ -967,29 +935,6 @@ class FluxControlNetPipeline(
             latents,
         )
 
-        # 5. Prepare timesteps
-        sigmas = np.linspace(1.0, 1 / num_inference_steps, num_inference_steps) if sigmas is None else sigmas
-        image_seq_len = latents.shape[1]
-
-        mu = calculate_shift(
-            image_seq_len,
-            self.scheduler.config.base_image_seq_len,
-            self.scheduler.config.max_image_seq_len,
-            self.scheduler.config.base_shift,
-            self.scheduler.config.max_shift,
-        )
-
-        timesteps, num_inference_steps = retrieve_timesteps(
-            self.scheduler,
-            num_inference_steps,
-            sigmas=sigmas,
-            mu=mu,
-        )
-
-        num_warmup_steps = max(len(timesteps) - num_inference_steps * self.scheduler.order, 0)
-        self._num_timesteps = len(timesteps)
-
-        # 6. Create tensor stating which controlnets to keep
         controlnet_keep = []
         for i in range(len(timesteps)):
             keeps = [
@@ -998,45 +943,14 @@ class FluxControlNetPipeline(
             ]
             controlnet_keep.append(keeps[0] if isinstance(self.controlnet, FluxControlNetModel) else keeps)
 
+        num_warmup_steps = max(len(timesteps) - num_inference_steps * self.scheduler.order, 0)
+        self._num_timesteps = len(timesteps)
 
-        if (ip_adapter_image is not None or ip_adapter_image_embeds is not None) and (
-            negative_ip_adapter_image is None and negative_ip_adapter_image_embeds is None
-        ):
-            negative_ip_adapter_image = np.zeros((width, height, 3), dtype=np.uint8)
-        elif (ip_adapter_image is None and ip_adapter_image_embeds is None) and (
-            negative_ip_adapter_image is not None or negative_ip_adapter_image_embeds is not None
-        ):
-            ip_adapter_image = np.zeros((width, height, 3), dtype=np.uint8)
-
-        if self.joint_attention_kwargs is None:
-            self._joint_attention_kwargs = {}
-            
-        image_embeds = None
-        negative_image_embeds = None
-        if ip_adapter_image is not None or ip_adapter_image_embeds is not None:
-            image_embeds = self.prepare_ip_adapter_image_embeds(
-                ip_adapter_image,
-                ip_adapter_image_embeds,
-                batch_size * num_images_per_prompt,
-            )
-            
-        if negative_ip_adapter_image is not None or negative_ip_adapter_image_embeds is not None:
-            negative_image_embeds = self.prepare_ip_adapter_image_embeds(
-                negative_ip_adapter_image,
-                negative_ip_adapter_image_embeds,
-                batch_size * num_images_per_prompt,
-            )
-
-        # 7. Denoising loop
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 if self.interrupt:
                     continue
 
-                if image_embeds is not None:
-                    self._joint_attention_kwargs["ip_adapter_image_embeds"] = image_embeds
-                    
-                # broadcast to batch dimension
                 timestep = t.expand([latents.shape[0]]).astype(latents.dtype)
 
                 if isinstance(self.controlnet, FluxMultiControlNetModel):
@@ -1045,8 +959,7 @@ class FluxControlNetPipeline(
                     use_guidance = self.controlnet.config.guidance_embeds
 
                 guidance = paddle.to_tensor([guidance_scale]) if use_guidance else None
-                if guidance is not None:
-                    guidance = guidance.expand([latents.shape[0]])
+                guidance = guidance.expand([latents.shape[0]]) if guidance is not None else None
 
                 if isinstance(controlnet_keep[i], list):
                     cond_scale = [c * s for c, s in zip(controlnet_conditioning_scale, controlnet_keep[i])]
@@ -1055,7 +968,7 @@ class FluxControlNetPipeline(
                     if isinstance(controlnet_cond_scale, list):
                         controlnet_cond_scale = controlnet_cond_scale[0]
                     cond_scale = controlnet_cond_scale * controlnet_keep[i]
-                # controlnet
+
                 try:
                     controlnet_block_samples, controlnet_single_block_samples = self.controlnet(
                         hidden_states=latents,
@@ -1071,15 +984,14 @@ class FluxControlNetPipeline(
                         joint_attention_kwargs=self.joint_attention_kwargs,
                         return_dict=False,
                     )
-                    
                 except Exception as e:
                     import traceback
                     traceback.print_exc()
                     raise
 
                 guidance = paddle.to_tensor([guidance_scale]) if self.transformer.config.guidance_embeds else None
-                if guidance is not None:
-                    guidance = guidance.expand([latents.shape[0]])
+                guidance = guidance.expand([latents.shape[0]]) if guidance is not None else None
+
                 try:
                     noise_pred = self.transformer(
                         hidden_states=latents,
@@ -1093,35 +1005,13 @@ class FluxControlNetPipeline(
                         img_ids=latent_image_ids,
                         joint_attention_kwargs=self.joint_attention_kwargs,
                         return_dict=False,
-                        controlnet_blocks_repeat=controlnet_blocks_repeat,
                     )[0]
                 except Exception as e:
                     import traceback
                     traceback.print_exc()
                     raise
 
-                if do_true_cfg:
-                    if negative_image_embeds is not None:
-                        self._joint_attention_kwargs["ip_adapter_image_embeds"] = negative_image_embeds
-
-                    neg_noise_pred = self.transformer(
-                        hidden_states=latents,
-                        timestep=timestep / 1000,
-                        guidance=guidance,
-                        pooled_projections=negative_pooled_prompt_embeds,
-                        encoder_hidden_states=negative_prompt_embeds,
-                        controlnet_block_samples=controlnet_block_samples,
-                        controlnet_single_block_samples=controlnet_single_block_samples,
-                        txt_ids=text_ids,
-                        img_ids=latent_image_ids,
-                        joint_attention_kwargs=self.joint_attention_kwargs,
-                        return_dict=False,
-                        controlnet_blocks_repeat=controlnet_blocks_repeat,
-                    )[0]
-                    
-                    noise_pred = neg_noise_pred + true_cfg_scale * (noise_pred - neg_noise_pred)
-
-                # compute the previous noisy sample x_t -> x_t-1
+                latents_dtype = latents.dtype
                 latents = self.scheduler.step(noise_pred, t, latents, return_dict=False)[0]
 
                 if callback_on_step_end is not None:
@@ -1134,7 +1024,6 @@ class FluxControlNetPipeline(
                     prompt_embeds = callback_outputs.pop("prompt_embeds", prompt_embeds)
                     control_image = callback_outputs.pop("control_image", control_image)
 
-                # call the callback, if provided
                 if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
                     progress_bar.update()
 
@@ -1142,14 +1031,12 @@ class FluxControlNetPipeline(
             image = latents
         else:
             latents = self._unpack_latents(latents, height, width, self.vae_scale_factor)
-            
             latents = (latents / self.vae.config.scaling_factor) + self.vae.config.shift_factor
             image = self.vae.decode(latents, return_dict=False)[0]
-            
             image = self.image_processor.postprocess(image, output_type=output_type)
 
-        # Offload all models
         self.maybe_free_model_hooks()
+
         if not return_dict:
             return (image,)
 
