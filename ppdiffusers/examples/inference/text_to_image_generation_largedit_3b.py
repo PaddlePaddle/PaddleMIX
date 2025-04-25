@@ -18,6 +18,7 @@ from paddlenlp.trainer import set_seed
 from ppdiffusers import DPMSolverMultistepScheduler
 from ppdiffusers.pipelines import LDMTextToImageLargeDiTPipeline
 
+# note that: will cost about 36G gpu memory
 dtype = paddle.bfloat16
 pipe = LDMTextToImageLargeDiTPipeline.from_pretrained("Alpha-VLLM/Large-DiT-T2I-3B-1024", paddle_dtype=dtype)
 pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
