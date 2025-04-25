@@ -1,0 +1,8 @@
+环境准备
+git clone https://github.com/PaddlePaddle/PaddleMIX
+cd PaddleMIX
+pip install -e .
+
+#ppdiffusers 安装
+cd ppdiffusers
+pip install -e .
