@@ -1258,30 +1258,6 @@ def apply_rotary_emb(
         x_out = paddle.as_real(x=x_rotated * freqs_cis).flatten(start_axis=3)
         return x_out.astype(dtype=x.dtype)
 
-
-class CombinedTimestepGuidanceTextProjEmbeddings(paddle.nn.Layer):
-    def __init__(self, embedding_dim, pooled_projection_dim):
-        super().__init__()
-
-        self.time_proj = Timesteps(num_channels=256, flip_sin_to_cos=True, downscale_freq_shift=0)
-        self.timestep_embedder = TimestepEmbedding(in_channels=256, time_embed_dim=embedding_dim)
-        self.guidance_embedder = TimestepEmbedding(in_channels=256, time_embed_dim=embedding_dim)
-        self.text_embedder = PixArtAlphaTextProjection(pooled_projection_dim, embedding_dim, act_fn="silu")
-
-    def forward(self, timestep, guidance, pooled_projection):
-        timesteps_proj = self.time_proj(timestep)
-        timesteps_emb = self.timestep_embedder(timesteps_proj.to(dtype=pooled_projection.dtype))
-
-        guidance_proj = self.time_proj(guidance)
-        guidance_emb = self.guidance_embedder(guidance_proj.to(dtype=pooled_projection.dtype))
-
-        time_guidance_emb = timesteps_emb + guidance_emb
-
-        pooled_projections = self.text_embedder(pooled_projection)
-        conditioning = time_guidance_emb + pooled_projections
-
-        return conditioning
-        
 class FluxPosEmbed(nn.Layer):
     # modified from https://github.com/black-forest-labs/flux/blob/c00d7c60b085fce8058b9df845e036090873f2ce/src/flux/modules/layers.py#L11
     def __init__(self, theta: int, axes_dim: List[int]):
