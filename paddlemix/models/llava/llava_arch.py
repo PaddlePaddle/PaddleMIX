@@ -344,7 +344,7 @@ class LlavaMetaForCausalLM:
                 continue
             image_token_indices = (
                 [-1]
-                + paddle.where(cur_input_ids == IMAGE_TOKEN_INDEX)[0].tolist()
+                + paddle.squeeze(paddle.where(cur_input_ids == IMAGE_TOKEN_INDEX)).unsqueeze(-1).tolist()
                 + [cur_input_ids.shape[0]]
             )
 

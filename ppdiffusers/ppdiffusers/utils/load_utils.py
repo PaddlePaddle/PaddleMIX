@@ -22,6 +22,7 @@ from typing import Union
 from zipfile import ZipFile
 
 import numpy as np
+import paddle
 
 from .constants import get_map_location_default
 from .import_utils import (
@@ -52,7 +53,8 @@ if is_torch_available():
     import torch
 
     # patch torch.uint16
-    torch.uint16 = torch.bfloat16
+    torch.uint16 = paddle.bfloat16
+
 
 if is_paddle_available():
     import paddle
@@ -309,7 +311,7 @@ def cast_to_paddle(tensor, return_numpy=False):
         is_bfloat16 = False
         if tensor.ndim == 0:
             tensor = tensor.reshape((1,))
-        if "torch.bfloat16" in str(tensor.dtype):
+        if "paddle.bfloat16" in str(tensor.dtype):
             is_bfloat16 = True
             tensor = tensor.float().contiguous().cpu().numpy()
         else:
