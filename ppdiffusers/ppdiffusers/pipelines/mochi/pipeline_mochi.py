@@ -1,4 +1,4 @@
-# Copyright 2024 Genmo and The HuggingFace Team. All rights reserved.
+# Copyright 2024 Black Forest Labs, The HuggingFace Team and The InstantX Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 
 import inspect
 from typing import Any, Callable, Dict, List, Optional, Union
@@ -35,21 +36,21 @@ from ..pipeline_utils import DiffusionPipeline
 from .pipeline_output import MochiPipelineOutput
 
 
-logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
+logger = logging.get_logger(__name__) 
 
 EXAMPLE_DOC_STRING = """
     Examples:
         ```py
-        >>> import torch
+        >>> import paddle
         >>> from diffusers import MochiPipeline
         >>> from diffusers.utils import export_to_video
 
-        >>> pipe = MochiPipeline.from_pretrained("genmo/mochi-1-preview", torch_dtype=torch.bfloat16)
-        >>> pipe.enable_model_cpu_offload()
+        >>> pipe = pipe = MochiPipeline.from_pretrained("genmo/mochi-1-preview",variant="bf16",paddle_dtype=paddle.bfloat16,low_cpu_mem_usage=True,map_location="cpu")
         >>> pipe.enable_vae_tiling()
         >>> prompt = "Close-up of a chameleon's eye, with its scaly skin changing color. Ultra high resolution 4k."
-        >>> frames = pipe(prompt, num_inference_steps=28, guidance_scale=3.5).frames[0]
-        >>> export_to_video(frames, "mochi.mp4")
+        >>> frames = pipe(prompt, num_frames=30).frames[0]
+        
+        >>> export_to_video(frames, "mochi.mp4", fps=30)
         ```
 """
 
@@ -128,28 +129,6 @@ def retrieve_timesteps(
 
 
 class MochiPipeline(DiffusionPipeline, Mochi1LoraLoaderMixin):
-    r"""
-    The mochi pipeline for text-to-video generation.
-
-    Reference: https://github.com/genmoai/models
-
-    Args:
-        transformer ([`MochiTransformer3DModel`]):
-            Conditional Transformer architecture to denoise the encoded video latents.
-        scheduler ([`FlowMatchEulerDiscreteScheduler`]):
-            A scheduler to be used in combination with `transformer` to denoise the encoded image latents.
-        vae ([`AutoencoderKLMochi`]):
-            Variational Auto-Encoder (VAE) Model to encode and decode videos to and from latent representations.
-        text_encoder ([`T5EncoderModel`]):
-            [T5](https://huggingface.co/docs/transformers/en/model_doc/t5#transformers.T5EncoderModel), specifically
-            the [google/t5-v1_1-xxl](https://huggingface.co/google/t5-v1_1-xxl) variant.
-        tokenizer (`CLIPTokenizer`):
-            Tokenizer of class
-            [CLIPTokenizer](https://huggingface.co/docs/transformers/en/model_doc/clip#transformers.CLIPTokenizer).
-        tokenizer (`T5TokenizerFast`):
-            Second Tokenizer of class
-            [T5TokenizerFast](https://huggingface.co/docs/transformers/en/model_doc/t5#transformers.T5TokenizerFast).
-    """
 
     model_cpu_offload_seq = "text_encoder->transformer->vae"
     _optional_components = []
@@ -425,7 +404,7 @@ class MochiPipeline(DiffusionPipeline, Mochi1LoraLoaderMixin):
     
     
     @paddle.no_grad()
-    # @replace_example_docstring(EXAMPLE_DOC_STRING)
+    @replace_example_docstring(EXAMPLE_DOC_STRING)
     def __call__(
         self,
         prompt: Union[str, List[str]] = None,
@@ -449,14 +428,67 @@ class MochiPipeline(DiffusionPipeline, Mochi1LoraLoaderMixin):
         callback_on_step_end_tensor_inputs: List[str] = ["latents"],
         max_sequence_length: int = 256,
     ):
-        # ... (docstring remains the same)
+        """
+        Generate video frames based on text prompts using the Mochi pipeline.
+        
+        Args:
+            prompt (`str` or `List[str]`, *optional*):
+                The prompt or prompts to guide video generation. If not provided, prompt embeddings must be passed.
+            negative_prompt (`str` or `List[str]`, *optional*):
+                The prompt or prompts to guide what to not include in video generation. Ignored when
+                not using guidance (guidance_scale < 1).
+            height (`int`, *optional*, defaults to self.default_height):
+                The height in pixels of the generated video frames.
+            width (`int`, *optional*, defaults to self.default_width):
+                The width in pixels of the generated video frames.
+            num_frames (`int`, *optional*, defaults to 19):
+                The number of video frames to generate.
+            num_inference_steps (`int`, *optional*, defaults to 64):
+                The number of denoising steps. More denoising steps usually lead to a higher quality video
+                at the expense of slower inference.
+            timesteps (`List[int]`, *optional*):
+                Custom timesteps to use for the denoising process. If not defined, equal spaced `num_inference_steps`
+                timesteps are used.
+            guidance_scale (`float`, *optional*, defaults to 4.5):
+                Guidance scale as defined in [Classifier-Free Diffusion Guidance](https://arxiv.org/abs/2207.12598).
+                Higher values lead to more guided generation at the cost of lower diversity.
+            num_videos_per_prompt (`int`, *optional*, defaults to 1):
+                The number of videos to generate per prompt.
+            generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
+                A paddle generator to make generation deterministic.
+            latents (`paddle.Tensor`, *optional*):
+                Pre-generated noise tensor to be used as input for video generation.
+                If not provided, a noise tensor will be generated based on the batch size and dimensions.
+            prompt_embeds (`paddle.Tensor`, *optional*):
+                Pre-computed embeddings for prompt. If not provided, text embeddings will be generated from the prompt.
+            prompt_attention_mask (`paddle.Tensor`, *optional*):
+                Attention mask for prompt embeddings.
+            negative_prompt_embeds (`paddle.Tensor`, *optional*):
+                Pre-computed embeddings for negative prompt. If not provided and negative_prompt is given, 
+                embeddings will be computed from negative_prompt.
+            negative_prompt_attention_mask (`paddle.Tensor`, *optional*):
+                Attention mask for negative prompt embeddings.
+            output_type (`str`, *optional*, defaults to `"pil"`):
+                The output format of the generated video. Choose between "pil" (PIL.Image.Image), "np" (numpy.ndarray), 
+                "pt" (paddle.Tensor) or "latent" (latent space output).
+            return_dict (`bool`, *optional*, defaults to `True`):
+                Whether or not to return a [`~pipelines.mochi.MochiPipelineOutput`] instead of a tuple.
+            callback_on_step_end (`Callable`, *optional*):
+                A function that is called at the end of each denoising step. It takes the following arguments:
+                `callback(self, i, t, callback_kwargs)` where `i` is the step index, `t` is the current timestep and
+                `callback_kwargs` is a dictionary of additional keywords arguments including tensors.
+            callback_on_step_end_tensor_inputs (`List[str]`, *optional*, defaults to `["latents"]`):
+                List of tensor argument names to pass to `callback_on_step_end`.
+            max_sequence_length (`int`, *optional*, defaults to 256):
+                The maximum sequence length for text embeddings.
 
-        print("====== 管道执行开始 ======")
-        print(f"传入的 prompt 类型: {type(prompt)}")
-        print(f"当前 transformer 的默认数据类型: {self.transformer._dtype}")
-
-
-
+        Returns:
+            [`~pipelines.mochi.MochiPipelineOutput`] or `tuple`:
+            If return_dict is True, a [`~pipelines.mochi.MochiPipelineOutput`] is returned, otherwise a
+            tuple is returned containing the generated video frames.
+            
+        Examples:
+        """
         if isinstance(callback_on_step_end, (PipelineCallback, MultiPipelineCallbacks)):
             callback_on_step_end_tensor_inputs = callback_on_step_end.tensor_inputs
 
@@ -474,7 +506,7 @@ class MochiPipeline(DiffusionPipeline, Mochi1LoraLoaderMixin):
             prompt_attention_mask=prompt_attention_mask,
             negative_prompt_attention_mask=negative_prompt_attention_mask,
         )
-
+        
         self._guidance_scale = guidance_scale
         self._current_timestep = None
         self._interrupt = False
@@ -504,7 +536,7 @@ class MochiPipeline(DiffusionPipeline, Mochi1LoraLoaderMixin):
             negative_prompt_attention_mask=negative_prompt_attention_mask,
             max_sequence_length=max_sequence_length,
         )
-
+        
         # 4. Prepare latent variables
         num_channels_latents = self.transformer.config.in_channels
         latents = self.prepare_latents(
@@ -517,11 +549,11 @@ class MochiPipeline(DiffusionPipeline, Mochi1LoraLoaderMixin):
             generator,
             latents,
         )
-
+        
         if self.do_classifier_free_guidance:
             prompt_embeds = paddle.concat([negative_prompt_embeds, prompt_embeds], axis=0)
             prompt_attention_mask = paddle.concat([negative_prompt_attention_mask, prompt_attention_mask], axis=0)
-
+        
         # 5. Prepare timestep
         threshold_noise = 0.025
         sigmas = linear_quadratic_schedule(num_inference_steps, threshold_noise)
@@ -541,17 +573,11 @@ class MochiPipeline(DiffusionPipeline, Mochi1LoraLoaderMixin):
             for i, t in enumerate(timesteps):
                 if self.interrupt:
                     continue
-
+            
                 self._current_timestep = 1000 - t
                 latent_model_input = paddle.concat([latents] * 2) if self.do_classifier_free_guidance else latents
                 timestep = paddle.full((latent_model_input.shape[0],), t, dtype=latents.dtype)
                 
-                print("\n====== 调用 transformer 前 ======")
-                print(f"latent_model_input 类型: {latent_model_input.dtype}")
-                print(f"prompt_embeds 类型: {prompt_embeds.dtype}")
-                print(f"timestep 类型: {timestep.dtype}")
-
-
                 noise_pred = self.transformer(
                     hidden_states=latent_model_input,
                     encoder_hidden_states=prompt_embeds,
@@ -559,15 +585,21 @@ class MochiPipeline(DiffusionPipeline, Mochi1LoraLoaderMixin):
                     encoder_attention_mask=prompt_attention_mask,
                     return_dict=False,
                 )[0]
+                
+                # Type conversion
                 noise_pred = noise_pred.cast('float32')
 
                 if self.do_classifier_free_guidance:
                     noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
+                    
+                    # Perform CFG
                     noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_text - noise_pred_uncond)
-
+                    
+                # Scheduler step
                 latents_dtype = latents.dtype
                 latents = self.scheduler.step(noise_pred, t, latents.cast('float32'), return_dict=False)[0]
                 latents = latents.cast(latents_dtype)
+                
 
                 if callback_on_step_end is not None:
                     callback_kwargs = {}
@@ -594,8 +626,10 @@ class MochiPipeline(DiffusionPipeline, Mochi1LoraLoaderMixin):
                 latents = latents * latents_std / self.vae.config.scaling_factor + latents_mean
             else:
                 latents = latents / self.vae.config.scaling_factor
-
+                
+            # VAE decode
             video = self.vae.decode(latents, return_dict=False)[0]
+            
             video = self.video_processor.postprocess_video(video, output_type=output_type)
 
         # Offload all models

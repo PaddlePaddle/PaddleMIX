@@ -1,4 +1,4 @@
-# Copyright 2024 Black Forest Labs, The HuggingFace Team and The InstantX Team. All rights reserved.
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,9 +23,9 @@ from ...utils import (
     is_paddlenlp_available,
 )
 
-
 _dummy_objects = {}
 _import_structure = {}
+
 
 try:
     if not (is_paddlenlp_available() and is_paddle_available()):
@@ -35,16 +35,18 @@ except OptionalDependencyNotAvailable:
 
     _dummy_objects.update(get_objects_from_module(dummy_paddle_and_paddlenlp_objects))
 else:
-    _import_structure["pipeline_mochi"] = ["MochiPipeline"]
+    _import_structure["pipeline_wan"] = ["WanPipeline"]
+    _import_structure["pipeline_wan_i2v"] = ["WanImageToVideoPipeline"]
 
 if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
     try:
         if not (is_paddlenlp_available() and is_paddle_available()):
             raise OptionalDependencyNotAvailable()
+
     except OptionalDependencyNotAvailable:
-        from ...utils.dummy_paddle_and_paddlenlp_objects import *  # noqa F403
+        from ...utils.dummy_paddle_and_paddlenlp_objects import *
     else:
-        from .pipeline_mochi import MochiPipeline
+        from .pipeline_wan import WanImageToVideoPipeline, WanPipeline
 
 else:
     import sys

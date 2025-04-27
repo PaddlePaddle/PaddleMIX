@@ -591,6 +591,7 @@ class CombinedTimestepGuidanceTextProjEmbeddings(nn.Layer):
 
         return conditioning
 
+
 class TextTimeEmbedding(nn.Layer):
     def __init__(self, encoder_dim: int, time_embed_dim: int, num_heads: int = 64):
         super().__init__()
@@ -925,7 +926,7 @@ class PixArtAlphaTextProjection(nn.Layer):
             out_features = hidden_size
         self.linear_1 = nn.Linear(in_features=in_features, out_features=hidden_size, bias_attr=True)
         if act_fn == "gelu_tanh":
-            self.act_1 = nn.GELU(approximate="tanh")
+            self.act_1 = nn.GELU(approximate=True)
         elif act_fn == "silu":
             self.act_1 = nn.Silu()
         elif act_fn == "silu_fp32":
@@ -1162,7 +1163,7 @@ def get_1d_rotary_pos_embed(
     linear_factor=1.0,
     ntk_factor=1.0,
     repeat_interleave_real=True,
-    freqs_dtype=paddle.float32,  #  paddle.float32, paddle.float64 (flux)
+    freqs_dtype=paddle.float32,  # paddle.float32, paddle.float64 (flux)
 ):
     """
     Precompute the frequency tensor for complex exponentials (cis) with given dimensions.
@@ -1198,11 +1199,7 @@ def get_1d_rotary_pos_embed(
         pos = paddle.to_tensor(pos)  # type: ignore  # [S]
 
     theta = theta * ntk_factor
-    freqs = (
-        1.0
-        / (theta ** (paddle.arange(0, dim, 2, dtype=freqs_dtype)[: (dim // 2)] / dim))
-        / linear_factor
-    )  # [D/2]
+    freqs = 1.0 / (theta ** (paddle.arange(0, dim, 2, dtype=freqs_dtype)[: (dim // 2)] / dim)) / linear_factor  # [D/2]
     pos = pos.astype(freqs_dtype)
     freqs = paddle.outer(pos, freqs)  # type: ignore   # [S, D/2]
     if use_real and repeat_interleave_real:
@@ -1220,7 +1217,8 @@ def get_1d_rotary_pos_embed(
         # paddle.complex(abs * paddle.cos(angle), abs * paddle.sin(angle))
         freqs_cis = paddle.polar(paddle.ones_like(freqs), freqs)  # complex64     # [S, D/2]
         return freqs_cis
-    
+
+
 def apply_rotary_emb(
     x: paddle.Tensor,
     freqs_cis: Union[paddle.Tensor, Tuple[paddle.Tensor]],
@@ -1273,7 +1271,7 @@ class FluxPosEmbed(nn.Layer):
         n_axes = ids.shape[-1]
         cos_out = []
         sin_out = []
-        pos = ids.astype('float32')
+        pos = ids.astype("float32")
         # TODO
         # is_mps = ids.device.type == "mps"
         is_mps = False
@@ -1292,29 +1290,6 @@ class FluxPosEmbed(nn.Layer):
         freqs_cos = paddle.concat(cos_out, axis=-1)
         freqs_sin = paddle.concat(sin_out, axis=-1)
         return freqs_cos, freqs_sin
-
-class CombinedTimestepGuidanceTextProjEmbeddings(paddle.nn.Layer):
-    def __init__(self, embedding_dim, pooled_projection_dim):
-        super().__init__()
-
-        self.time_proj = Timesteps(num_channels=256, flip_sin_to_cos=True, downscale_freq_shift=0)
-        self.timestep_embedder = TimestepEmbedding(in_channels=256, time_embed_dim=embedding_dim)
-        self.guidance_embedder = TimestepEmbedding(in_channels=256, time_embed_dim=embedding_dim)
-        self.text_embedder = PixArtAlphaTextProjection(pooled_projection_dim, embedding_dim, act_fn="silu")
-
-    def forward(self, timestep, guidance, pooled_projection):
-        timesteps_proj = self.time_proj(timestep)
-        timesteps_emb = self.timestep_embedder(timesteps_proj.to(dtype=pooled_projection.dtype))
-
-        guidance_proj = self.time_proj(guidance)
-        guidance_emb = self.guidance_embedder(guidance_proj.to(dtype=pooled_projection.dtype))
-
-        time_guidance_emb = timesteps_emb + guidance_emb
-
-        pooled_projections = self.text_embedder(pooled_projection)
-        conditioning = time_guidance_emb + pooled_projections
-
-        return conditioning
 
 def get_1d_rotary_pos_embed(
     dim: int,
@@ -1360,17 +1335,14 @@ def get_1d_rotary_pos_embed(
 
     theta = theta * ntk_factor
     freqs = (
-        1.0
-        / theta ** (paddle.arange(start=0, end=dim, step=2, dtype=freqs_dtype)[: dim // 2] / dim
-        )
-        / linear_factor
+        1.0 / theta ** (paddle.arange(start=0, end=dim, step=2, dtype=freqs_dtype)[: dim // 2] / dim) / linear_factor
     )  # [D/2]
     pos = pos.astype(freqs_dtype)
     freqs = paddle.outer(x=pos, y=freqs)  # type: ignore   # [S, D/2]
     if use_real and repeat_interleave_real:
         # flux, hunyuan-dit, cogvideox
-        freqs_cos = (freqs.cos().repeat_interleave(repeats=2, axis=1).astype(dtype="float32"))  # [S, D]
-        freqs_sin = (freqs.sin().repeat_interleave(repeats=2, axis=1).astype(dtype="float32"))  # [S, D]
+        freqs_cos = freqs.cos().repeat_interleave(repeats=2, axis=1).astype(dtype="float32")  # [S, D]
+        freqs_sin = freqs.sin().repeat_interleave(repeats=2, axis=1).astype(dtype="float32")  # [S, D]
         return freqs_cos, freqs_sin
     elif use_real:
         # stable audio, allegro
@@ -1385,6 +1357,7 @@ def get_1d_rotary_pos_embed(
         )  # complex64     # [S, D/2]
         return freqs_cis
     
+
 
 
 class MochiAttentionPool(nn.Layer):
@@ -1422,159 +1395,110 @@ class MochiAttentionPool(nn.Layer):
         pooled = (x * mask).sum(axis=1, keepdim=keepdim)
         return pooled
 
-    # def forward(self, x: paddle.Tensor, mask: paddle.Tensor) -> paddle.Tensor:
-    #     r"""
-    #     Args:
-    #         x (`paddle.Tensor`):
-    #             Tensor of shape `(B, S, D)` of input tokens.
-    #         mask (`paddle.Tensor`):
-    #             Boolean tensor of shape `(B, S)` indicating which tokens are not padding.
-
-    #     Returns:
-    #         `paddle.Tensor`:
-    #             `(B, D)` tensor of pooled tokens.
-    #     """
-    #     D = x.shape[2]
-
-    #     # Construct attention mask, shape: (B, 1, num_queries=1, num_keys=1+L).
-    #     attn_mask = mask[:, None, None, :].astype('bool')  # (B, 1, 1, L).
-    #     # attn_mask = F.pad(attn_mask, (1, 0), value=True)  # (B, 1, 1, 1+L).
-    #     attn_mask = F.pad(attn_mask.astype('int32'), (1, 0), value=1)  # Using 1 as True
-    #     attn_mask = attn_mask.astype('bool')  # Convert back to boolean if needed
-
-    #     # Average non-padding token features. These will be used as the query.
-    #     x_pool = self.pool_tokens(x, mask, keepdim=True)  # (B, 1, D)
-
-    #     # Concat pooled features to input sequence.
-    #     x = paddle.concat([x_pool, x], axis=1)  # (B, L+1, D)
-
-    #     # Compute queries, keys, values. Only the mean token is used to create a query.
-    #     kv = self.to_kv(x)  # (B, L+1, 2 * D)
-    #     q = self.to_q(x[:, 0])  # (B, D)
-
-    #     # Extract heads.
-    #     head_dim = D // self.num_attention_heads
-    #     kv = kv.reshape([0, 0, 2, self.num_attention_heads, head_dim])  # (B, 1+L, 2, H, head_dim)
-    #     kv = kv.transpose([0, 3, 2, 1, 4])  # (B, H, 2, 1+L, head_dim)
-    #     k, v = kv.unbind(axis=2)  # (B, H, 1+L, head_dim)
-    #     q = q.reshape([0, self.num_attention_heads, head_dim])  # (B, H, head_dim)
-    #     q = q.unsqueeze(axis=2)  # (B, H, 1, head_dim)
-        
-    #     # 在调用 scaled_dot_product_attention 前添加这些打印语句
-    #     print("数据类型检查:")
-    #     print(f"q 数据类型: {q.dtype}")
-    #     print(f"k 数据类型: {k.dtype}")
-    #     print(f"v 数据类型: {v.dtype}")
-    #     print(f"attn_mask 数据类型: {attn_mask.dtype}")
-
-    #     # 还可以打印张量的形状，这对调试也很有帮助
-    #     print(f"q 形状: {q.shape}")
-    #     print(f"k 形状: {k.shape}")
-    #     print(f"v 形状: {v.shape}")
-    #     print(f"attn_mask 形状: {attn_mask.shape}")
-        
-    #     # 转换输入为支持 Flash Attention 的类型
-    #     q_dtype = q.dtype
-    #     # 将掩码转换为与q相同的数据类型！这是关键修复
-    #     attn_mask = attn_mask.astype(q_dtype)  
-    #     print(f"attn_mask 数据类型: {attn_mask.dtype}")
-
-
-    #     # Compute attention.
-    #     x = F.scaled_dot_product_attention(q, k, v, attn_mask=attn_mask, dropout_p=0.0)  # (B, H, 1, head_dim)
-
-    #     # Concatenate heads and run output.
-    #     x = x.squeeze(axis=2).flatten(start_axis=1, stop_axis=2)  # (B, D = H * head_dim)
-    #     x = self.to_out(x)
-    #     return x
-    
     def forward(self, x: paddle.Tensor, mask: paddle.Tensor) -> paddle.Tensor:
-        """
-        Args:
-            x (`paddle.Tensor`):
-                Tensor of shape `(B, S, D)` of input tokens.
-            mask (`paddle.Tensor`):
-                Boolean tensor of shape `(B, S)` indicating which tokens are not padding.
-
-        Returns:
-            `paddle.Tensor`:
-                `(B, D)` tensor of pooled tokens.
-        """
         D = x.shape[2]
 
-        # 构造注意力掩码
-        attn_mask = mask[:, None, None, :].astype('bool')  # (B, 1, 1, L).
-        attn_mask = F.pad(attn_mask.astype('int32'), (1, 0), value=1)  # Using 1 as True
-        attn_mask = attn_mask.astype('bool')  # Convert back to boolean if needed
+        # Mask part remains unchanged
+        attn_mask = mask[:, None, None, :].astype('bool')
+        attn_mask = F.pad(attn_mask.astype('int32'), (1, 0), value=1)
+        attn_mask = attn_mask.astype('bool')
 
-        # 平均非填充标记特征，用作查询
-        x_pool = self.pool_tokens(x, mask, keepdim=True)  # (B, 1, D)
-
-        # 将池化特征连接到输入序列
-        x = paddle.concat([x_pool, x], axis=1)  # (B, L+1, D)
-
-        # 计算查询、键、值。只使用均值标记创建查询
-        kv = self.to_kv(x)  # (B, L+1, 2 * D)
-        q = self.to_q(x[:, 0])  # (B, D)
-
-        # 提取头
+        # Average non-padding token features
+        x_pool = self.pool_tokens(x, mask, keepdim=True)
+        x = paddle.concat([x_pool, x], axis=1)
+        
+        # Compute query, key, value
+        kv = self.to_kv(x)
+        q = self.to_q(x[:, 0])
+        
+        # Extract head information - this part mostly remains unchanged
         head_dim = D // self.num_attention_heads
-        kv = kv.reshape([0, 0, 2, self.num_attention_heads, head_dim])  # (B, 1+L, 2, H, head_dim)
-        kv = kv.transpose([0, 3, 2, 1, 4])  # (B, H, 2, 1+L, head_dim)
-        k, v = paddle.unstack(kv, axis=2)  # (B, H, 1+L, head_dim) 
-        q = q.reshape([0, self.num_attention_heads, head_dim])  # (B, H, head_dim)
-        q = q.unsqueeze(axis=2)  # (B, H, 1, head_dim)
-
-        # 手动实现注意力计算 (替代 Flash Attention)
-        scale = head_dim ** -0.5
-        attn_weights = paddle.matmul(q, k.transpose([0, 1, 3, 2])) * scale  # (B, H, 1, 1+L)
+        # kv = kv.reshape([0, 0, 2, self.num_attention_heads, head_dim])
+        kv = paddle.unflatten(kv, 2, (2, self.num_attention_heads, head_dim))
+        kv = kv.transpose([0, 3, 2, 1, 4])
+        k, v = kv.unbind(axis=2)
+        # q = q.reshape([0, self.num_attention_heads, head_dim])
+        q = paddle.unflatten(q, 1, (self.num_attention_heads, head_dim))
+        q = q.unsqueeze(axis=2)
         
-        # 应用注意力掩码
-        if attn_mask is not None:
-            # 确保掩码的形状正确 (B, 1, 1, 1+L)
-            # 将 -inf 应用于需要被掩码的位置
-            attn_weights = attn_weights + attn_mask.astype(attn_weights.dtype) * -10000.0
+        # Call attention function using Paddle format
+        x = F.scaled_dot_product_attention(
+            q.transpose([0, 2, 1, 3]), 
+            k.transpose([0, 2, 1, 3]), 
+            v.transpose([0, 2, 1, 3]), 
+            attn_mask=attn_mask,
+            dropout_p=0.0
+        )  # Output should be [B,1,H,D]
         
-        # softmax 和注意力应用
-        attn_weights = F.softmax(attn_weights, axis=-1)
-        x = paddle.matmul(attn_weights, v)  # (B, H, 1, head_dim)
-
-        # 连接头并应用输出层
-        x = x.squeeze(axis=2).reshape([0, -1])  # (B, D = H * head_dim)
+        # Convert result back to original order
+        x = x.transpose([0, 2, 1, 3])  # [B,1,H,D] -> [B,H,1,D]
+        
+        # Subsequent processing remains unchanged
+        x = x.squeeze(axis=2).flatten(start_axis=1, stop_axis=2)
         x = self.to_out(x)
         return x
 
 
 class MochiCombinedTimestepCaptionEmbedding(nn.Layer):
+    """
+    A neural network layer that combines timestep embeddings with caption/text embeddings.
+    This is typically used in diffusion models where both time and textual conditioning are required.
+    The class processes timestep information and text embeddings separately, then combines them.
+    """
     def __init__(
         self,
-        embedding_dim: int,
-        pooled_projection_dim: int,
-        text_embed_dim: int,
-        time_embed_dim: int = 256,
-        num_attention_heads: int = 8,
+        embedding_dim: int,         # Dimension of the output embedding
+        pooled_projection_dim: int, # Dimension for the caption projection
+        text_embed_dim: int,        # Dimension of the input text embeddings
+        time_embed_dim: int = 256,  # Dimension for the time embeddings
+        num_attention_heads: int = 8, # Number of attention heads for pooling
     ) -> None:
         super().__init__()
 
+        # Process timesteps into sinusoidal embeddings
         self.time_proj = Timesteps(num_channels=time_embed_dim, flip_sin_to_cos=True, downscale_freq_shift=0.0)
+        
+        # Embed timesteps into the model dimension
         self.timestep_embedder = TimestepEmbedding(in_channels=time_embed_dim, time_embed_dim=embedding_dim)
+        
+        # Attention pooling mechanism for text embeddings
         self.pooler = MochiAttentionPool(
             num_attention_heads=num_attention_heads, embed_dim=text_embed_dim, output_dim=embedding_dim
         )
+        
+        # Projection layer for caption embeddings
         self.caption_proj = nn.Linear(text_embed_dim, pooled_projection_dim)
 
     def forward(
         self,
-        timestep: paddle.Tensor,
-        encoder_hidden_states: paddle.Tensor,
-        encoder_attention_mask: paddle.Tensor,
-        hidden_dtype: Optional[str] = None,
+        timestep: paddle.Tensor,              # Timestep values to embed
+        encoder_hidden_states: paddle.Tensor, # Text encoder output/embeddings
+        encoder_attention_mask: paddle.Tensor, # Attention mask for text encoder outputs
+        hidden_dtype: Optional[str] = None,    # Optional dtype for internal calculations
     ):
+        """
+        Combines timestep embeddings with text embeddings for conditioning.
+        
+        Args:
+            timestep: Tensor containing timestep values
+            encoder_hidden_states: Text embeddings from an encoder
+            encoder_attention_mask: Attention mask for the encoder states
+            hidden_dtype: Optional data type for intermediate calculations
+            
+        Returns:
+            tuple: (combined embedding for conditioning, caption projection)
+        """
+        # Project timesteps to sinusoidal embeddings
         time_proj = self.time_proj(timestep)
+        # Convert time projections to embeddings with the target dimension
         time_emb = self.timestep_embedder(time_proj.astype(hidden_dtype))
 
+        # Pool the text embeddings using attention mechanism
         pooled_projections = self.pooler(encoder_hidden_states, encoder_attention_mask)
+        # Project the text embeddings to the required dimension
         caption_proj = self.caption_proj(encoder_hidden_states)
 
+        # Combine time embeddings with pooled text embeddings for final conditioning
         conditioning = time_emb + pooled_projections
         return conditioning, caption_proj
+
