@@ -65,8 +65,6 @@ def get_timestep_embedding(
     return emb
 
 
-
-
 def get_2d_sincos_pos_embed(
     embed_dim, grid_size, cls_token=False, extra_tokens=0, interpolation_scale=1.0, base_size=16
 ):
@@ -249,6 +247,7 @@ class PatchEmbed(nn.Layer):
         else:
             return latent.cast(latent.dtype)
 
+
 class TimestepEmbedding(nn.Layer):
     def __init__(
         self,
@@ -297,6 +296,7 @@ class TimestepEmbedding(nn.Layer):
             sample = self.post_act(sample)
         return sample
 
+
 class Timesteps(nn.Layer):
     def __init__(self, num_channels: int, flip_sin_to_cos: bool, downscale_freq_shift: float):
         super().__init__()
@@ -310,7 +310,7 @@ class Timesteps(nn.Layer):
             self.num_channels,
             flip_sin_to_cos=self.flip_sin_to_cos,
             downscale_freq_shift=self.downscale_freq_shift,
-        ) 
+        )
         return t_emb
 
 
@@ -1289,7 +1289,6 @@ class FluxPosEmbed(nn.Layer):
         freqs_cos = paddle.concat(cos_out, axis=-1)
         freqs_sin = paddle.concat(sin_out, axis=-1)
         return freqs_cos, freqs_sin
-
 
 def get_1d_rotary_pos_embed(
     dim: int,
