@@ -19,7 +19,7 @@ import paddle.nn.functional as F
 
 from ..utils import USE_PEFT_BACKEND
 from ..utils.paddle_utils import maybe_allow_in_graph
-from .activations import GEGLU, GELU, ApproximateGELU, SwiGLU, LinearActivation
+from .activations import GEGLU, GELU, ApproximateGELU, LinearActivation, SwiGLU
 from .attention_processor import Attention, JointAttnProcessor2_5
 from .embeddings import SinusoidalPositionalEmbedding
 from .lora import LoRACompatibleLinear
