@@ -1315,17 +1315,28 @@ class XFormersAttnProcessor:
             attention_mask_tmp = paddle.zeros([1, 1, L, S], dtype=query.dtype)
             attention_mask_tmp = attention_mask_tmp.masked_fill(attention_mask.logical_not(), float("-inf"))
             attention_mask = attention_mask_tmp
-
-        hidden_states = F.scaled_dot_product_attention_(
-            query,
-            key,
-            value,
-            attn_mask=attention_mask,
-            scale=attn.scale,
-            dropout_p=0.0,
-            training=attn.training,
-            attention_op=self.attention_op,
-        )
+        try:
+            hidden_states = F.scaled_dot_product_attention_(
+                query,
+                key,
+                value,
+                attn_mask=attention_mask,
+                scale=attn.scale,
+                dropout_p=0.0,
+                training=attn.training,
+                attention_op=self.attention_op,
+            )
+        except:
+            hidden_states = F.scaled_dot_product_attention_(
+                query,
+                key,
+                value,
+                attn_mask=attention_mask,
+                scale=attn.scale,
+                dropout_p=0.0,
+                training=attn.training,
+                attention_op="math",
+            )
 
         hidden_states = hidden_states.cast(query.dtype)
         hidden_states = attn.batch_to_head_dim(hidden_states, transpose=False)
