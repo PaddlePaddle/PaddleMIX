@@ -1876,3 +1876,537 @@ class SD3LoraLoaderMixin:
                 A tuple indicating if `is_model_cpu_offload` or `is_sequential_cpu_offload` is True.
         """
         pass
+
+
+class FluxLoraLoaderMixin(LoraLoaderMixin):
+    r"""
+    Load LoRA layers into [`FluxTransformer2DModel`], [`CLIPTextModel`].
+
+    Specific to [`StableDiffusion3Pipeline`].
+    """
+
+    _lora_loadable_modules = ["transformer", "text_encoder"]
+    transformer_name = TRANSFORMER_NAME
+    text_encoder_name = TEXT_ENCODER_NAME
+
+    @classmethod
+    # Copied from ppdiffusers.loaders.lora.SD3LoraLoaderMixin.lora_state_dict
+    def lora_state_dict(
+        cls,
+        pretrained_model_name_or_path_or_dict: Union[str, Dict[str, paddle.Tensor]],
+        **kwargs,
+    ):
+        r"""
+        Return state dict for lora weights and the network alphas.
+        <Tip warning={true}>
+        We support loading A1111 formatted LoRA checkpoints in a limited capacity.
+        This function is experimental and might change in the future.
+        </Tip>
+        Parameters:
+            pretrained_model_name_or_path_or_dict (`str` or `os.PathLike` or `dict`):
+                Can be either:
+                    - A string, the *model id* (for example `google/ddpm-celebahq-256`) of a pretrained model hosted on
+                      the Hub.
+                    - A path to a *directory* (for example `./my_model_directory`) containing the model weights saved
+                      with [`ModelMixin.save_pretrained`].
+                    - A [torch state
+                      dict](https://pytorch.org/tutorials/beginner/saving_loading_models.html#what-is-a-state-dict).
+            cache_dir (`Union[str, os.PathLike]`, *optional*):
+                Path to a directory where a downloaded pretrained model configuration is cached if the standard cache
+                is not used.
+            force_download (`bool`, *optional*, defaults to `False`):
+                Whether or not to force the (re-)download of the model weights and configuration files, overriding the
+                cached versions if they exist.
+            resume_download (`bool`, *optional*, defaults to `False`):
+                Whether or not to resume downloading the model weights and configuration files. If set to `False`, any
+                incompletely downloaded files are deleted.
+            proxies (`Dict[str, str]`, *optional*):
+                A dictionary of proxy servers to use by protocol or endpoint, for example, `{'http': 'foo.bar:3128',
+                'http://hostname': 'foo.bar:4012'}`. The proxies are used on each request.
+            local_files_only (`bool`, *optional*, defaults to `False`):
+                Whether to only load local model weights and configuration files or not. If set to `True`, the model
+                won't be downloaded from the Hub.
+            revision (`str`, *optional*, defaults to `"main"`):
+                The specific model version to use. It can be a branch name, a tag name, a commit id, or any identifier
+                allowed by Git.
+            subfolder (`str`, *optional*, defaults to `""`):
+                The subfolder location of a model file within a larger model repository on the Hub or locally.
+        """
+        # Load the main state dict first which has the LoRA layers for either of
+        # UNet and text encoder or both.
+        from_hf_hub = kwargs.pop("from_hf_hub", FROM_HF_HUB)
+        from_aistudio = kwargs.pop("from_aistudio", FROM_AISTUDIO)
+        cache_dir = kwargs.pop("cache_dir", None)
+        if cache_dir is None:
+            if from_aistudio:
+                cache_dir = None  # TODO, check aistudio cache
+            elif from_hf_hub:
+                cache_dir = DIFFUSERS_CACHE
+            else:
+                cache_dir = PPDIFFUSERS_CACHE
+        from_diffusers = kwargs.pop("from_diffusers", FROM_DIFFUSERS)
+        force_download = kwargs.pop("force_download", False)
+        resume_download = kwargs.pop("resume_download", False)
+        proxies = kwargs.pop("proxies", None)
+        local_files_only = kwargs.pop("local_files_only", None)
+        use_auth_token = kwargs.pop("use_auth_token", None)
+        revision = kwargs.pop("revision", None)
+        subfolder = kwargs.pop("subfolder", None)
+        weight_name = kwargs.pop("weight_name", None)
+        use_safetensors = kwargs.pop("use_safetensors", None)
+
+        if use_safetensors is None:
+            use_safetensors = True
+
+        user_agent = {
+            "file_type": "attn_procs_weights",
+            "framework": "pytorch" if from_diffusers else "paddle",
+        }
+
+        model_file = None
+        if not isinstance(pretrained_model_name_or_path_or_dict, dict):
+            # Let's first try to load .safetensors weights
+            if (use_safetensors and weight_name is None) or (
+                weight_name is not None and weight_name.endswith(".safetensors")
+            ):
+                try:
+                    model_file = _get_model_file(
+                        pretrained_model_name_or_path_or_dict,
+                        weights_name=(weight_name or TORCH_LORA_WEIGHT_NAME_SAFE)
+                        if from_diffusers
+                        else ((weight_name or PADDLE_LORA_WEIGHT_NAME_SAFE)),
+                        cache_dir=cache_dir,
+                        force_download=force_download,
+                        resume_download=resume_download,
+                        proxies=proxies,
+                        local_files_only=local_files_only,
+                        use_auth_token=use_auth_token,
+                        revision=revision,
+                        subfolder=subfolder,
+                        user_agent=user_agent,
+                        from_aistudio=from_aistudio,
+                        from_hf_hub=from_hf_hub,
+                    )
+                except Exception:
+                    model_file = None
+
+            if model_file is None:
+                model_file = _get_model_file(
+                    pretrained_model_name_or_path_or_dict,
+                    weights_name=(weight_name or TORCH_LORA_WEIGHT_NAME)
+                    if from_diffusers
+                    else ((weight_name or PADDLE_LORA_WEIGHT_NAME)),
+                    cache_dir=cache_dir,
+                    force_download=force_download,
+                    resume_download=resume_download,
+                    proxies=proxies,
+                    local_files_only=local_files_only,
+                    use_auth_token=use_auth_token,
+                    revision=revision,
+                    subfolder=subfolder,
+                    user_agent=user_agent,
+                    from_aistudio=from_aistudio,
+                    from_hf_hub=from_hf_hub,
+                )
+
+            assert model_file is not None, "Could not find the model file!"
+            # TODO, check this
+            from ppdiffusers.utils import smart_load
+
+            state_dict = smart_load(model_file, return_is_torch_weight=True)
+            is_torch_weight = state_dict.pop("is_torch_weight", False)
+            if not from_diffusers and is_torch_weight:
+                logger.warning(
+                    "Detect the weight is in diffusers format, but currently, `from_diffusers` is set to `False`. To proceed, we will change the value of `from_diffusers` to `True`!"
+                )
+                from_diffusers = True
+        else:
+            state_dict = pretrained_model_name_or_path_or_dict
+
+        return state_dict, from_diffusers
+
+    def load_lora_weights(
+        self, pretrained_model_name_or_path_or_dict: Union[str, Dict[str, paddle.Tensor]], adapter_name=None, **kwargs
+    ):
+        """
+        Load LoRA weights specified in `pretrained_model_name_or_path_or_dict` into `self.transformer` and
+        `self.text_encoder`.
+
+        All kwargs are forwarded to `self.lora_state_dict`.
+
+        See [`~loaders.StableDiffusionLoraLoaderMixin.lora_state_dict`] for more details on how the state dict is
+        loaded.
+
+        See [`~loaders.StableDiffusionLoraLoaderMixin.load_lora_into_transformer`] for more details on how the state
+        dict is loaded into `self.transformer`.
+
+        Parameters:
+            pretrained_model_name_or_path_or_dict (`str` or `os.PathLike` or `dict`):
+                See [`~loaders.StableDiffusionLoraLoaderMixin.lora_state_dict`].
+            kwargs (`dict`, *optional*):
+                See [`~loaders.StableDiffusionLoraLoaderMixin.lora_state_dict`].
+            adapter_name (`str`, *optional*):
+                Adapter name to be used for referencing the loaded adapter model. If not specified, it will use
+                `default_{i}` where i is the total number of adapters being loaded.
+        """
+        if not USE_PEFT_BACKEND:
+            raise ValueError("PEFT backend is required for this method.")
+
+        # if a dict is passed, copy it instead of modifying it inplace
+        if isinstance(pretrained_model_name_or_path_or_dict, dict):
+            pretrained_model_name_or_path_or_dict = pretrained_model_name_or_path_or_dict.copy()
+
+        # First, ensure that the checkpoint is a compatible one and can be successfully loaded.
+        state_dict, from_diffusers = self.lora_state_dict(pretrained_model_name_or_path_or_dict, **kwargs)
+
+        is_correct_format = all("lora" in key or "dora_scale" in key for key in state_dict.keys())
+        if not is_correct_format:
+            raise ValueError("Invalid LoRA checkpoint.")
+
+        self.load_lora_into_transformer(
+            state_dict,
+            transformer=getattr(self, self.transformer_name) if not hasattr(self, "transformer") else self.transformer,
+            adapter_name=adapter_name,
+            _pipeline=self,
+            from_diffusers=from_diffusers,
+        )
+
+        text_encoder_state_dict = {k: v for k, v in state_dict.items() if "text_encoder." in k}
+        if len(text_encoder_state_dict) > 0:
+            self.load_lora_into_text_encoder(
+                text_encoder_state_dict,
+                network_alphas=None,
+                text_encoder=self.text_encoder,
+                prefix="text_encoder",
+                lora_scale=self.lora_scale,
+                adapter_name=adapter_name,
+                _pipeline=self,
+                from_diffusers=from_diffusers,
+            )
+
+    @classmethod
+    # Copied from ppdiffusers.loaders.lora.SD3LoraLoaderMixin.load_lora_into_transformer
+    def load_lora_into_transformer(
+        cls,
+        state_dict,
+        transformer,
+        adapter_name=None,
+        _pipeline=None,
+        from_diffusers=None,
+    ):
+        """
+        This will load the LoRA layers specified in `state_dict` into `transformer`.
+        Parameters:
+            state_dict (`dict`):
+                A standard state dict containing the lora layer parameters. The keys can either be indexed directly
+                into the unet or prefixed with an additional `unet` which can be used to distinguish between text
+                encoder lora layers.
+            transformer (`SD3Transformer2DModel`):
+                The Transformer model to load the LoRA layers into.
+            adapter_name (`str`, *optional*):
+                Adapter name to be used for referencing the loaded adapter model. If not specified, it will use
+                `default_{i}` where i is the total number of adapters being loaded.
+        """
+        if from_diffusers is None:
+            from_diffusers = FROM_DIFFUSERS
+
+        from ppdiffusers.peft import (
+            LoraConfig,
+            inject_adapter_in_model,
+            set_peft_model_state_dict,
+        )
+
+        keys = list(state_dict.keys())
+
+        transformer_keys = [k for k in keys if k.startswith(cls.transformer_name)]
+        state_dict = {
+            k.replace(f"{cls.transformer_name}.", ""): v for k, v in state_dict.items() if k in transformer_keys
+        }
+
+        if len(state_dict.keys()) > 0:
+            if adapter_name in getattr(transformer, "peft_config", {}):
+                raise ValueError(
+                    f"Adapter name {adapter_name} already in use in the transformer - please select a new adapter name."
+                )
+
+            rank = {}
+            for key, val in state_dict.items():
+                if "lora_B" in key:
+                    rank[key] = val.shape[1]
+
+            lora_config_kwargs = get_peft_kwargs(rank, network_alpha_dict=None, peft_state_dict=state_dict)
+            if "use_dora" in lora_config_kwargs:
+                raise ValueError("ppdiffusers.peft does not support dora yet")
+            lora_config = LoraConfig(**lora_config_kwargs)
+
+            # adapter_name
+            if adapter_name is None:
+                adapter_name = get_adapter_name(transformer)
+
+            inject_adapter_in_model(lora_config, transformer, adapter_name=adapter_name)
+            incompatible_keys = set_peft_model_state_dict(transformer, state_dict, adapter_name)
+
+            if incompatible_keys is not None:
+                # check only for unexpected keys
+                unexpected_keys = getattr(incompatible_keys, "unexpected_keys", None)
+                if unexpected_keys:
+                    logger.warning(
+                        f"Loading adapter weights from state_dict led to unexpected keys not found in the model: "
+                        f" {unexpected_keys}. "
+                    )
+
+            # Unsafe code />
+
+    @classmethod
+    # Copied from ppdiffusers.loaders.lora.LoraLoaderMixin.load_lora_into_text_encoder
+    def load_lora_into_text_encoder(
+        cls,
+        state_dict,
+        network_alphas,
+        text_encoder,
+        prefix=None,
+        lora_scale=1.0,
+        low_cpu_mem_usage=None,
+        adapter_name=None,
+        _pipeline=None,
+        from_diffusers=None,
+    ):
+        """
+        This will load the LoRA layers specified in `state_dict` into `text_encoder`
+
+        Parameters:
+            state_dict (`dict`):
+                A standard state dict containing the lora layer parameters. The key should be prefixed with an
+                additional `text_encoder` to distinguish between unet lora layers.
+            network_alphas (`Dict[str, float]`):
+                See `LoRALinearLayer` for more details.
+            text_encoder (`CLIPTextModel`):
+                The text encoder model to load the LoRA layers into.
+            prefix (`str`):
+                Expected prefix of the `text_encoder` in the `state_dict`.
+            lora_scale (`float`):
+                How much to scale the output of the lora linear layer before it is added with the output of the regular
+                lora layer.
+            low_cpu_mem_usage (`bool`, *optional*, defaults to `True` if torch version >= 1.9.0 else `False`):
+                Speed up model loading only loading the pretrained weights and not initializing the weights. This also
+                tries to not use more than 1x model size in CPU memory (including peak memory) while loading the model.
+                Only supported for PyTorch >= 1.9.0. If you are using an older version of PyTorch, setting this
+                argument to `True` will raise an error.
+            adapter_name (`str`, *optional*):
+                Adapter name to be used for referencing the loaded adapter model. If not specified, it will use
+                `default_{i}` where i is the total number of adapters being loaded.
+        """
+        if from_diffusers is None:
+            from_diffusers = FROM_DIFFUSERS
+        low_cpu_mem_usage = low_cpu_mem_usage if low_cpu_mem_usage is not None else LOW_CPU_MEM_USAGE_DEFAULT
+
+        # If the serialization format is new (introduced in https://github.com/huggingface/diffusers/pull/2918),
+        # then the `state_dict` keys should have `self.unet_name` and/or `self.text_encoder_name` as
+        # their prefixes.
+        keys = list(state_dict.keys())
+        prefix = cls.text_encoder_name if prefix is None else prefix
+
+        # Safe prefix to check with.
+        if any(cls.text_encoder_name in key for key in keys):
+            # Load the layers corresponding to text encoder and make necessary adjustments.
+            text_encoder_keys = [k for k in keys if k.startswith(prefix) and k.split(".")[0] == prefix]
+            text_encoder_lora_state_dict = {
+                k.replace(f"{prefix}.", ""): v for k, v in state_dict.items() if k in text_encoder_keys
+            }
+
+            if len(text_encoder_lora_state_dict) > 0:
+                logger.info(f"Loading {prefix}.")
+                rank = {}
+                text_encoder_lora_state_dict = convert_state_dict_to_ppdiffusers(text_encoder_lora_state_dict)
+                index = 1 if from_diffusers else 0
+                if USE_PEFT_BACKEND:
+                    # convert state dict
+                    text_encoder_lora_state_dict = convert_state_dict_to_peft(text_encoder_lora_state_dict)
+
+                    for name, _ in text_encoder_attn_modules(text_encoder):
+                        rank_key = f"{name}.out_proj.lora_B.weight"
+                        rank[rank_key] = text_encoder_lora_state_dict[rank_key].shape[index]
+
+                    patch_mlp = any(".mlp." in key for key in text_encoder_lora_state_dict.keys())
+                    if patch_mlp:
+                        for name, _ in text_encoder_mlp_modules(text_encoder):
+                            rank_key_fc1 = f"{name}.fc1.lora_B.weight"
+                            rank_key_fc2 = f"{name}.fc2.lora_B.weight"
+
+                            rank[rank_key_fc1] = text_encoder_lora_state_dict[rank_key_fc1].shape[index]
+                            rank[rank_key_fc2] = text_encoder_lora_state_dict[rank_key_fc2].shape[index]
+                else:
+                    for name, _ in text_encoder_attn_modules(text_encoder):
+                        rank_key = f"{name}.out_proj.lora_linear_layer.up.weight"
+                        rank.update({rank_key: text_encoder_lora_state_dict[rank_key].shape[index]})
+
+                    patch_mlp = any(".mlp." in key for key in text_encoder_lora_state_dict.keys())
+                    if patch_mlp:
+                        for name, _ in text_encoder_mlp_modules(text_encoder):
+                            rank_key_fc1 = f"{name}.fc1.lora_linear_layer.up.weight"
+                            rank_key_fc2 = f"{name}.fc2.lora_linear_layer.up.weight"
+                            rank[rank_key_fc1] = text_encoder_lora_state_dict[rank_key_fc1].shape[index]
+                            rank[rank_key_fc2] = text_encoder_lora_state_dict[rank_key_fc2].shape[index]
+                if network_alphas is not None:
+                    alpha_keys = [
+                        k for k in network_alphas.keys() if k.startswith(prefix) and k.split(".")[0] == prefix
+                    ]
+                    network_alphas = {
+                        k.replace(f"{prefix}.", ""): v for k, v in network_alphas.items() if k in alpha_keys
+                    }
+
+                if USE_PEFT_BACKEND:
+                    from ppdiffusers.peft import LoraConfig
+
+                    lora_config_kwargs = get_peft_kwargs(
+                        rank, network_alphas, text_encoder_lora_state_dict, is_unet=False
+                    )
+
+                    lora_config = LoraConfig(**lora_config_kwargs)
+
+                    # adapter_name
+                    if adapter_name is None:
+                        adapter_name = get_adapter_name(text_encoder)
+
+                    # inject LoRA layers and load the state dict
+                    # in transformers we automatically check whether the adapter name is already in use or not
+                    text_encoder.load_adapter(
+                        adapter_name=adapter_name,
+                        adapter_state_dict=text_encoder_lora_state_dict,
+                        peft_config=lora_config,
+                        from_diffusers=from_diffusers,  # new add from diffusers
+                    )
+
+                    # scale LoRA layers with `lora_scale`
+                    scale_lora_layers(text_encoder, weight=lora_scale)
+                else:
+                    cls._modify_text_encoder(
+                        text_encoder,
+                        lora_scale,
+                        network_alphas,
+                        rank=rank,
+                        patch_mlp=patch_mlp,
+                        low_cpu_mem_usage=low_cpu_mem_usage,
+                    )
+
+                    if from_diffusers:
+                        convert_pytorch_state_dict_to_paddle(text_encoder, text_encoder_lora_state_dict)
+                    faster_set_state_dict(text_encoder, text_encoder_lora_state_dict)
+
+                text_encoder.to(dtype=text_encoder.dtype)
+
+    @classmethod
+    # Copied from ppdiffusers.loaders.lora.SD3LoraLoaderMixin.save_lora_weights
+    def save_lora_weights(
+        cls,
+        save_directory: Union[str, os.PathLike],
+        transformer_lora_layers: Dict[str, paddle.nn.Layer] = None,
+        is_main_process: bool = True,
+        weight_name: str = None,
+        save_function: Callable = None,
+        safe_serialization: bool = True,
+        to_diffusers=None,
+    ):
+        r"""
+        Save the LoRA parameters corresponding to the UNet and text encoder.
+        Arguments:
+            save_directory (`str` or `os.PathLike`):
+                Directory to save LoRA parameters to. Will be created if it doesn't exist.
+            transformer_lora_layers (`Dict[str, paddle.nn.Layer]` or `Dict[str, paddletorch.Tensor]`):
+                State dict of the LoRA layers corresponding to the `transformer`.
+            is_main_process (`bool`, *optional*, defaults to `True`):
+                Whether the process calling this is the main process or not. Useful during distributed training and you
+                need to call this function on all processes. In this case, set `is_main_process=True` only on the main
+                process to avoid race conditions.
+            save_function (`Callable`):
+                The function to use to save the state dictionary. Useful during distributed training when you need to
+                replace `torch.save` or `paddle.save` with another method. Can be configured with the environment variable
+                `DIFFUSERS_SAVE_MODE`.
+            safe_serialization (`bool`, *optional*, defaults to `True`):
+                Whether to save the model using `safetensors` or the traditional way.
+        """
+        if to_diffusers is None:
+            to_diffusers = TO_DIFFUSERS
+
+        state_dict = {}
+
+        def pack_weights(layers, prefix):
+            layers_weights = layers.state_dict() if isinstance(layers, nn.Layer) else layers
+            layers_state_dict = {f"{prefix}.{module_name}": param for module_name, param in layers_weights.items()}
+            return layers_state_dict
+
+        if not transformer_lora_layers:
+            raise ValueError("You must pass `transformer_lora_layers`.")
+
+        if transformer_lora_layers:
+            state_dict.update(pack_weights(transformer_lora_layers, cls.transformer_name))
+
+        # Save the model
+        cls.write_lora_layers(
+            state_dict=state_dict,
+            save_directory=save_directory,
+            is_main_process=is_main_process,
+            weight_name=weight_name,
+            save_function=save_function,
+            safe_serialization=safe_serialization,
+            to_diffusers=to_diffusers,  # only change save weights name and save function
+        )
+
+    def fuse_lora(
+        self,
+        components: List[str] = ["transformer", "text_encoder"],
+        lora_scale: float = 1.0,
+        safe_fusing: bool = False,
+        adapter_names: Optional[List[str]] = None,
+        **kwargs,
+    ):
+        r"""
+        Fuses the LoRA parameters into the original parameters of the corresponding blocks.
+
+        <Tip warning={true}>
+
+        This is an experimental API.
+
+        </Tip>
+
+        Args:
+            components: (`List[str]`): List of LoRA-injectable components to fuse the LoRAs into.
+            lora_scale (`float`, defaults to 1.0):
+                Controls how much to influence the outputs with the LoRA parameters.
+            safe_fusing (`bool`, defaults to `False`):
+                Whether to check fused weights for NaN values before fusing and if values are NaN not fusing them.
+            adapter_names (`List[str]`, *optional*):
+                Adapter names to be used for fusing. If nothing is passed, all active adapters will be fused.
+
+        Example:
+
+        ```py
+        from ppdiffusers import DiffusionPipeline
+        import paddle
+
+        pipeline = DiffusionPipeline.from_pretrained(
+            "stabilityai/stable-diffusion-xl-base-1.0", paddle_dtype=paddle.float16
+        )
+        pipeline.load_lora_weights("nerijs/pixel-art-xl", weight_name="pixel-art-xl.safetensors", adapter_name="pixel")
+        pipeline.fuse_lora(lora_scale=0.7)
+        ```
+        """
+        super().fuse_lora(
+            components=components, lora_scale=lora_scale, safe_fusing=safe_fusing, adapter_names=adapter_names
+        )
+
+    def unfuse_lora(self, components: List[str] = ["transformer", "text_encoder"], **kwargs):
+        r"""
+        Reverses the effect of `pipe.fuse_lora()`
+
+        <Tip warning={true}>
+
+        This is an experimental API.
+
+        </Tip>
+
+        Args:
+            components (`List[str]`): List of LoRA-injectable components to unfuse LoRA from.
+        """
+        super().unfuse_lora(components=components)
+

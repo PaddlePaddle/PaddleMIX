@@ -40,22 +40,29 @@ python train_dreambooth_lora_flux.py \
   --instance_prompt="a photo of sks dog" \
   --resolution=512 \
   --train_batch_size=1 \
-  --gradient_accumulation_steps=4 \
-  --learning_rate=5e-5 \
+  --gradient_accumulation_steps=1 \
+  --learning_rate=1e-4 \
   --report_to="wandb" \
   --lr_scheduler="constant" \
   --lr_warmup_steps=0 \
   --max_train_steps=500 \
   --validation_prompt="A photo of sks dog in a bucket" \
-  --validation_epochs=25 \
+  --validation_epochs=20 \
   --seed="0" \
+  --not_validation_final \
   --checkpointing_steps=250
 ```
 
 为了更好地跟踪我们的训练实验，我们在上面的命令中使用了以下标志：
-
 * `report_to="wandb"` 将确保在 Weights and Biases 上跟踪训练运行。要使用它，请确保安装 `wandb`，使用 `pip install wandb`。
 * `validation_prompt` 和 `validation_epochs` 允许脚本进行几次验证推理运行。这可以让我们定性地检查训练是否按预期进行。
+
+在H100等显卡训练时，需要加上以下环境变量：
+```bash
+export FLAGS_sdpa_select_math="yes"
+export FLAGS_use_fused_rmsnorm="yes"
+```
+
 
 
 ### 推理

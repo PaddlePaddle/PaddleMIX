@@ -178,7 +178,7 @@ def log_validation(
     # run inference
     generator = paddle.Generator().manual_seed(args.seed) if args.seed else None
     # autocast_ctx = nullcontext()
-    autocast_ctx = paddle.amp.auto_cast(enable=True, custom_white_list=None, custom_black_list=None, level="O2", dtype='float16')
+    autocast_ctx = paddle.amp.auto_cast(enable=True, custom_white_list=None, custom_black_list=None, level="O2", dtype='float16' if args.mixed_precision == 'fp16' else 'bfloat16')
 
     with autocast_ctx:
         images = [pipeline(**pipeline_args, generator=generator).images[0] for _ in range(args.num_validation_images)]
@@ -1143,8 +1143,7 @@ def main(args):
         r=args.rank,
         lora_alpha=args.rank,
         init_lora_weights="gaussian",
-        # target_modules=target_modules,
-        target_modules=["to_k", "to_q", "to_v", "to_out.0"],
+        target_modules=target_modules,
     )
     transformer.add_adapter(transformer_lora_config)
 
@@ -1474,7 +1473,7 @@ def main(args):
     # add amp
     if args.mixed_precision in ['fp16', 'bf16']:
         scaler = paddle.amp.GradScaler(init_loss_scaling=1024)
-        transformer = paddle.amp.decorate(models=transformer.to(dtype=paddle.float32), level="O2")
+        transformer = paddle.amp.decorate(models=transformer.to(dtype=paddle.float32), level="O2", dtype="bfloat16" if args.mixed_precision == 'bf16' else "float16")
     for epoch in range(first_epoch, args.num_train_epochs):
         transformer.train()
         if args.train_text_encoder:
@@ -1578,7 +1577,6 @@ def main(args):
                 # Predict the noise residual
                 # westfish: add amp
                 with paddle.amp.auto_cast(enable=args.mixed_precision in ['fp16', 'bf16'], custom_white_list=["lookup_table", "lookup_table_v2"], custom_black_list=["reduce_sum", "c_softmax_with_cross_entropy"], level="O2", dtype='float16' if args.mixed_precision == 'fp16' else 'bfloat16'):
-                # with null_context():
                     model_pred = transformer(
                         hidden_states=packed_noisy_model_input,
                         # YiYi notes: divide it by 1000 for now because we scale it by 1000 in the transforme rmodel (we should not keep it but I want to keep the inputs same for the model for testing)
@@ -1631,22 +1629,13 @@ def main(args):
 
                 # westfish: add amp
                 # accelerator.backward(loss)
-
-
-                print("DEBUG loss:", loss, type(loss))
-                assert loss is not None, "loss tensor is None!"
-                has_trainable = any(not p.stop_gradient for p in transformer.parameters())
-                print("Has trainable params:", has_trainable)
-                # breakpoint()
-                loss.backward()
-
-                # if args.mixed_precision in ['fp16', 'bf16']:
-                #     scaled = scaler.scale(loss)
-                #     scaled.backward()
-                #     scaler.step(optimizer)
-                #     scaler.update()
-                # else:
-                #     loss.backward()
+                if args.mixed_precision in ['fp16', 'bf16']:
+                    scaled = scaler.scale(loss)
+                    scaled.backward()
+                    scaler.step(optimizer)
+                    scaler.update()
+                else:
+                    loss.backward()
 
                 optimizer.step()
                 lr_scheduler.step()
@@ -1680,28 +1669,48 @@ def main(args):
                                     shutil.rmtree(removing_checkpoint)
 
                         save_path = os.path.join(args.output_dir, f"checkpoint-{global_step}")
-                        # westfish: save_state substitute
-                        # accelerator.save_state(save_path)
-                        models = []
-                        models.append(copy.deepcopy(transformer))
-                        weights = []
+                        # # westfish: save_state substitute
+                        # # accelerator.save_state(save_path)
+                        # models = []
+                        # models.append(copy.deepcopy(transformer))
+                        # weights = []
 
-                        def get_state_dict(model):
-                            state_dict = model.state_dict()
-                            if state_dict is not None:
-                                for k in state_dict:
-                                    if getattr(state_dict[k], "dtype", None) == paddle.float16:
-                                        state_dict[k] = state_dict[k]._to(dtype="float32")
+                        # def get_state_dict(model):
+                        #     state_dict = model.state_dict()
+                        #     if state_dict is not None:
+                        #         for k in state_dict:
+                        #             if getattr(state_dict[k], "dtype", None) == paddle.float16:
+                        #                 state_dict[k] = state_dict[k]._to(dtype="float32")
 
-                            return state_dict
+                        #     return state_dict
 
-                        for i, model in enumerate(models):
-                            weights.append(get_state_dict(model))
-                        save_model_hook(models, weights, save_path)
-                        del models, weights
-                        for _ in range(3):
-                            gc.collect()
-                        paddle.device.cuda.empty_cache()
+                        # for i, model in enumerate(models):
+                        #     weights.append(get_state_dict(model))
+                        # save_model_hook(models, weights, save_path)
+                        # del models, weights
+                        # for _ in range(3):
+                        #     gc.collect()
+                        # paddle.device.cuda.empty_cache()
+
+                        def save_checkpoint(transformer, save_path, fp32_on_cpu=True):
+                            state_dict = transformer.state_dict()
+
+                            if fp32_on_cpu:
+                                cpu_state = {}
+                                for k, v in state_dict.items():
+                                    # 先搬到 CPU，再视需要转 dtype
+                                    t = v.cpu()                     # 显存立即释放
+                                    if t.dtype == paddle.float16:
+                                        t = t.cast('float32')       # 占用 host 内存，可选
+                                    cpu_state[k] = t
+                                paddle.save(cpu_state, save_path)
+                            else:
+                                # 直接保存 fp16 权重，占用更小
+                                paddle.save(state_dict, save_path)
+
+                        save_checkpoint(transformer, save_path, fp32_on_cpu=True)
+                        paddle.device.cuda.empty_cache()        # 只清 GPU cache
+
                         logger.info(f"Saved state to {save_path}")
 
             logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_lr()}
@@ -1716,8 +1725,8 @@ def main(args):
                 # create pipeline
                 if not args.train_text_encoder:
                     text_encoder_one, text_encoder_two = load_text_encoders(text_encoder_cls_one, text_encoder_cls_two)
-                    text_encoder_one.to(weight_dtype)
-                    text_encoder_two.to(weight_dtype)
+                    text_encoder_one.to(dtype=weight_dtype)
+                    text_encoder_two.to(dtype=weight_dtype)
                 pipeline = FluxPipeline.from_pretrained(
                     args.pretrained_model_name_or_path,
                     vae=vae,
@@ -1750,7 +1759,7 @@ def main(args):
     accelerator.wait_for_everyone()
     if accelerator.is_main_process:
         transformer = unwrap_model(transformer)
-        transformer = transformer.to(dtype=paddle.float32)
+        transformer = transformer.to(dtype=weight_dtype)
         transformer_lora_layers = get_peft_model_state_dict(transformer)
 
         FluxPipeline.save_lora_weights(
