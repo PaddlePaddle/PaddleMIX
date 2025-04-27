@@ -16,27 +16,30 @@ import paddle
 
 from ppdiffusers.utils import load_image
 from ppdiffusers import FluxControlNetModel
-from ppdiffusers.pipelines import FluxControlNetImg2ImgPipeline
+from ppdiffusers.pipelines import FluxControlNetInpaintPipeline
 
 
-controlnet = FluxControlNetModel.from_pretrained("/home/lcjgrp/lizhijun/llm/FLUX.1-dev-Controlnet-Canny-pd-0424", 
+controlnet = FluxControlNetModel.from_pretrained("InstantX/FLUX.1-dev-controlnet-canny", 
                                                  paddle_dtype=paddle.float16)
-pipe = FluxControlNetImg2ImgPipeline.from_pretrained(
+pipe = FluxControlNetInpaintPipeline.from_pretrained(
     "black-forest-labs/FLUX.1-dev", controlnet=controlnet, paddle_dtype=paddle.float16, low_cpu_mem_usage=True, map_location="cpu",
 )
 
-control_image = load_image("canny.jpg")
-init_image = load_image("sketch-mountains-input.jpg")
-prompt = "A girl in city, 25 years old, cool, futuristic"
+control_image = load_image("https://huggingface.co/InstantX/FLUX.1-dev-Controlnet-Canny-alpha/resolve/main/canny.jpg")
+init_image = load_image("https://raw.githubusercontent.com/CompVis/latent-diffusion/main/data/inpainting_examples/overture-creations-5sI6fQgYIuo.png")
+mask_image = load_image("https://raw.githubusercontent.com/CompVis/latent-diffusion/main/data/inpainting_examples/overture-creations-5sI6fQgYIuo_mask.png")
+prompt = "A girl holding a sign that says InstantX"
 image = pipe(
     prompt,
     image=init_image,
     control_image=control_image,
+    mask_image=mask_image,
     control_guidance_start=0.2,
     control_guidance_end=0.8,
-    controlnet_conditioning_scale=1.0,
+    controlnet_conditioning_scale=0.7,
     strength=0.7,
-    num_inference_steps=2,
+    num_inference_steps=28,
     guidance_scale=3.5,
+    generator=paddle.Generator().manual_seed(42)
 ).images[0]
-image.save("text_to_image_generation-flux-dev-controlnet-img2img-result.png")
+image.save("text_to_image_generation-flux-dev-controlnet-inpaint-result.png")

@@ -1607,7 +1607,7 @@ class LearnedClassifierFreeSamplingEmbeddings(metaclass=DummyObject):
 
 
 
-class FluxControlNetInpaintingPipeline(metaclass=DummyObject):
+class FluxControlNetInpaintPipeline(metaclass=DummyObject):
     _backends = ["paddle", "paddlenlp"]
 
     def __init__(self, *args, **kwargs):

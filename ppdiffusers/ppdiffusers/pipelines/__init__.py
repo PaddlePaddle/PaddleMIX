@@ -137,7 +137,7 @@ else:
         "FluxControlInpaintPipeline",
         "FluxControlImg2ImgPipeline",
         "FluxControlNetPipeline",
-        "FluxControlNetInpaintingPipeline",
+        "FluxControlNetInpaintPipeline",
         "FluxControlNetImg2ImgPipeline",
         "FluxImg2ImgPipeline",
         "FluxInpaintPipeline",
@@ -416,10 +416,6 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         from .controlnet_sd3 import (
             StableDiffusion3ControlNetInpaintingPipeline,
             StableDiffusion3ControlNetPipeline,
-        )
-        from .controlnet_flux import (
-            FluxControlNetInpaintingPipeline,
-            FluxControlNetPipeline,
         )
         from .deepfloyd_if import (
             IFImg2ImgPipeline,

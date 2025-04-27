@@ -17,7 +17,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import numpy as np
 
 import paddle
-from  ppdiffusers.transformers import ( # T5TokenizerFast,
+from  ppdiffusers.transformers import ( 
     CLIPImageProcessor,
     CLIPTextModel,
     CLIPTokenizer,
@@ -40,36 +40,38 @@ from .pipeline_output import FluxPipelineOutput
 EXAMPLE_DOC_STRING = """
     Examples:
         ```py
-        >>> import torch
-        >>> from controlnet_aux import CannyDetector
-        >>> from diffusers import FluxControlNetPipeline
-        >>> from diffusers.utils import load_image
-
+        >>> import paddle
+        >>> from ppdiffusers import FluxControlNetModel
+        >>> from ppdiffusers.pipelines import FluxControlNetPipeline
+        >>> from ppdiffusers.utils import load_image
+        
+        >>> controlnet = FluxControlNetModel.from_pretrained(
+        ...     "InstantX/FLUX.1-dev-controlnet-canny", paddle_dtype=paddle.float16
+        ... )
         >>> pipe = FluxControlNetPipeline.from_pretrained(
-        ...     "black-forest-labs/FLUX.1-Canny-dev", torch_dtype=torch.bfloat16
-        ... ).to("cuda")
-
-        >>> prompt = "A robot made of exotic candies and chocolates of different kinds. The background is filled with confetti and celebratory gifts."
+        ...     "black-forest-labs/FLUX.1-dev", controlnet=controlnet, paddle_dtype=paddle.float16,
+        ...     low_cpu_mem_usage=True, map_location="cpu"
+        ... )
+        
         >>> control_image = load_image(
-        ...     "https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/robot.png"
+        ...     "https://huggingface.co/InstantX/SD3-Controlnet-Canny/resolve/main/canny.jpg"
         ... )
-
-        >>> processor = CannyDetector()
-        >>> control_image = processor(
-        ...     control_image, low_threshold=50, high_threshold=200, detect_resolution=1024, image_resolution=1024
-        ... )
-
+        >>> prompt = "A girl in city, 25 years old, cool, futuristic"
         >>> image = pipe(
-        ...     prompt=prompt,
+        ...     prompt,
         ...     control_image=control_image,
-        ...     height=1024,
-        ...     width=1024,
+        ...     controlnet_conditioning_scale=0.5,
+        ...     width=control_image.size[0],
+        ...     height=control_image.size[1],
+        ...     guidance_scale=3.5,
         ...     num_inference_steps=50,
-        ...     guidance_scale=30.0,
+        ...     max_sequence_length=512,
+        ...     generator=paddle.Generator().manual_seed(42)
         ... ).images[0]
-        >>> image.save("output.png")
+        >>> image.save("text_to_image_generation-flux-dev-controlnet-result.png")
         ```
-"""
+    """
+
 
 try:
     # paddle.incubate.jit.inference is available in paddle develop but not in paddle 3.0beta, so we add a try except.
