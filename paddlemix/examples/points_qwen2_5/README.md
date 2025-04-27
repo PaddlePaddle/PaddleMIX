@@ -69,7 +69,7 @@ python paddlemix/examples/points_qwen2_5/convert_torch_to_paddle.py --torch_mode
 
 ```bash
 # 单图推理
-python paddlemix/examples/points_qwen2_5/image_infer.py
+python paddlemix/examples/points_qwen2_5/image_infer.py --model_path ./models/POINTS-Qwen-2-5-7B-Chat_pd/ --image_file ./paddlemix/demo_images/examples_image2.jpg
 ```
 
 ![](../../demo_images/examples_image2.jpg)
