@@ -1,4 +1,4 @@
-# MiniCPM-V-2_6
+# POINTS-Qwen-2-5
 
 ## 1. 模型介绍
 
