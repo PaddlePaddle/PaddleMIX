@@ -17,7 +17,7 @@ import paddle
 from ppdiffusers import FluxPipeline
 
 pipe = FluxPipeline.from_pretrained(
-    "black-forest-labs/FLUX.1-dev", paddle_dtype=paddle.float16
+    "black-forest-labs/FLUX.1-dev", paddle_dtype=paddle.bfloat16, low_cpu_mem_usage=True, map_location="cpu",
 )
 
 prompt = "A cat holding a sign that says hello world"

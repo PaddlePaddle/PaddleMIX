@@ -590,6 +590,7 @@ class CombinedTimestepGuidanceTextProjEmbeddings(nn.Layer):
 
         return conditioning
 
+
 class TextTimeEmbedding(nn.Layer):
     def __init__(self, encoder_dim: int, time_embed_dim: int, num_heads: int = 64):
         super().__init__()
@@ -924,7 +925,7 @@ class PixArtAlphaTextProjection(nn.Layer):
             out_features = hidden_size
         self.linear_1 = nn.Linear(in_features=in_features, out_features=hidden_size, bias_attr=True)
         if act_fn == "gelu_tanh":
-            self.act_1 = nn.GELU(approximate="tanh")
+            self.act_1 = nn.GELU(approximate=True)
         elif act_fn == "silu":
             self.act_1 = nn.Silu()
         elif act_fn == "silu_fp32":
@@ -1161,7 +1162,7 @@ def get_1d_rotary_pos_embed(
     linear_factor=1.0,
     ntk_factor=1.0,
     repeat_interleave_real=True,
-    freqs_dtype=paddle.float32,  #  paddle.float32, paddle.float64 (flux)
+    freqs_dtype=paddle.float32,  # paddle.float32, paddle.float64 (flux)
 ):
     """
     Precompute the frequency tensor for complex exponentials (cis) with given dimensions.
@@ -1197,11 +1198,7 @@ def get_1d_rotary_pos_embed(
         pos = paddle.to_tensor(pos)  # type: ignore  # [S]
 
     theta = theta * ntk_factor
-    freqs = (
-        1.0
-        / (theta ** (paddle.arange(0, dim, 2, dtype=freqs_dtype)[: (dim // 2)] / dim))
-        / linear_factor
-    )  # [D/2]
+    freqs = 1.0 / (theta ** (paddle.arange(0, dim, 2, dtype=freqs_dtype)[: (dim // 2)] / dim)) / linear_factor  # [D/2]
     pos = pos.astype(freqs_dtype)
     freqs = paddle.outer(pos, freqs)  # type: ignore   # [S, D/2]
     if use_real and repeat_interleave_real:
@@ -1219,7 +1216,8 @@ def get_1d_rotary_pos_embed(
         # paddle.complex(abs * paddle.cos(angle), abs * paddle.sin(angle))
         freqs_cis = paddle.polar(paddle.ones_like(freqs), freqs)  # complex64     # [S, D/2]
         return freqs_cis
-    
+
+
 def apply_rotary_emb(
     x: paddle.Tensor,
     freqs_cis: Union[paddle.Tensor, Tuple[paddle.Tensor]],
@@ -1260,7 +1258,7 @@ def apply_rotary_emb(
         x_out = paddle.as_real(x=x_rotated * freqs_cis).flatten(start_axis=3)
         return x_out.astype(dtype=x.dtype)
 
-
+        
 class FluxPosEmbed(nn.Layer):
     # modified from https://github.com/black-forest-labs/flux/blob/c00d7c60b085fce8058b9df845e036090873f2ce/src/flux/modules/layers.py#L11
     def __init__(self, theta: int, axes_dim: List[int]):
@@ -1272,7 +1270,7 @@ class FluxPosEmbed(nn.Layer):
         n_axes = ids.shape[-1]
         cos_out = []
         sin_out = []
-        pos = ids.astype('float32')
+        pos = ids.astype("float32")
         # TODO
         # is_mps = ids.device.type == "mps"
         is_mps = False
@@ -1292,40 +1290,6 @@ class FluxPosEmbed(nn.Layer):
         freqs_sin = paddle.concat(sin_out, axis=-1)
         return freqs_cos, freqs_sin
 
-class CombinedTimestepGuidanceTextProjEmbeddings(paddle.nn.Layer):
-    def __init__(self, embedding_dim, pooled_projection_dim):
-        super().__init__()
-
-        self.time_proj = Timesteps(num_channels=256, flip_sin_to_cos=True, downscale_freq_shift=0)
-        self.timestep_embedder = TimestepEmbedding(in_channels=256, time_embed_dim=embedding_dim)
-
-        self.guidance_embedder = TimestepEmbedding(in_channels=256, time_embed_dim=embedding_dim)
-        self.text_embedder = PixArtAlphaTextProjection(pooled_projection_dim, embedding_dim, act_fn="silu")
-
-    def forward(self, timestep, guidance, pooled_projection):
-
-        # 时间嵌入
-        timesteps_proj = self.time_proj(timestep)
-        timesteps_emb = self.timestep_embedder(timesteps_proj.to(dtype=pooled_projection.dtype))
-
-        # guidance嵌入
-        guidance_proj = self.time_proj(guidance)
-
-        guidance_emb = self.guidance_embedder(guidance_proj.to(dtype=pooled_projection.dtype))
-
-        # 时间和guidance的组合
-        time_guidance_emb = timesteps_emb + guidance_emb
-
-        # 文本嵌入
-        pooled_projections = self.text_embedder(pooled_projection)
-
-        # 最终组合
-        conditioning = time_guidance_emb + pooled_projections
-
-        return conditioning
-
-    
-    
 
 def get_1d_rotary_pos_embed(
     dim: int,
@@ -1358,10 +1322,10 @@ def get_1d_rotary_pos_embed(
         repeat_interleave_real (`bool`, *optional*, defaults to `True`):
             If `True` and `use_real`, real part and imaginary part are each interleaved with themselves to reach `dim`.
             Otherwise, they are concateanted with themselves.
-        freqs_dtype (`torch.float32` or `torch.float64`, *optional*, defaults to `torch.float32`):
+        freqs_dtype (`paddle.float32` or `paddle.float64`, *optional*, defaults to `paddle.float32`):
             the dtype of the frequency tensor.
     Returns:
-        `torch.Tensor`: Precomputed frequency tensor with complex exponentials. [S, D/2]
+        `paddle.Tensor`: Precomputed frequency tensor with complex exponentials. [S, D/2]
     """
     assert dim % 2 == 0
     if isinstance(pos, int):
@@ -1371,17 +1335,14 @@ def get_1d_rotary_pos_embed(
 
     theta = theta * ntk_factor
     freqs = (
-        1.0
-        / theta ** (paddle.arange(start=0, end=dim, step=2, dtype=freqs_dtype)[: dim // 2] / dim
-        )
-        / linear_factor
+        1.0 / theta ** (paddle.arange(start=0, end=dim, step=2, dtype=freqs_dtype)[: dim // 2] / dim) / linear_factor
     )  # [D/2]
     pos = pos.astype(freqs_dtype)
     freqs = paddle.outer(x=pos, y=freqs)  # type: ignore   # [S, D/2]
     if use_real and repeat_interleave_real:
         # flux, hunyuan-dit, cogvideox
-        freqs_cos = (freqs.cos().repeat_interleave(repeats=2, axis=1).astype(dtype="float32"))  # [S, D]
-        freqs_sin = (freqs.sin().repeat_interleave(repeats=2, axis=1).astype(dtype="float32"))  # [S, D]
+        freqs_cos = freqs.cos().repeat_interleave(repeats=2, axis=1).astype(dtype="float32")  # [S, D]
+        freqs_sin = freqs.sin().repeat_interleave(repeats=2, axis=1).astype(dtype="float32")  # [S, D]
         return freqs_cos, freqs_sin
     elif use_real:
         # stable audio, allegro

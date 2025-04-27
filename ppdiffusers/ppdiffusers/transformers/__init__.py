@@ -18,9 +18,10 @@ from .bert import *
 from .clip import *
 from .gpt2 import *
 from .roberta import *
-from .t5 import *
-from .xlm_roberta import *
 from .siglip import *
+from .t5 import *
+from .umt5 import *
+from .xlm_roberta import *
 
 # overridden model_utils
 from .model_utils import ModuleUtilsMixin, PretrainedConfig, PretrainedModel  # isort:skip
