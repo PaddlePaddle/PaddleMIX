@@ -123,8 +123,7 @@ class ApproximateGELU(nn.Layer):
     def forward(self, x: paddle.Tensor) -> paddle.Tensor:
         x = self.proj(x)
         return x * F.sigmoid(1.702 * x)
-    
-    
+
 class LinearActivation(paddle.nn.Layer):
     def __init__(
         self, dim_in: int, dim_out: int, bias: bool = True, activation: str = "silu"

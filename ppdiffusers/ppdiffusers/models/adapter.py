@@ -160,12 +160,12 @@ class MultiAdapter(ModelMixin):
             pretrained_model_path (`os.PathLike`):
                 A path to a *directory* containing model weights saved using
                 [`~ppdiffusers.models.adapter.MultiAdapter.save_pretrained`], e.g., `./my_model_directory/adapter`.
-            torch_dtype (`str` or `torch.dtype`, *optional*):
-                Override the default `torch.dtype` and load the model under this dtype. If `"auto"` is passed the dtype
+            paddle_dtype (`str` or `paddle.dtype`, *optional*):
+                Override the default `paddle.dtype` and load the model under this dtype. If `"auto"` is passed the dtype
                 will be automatically derived from the model's weights.
             output_loading_info(`bool`, *optional*, defaults to `False`):
                 Whether or not to also return a dictionary containing missing keys, unexpected keys and error messages.
-            device_map (`str` or `Dict[str, Union[int, str, torch.device]]`, *optional*):
+            device_map (`str` or `Dict[str, Union[int, str]]`, *optional*):
                 A map that specifies where each submodule should go. It doesn't need to be refined to each
                 parameter/buffer name, once a given module name is inside, every submodule of it will be sent to the
                 same device.
