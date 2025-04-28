@@ -116,6 +116,7 @@ else:
             "AutoencoderKLTemporalDecoder",
             "AutoencoderTiny",
             "AutoencoderKLMochi",
+            "CacheMixin",
             "CogVideoXTransformer3DModel",
             "CogVideoXTransformer3DVCtrlModel",
             "ConsistencyDecoderVAE",

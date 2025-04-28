@@ -16,11 +16,11 @@
 import os
 from typing import Dict, Optional, Tuple
 
+import numbers
+
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
-
-import numbers
 
 from .activations import get_activation
 from .embeddings import CombinedTimestepLabelEmbeddings, CombinedTimestepSizeEmbeddings
@@ -330,22 +330,13 @@ class RMSNorm(nn.Layer):
             self.weight = None
 
     def forward(self, hidden_states, begin_norm_axis=None):
-        if self.weight is not None:
-            return paddle.incubate.nn.functional.fused_rms_norm(
-                x=hidden_states,
-                norm_weight=self.weight,
-                norm_bias=None,
-                epsilon=self.epsilon,
-                begin_norm_axis=len(hidden_states.shape)-1 if begin_norm_axis is None else begin_norm_axis,
-            )[0]
-        else:
-            input_dtype = hidden_states.dtype
-            variance = paddle.pow(hidden_states.astype('float32'), 2).mean(axis=-1, keepdim=True)
-            hidden_states = hidden_states * paddle.rsqrt(variance + self.epsilon)
-
-            hidden_states = hidden_states.astype(input_dtype)
-
-            return hidden_states
+        return paddle.incubate.nn.functional.fused_rms_norm(
+            x=hidden_states,
+            norm_weight=self.weight,
+            norm_bias=None,
+            epsilon=self.epsilon,
+            begin_norm_axis=len(hidden_states.shape)-1 if begin_norm_axis is None else begin_norm_axis,
+        )[0]
 
 
 class LpNorm(nn.Layer):
@@ -384,7 +375,6 @@ class CogVideoXLayerNormZero(paddle.nn.Layer):
             enc_scale)[:, None, :] + enc_shift[:, None, :]
         return hidden_states, encoder_hidden_states, gate[:, None, :
             ], enc_gate[:, None, :]
-
 
 
 class MochiRMSNorm(nn.Layer):
