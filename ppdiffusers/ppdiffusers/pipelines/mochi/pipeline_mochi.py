@@ -23,7 +23,7 @@ import numpy as np
 from ppdiffusers.transformers import T5EncoderModel, T5Tokenizer
 
 from ...callbacks import MultiPipelineCallbacks, PipelineCallback
-from ...loaders.Mochi1LoraLoader import Mochi1LoraLoaderMixin
+from ...loaders import Mochi1LoraLoaderMixin
 from ...models import AutoencoderKLMochi, MochiTransformer3DModel
 from ...schedulers import FlowMatchEulerDiscreteScheduler
 from ...utils import (
