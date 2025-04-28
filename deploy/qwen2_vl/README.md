@@ -10,7 +10,7 @@
 - **paddlepaddle-gpu 要求是develop版本**
 ```bash
 # 安装示例
-python -m pip install paddlepaddle-gpu==0.0.0.post118 -f https://www.paddlepaddle.org.cn/whl/linux/gpu/develop.html
+python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu123/
 ```
 
 - **paddlenlp 需要特定版本**
@@ -21,9 +21,54 @@ python -m pip install paddlepaddle-gpu==0.0.0.post118 -f https://www.paddlepaddl
 git clone https://github.com/PaddlePaddle/PaddleNLP.git
 cd PaddleNLP
 python setup.py install
+
+# 此处提供两种paddlenlp_ops安装方法，建议使用预编译的paddlenlp_ops进行安装
+# 手动编译安装paddlenlp_ops
 cd csrc
 python setup_cuda.py install
+
+# 安装pre-build paddlenlp_ops
+pip install https://paddlenlp.bj.bcebos.com/ops/cu118/paddlenlp_ops-3.0.0b4.post20250331-py3-none-any.whl
 ```
+
+3） paddlenlp_ops预编译包安装表格，根据paddlenlp、CUDA版本选择配套paddlenlp_ops 
+
+<table class="docutils">
+    <thead>
+        <tr>
+            <th width="80">CUDA</th>
+            <th width="200">paddlenlp_3.0.0b4</th>
+            <th width="200">paddlenlp_develop</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td align="center">12.4</td>
+            <td>
+                <details>
+                    <summary>Install</summary>
+                    <pre><code>pip install https://paddlenlp.bj.bcebos.com/ops/cu124/paddlenlp_ops-3.0.0b4-py3-none-any.whl</code></pre>
+                </details>
+            </td>
+            <td></td>
+        </tr>
+        <tr>
+            <td align="center">11.8</td>
+            <td>
+                <details>
+                    <summary>Install</summary>
+                    <pre><code>pip install https://paddlenlp.bj.bcebos.com/ops/cu118/paddlenlp_ops-3.0.0b4-py3-none-any.whl</code></pre>
+                </details>
+            </td>
+            <td>
+                <details>
+                    <summary>Install</summary>
+                    <pre><code>pip install https://paddlenlp.bj.bcebos.com/ops/cu118/paddlenlp_ops-3.0.0b4.post20250331-py3-none-any.whl</code></pre>
+                </details>
+            </td>
+        </tr>
+    </tbody>
+</table>
 
 > 注：
 * 请确保安装了以上依赖，否则无法运行。同时，需要安装 paddlemix/external_ops 下的自定义OP, `python setup.py install`。如果安装后仍然找不到算子，需要额外设置PYTHONPATH
@@ -36,6 +81,9 @@ python setup_cuda.py install
 ### 3.1. 文本&单张图像输入高性能推理
 ```bash
 export CUDA_VISIBLE_DEVICES=0
+export FLAGS_cascade_attention_max_partition_size=128
+export FLAGS_cascade_attention_deal_each_time=16
+export USE_FASTER_TOP_P_SAMPLING=1
 python deploy/qwen2_vl/single_image_infer.py\
     --model_name_or_path Qwen/Qwen2-VL-2B-Instruct \
     --question "Describe this image." \
@@ -47,17 +95,35 @@ python deploy/qwen2_vl/single_image_infer.py\
     --temperature 0.1 \
     --repetition_penalty 1.05 \
     --block_attn True \
+    --append_attn True \
     --inference_model True \
-    --mode dynamic \
+    --llm_mode static \
     --dtype bfloat16 \
     --output_via_mq False \
     --benchmark True
-
+```
 ### 3.2. 文本&视频输入高性能推理
 ```bash
-CUDA_VISIBLE_DEVICES=0 python deploy/qwen2_vl/video_infer.py \
+export CUDA_VISIBLE_DEVICES=0
+export FLAGS_cascade_attention_max_partition_size=128
+export FLAGS_cascade_attention_deal_each_time=16
+export USE_FASTER_TOP_P_SAMPLING=1
+python deploy/qwen2_vl/video_infer.py\
     --model_name_or_path Qwen/Qwen2-VL-2B-Instruct \
+    --question "Describe this video." \
+    --video_file paddlemix/demo_images/red-panda.mp4 \
+    --min_length 128 \
+    --max_length 128 \
+    --top_k 1 \
+    --top_p 0.001 \
+    --temperature 0.1 \
+    --repetition_penalty 1.05 \
+    --block_attn True \
+    --append_attn True \
+    --inference_model True \
+    --llm_mode static \
     --dtype bfloat16 \
+    --output_via_mq False \
     --benchmark True
 ```
 
@@ -84,10 +150,11 @@ sh deploy/qwen2_vl/scripts/qwen2_vl.sh
 
 
 #### 下方表格中所示性能对应的输入输出大小。
-|     parameter      |      Value     |
-| ------------------ | -------------- |
-|  input_tokens_len  |  997 tokens    |
-|  output_tokens_len |  128 tokens    |
+|     parameter            |      Value     |
+| -------------------------| -------------- |
+|  image_input_tokens_len  |  997 tokens    |
+|  video_input_tokens_len  | 2725 tokens    |
+|  output_tokens_len       |  128 tokens    |
 
 - 在 NVIDIA A800-80GB 上测试的单图端到端速度性能如下：
 
@@ -101,5 +168,5 @@ sh deploy/qwen2_vl/scripts/qwen2_vl.sh
 
 | model                  | Paddle Inference|    PyTorch   |
 | ---------------------- | --------------- | ------------ |
-| Qwen2-VL-2B-Instruct   |      2.890 s    |     3.143 s  |
-| Qwen2-VL-7B-Instruct   |      2.534 s    |     2.715 s  |
+| Qwen2-VL-2B-Instruct   |      1.306 s    |     3.143 s  |
+| Qwen2-VL-7B-Instruct   |      2.337 s    |     2.715 s  |
