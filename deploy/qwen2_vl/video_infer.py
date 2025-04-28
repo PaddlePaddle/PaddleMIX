@@ -13,10 +13,12 @@
 # limitations under the License.
 
 import datetime
+import sys
 from dataclasses import dataclass, field
 
 import numpy as np
 import paddle
+from paddle.distributed import fleet
 from paddlenlp.generation import GenerationConfig
 from paddlenlp.trainer import PdArgumentParser
 from paddlenlp.transformers import AutoConfig, AutoInferenceModelForCausalLM
@@ -33,112 +35,31 @@ from paddlemix.processors.qwen2_vl_processing import (
     process_vision_info,
 )
 
-MODEL_NAME = "Qwen/Qwen2-VL-2B-Instruct"
-vl_model = Qwen2VLForConditionalGeneration.from_pretrained(MODEL_NAME, dtype="bfloat16")
-
-# NOTE: (zhoukangkang、changwenbin) Because we only use the visual model here,
-# in order to reduce video memory,we delete the language model.
-del vl_model.model
-paddle.device.cuda.empty_cache()
-
-image_processor = Qwen2VLImageProcessor()
-tokenizer = MIXQwen2Tokenizer.from_pretrained(MODEL_NAME)
-processor = Qwen2VLProcessor(image_processor, tokenizer)
-
-# min_pixels = 256 * 28 * 28  # 200704
-# max_pixels = 1280 * 28 * 28  # 1003520
-# processor = Qwen2VLProcessor(image_processor, tokenizer, min_pixels=min_pixels, max_pixels=max_pixels)
-
-# Messages containing a video and a text query
-messages = [
-    {
-        "role": "user",
-        "content": [
-            {
-                "type": "video",
-                "video": "paddlemix/demo_images/red-panda.mp4",
-                "max_pixels": 360 * 420,
-                "fps": 1.0,
-            },
-            {"type": "text", "text": "Describe this video."},
-        ],
-    }
-]
-
-image_inputs, video_inputs = process_vision_info(messages)
-question = "Describe this video."
-video_pad_token = "<|vision_start|><|video_pad|><|vision_end|>"
-text = f"<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n{video_pad_token}{question}<|im_end|>\n<|im_start|>assistant\n"
+sys.path.append("PaddleNLP/llm/predict")
+from predictor import ModelArgument, PredictorArgument
 
 
 @dataclass
-class PredictorArgument:
-    # NOTE: (zhoukangkang、changwenbin)
-    # These parameters are all copied from https://github.com/PaddlePaddle/PaddleNLP/blob/develop/llm/predict/predictor.py
-    # For simplicity and ease of use, only the necessary parameters are retained here.
-    # If you want to know the exact meaning of these parameters, please refer to the link above.
-
-    model_name_or_path: str = field(default=None, metadata={"help": "The directory of model."})
-    src_length = 1024
-    min_length = 2
-    max_length = 200
-    top_k = 0
-    top_p = 0.0
-    temperature = 0.95
-    repetition_penalty = 1.0
-    dtype: str = field(default=None, metadata={"help": "Model dtype"})
-    decode_strategy = "sampling"
-    mode = "dynamic"
-    inference_model = True
-    quant_type = ""
-    benchmark: bool = field(
-        default=False,
-        metadata={
-            "help": "If benchmark set as `True`, we will force model decode to max_length, which is helpful to compute throughput. "
-        },
+class Mix_PredictorArgument(PredictorArgument):
+    question: str = field(default="Describe this video.", metadata={"help": "The question for the model."})
+    video_file: str = field(
+        default="paddlemix/demo_images/red-panda.mp4", metadata={"help": "The image file for the model."}
     )
-    use_fake_parameter = False
-    block_attn = True
-    block_size = 64
-    cachekv_int8_type = None
-    append_attn = True
-    total_max_length = 32768
-    speculate_method = None
+    attn_implementation: str = field(
+        default="flash_attention_2",
+        metadata={"help": "The implementation of attention. Supported values: eager, sdpa, flash_attention_2"},
+    )
+    llm_mode: str = field(default="dynamic", metadata={"help": "The mode of llm. Supported values: dynamic, static"})
 
 
 @dataclass
-class ModelArgument:
-    model_type: str = field(
-        default=None,
-        metadata={"help": "the type of the model"},
-    )
+class Mix_ModelArgument(ModelArgument):
+    pass
 
 
-def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: PredictorArgument):
-    assert len(inputs_embeds.shape) == 3
-    batch_size = inputs_embeds.shape[0]
-
-    model_inputs = {}
-    model_inputs["input_ids"] = paddle.zeros(shape=[batch_size, arg_config.total_max_length], dtype="int64")
-    model_inputs["inputs_embeds"] = inputs_embeds
-
-    # I dislike write (arg_config.total_max_length + arg_config.block_size -1 ) // arg_config.block_size
-    assert arg_config.total_max_length % arg_config.block_size == 0
-
-    model_inputs["top_p"] = paddle.full(shape=[batch_size, 1], fill_value=arg_config.top_p, dtype="float32")
-    model_inputs["temperature"] = paddle.full(
-        shape=[batch_size, 1], fill_value=arg_config.temperature, dtype="float32"
-    )
-    model_inputs["eos_token_id"] = paddle.to_tensor(
-        np.array(llm_utils.get_eos_token_id(tokenizer, generation_config)).reshape(-1, 1).astype("int64")
-    )
-    model_inputs["penalty_score"] = paddle.full(
-        shape=[batch_size, 1], fill_value=arg_config.repetition_penalty, dtype="float32"
-    )
-    model_inputs["frequency_score"] = paddle.full(shape=[batch_size, 1], fill_value=0.0, dtype="float32")
-    model_inputs["presence_score"] = paddle.full(shape=[batch_size, 1], fill_value=0.0, dtype="float32")
-    model_inputs["min_length"] = paddle.full(shape=[batch_size, 1], fill_value=arg_config.min_length, dtype="int64")
-    model_inputs["max_length"] = paddle.full(shape=[batch_size, 1], fill_value=arg_config.max_length, dtype="int64")
+# NOTE: (zhoukangkang、changwenbin) Copied from PaddleMIX/paddlemix/models/qwen2_vl/modeling_qwen2_vl.py,
+# for calculating M-ROPE.
+def use_m_rope(vision_model_inputs):
 
     position_ids, _ = vl_model.get_rope_index(
         config.vision_config["spatial_merge_size"],
@@ -172,14 +93,55 @@ def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: Predic
 
     rope_emb = paddle.stack([cos, sin], axis=0)
     rope_emb = rope_emb.reshape([rope_emb.shape[0], 1, rope_emb.shape[2], 1, rope_emb.shape[-1]])
-    model_inputs["rope_emb"] = rope_emb
+
+    return rope_emb
+
+
+def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: Mix_PredictorArgument):
+    assert len(inputs_embeds.shape) == 3
+    batch_size = inputs_embeds.shape[0]
+
+    model_inputs = {}
+    model_inputs["input_ids"] = paddle.zeros(shape=[batch_size, arg_config.total_max_length], dtype="int64")
+    model_inputs["inputs_embeds"] = inputs_embeds
+
+    # I dislike write (arg_config.total_max_length + arg_config.block_size -1 ) // arg_config.block_size
+    assert arg_config.total_max_length % arg_config.block_size == 0
+
+    model_inputs["top_p"] = paddle.full(shape=[batch_size, 1], fill_value=arg_config.top_p, dtype="float32")
+    model_inputs["temperature"] = paddle.full(
+        shape=[batch_size, 1], fill_value=arg_config.temperature, dtype="float32"
+    )
+    model_inputs["eos_token_id"] = paddle.to_tensor(
+        np.array(llm_utils.get_eos_token_id(tokenizer, generation_config)).reshape(-1, 1).astype("int64")
+    )
+    model_inputs["penalty_score"] = paddle.full(
+        shape=[batch_size, 1], fill_value=arg_config.repetition_penalty, dtype="float32"
+    )
+    model_inputs["frequency_score"] = paddle.full(shape=[batch_size, 1], fill_value=0.0, dtype="float32")
+    model_inputs["presence_score"] = paddle.full(shape=[batch_size, 1], fill_value=0.0, dtype="float32")
+    model_inputs["min_length"] = paddle.full(shape=[batch_size, 1], fill_value=arg_config.min_length, dtype="int64")
+    model_inputs["max_length"] = paddle.full(shape=[batch_size, 1], fill_value=arg_config.max_length, dtype="int64")
+
+    model_inputs["rope_emb"] = use_m_rope(vision_model_inputs)
 
     model_inputs["bad_tokens"] = paddle.to_tensor([-1], dtype="int64")
     model_inputs["is_block_step"] = paddle.full(shape=[batch_size], fill_value=False, dtype="bool")
 
-    cache_kvs_shape = fast_llm_model.get_cache_kvs_shape(fast_llm_model.config, batch_size)
+    cache_k_shapes, cache_v_shapes = fast_llm_model.get_cache_kvs_shape(fast_llm_model.config, arg_config.batch_size)
     cachekv_dtype = config.dtype if arg_config.cachekv_int8_type is None else "uint8"
-    model_inputs["cache_kvs"] = [paddle.zeros(shape, dtype=cachekv_dtype) for shape in cache_kvs_shape]
+
+    cache_kvs = []
+    if cache_k_shapes and cache_v_shapes:
+        for cache_k_shape, cache_v_shape in zip(cache_k_shapes, cache_v_shapes):
+            cache_kvs.append(paddle.zeros(cache_k_shape, dtype=cachekv_dtype))
+            cache_kvs.append(paddle.zeros(cache_v_shape, dtype=cachekv_dtype))
+    else:
+        # for mla's absorption
+        assert cache_v_shapes is None
+        cache_kvs = [paddle.zeros(shape, dtype=cachekv_dtype) for shape in cache_k_shapes]
+
+    model_inputs["cache_kvs"] = cache_kvs
 
     block_nums = arg_config.total_max_length // arg_config.block_size
     model_inputs["block_tables"] = paddle.arange(block_nums, dtype="int32").tile([batch_size, 1])
@@ -189,7 +151,7 @@ def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: Predic
     model_inputs["seq_lens_encoder"] = paddle.to_tensor(np.array(seq_lens).astype("int32").reshape(-1, 1))
     model_inputs["seq_lens_decoder"] = paddle.full(shape=[batch_size, 1], fill_value=0, dtype="int32")
     model_inputs["step_idx"] = paddle.full(shape=[batch_size, 1], fill_value=0, dtype="int64")
-    model_inputs["not_need_stop"] = paddle.full(shape=[1], fill_value=True, dtype="bool")
+    model_inputs["not_need_stop"] = paddle.full(shape=[1], fill_value=True, dtype="bool").cpu()
     model_inputs["stop_flags"] = paddle.full(shape=[batch_size, 1], fill_value=False, dtype="bool")
     model_inputs["stop_nums"] = paddle.full(shape=[1], fill_value=batch_size, dtype="int64")
     model_inputs["pre_ids"] = paddle.full(shape=[batch_size, arg_config.max_length], fill_value=-1, dtype="int64")
@@ -198,11 +160,95 @@ def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: Predic
     return model_inputs
 
 
-parser = PdArgumentParser((PredictorArgument, ModelArgument))
+def run_model(predictor_args):
+
+    question = predictor_args.question
+    video_pad_token = "<|vision_start|><|video_pad|><|vision_end|>"
+    text = f"<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n{video_pad_token}{question}<|im_end|>\n<|im_start|>assistant\n"
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "video", "video": predictor_args.video_file, "fps": 1, "max_pixels": 360 * 420},
+                {"type": "text", "text": predictor_args.question},
+            ],
+        }
+    ]
+
+    # Preparation for inference
+    image_inputs, video_inputs = process_vision_info(messages)
+    vision_model_inputs = processor(
+        text=text,
+        images=image_inputs,
+        videos=video_inputs,
+        padding=True,
+        return_tensors="pd",
+    )
+    input_tokens_len = vision_model_inputs.input_ids.shape[1]
+    with paddle.no_grad():
+        inputs_embeds = vl_model.vision_forward(**vision_model_inputs)
+    llm_model_inputs = init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config=predictor_args)
+    generated_text = ""
+    generated_ids = paddle.to_tensor([], dtype="int64").reshape([1, 0])
+    while llm_model_inputs["not_need_stop"]:
+        generated_id = vl_model.model.generate(**llm_model_inputs)
+
+        # NOTE: (changwenbin) , Get inputs_embeds from the visual model or input_ids.
+        # Here we uniformly set the input of the language model to inputs_embeds
+        llm_model_inputs["inputs_embeds"] = fast_llm_model.qwen2.embed_tokens(generated_id)
+
+        generated_ids = paddle.concat([generated_ids, generated_id], axis=1)
+        if paddle.any(generated_id == 151645).item():
+            break
+    generated_text = processor.batch_decode(
+        generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False
+    )[0]
+    output_tokens_len = generated_ids.shape[1]
+    return generated_text, input_tokens_len, output_tokens_len
+
+
+parser = PdArgumentParser((Mix_PredictorArgument, Mix_ModelArgument))
 predictor_args, model_args = parser.parse_args_into_dataclasses()
 
 paddle.set_default_dtype(predictor_args.dtype)
+tensor_parallel_degree = paddle.distributed.get_world_size()
+tensor_parallel_rank = paddle.distributed.get_rank()
+if tensor_parallel_degree > 1:
+    strategy = fleet.DistributedStrategy()
+    strategy.hybrid_configs = {
+        "dp_degree": 1,
+        "mp_degree": tensor_parallel_degree,
+        "pp_degree": 1,
+        "sharding_degree": 1,
+    }
+    fleet.init(is_collective=True, strategy=strategy)
+
+vl_model = Qwen2VLForConditionalGeneration.from_pretrained(
+    predictor_args.model_name_or_path,
+    tensor_parallel_degree=tensor_parallel_degree,
+    tensor_parallel_rank=tensor_parallel_rank,
+    dtype=predictor_args.dtype,
+    tensor_parallel_output=False,
+    attn_implementation=predictor_args.attn_implementation,
+).eval()
+
+
+# NOTE: (zhoukangkang、changwenbin) Because we only use the visual model here,
+# in order to reduce video memory,we delete the language model.
+del vl_model.model
+paddle.device.cuda.empty_cache()
+
+
+image_processor = Qwen2VLImageProcessor()
+tokenizer = MIXQwen2Tokenizer.from_pretrained(predictor_args.model_name_or_path)
+processor = Qwen2VLProcessor(image_processor, tokenizer)
+# min_pixels = 256*28*28 # 200704
+# max_pixels = 1280*28*28 # 1003520
+
 config = AutoConfig.from_pretrained(predictor_args.model_name_or_path)
+config.tensor_parallel_degree = tensor_parallel_degree
+config.tensor_parallel_rank = tensor_parallel_rank
+predictor_args.total_max_length = config.max_position_embeddings
 
 # NOTE: (changwenbin) This is for using the inference optimization of paddlenlp qwen2.
 config.model_type = "qwen2"
@@ -213,40 +259,21 @@ fast_llm_model = AutoInferenceModelForCausalLM.from_pretrained(
     predictor_args=predictor_args,
     model_args=model_args,
     dtype=predictor_args.dtype,
-    tensor_parallel_degree=1,
-    tensor_parallel_rank=0,
-)
-fast_llm_model.eval()
+    tensor_parallel_degree=tensor_parallel_degree,
+    tensor_parallel_rank=tensor_parallel_rank,
+).eval()
+
+# NOTE: (changwenbin) We convert the language model into a static graph
+if predictor_args.llm_mode == "static":
+    fast_llm_model = paddle.incubate.jit.inference(
+        fast_llm_model,
+        save_model_dir=f"./tmp/{predictor_args.model_name_or_path}/{predictor_args.quant_type}",
+        enable_new_ir=True,
+        cache_static_model=True,
+        exp_enable_use_cutlass=False,
+    )
 
 vl_model.model = fast_llm_model
-
-
-def run_model():
-
-    vision_model_inputs = processor(
-        text=[text],
-        images=image_inputs,
-        videos=video_inputs,
-        padding=True,
-        return_tensors="pd",
-    )
-    with paddle.no_grad():
-        inputs_embeds = vl_model.vision_forward(**vision_model_inputs)
-    llm_model_inputs = init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config=predictor_args)
-    generated_text = ""
-    generated_ids = paddle.to_tensor([], dtype="int64").reshape([1, 0])
-    while llm_model_inputs["not_need_stop"]:
-        generated_id = fast_llm_model.generate(**llm_model_inputs)  # already trimmed in paddle
-        llm_model_inputs["input_ids"] = generated_id
-        llm_model_inputs["inputs_embeds"] = None
-        generated_ids = paddle.concat([generated_ids, generated_id], axis=1)
-        if paddle.any(generated_id == 151653).item():
-            break
-    generated_text = processor.batch_decode(
-        generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False
-    )[0]
-    return generated_text
-
 
 if predictor_args.benchmark:
     print(f"Benchmarking {predictor_args.model_name_or_path} ...")
@@ -258,26 +285,36 @@ if predictor_args.benchmark:
         if i > 2:
             paddle.device.synchronize()
             starttime = datetime.datetime.now()
-        generated_text = run_model()
+        generated_text = run_model(predictor_args)
+
+        # NOTE: (changwenbin) We delete some weights of the original dynamic graph,
+        # after fast_llm_model is converted to a static graph to reduce memory usage.
+        if (fast_llm_model.qwen2.transformer_block is not None) and (predictor_args.llm_mode == "static"):
+            fast_llm_model.qwen2.transformer_block = None
+            fast_llm_model.qwen2.norm = None
+            fast_llm_model.lm_head = None
+            paddle.device.cuda.empty_cache()
+
         if i > 2:
             paddle.device.synchronize()
             endtime = datetime.datetime.now()
-            print("Final output_text:\n", generated_text)
+            print("Final output_text:\n", generated_text[0])
 
         if i > 2:
             duringtime = endtime - starttime
             duringtime = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
             sumtime += duringtime
-            print(f"Single Video Inference: {predictor_args.model_name_or_path} end to end time : ", duringtime, "ms")
-            inference_global_mem = paddle.device.cuda.memory_reserved() / (1024**3)
-            print(f"Inference used CUDA memory : {inference_global_mem:.3f} GiB")
-
+            print(f"Single Image Inference: {predictor_args.model_name_or_path} end-to-end time : ", duringtime, "ms")
     print(
-        f"Single Video Inference: {predictor_args.model_name_or_path} average end-to-end time : ",
+        f"Single Image Inference: {predictor_args.model_name_or_path} average end-to-end time : ",
         sumtime / repeat_times,
         "ms",
     )
+    print(f"GPU max_memory_allocated: {paddle.device.cuda.max_memory_allocated() / 1024 ** 3:.2f} GB")
+    print(f"GPU memory_allocated: {paddle.device.cuda.memory_allocated() / 1024 ** 3:.2f} GB")
+    print("input_tokens_len is :", generated_text[1], "tokens")
+    print("output_tokens_len is :", generated_text[2], "tokens")
 
 else:
-    generated_text = run_model()
-    print("Final output_text:\n", generated_text)
+    generated_text = run_model(predictor_args)
+    print("Final output_text:\n", generated_text[0])
