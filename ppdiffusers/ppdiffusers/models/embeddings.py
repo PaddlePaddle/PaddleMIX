@@ -1258,7 +1258,7 @@ def apply_rotary_emb(
         x_out = paddle.as_real(x=x_rotated * freqs_cis).flatten(start_axis=3)
         return x_out.astype(dtype=x.dtype)
 
-
+        
 class FluxPosEmbed(nn.Layer):
     # modified from https://github.com/black-forest-labs/flux/blob/c00d7c60b085fce8058b9df845e036090873f2ce/src/flux/modules/layers.py#L11
     def __init__(self, theta: int, axes_dim: List[int]):
