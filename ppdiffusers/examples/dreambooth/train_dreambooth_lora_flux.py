@@ -1670,28 +1670,6 @@ def main(args):
                                     shutil.rmtree(removing_checkpoint)
 
                         save_path = os.path.join(args.output_dir, f"checkpoint-{global_step}")
-                        # # westfish: save_state substitute
-                        # # accelerator.save_state(save_path)
-                        # models = []
-                        # models.append(copy.deepcopy(transformer))
-                        # weights = []
-
-                        # def get_state_dict(model):
-                        #     state_dict = model.state_dict()
-                        #     if state_dict is not None:
-                        #         for k in state_dict:
-                        #             if getattr(state_dict[k], "dtype", None) == paddle.float16:
-                        #                 state_dict[k] = state_dict[k]._to(dtype="float32")
-
-                        #     return state_dict
-
-                        # for i, model in enumerate(models):
-                        #     weights.append(get_state_dict(model))
-                        # save_model_hook(models, weights, save_path)
-                        # del models, weights
-                        # for _ in range(3):
-                        #     gc.collect()
-                        # paddle.device.cuda.empty_cache()
 
                         def save_checkpoint(transformer, save_path, fp32_on_cpu=True):
                             state_dict = transformer.state_dict()
@@ -1699,18 +1677,16 @@ def main(args):
                             if fp32_on_cpu:
                                 cpu_state = {}
                                 for k, v in state_dict.items():
-                                    # 先搬到 CPU，再视需要转 dtype
-                                    t = v.cpu()                     # 显存立即释放
+                                    t = v.cpu()                     
                                     if t.dtype == paddle.float16:
-                                        t = t.cast('float32')       # 占用 host 内存，可选
+                                        t = t.cast('float32')       
                                     cpu_state[k] = t
                                 paddle.save(cpu_state, save_path)
                             else:
-                                # 直接保存 fp16 权重，占用更小
                                 paddle.save(state_dict, save_path)
 
                         save_checkpoint(transformer, save_path, fp32_on_cpu=True)
-                        paddle.device.cuda.empty_cache()        # 只清 GPU cache
+                        paddle.device.cuda.empty_cache()
 
                         logger.info(f"Saved state to {save_path}")
 
