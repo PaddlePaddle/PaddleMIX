@@ -91,8 +91,8 @@ def generate_video(
 
     # If you're using with lora, add this code
     if lora_path:
-        pipe.load_lora_weights(lora_path, weight_name="pytorch_lora_weights.safetensors", adapter_name="test_1")
-        pipe.fuse_lora(lora_scale=1 / lora_rank)
+        pipe.load_lora_weights(lora_path, adapter_name="cogvideox-lora")
+        pipe.set_adapters(["cogvideox-lora"], [1 / lora_rank])
 
     # 2. Set Scheduler.
     # Can be changed to `CogVideoXDPMScheduler` or `CogVideoXDDIMScheduler`.
@@ -156,7 +156,7 @@ if __name__ == "__main__":
         help="The path of the image to be used as the background of the video",
     )
     parser.add_argument(
-        "--model_path", type=str, default="THUDM/CogVideoX-5b", help="The path of the pre-trained model to be used"
+        "--model_path", type=str, default="THUDM/CogVideoX-2b", help="The path of the pre-trained model to be used"
     )
     parser.add_argument("--lora_path", type=str, default=None, help="The path of the LoRA weights to be used")
     parser.add_argument("--lora_rank", type=int, default=128, help="The rank of the LoRA weights")

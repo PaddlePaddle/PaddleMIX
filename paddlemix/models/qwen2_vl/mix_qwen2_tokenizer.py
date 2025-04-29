@@ -47,6 +47,18 @@ class MIXQwen2Tokenizer(Qwen2Tokenizer):
             (str(t), t) for t in self.all_special_tokens_extended if isinstance(t, AddedToken)
         )
 
+        # Add special tokens
+        for t in self.added_tokens_decoder:
+            token = self.added_tokens_decoder[t]
+            if isinstance(token, AddedToken) and token.special:
+                all_special_tokens_extended[str(token)] = token
+                if str(token) not in self.all_special_tokens:
+                    self.all_special_tokens.append(str(token))
+                if str(token) not in self.unique_no_split_tokens:
+                    self.unique_no_split_tokens.append(str(token))
+
+        self._create_trie(self.unique_no_split_tokens)
+
         text, kwargs = self.prepare_for_tokenization(text, **kwargs)
 
         # TODO: should this be in the base class?
