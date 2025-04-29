@@ -323,30 +323,6 @@ class AdaLayerNormContinuous(nn.Layer):
             x = self.norm(x) * (1 + scale)[:, None, :] + shift[:, None, :]
         return x
 
-
-# class RMSNorm(nn.Layer):
-#     def __init__(self, dim, epsilon: float, elementwise_affine: bool = True):
-#         super().__init__()
-#         self.epsilon = epsilon
-#         self.dim = dim
-#         if elementwise_affine:
-#             self.weight = paddle.create_parameter(
-#                 shape=[dim],
-#                 dtype=paddle.get_default_dtype(),
-#                 default_initializer=nn.initializer.Constant(1.0),
-#             )
-#         else:
-#             self.weight = None
-
-#     def forward(self, hidden_states, begin_norm_axis=None):
-#         return paddle.incubate.nn.functional.fused_rms_norm(
-#             x=hidden_states,
-#             norm_weight=self.weight,
-#             norm_bias=None,
-#             epsilon=self.epsilon,
-#             begin_norm_axis=len(hidden_states.shape)-1 if begin_norm_axis is None else begin_norm_axis,
-#         )[0]
-
 class RMSNorm(nn.Layer):
     def __init__(self, dim, epsilon: float, elementwise_affine: bool = True, bias: bool = False):
         super().__init__()
