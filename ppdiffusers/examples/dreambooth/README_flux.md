@@ -1,4 +1,4 @@
-# DreamBooth训练示例：Stable Diffusion 3 (SD3)
+# DreamBooth训练示例：FLUX
 
 [DreamBooth: Fine Tuning Text-to-Image Diffusion Models for Subject-Driven Generation](https://arxiv.org/abs/2208.12242) 是一种用于个性化文本到图像模型的方法，只需要主题的少量图像（3~5张）即可。
 
