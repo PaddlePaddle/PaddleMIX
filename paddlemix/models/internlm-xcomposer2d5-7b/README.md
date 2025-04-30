@@ -1,12 +1,12 @@
-@@ -1,8 +1,16 @@
+
 环境准备
 conda create -n internlm python=3.11 -y
 conda activate internlm
-
+ 
 git clone https://github.com/PaddlePaddle/PaddleMIX
 cd PaddleMIX
 pip install -e .
-
+ 
 #ppdiffusers 安装
 cd ppdiffusers
 pip install -e .
