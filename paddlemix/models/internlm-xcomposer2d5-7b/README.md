@@ -1,3 +1,4 @@
+@@ -1,8 +1,16 @@
 环境准备
 conda create -n internlm python=3.11 -y
 conda activate internlm
