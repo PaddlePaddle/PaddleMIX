@@ -27,11 +27,15 @@ conda activate internlm
 ```bash
 pip install -e .
 ```
-# 安装 ppdiffusers
+# 安装ppdiffusers
 ```bash
 cd ppdiffusers
 pip install -e .
 cd ..
+```
+# 安装flash_attn
+```bash
+pip install --no-index  /home/aistudio/PaddleMIX/ppdiffusers/flash-attention/flash_attn-2.7.3-cp311-cp311-linux_x86_64.whl.whl
 ```
 ## 3 模型转换
 
