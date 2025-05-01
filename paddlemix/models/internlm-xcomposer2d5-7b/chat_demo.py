@@ -2,9 +2,9 @@ import os
 import argparse
 import cv2
 import paddle
-import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM
-from torchvision import transforms
+import numpy as np
+from paddlenlp.transformers import AutoTokenizer, AutoModelForCausalLM
+from paddle.vision import transforms
 
 def main(args):
     # 检查图像路径并修改文本
@@ -17,9 +17,9 @@ def main(args):
     tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=True)
     model = AutoModelForCausalLM.from_pretrained(
         model_name_or_path,
-        torch_dtype=torch.float16,  # 确保模型以 float16 加载
+        dtype=paddle.float16,  # 确保模型以 float16 加载
         trust_remote_code=True
-    ).cuda()
+    )
     model.eval()
 
     # 图像加载和处理
@@ -41,20 +41,24 @@ def main(args):
         ])
 
         # 转换为张量并添加批次维度
-        image_tensor = transform(image).unsqueeze(0).cuda()  # 现在形状为 (1, 3, 224, 224)
-        image_tensor = image_tensor.half()  # 确保图像张量为 float16
+        image_tensor = transform(image).unsqueeze(0)  # 现在形状为 (1, 3, 560, 560)
+        image_tensor = image_tensor.astype(paddle.float16)  # 确保图像张量为 float16
         print(f"Image tensor shape: {image_tensor.shape}")
         print(f"Image tensor dtype: {image_tensor.dtype}")  # 打印数据类型用于调试
     else:
         raise ValueError(f"Image path does not exist: {image_path}")
 
     # 运行推理并打印输出
-    inputs = tokenizer(args.text, return_tensors="pt").to("cuda")  # 移动到 GPU
+    inputs = tokenizer(args.text, return_tensors="pd")  # 使用 Paddle 格式
 
     # 确保 input_ids 是整数类型
-    inputs["input_ids"] = inputs["input_ids"].to(dtype=torch.int64)
-    inputs["attention_mask"] = inputs["attention_mask"].to(dtype=torch.int64)
+    inputs["input_ids"] = inputs["input_ids"].astype(paddle.int64)
+    inputs["attention_mask"] = inputs["attention_mask"].astype(paddle.int64)
 
+    # 将 inputs 移动到 GPU（如果可用）
+    paddle.device.set_device("gpu" if paddle.device.is_compiled_with_cuda() else "cpu")
+
+    # 在 PaddlePaddle 中进行推理
     output_ids = model.generate(**inputs, max_length=256)
     print(tokenizer.decode(output_ids[0], skip_special_tokens=True))
 
