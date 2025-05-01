@@ -16,17 +16,23 @@
 1）[安装PaddlePaddle](https://github.com/PaddlePaddle/PaddleMIX?tab=readme-ov-file#3-%EF%B8%8F%E5%AE%89%E8%A3%85paddlepaddle)
 - **python >= 3.10**
 - **paddlepaddle-gpu 要求是3.0.0b2或develop版本**
-
+```bash
+conda create -n internlm python=3.11 -y
+conda activate internlm
+```
 2） [安装PaddleNLP](https://github.com/PaddlePaddle/PaddleNLP?tab=readme-ov-file#%E5%AE%89%E8%A3%85)
 
 3）[安装 PaddleMix 环境依赖包](https://github.com/PaddlePaddle/PaddleMIX/tree/b4f97ff859e1964c839fc5fab94f7ba63b1e5959?tab=readme-ov-file#%E5%AE%89%E8%A3%85)
 # 安装 PaddleMIX
+```bash
 pip install -e .
+```
 # 安装 ppdiffusers
+```bash
 cd ppdiffusers
 pip install -e .
 cd ..
-
+```
 ## 3 模型转换
 
 将torch模型转换成paddle模型，请采用下述命令。
