@@ -1,92 +1,121 @@
+import os
 import torch
 import paddle
 import gc
-import tracemalloc
+from tqdm import tqdm
 from transformers import AutoModel, AutoTokenizer
-from accelerate import load_checkpoint_and_dispatch, init_empty_weights
 
 local_model_path = "/home/aistudio/internlm-xcomposer2d5-7b"
 save_dir = "/home/aistudio/internlm-xcomposer2d5-7b-paddle"
 
-# 使用transformers加载PyTorch模型
-def load_torch_model(path):
-    return AutoModel.from_pretrained(path, trust_remote_code=True)
-
-# 将PyTorch模型参数转换为PaddlePaddle格式
-def convert_state_dict(torch_state_dict):
-    paddle_state_dict = {}
-    for key, tensor in torch_state_dict.items():
-        # 确保张量不在meta设备上
-        if tensor.device.type == "meta":
-            print(f"Warning: Tensor {key} is on meta device and will be skipped.")
-            continue
-        # 确保张量在CPU上
-        tensor_cpu = tensor.cpu()
-        p_tensor = paddle.to_tensor(tensor_cpu.numpy())
-        if 'weight' in key and any(x in key for x in ['emb', 'linear', 'qkv']):
-            p_tensor = p_tensor.transpose([1, 0])
-        paddle_state_dict[key] = p_tensor
-    return paddle_state_dict
-
-# 保存PaddlePaddle模型参数
-def save_paddle_model(paddle_state_dict, save_dir):
-    paddle.save(paddle_state_dict, f"{save_dir}/model_state.pdparams")
-
-# 加载模型并分发到不同设备
-def load_and_dispatch_model(model_path):
-    with init_empty_weights():
-        torch_model = load_torch_model(model_path)
-    torch_model = load_checkpoint_and_dispatch(
-        torch_model,
+def load_full_model(model_path):
+    """加载完整模型到CPU内存"""
+    print("Loading full model to CPU...")
+    return AutoModel.from_pretrained(
         model_path,
-        device_map="auto",
-        offload_folder="/tmp/offload",
-        no_split_module_classes=["InternLMXComposer2ForCausalLM"],
-        offload_buffers=True,
-    )
-    return torch_model
+        trust_remote_code=True,
+        device_map=None,
+        torch_dtype=torch.float32
+    ).float().cpu()
 
-# 分阶段处理模型的不同部分
-def process_model_in_chunks():
-    # 加载分词器
+def convert_parameter(key, tensor):
+    """带内存优化的参数转换"""
+    if tensor.device.type == "meta":
+        raise RuntimeError(f"发现meta设备参数：{key}")
+    
+    # 使用内存视图减少拷贝
+    np_tensor = tensor.detach().cpu().numpy()
+    del tensor  # 立即释放PyTorch张量
+    
+    # 转置逻辑优化
+    transpose_conditions = [
+        'weight' in key,
+        any(k in key for k in ['linear', 'emb', 'qkv', 'proj', 'fc']),
+        len(np_tensor.shape) == 2
+    ]
+    if all(transpose_conditions):
+        np_tensor = np_tensor.transpose(1, 0)
+    
+    # 使用paddle.Tensor.astype优化内存
+    return paddle.to_tensor(np_tensor).astype("float32")
+
+def convert_and_save_chunks(torch_state_dict, save_dir, chunk_size=30):
+    """分块转换并直接保存到文件"""
+    os.makedirs(save_dir, exist_ok=True)
+    keys = list(torch_state_dict.keys())
+    
+    print(f"开始分块转换（块大小: {chunk_size}）...")
+    for i in tqdm(range(0, len(keys), chunk_size)):
+        chunk_keys = keys[i:i+chunk_size]
+        
+        # 分块转换
+        paddle_chunk = {}
+        for k in chunk_keys:
+            v = torch_state_dict[k]
+            try:
+                paddle_chunk[k] = convert_parameter(k, v)
+                del v  # 立即释放原始张量
+            except Exception as e:
+                raise RuntimeError(f"转换失败: {k} - {str(e)}")
+        
+        # 立即保存当前分块
+        chunk_path = os.path.join(save_dir, f"model_part_{i//chunk_size}.pdparams")
+        paddle.save(paddle_chunk, chunk_path)
+        
+        # 释放内存
+        del paddle_chunk
+        gc.collect()
+
+def merge_chunks(save_dir):
+    """合并分块文件（可选）"""
+    chunk_files = sorted(
+        [f for f in os.listdir(save_dir) if f.startswith("model_part_")],
+        key=lambda x: int(x.split("_")[2].split(".")[0])
+    
+    full_state_dict = {}
+    for fname in tqdm(chunk_files, desc="合并分块"):
+        chunk = paddle.load(os.path.join(save_dir, fname))
+        full_state_dict.update(chunk)
+        del chunk
+        gc.collect()
+    
+    # 保存最终合并文件
+    paddle.save(full_state_dict, os.path.join(save_dir, "model_state.pdparams"))
+    
+    # 清理分块文件
+    for fname in chunk_files:
+        os.remove(os.path.join(save_dir, fname))
+
+def main():
+    # 创建保存目录
+    os.makedirs(save_dir, exist_ok=True)
+    
+    # 保存分词器
+    print("保存分词器...")
     tokenizer = AutoTokenizer.from_pretrained(local_model_path, trust_remote_code=True)
     tokenizer.save_pretrained(save_dir)
     
-    # 加载并分发模型
-    torch_model = load_and_dispatch_model(local_model_path)
+    # 加载PyTorch模型
+    torch_model = load_full_model(local_model_path)
     
-    # 分阶段处理模型参数
-    state_dict = torch_model.state_dict()
-    total_items = len(state_dict)
-    chunk_size = 100  # 根据需要调整
-    for i in range(0, total_items, chunk_size):
-        chunk = {k: state_dict[k] for k in list(state_dict.keys())[i:i+chunk_size]}
-        paddle_chunk = convert_state_dict(chunk)
-        # 保存当前chunk的参数（如果需要）
-        # save_paddle_model(paddle_chunk, save_dir)
-        # 清理不再需要的变量
-        del chunk, paddle_chunk
+    try:
+        # 分块转换并保存
+        convert_and_save_chunks(
+            torch_model.state_dict(),
+            save_dir,
+            chunk_size=30  # 根据内存调整
+        )
+        
+        # 可选：合并分块文件（需要足够磁盘空间）
+        # merge_chunks(save_dir)
+        
+        print(f"转换完成！参数保存在：{save_dir}")
+        print(f"分块数量：{len([f for f in os.listdir(save_dir) if f.startswith('model_part_')])}")
+        
+    finally:
+        # 清理内存
+        del torch_model
         gc.collect()
-    
-    # 保存完整的模型参数
-    paddle_state_dict = convert_state_dict(state_dict)
-    save_paddle_model(paddle_state_dict, save_dir)
-    
-    # 清理不再需要的变量
-    del torch_model, state_dict, paddle_state_dict
-    gc.collect()
 
-# 检测内存泄漏
-def detect_memory_leaks():
-    tracemalloc.start()
-    process_model_in_chunks()
-    snapshot = tracemalloc.take_snapshot()
-    top_stats = snapshot.statistics('lineno')
-    print("[ Top 10 ]")
-    for stat in top_stats[:10]:
-        print(stat)
-
-# 执行模型转换
-detect_memory_leaks()
-
-print(f"模型参数已保存到: {save_dir}")
+if __name__ == "__main__":
+    main()
