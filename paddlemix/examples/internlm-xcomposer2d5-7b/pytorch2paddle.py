@@ -6,7 +6,7 @@ from tqdm import tqdm
 from transformers import AutoModel, AutoTokenizer
 
 local_model_path = "/home/aistudio/internlm-xcomposer2d5-7b"
-save_dir = "/home/aistudio/internlm-xcomposer2d5-7b_paddle"
+save_dir = "/home/aistudio/internlm-xcomposer2d5-7b-paddle"
 
 def load_full_model(model_path):
     """加载完整模型到CPU内存"""
