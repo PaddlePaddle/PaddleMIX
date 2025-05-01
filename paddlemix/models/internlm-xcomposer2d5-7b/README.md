@@ -11,11 +11,6 @@
 - **高质量文本-图像文章创作**：浦语·灵笔2.5利用特别设计的“思维链”（CoT）和“直接偏好优化”（DPO）技术，显著提高了其创作内容的质量。
 - **出色的性能**：浦语·灵笔2.5在28个基准测试中进行了评估，在16个基准测试上优于现有的开源先进模型。它还在16个关键任务上超越或与GPT-4V和Gemini Pro表现相近。
 
-**本仓库支持的模型权重:**
-
-| Model              |
-|--------------------|
-| InternLM-XComposer2.5-7b |
 ---
 ## 2 环境准备
 1）[安装PaddlePaddle](https://github.com/PaddlePaddle/PaddleMIX?tab=readme-ov-file#3-%EF%B8%8F%E5%AE%89%E8%A3%85paddlepaddle)
@@ -41,7 +36,7 @@ cd ..
 python torch2paddle.py 
 
 ```
-权重文件：
+权重文件：model_state.pdparams
 ## 4 模型推理
 
 
