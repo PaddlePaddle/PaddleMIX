@@ -53,11 +53,16 @@ python torch2paddle.py
 ```bash
 python paddlemix/examples/internlm_xcomposer2/chat_demo.py \
 --model_name_or_path "/home/aistudio/internlm-xcomposer2d5-7b-paddle" \
---image_path "/home/aistudio/internlm-xcomposer2-4bit/logo.png" \
+--image_path "/home/aistudio/internlm-xcomposer2-4bit/panda.jpg" \
 --text "Please describe this image in detail."
 ```
+![图片](https://github.com/user-attachments/assets/bc63f0d6-841e-488d-9557-31b6a88bb294)
 
+**Prompt:**
 
+>please describe the image in detail
+**Result:**
+The image presents a panda bear in its natural habitat, which is characterized by a lush environment with green grass and various plants. The panda's fur is predominantly black with distinctive white patches around its eyes, ears, and shoulders. It stands on all fours, suggesting a moment of rest or observation. The panda's posture is upright, and it appears to be looking downwards, possibly at something of interest on the ground. The blurred background indicates movement, either from the panda itself or from the camera's perspective, adding a dynamic element to the scene. The overall composition of the image captures the essence of the panda's serene yet curious nature within its natural setting.
 
 ### 参考文献
 ```BibTeX
