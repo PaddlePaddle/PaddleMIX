@@ -6,7 +6,7 @@ from tqdm import tqdm
 from transformers import AutoModel, AutoTokenizer
 
 local_model_path = "/home/aistudio/internlm-xcomposer2d5-7b"
-save_dir = "/home/aistudio/internlm-xcomposer2d5-7b-paddle"
+save_dir = "/home/aistudio/internlm-xcomposer2d5-7b_paddle"
 
 def load_full_model(model_path):
     """加载完整模型到CPU内存"""
@@ -69,8 +69,9 @@ def convert_and_save_chunks(torch_state_dict, save_dir, chunk_size=30):
 def merge_chunks(save_dir):
     """合并分块文件（可选）"""
     chunk_files = sorted(
-        [f for f in os.listdir(save_dir) if f.startswith("model_part_")],
-        key=lambda x: int(x.split("_")[2].split(".")[0])
+    [f for f in os.listdir(save_dir) if f.startswith("model_part_")], 
+    key=lambda x: int(x.split("_")[2].split(".")[0]) 
+)
     
     full_state_dict = {}
     for fname in tqdm(chunk_files, desc="合并分块"):
