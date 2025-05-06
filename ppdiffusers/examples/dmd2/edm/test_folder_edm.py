@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# code is heavily based on https://github.com/tianweiy/DMD2
+
 import argparse
 import glob
 import json
@@ -73,12 +75,7 @@ def create_generator(checkpoint_path, base_model=None):
 def create_evaluator(detector_url):
     detector_kwargs = dict(return_features=True)
     feature_dim = 2048
-    # with dnnlib.util.open_url(detector_url, verbose=False) as f:
-    # print('dddebug:', detector_url)
-    # with open_url(detector_url, verbose=False) as f:
-    #     detector_net = pickle.load(f)
-
-    # detector_net.eval()
+    
     from scripts.fid_clip_score.inception import InceptionV3
 
     block_idx = InceptionV3.BLOCK_INDEX_BY_DIM[feature_dim]

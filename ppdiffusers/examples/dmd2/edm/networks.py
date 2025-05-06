@@ -5,6 +5,8 @@
 # You should have received a copy of the license along with this
 # work. If not, see http://creativecommons.org/licenses/by-nc-sa/4.0/
 
+# code is heavily based on https://github.com/tianweiy/DMD2
+
 """Model architectures and preconditioning schemes used in the paper
 "Elucidating the Design Space of Diffusion-Based Generative Models"."""
 
@@ -45,11 +47,6 @@ class Linear(paddle.nn.Layer):
     def forward(self, x):
         out = F.linear(x=x, weight=self.weight.cast(dtype=x.dtype).T, bias=self.bias, name=None)
         return out
-        # x = x @ self.weight.to(dtype=x.dtype).T
-        # if self.bias is not None:
-        #     x = x.add_(self.bias.to(dtype=x.dtype))
-        # return x
-
 
 # ----------------------------------------------------------------------------
 # Convolutional layer with optional up/downsampling.

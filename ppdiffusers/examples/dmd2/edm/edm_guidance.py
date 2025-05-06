@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# code is heavily based on https://github.com/tianweiy/DMD2
+
 import copy
 import glob
 import hashlib

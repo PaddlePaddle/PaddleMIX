@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# code is heavily based on https://github.com/tianweiy/DMD2
+
 import argparse
 import time
 
@@ -54,8 +56,10 @@ def create_generator(checkpoint_path, base_model=None):
 
     while True:
         try:
-            # state_dict = paddle.load(checkpoint_path, map_location="cpu")
-            state_dict = load_file(checkpoint_path)
+            try:
+                state_dict = load_file(checkpoint_path)
+            except:
+                state_dict = paddle.load(checkpoint_path)
             break
         except Exception as e:
             print(f"fail to load checkpoint {checkpoint_path}", e)

@@ -12,18 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# code is heavily based on https://github.com/tianweiy/DMD2
+
 import matplotlib
 
 matplotlib.use("Agg")
 
-import argparse
-import logging
 import os
-import shutil
 import time
+import wandb
+import shutil
+import logging
+import argparse
 
 import paddle
-import wandb
 from data.lmdb_dataset import LMDBDataset
 from edm.edm_unified_model import EDMUniModel
 from utils import (
@@ -131,7 +133,6 @@ class Trainer:
         self.scheduler_guidance = get_scheduler(
             "constant_with_warmup",
             learning_rate=args.guidance_lr,
-            # optimizer=self.optimizer_guidance,
             num_warmup_steps=args.warmup_step,
             num_training_steps=args.train_iters,
         )
@@ -139,7 +140,6 @@ class Trainer:
         self.scheduler_generator = get_scheduler(
             "constant_with_warmup",
             learning_rate=args.generator_lr,
-            # optimizer=self.optimizer_generator,
             num_warmup_steps=args.warmup_step,
             num_training_steps=args.train_iters,
         )
