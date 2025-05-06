@@ -142,7 +142,7 @@ PaddleMIX支持在NPU硬件上进行训练：
 ```shell
 export FLAGS_use_stride_kernel=0
 export FLAGS_npu_storage_format=0 # 关闭私有格式
-export FLAGS_npu_jit_compile=0 # 关闭即时编译
+export FLAGS_npu_jit_compile=1 # 打开即时编译
 export FLAGS_npu_scale_aclnn=True # aclnn加速
 export FLAGS_npu_split_aclnn=True # aclnn加速
 export CUSTOM_DEVICE_BLACK_LIST=set_value,set_value_with_tensor # set_value加入黑名单
