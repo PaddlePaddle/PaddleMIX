@@ -156,12 +156,10 @@ python paddlemix/examples/llava/run_predict_multiround.py \
     --fp16
 ```
 微调:
+因显存限制, NPU硬件(910B)上微调时仅支持使用lora微调方式
 ```shell
 # llava lora微调
 python paddlemix/examples/llava/supervised_finetune.py paddlemix/config/llava/v1_5/lora_sft_argument.json
-
-# llava full参数微调
-python paddlemix/examples/llava/supervised_finetune.py paddlemix/config/llava/v1_5/sft_argument.json
 ```
 注意: PaddleMIX 3.0以上版本LLaVA模型NPU训练推理需对应安装3.0.0b4以上版本PaddleNLP
 
