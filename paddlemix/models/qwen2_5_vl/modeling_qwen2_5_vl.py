@@ -36,6 +36,7 @@ from paddlemix.models.qwen2_vl.bert_padding import (
     pad_input,
     unpad_input,
 )
+from paddlemix.utils.tools import get_env_device
 from ppdiffusers.utils import logging
 
 from ...activations import ACT2FN
@@ -727,9 +728,14 @@ class Qwen2MLP(nn.Layer):
                 has_bias=False,
             )
         else:
-            self.gate_proj = Linear(self.hidden_size, self.intermediate_size, bias_attr=False)  # w1
-            self.up_proj = Linear(self.hidden_size, self.intermediate_size, bias_attr=False)  # w3
-            self.down_proj = Linear(self.intermediate_size, self.hidden_size, bias_attr=False)  # w2
+            if get_env_device() == "xpu":
+                self.gate_proj = nn.Linear(self.hidden_size, self.intermediate_size, bias_attr=False)  # w1
+                self.up_proj = nn.Linear(self.hidden_size, self.intermediate_size, bias_attr=False)  # w3
+                self.down_proj = nn.Linear(self.intermediate_size, self.hidden_size, bias_attr=False)  # w2
+            else:
+                self.gate_proj = Linear(self.hidden_size, self.intermediate_size, bias_attr=False)  # w1
+                self.up_proj = Linear(self.hidden_size, self.intermediate_size, bias_attr=False)  # w3
+                self.down_proj = Linear(self.intermediate_size, self.hidden_size, bias_attr=False)  # w2
 
         self.act_fn = ACT2FN[config.hidden_act]
         self.fuse_swiglu = False
