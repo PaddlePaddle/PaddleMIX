@@ -52,7 +52,6 @@ sh build_env.sh
 ## 3. 在线体验和部署
 
 ### 3.1 在线体验
-https://github.com/user-attachments/assets/8e74c364-6d65-4930-b873-6fd5df263d9a
 
 我们提供了在线体验环境，您可以通过[AI Studio](https://aistudio.baidu.com/application/detail/60135)快速体验 PP-DocBee-V2 的功能。
 
