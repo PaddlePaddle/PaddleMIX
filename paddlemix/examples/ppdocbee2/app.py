@@ -304,7 +304,7 @@ def handle_image_upload(image):
 with gr.Blocks() as demo:
     gr.Markdown(
         value="""
-    # 🤖 PP-DocBee(2B): Multimodal Document Understanding Demo
+    # 🤖 PP-DocBee-V2(3B): Multimodal Document Understanding Demo
 
     📚 原始模型来自 [PaddleMIX](https://github.com/PaddlePaddle/PaddleMIX)  （🌟 一个基于飞桨PaddlePaddle框架构建的多模态大模型套件）
     """
