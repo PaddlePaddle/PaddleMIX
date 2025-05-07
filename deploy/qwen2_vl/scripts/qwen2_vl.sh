@@ -33,7 +33,7 @@ python deploy/qwen2_vl/single_image_infer.py\
     --append_attn True \
     --inference_model True \
     --llm_mode static \
-    --dtype bfloat16 \
+    --dtype float16 \
     --output_via_mq False \
     --benchmark True
 
