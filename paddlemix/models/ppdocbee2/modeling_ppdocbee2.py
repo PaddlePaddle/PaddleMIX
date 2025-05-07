@@ -21,6 +21,7 @@ from ..qwen2_5_vl.modeling_qwen2_5_vl import Qwen2_5_VLForConditionalGeneration
 from ..qwen2_5_vl.modeling_qwen2_5_vl import Qwen2_5_VisionTransformerPretrainedModel
 
 class PPDocBee2TransformerPretrainedModel(Qwen2_5_VisionTransformerPretrainedModel):
+    layer_idx = 15
     def forward(self, hidden_states: paddle.Tensor, grid_thw: paddle.Tensor) -> paddle.Tensor:
         """
         Args:
@@ -69,8 +70,8 @@ class PPDocBee2TransformerPretrainedModel(Qwen2_5_VisionTransformerPretrainedMod
             else:
                 hidden_states = blk(hidden_states, cu_seqlens=cu_seqlens_now, rotary_pos_emb=rotary_pos_emb)
 
-            multi_vit.append(hidden_states.clone())
-        layer_idx = 15
+            multi_vit.append(hidden_states)
+        layer_idx = type(self).layer_idx 
         hidden_states = self.merger(hidden_states + multi_vit[layer_idx])
         reverse_indices = paddle.argsort(x=window_index)
         hidden_states = hidden_states[reverse_indices, :]
