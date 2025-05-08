@@ -27,7 +27,6 @@ import paddle
 import paddle.distributed as dist
 import paddle.nn as nn
 import paddle.nn.functional as F
-from paddle.distributed.auto_parallel.local_layer import LocalLayer
 from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
 from paddle.distributed.fleet.utils import recompute
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
@@ -1217,17 +1216,6 @@ class Qwen2VisionTransformerPretrainedModel(Qwen2VLPreTrainedModel):
         return self.merger(hidden_states)
 
 
-class ReplaceImageMask(LocalLayer):
-    def __init__(self, config, out_dist_attrs, grad_dist_attrs):
-        super().__init__(out_dist_attrs=out_dist_attrs, grad_dist_attrs=grad_dist_attrs)
-
-    def forward(
-        self, image_mask: paddle.Tensor, inputs_embeds: paddle.Tensor, image_embeds: paddle.Tensor
-    ) -> paddle.Tensor:
-        inputs_embeds[image_mask] = image_embeds
-        return inputs_embeds
-
-
 class Qwen2VLModel(Qwen2VLPreTrainedModel):
     def __init__(self, config: Qwen2VLConfig):
         super().__init__(config)
@@ -1501,9 +1489,11 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
             mesh = mesh.get_mesh_with_dim("pp")[0]
         placement_rr = [dist.Replicate(), dist.Replicate()]
         placement_sr = [dist.Shard(0), dist.Replicate()]
-        out_dist_attrs = [(mesh, placement_sr)]
-        grad_dist_attrs = [(mesh, placement_sr), (mesh, placement_sr), (mesh, placement_rr)]
-        self.replace_image_mask = ReplaceImageMask(config, out_dist_attrs, grad_dist_attrs)
+        out_dist_attrs = [placement_sr]
+        grad_dist_attrs = [placement_sr, placement_sr, placement_rr]
+        self.replace_image_mask = dist.local_map(
+            self.replace_image_mask_compute, out_dist_attrs, grad_dist_attrs, mesh
+        )
         self.model = Qwen2VLModel(config)
         self.vocab_size = config.vocab_size
 
@@ -1515,6 +1505,12 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
         self.padding_side = "left"  # set it to left by default, user can use setter to change padding_sides
         # Initialize weights and apply final processing
         # self.post_init()
+
+    def replace_image_mask_compute(
+        self, image_mask: paddle.Tensor, inputs_embeds: paddle.Tensor, image_embeds: paddle.Tensor
+    ):
+        inputs_embeds[image_mask] = image_embeds
+        return inputs_embeds
 
     def get_input_embeddings(self):
         return self.model.embed_tokens
