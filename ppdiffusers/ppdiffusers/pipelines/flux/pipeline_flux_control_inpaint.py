@@ -57,32 +57,30 @@ logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 EXAMPLE_DOC_STRING = """
     Examples:
         ```py
-        import torch
-        from diffusers import FluxControlInpaintPipeline
-        from diffusers.models.transformers import FluxTransformer2DModel
-        from transformers import T5EncoderModel
-        from diffusers.utils import load_image, make_image_grid
+        import paddle
+        from ppdiffusers import FluxControlInpaintPipeline
+        from ppdiffusers.models.transformers import FluxTransformer2DModel
+        from paddlenlp.transformers import T5EncoderModel
+        from ppdiffusers.utils import load_image, make_image_grid
         from image_gen_aux import DepthPreprocessor  # https://github.com/huggingface/image_gen_aux
         from PIL import Image
         import numpy as np
 
         pipe = FluxControlInpaintPipeline.from_pretrained(
             "black-forest-labs/FLUX.1-Depth-dev",
-            torch_dtype=torch.bfloat16,
+            paddle_dtype=paddle.bfloat16,
         )
         # use following lines if you have GPU constraints
         # ---------------------------------------------------------------
         transformer = FluxTransformer2DModel.from_pretrained(
-            "sayakpaul/FLUX.1-Depth-dev-nf4", subfolder="transformer", torch_dtype=torch.bfloat16
+            "sayakpaul/FLUX.1-Depth-dev-nf4", subfolder="transformer", paddle_dtype=paddle.bfloat16
         )
         text_encoder_2 = T5EncoderModel.from_pretrained(
-            "sayakpaul/FLUX.1-Depth-dev-nf4", subfolder="text_encoder_2", torch_dtype=torch.bfloat16
+            "sayakpaul/FLUX.1-Depth-dev-nf4", subfolder="text_encoder_2", paddle_dtype=paddle.bfloat16
         )
         pipe.transformer = transformer
         pipe.text_encoder_2 = text_encoder_2
-        pipe.enable_model_cpu_offload()
         # ---------------------------------------------------------------
-        pipe.to("cuda")
 
         prompt = "a blue robot singing opera with human-like expressions"
         image = load_image("https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/robot.png")
@@ -102,7 +100,7 @@ EXAMPLE_DOC_STRING = """
             num_inference_steps=30,
             strength=0.9,
             guidance_scale=10.0,
-            generator=torch.Generator().manual_seed(42),
+            generator=paddle.Generator().manual_seed(42),
         ).images[0]
         make_image_grid([image, control_image, mask_image, output.resize(image.size)], rows=1, cols=4).save(
             "output.png"
@@ -165,7 +163,7 @@ def retrieve_timesteps(
             `num_inference_steps` and `timesteps` must be `None`.
 
     Returns:
-        `Tuple[torch.Tensor, int]`: A tuple where the first element is the timestep schedule from the scheduler and the
+        `Tuple[paddle.Tensor, int]`: A tuple where the first element is the timestep schedule from the scheduler and the
         second element is the number of inference steps.
     """
     if timesteps is not None and sigmas is not None:
@@ -784,28 +782,28 @@ class FluxControlInpaintPipeline(
             prompt_2 (`str` or `List[str]`, *optional*):
                 The prompt or prompts to be sent to `tokenizer_2` and `text_encoder_2`. If not defined, `prompt` is
                 will be used instead
-            image (`torch.Tensor`, `PIL.Image.Image`, `np.ndarray`, `List[torch.Tensor]`, `List[PIL.Image.Image]`, or `List[np.ndarray]`):
+            image (`paddle.Tensor`, `PIL.Image.Image`, `np.ndarray`, `List[paddle.Tensor]`, `List[PIL.Image.Image]`, or `List[np.ndarray]`):
                 `Image`, numpy array or tensor representing an image batch to be used as the starting point. For both
-                numpy array and pytorch tensor, the expected value range is between `[0, 1]` If it's a tensor or a list
+                numpy array and tensor, the expected value range is between `[0, 1]` If it's a tensor or a list
                 or tensors, the expected shape should be `(B, C, H, W)` or `(C, H, W)`. If it is a numpy array or a
                 list of arrays, the expected shape should be `(B, H, W, C)` or `(H, W, C)` It can also accept image
                 latents as `image`, but if passing latents directly it is not encoded again.
-            control_image (`torch.Tensor`, `PIL.Image.Image`, `np.ndarray`, `List[torch.Tensor]`, `List[PIL.Image.Image]`, `List[np.ndarray]`,:
-                    `List[List[torch.Tensor]]`, `List[List[np.ndarray]]` or `List[List[PIL.Image.Image]]`):
+            control_image (`paddle.Tensor`, `PIL.Image.Image`, `np.ndarray`, `List[paddle.Tensor]`, `List[PIL.Image.Image]`, `List[np.ndarray]`,:
+                    `List[List[paddle.Tensor]]`, `List[List[np.ndarray]]` or `List[List[PIL.Image.Image]]`):
                 The ControlNet input condition to provide guidance to the `unet` for generation. If the type is
-                specified as `torch.Tensor`, it is passed to ControlNet as is. `PIL.Image.Image` can also be accepted
+                specified as `paddle.Tensor`, it is passed to ControlNet as is. `PIL.Image.Image` can also be accepted
                 as an image. The dimensions of the output image defaults to `image`'s dimensions. If height and/or
                 width are passed, `image` is resized accordingly. If multiple ControlNets are specified in `init`,
                 images must be passed as a list such that each element of the list can be correctly batched for input
                 to a single ControlNet.
-            mask_image (`torch.Tensor`, `PIL.Image.Image`, `np.ndarray`, `List[torch.Tensor]`, `List[PIL.Image.Image]`, or `List[np.ndarray]`):
+            mask_image (`paddle.Tensor`, `PIL.Image.Image`, `np.ndarray`, `List[paddle.Tensor]`, `List[PIL.Image.Image]`, or `List[np.ndarray]`):
                 `Image`, numpy array or tensor representing an image batch to mask `image`. White pixels in the mask
                 are repainted while black pixels are preserved. If `mask_image` is a PIL image, it is converted to a
-                single channel (luminance) before use. If it's a numpy array or pytorch tensor, it should contain one
-                color channel (L) instead of 3, so the expected shape for pytorch tensor would be `(B, 1, H, W)`, `(B,
+                single channel (luminance) before use. If it's a numpy array or tensor, it should contain one
+                color channel (L) instead of 3, so the expected shape for tensor would be `(B, 1, H, W)`, `(B,
                 H, W)`, `(1, H, W)`, `(H, W)`. And for numpy array would be for `(B, H, W, 1)`, `(B, H, W)`, `(H, W,
                 1)`, or `(H, W)`.
-            mask_image_latent (`torch.Tensor`, `List[torch.Tensor]`):
+            mask_image_latent (`paddle.Tensor`, `List[paddle.Tensor]`):
                 `Tensor` representing an image batch to mask `image` generated by VAE. If not provided, the mask
                 latents tensor will ge generated by `mask_image`.
             height (`int`, *optional*, defaults to self.unet.config.sample_size * self.vae_scale_factor):
@@ -833,17 +831,17 @@ class FluxControlInpaintPipeline(
                 usually at the expense of lower image quality.
             num_images_per_prompt (`int`, *optional*, defaults to 1):
                 The number of images to generate per prompt.
-            generator (`torch.Generator` or `List[torch.Generator]`, *optional*):
-                One or a list of [torch generator(s)](https://pytorch.org/docs/stable/generated/torch.Generator.html)
+            generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
+                One or a list of paddle generator(s)
                 to make generation deterministic.
-            latents (`torch.FloatTensor`, *optional*):
+            latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents, sampled from a Gaussian distribution, to be used as inputs for image
                 generation. Can be used to tweak the same generation with different prompts. If not provided, a latents
                 tensor will ge generated by sampling using the supplied random `generator`.
-            prompt_embeds (`torch.FloatTensor`, *optional*):
+            prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt weighting. If not
                 provided, text embeddings will be generated from `prompt` input argument.
-            pooled_prompt_embeds (`torch.FloatTensor`, *optional*):
+            pooled_prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated pooled text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt weighting.
                 If not provided, pooled text embeddings will be generated from `prompt` input argument.
             output_type (`str`, *optional*, defaults to `"pil"`):

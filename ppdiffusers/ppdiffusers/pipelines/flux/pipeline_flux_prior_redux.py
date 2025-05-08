@@ -52,18 +52,17 @@ logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 EXAMPLE_DOC_STRING = """
     Examples:
         ```py
-        >>> import torch
-        >>> from diffusers import FluxPriorReduxPipeline, FluxPipeline
-        >>> from diffusers.utils import load_image
+        >>> import paddle
+        >>> from ppdiffusers import FluxPriorReduxPipeline, FluxPipeline
+        >>> from ppdiffusers.utils import load_image
 
-        >>> device = "cuda"
-        >>> dtype = torch.bfloat16
+        >>> dtype = paddle.bfloat16
 
         >>> repo_redux = "black-forest-labs/FLUX.1-Redux-dev"
         >>> repo_base = "black-forest-labs/FLUX.1-dev"
-        >>> pipe_prior_redux = FluxPriorReduxPipeline.from_pretrained(repo_redux, torch_dtype=dtype).to(device)
+        >>> pipe_prior_redux = FluxPriorReduxPipeline.from_pretrained(repo_redux, paddle_dtype=dtype)
         >>> pipe = FluxPipeline.from_pretrained(
-        ...     repo_base, text_encoder=None, text_encoder_2=None, torch_dtype=torch.bfloat16
+        ...     repo_base, text_encoder=None, text_encoder_2=None, paddle_dtype=paddle.bfloat16
         ... ).to(device)
 
         >>> image = load_image(
@@ -73,7 +72,7 @@ EXAMPLE_DOC_STRING = """
         >>> images = pipe(
         ...     guidance_scale=2.5,
         ...     num_inference_steps=50,
-        ...     generator=torch.Generator("cpu").manual_seed(0),
+        ...     generator=paddle.Generator().manual_seed(0),
         ...     **pipe_prior_output,
         ... ).images
         >>> images[0].save("flux-redux.png")
@@ -362,9 +361,9 @@ class FluxPriorReduxPipeline(DiffusionPipeline):
         Function invoked when calling the pipeline for generation.
 
         Args:
-            image (`torch.Tensor`, `PIL.Image.Image`, `np.ndarray`, `List[torch.Tensor]`, `List[PIL.Image.Image]`, or `List[np.ndarray]`):
+            image (`paddle.Tensor`, `PIL.Image.Image`, `np.ndarray`, `List[paddle.Tensor]`, `List[PIL.Image.Image]`, or `List[np.ndarray]`):
                 `Image`, numpy array or tensor representing an image batch to be used as the starting point. For both
-                numpy array and pytorch tensor, the expected value range is between `[0, 1]` If it's a tensor or a list
+                numpy array and tensor, the expected value range is between `[0, 1]` If it's a tensor or a list
                 or tensors, the expected shape should be `(B, C, H, W)` or `(C, H, W)`. If it is a numpy array or a
                 list of arrays, the expected shape should be `(B, H, W, C)` or `(H, W, C)`
             prompt (`str` or `List[str]`, *optional*):
@@ -373,9 +372,9 @@ class FluxPriorReduxPipeline(DiffusionPipeline):
                 are not loaded.
             prompt_2 (`str` or `List[str]`, *optional*):
                 The prompt or prompts to be sent to the `tokenizer_2` and `text_encoder_2`.
-            prompt_embeds (`torch.FloatTensor`, *optional*):
+            prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt weighting.
-            pooled_prompt_embeds (`torch.FloatTensor`, *optional*):
+            pooled_prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated pooled text embeddings.
             return_dict (`bool`, *optional*, defaults to `True`):
                 Whether or not to return a [`~pipelines.flux.FluxPriorReduxPipelineOutput`] instead of a plain tuple.
