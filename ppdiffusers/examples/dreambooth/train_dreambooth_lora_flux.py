@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding=utf-8
 # Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
-# Copyright 2024 The HuggingFace Inc. team. All rights reserved.
+# Copyright 2025 The HuggingFace Inc. team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ import warnings
 import contextlib
 from contextlib import nullcontext
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
 import paddle
@@ -51,8 +52,8 @@ import ppdiffusers
 from ppdiffusers import (
     AutoencoderKL,
     FlowMatchEulerDiscreteScheduler,
-    SD3Transformer2DModel,
-    StableDiffusion3Pipeline,
+    FluxPipeline,
+    FluxTransformer2DModel,
 )
 from ppdiffusers.optimization import get_scheduler
 from ppdiffusers.training_utils import cast_training_params
@@ -77,6 +78,49 @@ from typing import Tuple
 
 import paddle
 from PIL import Image
+
+def compute_loss_weighting_for_sd3(weighting_scheme: str, sigmas=None):
+    """
+    Computes loss weighting scheme for SD3 training.
+
+    Courtesy: This was contributed by Rafie Walker in https://github.com/huggingface/diffusers/pull/8528.
+
+    SD3 paper reference: https://arxiv.org/abs/2403.03206v1.
+    """
+    if weighting_scheme == "sigma_sqrt":
+        weighting = (sigmas**-2.0).float()
+    elif weighting_scheme == "cosmap":
+        bot = 1 - 2 * sigmas + 2 * sigmas**2
+        weighting = 2 / (math.pi * bot)
+    else:
+        weighting = paddle.ones_like(sigmas)
+    return weighting
+
+def compute_density_for_timestep_sampling(
+    weighting_scheme: str,
+    batch_size: int,
+    logit_mean: float = None,
+    logit_std: float = None,
+    mode_scale: float = None,
+    generator: Optional[paddle.Generator] = None,
+):
+    """
+    Compute the density for sampling the timesteps when doing SD3 training.
+
+    Courtesy: This was contributed by Rafie Walker in https://github.com/huggingface/diffusers/pull/8528.
+
+    SD3 paper reference: https://arxiv.org/abs/2403.03206v1.
+    """
+    if weighting_scheme == "logit_normal":
+        u = paddle.normal(mean=logit_mean, std=logit_std, shape=(batch_size,))
+        u = paddle.nn.functional.sigmoid(u)
+    elif weighting_scheme == "mode":
+        u = paddle.rand(shape=(batch_size,))
+        u = 1 - u - mode_scale * (paddle.cos(math.pi * u / 2) ** 2 - 1 + u)
+    else:
+        u = paddle.rand(shape=(batch_size,))
+    return u
+
 
 def get_params(img, output_size):
     """Get parameters for ``crop`` for a random crop in PaddlePaddle.
@@ -108,17 +152,14 @@ def get_params(img, output_size):
     j = paddle.randint(0, w - tw + 1).item()
     return i, j, th, tw
 
-def load_text_encoders(class_one, class_two, class_three):
+def load_text_encoders(class_one, class_two):
     text_encoder_one = class_one.from_pretrained(
         args.pretrained_model_name_or_path, subfolder="text_encoder", revision=args.revision, variant=args.variant
     )
     text_encoder_two = class_two.from_pretrained(
         args.pretrained_model_name_or_path, subfolder="text_encoder_2", revision=args.revision, variant=args.variant
     )
-    text_encoder_three = class_three.from_pretrained(
-        args.pretrained_model_name_or_path, subfolder="text_encoder_3", revision=args.revision, variant=args.variant
-    )
-    return text_encoder_one, text_encoder_two, text_encoder_three
+    return text_encoder_one, text_encoder_two
 
 
 def log_validation(
@@ -172,10 +213,10 @@ def import_model_class_from_model_name_or_path(
         pretrained_model_name_or_path, subfolder=subfolder, revision=revision
     )
     model_class = text_encoder_config.architectures[0]
-    if model_class == "CLIPTextModelWithProjection":
-        from ppdiffusers.transformers import CLIPTextModelWithProjection
+    if model_class == "CLIPTextModel":
+        from ppdiffusers.transformers import CLIPTextModel
 
-        return CLIPTextModelWithProjection
+        return CLIPTextModel
     elif model_class == "T5EncoderModel":
         from ppdiffusers.transformers import T5EncoderModel
 
@@ -274,6 +315,12 @@ def parse_args(input_args=None):
         help="The prompt to specify images in the same class as provided instance images.",
     )
     parser.add_argument(
+        "--max_sequence_length",
+        type=int,
+        default=77,
+        help="Maximum sequence length to use with with the T5 text encoder",
+    )
+    parser.add_argument(
         "--validation_prompt",
         type=str,
         default=None,
@@ -325,7 +372,7 @@ def parse_args(input_args=None):
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="sd3-dreambooth",
+        default="flux-dreambooth-lora",
         help="The output directory where the model predictions and checkpoints will be written.",
     )
     parser.add_argument("--seed", type=int, default=None, help="A seed for reproducible training.")
@@ -351,6 +398,11 @@ def parse_args(input_args=None):
         "--random_flip",
         action="store_true",
         help="whether to randomly flip images horizontally",
+    )
+    parser.add_argument(
+        "--train_text_encoder",
+        action="store_true",
+        help="Whether to train the text encoder. If set, the text encoder should be float32 precision.",
     )
     parser.add_argument(
         "--train_batch_size", type=int, default=4, help="Batch size (per device) for the training dataloader."
@@ -407,7 +459,12 @@ def parse_args(input_args=None):
         default=1e-4,
         help="Initial learning rate (after the potential warmup period) to use.",
     )
-
+    parser.add_argument(
+        "--guidance_scale",
+        type=float,
+        default=3.5,
+        help="the FLUX.1 dev variant is a guidance distilled model",
+    )
     parser.add_argument(
         "--text_encoder_lr",
         type=float,
@@ -448,7 +505,11 @@ def parse_args(input_args=None):
         ),
     )
     parser.add_argument(
-        "--weighting_scheme", type=str, default="sigma_sqrt", choices=["sigma_sqrt", "logit_normal", "mode"]
+        "--weighting_scheme",
+        type=str,
+        default="none",
+        choices=["sigma_sqrt", "logit_normal", "mode", "cosmap", "none"],
+        help=('We default to the "none" weighting scheme for uniform sampling and uniform loss'),
     )
     parser.add_argument("--logit_mean", type=float, default=0.0)
     parser.add_argument("--logit_std", type=float, default=1.0)
@@ -476,7 +537,14 @@ def parse_args(input_args=None):
     parser.add_argument(
         "--adam_weight_decay_text_encoder", type=float, default=1e-03, help="Weight decay to use for text_encoder"
     )
-
+    parser.add_argument(
+        "--lora_layers",
+        type=str,
+        default=None,
+        help=(
+            'The transformer modules to apply LoRA training on. Please specify the layers in a comma seperated. E.g. - "to_k,to_q,to_v,to_out.0" will result in lora training of attention layers only'
+        ),
+    )
     parser.add_argument(
         "--adam_epsilon",
         type=float,
@@ -500,6 +568,12 @@ def parse_args(input_args=None):
             "[TensorBoard](https://www.tensorflow.org/tensorboard) log directory. Will default to"
             " *output_dir/runs/**CURRENT_DATETIME_HOSTNAME***."
         ),
+    )
+    parser.add_argument(
+        "--cache_latents",
+        action="store_true",
+        default=False,
+        help="Cache the VAE latents",
     )
     parser.add_argument(
         "--report_to",
@@ -764,12 +838,14 @@ class PromptDataset(Dataset):
         return example
 
 
-def tokenize_prompt(tokenizer, prompt):
+def tokenize_prompt(tokenizer, prompt, max_sequence_length):
     text_inputs = tokenizer(
         prompt,
         padding="max_length",
-        max_length=77,
+        max_length=max_sequence_length,
         truncation=True,
+        return_length=False,
+        return_overflowing_tokens=False,
         return_tensors="pd",
     )
     text_input_ids = text_inputs.input_ids
@@ -779,22 +855,29 @@ def tokenize_prompt(tokenizer, prompt):
 def _encode_prompt_with_t5(
     text_encoder,
     tokenizer,
+    max_sequence_length=512,
     prompt=None,
     num_images_per_prompt=1,
-    device=None,
+    text_input_ids=None,
 ):
     prompt = [prompt] if isinstance(prompt, str) else prompt
     batch_size = len(prompt)
 
-    text_inputs = tokenizer(
-        prompt,
-        padding="max_length",
-        max_length=77,
-        truncation=True,
-        add_special_tokens=True,
-        return_tensors="pd",
-    )
-    text_input_ids = text_inputs.input_ids
+    if tokenizer is not None:
+        text_inputs = tokenizer(
+            prompt,
+            padding="max_length",
+            max_length=max_sequence_length,
+            truncation=True,
+            return_length=False,
+            return_overflowing_tokens=False,
+            return_tensors="pd",
+        )
+        text_input_ids = text_inputs.input_ids
+    else:
+        if text_input_ids is None:
+            raise ValueError("text_input_ids must be provided when the tokenizer is not specified")
+
     prompt_embeds = text_encoder(text_input_ids)[0]
 
     dtype = text_encoder.dtype
@@ -813,75 +896,72 @@ def _encode_prompt_with_clip(
     text_encoder,
     tokenizer,
     prompt: str,
-    device=None,
+    text_input_ids=None,
     num_images_per_prompt: int = 1,
 ):
     prompt = [prompt] if isinstance(prompt, str) else prompt
     batch_size = len(prompt)
 
-    text_inputs = tokenizer(
-        prompt,
-        padding="max_length",
-        max_length=77,
-        truncation=True,
-        return_tensors="pd",
-    )
+    if tokenizer is not None:
+        text_inputs = tokenizer(
+            prompt,
+            padding="max_length",
+            max_length=77,
+            truncation=True,
+            return_overflowing_tokens=False,
+            return_length=False,
+            return_tensors="pd",
+        )
+        text_input_ids = text_inputs.input_ids
+    else:
+        if text_input_ids is None:
+            raise ValueError("text_input_ids must be provided when the tokenizer is not specified")
 
-    text_input_ids = text_inputs.input_ids
-    prompt_embeds = text_encoder(text_input_ids, output_hidden_states=True)
+    prompt_embeds = text_encoder(text_input_ids, output_hidden_states=False)
 
-    pooled_prompt_embeds = prompt_embeds[0]
-    prompt_embeds = prompt_embeds.hidden_states[-2]
+    # Use pooled output of CLIPTextModel
+    prompt_embeds = prompt_embeds.pooler_output
     prompt_embeds = prompt_embeds.astype(dtype=text_encoder.dtype)
 
-    _, seq_len, _ = prompt_embeds.shape
     # duplicate text embeddings for each generation per prompt, using mps friendly method
     prompt_embeds = prompt_embeds.tile([1, num_images_per_prompt, 1])
-    prompt_embeds = prompt_embeds.reshape([batch_size * num_images_per_prompt, seq_len, -1])
+    prompt_embeds = prompt_embeds.reshape([batch_size * num_images_per_prompt, -1])
 
-    return prompt_embeds, pooled_prompt_embeds
+    return prompt_embeds
 
 
 def encode_prompt(
     text_encoders,
     tokenizers,
     prompt: str,
-    device=None,
+    max_sequence_length,
     num_images_per_prompt: int = 1,
+    text_input_ids_list=None,
 ):
     prompt = [prompt] if isinstance(prompt, str) else prompt
+    dtype = text_encoders[0].dtype
 
-    clip_tokenizers = tokenizers[:2]
-    clip_text_encoders = text_encoders[:2]
-
-    clip_prompt_embeds_list = []
-    clip_pooled_prompt_embeds_list = []
-    for tokenizer, text_encoder in zip(clip_tokenizers, clip_text_encoders):
-        prompt_embeds, pooled_prompt_embeds = _encode_prompt_with_clip(
-            text_encoder=text_encoder,
-            tokenizer=tokenizer,
-            prompt=prompt,
-            num_images_per_prompt=num_images_per_prompt,
-        )
-        clip_prompt_embeds_list.append(prompt_embeds)
-        clip_pooled_prompt_embeds_list.append(pooled_prompt_embeds)
-
-    clip_prompt_embeds = paddle.concat(clip_prompt_embeds_list, axis=-1)
-    pooled_prompt_embeds = paddle.concat(clip_pooled_prompt_embeds_list, axis=-1)
-
-    t5_prompt_embed = _encode_prompt_with_t5(
-        text_encoders[-1],
-        tokenizers[-1],
+    pooled_prompt_embeds = _encode_prompt_with_clip(
+        text_encoder=text_encoders[0],
+        tokenizer=tokenizers[0],
         prompt=prompt,
         num_images_per_prompt=num_images_per_prompt,
+        text_input_ids=text_input_ids_list[0] if text_input_ids_list else None,
     )
 
-    clip_prompt_embeds = paddle.nn.functional.pad(
-        clip_prompt_embeds, (0, t5_prompt_embed.shape[-1] - clip_prompt_embeds.shape[-1]), data_format='NCL',
+    prompt_embeds = _encode_prompt_with_t5(
+        text_encoder=text_encoders[1],
+        tokenizer=tokenizers[1],
+        max_sequence_length=max_sequence_length,
+        prompt=prompt,
+        num_images_per_prompt=num_images_per_prompt,
+        text_input_ids=text_input_ids_list[1] if text_input_ids_list else None,
     )
-    prompt_embeds = paddle.concat([clip_prompt_embeds, t5_prompt_embed], axis=-2)
 
-    return prompt_embeds, pooled_prompt_embeds
+    text_ids = paddle.zeros([prompt_embeds.shape[1], 3]).astype(dtype=dtype)
+
+    return prompt_embeds, pooled_prompt_embeds, text_ids
+
 
 
 def main(args):
@@ -939,7 +1019,7 @@ def main(args):
                 paddle_dtype = paddle.float16
             elif args.prior_generation_precision == "bf16":
                 paddle_dtype = paddle.bfloat16
-            pipeline = StableDiffusion3Pipeline.from_pretrained(
+            pipeline = FluxPipeline.from_pretrained(
                 args.pretrained_model_name_or_path,
                 paddle_dtype=paddle_dtype,
                 revision=args.revision,
@@ -982,14 +1062,9 @@ def main(args):
         subfolder="tokenizer",
         revision=args.revision,
     )
-    tokenizer_two = CLIPTokenizer.from_pretrained(
+    tokenizer_two = T5Tokenizer.from_pretrained(
         args.pretrained_model_name_or_path,
         subfolder="tokenizer_2",
-        revision=args.revision,
-    )
-    tokenizer_three = T5Tokenizer.from_pretrained(
-        args.pretrained_model_name_or_path,
-        subfolder="tokenizer_3",
         revision=args.revision,
     )
 
@@ -1000,25 +1075,21 @@ def main(args):
     text_encoder_cls_two = import_model_class_from_model_name_or_path(
         args.pretrained_model_name_or_path, args.revision, subfolder="text_encoder_2"
     )
-    text_encoder_cls_three = import_model_class_from_model_name_or_path(
-        args.pretrained_model_name_or_path, args.revision, subfolder="text_encoder_3"
-    )
 
     # Load scheduler and models
     noise_scheduler = FlowMatchEulerDiscreteScheduler.from_pretrained(
         args.pretrained_model_name_or_path, subfolder="scheduler"
     )
     noise_scheduler_copy = copy.deepcopy(noise_scheduler)
-    text_encoder_one, text_encoder_two, text_encoder_three = load_text_encoders(
-        text_encoder_cls_one, text_encoder_cls_two, text_encoder_cls_three
-    )
+    text_encoder_one, text_encoder_two = load_text_encoders(text_encoder_cls_one, text_encoder_cls_two)
+
     vae = AutoencoderKL.from_pretrained(
         args.pretrained_model_name_or_path,
         subfolder="vae",
         revision=args.revision,
         variant=args.variant,
     )
-    transformer = SD3Transformer2DModel.from_pretrained(
+    transformer = FluxTransformer2DModel.from_pretrained(
         args.pretrained_model_name_or_path, subfolder="transformer", revision=args.revision, variant=args.variant
     )
 
@@ -1031,9 +1102,8 @@ def main(args):
     set_requires_grad(vae, False)
     set_requires_grad(text_encoder_one, False)
     set_requires_grad(text_encoder_two, False)
-    set_requires_grad(text_encoder_three, False)
 
-    # For mixed precision training we cast all non-trainable weights (vae, non-lora text_encoder and non-lora transformer) to half-precision
+    # For mixed precision training we cast all non-trainable weights (vae, text_encoder and transformer) to half-precision
     # as these weights are only used for inference, keeping weights in full precision is not required.
     weight_dtype = paddle.float32
     if accelerator.mixed_precision == "fp16":
@@ -1041,23 +1111,51 @@ def main(args):
     elif accelerator.mixed_precision == "bf16":
         weight_dtype = paddle.bfloat16
 
-    # vae.to(dtype=paddle.float32)
+    vae.to(dtype=weight_dtype)
     transformer.to(dtype=weight_dtype)
     text_encoder_one.to(dtype=weight_dtype)
     text_encoder_two.to(dtype=weight_dtype)
-    text_encoder_three.to(dtype=weight_dtype)
 
     if args.gradient_checkpointing:
         transformer.enable_gradient_checkpointing()
+        if args.train_text_encoder:
+            text_encoder_one.gradient_checkpointing_enable()
+
+    if args.lora_layers is not None:
+        target_modules = [layer.strip() for layer in args.lora_layers.split(",")]
+    else:
+        target_modules = [
+            "attn.to_k",
+            "attn.to_q",
+            "attn.to_v",
+            "attn.to_out.0",
+            "attn.add_k_proj",
+            "attn.add_q_proj",
+            "attn.add_v_proj",
+            "attn.to_add_out",
+            "ff.net.0.proj",
+            "ff.net.2",
+            "ff_context.net.0.proj",
+            "ff_context.net.2",
+        ]
 
     # now we will add new LoRA weights to the attention layers
     transformer_lora_config = LoraConfig(
         r=args.rank,
         lora_alpha=args.rank,
         init_lora_weights="gaussian",
-        target_modules=["to_k", "to_q", "to_v", "to_out.0"],
+        target_modules=target_modules,
     )
     transformer.add_adapter(transformer_lora_config)
+
+    if args.train_text_encoder:
+        text_lora_config = LoraConfig(
+            r=args.rank,
+            lora_alpha=args.rank,
+            init_lora_weights="gaussian",
+            target_modules=["q_proj", "k_proj", "v_proj", "out_proj"],
+        )
+        text_encoder_one.add_adapter(text_lora_config)
 
     def unwrap_model(model):
         model = accelerator.unwrap_model(model)
@@ -1067,35 +1165,43 @@ def main(args):
     def save_model_hook(models, weights, output_dir):
         if accelerator.is_main_process:
             transformer_lora_layers_to_save = None
+            text_encoder_one_lora_layers_to_save = None
 
             for model in models:
                 if isinstance(model, type(unwrap_model(transformer))):
                     transformer_lora_layers_to_save = get_peft_model_state_dict(model)
+                elif isinstance(model, type(unwrap_model(text_encoder_one))):
+                    text_encoder_one_lora_layers_to_save = get_peft_model_state_dict(model)
                 else:
                     raise ValueError(f"unexpected save model: {model.__class__}")
 
                 # make sure to pop weight so that corresponding model is not saved again
                 weights.pop()
 
-            StableDiffusion3Pipeline.save_lora_weights(
-                output_dir, transformer_lora_layers=transformer_lora_layers_to_save
+            FluxPipeline.save_lora_weights(
+                output_dir, 
+                transformer_lora_layers=transformer_lora_layers_to_save,
+                text_encoder_lora_layers=text_encoder_one_lora_layers_to_save,
             )
 
     def load_model_hook(models, input_dir):
         transformer_ = None
+        text_encoder_one_ = None
 
         while len(models) > 0:
             model = models.pop()
 
             if isinstance(model, type(unwrap_model(transformer))):
                 transformer_ = model
+            elif isinstance(model, type(unwrap_model(text_encoder_one))):
+                text_encoder_one_ = model
             else:
                 raise ValueError(f"unexpected save model: {model.__class__}")
 
-        lora_state_dict = StableDiffusion3Pipeline.lora_state_dict(input_dir)
+        lora_state_dict = FluxPipeline.lora_state_dict(input_dir)
 
         transformer_state_dict = {
-            f'{k.replace("transformer.", "")}': v for k, v in lora_state_dict.items() if k.startswith("unet.")
+            f'{k.replace("transformer.", "")}': v for k, v in lora_state_dict.items() if k.startswith("transformer.")
         }
         transformer_state_dict = convert_unet_state_dict_to_peft(transformer_state_dict)
         incompatible_keys = set_peft_model_state_dict(transformer_, transformer_state_dict, adapter_name="default")
@@ -1107,12 +1213,17 @@ def main(args):
                     f"Loading adapter weights from state_dict led to unexpected keys not found in the model: "
                     f" {unexpected_keys}. "
                 )
+        if args.train_text_encoder:
+            # Do we need to call `scale_lora_layers()` here?
+            _set_state_dict_into_text_encoder(lora_state_dict, prefix="text_encoder.", text_encoder=text_encoder_one_)
 
         # Make sure the trainable params are in float32. This is again needed since the base models
         # are in `weight_dtype`. More details:
         # https://github.com/huggingface/diffusers/pull/6514#discussion_r1449796804
         if args.mixed_precision == "fp16":
             models = [transformer_]
+            if args.train_text_encoder:
+                models.extend([text_encoder_one_])
             # only upcast trainable parameters (LoRA) into fp32
             # cast_training_params(models)
 
@@ -1127,17 +1238,29 @@ def main(args):
     # Make sure the trainable params are in float32.
     if args.mixed_precision == "fp16":
         models = [transformer]
+        if args.train_text_encoder:
+            models.extend([text_encoder_one])
         # only upcast trainable parameters (LoRA) into fp32
         # cast_training_params(models, dtype=paddle.float32)
 
     transformer_lora_parameters = list(filter(lambda p: p.requires_grad, transformer.parameters()))
+    if args.train_text_encoder:
+        text_lora_parameters_one = list(filter(lambda p: p.requires_grad, text_encoder_one.parameters()))
 
     # Optimization parameters
     transformer_parameters_with_lr = {"params": transformer_lora_parameters, "lr": args.learning_rate}
-    params_to_optimize = [transformer_parameters_with_lr]
+    if args.train_text_encoder:
+        # different learning rate for text encoder and unet
+        text_parameters_one_with_lr = {
+            "params": text_lora_parameters_one,
+            "weight_decay": args.adam_weight_decay_text_encoder,
+            "lr": args.text_encoder_lr if args.text_encoder_lr else args.learning_rate,
+        }
+        params_to_optimize = [transformer_parameters_with_lr, text_parameters_one_with_lr]
+    else:
+        params_to_optimize = [transformer_parameters_with_lr]
 
     # Optimizer creation
-
     if args.optimizer.lower() == "adamw":
         if args.use_8bit_adam:
             raise Exception("8-bit Adam not supported yet. Please use the default AdamW optimizer instead.")
@@ -1175,55 +1298,82 @@ def main(args):
         num_workers=args.dataloader_num_workers,
     )
 
-    tokenizers = [tokenizer_one, tokenizer_two, tokenizer_three]
-    text_encoders = [text_encoder_one, text_encoder_two, text_encoder_three]
+    if not args.train_text_encoder:
+        tokenizers = [tokenizer_one, tokenizer_two]
+        text_encoders = [text_encoder_one, text_encoder_two]
 
-    def compute_text_embeddings(prompt, text_encoders, tokenizers):
-        with paddle.no_grad():
-            prompt_embeds, pooled_prompt_embeds = encode_prompt(text_encoders, tokenizers, prompt)
-        return prompt_embeds, pooled_prompt_embeds
+        def compute_text_embeddings(prompt, text_encoders, tokenizers):
+            with paddle.no_grad():
+                prompt_embeds, pooled_prompt_embeds, text_ids = encode_prompt(
+                    text_encoders, tokenizers, prompt, args.max_sequence_length
+                )
+                prompt_embeds = prompt_embeds
+                pooled_prompt_embeds = pooled_prompt_embeds
+            return prompt_embeds, pooled_prompt_embeds, text_ids
 
-    if not train_dataset.custom_instance_prompts:
-        instance_prompt_hidden_states, instance_pooled_prompt_embeds = compute_text_embeddings(
+    # If no type of tuning is done on the text_encoder and custom instance prompts are NOT
+    # provided (i.e. the --instance_prompt is used for all images), we encode the instance prompt once to avoid
+    # the redundant encoding.
+    if not args.train_text_encoder and not train_dataset.custom_instance_prompts:
+        instance_prompt_hidden_states, instance_pooled_prompt_embeds, instance_text_ids = compute_text_embeddings(
             args.instance_prompt, text_encoders, tokenizers
         )
 
     # Handle class prompt for prior-preservation.
     if args.with_prior_preservation:
-        class_prompt_hidden_states, class_pooled_prompt_embeds = compute_text_embeddings(
-            args.class_prompt, text_encoders, tokenizers
-        )
+        if not args.train_text_encoder:
+            class_prompt_hidden_states, class_pooled_prompt_embeds, class_text_ids = compute_text_embeddings(
+                args.class_prompt, text_encoders, tokenizers
+            )
 
     # Clear the memory here
-    if not train_dataset.custom_instance_prompts:
-        del tokenizers, text_encoders
+    if not args.train_text_encoder and not train_dataset.custom_instance_prompts:
+        del text_encoder_one, text_encoder_two, tokenizer_one, tokenizer_two
         gc.collect()
         paddle.device.cuda.empty_cache()
-
 
     # If custom instance prompts are NOT provided (i.e. the instance prompt is used for all images),
     # pack the statically computed variables appropriately here. This is so that we don't
     # have to pass them to the dataloader.
 
     if not train_dataset.custom_instance_prompts:
-        prompt_embeds = instance_prompt_hidden_states
-        pooled_prompt_embeds = instance_pooled_prompt_embeds
-        if args.with_prior_preservation:
-            prompt_embeds = paddle.concat([prompt_embeds, class_prompt_hidden_states], axis=0)
-            pooled_prompt_embeds = paddle.concat([pooled_prompt_embeds, class_pooled_prompt_embeds], axis=0)
+        if not args.train_text_encoder:
+            prompt_embeds = instance_prompt_hidden_states
+            pooled_prompt_embeds = instance_pooled_prompt_embeds
+            text_ids = instance_text_ids
+            if args.with_prior_preservation:
+                prompt_embeds = paddle.concat([prompt_embeds, class_prompt_hidden_states], axis=0)
+                pooled_prompt_embeds = paddle.concat([pooled_prompt_embeds, class_pooled_prompt_embeds], axis=0)
+                text_ids = paddle.concat([text_ids, class_text_ids], axis=0)
         # if we're optimizing the text encoder (both if instance prompt is used for all images or custom prompts) we need to tokenize and encode the
         # batch prompts on all training steps
         else:
-            tokens_one = tokenize_prompt(tokenizer_one, args.instance_prompt)
-            tokens_two = tokenize_prompt(tokenizer_two, args.instance_prompt)
-            tokens_three = tokenize_prompt(tokenizer_three, args.instance_prompt)
+            tokens_one = tokenize_prompt(tokenizer_one, args.instance_prompt, max_sequence_length=77)
+            tokens_two = tokenize_prompt(
+                tokenizer_two, args.instance_prompt, max_sequence_length=args.max_sequence_length
+            )
             if args.with_prior_preservation:
-                class_tokens_one = tokenize_prompt(tokenizer_one, args.class_prompt)
-                class_tokens_two = tokenize_prompt(tokenizer_two, args.class_prompt)
-                class_tokens_three = tokenize_prompt(tokenizer_three, args.class_prompt)
+                class_tokens_one = tokenize_prompt(tokenizer_one, args.class_prompt, max_sequence_length=77)
+                class_tokens_two = tokenize_prompt(
+                    tokenizer_two, args.class_prompt, max_sequence_length=args.max_sequence_length
+                )
                 tokens_one = paddle.concat([tokens_one, class_tokens_one], axis=0)
                 tokens_two = paddle.concat([tokens_two, class_tokens_two], axis=0)
-                tokens_three = paddle.concat([tokens_three, class_tokens_three], axis=0)
+
+    vae_config_shift_factor = vae.config.shift_factor
+    vae_config_scaling_factor = vae.config.scaling_factor
+    vae_config_block_out_channels = vae.config.block_out_channels
+    if args.cache_latents:
+        latents_cache = []
+        for batch in tqdm(train_dataloader, desc="Caching latents"):
+            with paddle.no_grad():
+                batch["pixel_values"] = batch["pixel_values"].astype(dtype=weight_dtype)
+                latents_cache.append(vae.encode(batch["pixel_values"]).latent_dist)
+
+        if args.validation_prompt is None:
+            del vae
+            gc.collect()
+            paddle.device.cuda.empty_cache()
 
     # Scheduler and math around the number of training steps.
     overrode_max_train_steps = False
@@ -1257,7 +1407,7 @@ def main(args):
     # We need to initialize the trackers we use, and also store our configuration.
     # The trackers initializes automatically on the main process.
     if accelerator.is_main_process:
-        tracker_name = "dreambooth-sd3-lora"
+        tracker_name = "dreambooth-flux-dev-lora"
         accelerator.init_trackers(tracker_name, config=vars(args))
 
     # Train!
@@ -1324,9 +1474,12 @@ def main(args):
     # add amp
     if args.mixed_precision in ['fp16', 'bf16']:
         scaler = paddle.amp.GradScaler(init_loss_scaling=1024)
-        transformer = paddle.amp.decorate(models=transformer.to(dtype=paddle.float32), level="O2")
+        transformer = paddle.amp.decorate(models=transformer.to(dtype=paddle.float32), level="O2", dtype="bfloat16" if args.mixed_precision == 'bf16' else "float16")
     for epoch in range(first_epoch, args.num_train_epochs):
         transformer.train()
+        if args.train_text_encoder:
+            text_encoder_one.train()
+            set_requires_grad(text_encoder_one, True)
 
         for step, batch in enumerate(train_dataloader):
             # westfish: ppdiffusers.accelerate dont support accumulate yet. AttributeError: 'UNet2DConditionModel' object has no attribute 'do_gradient_checkpointing'
@@ -1337,60 +1490,118 @@ def main(args):
                 yield
 
             with null_context():
-                pixel_values = batch["pixel_values"].to(dtype=vae.dtype)
                 prompts = batch["prompts"]
 
                 # encode batch prompts when custom prompts are provided for each image -
                 if train_dataset.custom_instance_prompts:
-                    prompt_embeds, pooled_prompt_embeds = compute_text_embeddings(prompts, text_encoders, tokenizers)
+                    if not args.train_text_encoder:
+                        prompt_embeds, pooled_prompt_embeds, text_ids = compute_text_embeddings(prompts, text_encoders, tokenizers)
+                    else:
+                        tokens_one = tokenize_prompt(tokenizer_one, prompts, max_sequence_length=77)
+                        tokens_two = tokenize_prompt(
+                            tokenizer_two, prompts, max_sequence_length=args.max_sequence_length
+                        )
+                        prompt_embeds, pooled_prompt_embeds, text_ids = encode_prompt(
+                            text_encoders=[text_encoder_one, text_encoder_two],
+                            tokenizers=[None, None],
+                            text_input_ids_list=[tokens_one, tokens_two],
+                            max_sequence_length=args.max_sequence_length,
+                            prompt=prompts,
+                        )
+                else:
+                    elems_to_repeat = len(prompts)
+                    if args.train_text_encoder:
+                        prompt_embeds, pooled_prompt_embeds, text_ids = encode_prompt(
+                            text_encoders=[text_encoder_one, text_encoder_two],
+                            tokenizers=[None, None],
+                            text_input_ids_list=[
+                                tokens_one.tile([elems_to_repeat, 1]),
+                                tokens_two.tile([elems_to_repeat, 1]),
+                            ],
+                            max_sequence_length=args.max_sequence_length,
+                            prompt=args.instance_prompt,
+                        )
 
                 # Convert images to latent space
-                model_input = vae.encode(pixel_values).latent_dist.sample()
-                model_input = model_input * vae.config.scaling_factor
-                model_input = model_input.to(dtype=weight_dtype)
+                if args.cache_latents:
+                    model_input = latents_cache[step].sample()
+                else:
+                    pixel_values = batch["pixel_values"].astype(dtype=vae.dtype)
+                    model_input = vae.encode(pixel_values).latent_dist.sample()
+
+                model_input = (model_input - vae_config_shift_factor) * vae_config_scaling_factor
+                model_input = model_input.astype(dtype=weight_dtype)
+
+                vae_scale_factor = 2 ** (len(vae_config_block_out_channels) - 1)
+
+                latent_image_ids = FluxPipeline._prepare_latent_image_ids(
+                    model_input.shape[0],
+                    model_input.shape[2] // 2,
+                    model_input.shape[3] // 2,
+                    weight_dtype,
+                )
 
                 # Sample noise that we'll add to the latents
                 noise = paddle.randn(shape=model_input.shape, dtype=model_input.dtype)
                 bsz = model_input.shape[0]
 
                 # Sample a random timestep for each image
-                indices = paddle.randint(0, noise_scheduler_copy.config.num_train_timesteps, (bsz,))
+                u = compute_density_for_timestep_sampling(
+                    weighting_scheme=args.weighting_scheme,
+                    batch_size=bsz,
+                    logit_mean=args.logit_mean,
+                    logit_std=args.logit_std,
+                    mode_scale=args.mode_scale,
+                )
+                indices = (u * noise_scheduler_copy.config.num_train_timesteps).astype(paddle.int64)
                 timesteps = noise_scheduler_copy.timesteps[indices]
 
                 # Add noise according to flow matching.
                 sigmas = get_sigmas(timesteps, n_dim=model_input.ndim, dtype=model_input.dtype)
-                noisy_model_input = sigmas * noise + (1.0 - sigmas) * model_input
+                noisy_model_input = (1.0 - sigmas) * model_input + sigmas * noise
+
+                packed_noisy_model_input = FluxPipeline._pack_latents(
+                    noisy_model_input,
+                    batch_size=model_input.shape[0],
+                    num_channels_latents=model_input.shape[1],
+                    height=model_input.shape[2],
+                    width=model_input.shape[3],
+                )
+
+                # handle guidance
+                if accelerator.unwrap_model(transformer).config.guidance_embeds:
+                    guidance = paddle.to_tensor([args.guidance_scale])
+                    guidance = guidance.expand(model_input.shape[0])
+                else:
+                    guidance = None
 
                 # Predict the noise residual
                 # westfish: add amp
-                with paddle.amp.auto_cast(enable=args.mixed_precision in ['fp16', 'bf16'], custom_white_list=None, custom_black_list=None, level="O2", dtype='float16' if args.mixed_precision == 'fp16' else 'bfloat16'):
+                with paddle.amp.auto_cast(enable=args.mixed_precision in ['fp16', 'bf16'], custom_white_list=["lookup_table", "lookup_table_v2"], custom_black_list=["reduce_sum", "c_softmax_with_cross_entropy"], level="O2", dtype='float16' if args.mixed_precision == 'fp16' else 'bfloat16'):
                     model_pred = transformer(
-                        hidden_states=noisy_model_input,
-                        timestep=timesteps,
-                        encoder_hidden_states=prompt_embeds,
+                        hidden_states=packed_noisy_model_input,
+                        # YiYi notes: divide it by 1000 for now because we scale it by 1000 in the transforme rmodel (we should not keep it but I want to keep the inputs same for the model for testing)
+                        timestep=timesteps / 1000,
+                        guidance=guidance,
                         pooled_projections=pooled_prompt_embeds,
+                        encoder_hidden_states=prompt_embeds,
+                        txt_ids=text_ids,
+                        img_ids=latent_image_ids,
                         return_dict=False,
                     )[0]
+                    model_pred = FluxPipeline._unpack_latents(
+                        model_pred,
+                        height=model_input.shape[2] * vae_scale_factor,
+                        width=model_input.shape[3] * vae_scale_factor,
+                        vae_scale_factor=vae_scale_factor,
+                    )
 
-                # Follow: Section 5 of https://arxiv.org/abs/2206.00364.
-                # Preconditioning of the model outputs.
-                model_pred = model_pred * (-sigmas) + noisy_model_input
+                # these weighting schemes use a uniform timestep sampling
+                # and instead post-weight the loss
+                weighting = compute_loss_weighting_for_sd3(weighting_scheme=args.weighting_scheme, sigmas=sigmas)
 
-                # TODO (kashif, sayakpaul): weighting scheme needs to be experimented with :)
-                if args.weighting_scheme == "sigma_sqrt":
-                    weighting = (sigmas**-2.0).cast(paddle.float32)
-                elif args.weighting_scheme == "logit_normal":
-                    # See 3.1 in the SD3 paper ($rf/lognorm(0.00,1.00)$).
-                    u = paddle.normal(mean=args.logit_mean, std=args.logit_std, size=(bsz,))
-                    weighting = paddle.nn.functional.sigmoid(u)
-                elif args.weighting_scheme == "mode":
-                    # See sec 3.1 in the SD3 paper (20).
-                    u = paddle.rand(size=(bsz,))
-                    weighting = 1 - u - args.mode_scale * (paddle.cos(math.pi * u / 2) ** 2 - 1 + u)
-
-                # simplified flow matching aka 0-rectified flow matching loss
-                # target = model_input - noise
-                target = model_input
+                # flow matching loss
+                target = noise - model_input
 
                 if args.with_prior_preservation:
                     # Chunk the noise and model_pred into two parts and compute the loss on each part separately.
@@ -1459,28 +1670,24 @@ def main(args):
                                     shutil.rmtree(removing_checkpoint)
 
                         save_path = os.path.join(args.output_dir, f"checkpoint-{global_step}")
-                        # westfish: save_state substitute
-                        # accelerator.save_state(save_path)
-                        models = []
-                        models.append(copy.deepcopy(transformer))
-                        weights = []
 
-                        def get_state_dict(model):
-                            state_dict = model.state_dict()
-                            if state_dict is not None:
-                                for k in state_dict:
-                                    if getattr(state_dict[k], "dtype", None) == paddle.float16:
-                                        state_dict[k] = state_dict[k]._to(dtype="float32")
+                        def save_checkpoint(transformer, save_path, fp32_on_cpu=True):
+                            state_dict = transformer.state_dict()
 
-                            return state_dict
+                            if fp32_on_cpu:
+                                cpu_state = {}
+                                for k, v in state_dict.items():
+                                    t = v.cpu()                     
+                                    if t.dtype == paddle.float16:
+                                        t = t.cast('float32')       
+                                    cpu_state[k] = t
+                                paddle.save(cpu_state, save_path)
+                            else:
+                                paddle.save(state_dict, save_path)
 
-                        for i, model in enumerate(models):
-                            weights.append(get_state_dict(model))
-                        save_model_hook(models, weights, save_path)
-                        del models, weights
-                        for _ in range(3):
-                            gc.collect()
+                        save_checkpoint(transformer, save_path, fp32_on_cpu=True)
                         paddle.device.cuda.empty_cache()
+
                         logger.info(f"Saved state to {save_path}")
 
             logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_lr()}
@@ -1493,15 +1700,15 @@ def main(args):
         if accelerator.is_main_process:
             if args.validation_prompt is not None and epoch % args.validation_epochs == 0:
                 # create pipeline
-                text_encoder_one, text_encoder_two, text_encoder_three = load_text_encoders(
-                    text_encoder_cls_one, text_encoder_cls_two, text_encoder_cls_three
-                )
-                pipeline = StableDiffusion3Pipeline.from_pretrained(
+                if not args.train_text_encoder:
+                    text_encoder_one, text_encoder_two = load_text_encoders(text_encoder_cls_one, text_encoder_cls_two)
+                    text_encoder_one.to(dtype=weight_dtype)
+                    text_encoder_two.to(dtype=weight_dtype)
+                pipeline = FluxPipeline.from_pretrained(
                     args.pretrained_model_name_or_path,
                     vae=vae,
                     text_encoder=accelerator.unwrap_model(text_encoder_one),
                     text_encoder_2=accelerator.unwrap_model(text_encoder_two),
-                    text_encoder_3=accelerator.unwrap_model(text_encoder_three),
                     transformer=accelerator.unwrap_model(transformer),
                     revision=args.revision,
                     variant=args.variant,
@@ -1515,10 +1722,13 @@ def main(args):
                     pipeline_args=pipeline_args,
                     epoch=epoch,
                 )
-                del text_encoder_one, text_encoder_two, text_encoder_three
-                gc.collect()
-                paddle.device.cuda.empty_cache()
+                if not args.train_text_encoder:
+                    del text_encoder_one, text_encoder_two
+                    gc.collect()
+                    paddle.device.cuda.empty_cache()
                 
+                images = None
+                del pipeline
         if global_step >= args.max_train_steps:
             break
 
@@ -1526,24 +1736,17 @@ def main(args):
     accelerator.wait_for_everyone()
     if accelerator.is_main_process:
         transformer = unwrap_model(transformer)
-        transformer = transformer.to(dtype=paddle.float32)
+        transformer = transformer.to(dtype=weight_dtype)
         transformer_lora_layers = get_peft_model_state_dict(transformer)
 
-        StableDiffusion3Pipeline.save_lora_weights(
+        FluxPipeline.save_lora_weights(
             save_directory=args.output_dir, transformer_lora_layers=transformer_lora_layers
         )
 
         if not args.not_validation_final:
-            pipeline = StableDiffusion3Pipeline.from_pretrained(
-                args.pretrained_model_name_or_path,
-                revision=args.revision,
-                variant=args.variant,
-                paddle_dtype=weight_dtype,
-            )
-
             # Final inference
             # Load previous pipeline
-            pipeline = StableDiffusion3Pipeline.from_pretrained(
+            pipeline = FluxPipeline.from_pretrained(
                 args.pretrained_model_name_or_path,
                 revision=args.revision,
                 variant=args.variant,

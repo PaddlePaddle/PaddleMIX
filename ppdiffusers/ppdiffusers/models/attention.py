@@ -19,7 +19,7 @@ from paddle import nn
 
 from ..utils import USE_PEFT_BACKEND
 from ..utils.paddle_utils import maybe_allow_in_graph
-from .activations import GEGLU, GELU, ApproximateGELU
+from .activations import GEGLU, GELU, ApproximateGELU, LinearActivation
 from .attention_processor import Attention, JointAttnProcessor2_5
 from .embeddings import SinusoidalPositionalEmbedding
 from .lora import LoRACompatibleLinear
@@ -705,6 +705,8 @@ class FeedForward(nn.Layer):
             act_fn = GEGLU(dim, inner_dim, bias=bias)
         elif activation_fn == "geglu-approximate":
             act_fn = ApproximateGELU(dim, inner_dim, bias=bias)
+        elif activation_fn == "linear-silu":
+            act_fn = LinearActivation(dim, inner_dim, bias=bias, activation="silu")
 
         self.net = nn.LayerList([])
         # project in
