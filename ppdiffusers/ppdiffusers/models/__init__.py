@@ -27,6 +27,7 @@ if is_paddle_available():
     _import_structure["autoencoder_kl_wan"] = ["AutoencoderKLWan"]
     _import_structure["autoencoder_kl_temporal_decoder"] = ["AutoencoderKLTemporalDecoder"]
     _import_structure["autoencoder_tiny"] = ["AutoencoderTiny"]
+    _import_structure["cache_utils"] = ["CacheMixin"]
     _import_structure["consistency_decoder_vae"] = ["ConsistencyDecoderVAE"]
     _import_structure["controlnet"] = ["ControlNetModel"]
     _import_structure["dual_transformer_2d"] = ["DualTransformer2DModel"]

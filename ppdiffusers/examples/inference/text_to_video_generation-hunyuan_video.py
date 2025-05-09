@@ -29,7 +29,10 @@ pipe = HunyuanVideoPipeline.from_pretrained(
     transformer = transformer,
     text_encoder = text_encoder,
     tokenizer = tokenizer,
-    paddle_dtype=paddle.float16)
+    paddle_dtype=paddle.float16,
+    map_location="cpu")
+pipe.vae.enable_tiling()
+pipe.vae.enable_slicing()
 prompt = 'A cat walks on the grass, realistic.'
 output = pipe(
     prompt=prompt,

@@ -99,7 +99,8 @@ def convert_paddle_state_dict_to_pytorch(self: nn.Layer, pd_state_dict):
         if is_torch_available():
             if pd_tensor.dtype in ["uint16", np.uint16]:
                 pd_tensor = pd_tensor.astype(np.float32)
-                pd_state_dict[pd_key] = torch.from_numpy(pd_tensor).to(torch.bfloat16)
+                pd_state_dict[pd_key] = torch.from_numpy(pd_tensor).to(paddle.bfloat16
+)
             else:
                 pd_state_dict[pd_key] = torch.from_numpy(pd_tensor)
         else:
