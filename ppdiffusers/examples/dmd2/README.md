@@ -179,17 +179,5 @@ python -u sdxl/test_sdxl_single_ckpt.py  \
 这里提供了一个预训练好的[模型](https://paddlenlp.bj.bcebos.com/models/community/ppdiffusers/dmd2/sdxl_cond999_8node_lr5e-5_denoising4step_diffusion1000_gan5e-3_guidance8_noinit_noode_backsim_scratch_lora.pdparams)
 
 
-## reference
-@inproceedings{yin2024improved,
-    title={Improved Distribution Matching Distillation for Fast Image Synthesis},
-    author={Yin, Tianwei and Gharbi, Micha{\"e}l and Park, Taesung and Zhang, Richard and Shechtman, Eli and Durand, Fredo and Freeman, William T},
-    booktitle={NeurIPS},
-    year={2024}
-}
-
-@inproceedings{yin2024onestep,
-    title={One-step Diffusion with Distribution Matching Distillation},
-    author={Yin, Tianwei and Gharbi, Micha{\"e}l and Zhang, Richard and Shechtman, Eli and Durand, Fr{\'e}do and Freeman, William T and Park, Taesung},
-    booktitle={CVPR},
-    year={2024}
-}
+## 参考
+- https://github.com/tianweiy/DMD2
