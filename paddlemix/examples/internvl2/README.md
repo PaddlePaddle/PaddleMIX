@@ -31,6 +31,7 @@
 | OpenGVLab/InternVL2-8B-MPO |
 | OpenGVLab/InternVL2-26B |
 | OpenGVLab/InternVL2-40B |
+| OpenGVLab/InternVL2-Llama3-76B |
 | OpenGVLab/InternVL2_5-1B  |
 | OpenGVLab/InternVL2_5-1B-MPO  |
 | OpenGVLab/InternVL2_5-2B  |
@@ -39,6 +40,19 @@
 | OpenGVLab/InternVL2_5-4B-MPO  |
 | OpenGVLab/InternVL2_5-8B  |
 | OpenGVLab/InternVL2_5-8B-MPO  |
+| OpenGVLab/InternVL2_5-26B  |
+| OpenGVLab/InternVL2_5-26B-MPO  |
+| OpenGVLab/InternVL2_5-38B  |
+| OpenGVLab/InternVL2_5-38B-MPO  |
+| OpenGVLab/InternVL2_5-78B  |
+| OpenGVLab/InternVL2_5-78B-MPO  |
+| OpenGVLab/InternVL3-1B  |
+| OpenGVLab/InternVL3-2B  |
+| OpenGVLab/InternVL3-8B  |
+| OpenGVLab/InternVL3-9B  |
+| OpenGVLab/InternVL3-14B  |
+| OpenGVLab/InternVL3-38B  |
+| OpenGVLab/InternVL3-78B  |
 
 注意：与huggingface权重同名，但权重为paddle框架的Tensor，使用`xxx.from_pretrained("OpenGVLab/InternVL2-2B")`即可自动下载该权重文件夹到缓存目录。
 

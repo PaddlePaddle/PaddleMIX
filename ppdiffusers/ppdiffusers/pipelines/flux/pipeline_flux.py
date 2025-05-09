@@ -27,11 +27,13 @@ from  ppdiffusers.transformers import ( # T5TokenizerFast,
 )
 
 from ...image_processor import PipelineImageInput, VaeImageProcessor
+from ...loaders import FluxLoraLoaderMixin
 from ...loaders import FromSingleFileMixin, TextualInversionLoaderMixin # FluxIPAdapterMixin, FluxLoraLoaderMixin
 from ...models.autoencoder_kl import AutoencoderKL
 from ...models.transformer_flux import FluxTransformer2DModel
 from ...schedulers import FlowMatchEulerDiscreteScheduler
 from ...utils import (
+    USE_PEFT_BACKEND,
     logging,
     replace_example_docstring,
     scale_lora_layers,
@@ -140,6 +142,7 @@ class FluxPipeline(
     DiffusionPipeline,
     FromSingleFileMixin,
     TextualInversionLoaderMixin,
+    FluxLoraLoaderMixin,
 ):
     r"""
     The Flux pipeline for text-to-image generation.
@@ -327,9 +330,8 @@ class FluxPipeline(
         """
         # set lora scale so that monkey patched LoRA
         # function of text encoder can correctly access it
-        # TODO
-        # if lora_scale is not None and isinstance(self, FluxLoraLoaderMixin):
-        #     self._lora_scale = lora_scale
+        if lora_scale is not None and isinstance(self, FluxLoraLoaderMixin):
+            self._lora_scale = lora_scale
 
         prompt = [prompt] if isinstance(prompt, str) else prompt
 
@@ -347,6 +349,17 @@ class FluxPipeline(
                 num_images_per_prompt=num_images_per_prompt,
                 max_sequence_length=max_sequence_length,
             )
+
+
+        if self.text_encoder is not None:
+            if isinstance(self, FluxLoraLoaderMixin) and USE_PEFT_BACKEND:
+                # Retrieve the original scale by scaling back the LoRA layers
+                unscale_lora_layers(self.text_encoder, lora_scale)
+
+        if self.text_encoder_2 is not None:
+            if isinstance(self, FluxLoraLoaderMixin) and USE_PEFT_BACKEND:
+                # Retrieve the original scale by scaling back the LoRA layers
+                unscale_lora_layers(self.text_encoder_2, lora_scale)
 
         dtype = self.text_encoder.dtype if self.text_encoder is not None else self.transformer.dtype
         text_ids = paddle.zeros([prompt_embeds.shape[1], 3]).astype(dtype=dtype)
@@ -488,7 +501,7 @@ class FluxPipeline(
     @staticmethod
     def _pack_latents(latents, batch_size, num_channels_latents, height, width):
         latents = latents.reshape([batch_size, num_channels_latents, height // 2, 2, width // 2, 2])
-        latents = latents.permute(0, 2, 4, 1, 3, 5)
+        latents = latents.transpose([0, 2, 4, 1, 3, 5])
         latents = latents.reshape([batch_size, (height // 2) * (width // 2), num_channels_latents * 4])
 
         return latents
@@ -503,7 +516,7 @@ class FluxPipeline(
         width = 2 * (int(width) // (vae_scale_factor * 2))
 
         latents = latents.reshape([batch_size, height // 2, width // 2, channels // 4, 2, 2])
-        latents = latents.permute(0, 3, 1, 4, 2, 5)
+        latents = latents.transpose([0, 3, 1, 4, 2, 5])
 
         latents = latents.reshape([batch_size, channels // (2 * 2), height, width])
 
@@ -651,7 +664,7 @@ class FluxPipeline(
             num_images_per_prompt (`int`, *optional*, defaults to 1):
                 The number of images to generate per prompt.
             generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
-                One or a list of [paddle generator(s)](https://pytorch.org/docs/stable/generated/torch.Generator.html)
+                One or a list of paddle generator(s)
                 to make generation deterministic.
             latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents, sampled from a Gaussian distribution, to be used as inputs for image

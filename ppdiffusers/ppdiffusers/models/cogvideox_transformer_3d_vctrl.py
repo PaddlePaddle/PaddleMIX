@@ -23,6 +23,7 @@ from ppdiffusers.models.attention_processor import (
     CogVideoXAttnProcessor2_0,
     FusedCogVideoXAttnProcessor2_0,
 )
+from ppdiffusers.models.cache_utils import CacheMixin
 from ppdiffusers.models.embeddings import (
     CogVideoXPatchEmbed,
     TimestepEmbedding,
@@ -151,7 +152,7 @@ class CogVideoXBlock(paddle.nn.Layer):
         return hidden_states, encoder_hidden_states
 
 
-class CogVideoXTransformer3DVCtrlModel(ModelMixin, ConfigMixin):
+class CogVideoXTransformer3DVCtrlModel(ModelMixin, ConfigMixin, CacheMixin):
     """
     A Transformer model for video-like data in [CogVideoX](https://github.com/THUDM/CogVideo).
 
