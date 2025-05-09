@@ -5,3 +5,7 @@
 * 前沿多模态模型开发与应用实战第二期：[Qwen2-VL系列多模态理解大模型算法解析与功能抢先体验](./tutorial_2_qwen2-vl.md)
 
 * 前沿多模态模型开发与应用实战第三期：[DeepSeek-VL2多模态理解大模型算法解析与功能抢先体验](./tutorial_3_deepseek_vl2.md)
+
+* 前沿多模态模型开发与应用实战第四期：[多模态理解趣味应用](./tutorial_4_multimodel_understanding_application.md)
+
+* 前沿多模态模型开发与应用实战第五期：[FLUX文生图大模型算法解析与功能体验](./tutorial_5_flux.md)
