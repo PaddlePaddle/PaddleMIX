@@ -139,9 +139,6 @@ class HunyuanVideoAttnProcessor2_0:
         if attention_mask.dtype == paddle.bool:
             L, S = query.shape[-2], key.shape[-2]
             attention_mask_tmp = paddle.zeros([1,1,L, S], dtype=query.dtype)
-            # attention_mask_tmp = paddle.zeros_like(attention_mask).to(query.dtype)
-            # attention_mask_tmp[attention_mask==True] = 0
-            # attention_mask_tmp[attention_mask==False] = float("-inf")
             attention_mask_tmp = attention_mask_tmp.masked_fill(attention_mask.logical_not(), float("-inf"))
             attention_mask = attention_mask_tmp
 
@@ -153,17 +150,6 @@ class HunyuanVideoAttnProcessor2_0:
             dropout_p=0.0,
             is_causal=False,
         ).transpose([0,2,1,3])
-        # hidden_states = query
-        # import pdb;pdb.set_trace()
-
-        # hidden_states = scaled_dot_product_attention_paddle(
-        #     query=query,
-        #     key=key,
-        #     value=value,
-        #     attn_mask=attention_mask,
-        #     dropout_p=0.0,
-        #     is_causal=False,
-        # )
 
         hidden_states = hidden_states.transpose(
             perm=dim2perm(hidden_states.ndim, 1, 2)
