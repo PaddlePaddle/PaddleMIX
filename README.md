@@ -39,8 +39,8 @@
 ## 📣最新进展
 
 **🔥2025.05.09 发布PaddleMIX v3.0-beta**
-* 多模态理解：新增Qwen2.5VL系列，DeepSeek-VL2等；发布自研PP-DocBee文档理解多模态大模型，新增Qwen2.5VL高性能推理部署，性能领先vllm 11.5%
-* 多模态生成：发布[PPDiffusers 0.29.1](./ppdiffusers/README.md)版本，发布自研可控视频模型PP-VCtrl，新增对SD3 ControlNet和SD3.5的支持。
+* 多模态理解：新增Qwen2.5VL系列，DeepSeek-VL2等；发布自研[PP-DocBee](./paddlemix/examples/ppdocbee)文档理解多模态大模型，新增[Qwen2.5VL高性能推理部署](deploy/qwen2_5_vl)，性能领先vllm 11.5%
+* 多模态生成：发布[PPDiffusers 0.29.1](./ppdiffusers/README.md)版本，发布自研可控视频模型[PP-VCtrl](./ppdiffusers/examples/ppvctrl/README_CN.md)，新增对SD3 ControlNet和SD3.5的支持。
 
 
 **🎉 2025.01.08 发布自研[PP-VCtrl](./ppdiffusers/examples/ppvctrl/README_CN.md)视频生成控制模型**
