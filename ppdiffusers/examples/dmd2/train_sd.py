@@ -89,10 +89,7 @@ class Trainer:
             os.makedirs(self.wandb_folder, exist_ok=True)
 
         self.model = SDUniModel(args, accelerator)
-        for k, v in self.model.state_dict().items():
-            print(k, v.name)
-        # exit()
-        print("dddebug00", type(self.model))
+
         self.max_grad_norm = args.max_grad_norm
         self.denoising = args.denoising
         self.step = 0
@@ -186,13 +183,12 @@ class Trainer:
             denoising_dataloader = accelerator.prepare(denoising_dataloader)
             self.denoising_dataloader = cycle(denoising_dataloader)
 
-        self.fsdp = args.fsdp
+        self.gsp = args.gsp
 
         # actually this scheduler is not very useful (it warms up from 0 to max_lr in 500 / num_gpu steps), but we keep it here for consistency
         self.scheduler_guidance = get_scheduler(
             "constant_with_warmup",
             learning_rate=args.guidance_lr,
-            # optimizer=self.optimizer_guidance,
             num_warmup_steps=args.warmup_step,
             num_training_steps=args.train_iters,
         )
@@ -200,7 +196,6 @@ class Trainer:
         self.scheduler_generator = get_scheduler(
             "constant_with_warmup",
             learning_rate=args.generator_lr,
-            # optimizer=self.optimizer_generator,
             num_warmup_steps=args.warmup_step,
             num_training_steps=args.train_iters,
         )
@@ -220,7 +215,7 @@ class Trainer:
             weight_decay=0.01,
         )
 
-        if self.fsdp:
+        if self.gsp:
             (self.scheduler_generator, self.scheduler_guidance) = accelerator.prepare(
                 self.scheduler_generator, self.scheduler_guidance
             )
@@ -275,7 +270,7 @@ class Trainer:
             self.load(args.checkpoint_path)
 
     def load(self, checkpoint_path):
-        # this is used for non-fsdp models.
+        # this is used for non-gsp models.
         self.step = int(checkpoint_path.replace("/", "").split("_")[-1])
         print(self.accelerator.load_state(checkpoint_path, strict=False))
         self.accelerator.print(f"Loaded checkpoint from {checkpoint_path}")
@@ -289,7 +284,7 @@ class Trainer:
             os.makedirs(output_path, exist_ok=True)
             print(f"start saving checkpoint to {output_path}")
 
-            if self.fsdp:
+            if self.gsp:
                 paddle.distributed.sharding.save_group_sharded_model(self.model.feedforward_model, output_path)
             else:
                 self.accelerator.save_state(output_path)
@@ -328,9 +323,9 @@ class Trainer:
         # 4 channel for SD-VAE, please adapt for other autoencoders
         noise = paddle.randn(
             [self.batch_size, self.latent_channel, self.latent_resolution, self.latent_resolution],
-        )  # device=accelerator.device)
+        ) 
         visual = self.step % self.wandb_iters == 0
-        # visual = False
+
         COMPUTE_GENERATOR_GRADIENT = self.step % self.dfake_gen_update_ratio == 0
 
         if COMPUTE_GENERATOR_GRADIENT:
@@ -388,14 +383,10 @@ class Trainer:
             )
             # generator_grad_norm = paddle.zeros([1])
             self.optimizer_generator.step()
-            print("Step", self.step, "generator loss:", generator_loss.item())
             # if we also compute gan loss, the classifier may also receive gradient
             # zero out guidance model's gradient avoids undesired gradient accumulation
             self.optimizer_generator.clear_grad()
-            try:
-                self.optimizer_guidance.clear_grad()
-            except Exception as e:
-                print(e)
+            self.optimizer_guidance.clear_grad()
 
         self.scheduler_generator.step()
 
@@ -427,12 +418,11 @@ class Trainer:
         # guidance_grad_norm = paddle.zeros([1])
         self.optimizer_guidance.step()
         self.optimizer_guidance.clear_grad()
-        try:
-            self.optimizer_generator.clear_grad()  # zero out the generator's gradient as well
-        except Exception as e:
-            print(e)
+        # zero out the generator's gradient as well
+        self.optimizer_generator.clear_grad()  
+
         self.scheduler_guidance.step()
-        print("Step", self.step, "guidance_loss loss:", guidance_loss.item())
+
         # combine the two dictionaries
         loss_dict = {**generator_loss_dict, **guidance_loss_dict}
         log_dict = {**generator_log_dict, **guidance_log_dict}
@@ -521,9 +511,6 @@ class Trainer:
                 log_dict["original_clean_image"] = accelerator.gather(log_dict["original_clean_image"])
                 log_dict["denoising_timestep"] = accelerator.gather(log_dict["denoising_timestep"])
 
-            # if self.cls_on_clean_image:
-            #     log_dict['real_image'] = accelerator.gather(real_train_dict['images'])
-
         if accelerator.is_main_process and visual:
             with paddle.no_grad():
                 if not self.args.gan_alone:
@@ -609,19 +596,14 @@ class Trainer:
 
                     pred_realism_on_fake = log_dict["pred_realism_on_fake"]
                     pred_realism_on_real = log_dict["pred_realism_on_real"]
-                    print("pred_realism_on_fake", pred_realism_on_fake.shape)
-                    print("pred_realism_on_real", pred_realism_on_real.shape)
+
                     hist_pred_realism_on_fake = draw_probability_histogram(pred_realism_on_fake.cpu().numpy())
                     hist_pred_realism_on_real = draw_probability_histogram(pred_realism_on_real.cpu().numpy())
-
-                    # real_image = log_dict['real_image']
-                    # real_image_grid = prepare_images_for_saving(real_image, resolution=self.resolution, grid_size=self.grid_size)
 
                     data_dict.update(
                         {
                             "hist_pred_realism_on_fake": wandb.Image(hist_pred_realism_on_fake),
                             "hist_pred_realism_on_real": wandb.Image(hist_pred_realism_on_real),
-                            # "real_image": wandb.Image(real_image_grid)
                         }
                     )
 
@@ -704,14 +686,14 @@ def parse_args():
     parser.add_argument("--gen_cls_loss_weight", type=float, default=0)
     parser.add_argument("--guidance_cls_loss_weight", type=float, default=0)
     parser.add_argument("--sdxl", action="store_true")
-    parser.add_argument("--fsdp", action="store_true")
+    parser.add_argument("--gsp", action="store_true")
     parser.add_argument("--generator_ckpt_path", type=str)
     parser.add_argument("--conditioning_timestep", type=int, default=999)
     parser.add_argument("--tiny_vae", action="store_true")
     parser.add_argument(
         "--gradient_checkpointing",
         action="store_true",
-        help="apply gradient checkpointing for dfake and generator. this might be a better option than FSDP",
+        help="apply gradient checkpointing for dfake and generator. this might be a better option than gsp",
     )
     parser.add_argument("--dm_loss_weight", type=float, default=1.0)
 
@@ -739,8 +721,6 @@ def parse_args():
         args.local_rank = env_local_rank
 
     assert args.gradient_accumulation_steps == 1, "grad accumulation not supported yet"
-
-    # assert not (args.fsdp and args.gradient_checkpointing), "currently, we don't support both options. open an issue for details."
 
     assert (
         args.wandb_iters % args.dfake_gen_update_ratio == 0

@@ -38,7 +38,6 @@ class SDImageDatasetLMDB(Dataset):
 
     def __getitem__(self, idx):
         image = retrieve_row_from_lmdb(self.env, "latents", self.KEY_TO_TYPE["latents"], self.latent_shape[1:], idx)
-        # image = torch.tensor(image, dtype=torch.float32)
         image = image.astype(np.float32)
 
         with self.env.begin() as txn:

@@ -28,8 +28,6 @@ def build_resizer(mode):
     # if using legacy tensorflow, do not manually resize outside the network
     elif mode == "legacy_tensorflow":
         return lambda x: x
-    elif mode == "legacy_pytorch":
-        return make_resizer("PyTorch", False, "bilinear", (299, 299))
     else:
         raise ValueError(f"Invalid mode {mode} specified")
 

@@ -81,9 +81,9 @@ class SDGuidance(nn.Layer):
         self.fake_unet = UNet2DConditionModel.from_pretrained(args.model_id, subfolder="unet").float()
 
         self.fake_unet.requires_grad_(True)
-        print("fake_unet_enable_xformers_memory_efficient_attention.")
+
         self.fake_unet.enable_xformers_memory_efficient_attention()
-        # somehow FSDP requires at least one network with dense parameters (models from diffuser are lazy initialized so their parameters are empty in fsdp mode)
+        #TODO remove it
         self.dummy_network = DummyNetwork()
         self.dummy_network.requires_grad_(False)
 
@@ -151,9 +151,6 @@ class SDGuidance(nn.Layer):
                     )
                 elif args.resolution == 512:
                     self.cls_pred_branch = nn.Sequential(
-                        # nn.Conv2D(kernel_size=4, in_channels=1280, out_channels=1280, stride=2, padding=1), # 32x32 -> 16x16
-                        # nn.GroupNorm(num_groups=32, num_channels=1280),
-                        # nn.Silu(),
                         nn.Conv2D(
                             kernel_size=4, in_channels=1280, out_channels=1280, stride=2, padding=1
                         ),  # 16x16 -> 8x8
@@ -173,12 +170,6 @@ class SDGuidance(nn.Layer):
                     )
                 elif args.resolution == 256:
                     self.cls_pred_branch = nn.Sequential(
-                        # nn.Conv2D(kernel_size=4, in_channels=1280, out_channels=1280, stride=2, padding=1), # 32x32 -> 16x16
-                        # nn.GroupNorm(num_groups=32, num_channels=1280),
-                        # nn.Silu(),
-                        # nn.Conv2D(kernel_size=4, in_channels=1280, out_channels=1280, stride=2, padding=1), # 16x16 -> 8x8
-                        # nn.GroupNorm(num_groups=32, num_channels=1280),
-                        # nn.Silu(),
                         nn.Conv2D(
                             kernel_size=4, in_channels=1280, out_channels=1280, stride=2, padding=1
                         ),  # 8x8 -> 4x4
@@ -191,16 +182,6 @@ class SDGuidance(nn.Layer):
                         nn.Silu(),
                         nn.Conv2D(kernel_size=1, in_channels=1280, out_channels=1, stride=1, padding=0),  # 1x1 -> 1x1
                     )
-                # debug
-                # self.cls_pred_branch = nn.Sequential(
-                #     nn.Conv2D(kernel_size=4, in_channels=1280, out_channels=1280, stride=2, padding=1), # 8x8 -> 4x4
-                #     nn.GroupNorm(num_groups=32, num_channels=1280),
-                #     nn.Silu(),
-                #     nn.Conv2D(kernel_size=4, in_channels=1280, out_channels=1280, stride=4, padding=0), # 4x4 -> 1x1
-                #     nn.GroupNorm(num_groups=32, num_channels=1280),
-                #     nn.Silu(),
-                #     nn.Conv2D(kernel_size=1, in_channels=1280, out_channels=1, stride=1, padding=0), # 1x1 -> 1x1
-                # )
             else:
                 # SDv1.5
                 self.cls_pred_branch = nn.Sequential(
@@ -217,13 +198,9 @@ class SDGuidance(nn.Layer):
 
         self.sdxl = args.sdxl
         self.gradient_checkpointing = args.gradient_checkpointing
-        print("use gradient_checkpointing", self.gradient_checkpointing)
 
         self.diffusion_gan = args.diffusion_gan
         self.diffusion_gan_max_timestep = args.diffusion_gan_max_timestep
-
-        # self.network_context_manager = paddle.autocast(device_type="cuda", dtype=paddle.bfloat16) if self.use_fp16 else NoOpContext()
-        # self.network_context_manager = paddle.amp.auto_cast(dtype='bfloat16') if self.use_fp16 else NoOpContext()
         self.network_context_manager = NoOpContext()
 
     def compute_cls_logits(self, image, text_embedding, unet_added_conditions):
@@ -234,7 +211,6 @@ class SDGuidance(nn.Layer):
         else:
             timesteps = paddle.zeros([image.shape[0]], dtype=paddle.int64)  # , device=image.device)
 
-        # with self.network_context_manager:
         if self.use_fp16:
             with paddle.amp.auto_cast(dtype="bfloat16"):
                 rep = self.fake_unet.forward(
@@ -248,7 +224,6 @@ class SDGuidance(nn.Layer):
 
         # we only use the bottleneck layer
         rep = rep[-1].cast(paddle.float32)
-        # print('rep', rep.shape)
         logits = self.cls_pred_branch(rep).squeeze(axis=[2, 3])
         return logits
 
@@ -262,7 +237,6 @@ class SDGuidance(nn.Layer):
                 self.min_step,
                 min(self.max_step + 1, self.num_train_timesteps),
                 [batch_size],
-                # device=latents.device,
                 dtype=paddle.int64,
             )
 
@@ -368,7 +342,6 @@ class SDGuidance(nn.Layer):
             0,
             self.num_train_timesteps,
             [batch_size],
-            # device=latents.device,
             dtype=paddle.int64,
         )
         noisy_latents = self.scheduler.add_noise(latents, noise, timesteps)
@@ -385,7 +358,6 @@ class SDGuidance(nn.Layer):
                     uncond_unet_added_conditions=uncond_unet_added_conditions,
                 )
         else:
-            # with self.network_context_manager:
             fake_noise_pred = predict_noise(
                 self.fake_unet,
                 noisy_latents,
@@ -437,7 +409,6 @@ class SDGuidance(nn.Layer):
         loss_dict = {}
         log_dict = {}
 
-        # image.requires_grad_(True)
         if not self.gan_alone:
             dm_dict, dm_log_dict = self.compute_distribution_matching_loss(
                 image, text_embedding, uncond_embedding, unet_added_conditions, uncond_unet_added_conditions
@@ -449,20 +420,6 @@ class SDGuidance(nn.Layer):
         if self.cls_on_clean_image:
             clean_cls_loss_dict = self.compute_generator_clean_cls_loss(image, text_embedding, unet_added_conditions)
             loss_dict.update(clean_cls_loss_dict)
-
-        # cls_loss_grad = paddle.autograd.grad(
-        #     loss_dict["gen_cls_loss"], image, retain_graph=True
-        # )[0]
-
-        # dm_loss_grad = paddle.autograd.grad(
-        #     loss_dict["loss_dm"], image, retain_graph=True
-        # )[0]
-
-        # if self.accelerator.is_main_process:
-        #     print("cls_loss_grad", cls_loss_grad.abs().mean().item())
-        #     print("dm_loss_grad", dm_loss_grad.abs().mean().item())
-
-        # import pdb; pdb.set_trace()
 
         return loss_dict, log_dict
 

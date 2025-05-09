@@ -47,7 +47,6 @@ class SDUniModel(nn.Layer):
         self.denoising_step_list = paddle.to_tensor(
             list(range(self.denoising_timestep - 1, 0, -(self.denoising_timestep // self.num_denoising_step))),
             dtype=paddle.int64,
-            # device=accelerator.device
         )
         self.timestep_interval = self.denoising_timestep // self.num_denoising_step
 
@@ -56,9 +55,6 @@ class SDUniModel(nn.Layer):
 
             if args.generator_lora:
                 self.feedforward_model.requires_grad_(False)
-                # for k in self.feedforward_model.state_dict().keys():
-                #     print(k)
-                # print('add lora:')
                 assert args.sdxl
                 lora_target_modules = [
                     "to_q",
@@ -83,11 +79,6 @@ class SDUniModel(nn.Layer):
                     lora_dropout=args.lora_dropout,
                 )
                 self.feedforward_model.add_adapter(lora_config)
-                # for k, v in self.feedforward_model.named_parameters():
-                #     print(k, v.stop_gradient)
-                # # for k in self.feedforward_model.state_dict().keys():
-                # #     print(k)
-                # exit()
             else:
                 self.feedforward_model.requires_grad_(True)
 
@@ -129,9 +120,6 @@ class SDUniModel(nn.Layer):
             # "SDXL's origianl VAE doesn't work with half precision"
             self.vae.to(paddle.float16)
 
-        # self.network_context_manager = paddle.autocast(device_type="cuda", dtype=paddle.bfloat16) if self.use_fp16 else NoOpContext()
-        # self.network_context_manager = paddle.amp.auto_cast(dtype='bfloat16') if self.use_fp16 else contextlib.nullcontext()
-
     def build_condition_input(self, resolution, accelerator):
         original_size = (resolution, resolution)
         target_size = (resolution, resolution)
@@ -164,7 +152,6 @@ class SDUniModel(nn.Layer):
 
         for constant in self.denoising_step_list[:selected_step]:
             current_timesteps = paddle.ones(batch_size, dtype=paddle.int64) * constant
-            # TODO add bf16?
             generated_noise = self.feedforward_model(
                 noisy_image, current_timesteps, real_text_embedding, added_cond_kwargs=unet_added_conditions
             ).sample
@@ -201,7 +188,6 @@ class SDUniModel(nn.Layer):
 
             real_unet_added_conditions = {
                 "time_ids": self.add_time_ids.tile(len(real_text_embedding), 1),
-                # "time_ids": self.add_time_ids.repeat(len(real_text_embedding), 1),
                 "text_embeds": real_pooled_text_embedding,
             }
             real_train_dict["unet_added_conditions"] = real_unet_added_conditions
@@ -297,7 +283,6 @@ class SDUniModel(nn.Layer):
                 uncond_unet_added_conditions = None
 
             if compute_generator_gradient:
-                print("use_fp16", self.use_fp16)
                 if self.use_fp16:
                     with paddle.amp.auto_cast(dtype="bfloat16"):
                         generated_noise = self.feedforward_model(

@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# code is heavily based on https://github.com/tianweiy/DMD2
+
 import argparse
 import logging
 import time
@@ -37,7 +39,6 @@ from ppdiffusers import (
 )
 from ppdiffusers.accelerate import Accelerator
 
-# from huggingface_hub import hf_hub_download
 from ppdiffusers.accelerate.logging import get_logger
 from ppdiffusers.accelerate.utils import ProjectConfiguration, set_seed
 from ppdiffusers.peft import LoraConfig
@@ -84,14 +85,10 @@ def create_generator(checkpoint_path, base_model=None, args=None):
     counter = 0
     while True:
         try:
-            state_dict = paddle.load(checkpoint_path)
-            # state_dict = load_file(checkpoint_path)
-            # if args.generator_lora:
-            #     new_state_dict = {}
-            #     for k, v in state_dict.items():
-            #         if 'base_layer' in k:
-            #             new_state_dict[k.replace('base_layer.', '')] = v
-            #     state_dict = new_state_dict
+            if checkpoint_path.endswith('safetensors'):
+                state_dict = load_file(checkpoint_path)
+            else:
+                state_dict = paddle.load(checkpoint_path)
             break
         except Exception as e:
             print(f"fail to load checkpoint {checkpoint_path}", e)
@@ -119,8 +116,6 @@ def build_condition_input(resolution, accelerator):
 
 def get_x0_from_noise(sample, model_output, timestep, alphas_cumprod):
     alpha_prod_t = alphas_cumprod[timestep].reshape([-1, 1, 1, 1])
-    # 0.0047 corresponds to the alphas_cumprod of the last timestep (999)
-    # alpha_prod_t = (paddle.ones_like(timestep) * 0.0047).reshape(-1, 1, 1, 1).double()
     beta_prod_t = 1 - alpha_prod_t
 
     pred_original_sample = (sample - beta_prod_t ** (0.5) * model_output) / alpha_prod_t ** (0.5)
@@ -178,7 +173,7 @@ def evaluate():
     paddle.set_grad_enabled(False)
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--folder", type=str, required=True, help="pass to folder list")
+    parser.add_argument("--folder", type=str, help="pass to folder list")
     parser.add_argument("--wandb_entity", type=str)
     parser.add_argument("--wandb_project", type=str)
     parser.add_argument("--wandb_name", type=str)
@@ -310,10 +305,10 @@ def evaluate():
 
         # Load model.
         unet = UNet2DConditionModel.from_pretrained(base, subfolder="unet").to(accelerator.device, paddle.float32)
-        # unet.load_state_dict(load_file(hf_hub_download(repo, ckpt)))
+
         lightning_pipeline = StableDiffusionXLPipeline.from_pretrained(
             base, unet=unet, paddle_dtype=paddle.float32
-        )  # .to(accelerator.device)
+        ) 
 
         # Ensure sampler uses "trailing" timesteps.
         lightning_pipeline.scheduler = EulerDiscreteScheduler.from_config(
@@ -457,20 +452,7 @@ def evaluate():
                     num_step=args.num_step,
                     conditioning_timestep=args.conditioning_timestep,
                 )
-            # all_images.append(eval_images.cpu().numpy())
-            if args.visual:
-                # break
-                eval_images_np = eval_images.cpu().numpy()
-
-                from PIL import Image
-
-                for i in range(eval_images_np.shape[0]):
-                    eval_img = eval_images_np[i]
-                    img = Image.fromarray(eval_img)
-                    img.save("sdxl_lr0.1_28000_%s.png" % i)
-                exit()
-            else:
-                all_images.append(eval_images.cpu().numpy())
+            all_images.append(eval_images.cpu().numpy())
 
         all_images = np.concatenate(all_images, axis=0)[: args.total_eval_samples]
         all_captions = [caption for sublist in all_captions for caption in sublist]
@@ -487,10 +469,10 @@ def evaluate():
             print("fid", fid)
 
             if args.clip_score:
-                pass
+                raise NotImplementedError("not support clip score yet")
 
             if args.image_reward:
-                pass
+                raise NotImplementedError("not support image reward yet")
 
             visualize_images = all_images[: args.test_visual_batch_size]
 

@@ -18,7 +18,6 @@ import numpy as np
 import paddle
 from coco_eval.cleanfid.resize import build_resizer
 
-# import torchvision
 from PIL import Image
 
 

@@ -154,34 +154,10 @@ class Trainer:
             denoising_dataloader = accelerator.prepare(denoising_dataloader)
             self.denoising_dataloader = cycle(denoising_dataloader)
 
-        if False and (args.ckpt_only_path is None):
-            # in fsdp hybrid_shard case, parameters initialized on different nodes may have different values
-            # to fix this, we first save the checkpoint in the main process and reload it
-            generator_path = os.path.join(args.output_path, f"checkpoint_model_{self.step:06d}", "paddle_model.bin")
-            guidance_path = os.path.join(args.output_path, f"checkpoint_model_{self.step:06d}", "paddle_model_1.bin")
-
-            if accelerator.is_main_process:
-                print(
-                    f"Saving current model to {args.output_path} to fix fsdp hybrid sharding's parameter mismatch across nodes"
-                )
-                os.makedirs(os.path.join(args.output_path, f"checkpoint_model_{self.step:06d}"), exist_ok=True)
-                paddle.save(self.model.feedforward_model.state_dict(), generator_path)
-                paddle.save(self.model.guidance_model.state_dict(), guidance_path)
-
-            accelerator.wait_for_everyone()
-            generator_path = os.path.join(args.output_path, f"checkpoint_model_{self.step:06d}", "paddle_model.bin")
-            guidance_path = os.path.join(args.output_path, f"checkpoint_model_{self.step:06d}", "paddle_model_1.bin")
-            print(self.model.feedforward_model.set_state_dict(paddle.load(generator_path)))
-            print(self.model.guidance_model.set_state_dict(paddle.load(guidance_path)))
-
-            if accelerator.is_main_process:
-                print("reloading done")
-
         # actually this scheduler is not very useful (it warms up from 0 to max_lr in 500 / num_gpu steps), but we keep it here for consistency
         self.scheduler_guidance = get_scheduler(
             "constant_with_warmup",
             learning_rate=args.guidance_lr,
-            # optimizer=self.optimizer_guidance,
             num_warmup_steps=args.warmup_step,
             num_training_steps=args.train_iters,
         )
@@ -189,7 +165,6 @@ class Trainer:
         self.scheduler_generator = get_scheduler(
             "constant_with_warmup",
             learning_rate=args.generator_lr,
-            # optimizer=self.optimizer_generator,
             num_warmup_steps=args.warmup_step,
             num_training_steps=args.train_iters,
         )

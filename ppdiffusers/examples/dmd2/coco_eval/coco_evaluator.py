@@ -14,20 +14,12 @@
 
 # Part of this code is modified from GigaGAN: https://github.com/mingukkang/GigaGAN
 # The MIT License (MIT)
-# from torchvision.transforms import InterpolationMode
 
 import numpy as np
 import paddle
 import paddle.vision.transforms as transforms
 from paddle.io import DataLoader, Dataset
 from PIL import Image
-
-# resizer_collection = {"nearest": InterpolationMode.NEAREST,
-#                       "box": InterpolationMode.BOX,
-#                       "bilinear": InterpolationMode.BILINEAR,
-#                       "hamming": InterpolationMode.HAMMING,
-#                       "bicubic": InterpolationMode.BICUBIC,
-#                       "lanczos": InterpolationMode.LANCZOS}
 
 
 class CenterCropLongEdge(object):
@@ -53,14 +45,11 @@ def compute_fid(fake_arr, gt_dir, device, resize_size=None, feature_extractor="i
     def resize_and_center_crop(image_np):
         image_pil = Image.fromarray(image_np)
         if patch_fid:
-            # if image_pil.size[0] != 1024 and image_pil.size[1] != 1024:
-            #     image_pil = image_pil.resize([1024, 1024])
-
             # directly crop to the 299 x 299 patch expected by the inception network
             if image_pil.size[0] >= 299 and image_pil.size[1] >= 299:
                 image_pil = transforms.functional.center_crop(image_pil, 299)
-            # else:
-            #     raise ValueError("Image is too small to crop to 299 x 299")
+            else:
+                raise ValueError("Image is too small to crop to 299 x 299")
         else:
             image_pil = center_crop_trsf(image_pil)
 
@@ -74,7 +63,7 @@ def compute_fid(fake_arr, gt_dir, device, resize_size=None, feature_extractor="i
         model_name = "clip_vit_b_32"
     else:
         raise ValueError("Unrecognized feature extractor [%s]" % feature_extractor)
-    # fid, fake_feats, real_feats = fid.compute_fid(
+
     fid = fid.compute_fid(
         None,
         gt_dir,

@@ -13,7 +13,7 @@ pip install -r requirements.txt
 CUDA_VISIBLE_DEVICES=2 PYTHONPATH=./:$PYTHONPATH   python -m edm.imagenet_example  --checkpoint_path YOUR_TRAINED_MODEL_PATH
 ```
 
-我们提供了一个预训练好的[模型](https://paddlenlp.bj.bcebos.com/models/community/ppdiffusers/imagenet_gan_classifier_genloss3e-3_diffusion1000_lr2e-6_scratch.pdparams)
+我们提供了一个预训练好的[模型](https://paddlenlp.bj.bcebos.com/models/community/ppdiffusers/dmd2/imagenet_gan_classifier_genloss3e-3_diffusion1000_lr2e-6_scratch.pdparams)
 
 ### 训练示例
 
@@ -21,6 +21,7 @@ CUDA_VISIBLE_DEVICES=2 PYTHONPATH=./:$PYTHONPATH   python -m edm.imagenet_exampl
 * 硬件要求：Nvidia A100 80G，如果显存不足可以对应较少batch size
 
 #### 数据准备
+```
 wget https://nvlabs-fi-cdn.nvidia.com/edm/fid-refs/imagenet-64x64.npz -O $CHECKPOINT_PATH/imagenet_fid_refs_edm.npz
 
 ###### download the imagenet-64x64 lmdb
@@ -28,8 +29,8 @@ wget https://huggingface.co/tianweiy/DMD2/resolve/main/data/imagenet/imagenet-64
 unzip $CHECKPOINT_PATH/imagenet-64x64_lmdb.zip -d $CHECKPOINT_PATH
 
 ###### 下载edm模型的预训练权重
-wget https://paddlenlp.bj.bcebos.com/models/community/ppdiffusers/edm-imagenet-64x64-cond-adm.pdparams
-
+wget https://paddlenlp.bj.bcebos.com/models/community/ppdiffusers/dmd2/edm-imagenet-64x64-cond-adm.pdparams
+```
 
 #### 训练
 
@@ -66,9 +67,7 @@ CUDA_VISIBLE_DEVICES=1,2,3,4,5,6,7 python -m paddle.distributed.launch edm/train
 
 ```
 
-
-
-## 评估
+#### 评估
 
 训练完后，可用以下脚本进行评估，获得模型的fid.
 
@@ -94,7 +93,6 @@ wget  https://huggingface.co/tianweiy/DMD2/resolve/main/data/laion/captions_laio
 wget  https://huggingface.co/tianweiy/DMD2/resolve/main/data/coco/captions_coco14_test.pkl?download=true -O $CHECKPOINT_PATH/captions_coco14_test.pkl
 
 
-
 mkdir $CHECKPOINT_PATH/sdxl_vae_latents_laion_500k
 # real dataset 
 for INDEX in {0..59}
@@ -114,13 +112,13 @@ wget https://huggingface.co/tianweiy/DMD2/resolve/main/data/coco/coco10k.zip?dow
 unzip $CHECKPOINT_PATH/coco10k.zip -d $CHECKPOINT_PATH
 ```
 
-#### 训练
+#### 训练命令
 ```bash
 USE_PEFT_BACKEND=1 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
 python -u train_sd.py \
     --generator_lr 5e-5 \
     --guidance_lr 5e-5 \
-    --train_iters 100000000 \
+    --train_iters 200000 \
     --output_path  output/sdxl_cond999_8node_lr5e-7_denoising4step_diffusion1000_gan5e-3_guidance8_noinit_noode_backsim_scratch \
     --batch_size 1 \
     --grid_size 1 \
@@ -139,6 +137,7 @@ python -u train_sd.py \
     --wandb_name "sdxl_cond999_8node_lr5e-7_denoising4step_diffusion1000_gan5e-3_guidance8_noinit_noode_backsim_scratch" \
     --dfake_gen_update_ratio 5 \
     --sdxl \
+    --gsp \
     --max_step_percent 0.98 \
     --cls_on_clean_image \
     --gen_cls_loss \
@@ -154,3 +153,43 @@ python -u train_sd.py \
     --real_image_path ckpts/sdxl_vae_latents_laion_500k_lmdb \
     --generator_lora
 ```
+
+#### 评估
+
+训练完后，可用以下脚本进行评估，获得模型的fid.
+
+```bash
+export PYTHONPATH=./:$PWD/../../scripts/fid_clip_score/:$PYTHONPATH USE_PEFT_BACKEND=1  
+python -u sdxl/test_sdxl_single_ckpt.py  \
+    --checkpoint_path YOUR-TRAINED-WEIGHT \
+    --conditioning_timestep 999 \
+    --num_step 4 \
+    --wandb_entity YOUR-ENTITY \
+    --wandb_project dmd2 \
+    --num_train_timesteps 1000 \
+    --seed 10 \
+    --eval_res 512 \
+    --ref_dir ckpts/coco10k/subset \
+    --anno_path  ckpts/coco10k/all_prompts.pkl \
+    --total_eval_samples 10000 \
+    --wandb_name YOUR_WANDB_NAME \
+    --generator_lora
+```
+
+这里提供了一个预训练好的[模型](https://paddlenlp.bj.bcebos.com/models/community/ppdiffusers/dmd2/sdxl_cond999_8node_lr5e-5_denoising4step_diffusion1000_gan5e-3_guidance8_noinit_noode_backsim_scratch_lora.pdparams)
+
+
+## reference
+@inproceedings{yin2024improved,
+    title={Improved Distribution Matching Distillation for Fast Image Synthesis},
+    author={Yin, Tianwei and Gharbi, Micha{\"e}l and Park, Taesung and Zhang, Richard and Shechtman, Eli and Durand, Fredo and Freeman, William T},
+    booktitle={NeurIPS},
+    year={2024}
+}
+
+@inproceedings{yin2024onestep,
+    title={One-step Diffusion with Distribution Matching Distillation},
+    author={Yin, Tianwei and Gharbi, Micha{\"e}l and Zhang, Richard and Shechtman, Eli and Durand, Fr{\'e}do and Freeman, William T and Park, Taesung},
+    booktitle={CVPR},
+    year={2024}
+}

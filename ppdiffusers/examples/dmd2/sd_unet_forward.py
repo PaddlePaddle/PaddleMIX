@@ -115,19 +115,7 @@ def classify_forward(
             forward_upsample_size = True
             break
 
-    # ensure attention_mask is a bias, and give it a singleton query_tokens dimension
-    # expects mask of shape:
-    #   [batch, key_tokens]
-    # adds singleton query_tokens dimension:
-    #   [batch,                    1, key_tokens]
-    # this helps to broadcast it as a bias over attention scores, which will be in one of the following shapes:
-    #   [batch,  heads, query_tokens, key_tokens] (e.g. paddle sdp attn)
-    #   [batch * heads, query_tokens, key_tokens] (e.g. xformers or classic attn)
     if attention_mask is not None:
-        # assume that mask is expressed as:
-        #   (1 = keep,      0 = discard)
-        # convert mask into a bias that can be added to attention scores:
-        #       (keep = +0,     discard = -10000.0)
         attention_mask = (1 - attention_mask.to(sample.dtype)) * -10000.0
         attention_mask = attention_mask.unsqueeze(1)
 
