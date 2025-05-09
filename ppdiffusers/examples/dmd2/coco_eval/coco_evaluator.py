@@ -73,7 +73,6 @@ def compute_fid(fake_arr, gt_dir, device, resize_size=None, feature_extractor="i
         device=device,
         pred_arr=fake_arr,
     )
-    # return fid, fake_feats, real_feats
     return fid
 
 
@@ -119,91 +118,6 @@ class CLIPScoreDataset(Dataset):
         image_pil = self.preprocessor(image_pil)
         caption = self.captions[index]
         return image_pil, caption
-
-
-@paddle.no_grad()
-def compute_clip_score(images, captions, clip_model="ViT-B/32", device="cuda", how_many=30000):
-    print("Computing CLIP score")
-    import clip as openai_clip
-
-    if clip_model == "ViT-B/32":
-        clip, clip_preprocessor = openai_clip.load("ViT-B/32", device=device)
-        clip = clip.eval()
-    elif clip_model == "ViT-G/14":
-        import open_clip
-
-        clip, _, clip_preprocessor = open_clip.create_model_and_transforms("ViT-g-14", pretrained="laion2b_s12b_b42k")
-        clip = clip.to(device)
-        clip = clip.eval()
-        clip = clip.float()
-    else:
-        raise NotImplementedError
-
-    def resize_and_center_crop(image_np, resize_size=256):
-        image_pil = Image.fromarray(image_np)
-        image_pil = CenterCropLongEdge()(image_pil)
-
-        if resize_size is not None:
-            image_pil = image_pil.resize((resize_size, resize_size), Image.LANCZOS)
-        return image_pil
-
-    def simple_collate(batch):
-        images, captions = [], []
-        for img, cap in batch:
-            images.append(img)
-            captions.append(cap)
-        return images, captions
-
-    dataset = CLIPScoreDataset(images, captions, transform=resize_and_center_crop, preprocessor=clip_preprocessor)
-    dataloader = DataLoader(dataset, batch_size=64, shuffle=False, num_workers=8, collate_fn=simple_collate)
-
-    cos_sims = []
-    count = 0
-    # for imgs, txts in zip(images, captions):
-    for index, (imgs_pil, txts) in enumerate(dataloader):
-        # imgs_pil = [resize_and_center_crop(imgs)]
-        # txts = [txts]
-        # imgs_pil = [clip_preprocessor(img) for img in imgs]
-        imgs = paddle.stack(imgs_pil, axis=0).to(device)
-        tokens = openai_clip.tokenize(txts, truncate=True).to(device)
-        # Prepending text prompts with "A photo depicts "
-        # https://arxiv.org/abs/2104.08718
-        prepend_text = "A photo depicts "
-        prepend_text_token = openai_clip.tokenize(prepend_text)[:, 1:4].to(device)
-        prepend_text_tokens = prepend_text_token.expand(tokens.shape[0], -1)
-
-        start_tokens = tokens[:, :1]
-        new_text_tokens = paddle.concat([start_tokens, prepend_text_tokens, tokens[:, 1:]], axis=1)[:, :77]
-        last_cols = new_text_tokens[:, 77 - 1 : 77]
-        last_cols[last_cols > 0] = 49407  # eot token
-        new_text_tokens = paddle.concat([new_text_tokens[:, :76], last_cols], axis=1)
-
-        img_embs = clip.encode_image(imgs)
-        text_embs = clip.encode_text(new_text_tokens)
-
-        similarities = paddle.nn.functional.cosine_similarity(img_embs, text_embs, axis=1)
-        cos_sims.append(similarities)
-        count += similarities.shape[0]
-        if count >= how_many:
-            break
-
-    clip_score = paddle.concat(cos_sims, axis=0)[:how_many].mean()
-    clip_score = clip_score.detach().cpu().numpy()
-    return clip_score
-
-
-# @paddle.no_grad()
-# def compute_image_reward(
-#     images, captions, device
-# ):
-#     import ImageReward as RM
-#     from tqdm import tqdm
-#     model = RM.load("ImageReward-v1.0", device=device)
-#     rewards = []
-#     for image, prompt in tqdm(zip(images, captions)):
-#         reward = model.score(prompt, Image.fromarray(image))
-#         rewards.append(reward)
-#     return np.mean(np.array(rewards))
 
 
 @paddle.no_grad()

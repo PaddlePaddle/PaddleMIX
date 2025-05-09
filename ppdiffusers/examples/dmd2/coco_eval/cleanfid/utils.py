@@ -71,9 +71,8 @@ class ResizeDataset(paddle.io.Dataset):
         # fn_resize expects a np array and returns a np array
         img_resized = self.fn_resize(img_np)
 
-        # ToTensor() converts to [0,1] only if input in uint8
         if img_resized.dtype == "uint8":
-            img_t = self.transforms(np.array(img_resized))  # * 255
+            img_t = self.transforms(np.array(img_resized)) 
         elif img_resized.dtype == "float32":
             img_t = self.transforms(img_resized)
 
@@ -94,7 +93,6 @@ class ResizeArrayDataset(paddle.io.Dataset):
 
     def __init__(self, array, mode, size=(299, 299)):
         self.array = array
-        # self.transforms = paddle.vision.transforms.ToTensor()
         self.transforms = ToTensor()
         self.size = size
         self.fn_resize = build_resizer(mode)
@@ -111,9 +109,8 @@ class ResizeArrayDataset(paddle.io.Dataset):
         # fn_resize expects a np array and returns a np array
         img_resized = self.fn_resize(img_np)
 
-        # ToTensor() converts to [0,1] only if input in uint8
         if img_resized.dtype == "uint8":
-            img_t = self.transforms(np.array(img_resized))  # * 255
+            img_t = self.transforms(np.array(img_resized))
         elif img_resized.dtype == "float32":
             img_t = self.transforms(img_resized)
 

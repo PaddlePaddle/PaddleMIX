@@ -354,9 +354,6 @@ class EDMGuidance(nn.Layer):
             grad = paddle.nan_to_num(grad)
 
         # this loss gives the grad as gradient through autodiff, following https://github.com/ashawkey/stable-dreamfusion
-        # tmp = original_latents - grad
-        # tmp.stop_gradient = True
-        # loss = 0.5 * F.mse_loss(original_latents, tmp, reduction="mean")
         loss = 0.5 * F.mse_loss(original_latents, (original_latents - grad).detach(), reduction="mean")
 
         loss_dict = {"loss_dm": loss}

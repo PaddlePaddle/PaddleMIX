@@ -1187,19 +1187,6 @@ class DMD2Trainer(NLPTrainer):
                 except NotImplementedError:
                     model_flops = None
 
-            # Do not log speed metrics if all steps are skipped since last log.
-            # if num_steps > 0:
-            #     logs.update(
-            #         speed_metrics(
-            #             "interval",
-            #             self._globalstep_last_start_time,
-            #             num_samples=total_train_batch_size * num_steps,
-            #             num_steps=num_steps,
-            #             seq_length=seq_length,
-            #             model_flops=model_flops,
-            #         )
-            #     )
-
             self._total_loss_scalar += tr_loss_scalar
             self._globalstep_last_logged = self.state.global_step
             self._globalstep_last_start_time = time.time()
@@ -1267,8 +1254,6 @@ class DMD2Trainer(NLPTrainer):
         Trainer's init through `optimizers`, or subclass and override this method (or `create_optimizer` and/or
         `create_scheduler`) in a subclass.
         """
-        # self.create_scheduler(num_training_steps=num_training_steps)
-        # self.create_optimizer(self.lr_scheduler)
         self.create_optimizer()
 
     def create_optimizer(self, lr_scheduler=None):
@@ -1877,9 +1862,7 @@ class DMD2Trainer(NLPTrainer):
             return self.training_pipeline_step(model, inputs)
 
         model.train()
-        # inputs = self._prepare_inputs(inputs)
-        # with self.autocast_smart_context_manager():
-        # loss, loss_log = self.compute_loss(model, inputs, return_outputs=True, generator_turn=generator_turn)
+
         noise = inputs["noise"]
         text_embedding = inputs["text_embedding"]
         uncond_embedding = inputs["uncond_embedding"]
@@ -1920,7 +1903,6 @@ class DMD2Trainer(NLPTrainer):
                     generator_loss.backward()
             loss = generator_loss
             loss_log["generator_loss_dict"] = generator_loss_dict
-            print("Step:", self.state.global_step, "generator loss:", float(loss))
         else:
             guidance_data_dict = inputs["guidance_data_dict"]
 
@@ -1953,7 +1935,6 @@ class DMD2Trainer(NLPTrainer):
                 guidance_loss.backward()
 
             loss = guidance_loss
-            print("Step:", self.state.global_step, "guidance loss:", float(loss))
             loss_log["guidance_loss_dict"] = guidance_loss_dict
 
         return loss.detach(), loss_log
@@ -2404,119 +2385,3 @@ class DMD2Trainer(NLPTrainer):
                 )
         if self.args.should_save_sharding_stage1_model:
             self.sharding_io.save_distributed_model_meta(output_dir)
-
-    def _load_optimizer_and_scheduler(self, checkpoint):
-        """If optimizer and scheduler states exist, load them."""
-        self.runtime_timer.start("checkpoint loading time")
-        if checkpoint is None:
-            self.runtime_timer.stop()
-            return
-
-        logger.info("Loading optimizer and scheduler...")
-        if (not self.args.should_load_sharding_stage1_model) and self.args.ignore_load_lr_and_optim:
-            self.runtime_timer.stop()
-            return
-
-        opt_state_dict = None
-        if self.args.should_load_sharding_stage1_model:
-            opt_state_dict = self.sharding_io.load_optimizer_state_with_reshard(
-                checkpoint, OPTIMIZER_NAME, self.model_wrapped
-            )
-        else:
-            use_unified_checkpoint = False
-            if self.args.unified_checkpoint:
-                if self.is_unified_checkpoint(checkpoint):
-                    use_unified_checkpoint = True
-                else:
-                    logger.info("Loading checkpoint, the next checkpoint will be saved as unified checkpoint")
-
-            if not use_unified_checkpoint:
-                if self.args.data_parallel_rank == 0 or self.args.use_expert_parallel:
-                    optimizer_name = _add_variant(OPTIMIZER_NAME, self.args.optimizer_name_suffix)
-                    path = os.path.join(checkpoint, optimizer_name)
-                    if os.path.isfile(path):
-                        opt_state_dict = paddle.load(path)
-                else:
-                    opt_state_dict = None
-            else:
-                model = self.model
-                if (
-                    hasattr(self.args, "enable_sharding_comm_overlap")
-                    and self.args.enable_sharding_comm_overlap
-                    and "split_param" in split_parallel_config(self.args.sharding_parallel_config)
-                ):
-                    model = self.model_wrapped
-                opt_state_dict = self.unified_checkpoint_handler.load_unified_optimizer(
-                    model=model,
-                    optimizer=self.optimizer,
-                    resume_from_checkpoint=checkpoint,
-                )
-
-        if self.args.ignore_load_lr_and_optim and opt_state_dict:
-            tmp = self.optimizer.state_dict()
-            tmp["master_weights"] = opt_state_dict["master_weights"]
-            opt_state_dict = tmp
-
-        # broadcast optimizer state in dp group
-        if self.args.local_rank != -1:
-            dist.barrier()
-        if self.args.use_expert_parallel:
-            opt_state_dict = broadcast_moe_optimizer(
-                opt_state_dict,
-                model_state_dict=self.model.state_dict(),
-                broadcast_dp=not self.args.should_load_sharding_stage1_model,
-            )
-        else:
-            if not self.args.should_load_sharding_stage1_model:
-                opt_state_dict = broadcast_dp_optimizer(opt_state_dict)
-
-        if opt_state_dict is not None:
-            # Load in optimizer and scheduler states
-            self.optimizer.set_state_dict(opt_state_dict)
-        else:
-            optimizer_name = _add_variant(OPTIMIZER_NAME, self.args.optimizer_name_suffix)
-            raise ValueError(f"optimizer-state-dict not found, opt: {os.path.join(checkpoint, optimizer_name)}.")
-
-        if not self.args.ignore_load_lr_and_optim:
-            if distributed_isfile(os.path.join(checkpoint, SCHEDULER_NAME)):
-                self.lr_scheduler.set_state_dict(
-                    paddle.load(distributed_file(os.path.join(checkpoint, SCHEDULER_NAME)))
-                )
-            else:
-                raise ValueError(f"scheduler-file not found, scheduler:{os.path.join(checkpoint, SCHEDULER_NAME)}")
-
-            if self.do_grad_scaling and distributed_isfile(os.path.join(checkpoint, SCALER_NAME)):
-                self.scaler.load_state_dict(
-                    paddle.load(distributed_file(os.path.join(checkpoint, SCALER_NAME)), return_numpy=True)
-                )
-
-        if self.args.offload_optim:
-            logger.info("Offloading optimizer state...")
-            self._offload_optimizer()
-
-        self.runtime_timer.stop()
-
-    def is_unified_checkpoint(self, resume_from_checkpoint, safe_serialization=True):
-        is_unified_checkpoint_type = False
-        if isinstance(self.model, LoRAModel) or isinstance(self.model, PrefixModelForCausalLM):
-            weights_index_name = (
-                PADDLE_PEFT_WEIGHTS_INDEX_NAME if not safe_serialization else SAFE_PEFT_WEIGHTS_INDEX_NAME
-            )
-        else:
-            weights_index_name = PADDLE_WEIGHTS_INDEX_NAME if not safe_serialization else SAFE_WEIGHTS_INDEX_NAME
-        master_weights_index_name = (
-            PADDLE_MASTER_WEIGHTS_INDEX_NAME if not safe_serialization else SAFE_MASTER_WEIGHTS_INDEX_NAME
-        )
-        weights_index_file = os.path.join(
-            resume_from_checkpoint,
-            weights_index_name,
-        )
-        master_weights_index_file = os.path.join(
-            resume_from_checkpoint,
-            master_weights_index_name,
-        )
-
-        if distributed_isfile(weights_index_file) or distributed_isfile(master_weights_index_file):
-            is_unified_checkpoint_type = True
-
-        return is_unified_checkpoint_type
