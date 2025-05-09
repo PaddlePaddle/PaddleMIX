@@ -29,9 +29,54 @@ git clone --depth=1 https://github.com/PaddlePaddle/PaddleNLP.git
 cd PaddleNLP
 pip install -e .
 
-# 安装paddlenlp_ops pre-build
-pip install https://paddlenlp.bj.bcebos.com/ops/cu118/paddlenlp_ops-3.0.0b4-py3-none-any.whl
+# 此处提供两种paddlenlp_ops安装方法，建议使用预编译的paddlenlp_ops进行安装
+# 手动编译安装paddlenlp_ops
+cd csrc
+python setup_cuda.py install
+
+# 安装pre-build paddlenlp_ops
+pip install https://paddlenlp.bj.bcebos.com/ops/cu118/paddlenlp_ops-3.0.0b4.post20250331-py3-none-any.whl
 ```
+
+
+3） paddlenlp_ops预编译包安装表格，根据paddlenlp、CUDA版本选择配套paddlenlp_ops 
+
+<table class="docutils">
+    <thead>
+        <tr>
+            <th width="80">CUDA</th>
+            <th width="200">paddlenlp_3.0.0b4</th>
+            <th width="200">paddlenlp_develop</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td align="center">12.4</td>
+            <td>
+                <details>
+                    <summary>Install</summary>
+                    <pre><code>pip install https://paddlenlp.bj.bcebos.com/ops/cu124/paddlenlp_ops-3.0.0b4-py3-none-any.whl</code></pre>
+                </details>
+            </td>
+            <td></td>
+        </tr>
+        <tr>
+            <td align="center">11.8</td>
+            <td>
+                <details>
+                    <summary>Install</summary>
+                    <pre><code>pip install https://paddlenlp.bj.bcebos.com/ops/cu118/paddlenlp_ops-3.0.0b4-py3-none-any.whl</code></pre>
+                </details>
+            </td>
+            <td>
+                <details>
+                    <summary>Install</summary>
+                    <pre><code>pip install https://paddlenlp.bj.bcebos.com/ops/cu118/paddlenlp_ops-3.0.0b4.post20250331-py3-none-any.whl</code></pre>
+                </details>
+            </td>
+        </tr>
+    </tbody>
+</table>
 
 ## 3 高性能推理
 
@@ -44,35 +89,43 @@ export CUDA_VISIBLE_DEVICES=0
 export FLAGS_mla_use_tensorcore=0
 export FLAGS_cascade_attention_max_partition_size=128
 export FLAGS_cascade_attention_deal_each_time=16
+export USE_FASTER_TOP_P_SAMPLING=1
 python deploy/deepseek_vl2/deepseek_vl2_infer.py \
     --model_name_or_path deepseek-ai/deepseek-vl2-small \
     --question "Describe this image." \
     --image_file paddlemix/demo_images/examples_image1.jpg \
     --min_length 128 \
     --max_length 128 \
-    --inference_model True \
-    --append_attn True \
-    --mode dynamic \
-    --dtype bfloat16 \
     --top_k 1 \
     --top_p 0.001 \
     --temperature 0.1 \
     --repetition_penalty 1.05 \
+    --block_attn True \
+    --append_attn True \
+    --inference_model True \
+    --llm_mode static \
+    --dtype bfloat16 \
     --output_via_mq False \
-    --benchmark
+    --benchmark True
 
 # 多图推理
+export CUDA_VISIBLE_DEVICES=0
+export FLAGS_mla_use_tensorcore=0
+export FLAGS_cascade_attention_max_partition_size=128
+export FLAGS_cascade_attention_deal_each_time=16
+export USE_FASTER_TOP_P_SAMPLING=1
 python deploy/deepseek_vl2/deepseek_vl2_infer_multi_image.py \
     --model_name_or_path deepseek-ai/deepseek-vl2-small \
-    --question "What are in these images." \
+    --question "Can you tell me what are in the images?" \
     --image_file_1 paddlemix/demo_images/examples_image1.jpg \
     --image_file_2 paddlemix/demo_images/examples_image2.jpg \
     --image_file_3 paddlemix/demo_images/examples_image1.jpg \
     --min_length 128 \
     --max_length 128 \
-    --inference_model True \
+    --block_attn True \
     --append_attn True \
-    --mode dynamic \
+    --inference_model True \
+    --llm_mode static \
     --dtype bfloat16 \
     --top_k 1 \
     --top_p 0.001 \
@@ -88,15 +141,17 @@ export CUDA_VISIBLE_DEVICES=0
 export FLAGS_mla_use_tensorcore=0
 export FLAGS_cascade_attention_max_partition_size=128
 export FLAGS_cascade_attention_deal_each_time=16
+export USE_FASTER_TOP_P_SAMPLING=1
 python deploy/deepseek_vl2/deepseek_vl2_infer.py \
     --model_name_or_path deepseek-ai/deepseek-vl2-small \
     --question "Describe this image." \
     --image_file paddlemix/demo_images/examples_image1.jpg \
     --min_length 128 \
     --max_length 128 \
-    --inference_model True \
+    --block_attn True \
     --append_attn True \
-    --mode dynamic \
+    --inference_model True \
+    --llm_mode static \
     --dtype bfloat16 \
     --top_k 1 \
     --top_p 0.001 \
@@ -127,11 +182,18 @@ sh deploy/deepseek_vl2/shell/run.sh
 ## 在 NVIDIA A800-SXM4-80GB 上测试的性能如下：
 
 #### 下方表格中所示性能对应的输入输出大小。
-|     parameter      |      Value     |
-| ------------------ | -------------- |
-|  input_tokens_len  |  1428 tokens    |
-|  output_tokens_len |  128 tokens    |
+|     parameter                   |      Value      |
+| ------------------------------- | --------------- |
+|  single_image_input_tokens_len  |  1428 tokens    |
+|  multi_image_input_tokens_len   |  1304 tokens    |
+|  output_tokens_len              |  128 tokens     |
 
-|             model              | Paddle Inference wint8 | Paddle Inference|    PyTorch     | VLLM     |
+#### 单图测试性能
+|             model              | Paddle Inference wint8 | Paddle Inference|    PyTorch     | VLLM          |
 | -----------------------------  | ---------------------  | --------------- | -------------- |-------------- |
-| deepseek-ai/deepseek-vl2-small |          1.52 s        |     1.77 s      |      4.92 s    | 1.39s     |
+| deepseek-ai/deepseek-vl2-small |          1.63 s        |     1.78 s      |      7.50 s    | 1.95s         |
+
+#### 多图测试性能
+|             model              | Paddle Inference wint8 | Paddle Inference|    PyTorch     | VLLM          |
+| -----------------------------  | ---------------------  | --------------- | -------------- |-------------- |
+| deepseek-ai/deepseek-vl2-small |          1.67 s        |     1.85 s      |      7.44 s    | 2.05s         |

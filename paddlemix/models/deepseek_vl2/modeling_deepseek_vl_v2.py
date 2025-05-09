@@ -20,8 +20,10 @@ from einops import rearrange, repeat
 from paddlenlp.transformers import PretrainedModel
 
 from paddlemix.models.janus.siglip_vit import SigLIPVisionTransformer
+
 from .configuration_deepseek import DeepseekVLV2Config
 from .modeling_deepseek import DeepseekV2ForCausalLM
+
 # from paddlenlp.transformers.deepseek_v2.modeling import DeepseekV2ForCausalLM # diff
 
 
@@ -423,9 +425,10 @@ class DeepseekVLV2ForCausalLM(DeepseekVLV2PreTrainedModel):
             num_logits_to_keep=num_logits_to_keep,
             **kwargs,
         )
-        model_inputs["images"] = images
-        model_inputs["images_seq_mask"] = images_seq_mask
-        model_inputs["images_spatial_crop"] = images_spatial_crop
+        if model_inputs.get("past_key_values", None) is None:
+            model_inputs["images"] = images
+            model_inputs["images_seq_mask"] = images_seq_mask
+            model_inputs["images_spatial_crop"] = images_spatial_crop
         return model_inputs
 
     @staticmethod

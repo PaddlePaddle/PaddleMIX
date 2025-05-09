@@ -31,6 +31,7 @@ if is_paddle_available():
             "StableDiffusionXLLoraLoaderMixin",
             "SD3LoraLoaderMixin",
             "WanLoraLoaderMixin",
+            "FluxLoraLoaderMixin",
         ]
         _import_structure["textual_inversion"] = ["TextualInversionLoaderMixin"]
         _import_structure["ip_adapter"] = ["IPAdapterMixin"]
