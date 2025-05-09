@@ -35,11 +35,12 @@ cd csrc
 python setup_cuda.py install
 
 # 安装pre-build paddlenlp_ops
-pip install https://paddlenlp.bj.bcebos.com/ops/cu118/paddlenlp_ops-3.0.0b4.post20250331-py3-none-any.whl
+wget https://paddlenlp.bj.bcebos.com/wheels/paddlenlp_ops-ci-py3-none-any.whl -O paddlenlp_ops-0.0.0-py3-none-any.whl
+pip install paddlenlp_ops-0.0.0-py3-none-any.whl
 ```
 
 
-3） paddlenlp_ops预编译包安装表格，根据paddlenlp、CUDA版本选择配套paddlenlp_ops 
+3） paddlenlp_ops预编译包安装表格，根据paddlenlp、CUDA版本选择配套paddlenlp_ops
 
 <table class="docutils">
     <thead>
@@ -71,7 +72,7 @@ pip install https://paddlenlp.bj.bcebos.com/ops/cu118/paddlenlp_ops-3.0.0b4.post
             <td>
                 <details>
                     <summary>Install</summary>
-                    <pre><code>pip install https://paddlenlp.bj.bcebos.com/ops/cu118/paddlenlp_ops-3.0.0b4.post20250331-py3-none-any.whl</code></pre>
+                    <pre><code>wget https://paddlenlp.bj.bcebos.com/wheels/paddlenlp_ops-ci-py3-none-any.whl -O paddlenlp_ops-0.0.0-py3-none-any.whl && pip install paddlenlp_ops-0.0.0-py3-none-any.whl</code></pre>
                 </details>
             </td>
         </tr>
