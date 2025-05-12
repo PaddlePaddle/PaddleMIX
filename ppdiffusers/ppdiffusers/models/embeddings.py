@@ -1422,7 +1422,7 @@ class MochiAttentionPool(nn.Layer):
         q = q.unsqueeze(axis=2)
         
         # Call attention function using Paddle format
-        x = F.scaled_dot_product_attention(
+        x = F.scaled_dot_product_attention_(
             q.transpose([0, 2, 1, 3]), 
             k.transpose([0, 2, 1, 3]), 
             v.transpose([0, 2, 1, 3]), 

@@ -17,12 +17,7 @@ from ppdiffusers import MochiPipeline
 from ppdiffusers.utils import export_to_video
 
 
-pipe = MochiPipeline.from_pretrained("/home/lcjgrp/lizhijun/llm/mochi-1-preview-pd", 
-                                     variant="bf16", 
-                                     paddle_dtype=paddle.bfloat16,
-                                     low_cpu_mem_usage=True, 
-                                     map_location="cpu"
-                                     )
+pipe = MochiPipeline.from_pretrained("genmo/mochi-1-preview", paddle_dtype=paddle.bfloat16)
 
 # VAE tiling
 pipe.enable_vae_tiling()
