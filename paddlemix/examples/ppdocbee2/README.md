@@ -10,6 +10,7 @@ PP-DocBee-V2 是PaddleMIX团队自研的一款专注于文档理解的多模态�
 |--------------------|----------|--------------------|
 | PPDocBeeV2-3B | 3B | [PPDocBeeV2-3B](https://huggingface.co/PaddleMIX/PPDocBeeV2-3B) |
 
+注意：使用`xxx.from_pretrained("PaddleMIX/PPDocBeeV2-3B")`即可自动下载该权重文件夹到缓存目录。
 
 ## 2 环境准备
 1）[安装PaddlePaddle](https://github.com/PaddlePaddle/PaddleMIX?tab=readme-ov-file#3-%EF%B8%8F%E5%AE%89%E8%A3%85paddlepaddle)
@@ -107,6 +108,10 @@ python paddlemix/examples/ppdocbee2/ppdocbee2_infer.py \
 sh paddlemix/examples/ppdocbee2/shell/distributed_ppdocbee2_infer.sh
 ```
 > ⚠️注意："mp_degree"需要根据显卡数量"gpus"进行调整，例如2卡推理，则设置为2。
+
+### 4.3 高性能推理
+
+PP-DocBee-V2 支持高性能推理，具体可参考 [PP-DocBee-V2高性能推理教程](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/deploy/ppdocbee2)
 
 ## 5. 性能评测
 
