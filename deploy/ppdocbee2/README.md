@@ -1,8 +1,8 @@
-# PP-DocBee-V2高性能推理教程
+# PP-DocBee2高性能推理教程
 
 ## 1. 模型介绍
 
-[PP-DocBee-V2](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/paddlemix/examples/ppdocbee2) 是PaddleMIX团队自研的一款专注于文档理解的多模态大模型，在PP-DocBee的基础上，我们进一步优化了基础模型，并引入了新的数据优化方案，提高了数据质量，使用自研[数据合成策略](https://arxiv.org/abs/2503.04065)生成的少量的47万数据便使得PP-DocBee-V2在中文文档理解任务上表现更佳。在内部业务中文场景类的指标上，PP-DocBee-v2相较于PP-DocBee提升了约11.4%，同时也高于目前的同规模热门开源和闭源模型。
+[PP-DocBee2](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/paddlemix/examples/ppdocbee2) 是PaddleMIX团队自研的一款专注于文档理解的多模态大模型，在PP-DocBee的基础上，我们进一步优化了基础模型，并引入了新的数据优化方案，提高了数据质量，使用自研[数据合成策略](https://arxiv.org/abs/2503.04065)生成的少量的47万数据便使得PP-DocBee2在中文文档理解任务上表现更佳。在内部业务中文场景类的指标上，PP-DocBee2相较于PP-DocBee提升了约11.4%，同时也高于目前的同规模热门开源和闭源模型。
 
 | Model              | 模型大小 | Huggingface 仓库地址 |
 |--------------------|----------|--------------------|
@@ -85,7 +85,7 @@ pip install https://paddlenlp.bj.bcebos.com/ops/cu118/paddlenlp_ops-3.0.0b4.post
 
 ## 3 高性能推理
 
-### a. fp16 高性能推理
+### a. 单卡高性能推理
 ```bash
 cd PaddleMIX
 rm -rf ./tmp
@@ -116,7 +116,7 @@ python deploy/ppdocbee2/ppdocbee2_infer.py \
 ```
 
 
-### c. 多卡推理
+### b. 多卡推理
 ```bash
 export CUDA_VISIBLE_DEVICES=0,1
 python -m paddle.distributed.launch --gpus "0,1" deploy/ppdocbee2/ppdocbee2_infer.py \

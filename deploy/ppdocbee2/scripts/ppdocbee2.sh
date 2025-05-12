@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=0
 export FLAGS_cascade_attention_max_partition_size=512
 export FLAGS_cascade_attention_deal_each_time=16
 export USE_FASTER_TOP_P_SAMPLING=1

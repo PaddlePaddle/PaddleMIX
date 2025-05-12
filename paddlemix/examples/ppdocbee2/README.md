@@ -1,8 +1,8 @@
-# PP-DocBee-V2
+# PP-DocBee2
 
 ## 1. 简介
 
-PP-DocBee-V2 是PaddleMIX团队自研的一款专注于文档理解的多模态大模型，在PP-DocBee的基础上，我们进一步优化了基础模型，并引入了新的数据优化方案，提高了数据质量，使用自研[数据合成策略](https://arxiv.org/abs/2503.04065)生成的少量的47万数据便使得PP-DocBee-V2在中文文档理解任务上表现更佳。在内部业务中文场景类的指标上，PP-DocBee-v2相较于PP-DocBee提升了约11.4%，同时也高于目前的同规模热门开源和闭源模型。
+PP-DocBee2 是PaddleMIX团队自研的一款专注于文档理解的多模态大模型，在PP-DocBee的基础上，我们进一步优化了基础模型，并引入了新的数据优化方案，提高了数据质量，使用自研[数据合成策略](https://arxiv.org/abs/2503.04065)生成的少量的47万数据便使得PP-DocBee2在中文文档理解任务上表现更佳。在内部业务中文场景类的指标上，PP-DocBee2相较于PP-DocBee提升了约11.4%，同时也高于目前的同规模热门开源和闭源模型。
 
 **本仓库支持的模型权重:**
 
@@ -54,7 +54,7 @@ sh build_env.sh
 
 ### 3.1 在线体验
 
-我们提供了在线体验环境，您可以通过[AI Studio](https://aistudio.baidu.com/application/detail/60135)快速体验 PP-DocBee-V2 的功能。
+我们提供了在线体验环境，您可以通过[AI Studio](https://aistudio.baidu.com/application/detail/60135)快速体验 PP-DocBee2 的功能。
 
 ### 3.2 本地gradio部署
 ```bash
@@ -111,7 +111,7 @@ sh paddlemix/examples/ppdocbee2/shell/distributed_ppdocbee2_infer.sh
 
 ### 4.3 高性能推理
 
-PP-DocBee-V2 支持高性能推理，具体可参考 [PP-DocBee-V2高性能推理教程](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/deploy/ppdocbee2)
+PP-DocBee2 支持高性能推理，具体可参考 [PP-DocBee2高性能推理教程](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/deploy/ppdocbee2)
 
 ## 5. 性能评测
 
