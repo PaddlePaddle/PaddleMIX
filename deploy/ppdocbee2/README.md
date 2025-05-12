@@ -117,7 +117,7 @@ python deploy/ppdocbee2/ppdocbee2_infer.py \
 ```
 
 
-### c. TP并行，多卡高性能推理
+### c. 多卡推理
 ```bash
 export CUDA_VISIBLE_DEVICES=0,1
 python -m paddle.distributed.launch --gpus "0,1" deploy/ppdocbee2/ppdocbee2_infer.py \
