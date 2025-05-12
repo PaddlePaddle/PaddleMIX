@@ -90,7 +90,6 @@ pip install https://paddlenlp.bj.bcebos.com/ops/cu118/paddlenlp_ops-3.0.0b4.post
 cd PaddleMIX
 rm -rf ./tmp
 
-# 1. image infer
 export CUDA_VISIBLE_DEVICES=0
 export FLAGS_cascade_attention_max_partition_size=512
 export FLAGS_cascade_attention_deal_each_time=16
