@@ -511,7 +511,7 @@ class VisionAttention(nn.Layer):
         v = v.transpose([1, 0, 2])
         attn_weights = paddle.matmul(q, k.transpose([0, 2, 1])) / math.sqrt(self.head_dim)
         attn_weights = attn_weights + attention_mask
-        attn_weights = nn.functional.softmax(attn_weights, axis=-1, dtype="float32")
+        attn_weights = nn.functional.softmax(attn_weights, axis=-1)
         attn_output = paddle.matmul(attn_weights, v)
         attn_output = attn_output.transpose([1, 0, 2])
         attn_output = attn_output.reshape([seq_length, -1])
@@ -876,7 +876,6 @@ class Qwen2VLAttention(nn.Layer):
             attn_output = attn_output.astype(paddle.float16)
         elif self.o_proj.weight.dtype == paddle.float32:
             attn_output = attn_output.astype(paddle.float32)
-
 
         attn_output = self.o_proj(attn_output)
         if not output_attentions:
@@ -1876,13 +1875,13 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
 
             inputs_embeds = self.model.qwen2.embed_tokens(input_ids)
             if pixel_values is not None:
-                pixel_values = paddle.cast(pixel_values, paddle.bfloat16)
+                pixel_values = paddle.cast(pixel_values, self.visual.patch_embed.proj.weight.dtype)
                 image_embeds = self.visual(pixel_values, grid_thw=image_grid_thw)
                 image_mask = input_ids == self.config.image_token_id
 
                 inputs_embeds[image_mask] = image_embeds
             if pixel_values_videos is not None:
-                pixel_values_videos = paddle.cast(pixel_values_videos, paddle.bfloat16)
+                pixel_values_videos = paddle.cast(pixel_values_videos, self.visual.patch_embed.proj.weight.dtype)
                 video_embeds = self.visual(pixel_values_videos, grid_thw=video_grid_thw)
                 video_mask = input_ids == self.config.video_token_id
                 inputs_embeds[video_mask] = video_embeds
@@ -2101,7 +2100,6 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
             }
         )
         return model_inputs
-
 
     def gme_qwen2_vl_forward(
         self,

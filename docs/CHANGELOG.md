@@ -2,6 +2,20 @@
 
 ## 最新版本信息
 
+### 3.0-beta(05/09/2024)
+
+#### 多模态理解
+
+1. 新增模型：Qwen2VL/Qwen2.5VL系列，DeepSeek-VL2, miniCPM-V 2.6, Janus系列，LLaVA-Critic, LLaVA-DenseConnector, LLaVA-OneVision, GOT-OCR2.0, mPLUG-Owl3
+2. PP系列模型：发布自研PP-DocBee文档理解多模态大模型，在学术界权威的英文文档理解评测榜单上达到同参数量级别模型SOTA
+3. 工具链升级：完善高性能推理部署，新增支持Qwen2.5VL系列，A800推理性能较vllm领先11.5%。LLaVA、InternVL2模型训练和推理适配昇腾910B
+
+#### 多模态生成
+
+1. 新增模型：Open-MAGVIT2，文生视频模型CogVideoX, HunyuanVideo
+2. PP系列模型：发布自研可控视频模型PP-VCtrl，支持在多种控制条件下的视频生成
+3. 工具链升级：发布ppdiffusers 0.29.1版本，新增对SD3 ControlNet和SD3.5的支持。SD3高性能推理性能打平TensorRT。SD3、SDXL模型LoRA训练和推理适配昇腾910B
+
 ### 2.0(07/26/2024)
 
 #### 多模态理解

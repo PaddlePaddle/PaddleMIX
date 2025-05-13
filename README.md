@@ -37,15 +37,10 @@
 
 
 ## 📣最新进展
-**🎉 2025.03.31 [Qwen2.5VL昆仑XPU](docs/hardware_support/KL_usage.md)硬件适配**
-* 为了满足用户对AI国产新硬件的使用需求，Qwen2.5VL在PaddleMIX框架中增加对昆仑P800芯片适配，提供国产计算芯片上的训推能力。
 
-**🎉 2025.03.17 [Qwen2.5VL高性能升级](deploy/qwen2_5_vl)重磅发布**
-* 得益于PaddlePaddle的最新优化，Qwen2.5VL在PaddleMIX框架中实现了高性能体验，推理速度提升显著，较VLLM框架提升10%-30%。
-
-**🎉 2025.01.20 喜迎外部开发者在星河(AIStudio)社区开发的[创作教程页面](paddlemix_applications.md)更新**
-* 涵盖圣诞主题贺卡生成🎄、人物生成👤等多种应用，期待您的体验！此外，还有AI鉴宝🔍、图生音乐🎶等有趣的应用等待您来探索～
-* 🙏 衷心感谢各位开发者基于套件的精彩创作！🚀 诚挚邀请您也来分享您的创意 - 欢迎将教程发布到公开网页或[飞桨AI Studio](https://aistudio.baidu.com/aistudio/community/multimodal?from=singlemessage)社区
+**🔥2025.05.09 发布PaddleMIX v3.0-beta**
+* 多模态理解：新增Qwen2.5VL系列，DeepSeek-VL2等；发布自研[PP-DocBee](./paddlemix/examples/ppdocbee)文档理解多模态大模型，新增[Qwen2.5VL高性能推理部署](deploy/qwen2_5_vl)，性能领先vllm 11.5%
+* 多模态生成：发布[PPDiffusers 0.29.1](./ppdiffusers/README.md)版本，发布自研可控视频模型[PP-VCtrl](./ppdiffusers/examples/ppvctrl/README_CN.md)，新增对SD3 ControlNet和SD3.5的支持。
 
 
 **🎉 2025.01.08 发布自研[PP-VCtrl](./ppdiffusers/examples/ppvctrl/README_CN.md)视频生成控制模型**
@@ -176,8 +171,8 @@ sh check_env.sh
 
 环境和依赖推荐版本:
 - paddlepaddle: 3.0.0b2或develop版本
-- paddlenlp: 3.0.0b2
-- ppdiffusers: 0.29.0
+- paddlenlp: 3.0.0b3
+- ppdiffusers: 0.29.1
 - huggingface_hub: 0.23.0
 ```
 

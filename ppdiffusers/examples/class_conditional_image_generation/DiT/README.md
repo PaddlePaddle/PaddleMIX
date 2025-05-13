@@ -12,9 +12,14 @@
 # paddlepaddle-gpu>=2.6.0
 python -m pip install paddlepaddle-gpu==2.6.0 -f https://www.paddlepaddle.org.cn/whl/linux/mkl/avx/stable.html
 pip install -r requirements.txt
+
+git clone https://github.com/PaddlePaddle/PaddleNLP.git -b release/2.6
+cd PaddleNLP/model_zoo/gpt-3/external_ops/
+python setup.py install
+cd ../../../../
 ```
 
-训练Large-DiT(DiT-LLaMA)模型需安装`fused_ln`，需要安装[此目录](https://github.com/PaddlePaddle/PaddleNLP/tree/develop/model_zoo/gpt-3/external_ops)下的自定义OP， `python setup.py install`。
+训练Large-DiT(DiT-LLaMA)模型需安装`fused_ln`，需要安装[此目录](https://github.com/PaddlePaddle/PaddleNLP/tree/release/2.6/model_zoo/gpt-3/external_ops)下的自定义OP， `python setup.py install`。
 
 
 ### 1.2 准备数据
