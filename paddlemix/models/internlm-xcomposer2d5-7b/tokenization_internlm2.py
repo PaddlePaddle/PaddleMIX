@@ -1,7 +1,5 @@
 # coding=utf-8
-# Copyright (c) The InternLM team and The HuggingFace Inc. team. All rights reserved.
-#
-# This code is based on transformers/src/transformers/models/llama/tokenization_llama.py
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,6 +12,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+# @Time    : 2025/5/14 下午1:33
+# @Author  : Ismoothly(1844252306@qq.com)
 
 """Tokenization classes for InternLM."""
 import os
