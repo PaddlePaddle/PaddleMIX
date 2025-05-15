@@ -276,6 +276,7 @@ else:
         "HunyuanVideoPipeline",
         "HunyuanVideoPipelineOutput",
     ]
+    _import_structure["mochi"] = ["MochiPipeline"]
 try:
     if not is_fastdeploy_available():
         raise OptionalDependencyNotAvailable()
@@ -569,6 +570,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             WuerstchenDecoderPipeline,
             WuerstchenPriorPipeline,
         )
+        from .mochi import MochiPipeline
 
         try:
             if not is_fastdeploy_available():

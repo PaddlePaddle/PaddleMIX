@@ -18,6 +18,7 @@ from typing import List, Optional, Tuple, Union
 import numpy as np
 import paddle
 from paddle import nn
+import paddle.nn.functional as F
 
 from ..utils import USE_PEFT_BACKEND
 from .activations import FP32SiLU, get_activation
@@ -1355,3 +1356,149 @@ def get_1d_rotary_pos_embed(
             paddle.ones_like(x=freqs) * paddle.sin(freqs),
         )  # complex64     # [S, D/2]
         return freqs_cis
+    
+
+
+
+class MochiAttentionPool(nn.Layer):
+    def __init__(
+        self,
+        num_attention_heads: int,
+        embed_dim: int,
+        output_dim: int = None,
+    ):
+        super().__init__()
+
+        self.output_dim = output_dim if output_dim is not None else embed_dim
+        self.num_attention_heads = num_attention_heads
+
+        self.to_kv = nn.Linear(embed_dim, 2 * embed_dim)
+        self.to_q = nn.Linear(embed_dim, embed_dim)
+        self.to_out = nn.Linear(embed_dim, self.output_dim)
+
+    @staticmethod
+    def pool_tokens(x: paddle.Tensor, mask: paddle.Tensor, *, keepdim=False) -> paddle.Tensor:
+        """
+        Pool tokens in x using mask.
+
+        Args:
+            x: (B, L, D) tensor of tokens.
+            mask: (B, L) boolean tensor indicating which tokens are not padding.
+
+        Returns:
+            pooled: (B, D) tensor of pooled tokens.
+        """
+        assert x.shape[1] == mask.shape[1]  # Expected mask to have same length as tokens.
+        assert x.shape[0] == mask.shape[0]  # Expected mask to have same batch size as tokens.
+        mask = mask[:, :, None].astype(x.dtype)
+        mask = mask / mask.sum(axis=1, keepdim=True).clip(min=1)
+        pooled = (x * mask).sum(axis=1, keepdim=keepdim)
+        return pooled
+
+    def forward(self, x: paddle.Tensor, mask: paddle.Tensor) -> paddle.Tensor:
+        D = x.shape[2]
+
+        # Mask part remains unchanged
+        attn_mask = mask[:, None, None, :].astype('bool')
+        attn_mask = F.pad(attn_mask.astype('int32'), (1, 0), value=1)
+        attn_mask = attn_mask.astype('bool')
+
+        # Average non-padding token features
+        x_pool = self.pool_tokens(x, mask, keepdim=True)
+        x = paddle.concat([x_pool, x], axis=1)
+        
+        # Compute query, key, value
+        kv = self.to_kv(x)
+        q = self.to_q(x[:, 0])
+        
+        # Extract head information - this part mostly remains unchanged
+        head_dim = D // self.num_attention_heads
+        # kv = kv.reshape([0, 0, 2, self.num_attention_heads, head_dim])
+        kv = paddle.unflatten(kv, 2, (2, self.num_attention_heads, head_dim))
+        kv = kv.transpose([0, 3, 2, 1, 4])
+        k, v = kv.unbind(axis=2)
+        # q = q.reshape([0, self.num_attention_heads, head_dim])
+        q = paddle.unflatten(q, 1, (self.num_attention_heads, head_dim))
+        q = q.unsqueeze(axis=2)
+        
+        # Call attention function using Paddle format
+        x = F.scaled_dot_product_attention_(
+            q.transpose([0, 2, 1, 3]), 
+            k.transpose([0, 2, 1, 3]), 
+            v.transpose([0, 2, 1, 3]), 
+            attn_mask=attn_mask,
+            dropout_p=0.0
+        )  # Output should be [B,1,H,D]
+        
+        # Convert result back to original order
+        x = x.transpose([0, 2, 1, 3])  # [B,1,H,D] -> [B,H,1,D]
+        
+        # Subsequent processing remains unchanged
+        x = x.squeeze(axis=2).flatten(start_axis=1, stop_axis=2)
+        x = self.to_out(x)
+        return x
+
+
+class MochiCombinedTimestepCaptionEmbedding(nn.Layer):
+    """
+    A neural network layer that combines timestep embeddings with caption/text embeddings.
+    This is typically used in diffusion models where both time and textual conditioning are required.
+    The class processes timestep information and text embeddings separately, then combines them.
+    """
+    def __init__(
+        self,
+        embedding_dim: int,         # Dimension of the output embedding
+        pooled_projection_dim: int, # Dimension for the caption projection
+        text_embed_dim: int,        # Dimension of the input text embeddings
+        time_embed_dim: int = 256,  # Dimension for the time embeddings
+        num_attention_heads: int = 8, # Number of attention heads for pooling
+    ) -> None:
+        super().__init__()
+
+        # Process timesteps into sinusoidal embeddings
+        self.time_proj = Timesteps(num_channels=time_embed_dim, flip_sin_to_cos=True, downscale_freq_shift=0.0)
+        
+        # Embed timesteps into the model dimension
+        self.timestep_embedder = TimestepEmbedding(in_channels=time_embed_dim, time_embed_dim=embedding_dim)
+        
+        # Attention pooling mechanism for text embeddings
+        self.pooler = MochiAttentionPool(
+            num_attention_heads=num_attention_heads, embed_dim=text_embed_dim, output_dim=embedding_dim
+        )
+        
+        # Projection layer for caption embeddings
+        self.caption_proj = nn.Linear(text_embed_dim, pooled_projection_dim)
+
+    def forward(
+        self,
+        timestep: paddle.Tensor,              # Timestep values to embed
+        encoder_hidden_states: paddle.Tensor, # Text encoder output/embeddings
+        encoder_attention_mask: paddle.Tensor, # Attention mask for text encoder outputs
+        hidden_dtype: Optional[str] = None,    # Optional dtype for internal calculations
+    ):
+        """
+        Combines timestep embeddings with text embeddings for conditioning.
+        
+        Args:
+            timestep: Tensor containing timestep values
+            encoder_hidden_states: Text embeddings from an encoder
+            encoder_attention_mask: Attention mask for the encoder states
+            hidden_dtype: Optional data type for intermediate calculations
+            
+        Returns:
+            tuple: (combined embedding for conditioning, caption projection)
+        """
+        # Project timesteps to sinusoidal embeddings
+        time_proj = self.time_proj(timestep)
+        # Convert time projections to embeddings with the target dimension
+        time_emb = self.timestep_embedder(time_proj.astype(hidden_dtype))
+
+        # Pool the text embeddings using attention mechanism
+        pooled_projections = self.pooler(encoder_hidden_states, encoder_attention_mask)
+        # Project the text embeddings to the required dimension
+        caption_proj = self.caption_proj(encoder_hidden_states)
+
+        # Combine time embeddings with pooled text embeddings for final conditioning
+        conditioning = time_emb + pooled_projections
+        return conditioning, caption_proj
+

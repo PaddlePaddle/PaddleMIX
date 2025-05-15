@@ -16,6 +16,8 @@
 import os
 from typing import Dict, Optional, Tuple
 
+import numbers
+
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
@@ -362,13 +364,22 @@ class RMSNorm(nn.Layer):
 
             return hidden_states
         else:
-            return paddle.incubate.nn.functional.fused_rms_norm(
-                x=hidden_states,
-                norm_weight=self.weight,
-                norm_bias=None,
-                epsilon=self.epsilon,
-                begin_norm_axis=len(hidden_states.shape)-1 if begin_norm_axis is None else begin_norm_axis,
-            )[0]
+            if self.weight is not None:
+                return paddle.incubate.nn.functional.fused_rms_norm(
+                        x=hidden_states,
+                        norm_weight=self.weight,
+                        norm_bias=None,
+                        epsilon=self.epsilon,
+                        begin_norm_axis=len(hidden_states.shape)-1 if begin_norm_axis is None else begin_norm_axis,
+                    )[0]
+            else:
+                input_dtype = hidden_states.dtype
+                variance = paddle.pow(hidden_states.astype('float32'), 2).mean(axis=-1, keepdim=True)
+                hidden_states = hidden_states * paddle.rsqrt(variance + self.epsilon)
+
+                hidden_states = hidden_states.astype(input_dtype)
+
+                return hidden_states
 
 class LpNorm(nn.Layer):
     def __init__(self, p: int = 2, axis: int = -1, epsilon: float = 1e-12):
@@ -406,3 +417,34 @@ class CogVideoXLayerNormZero(paddle.nn.Layer):
             enc_scale)[:, None, :] + enc_shift[:, None, :]
         return hidden_states, encoder_hidden_states, gate[:, None, :
             ], enc_gate[:, None, :]
+
+
+class MochiRMSNorm(nn.Layer):
+    def __init__(self, dim, eps: float, elementwise_affine: bool = True):
+        super().__init__()
+
+        self.eps = eps
+
+        if isinstance(dim, numbers.Integral):
+            dim = (dim,)
+
+        self.dim = dim
+
+        if elementwise_affine:
+            self.weight = self.create_parameter(
+                shape=dim,
+                default_initializer=nn.initializer.Constant(value=1.0)
+            )
+        else:
+            self.weight = None
+
+    def forward(self, hidden_states):
+        input_dtype = hidden_states.dtype
+        variance = paddle.pow(hidden_states.astype('float32'), 2).mean(axis=-1, keepdim=True)
+        hidden_states = hidden_states * paddle.rsqrt(variance + self.eps)
+
+        if self.weight is not None:
+            hidden_states = hidden_states * self.weight
+        hidden_states = hidden_states.astype(input_dtype)
+
+        return hidden_states
