@@ -35,8 +35,6 @@ import paddle.nn.functional as F
 import requests
 from edm.edm_network import get_edm_network
 
-torch_utils = None
-
 
 def open_url(
     url: str,

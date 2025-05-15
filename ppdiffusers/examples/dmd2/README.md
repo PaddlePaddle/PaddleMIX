@@ -10,7 +10,7 @@ pip install -r requirements.txt
 ### 推理示例
 
 ```shell
-CUDA_VISIBLE_DEVICES=2 PYTHONPATH=./:$PYTHONPATH   python -m edm.imagenet_example  --checkpoint_path YOUR_TRAINED_MODEL_PATH
+python -m edm.imagenet_example  --checkpoint_path YOUR_TRAINED_MODEL_PATH
 ```
 
 我们提供了一个预训练好的[模型](https://paddlenlp.bj.bcebos.com/models/community/ppdiffusers/dmd2/imagenet_gan_classifier_genloss3e-3_diffusion1000_lr2e-6_scratch.pdparams)

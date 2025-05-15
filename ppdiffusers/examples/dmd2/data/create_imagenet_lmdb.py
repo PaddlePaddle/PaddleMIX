@@ -19,7 +19,7 @@ import os
 
 import lmdb
 import numpy as np
-import torch
+import paddle
 from PIL import Image
 from tqdm import tqdm
 
@@ -48,7 +48,7 @@ def get_array_shape_from_lmdb(lmdb_path, array_name):
 
 
 def load_ode_file(ode_file):
-    ode_dict = torch.load(ode_file)
+    ode_dict = paddle.load(ode_file)
 
     ode_dict.pop("prompt_list", None)  # Remove 'prompt_list' if exists
     ode_dict.pop("batch_index", None)  # Remove 'batch_index' if exists
