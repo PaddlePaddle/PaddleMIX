@@ -8,9 +8,9 @@ PP-DocBee2 是PaddleMIX团队自研的一款专注于文档理解的多模态大
 
 | Model              | 模型大小 | Huggingface 仓库地址 |
 |--------------------|----------|--------------------|
-| PPDocBeeV2-3B | 3B | [PPDocBeeV2-3B](https://huggingface.co/PaddleMIX/PPDocBeeV2-3B) |
+| PPDocBee2-3B | 3B | [PPDocBee2-3B](https://huggingface.co/PaddleMIX/PPDocBee2-3B) |
 
-注意：使用`xxx.from_pretrained("PaddleMIX/PPDocBeeV2-3B")`即可自动下载该权重文件夹到缓存目录。
+注意：使用`xxx.from_pretrained("PaddleMIX/PPDocBee2-3B")`即可自动下载该权重文件夹到缓存目录。
 
 ## 2 环境准备
 1）[安装PaddlePaddle](https://github.com/PaddlePaddle/PaddleMIX?tab=readme-ov-file#3-%EF%B8%8F%E5%AE%89%E8%A3%85paddlepaddle)
@@ -76,7 +76,7 @@ python paddlemix/examples/ppdocbee2/app.py
 
 ```bash
 python paddlemix/examples/ppdocbee2/ppdocbee2_infer.py \
-  --model_path "PaddleMIX/PPDocBeeV2-3B" \
+  --model_path "PaddleMIX/PPDocBee2-3B" \
   --image_file "paddlemix/demo_images/medal_table.png" \
   --question "识别这份表格的内容, 以markdown格式输出"
 ```
@@ -125,7 +125,7 @@ PP-DocBee2 支持高性能推理，具体可参考 [PP-DocBee2高性能推理教
 | Qwen2-VL-2B | 680 | 476 | 167 | **8** | 29 |
 | PPDocBee-2B | 765 | 517 | 202 | 5 | 41 |
 | Qwen2.5-VL-3B | 789 | 526 | 223 | 6 | 34 |
-| **PPDocBeeV2-3B** | **852** | **545** | **253** | 7 | **47** |
+| **PPDocBee2-3B** | **852** | **545** | **253** | 7 | **47** |
 
 
 印刷文字类 (656张)、表格类 (358张)、印章类 (15张)、图表类 (167张)

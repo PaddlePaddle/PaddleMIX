@@ -30,7 +30,7 @@ import shutil
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 # 模型配置
-model_path = "PaddleMIX/PPDocBeeV2-3B"
+model_path = "PaddleMIX/PPDocBee2-3B"
 dtype = "bfloat16"  # V100请改成float16
 attn_implementation = "flash_attention_2" # V100请改成'eager'
 
