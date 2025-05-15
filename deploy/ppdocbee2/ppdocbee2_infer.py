@@ -1,4 +1,4 @@
-# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,26 +24,33 @@ from paddlenlp.trainer import PdArgumentParser
 from paddlenlp.transformers import AutoConfig, AutoInferenceModelForCausalLM
 from paddlenlp.trl import llm_utils
 
-from paddlemix.models.qwen2_vl import MIXQwen2Tokenizer
-from paddlemix.models.qwen2_vl.modeling_qwen2_vl import (
-    Qwen2VLForConditionalGeneration,
-    Qwen2VLRotaryEmbedding,
+from paddlemix.models.qwen2_5_vl import MIXQwen2_5_Tokenizer
+from paddlemix.models.ppdocbee2 import PPDocBee2ForConditionalGeneration
+from paddlemix.models.qwen2_5_vl.modeling_qwen2_5_vl import (
+    Qwen2_5_VLRotaryEmbedding,
 )
-from paddlemix.processors.qwen2_vl_processing import (
-    Qwen2VLImageProcessor,
-    Qwen2VLProcessor,
+from paddlemix.processors.qwen2_5_vl_processing import (
+    Qwen2_5_VLImageProcessor,
+    Qwen2_5_VLProcessor,
     process_vision_info,
 )
-
+# NOTE: (huangkui) sys.path.append("path_to_your_PaddleNLP/llm/predict")
 sys.path.append("PaddleNLP/llm/predict")
 from predictor import ModelArgument, PredictorArgument
 
 
 @dataclass
 class Mix_PredictorArgument(PredictorArgument):
+    media_type: str = field(
+        default="image",
+        metadata={"help": "The media type for the model, image or video."},
+    )
     question: str = field(default="Describe this image.", metadata={"help": "The question for the model."})
     image_file: str = field(
         default="paddlemix/demo_images/examples_image1.jpg", metadata={"help": "The image file for the model."}
+    )
+    video_file: str = field(
+        default="paddlemix/demo_images/red-panda.mp4", metadata={"help": "The video file for the model."}
     )
     attn_implementation: str = field(
         default="flash_attention_2",
@@ -66,9 +73,11 @@ def use_m_rope(vision_model_inputs):
         config.image_token_id,
         config.video_token_id,
         config.vision_start_token_id,
+        config.vision_config["tokens_per_second"],
         vision_model_inputs.get("input_ids"),
         vision_model_inputs.get("image_grid_thw"),
         vision_model_inputs.get("video_grid_thw", None),
+        vision_model_inputs.get("second_per_grid_ts", None),
         vision_model_inputs.get("attention_mask"),
     )
     position_start = position_ids[0][0][-1].item()
@@ -79,7 +88,7 @@ def use_m_rope(vision_model_inputs):
     position_ids = paddle.concat([position_ids, position_value], axis=-1)
 
     head_dim = config.hidden_size // config.num_attention_heads
-    qwen2_Embedding = Qwen2VLRotaryEmbedding(head_dim, config.max_position_embeddings, config.rope_theta)
+    qwen2_Embedding = Qwen2_5_VLRotaryEmbedding(head_dim, config.max_position_embeddings, config.rope_theta)
     cos = qwen2_Embedding.cos_cached
     sin = qwen2_Embedding.sin_cached
 
@@ -93,11 +102,10 @@ def use_m_rope(vision_model_inputs):
 
     rope_emb = paddle.stack([cos, sin], axis=0)
     rope_emb = rope_emb.reshape([rope_emb.shape[0], 1, rope_emb.shape[2], 1, rope_emb.shape[-1]])
-
     return rope_emb
 
 
-def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: Mix_PredictorArgument):
+def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: PredictorArgument):
     assert len(inputs_embeds.shape) == 3
     batch_size = inputs_embeds.shape[0]
 
@@ -161,13 +169,9 @@ def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: Mix_Pr
 
 
 def run_model(predictor_args):
-
-    question = "Describe this image."
-    image_pad_token = "<|vision_start|><|image_pad|><|vision_end|>"
-    text = f"<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n{image_pad_token}{question}<|im_end|>\n<|im_start|>assistant\n"
-
+    texts = [processor.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)]
     vision_model_inputs = processor(
-        text=text,
+        text=texts,
         images=image_inputs,
         videos=video_inputs,
         padding=True,
@@ -180,14 +184,14 @@ def run_model(predictor_args):
     generated_text = ""
     generated_ids = paddle.to_tensor([], dtype="int64").reshape([1, 0])
     while llm_model_inputs["not_need_stop"]:
-        generated_id = vl_model.model.generate(**llm_model_inputs)
+        generated_id = fast_llm_model.generate(**llm_model_inputs)
 
         # NOTE: (changwenbin) , Get inputs_embeds from the visual model or input_ids.
         # Here we uniformly set the input of the language model to inputs_embeds
         llm_model_inputs["inputs_embeds"] = fast_llm_model.qwen2.embed_tokens(generated_id)
 
         generated_ids = paddle.concat([generated_ids, generated_id], axis=1)
-        if paddle.any(generated_id == 151645).item():
+        if paddle.any(generated_id == processor.tokenizer.eos_token_id).item():
             break
     generated_text = processor.batch_decode(
         generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False
@@ -212,7 +216,8 @@ if tensor_parallel_degree > 1:
     }
     fleet.init(is_collective=True, strategy=strategy)
 
-vl_model = Qwen2VLForConditionalGeneration.from_pretrained(
+# MODEL_NAME = "PaddleMIX/PPDocBeeV2-3B"
+vl_model = PPDocBee2ForConditionalGeneration.from_pretrained(
     predictor_args.model_name_or_path,
     tensor_parallel_degree=tensor_parallel_degree,
     tensor_parallel_rank=tensor_parallel_rank,
@@ -221,27 +226,37 @@ vl_model = Qwen2VLForConditionalGeneration.from_pretrained(
     attn_implementation=predictor_args.attn_implementation,
 ).eval()
 
-
 # NOTE: (zhoukangkang、changwenbin) Because we only use the visual model here,
 # in order to reduce video memory,we delete the language model.
 del vl_model.model
 paddle.device.cuda.empty_cache()
 
 
-image_processor = Qwen2VLImageProcessor()
-tokenizer = MIXQwen2Tokenizer.from_pretrained(predictor_args.model_name_or_path)
-processor = Qwen2VLProcessor(image_processor, tokenizer)
+image_processor = Qwen2_5_VLImageProcessor()
+tokenizer = MIXQwen2_5_Tokenizer.from_pretrained(predictor_args.model_name_or_path)
+processor = Qwen2_5_VLProcessor(image_processor, tokenizer)
 # min_pixels = 256*28*28 # 200704
 # max_pixels = 1280*28*28 # 1003520
+
+messages_media = {
+    "type": predictor_args.media_type,
+    predictor_args.media_type: predictor_args.image_file
+    if predictor_args.media_type == "image"
+    else predictor_args.video_file,
+}
+if predictor_args.media_type == "video":
+    messages_media.update(
+        {
+            "max_pixels": 360 * 420,
+            "fps": 1.0,
+        }
+    )
 
 messages = [
     {
         "role": "user",
         "content": [
-            {
-                "type": "image",
-                "image": predictor_args.image_file,
-            },
+            messages_media,
             {"type": "text", "text": predictor_args.question},
         ],
     }
@@ -274,6 +289,7 @@ if predictor_args.llm_mode == "static":
         save_model_dir=f"./tmp/{predictor_args.model_name_or_path}/{predictor_args.quant_type}",
         enable_new_ir=True,
         cache_static_model=True,
+        skip_prune_program=True,
         exp_enable_use_cutlass=False,
     )
 
@@ -318,7 +334,6 @@ if predictor_args.benchmark:
     print(f"GPU memory_allocated: {paddle.device.cuda.memory_allocated() / 1024 ** 3:.2f} GB")
     print("input_tokens_len is :", generated_text[1], "tokens")
     print("output_tokens_len is :", generated_text[2], "tokens")
-
 else:
     generated_text = run_model(predictor_args)
     print("Final output_text:\n", generated_text[0])
