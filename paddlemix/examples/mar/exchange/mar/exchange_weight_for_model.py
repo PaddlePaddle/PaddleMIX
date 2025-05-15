@@ -22,7 +22,8 @@ import os
 
 from safetensors import safe_open
 
-parent_path = os.path.abspath(os.path.join(__file__, *([".."] * 5)))
+parent_path = os.path.abspath(os.path.join(__file__, *([".."] * 3)))
+
 import sys
 
 sys.path.append(parent_path)
@@ -31,10 +32,10 @@ import argparse
 import paddle
 
 parser = argparse.ArgumentParser()
+parser.add_argument("--torch_path", type=str, default="mar-huge.safetensors", help="path of the torch_model")
 parser.add_argument(
-    "--torch_path", type=str, default="example/mar/mar-huge.safetensors", help="path of the torch_model"
+    "--paddle_path", type=str, default="exchange/mar/paddle_mar_huge.pdparams", help="path of the paddle_model"
 )
-parser.add_argument("--paddle_path", type=str, default="paddle_mar_huge.pdparams", help="path of the paddle_model")
 
 args = parser.parse_args()
 
