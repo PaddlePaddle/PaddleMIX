@@ -178,6 +178,7 @@ python -u sdxl/test_sdxl_single_ckpt.py  \
 
 这里提供了一个预训练好的[模型](https://paddlenlp.bj.bcebos.com/models/community/ppdiffusers/dmd2/sdxl_cond999_8node_lr5e-5_denoising4step_diffusion1000_gan5e-3_guidance8_noinit_noode_backsim_scratch_lora.pdparams)
 
+也可以将生成的文件保存成一个文件夹的形式，使用[该目录下的脚本](../../scripts/fid_clip_score/)获得fid.
 
 ## 参考
 - https://github.com/tianweiy/DMD2
