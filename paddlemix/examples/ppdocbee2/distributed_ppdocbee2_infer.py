@@ -132,7 +132,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model_path", type=str, default="PaddleMIX/PPDocBeeV2-3B")
+    parser.add_argument("--model_path", type=str, default="PaddleMIX/PPDocBee2-3B")
     parser.add_argument("--question", type=str, default="识别这份表格的内容，以markdown格式输出")
     parser.add_argument("--image_file", type=str, default="paddlemix/demo_images/medal_table.png")
     parser.add_argument("--temperature", type=float, default=0.1)
