@@ -16,3 +16,6 @@ paddlesde
 ligo-segments
 huggingface_hub
 hf_transfer
+wandb
+imageio
+

@@ -1,0 +1,2 @@
+lmdb
+matplotlib<=3.7.5
