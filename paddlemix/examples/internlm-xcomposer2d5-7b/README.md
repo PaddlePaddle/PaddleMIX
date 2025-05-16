@@ -47,8 +47,9 @@ python torch2paddle.py
 
 ```
 
-生成权重文件model_state.pdparams、tokenizer.model、tokenizer_config.json、special_tokens_map.json
-![image](https://github.com/user-attachments/assets/2d2172a2-9d17-4c04-8da7-11ff7c157b9d)
+生成权重文件model_state.pdparams、tokenizer.model、tokenizer_config.json、special_tokens_map.json等
+![image](https://github.com/user-attachments/assets/d71f6ea0-c2c0-44fd-ac43-d6b762b2042f)
+
 ## 4 模型推理
 
 
