@@ -46,7 +46,9 @@ pip install --no-index  /home/aistudio/PaddleMIX/ppdiffusers/flash-attention/fla
 python torch2paddle.py 
 
 ```
-权重文件：model_state.pdparams
+
+生成权重文件model_state.pdparams、tokenizer.model、tokenizer_config.json、special_tokens_map.json
+![image](https://github.com/user-attachments/assets/2d2172a2-9d17-4c04-8da7-11ff7c157b9d)
 ## 4 模型推理
 
 
