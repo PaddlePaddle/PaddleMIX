@@ -16,6 +16,7 @@
 1）[安装PaddlePaddle](https://github.com/PaddlePaddle/PaddleMIX?tab=readme-ov-file#3-%EF%B8%8F%E5%AE%89%E8%A3%85paddlepaddle)
 - **python >= 3.10**
 - **paddlepaddle-gpu 要求是3.0.0b2或develop版本**
+- **硬件配置至少A100**
 ```bash
 conda create -n internlm python=3.11 -y
 conda activate internlm
