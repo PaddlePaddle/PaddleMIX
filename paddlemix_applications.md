@@ -320,7 +320,7 @@
    
 64. [网文漫画创作](https://aistudio.baidu.com/projectdetail/8952817)
     - 📚 类型：多模态创作
-    - 📷 功能：小说理解及下拉式多风格漫画生成
+    - 🎨 功能：小说理解及下拉式多风格漫画生成
     - 🔥 热度：🔥
 
 65. [绘梦长空·风筝韵事](https://aistudio.baidu.com/projectdetail/8404865)
