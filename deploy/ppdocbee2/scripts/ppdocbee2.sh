@@ -18,7 +18,7 @@ export USE_FASTER_TOP_P_SAMPLING=1
 
 # 单卡高性能推理
 python deploy/ppdocbee2/ppdocbee2_infer.py \
-    --model_name_or_path PaddleMIX/PPDocBeeV2-3B \
+    --model_name_or_path PaddleMIX/PPDocBee2-3B \
     --media_type "image" \
     --question "识别这份表格的内容, 以markdown格式输出" \
     --image_file paddlemix/demo_images/medal_table.png \
@@ -38,22 +38,22 @@ python deploy/ppdocbee2/ppdocbee2_infer.py \
 
 
 # # 多卡推理功能
-export CUDA_VISIBLE_DEVICES=0,1
-python -m paddle.distributed.launch --gpus "0,1" deploy/ppdocbee2/ppdocbee2_infer.py \
-    --model_name_or_path PaddleMIX/PPDocBeeV2-3B \
-    --media_type "image" \
-    --question "识别这份表格的内容, 以markdown格式输出" \
-    --image_file paddlemix/demo_images/medal_table.png \
-    --min_length 0 \
-    --max_length 2048 \
-    --top_k 1 \
-    --top_p 0.001 \
-    --temperature 0.1 \
-    --repetition_penalty 1.05 \
-    --block_attn True \
-    --append_attn True \
-    --inference_model True \
-    --llm_mode static \
-    --dtype bfloat16 \
-    --output_via_mq False \
-    --benchmark True 
+# export CUDA_VISIBLE_DEVICES=0,1
+# python -m paddle.distributed.launch --gpus "0,1" deploy/ppdocbee2/ppdocbee2_infer.py \
+#     --model_name_or_path PaddleMIX/PPDocBee2-3B \
+#     --media_type "image" \
+#     --question "识别这份表格的内容, 以markdown格式输出" \
+#     --image_file paddlemix/demo_images/medal_table.png \
+#     --min_length 0 \
+#     --max_length 2048 \
+#     --top_k 1 \
+#     --top_p 0.001 \
+#     --temperature 0.1 \
+#     --repetition_penalty 1.05 \
+#     --block_attn True \
+#     --append_attn True \
+#     --inference_model True \
+#     --llm_mode static \
+#     --dtype bfloat16 \
+#     --output_via_mq False \
+#     --benchmark True 

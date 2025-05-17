@@ -123,6 +123,7 @@ else:
             "AutoencoderKLWan",
             "AutoencoderKLTemporalDecoder",
             "AutoencoderTiny",
+            "AutoencoderKLMochi",
             "CacheMixin",
             "CogVideoXTransformer3DModel",
             "CogVideoXTransformer3DVCtrlModel",
@@ -165,6 +166,7 @@ else:
             "VCtrlModel",
             # new add
             "FluxTransformer2DModel",
+            "MochiTransformer3DModel",
             "WanTransformer3DModel",
         ]
     )
@@ -417,6 +419,7 @@ else:
             # new add
             "ImgToVideoSDPipeline",
             "VideoToVideoModelscopePipeline",
+            "MochiPipeline",
         ]
     )
 
@@ -527,6 +530,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             AutoencoderKLHunyuanVideo,
             AutoencoderKLTemporalDecoder,
             AutoencoderTiny,
+            AutoencoderKLMochi,
             CogVideoXTransformer3DModel,
             CogVideoXTransformer3DVCtrlModel,
             ConsistencyDecoderVAE,
@@ -562,6 +566,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             VCtrlModel,
             Vid2VidSTUNet,
             VQModel,
+            MochiTransformer3DModel,
             WanTransformer3DModel,
         )
         from .optimization import (
@@ -788,6 +793,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             WuerstchenCombinedPipeline,
             WuerstchenDecoderPipeline,
             WuerstchenPriorPipeline,
+            MochiPipeline,
         )
 
     try:

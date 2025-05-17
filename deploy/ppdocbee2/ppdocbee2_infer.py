@@ -216,7 +216,7 @@ if tensor_parallel_degree > 1:
     }
     fleet.init(is_collective=True, strategy=strategy)
 
-# MODEL_NAME = "PaddleMIX/PPDocBeeV2-3B"
+# MODEL_NAME = "PaddleMIX/PPDocBee2-3B"
 vl_model = PPDocBee2ForConditionalGeneration.from_pretrained(
     predictor_args.model_name_or_path,
     tensor_parallel_degree=tensor_parallel_degree,

@@ -6,9 +6,9 @@
 
 | Model              | 模型大小 | Huggingface 仓库地址 |
 |--------------------|----------|--------------------|
-| PPDocBeeV2-3B | 3B | [PPDocBeeV2-3B](https://huggingface.co/PaddleMIX/PPDocBeeV2-3B) |
+| PPDocBee2-3B | 3B | [PPDocBee2-3B](https://huggingface.co/PaddleMIX/PPDocBee2-3B) |
 
-注意：使用`xxx.from_pretrained("PaddleMIX/PPDocBeeV2-3B")`即可自动下载该权重文件夹到缓存目录。
+注意：使用`xxx.from_pretrained("PaddleMIX/PPDocBee2-3B")`即可自动下载该权重文件夹到缓存目录。
 
 
 ## 2 环境准备
@@ -95,7 +95,7 @@ export FLAGS_cascade_attention_max_partition_size=512
 export FLAGS_cascade_attention_deal_each_time=16
 export USE_FASTER_TOP_P_SAMPLING=1
 python deploy/ppdocbee2/ppdocbee2_infer.py \
-    --model_name_or_path PaddleMIX/PPDocBeeV2-3B \
+    --model_name_or_path PaddleMIX/PPDocBee2-3B \
     --media_type "image" \
     --image_file "paddlemix/demo_images/medal_table.png" \
     --question "识别这份表格的内容, 以markdown格式输出" \
@@ -120,7 +120,7 @@ python deploy/ppdocbee2/ppdocbee2_infer.py \
 ```bash
 export CUDA_VISIBLE_DEVICES=0,1
 python -m paddle.distributed.launch --gpus "0,1" deploy/ppdocbee2/ppdocbee2_infer.py \
-    --model_name_or_path PaddleMIX/PPDocBeeV2-3B \
+    --model_name_or_path PaddleMIX/PPDocBee2-3B \
     --media_type "image" \
     --question "识别这份表格的内容, 以markdown格式输出" \
     --image_file paddlemix/demo_images/medal_table.png \
