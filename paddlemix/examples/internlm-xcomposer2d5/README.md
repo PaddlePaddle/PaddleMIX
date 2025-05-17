@@ -1,4 +1,4 @@
-#InternLM-XComposer2.5-7b
+#InternLM-XComposer2.5
 
 ## 1. 模型介绍
 
