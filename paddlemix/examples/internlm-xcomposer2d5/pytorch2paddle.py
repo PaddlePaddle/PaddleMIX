@@ -20,9 +20,22 @@ import paddle
 import gc
 from tqdm import tqdm
 from transformers import AutoModel, AutoTokenizer
-
-local_model_path = "/home/aistudio/internlm-xcomposer2d5-7b"
-save_dir = "/home/aistudio/internlm-xcomposer2d5-7b-paddle"
+import argparse
+def parse_args():
+    parser = argparse.ArgumentParser(description="Model conversion script")
+    parser.add_argument(
+        "--model_path",
+        type=str,
+        required=True,
+        help="Path to the original PyTorch model directory"
+    )
+    parser.add_argument(
+        "--save_dir",
+        type=str,
+        required=True,
+        help="Output directory for converted PaddlePaddle model"
+    )
+    return parser.parse_args()
 
 def load_full_model(model_path):
     """加载完整模型到CPU内存"""
