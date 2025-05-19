@@ -22,7 +22,7 @@ import os
 
 from safetensors import safe_open
 
-parent_path = os.path.abspath(os.path.join(__file__, *([".."] * 3)))
+parent_path = os.path.abspath(os.path.join(__file__, *([".."] * 5)))
 
 import sys
 

@@ -124,6 +124,7 @@ class Attention(nn.Layer):
         qkv = self.qkv(x).reshape([B, N, 3, self.num_heads, self.head_dim]).transpose([2, 0, 3, 1, 4])
         q, k, v = qkv[0], qkv[1], qkv[2]
         q, k = self.q_norm(q), self.k_norm(k)
+        # 增加转置验证
 
         attn = (q @ k.transpose([0, 1, 3, 2])) * self.scale
         attn = nn.functional.softmax(attn, axis=-1)

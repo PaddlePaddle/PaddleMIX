@@ -16,7 +16,8 @@
 # vae中无2维矩阵，无需转置，直接遍历存储后，转换格式即可
 import os
 
-parent_path = os.path.abspath(os.path.join(__file__, *([".."] * 3)))
+parent_path = os.path.abspath(os.path.join(__file__, *([".."] * 5)))
+
 import sys
 
 sys.path.append(parent_path)

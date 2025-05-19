@@ -185,16 +185,16 @@ class AttnBlock(paddle.nn.Layer):
         k = self.k(h_)
         v = self.v(h_)
         b, c, h, w = tuple(q.shape)
-        q = q.reshape(b, c, h * w)
+        q = q.reshape((b, c, h * w))
         q = q.transpose(perm=[0, 2, 1])
-        k = k.reshape(b, c, h * w)
+        k = k.reshape((b, c, h * w))
         w_ = paddle.bmm(x=q, y=k)
         w_ = w_ * int(c) ** -0.5
         w_ = paddle.nn.functional.softmax(x=w_, axis=2)
-        v = v.reshape(b, c, h * w)
+        v = v.reshape((b, c, h * w))
         w_ = w_.transpose(perm=[0, 2, 1])
         h_ = paddle.bmm(x=v, y=w_)
-        h_ = h_.reshape(b, c, h, w)
+        h_ = h_.reshape((b, c, h, w))
         h_ = self.proj_out(h_)
         return x + h_
 
@@ -476,7 +476,7 @@ class AutoencoderKL(paddle.nn.Layer):
         print("Missing keys:")
         print(msg[0])
         print("Unexpected keys:")
-        print(msg.unexpected_keys[1])
+        print(msg[1])
         print(f"Restored from {path}")
 
     def encode(self, x):

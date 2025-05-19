@@ -195,9 +195,9 @@ class MAR(nn.Layer):
         p = self.patch_size
         c = self.vae_embed_dim
         h_, w_ = self.seq_h, self.seq_w
-        x = x.reshape(bsz, h_, w_, c, p, p)
+        x = x.reshape((bsz, h_, w_, c, p, p))
         x = paddle.einsum("nhwcpq->nchpwq", x)
-        x = x.reshape(bsz, c, h_ * p, w_ * p)
+        x = x.reshape((bsz, c, h_ * p, w_ * p))
         return x
 
     def sample_orders(self, bsz):
@@ -242,7 +242,7 @@ class MAR(nn.Layer):
         x[:, : self.buffer_size] = class_embedding.unsqueeze(axis=1)
         x = x + self.encoder_pos_embed_learned
         x = self.z_proj_ln(x)
-        x = x[(1 - mask_with_buffer).nonzero(as_tuple=True)].reshape(bsz, -1, embed_dim)
+        x = x[(1 - mask_with_buffer).nonzero(as_tuple=True)].reshape((bsz, -1, embed_dim))
         if self.grad_checkpointing and not paddle.in_dynamic_mode():
             for block in self.encoder_blocks:
                 x = paddle.distributed.fleet.utils.recompute(block, x)

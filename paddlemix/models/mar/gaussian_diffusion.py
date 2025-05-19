@@ -397,7 +397,8 @@ class GaussianDiffusion:
             model_kwargs=model_kwargs,
         )
         noise = paddle.randn(shape=x.shape, dtype=x.dtype)
-        nonzero_mask = (t != 0).astype(dtype="float32").view(-1, *([1] * (len(tuple(x.shape)) - 1)))
+        new_shape = (-1,) + (1,) * (len(x.shape) - 1)
+        nonzero_mask = (t != 0).astype(dtype="float32").reshape(new_shape)
         if cond_fn is not None:
             out["mean"] = self.condition_mean(cond_fn, out, x, t, model_kwargs=model_kwargs)
         sample = out["mean"] + nonzero_mask * paddle.exp(x=0.5 * out["log_variance"]) * noise * temperature

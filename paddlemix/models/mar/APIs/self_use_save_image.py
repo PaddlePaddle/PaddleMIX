@@ -14,14 +14,14 @@
 
 import math
 import pathlib
-from typing import BinaryIO, Optional, Union
+from typing import BinaryIO, List, Optional, Tuple, Union
 
 import paddle
 from PIL import Image
 
 
 def save_image(
-    tensor: Union[paddle.Tensor, list[paddle.Tensor]],
+    tensor: Union[paddle.Tensor, List[paddle.Tensor]],
     fp: Union[str, pathlib.Path, BinaryIO],
     format: Optional[str] = None,
     **kwargs,
@@ -44,11 +44,11 @@ def save_image(
 
 
 def make_grid(
-    tensor: Union[paddle.Tensor, list[paddle.Tensor]],
+    tensor: Union[paddle.Tensor, List[paddle.Tensor]],
     nrow: int = 8,
     padding: int = 2,
     normalize: bool = False,
-    value_range: Optional[tuple[int, int]] = None,
+    value_range: Optional[Tuple[int, int]] = None,
     scale_each: bool = False,
     pad_value: float = 0.0,
 ) -> paddle.Tensor:

@@ -21,22 +21,31 @@
 
 ## 2 环境准备
 
-1) [安装PaddlePaddle-Gpu](https://www.paddlepaddle.org.cn/documentation/docs/zh/develop/install/pip/windows-pip.html)
+1) 准备`python`环境
 
-Python版本要求为3.8
+`Python`版本要求为3.8，建议使用`conda`或`miniconda`环境
 ```shell
-# 注意核对cuda版本
-python -m pip install paddlepaddle-gpu==3.0.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu118/
+# 准备miniconda环境
+mkdir -p ~/miniconda3
+wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda3/miniconda.sh
+bash ~/miniconda3/miniconda.sh -b -u -p ~/miniconda3
+source ~/miniconda3/bin/activate
+# 创建python环境
+conda create -n [your env name] python=3.8
+conda activate [your env name]
+# 设置清华源
+pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 ```
 
-2) 安装pip依赖
+2) 安装pip依赖及[PaddlePaddle-Gpu](https://www.paddlepaddle.org.cn/documentation/docs/zh/develop/install/pip/windows-pip.html)
 
-进入`models/mar`文件夹，加载requirements.txt
+进入`models/mar`文件夹，加载`requirements.txt`
 ```bash
-cd paddlemix/models/mar
+cd PaddleMIX/paddlemix/models/mar
 pip install -r requirements.txt
-# 或
-conda create --name <env> --file <this file>
+
+# 安装GPU版本Paddle注意核对cuda版本
+python -m pip install paddlepaddle-gpu==3.0.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu118/
 ```
 
 3) VAE、MAR权重的下载与转换
