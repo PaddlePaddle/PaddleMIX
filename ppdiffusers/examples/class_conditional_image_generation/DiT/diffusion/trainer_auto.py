@@ -37,7 +37,12 @@ from paddlenlp.trainer.integrations import (
     VisualDLCallback,
     rewrite_logs,
 )
-from paddlenlp.trainer.trainer import SCALER_NAME, SCHEDULER_NAME, TRAINER_STATE_NAME
+from paddlenlp.trainer.trainer import (
+    SCALER_NAME,
+    SCHEDULER_NAME,
+    TRAINER_STATE_NAME,
+    TRAINING_ARGS_NAME,
+)
 from paddlenlp.trainer.trainer_utils import PREFIX_CHECKPOINT_DIR
 from paddlenlp.transformers.model_utils import _add_variant
 from paddlenlp.utils import profiler
@@ -418,6 +423,26 @@ class LatentDiffusionAutoTrainer(AutoTrainer):
             if self.args.should_save_model_state and self.args.should_save:
                 # For ckpt integrity
                 paddle.save(self.state.global_step, os.path.join(output_dir, ".checkpoint_done"))
+
+    def _save(
+        self,
+        output_dir=None,
+        state_dict=None,
+        merge_tensor_parallel=False,
+    ):
+        output_dir = output_dir if output_dir is not None else self.args.output_dir
+        os.makedirs(output_dir, exist_ok=True)
+        logger.info(f"Saving model checkpoint to {output_dir}")
+
+        if self.args.should_save:
+            if self.tokenizer is not None:
+                self.tokenizer.save_pretrained(output_dir)
+            # Good practice: save your training arguments together with the trained model
+            paddle.save(self.args, os.path.join(output_dir, TRAINING_ARGS_NAME))
+
+        if self.args.should_save_model_state:
+            self._save_ckpt_func(self.model.state_dict(), output_dir)
+            logger.info(f"Model weights and optimizer states saved in {output_dir}")
 
 
 def clip_grad_norm_(
