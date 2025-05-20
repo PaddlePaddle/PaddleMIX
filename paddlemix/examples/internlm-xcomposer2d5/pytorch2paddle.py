@@ -117,30 +117,33 @@ def merge_chunks(save_dir):
         os.remove(os.path.join(save_dir, fname))
 
 def main():
+    # 解析命令行参数
+    args = parse_args()
+    
     # 创建保存目录
-    os.makedirs(save_dir, exist_ok=True)
+    os.makedirs(args.save_dir, exist_ok=True)
     
     # 保存分词器
     print("保存分词器...")
-    tokenizer = AutoTokenizer.from_pretrained(local_model_path, trust_remote_code=True)
-    tokenizer.save_pretrained(save_dir)
+    tokenizer = AutoTokenizer.from_pretrained(args.model_path, trust_remote_code=True)
+    tokenizer.save_pretrained(args.save_dir)
     
     # 加载PyTorch模型
-    torch_model = load_full_model(local_model_path)
+    torch_model = load_full_model(args.model_path)
     
     try:
         # 分块转换并保存
         convert_and_save_chunks(
             torch_model.state_dict(),
-            save_dir,
-            chunk_size=30  # 根据内存调整
+            args.save_dir,
+            chunk_size=30
         )
         
         # 可选：合并分块文件（需要足够磁盘空间）
-        # merge_chunks(save_dir)
+        # merge_chunks(args.save_dir)
         
-        print(f"转换完成！参数保存在：{save_dir}")
-        print(f"分块数量：{len([f for f in os.listdir(save_dir) if f.startswith('model_part_')])}")
+        print(f"转换完成！参数保存在：{args.save_dir}")
+        print(f"分块数量：{len([f for f in os.listdir(args.save_dir) if f.startswith('model_part_')])}")
         
     finally:
         # 清理内存
