@@ -10,7 +10,7 @@
 - **paddlepaddle-gpu 要求是develop版本**
 ```bash
 # 安装示例
-python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu123/
+python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu118/
 ```
 
 - **paddlenlp 需要特定版本**

@@ -13,7 +13,7 @@
 - **paddlepaddle-gpu 要求develop版本**
 ```bash
 # Develop 版本安装示例
-python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu123/
+python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu118/
 ```
 
 2） [安装PaddleMIX环境依赖包](https://github.com/PaddlePaddle/PaddleMIX?tab=readme-ov-file#3-%EF%B8%8F%E5%AE%89%E8%A3%85paddlepaddle)
@@ -165,7 +165,7 @@ python deploy/deepseek_vl2/deepseek_vl2_infer.py \
 
 ## 4 一键推理 & 推理说明
 cd PaddleMIX
-sh deploy/deepseek_vl2/shell/run.sh
+sh deploy/deepseek_vl2/scripts/deepseek_vl2.sh
 #### 参数设定
 |     parameter      |      Value     |
 | ------------------ | -------------- |

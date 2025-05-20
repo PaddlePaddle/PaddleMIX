@@ -107,7 +107,7 @@ def init_llm_model_inputs(inputs_embeds, arg_config: Mix_PredictorArgument):
     model_inputs["is_block_step"] = paddle.full(shape=[batch_size], fill_value=False, dtype="bool")
 
     cache_k_shapes, cache_v_shapes = vl_model.language.get_cache_kvs_shape(vl_model.language.config, batch_size)
-    cachekv_dtype = config.dtype if arg_config.cachekv_int8_type is None else "uint8"
+    cachekv_dtype = arg_config.dtype if arg_config.cachekv_int8_type is None else "uint8"
     cache_kvs = []
     if cache_k_shapes and cache_v_shapes:
         for cache_k_shape, cache_v_shape in zip(cache_k_shapes, cache_v_shapes):

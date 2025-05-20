@@ -20,7 +20,7 @@
 - **paddlepaddle-gpu 要求develop版本**
 ```bash
 # Develop 版本安装示例
-python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu123/
+python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu118/
 
 ```
 

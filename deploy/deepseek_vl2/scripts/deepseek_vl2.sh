@@ -33,7 +33,7 @@ python deploy/deepseek_vl2/deepseek_vl2_infer.py \
     --append_attn True \
     --inference_model True \
     --llm_mode static \
-    --dtype bfloat16 \
+    --dtype float16 \
     --output_via_mq False \
     --benchmark True
 
