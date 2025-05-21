@@ -18,20 +18,12 @@ python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/
 
 2） [安装PaddleMIX环境依赖包](https://github.com/PaddlePaddle/PaddleMIX?tab=readme-ov-file#3-%EF%B8%8F%E5%AE%89%E8%A3%85paddlepaddle)
 ```bash
-# pip 安装示例，安装paddlemix、ppdiffusers、项目依赖
-python -m pip install -e .
-python -m pip install -e ppdiffusers
-python -m pip install -r requirements.txt
-
-# 安装PaddleNLP
-pip uninstall -y paddlenlp && rm -rf PaddleNLP
-git clone --depth=1 https://github.com/PaddlePaddle/PaddleNLP.git
-cd PaddleNLP
-pip install -e .
+# 安装paddlemix、ppdiffusers、项目依赖、PaddleNLP
+sh build_env.sh --nlp_dev
 
 # 此处提供两种paddlenlp_ops安装方法，建议使用预编译的paddlenlp_ops进行安装
 # 手动编译安装paddlenlp_ops
-cd csrc
+cd PaddleNLP/csrc
 python setup_cuda.py install
 
 # 安装pre-build paddlenlp_ops
