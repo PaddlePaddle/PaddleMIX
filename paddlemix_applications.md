@@ -288,7 +288,7 @@
     - 🔥 热度：🔥
 
 ## 💡 七、创新应用类
-58. [多模态数字艺术创生](https://aistudio.baidu.com/projectdetail/8382636)
+58. [多模态数字艺术创作](https://aistudio.baidu.com/projectdetail/8382636)
     - 🎨 类型：艺术创作
     - 🖼️ 功能：数字艺术创作与鉴赏
     - 🔥 热度：🔥🔥
@@ -317,94 +317,99 @@
     - 📚 类型：多模态创作
     - 🎭 功能：将小说中场景深度还原
     - 🔥 热度：🔥
+   
+64. [网文漫画创作](https://aistudio.baidu.com/projectdetail/8952817)
+    - 📚 类型：多模态创作
+    - 🎨 功能：小说理解及下拉式多风格漫画生成
+    - 🔥 热度：🔥
 
-64. [绘梦长空·风筝韵事](https://aistudio.baidu.com/projectdetail/8404865)
+65. [绘梦长空·风筝韵事](https://aistudio.baidu.com/projectdetail/8404865)
     - 🎉 类型：图像理解
     - 📚 功能：讲述中国传统风筝背后的动人故事与制作工艺
     - 🔥 热度：🔥 
 
-65. [电商场景图生成](https://aistudio.baidu.com/projectdetail/8641146)
+66. [电商场景图生成](https://aistudio.baidu.com/projectdetail/8641146)
     - 🎉 类型：电商应用
     - 🎭 功能：商品场景图生成
     - 🔥 热度：🔥🔥
 
-66. [智能解题助手](https://aistudio.baidu.com/projectdetail/8598265)
+67. [智能解题助手](https://aistudio.baidu.com/projectdetail/8598265)
     - 🎉 类型：教育应用
     - 📚 功能：智能解题辅导助手
     - 🔥 热度：🔥
 
-67. [MobileAgent](https://aistudio.baidu.com/projectdetail/8660179)
+68. [MobileAgent](https://aistudio.baidu.com/projectdetail/8660179)
     - 🎉 类型：多模态智能体
     - 🎭 功能：AI手机助手
     - 🔥 热度：🔥
 
-68. [人生模拟器](https://aistudio.baidu.com/projectdetail/8949354)
+69. [人生模拟器](https://aistudio.baidu.com/projectdetail/8949354)
     - 🏊 类型：图像理解与文本分析
     - 🤵 功能：图文事件分析与场景生成
     - 🔥 热度：🔥
 
-69. [随身吐槽相机](https://aistudio.baidu.com/projectdetail/8876937)
+70. [随身吐槽相机](https://aistudio.baidu.com/projectdetail/8876937)
     - 📚 类型：图像理解与文本生成
     - 🦸‍♂️ 功能：根据图片生成文本段子
     - 🔥 热度：🔥
 
-70. [智能相册](https://aistudio.baidu.com/projectdetail/8848591)
+71. [智能相册](https://aistudio.baidu.com/projectdetail/8848591)
     - 📚 类型：词云生成
     - 📷 功能：生成个性化的词云相册
     - 🔥 热度：🔥
 
 ## 八、其他（教程类）
-71. [基于PaddleMIX的数据集行为标签分类器训推实例](https://aistudio.baidu.com/projectdetail/7917712)
+72. [基于PaddleMIX的数据集行为标签分类器训推实例](https://aistudio.baidu.com/projectdetail/7917712)
     - 🎓 类型：图像理解
     - 🌋 功能：基于LLaVA的行为分类
     - 🔥 热度：🔥🔥🔥
     
-72. [PaddleMIX入门AIGC应用](https://aistudio.baidu.com/projectdetail/7583868)
+73. [PaddleMIX入门AIGC应用](https://aistudio.baidu.com/projectdetail/7583868)
     - 📟 类型：多模态生成
     - 📷 功能：图像生成、音频生成、图像变换、图像超分辨率
     - 🔥 热度：🔥🔥
 
-73. [PaddleMIX DiT高性能推理实战](https://aistudio.baidu.com/projectdetail/8261962)
+74. [PaddleMIX DiT高性能推理实战](https://aistudio.baidu.com/projectdetail/8261962)
     - 🎨 类型：图像生成
     - 📚 功能：基于DiT结构的图像生成
     - 🔥 热度：🔥🔥
 
-74. [PaddleMIX玩转Stable Diffusion 3](https://aistudio.baidu.com/projectdetail/8494762)
+75. [PaddleMIX玩转Stable Diffusion 3](https://aistudio.baidu.com/projectdetail/8494762)
     - 🔔 类型：图像生成
     - 🎮 功能：基于Stable Diffusion 3的图像生成
     - 🔥 热度：🔥🔥
 
-75. [基于PaddleMIX的数据集行为标签分类器训推实例](https://aistudio.baidu.com/projectdetail/8229498)
+76. [基于PaddleMIX的数据集行为标签分类器训推实例](https://aistudio.baidu.com/projectdetail/8229498)
     - 🎈 类型：图像理解
     - 💎 功能：LLaVA模型训练与使用
     - 🔥 热度：🔥🔥
 
-76. [PaddleMIX入门视频生成](https://aistudio.baidu.com/projectdetail/8221041)
+77. [PaddleMIX入门视频生成](https://aistudio.baidu.com/projectdetail/8221041)
     - 🎥 类型：视频生成
     - 📺 功能：基于SVD和OpenSora的视频生成
     - 🔥 热度：🔥
 
-77. [基于PaddleMIX的高速文生图推理](https://aistudio.baidu.com/projectdetail/8232803)
+78. [基于PaddleMIX的高速文生图推理](https://aistudio.baidu.com/projectdetail/8232803)
     - 🎓 类型：图像生成
     - 🎨 功能：LCM模型的快速图像生成
     - 🔥 热度：🔥
 
-78. [多模态理解趣味应用](https://aistudio.baidu.com/projectdetail/8940626)
+79. [多模态理解趣味应用](https://aistudio.baidu.com/projectdetail/8940626)
     - 📷 类型：多模态理解
     - 🖌️ 功能：问答助手、动漫二创、图像理解
     - 🔥 热度：🔥🔥🔥
 
-79. [一站式训推多模态理解模型DeepSeek-VL2](https://aistudio.baidu.com/projectdetail/8889929)
+80. [一站式训推多模态理解模型DeepSeek-VL2](https://aistudio.baidu.com/projectdetail/8889929)
     - 🎮 类型：多模态理解
     - 🖌️ 功能：多模态理解模型训练推理
     - 🔥 热度：🔥🔥🔥
 
-80. [DeepSeek-VL2快速体验](https://aistudio.baidu.com/projectdetail/8807257)
+81. [DeepSeek-VL2快速体验](https://aistudio.baidu.com/projectdetail/8807257)
     - 📷 类型：多模态理解
     - 🎨 功能：图像描述
     - 🔥 热度：🔥🔥🔥
 
-81. [Janus快速体验](https://aistudio.baidu.com/projectdetail/8798721)
+82. [Janus快速体验](https://aistudio.baidu.com/projectdetail/8798721)
     - 🖼️ 类型：多模态理解
     - 🎨 功能：图像理解与图像生成
     - 🔥 热度：🔥🔥🔥
