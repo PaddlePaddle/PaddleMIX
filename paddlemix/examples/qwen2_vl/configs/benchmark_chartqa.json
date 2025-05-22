@@ -1,0 +1,7 @@
+{
+    "chartqa_train_18k": {
+      "annotation": "/root/.paddlemix/datasets/playground/opensource_json/chartqa_train_18k.json",
+      "repeat_time": 1
+    }
+  }
+  

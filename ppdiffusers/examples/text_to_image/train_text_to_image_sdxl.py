@@ -597,13 +597,11 @@ def main(args):
         args.pretrained_model_name_or_path,
         subfolder="tokenizer",
         revision=args.revision,
-        use_fast=False,
     )
     tokenizer_two = AutoTokenizer.from_pretrained(
         args.pretrained_model_name_or_path,
         subfolder="tokenizer_2",
         revision=args.revision,
-        use_fast=False,
     )
 
     # import correct text encoder classes
@@ -649,7 +647,7 @@ def main(args):
     # Set unet as trainable.
     unet.train()
 
-    # For mixed precision training we cast all non-trainable weigths to half-precision
+    # For mixed precision training we cast all non-trainable weights to half-precision
     # as these weights are only used for inference, keeping weights in full precision is not required.
     weight_dtype = paddle.float32
     if accelerator.mixed_precision == "fp16":

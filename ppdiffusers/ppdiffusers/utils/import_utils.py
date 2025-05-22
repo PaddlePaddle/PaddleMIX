@@ -80,11 +80,11 @@ if USE_PADDLE in ENV_VARS_TRUE_AND_AUTO_VALUES:
                     memory_efficient_attention,
                 )
 
-                _ = memory_efficient_attention(
-                    paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
-                    paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
-                    paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
-                )
+                # _ = memory_efficient_attention(
+                #     paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
+                #     paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
+                #     paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
+                # )
                 _ppxformers_available = True
             except Exception:
                 _ppxformers_available = False
@@ -375,6 +375,8 @@ def is_scipy_available():
 def is_librosa_available():
     return _librosa_available
 
+def is_npu_available():
+    return paddle.device.get_device().startswith("npu")
 
 def is_ppxformers_available():
     USE_PPXFORMERS = str2bool(os.getenv("USE_PPXFORMERS", True))
@@ -429,7 +431,7 @@ def is_paddlesde_available():
     return _paddlesde_available
 
 
-# This is paddle packge
+# This is paddle package
 def is_pp_invisible_watermark_available():
     return _pp_invisible_watermark_available
 
@@ -452,7 +454,7 @@ installation page: https://www.paddlepaddle.org.cn/install/quick and follow the 
 
 # docstyle-ignore
 PPXFORMERS_IMPORT_ERROR = """
-{0} requires the scaled_dot_product_attention but your PaddlePaddle donot have this. Checkout the instructions on the
+{0} requires the scaled_dot_product_attention but your PaddlePaddle do not have this. Checkout the instructions on the
 installation page: https://www.paddlepaddle.org.cn/install/quick and follow the ones that match your environment.
 """
 
@@ -721,7 +723,10 @@ def is_paddlenlp_version(operation: str, version: str):
     if not _paddlenlp_available:
         return False
     if _paddlenlp_version == "0.0.0" or "post" in _paddlenlp_version:
-        return True
+        if operation in [">", ">=", "=="]:
+            return True
+        elif operation in ["<", "<=", "!="]:
+            return False
     return compare_versions(parse(_paddlenlp_version), operation, version)
 
 

@@ -12,31 +12,37 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 import inspect
 from typing import Any, Callable, Dict, List, Optional, Union
 
 import paddle
-from ppdiffusers.transformers import (
+import paddle.distributed as dist
+import paddle.distributed.fleet as fleet
+
+from ppdiffusers.transformers import (  # T5TokenizerFast,
     CLIPTextModelWithProjection,
     CLIPTokenizer,
     T5EncoderModel,
-    # T5TokenizerFast,
-    T5Tokenizer
+    T5Tokenizer,
 )
 
 from ...image_processor import VaeImageProcessor
-from ...loaders import FromSingleFileMixin  # SD3LoraLoaderMixin
+from ...loaders import FromSingleFileMixin, SD3LoraLoaderMixin
 from ...models.autoencoder_kl import AutoencoderKL
 from ...models.transformer_sd3 import SD3Transformer2DModel
 from ...schedulers import FlowMatchEulerDiscreteScheduler
-from ...utils import (
-    logging,
-    replace_example_docstring,
-)
+from ...utils import logging, replace_example_docstring
 from ...utils.paddle_utils import randn_tensor
 from ..pipeline_utils import DiffusionPipeline
 from .pipeline_output import StableDiffusion3PipelineOutput
+
+try:
+    # paddle.incubate.jit.inference is available in paddle develop but not in paddle 3.0beta, so we add a try except.
+    from paddle.incubate.jit import is_inference_mode
+except:
+
+    def is_inference_mode(func):
+        return False
 
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
@@ -114,7 +120,7 @@ def retrieve_timesteps(
     return timesteps, num_inference_steps
 
 
-class StableDiffusion3Pipeline(DiffusionPipeline,  FromSingleFileMixin):  # SD3LoraLoaderMixin
+class StableDiffusion3Pipeline(DiffusionPipeline, SD3LoraLoaderMixin, FromSingleFileMixin):
 
     r"""
     Args:
@@ -194,6 +200,7 @@ class StableDiffusion3Pipeline(DiffusionPipeline,  FromSingleFileMixin):  # SD3L
     def _get_t5_prompt_embeds(
         self,
         prompt: Union[str, List[str]] = None,
+        max_sequence_length: int = 256,
         num_images_per_prompt: int = 1,
         dtype: Optional[paddle.dtype] = None,
     ):
@@ -210,7 +217,7 @@ class StableDiffusion3Pipeline(DiffusionPipeline,  FromSingleFileMixin):  # SD3L
         text_inputs = self.tokenizer_3(
             prompt,
             padding="max_length",
-            max_length=self.tokenizer_max_length,
+            max_length=max_sequence_length,
             truncation=True,
             add_special_tokens=True,
             return_tensors="pd",
@@ -218,13 +225,12 @@ class StableDiffusion3Pipeline(DiffusionPipeline,  FromSingleFileMixin):  # SD3L
         text_input_ids = text_inputs.input_ids
         untruncated_ids = self.tokenizer_3(prompt, padding="longest", return_tensors="pd").input_ids
 
-        if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not torch.equal(text_input_ids, untruncated_ids):
+        if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal(text_input_ids, untruncated_ids):
             removed_text = self.tokenizer_3.batch_decode(untruncated_ids[:, self.tokenizer_max_length - 1 : -1])
             logger.warning(
-                "The following part of your input was truncated because CLIP can only handle sequences up to"
-                f" {self.tokenizer_max_length} tokens: {removed_text}"
+                "The following part of your input was truncated because 'max_sequence_length' is set to"
+                f" {max_sequence_length} tokens: {removed_text}"
             )
-        # breakpoint()
         prompt_embeds = self.text_encoder_3(text_input_ids)[0]
 
         dtype = self.text_encoder_3.dtype
@@ -265,7 +271,7 @@ class StableDiffusion3Pipeline(DiffusionPipeline,  FromSingleFileMixin):  # SD3L
 
         text_input_ids = text_inputs.input_ids
         untruncated_ids = tokenizer(prompt, padding="longest", return_tensors="pd").input_ids
-        if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not torch.equal(text_input_ids, untruncated_ids):
+        if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal(text_input_ids, untruncated_ids):
             removed_text = tokenizer.batch_decode(untruncated_ids[:, self.tokenizer_max_length - 1 : -1])
             logger.warning(
                 "The following part of your input was truncated because CLIP can only handle sequences up to"
@@ -306,6 +312,7 @@ class StableDiffusion3Pipeline(DiffusionPipeline,  FromSingleFileMixin):  # SD3L
         pooled_prompt_embeds: Optional[paddle.Tensor] = None,
         negative_pooled_prompt_embeds: Optional[paddle.Tensor] = None,
         clip_skip: Optional[int] = None,
+        max_sequence_length: int = 256,
     ):
         r"""
 
@@ -380,15 +387,17 @@ class StableDiffusion3Pipeline(DiffusionPipeline,  FromSingleFileMixin):  # SD3L
             t5_prompt_embed = self._get_t5_prompt_embeds(
                 prompt=prompt_3,
                 num_images_per_prompt=num_images_per_prompt,
+                max_sequence_length=max_sequence_length,
             )
 
             clip_prompt_embeds = paddle.nn.functional.pad(
-                clip_prompt_embeds, (0, t5_prompt_embed.shape[-1] - clip_prompt_embeds.shape[-1]), data_format='NCL',
+                clip_prompt_embeds,
+                (0, t5_prompt_embed.shape[-1] - clip_prompt_embeds.shape[-1]),
+                data_format="NCL",
             )
 
             prompt_embeds = paddle.concat([clip_prompt_embeds, t5_prompt_embed], axis=-2)
             pooled_prompt_embeds = paddle.concat([pooled_prompt_embed, pooled_prompt_2_embed], axis=-1)
-
         if do_classifier_free_guidance and negative_prompt_embeds is None:
             negative_prompt = negative_prompt or ""
             negative_prompt_2 = negative_prompt_2 or negative_prompt
@@ -430,12 +439,15 @@ class StableDiffusion3Pipeline(DiffusionPipeline,  FromSingleFileMixin):  # SD3L
             negative_clip_prompt_embeds = paddle.concat([negative_prompt_embed, negative_prompt_2_embed], axis=-1)
 
             t5_negative_prompt_embed = self._get_t5_prompt_embeds(
-                prompt=negative_prompt_3, num_images_per_prompt=num_images_per_prompt,
+                prompt=negative_prompt_3,
+                num_images_per_prompt=num_images_per_prompt,
+                max_sequence_length=max_sequence_length,
             )
 
             negative_clip_prompt_embeds = paddle.nn.functional.pad(
                 negative_clip_prompt_embeds,
-                (0, t5_negative_prompt_embed.shape[-1] - negative_clip_prompt_embeds.shape[-1]), data_format='NCL',
+                (0, t5_negative_prompt_embed.shape[-1] - negative_clip_prompt_embeds.shape[-1]),
+                data_format="NCL",
             )
 
             negative_prompt_embeds = paddle.concat([negative_clip_prompt_embeds, t5_negative_prompt_embed], axis=-2)
@@ -460,6 +472,7 @@ class StableDiffusion3Pipeline(DiffusionPipeline,  FromSingleFileMixin):  # SD3L
         pooled_prompt_embeds=None,
         negative_pooled_prompt_embeds=None,
         callback_on_step_end_tensor_inputs=None,
+        max_sequence_length=None,
     ):
         if height % 8 != 0 or width % 8 != 0:
             raise ValueError(f"`height` and `width` have to be divisible by 8 but are {height} and {width}.")
@@ -530,6 +543,9 @@ class StableDiffusion3Pipeline(DiffusionPipeline,  FromSingleFileMixin):  # SD3L
             raise ValueError(
                 "If `negative_prompt_embeds` are provided, `negative_pooled_prompt_embeds` also have to be passed. Make sure to generate `negative_pooled_prompt_embeds` from the same text encoder that was used to generate `negative_prompt_embeds`."
             )
+        
+        if max_sequence_length is not None and max_sequence_length > 512:
+            raise ValueError(f"`max_sequence_length` cannot be greater than 512 but is {max_sequence_length}")
 
     def prepare_latents(
         self,
@@ -615,6 +631,7 @@ class StableDiffusion3Pipeline(DiffusionPipeline,  FromSingleFileMixin):  # SD3L
         clip_skip: Optional[int] = None,
         callback_on_step_end: Optional[Callable[[int, int, Dict], None]] = None,
         callback_on_step_end_tensor_inputs: List[str] = ["latents"],
+        max_sequence_length: int = 256,
     ):
         r"""
         Function invoked when calling the pipeline for generation.
@@ -698,7 +715,7 @@ class StableDiffusion3Pipeline(DiffusionPipeline,  FromSingleFileMixin):  # SD3L
                 The list of tensor inputs for the `callback_on_step_end` function. The tensors specified in the list
                 will be passed as `callback_kwargs` argument. You will only be able to include variables listed in the
                 `._callback_tensor_inputs` attribute of your pipeline class.
-
+            max_sequence_length (`int` defaults to 256): Maximum sequence length to use with the `prompt`.
         Examples:
 
         Returns:
@@ -725,6 +742,7 @@ class StableDiffusion3Pipeline(DiffusionPipeline,  FromSingleFileMixin):  # SD3L
             pooled_prompt_embeds=pooled_prompt_embeds,
             negative_pooled_prompt_embeds=negative_pooled_prompt_embeds,
             callback_on_step_end_tensor_inputs=callback_on_step_end_tensor_inputs,
+            max_sequence_length=max_sequence_length,
         )
 
         self._guidance_scale = guidance_scale
@@ -759,6 +777,7 @@ class StableDiffusion3Pipeline(DiffusionPipeline,  FromSingleFileMixin):  # SD3L
             negative_pooled_prompt_embeds=negative_pooled_prompt_embeds,
             clip_skip=self.clip_skip,
             num_images_per_prompt=num_images_per_prompt,
+            max_sequence_length=max_sequence_length,
         )
 
         if self.do_classifier_free_guidance:
@@ -793,14 +812,48 @@ class StableDiffusion3Pipeline(DiffusionPipeline,  FromSingleFileMixin):  # SD3L
                 # broadcast to batch dimension in a way that's compatible with ONNX/Core ML
                 timestep = t.expand(latent_model_input.shape[0])
 
-                noise_pred = self.transformer(
-                    hidden_states=latent_model_input,
-                    timestep=timestep,
-                    encoder_hidden_states=prompt_embeds,
-                    pooled_projections=pooled_prompt_embeds,
+                enabled_cfg_dp = False
+                if self.transformer.inference_dp_size > 1:
+                    enabled_cfg_dp = True
+                    assert self.do_classifier_free_guidance, "do_classifier_free_guidance must be true"
+
+                if enabled_cfg_dp:
+                    dp_id = self.transformer.dp_id
+                    latent_input = paddle.split(latent_model_input, 2, axis=0)[dp_id]
+                    timestep_input = paddle.split(timestep, 2, axis=0)[dp_id]
+                    prompt_embeds_input = paddle.split(prompt_embeds, 2, axis=0)[dp_id]
+                    pooled_prompt_embeds_input = paddle.split(pooled_prompt_embeds, 2, axis=0)[dp_id]
+
+                else:
+                    latent_input = latent_model_input
+                    timestep_input = timestep
+                    prompt_embeds_input = prompt_embeds
+                    pooled_prompt_embeds_input = pooled_prompt_embeds
+
+                model_output = self.transformer(
+                    hidden_states=latent_input,
+                    timestep=timestep_input,
+                    encoder_hidden_states=prompt_embeds_input,
+                    pooled_projections=pooled_prompt_embeds_input,
                     joint_attention_kwargs=self.joint_attention_kwargs,
                     return_dict=False,
-                )[0]
+                )
+                if is_inference_mode(self.transformer):
+                    # NOTE:(changwenbin,zhoukangkang)
+                    # This is for paddle inference mode
+                    output = model_output
+                else:
+                    output = model_output[0]
+
+                if enabled_cfg_dp:
+                    tmp_shape = output.shape
+                    tmp_shape[0] *= 2
+                    noise_pred = paddle.zeros(tmp_shape, dtype=output.dtype)
+                    dist.all_gather(
+                        noise_pred, output, group=fleet.get_hybrid_communicate_group().get_data_parallel_group()
+                    )
+                else:
+                    noise_pred = output
 
                 # perform guidance
                 if self.do_classifier_free_guidance:

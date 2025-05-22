@@ -166,7 +166,7 @@ def is_safetensors_compatible(filenames, variant=None, passed_components=None) -
             sf_filenames.add(os.path.normpath(filename))
 
     for filename in pt_filenames:
-        #  filename = 'foo/bar/baz.bam' -> path = 'foo/bar', filename = 'baz', extention = '.bam'
+        #  filename = 'foo/bar/baz.bam' -> path = 'foo/bar', filename = 'baz', extension = '.bam'
         path, filename = os.path.split(filename)
         filename, extension = os.path.splitext(filename)
 
@@ -280,7 +280,7 @@ def _get_pipeline_class(
 
         if repo_id is not None and hub_revision is not None:
             # if we load the pipeline code from the Hub
-            # make sure to overwrite the `revison`
+            # make sure to overwrite the `revision`
             revision = hub_revision
 
         return get_class_from_dynamic_module(
@@ -327,6 +327,7 @@ def load_sub_model(
     cache_dir: Union[str, os.PathLike] = None,
     variant: str = None,
     use_safetensors: bool = False,
+    map_location: str = None,
 ):
     """Helper method to load the module `name` from `library_name` and `class_name`"""
     # retrieve class candidates
@@ -341,7 +342,7 @@ def load_sub_model(
     )
 
     load_method_name = None
-    # retrive load method name
+    # retrieve load method name
     for class_name, class_candidate in class_candidates.items():
         if class_candidate is not None and issubclass(class_obj, class_candidate):
             load_method_name = importable_classes[class_name][1]
@@ -403,6 +404,7 @@ def load_sub_model(
             loading_kwargs["from_diffusers"] = from_diffusers
             loading_kwargs["paddle_dtype"] = paddle_dtype
             loading_kwargs["low_cpu_mem_usage"] = low_cpu_mem_usage
+            loading_kwargs["map_location"] = map_location
 
     # check if the module is in a subdirectory
     if os.path.isdir(os.path.join(cached_folder, name)):
@@ -688,10 +690,10 @@ class DiffusionPipeline(ConfigMixin):
 
         paddle_dtype = kwargs.pop("paddle_dtype", None)
         if paddle_dtype is not None:
-            deprecate("paddle_dtype", "0.25.0", "")
+            deprecate("paddle_dtype", "0.45.0", "")
         paddle_device = kwargs.pop("paddle_device", None)
         if paddle_device is not None:
-            deprecate("paddle_device", "0.25.0", "")
+            deprecate("paddle_device", "0.45.0", "")
 
         dtype_kwarg = kwargs.pop("dtype", None)
         device_kwarg = kwargs.pop("device", None)
@@ -963,6 +965,7 @@ class DiffusionPipeline(ConfigMixin):
         use_optim_cache = kwargs.pop("use_optim_cache", False)
         load_connected_pipeline = kwargs.pop("load_connected_pipeline", False)  # noqa: F841
         model_variants = kwargs.pop("model_variants", {})
+        map_location = kwargs.pop("map_location", None)
 
         # 1. Download the checkpoints and configs
         # use snapshot download here to get it working from from_pretrained
@@ -1102,9 +1105,10 @@ class DiffusionPipeline(ConfigMixin):
             if name in passed_class_obj:
                 # if the model is in a pipeline module, then we load it from the pipeline
                 # check that passed_class_obj has correct parent class
-                maybe_raise_or_warn(
-                    library_name, library, class_name, importable_classes, passed_class_obj, name, is_pipeline_module
-                )
+                if not os.environ.get("SKIP_PARENT_CLASS_CHECK", None):
+                    maybe_raise_or_warn(
+                        library_name, library, class_name, importable_classes, passed_class_obj, name, is_pipeline_module
+                    )
 
                 loaded_sub_model = passed_class_obj[name]
             else:
@@ -1132,6 +1136,7 @@ class DiffusionPipeline(ConfigMixin):
                     cache_dir=cache_dir,
                     variant=variant,
                     use_safetensors=use_safetensors,
+                    map_location=map_location,
                 )
                 logger.info(
                     f"Loaded {name} as {class_name} from `{name}` subfolder of {pretrained_model_name_or_path}."
@@ -1153,6 +1158,7 @@ class DiffusionPipeline(ConfigMixin):
 
         # 8. (TODO, junnyu) make sure all modules are in eval mode and cast dtype
         for name, _module in init_kwargs.items():
+            paddle_dtype = _module.dtype if hasattr(_module, "dtype") else None 
             if isinstance(_module, nn.Layer):
                 _module.eval()
                 if paddle_dtype is not None:

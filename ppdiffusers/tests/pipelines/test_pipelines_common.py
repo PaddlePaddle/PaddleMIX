@@ -69,6 +69,17 @@ def check_same_shape(tensor_list):
     return all(shape == shapes[0] for shape in shapes[1:])
 
 
+def check_qkv_fusion_matches_attn_procs_length(model, original_attn_processors):
+    current_attn_processors = model.attn_processors
+    return len(current_attn_processors) == len(original_attn_processors)
+
+
+def check_qkv_fusion_processors_exist(model):
+    current_attn_processors = model.attn_processors
+    proc_names = [v.__class__.__name__ for _, v in current_attn_processors.items()]
+    return all(p.startswith("Fused") for p in proc_names)
+
+
 class PipelineLatentTesterMixin:
     """
     This mixin is designed to be used with PipelineTesterMixin and unittest.TestCase classes.
@@ -341,7 +352,7 @@ class PipelineTesterMixin:
             "treatment when `do_classifier_free_guidance` is `True`. `pipeline_params.py` provides some common"
             " sets of parameters such as `TEXT_TO_IMAGE_CALLBACK_CFG_PARAMS`. If your pipeline's "
             "set of cfg arguments has minor changes from one of the common sets of cfg arguments, "
-            "do not make modifications to the existing common sets of cfg arguments. I.e. for inpaint pipeine, you "
+            "do not make modifications to the existing common sets of cfg arguments. I.e. for inpaint pipeline, you "
             " need to adjust batch size of `mask` and `masked_image_latents` so should set the attribute as"
             "`callback_cfg_params = TEXT_TO_IMAGE_CFG_PARAMS.union({'mask', 'masked_image_latents'})`"
         )
@@ -871,7 +882,7 @@ class PipelineTesterMixin:
         )
 
         def callback_inputs_subset(pipe, i, t, callback_kwargs):
-            # interate over callback args
+            # iterate over callback args
             for tensor_name, tensor_value in callback_kwargs.items():
                 # check that we're only passing in allowed tensor inputs
                 assert tensor_name in pipe._callback_tensor_inputs
@@ -882,7 +893,7 @@ class PipelineTesterMixin:
             for tensor_name in pipe._callback_tensor_inputs:
                 assert tensor_name in callback_kwargs
 
-            # interate over callback args
+            # iterate over callback args
             for tensor_name, tensor_value in callback_kwargs.items():
                 # check that we're only passing in allowed tensor inputs
                 assert tensor_name in pipe._callback_tensor_inputs

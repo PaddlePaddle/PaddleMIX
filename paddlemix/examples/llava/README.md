@@ -4,35 +4,48 @@
 
 [LLaVA](https://arxiv.org/pdf/2310.03744.pdf) 是基于大规模语言模型 llama 的视觉语言模型。支持多个多模态任务，包括零样本图像描述生成（Zero-shot Image Caption）、视觉问答（VQA）、细粒度视觉定位（Referring Expression Comprehension）等任务。
 
-其性能优于其他模型，在多个任务上取得了更好的效果。
-
 <p align="center">
   <img src="https://github.com/haotian-liu/LLaVA/blob/main/images/llava_v1_5_radar.jpg" align="middle" width = "600" />
 </p>
 
 注：图片引用自[LLaVA](https://github.com/haotian-liu/LLaVA).
 
-本仓库提供paddle版本的Llava-v1.5-7b、Llava-v1.5-13b、Llava-v1.6-7b以及预训练所用的vicuna-13b-v1.5模型。
+
+**本仓库支持的模型权重:**
+
+| Model              |
+|--------------------|
+| liuhaotian/llava-v1.5-7b  |
+| liuhaotian/llava-v1.5-13b  |
+| liuhaotian/llava-v1.6-vicuna-7b  |
+| liuhaotian/llava-v1.6-vicuna-13b  |
+
+注意：与huggingface权重同名，但权重为paddle框架的Tensor，使用`xxx.from_pretrained("liuhaotian/llava-v1.6-vicuna-7b")`即可自动下载该权重文件夹到缓存目录。
 
 
 ## 2 环境准备
-- **python >= 3.8**
-- **paddlenlp >= 2.7**
+
+1）[安装PaddleNLP develop分支](https://github.com/PaddlePaddle/PaddleNLP?tab=readme-ov-file#%E5%AE%89%E8%A3%85)
+
+版本要求：paddlenlp>=3.0.0b2
+
+2）[安装 PaddleMIX 环境依赖包](https://github.com/PaddlePaddle/PaddleMIX/tree/b4f97ff859e1964c839fc5fab94f7ba63b1e5959?tab=readme-ov-file#%E5%AE%89%E8%A3%85)
+
+注意：Python版本最好为3.10及以上版本，Python最低版本要求3.8。
+
 
 ## 3 快速开始
 完成环境准备后，我们提供多轮对话示例：
 
 ### 多轮对话启动
 ```bash
-# llava
 python paddlemix/examples/llava/run_predict_multiround.py \
---model-path "paddlemix/llava/llava-v1.5-7b" \
---image-file "https://bj.bcebos.com/v1/paddlenlp/models/community/GroundingDino/000000004505.jpg" \
+    --model-path "liuhaotian/llava-v1.6-vicuna-7b" \
+    --image-file "https://bj.bcebos.com/v1/paddlenlp/models/community/GroundingDino/000000004505.jpg" \
 ```
 可配置参数说明：
-  * `model-path`: 指定llava系列的模型名字或权重路径 ，支持 'paddlemix/llava/llava-v1.5-7b','paddlemix/llava/llava-v1.5-13b','paddlemix/llava/llava-v1.6-vicuna-7b'
+  * `model-path`: 指定llava系列的模型名字或权重路径，也可换成如'liuhaotian/llava-v1.6-vicuna-13b'
   * `image-flie` :输入图片路径或url，默认None。
-
 
 
 输入图片：<center><img src="https://github.com/LokeZhou/PaddleMIX/assets/13300429/95f73037-097e-4712-95be-17d5ca489f11" /></center>
@@ -90,19 +103,65 @@ ASSISTANT: 0.23, 0.33, 0.79, 0.78
 
 预训练命令：
 ```bash
+export FLAGS_use_cuda_managed_memory=true #若显存不够，可设置环境变量
 python paddlemix/examples/llava/pretrain.py paddlemix/config/llava/pretrain.json
 ```
 
 ## 5 模型微调
-Llava 基于 PaddleMIX tool 统一微调工具链，支持全参数、lora微调，数据准备及参数配置等可参考 [tools](../../tools/README.md)
 
 ```bash
 # llava lora微调
-python paddlemix/tools/supervised_finetune.py paddlemix/config/llava/v1_5/lora_sft_argument.json
+export FLAGS_use_cuda_managed_memory=true #若显存不够，可设置环境变量
+python paddlemix/examples/llava/supervised_finetune.py paddlemix/config/llava/v1_5/lora_sft_argument.json
+
+# lora微调后，模型权重合并
+python python paddlemix/examples/llava/merge_lora_params.py \
+--model_name_or_path xxx \  #llava model path
+--lora_path xxxx \  #lora checkpoint path
+--merge_model_path xxxx  #merge model path
 
 # llava full参数微调
-python paddlemix/tools/supervised_finetune.py paddlemix/config/llava/v1_5/sft_argument.json
+export FLAGS_use_cuda_managed_memory=true #若显存不够，可设置环境变量
+python paddlemix/examples/llava/supervised_finetune.py paddlemix/config/llava/v1_5/sft_argument.json
 ```
+
+## 6 NPU硬件训练
+PaddleMIX支持在NPU硬件上进行训练：
+1. 请先参照[PaddleCustomDevice](https://github.com/PaddlePaddle/PaddleCustomDevice/blob/develop/backends/npu/README_cn.md)安装NPU硬件Paddle
+2. 在config配置文件中增加`device`字段指定设备：
+```json
+{
+    ...
+    "model_name_or_path": "paddlemix/llava/llava-v1.5-7b",
+    "device": "npu",
+    "output_dir": "./checkpoints/llava_sft_ckpts",
+    ...
+}
+```
+3. 启动训练前请设置如下环境变量用于性能加速和精度对齐
+```shell
+export FLAGS_use_stride_kernel=0
+export FLAGS_npu_storage_format=0 # 关闭私有格式
+export FLAGS_npu_jit_compile=1 # 打开即时编译
+export FLAGS_npu_scale_aclnn=True # aclnn加速
+export FLAGS_npu_split_aclnn=True # aclnn加速
+export CUSTOM_DEVICE_BLACK_LIST=set_value,set_value_with_tensor # set_value加入黑名单
+```
+
+预测:
+```shell
+python paddlemix/examples/llava/run_predict_multiround.py \
+    --model-path "liuhaotian/llava-v1.6-vicuna-7b" \
+    --image-file "https://bj.bcebos.com/v1/paddlenlp/models/community/GroundingDino/000000004505.jpg" \
+    --fp16
+```
+微调:
+因显存限制, NPU硬件(910B)上微调时仅支持使用lora微调方式
+```shell
+# llava lora微调
+python paddlemix/examples/llava/supervised_finetune.py paddlemix/config/llava/v1_5/lora_sft_argument.json
+```
+注意: PaddleMIX 3.0以上版本LLaVA模型NPU训练推理需对应安装3.0.0b4以上版本PaddleNLP
 
 ### 参考文献
 ```BibTeX

@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .internvl_chat import *
-from .internlm2 import *
-from .phi3 import *
+# from .phi3 import *
 from .constants import *
+from .internlm2 import *
+from .internvl_chat import *
 from .patch import *

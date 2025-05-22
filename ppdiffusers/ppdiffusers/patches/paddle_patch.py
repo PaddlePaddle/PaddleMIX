@@ -351,9 +351,44 @@ def to(self=None, device=None, dtype=None, blocking=None):
 
 nn.Layer.to = to
 
-from ..utils.import_utils import is_ppxformers_available
+from ..utils.import_utils import is_ppxformers_available, is_npu_available
 
-if is_ppxformers_available():
+if is_npu_available():
+    for lib in os.listdir(os.getenv("CUSTOM_DEVICE_ROOT")):
+        if lib.endswith(".so"):
+            paddle.utils.cpp_extension.extension_utils.load_op_meta_info_and_register_op(
+                lib
+            )
+    from paddle.base import core
+    def scaled_dot_product_attention_npu(query,
+                                         key,
+                                         value,
+                                         attn_mask=None,
+                                         dropout_p=0.0,
+                                         is_causal=False,
+                                         training=True,
+                                         name=None,
+                                         fixed_seed_offset=None,
+                                         return_softmax=False,
+                                         is_triangle_upper_mask=True,
+                                         ):
+        out = core.eager._run_custom_op(
+            "flash_attention_npu",
+            query,
+            key,
+            value,
+            fixed_seed_offset,
+            attn_mask,
+            dropout_p,
+            is_causal,
+            return_softmax,
+            not training,
+            is_triangle_upper_mask,
+        )[0]
+        return out
+    paddle.nn.functional.scaled_dot_product_attention_npu = scaled_dot_product_attention_npu
+    
+if is_ppxformers_available() or is_npu_available():
     from paddle.incubate.nn.memory_efficient_attention import memory_efficient_attention
 
     try:
@@ -371,6 +406,13 @@ if is_ppxformers_available():
             paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
             paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
             attn_mask=paddle.ones((1, 2, 1, 1), dtype=paddle.float16),
+        )
+        
+        from paddle.nn.functional.flash_attention import flash_attention
+        _ = flash_attention(
+            paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
+            paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
+            paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
         )
     except Exception as error:
         flash_attn_error = error
@@ -392,6 +434,8 @@ if is_ppxformers_available():
             attention_op = "cutlass"
             if is_support_flash_attention and query.dtype not in [paddle.float32]:
                 attention_op = "flash"
+            elif is_npu_available() and query.dtype not in [paddle.float32]:
+                attention_op = "flash_npu"
         else:
             if attention_op == "flash" and flash_attn_error is not None:
                 raise OSError(flash_attn_error)
@@ -468,14 +512,24 @@ if is_ppxformers_available():
                     query,
                     key,
                     value,
-                    attn_mask=None if is_causal else attn_mask,
+                    attn_mask=None if is_causal or attn_mask is None else attn_mask.astype(query.dtype),
                     dropout_p=dropout_p if training else 0.0,
                     is_causal=bool(is_causal),
                     training=training,
                 )
+        elif attention_op == "flash_npu":
+            output = paddle.nn.functional.scaled_dot_product_attention_npu(
+                query,
+                key,
+                value,
+                attn_mask=None if is_causal or attn_mask is None else attn_mask.astype(query.dtype),
+                dropout_p=dropout_p if training else 0.0,
+                is_causal=bool(is_causal),
+                training=training,
+            )
         else:
             raise ValueError(
-                "ppxformers's attention_op shoulde be in ['auto', 'math', 'cutlass', `memory_efficient`, 'flash']."
+                "ppxformers's attention_op should be in ['auto', 'math', 'cutlass', `memory_efficient`, 'flash']."
             )
         return output
 
@@ -796,209 +850,3 @@ def patch_to(cls, as_prop=False, cls_method=False):
         return globals().get(nm, builtins.__dict__.get(nm, None))
 
     return _inner
-
-
-# NOTE(yujun06): patches will be removed in the future.
-# patches start
-from ppdiffusers.utils import is_paddlenlp_version
-
-if is_paddlenlp_version("<=", "2.7.2"):
-    import inspect
-    import json
-
-    from aistudio_sdk.hub import Hub
-    from paddlenlp.transformers.aistudio_utils import aistudio_download
-
-    from ppdiffusers.utils import DIFFUSERS_CACHE, PPDIFFUSERS_CACHE
-
-    old_hub_download = Hub.download
-
-    def new_hub_download(self, **kwargs):
-        repo_id = kwargs.pop("repo_id", None)
-        filename = kwargs.pop("filename", None)
-        data = repo_id.split("/")
-        if len(data) > 2:
-            subfolder = "/".join(data[2:])
-            repo_id = "/".join(data[:2])
-            filename = url_or_path_join(subfolder, filename)
-        kwargs["repo_id"] = repo_id
-        kwargs["filename"] = filename
-        res = old_hub_download(self, **kwargs)
-        return res
-
-    Hub.download = new_hub_download
-
-    def url_or_path_join(*path_list):
-        return os.path.join(*path_list) if os.path.isdir(os.path.join(*path_list)) else "/".join(path_list)
-
-    def patch_from_pretrained(patched_class):
-        raw_from_pretrained = patched_class.from_pretrained.__func__
-        num_inputs = len(inspect.signature(patched_class.from_pretrained).parameters.keys())
-        if patched_class.__name__ in ["ImageProcessingMixin", "FeatureExtractionMixin"]:
-
-            @classmethod
-            def new_from_pretrained(cls, pretrained_model_name_or_path, **kwargs):
-                # NOTE: NEW ADD, will be removed in the future.
-                from_hf_hub = kwargs.get("from_hf_hub", False)
-                from_aistudio = kwargs.get("from_aistudio", False)
-                cache_dir = kwargs.get("cache_dir", None)
-                if cache_dir is None:
-                    if from_hf_hub:
-                        cache_dir = DIFFUSERS_CACHE
-                    elif from_aistudio:
-                        cache_dir = None
-                    else:
-                        cache_dir = PPDIFFUSERS_CACHE
-                    kwargs["cache_dir"] = cache_dir
-                if from_hf_hub:
-                    pass
-                else:
-                    subfolder = kwargs.pop("subfolder", None)
-                    if subfolder is not None:
-                        pretrained_model_name_or_path = url_or_path_join(pretrained_model_name_or_path, subfolder)
-
-                if from_aistudio:
-                    resolved_image_processor_file = aistudio_download(
-                        pretrained_model_name_or_path, "preprocessor_config.json"
-                    )
-                    kwargs.pop("cache_dir", None)
-                    kwargs.pop("from_hf_hub", False)
-                    kwargs.pop("subfolder", None)
-                    try:
-                        # Load image_processor dict
-                        with open(resolved_image_processor_file, "r", encoding="utf-8") as reader:
-                            text = reader.read()
-                        image_processor_dict = json.loads(text)
-                    except json.JSONDecodeError:
-                        raise EnvironmentError(
-                            f"It looks like the config file at '{resolved_image_processor_file}' is not a valid JSON file."
-                        )
-                else:
-                    if hasattr(cls, "get_image_processor_dict"):
-                        image_processor_dict, kwargs = cls.get_image_processor_dict(
-                            pretrained_model_name_or_path, **kwargs
-                        )
-                    else:
-                        image_processor_dict, kwargs = cls.get_feature_extractor_dict(
-                            pretrained_model_name_or_path, **kwargs
-                        )
-                return cls.from_dict(image_processor_dict, **kwargs)
-
-        elif num_inputs == 2:
-
-            @classmethod
-            def new_from_pretrained(cls, pretrained_model_name_or_path, **kwargs):
-                # NOTE: NEW ADD, will be removed in the future.
-                from_hf_hub = kwargs.get("from_hf_hub", False)
-                from_aistudio = kwargs.get("from_aistudio", False)
-                cache_dir = kwargs.get("cache_dir", None)
-                if cache_dir is None:
-                    if from_hf_hub:
-                        cache_dir = DIFFUSERS_CACHE
-                    elif from_aistudio:
-                        cache_dir = None
-                    else:
-                        cache_dir = PPDIFFUSERS_CACHE
-                    kwargs["cache_dir"] = cache_dir
-                if from_hf_hub:
-                    pass
-                else:
-                    subfolder = kwargs.pop("subfolder", None)
-                    if subfolder is not None:
-                        pretrained_model_name_or_path = url_or_path_join(pretrained_model_name_or_path, subfolder)
-                return raw_from_pretrained(
-                    cls,
-                    pretrained_model_name_or_path,
-                    **kwargs,
-                )
-
-        elif num_inputs == 3:
-
-            @classmethod
-            def new_from_pretrained(cls, pretrained_model_name_or_path, *args, **kwargs):
-                # NOTE: NEW ADD, will be removed in the future.
-                from_hf_hub = kwargs.get("from_hf_hub", False)
-                from_aistudio = kwargs.get("from_aistudio", False)
-                cache_dir = kwargs.get("cache_dir", None)
-                if cache_dir is None:
-                    if from_hf_hub:
-                        cache_dir = DIFFUSERS_CACHE
-                    elif from_aistudio:
-                        cache_dir = None
-                    else:
-                        cache_dir = PPDIFFUSERS_CACHE
-                    kwargs["cache_dir"] = cache_dir
-                if from_hf_hub:
-                    pass
-                else:
-                    subfolder = kwargs.pop("subfolder", None)
-                    if subfolder is not None:
-                        pretrained_model_name_or_path = url_or_path_join(pretrained_model_name_or_path, subfolder)
-                return raw_from_pretrained(
-                    cls,
-                    pretrained_model_name_or_path,
-                    *args,
-                    **kwargs,
-                )
-
-        elif num_inputs == 4:
-
-            @classmethod
-            def new_from_pretrained(cls, pretrained_model_name_or_path, task=None, *args, **kwargs):
-                # NOTE: NEW ADD, will be removed in the future.
-                from_hf_hub = kwargs.get("from_hf_hub", False)
-                from_aistudio = kwargs.get("from_aistudio", False)
-                cache_dir = kwargs.get("cache_dir", None)
-                if cache_dir is None:
-                    if from_hf_hub:
-                        cache_dir = DIFFUSERS_CACHE
-                    elif from_aistudio:
-                        cache_dir = None
-                    else:
-                        cache_dir = PPDIFFUSERS_CACHE
-                    kwargs["cache_dir"] = cache_dir
-                if from_hf_hub:
-                    pass
-                else:
-                    subfolder = kwargs.pop("subfolder", None)
-                    if subfolder is not None:
-                        pretrained_model_name_or_path = url_or_path_join(pretrained_model_name_or_path, subfolder)
-                return raw_from_pretrained(
-                    cls,
-                    pretrained_model_name_or_path,
-                    task=task,
-                    *args,
-                    **kwargs,
-                )
-
-        else:
-            raise ValueError(f"{patched_class} Invalid number of arguments")
-        return new_from_pretrained
-
-    from paddlenlp.transformers import (
-        AutoConfig,
-        AutoModel,
-        AutoProcessor,
-        AutoTokenizer,
-        FeatureExtractionMixin,
-        ImageProcessingMixin,
-        PretrainedConfig,
-        PretrainedModel,
-        PretrainedTokenizer,
-    )
-
-    for cls in [
-        AutoConfig,
-        AutoModel,
-        AutoTokenizer,
-        AutoProcessor,
-        PretrainedModel,
-        PretrainedConfig,
-        PretrainedTokenizer,
-        ImageProcessingMixin,
-        FeatureExtractionMixin,
-    ]:
-        if not getattr(cls, "is_patch", False):
-            setattr(cls, "from_pretrained", patch_from_pretrained(cls))
-            setattr(cls, "is_patch", True)
-    # patches end

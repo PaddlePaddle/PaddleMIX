@@ -90,12 +90,12 @@ if is_paddlenlp_available():
 
 
 def faster_set_state_dict(model, state_dict):
-    # the state_dict will be destroied.
+    # the state_dict will be destroyed.
     with paddle.no_grad():
         for k, v in model.state_dict(use_hook=False).items():
             if k in state_dict:
                 v_new = state_dict.pop(k)
-                # with device_guard(): donot do device guard
+                # with device_guard(): do not do device guard
                 if isinstance(v_new, np.ndarray):
                     v_new = paddle.Tensor(v_new, zero_copy=True)
                 if v.dtype != v_new.dtype:
@@ -148,7 +148,7 @@ def get_parameter_dtype(parameter: nn.Layer) -> paddle.dtype:
 
 
 def load_state_dict(
-    checkpoint_file: Union[str, os.PathLike], state_dict, tensor_parallel_split_mapping=None, ignore_keys=None
+    checkpoint_file: Union[str, os.PathLike], state_dict, tensor_parallel_split_mapping=None, ignore_keys=None, map_location=None
 ):
     """
     Reads a PaddlePaddle checkpoint file, returning properly formatted errors if they arise.
@@ -184,7 +184,11 @@ def load_state_dict(
                     weight = tensor_parallel_split_mapping[key](py_safe_slice_)
                 else:
                     weight = f.get_tensor(key)
-                state_dict[key] = paddle.Tensor(weight, zero_copy=True)
+
+                if map_location=="cpu":   
+                    state_dict[key] = paddle.Tensor(weight, zero_copy=True,place=paddle.CPUPlace())
+                else:
+                    state_dict[key] = paddle.Tensor(weight, zero_copy=True)
 
     else:
         if any(checkpoint_file.endswith(suffix) for suffix in [".pt", ".pth", ".bin", ".ckpt"]):
@@ -392,11 +396,11 @@ class ModelMixin(nn.Layer):
                 f" current loaded adapters are: {list(self.peft_config.keys())}"
             )
 
-        from peft.tuners.tuners_utils import BaseTunerLayer
+        from ppdiffusers.peft.tuners.tuners_utils import BaseTunerLayer
 
         _adapters_has_been_set = False
 
-        for _, module in self.named_sublayers(include_self=True)():
+        for _, module in self.named_sublayers(include_self=True):
             if isinstance(module, BaseTunerLayer):
                 if hasattr(module, "set_adapter"):
                     module.set_adapter(adapter_name)
@@ -427,9 +431,9 @@ class ModelMixin(nn.Layer):
         if not self._pp_peft_config_loaded:
             raise ValueError("No adapter loaded. Please load an adapter first.")
 
-        from peft.tuners.tuners_utils import BaseTunerLayer
+        from ppdiffusers.peft.tuners.tuners_utils import BaseTunerLayer
 
-        for _, module in self.named_sublayers(include_self=True)():
+        for _, module in self.named_sublayers(include_self=True):
             if isinstance(module, BaseTunerLayer):
                 if hasattr(module, "enable_adapters"):
                     module.enable_adapters(enabled=False)
@@ -450,9 +454,9 @@ class ModelMixin(nn.Layer):
         if not self._pp_peft_config_loaded:
             raise ValueError("No adapter loaded. Please load an adapter first.")
 
-        from peft.tuners.tuners_utils import BaseTunerLayer
+        from ppdiffusers.peft.tuners.tuners_utils import BaseTunerLayer
 
-        for _, module in self.named_sublayers(include_self=True)():
+        for _, module in self.named_sublayers(include_self=True):
             if isinstance(module, BaseTunerLayer):
                 if hasattr(module, "enable_adapters"):
                     module.enable_adapters(enabled=True)
@@ -472,9 +476,9 @@ class ModelMixin(nn.Layer):
         if not self._pp_peft_config_loaded:
             raise ValueError("No adapter loaded. Please load an adapter first.")
 
-        from peft.tuners.tuners_utils import BaseTunerLayer
+        from ppdiffusers.peft.tuners.tuners_utils import BaseTunerLayer
 
-        for _, module in self.named_sublayers(include_self=True)():
+        for _, module in self.named_sublayers(include_self=True):
             if isinstance(module, BaseTunerLayer):
                 return module.active_adapter
 
@@ -794,6 +798,7 @@ class ModelMixin(nn.Layer):
         variant = kwargs.pop("variant", None)
         use_safetensors = kwargs.pop("use_safetensors", None)
         ignore_keys = kwargs.pop("ignore_keys", [])
+        map_location = kwargs.pop("map_location", None)
 
         # distributed kwargs
         tensor_parallel_degree = kwargs.pop("tensor_parallel_degree", 1)
@@ -1012,9 +1017,7 @@ class ModelMixin(nn.Layer):
                     "Tensor parallel is only supported for models that inherit from `ConversionMixin`."
                 )
             if len(resolved_model_files) > 1:
-                raise NotImplementedError(
-                    "Tensor parallel is not supported for multiple shards yet."
-                )
+                raise NotImplementedError("Tensor parallel is not supported for multiple shards yet.")
             tmp_state_dict = smart_load(resolved_model_files[0], return_numpy=True)
             tensor_parallel_split_mapping = cls.get_tensor_parallel_convert_actions(config, tmp_state_dict.keys())
         else:
@@ -1029,6 +1032,7 @@ class ModelMixin(nn.Layer):
             from_diffusers=from_diffusers,
             tensor_parallel_split_mapping=tensor_parallel_split_mapping,
             tensor_parallel_degree=tensor_parallel_degree,
+            map_location=map_location,
         )
 
         loading_info = {
@@ -1051,7 +1055,7 @@ class ModelMixin(nn.Layer):
         return model
 
     @classmethod
-    def custom_modify_weight(cls, state_dict):
+    def custom_modify_weight(cls, model_to_load, state_dict):
         pass
 
     @classmethod
@@ -1065,6 +1069,7 @@ class ModelMixin(nn.Layer):
         from_diffusers=False,
         tensor_parallel_split_mapping=None,
         tensor_parallel_degree=1,
+        map_location=None,
     ):
         state_dict = OrderedDict()
         model_state_dict = model.state_dict()
@@ -1085,6 +1090,7 @@ class ModelMixin(nn.Layer):
                 state_dict,  # inplace update state_dict
                 tensor_parallel_split_mapping=tensor_parallel_split_mapping,
                 ignore_keys=ignore_keys,
+                map_location=map_location,
             )
             # NOTE: new add support old state_dict
             model._update_deprecated_state_dict(state_dict)
@@ -1134,7 +1140,7 @@ class ModelMixin(nn.Layer):
                     error_msgs.append(
                         f"Error size mismatch, {key_name} receives a shape {loaded_shape}, but the expected shape is {model_shape}."
                     )
-                cls.custom_modify_weight(state_dict)
+                cls.custom_modify_weight(model_to_load, state_dict)
                 faster_set_state_dict(model_to_load, state_dict)
 
         missing_keys = sorted(list(set(expected_keys) - set(loaded_keys)))

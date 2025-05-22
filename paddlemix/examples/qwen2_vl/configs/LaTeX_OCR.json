@@ -1,0 +1,6 @@
+{
+  "LaTeX_OCR_TRAIN_155k": {
+    "annotation": "LaTeX_OCR/LaTeX_OCR_TRAIN_155k_qwen2vl_format.json",
+    "repeat_time": 1
+  }
+}

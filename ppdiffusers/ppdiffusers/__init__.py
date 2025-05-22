@@ -51,6 +51,7 @@ from .version import VERSION as __version__
 
 _import_structure = {
     "configuration_utils": ["ConfigMixin"],
+    "hooks": [],
     "models": [],
     "pipelines": [],
     "schedulers": [],
@@ -106,12 +107,26 @@ except OptionalDependencyNotAvailable:
     ]
 
 else:
+    _import_structure["hooks"].extend(
+        [
+            "HookRegistry",
+            "PyramidAttentionBroadcastConfig",
+            "apply_pyramid_attention_broadcast",
+        ]
+    )
     _import_structure["models"].extend(
         [
             "AsymmetricAutoencoderKL",
             "AutoencoderKL",
+            "AutoencoderKLCogVideoX",
+            "AutoencoderKLHunyuanVideo",
+            "AutoencoderKLWan",
             "AutoencoderKLTemporalDecoder",
             "AutoencoderTiny",
+            "AutoencoderKLMochi",
+            "CacheMixin",
+            "CogVideoXTransformer3DModel",
+            "CogVideoXTransformer3DVCtrlModel",
             "ConsistencyDecoderVAE",
             "ControlNetModel",
             "Kandinsky3UNet",
@@ -141,8 +156,18 @@ else:
             "AutoencoderKL_imgtovideo",
             "GaussianDiffusion",
             "GaussianDiffusion_SDEdit",
+            "HunyuanVideoTransformer3DModel",
             "STUNetModel",
             "Vid2VidSTUNet",
+            # new add
+            "SD3ControlNetModel",
+            "SD3MultiControlNetModel",
+            # new add
+            "VCtrlModel",
+            # new add
+            "FluxTransformer2DModel",
+            "MochiTransformer3DModel",
+            "WanTransformer3DModel",
         ]
     )
 
@@ -162,11 +187,14 @@ else:
             "AutoPipelineForInpainting",
             "AutoPipelineForText2Image",
             "ConsistencyModelPipeline",
+            "CogVideoXVCtrlPipeline",
+            "CogVideoXVCtrlImageToVideoPipeline",
             "DanceDiffusionPipeline",
             "DDIMPipeline",
             "DDPMPipeline",
             "DiffusionPipeline",
             "DiTPipeline",
+            "HunyuanVideoPipeline",
             "ImagePipelineOutput",
             "KarrasVePipeline",
             "LDMPipeline",
@@ -179,6 +207,8 @@ else:
     _import_structure["schedulers"].extend(
         [
             "CMStochasticIterativeScheduler",
+            "CogVideoXDDIMScheduler",
+            "CogVideoXDPMScheduler",
             "DDIMInverseScheduler",
             "DDIMParallelScheduler",
             "DDIMScheduler",
@@ -263,7 +293,18 @@ else:
             "BlipDiffusionControlNetPipeline",
             "BlipDiffusionPipeline",
             "CLIPImageProjection",
+            "CogVideoXPipeline",
             "CycleDiffusionPipeline",
+            "FluxControlImg2ImgPipeline",
+            "FluxControlInpaintPipeline",
+            "FluxControlPipeline",
+            "FluxFillPipeline",
+            "FluxImg2ImgPipeline",
+            "FluxInpaintPipeline",
+            "FluxPipeline",
+            "FluxPriorReduxPipeline",
+            "WanPipeline",
+            "WanImageToVideoPipeline",
             "IFImg2ImgPipeline",
             "IFImg2ImgSuperResolutionPipeline",
             "IFInpaintingPipeline",
@@ -301,6 +342,8 @@ else:
             "SemanticStableDiffusionPipeline",
             "ShapEImg2ImgPipeline",
             "ShapEPipeline",
+            "StableDiffusion3ControlNetInpaintingPipeline",
+            "StableDiffusion3ControlNetPipeline",
             "StableDiffusion3Img2ImgPipeline",
             "StableDiffusion3Pipeline",
             "StableDiffusionAdapterPipeline",
@@ -376,6 +419,7 @@ else:
             # new add
             "ImgToVideoSDPipeline",
             "VideoToVideoModelscopePipeline",
+            "MochiPipeline",
         ]
     )
 
@@ -482,14 +526,21 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             AsymmetricAutoencoderKL,
             AutoencoderKL,
             AutoencoderKL_imgtovideo,
+            AutoencoderKLCogVideoX,
+            AutoencoderKLHunyuanVideo,
             AutoencoderKLTemporalDecoder,
             AutoencoderTiny,
+            AutoencoderKLMochi,
+            CogVideoXTransformer3DModel,
+            CogVideoXTransformer3DVCtrlModel,
             ConsistencyDecoderVAE,
             ControlNetModel,
             DiTLLaMA2DModel,
             DiTLLaMAT2IModel,
+            FluxTransformer2DModel,
             GaussianDiffusion,
             GaussianDiffusion_SDEdit,
+            HunyuanVideoTransformer3DModel,
             Kandinsky3UNet,
             LVDMAutoencoderKL,
             LVDMUNet3DModel,
@@ -498,6 +549,8 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             MultiAdapter,
             PaddleInferRuntimeModel,
             PriorTransformer,
+            SD3ControlNetModel,
+            SD3MultiControlNetModel,
             SD3Transformer2DModel,
             STUNetModel,
             T2IAdapter,
@@ -510,8 +563,11 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             UNetMotionModel,
             UNetSpatioTemporalConditionModel,
             UViTT2IModel,
+            VCtrlModel,
             Vid2VidSTUNet,
             VQModel,
+            MochiTransformer3DModel,
+            WanTransformer3DModel,
         )
         from .optimization import (
             get_constant_schedule,
@@ -529,12 +585,15 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             AutoPipelineForText2Image,
             BlipDiffusionControlNetPipeline,
             BlipDiffusionPipeline,
+            CogVideoXVCtrlImageToVideoPipeline,
+            CogVideoXVCtrlPipeline,
             ConsistencyModelPipeline,
             DanceDiffusionPipeline,
             DDIMPipeline,
             DDPMPipeline,
             DiffusionPipeline,
             DiTPipeline,
+            HunyuanVideoPipeline,
             ImagePipelineOutput,
             ImgToVideoSDPipeline,
             KarrasVePipeline,
@@ -547,6 +606,8 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         )
         from .schedulers import (
             CMStochasticIterativeScheduler,
+            CogVideoXDDIMScheduler,
+            CogVideoXDPMScheduler,
             DDIMInverseScheduler,
             DDIMParallelScheduler,
             DDIMScheduler,
@@ -612,7 +673,16 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             AudioLDM2UNet2DConditionModel,
             AudioLDMPipeline,
             CLIPImageProjection,
+            CogVideoXPipeline,
             CycleDiffusionPipeline,
+            FluxControlImg2ImgPipeline,
+            FluxControlInpaintPipeline,
+            FluxControlPipeline,
+            FluxFillPipeline,
+            FluxImg2ImgPipeline,
+            FluxInpaintPipeline,
+            FluxPipeline,
+            FluxPriorReduxPipeline,
             IFImg2ImgPipeline,
             IFImg2ImgSuperResolutionPipeline,
             IFInpaintingPipeline,
@@ -665,6 +735,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             SemanticStableDiffusionPipeline,
             ShapEImg2ImgPipeline,
             ShapEPipeline,
+            StableDiffusion3ControlNetPipeline,
             StableDiffusion3Img2ImgPipeline,
             StableDiffusion3Pipeline,
             StableDiffusionAdapterPipeline,
@@ -717,9 +788,12 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             VersatileDiffusionTextToImagePipeline,
             VideoToVideoSDPipeline,
             VQDiffusionPipeline,
+            WanImageToVideoPipeline,
+            WanPipeline,
             WuerstchenCombinedPipeline,
             WuerstchenDecoderPipeline,
             WuerstchenPriorPipeline,
+            MochiPipeline,
         )
 
     try:

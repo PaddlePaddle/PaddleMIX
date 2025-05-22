@@ -16,6 +16,39 @@
 from . import DummyObject, requires_backends
 
 
+class HookRegistry(metaclass=DummyObject):
+    _backends = ["paddle"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["paddle"])
+
+    @classmethod
+    def from_config(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle"])
+
+    @classmethod
+    def from_pretrained(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle"])
+
+
+class PyramidAttentionBroadcastConfig(metaclass=DummyObject):
+    _backends = ["paddle"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["paddle"])
+
+    @classmethod
+    def from_config(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle"])
+
+    @classmethod
+    def from_pretrained(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle"])
+
+
+def apply_pyramid_attention_broadcast(*args, **kwargs):
+    requires_backends(apply_pyramid_attention_broadcast, ["paddle"])
+
 class AsymmetricAutoencoderKL(metaclass=DummyObject):
     _backends = ["paddle"]
 
@@ -75,6 +108,20 @@ class AutoencoderTiny(metaclass=DummyObject):
     def from_pretrained(cls, *args, **kwargs):
         requires_backends(cls, ["paddle"])
 
+
+class CacheMixin(metaclass=DummyObject):
+    _backends = ["paddle"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["paddle"])
+
+    @classmethod
+    def from_config(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle"])
+
+    @classmethod
+    def from_pretrained(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle"])
 
 class ConsistencyDecoderVAE(metaclass=DummyObject):
     _backends = ["paddle"]

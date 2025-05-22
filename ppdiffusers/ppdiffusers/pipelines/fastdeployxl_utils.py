@@ -435,7 +435,7 @@ class FastDeployDiffusionXLPipelineMixin:
                 continue
             module = getattr(self, name)
             if isinstance(module, FastDeployRuntimeModel):
-                infer_op = infer_op_dict.get(name, "zero_copy_infer") if module.is_spport_zero_copy() else "raw"
+                infer_op = infer_op_dict.get(name, "zero_copy_infer") if module.is_support_zero_copy() else "raw"
                 # if parse_prompt_type in ["lpw", "webui"] and name in ["text_encoder"]:
                 #     if infer_op != "raw":
                 #         logger.warning(
@@ -1161,7 +1161,7 @@ class FastDeployDiffusionXLPipelineMixin:
             negative_prompt_embeds = negative_prompt_embeds[0]
             negative_prompt_embeds_list.append(negative_prompt_embeds)
 
-            # 3. conbine the two embeddings
+            # 3. combine the two embeddings
             negative_prompt_embeds = paddle.concat(x=negative_prompt_embeds_list, axis=-1)
         prompt_embeds = prompt_embeds.cast(dtype=self.dtype)
         # duplicate text embeddings for each generation per prompt, using mps friendly method

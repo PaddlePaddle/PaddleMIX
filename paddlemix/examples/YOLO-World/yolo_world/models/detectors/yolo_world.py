@@ -58,7 +58,7 @@ class YOLOWorldDetector(BaseArch):
             "bbox_head": bbox_head,
         }
 
-    def forword(self):
+    def forward(self):
         img_feats, txt_feats = self.backbone(self.inputs, self.inputs["texts"])
         if self.mm_neck:
             img_feats = self.neck(img_feats, txt_feats)

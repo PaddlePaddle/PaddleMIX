@@ -72,7 +72,7 @@ class BaseTuner(nn.Layer, ABC):
 
         self.model = model
 
-        # For advanced developpers, if you want to attach multiple adapters to your
+        # For advanced developers, if you want to attach multiple adapters to your
         # model, just add a `peft_config` dict attribute to your model.
         if not hasattr(self, "peft_config"):
             self.peft_config = {adapter_name: peft_config} if isinstance(peft_config, PeftConfig) else peft_config
@@ -146,7 +146,7 @@ class BaseTuner(nn.Layer, ABC):
         **optional_kwargs: Any,
     ) -> None:
         r"""
-        Inplace replacement of the target module with the adapter layer. This method needs to be overriden by all the
+        Inplace replacement of the target module with the adapter layer. This method needs to be overridden by all the
         tuner classes.
 
         Check `peft.tuners.lora.LoraModel._create_and_replace` for an example.
@@ -171,7 +171,7 @@ class BaseTuner(nn.Layer, ABC):
     def _mark_only_adapters_as_trainable(self, model: nn.Layer):
         r"""
         A helper method to mark only the adapter layers as trainable (i.e. module.requires_grad = False) This needs to
-        be overriden for all tuner classes to match the correct key names.
+        be overridden for all tuner classes to match the correct key names.
 
         Check `peft.tuners.lora.LoraModel._mark_only_adapters_as_trainable` for an example.
         """
@@ -416,6 +416,8 @@ class BaseTunerLayer(ABC):
         # Deactivate grads on the inactive adapter and activate grads on the active adapter
         for layer_name in self.adapter_layer_names:
             module_dict = getattr(self, layer_name)
+            if isinstance(module_dict, paddle.nn.ParameterDict):
+                module_dict = dict(module_dict)
             for key, layer in module_dict.items():
                 if key in adapter_names:
                     # Note: It is possible that not a single layer is called with requires_grad_(True) here. This may

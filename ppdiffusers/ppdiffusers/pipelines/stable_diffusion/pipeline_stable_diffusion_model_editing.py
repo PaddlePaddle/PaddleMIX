@@ -498,7 +498,7 @@ class StableDiffusionModelEditingPipeline(DiffusionPipeline, TextualInversionLoa
                 The destination prompt. Must contain all words from `source_prompt` with additional ones to specify the
                 target edit.
             lamb (`float`, *optional*, defaults to 0.1):
-                The lambda parameter specifying the regularization intesity. Smaller values increase the editing power.
+                The lambda parameter specifying the regularization intensity. Smaller values increase the editing power.
             restart_params (`bool`, *optional*, defaults to True):
                 Restart the model parameters to their pre-trained version before editing. This is done to avoid edit
                 compounding. When it is `False`, edits accumulate.
@@ -563,8 +563,8 @@ class StableDiffusionModelEditingPipeline(DiffusionPipeline, TextualInversionLoa
                 idxs_replace.append(76)
             idxs_replaces.append(idxs_replace)
 
-        # prepare batch: for each pair of setences, old context and new values
-        contexts, valuess = [], []
+        # prepare batch: for each pair of sentences, old context and new values
+        contexts, values_ = [], []
         for old_emb, new_emb, idxs_replace in zip(old_embs, new_embs, idxs_replaces):
             context = old_emb.detach()
             values = []
@@ -572,7 +572,7 @@ class StableDiffusionModelEditingPipeline(DiffusionPipeline, TextualInversionLoa
                 for layer in self.projection_matrices:
                     values.append(layer(new_emb[idxs_replace]).detach())
             contexts.append(context)
-            valuess.append(values)
+            values_.append(values)
 
         # edit the model
         for layer_num in range(len(self.projection_matrices)):
@@ -583,7 +583,7 @@ class StableDiffusionModelEditingPipeline(DiffusionPipeline, TextualInversionLoa
             mat2 = lamb * paddle.eye(self.projection_matrices[layer_num].weight.shape[1])
 
             # aggregate sums for mat1, mat2
-            for context, values in zip(contexts, valuess):
+            for context, values in zip(contexts, values_):
                 context_vector = context.reshape([context.shape[0], context.shape[1], 1])
                 context_vector_T = context.reshape([context.shape[0], 1, context.shape[1]])
                 value_vector = values[layer_num].reshape([values[layer_num].shape[0], values[layer_num].shape[1], 1])

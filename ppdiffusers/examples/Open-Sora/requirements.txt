@@ -6,3 +6,5 @@ pyav
 tqdm
 beartype
 pandarallel
+imageio
+imageio-ffmpeg

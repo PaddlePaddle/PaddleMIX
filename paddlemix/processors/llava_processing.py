@@ -19,11 +19,11 @@ import paddle
 from ..models.llava.constants import IMAGE_TOKEN_INDEX
 from ..models.llava.mm_utils import (
     expand2square,
-    get_conversation,
     load_image,
     process_anyres_image,
     tokenizer_image_token,
 )
+from ..models.llava.train_utils import get_conversation
 from .base_processing import ProcessorMixin
 
 __all__ = ["LlavaProcessor"]
@@ -47,7 +47,9 @@ class LlavaProcessor(ProcessorMixin):
         **kwargs,
     ):
         if record is not None:
-            image_paths = [record["image"]] if "image" in record.keys() else []
+            image_paths = record["image"] if "image" in record.keys() else []
+            if isinstance(image_paths, str):
+                image_paths = [image_paths]
             prompt = record["conversations"] if "conversations" in record.keys() else None
 
         image_aspect_ratio = self.image_aspect_ratio
@@ -58,13 +60,13 @@ class LlavaProcessor(ProcessorMixin):
             image = load_image(image_path)
             if image_aspect_ratio == "pad":
                 image = expand2square(image, tuple(int(x * 255) for x in self.image_processor.image_mean))
-                image = self.image_processor(image, return_tensors="pd")["pixel_values"][0]
+                image = self.image_processor.preprocess(image, return_tensors="pd")["pixel_values"][0]
 
             elif image_aspect_ratio == "anyres":
                 image = process_anyres_image(image, self.image_processor, self.image_processor.image_grid_pinpoints)
 
             else:
-                image = self.image_processor(image, return_tensors="pd")["pixel_values"][0]
+                image = self.image_processor.preprocess(image, return_tensors="pd")["pixel_values"][0]
             images.append(image)
 
         if mode == "train":

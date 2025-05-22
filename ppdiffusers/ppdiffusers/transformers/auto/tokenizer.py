@@ -85,7 +85,7 @@ class AutoTokenizer(PPNLPAutoTokenizer):
     _name_mapping = TOKENIZER_MAPPING_NAMES
 
     @classmethod
-    def _get_tokenizer_class_from_config(cls, pretrained_model_name_or_path, config_file_path, use_fast):
+    def _get_tokenizer_class_from_config(cls, pretrained_model_name_or_path, config_file_path, use_fast=None):
         with io.open(config_file_path, encoding="utf-8") as f:
             init_kwargs = json.load(f)
         # class name corresponds to this configuration

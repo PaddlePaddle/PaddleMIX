@@ -31,6 +31,7 @@ from ..utils import (
 _dummy_objects = {}
 _import_structure = {
     "controlnet": [],
+    "controlnet_sd3": [],
     "latent_diffusion": [],
     "stable_diffusion": [],
     "stable_diffusion_xl": [],
@@ -100,6 +101,15 @@ else:
         "AudioLDM2UNet2DConditionModel",
     ]
     _import_structure["blip_diffusion"] = ["BlipDiffusionPipeline"]
+    _import_structure["cogvideo"] = [
+        "CogVideoXPipeline",
+        "CogVideoXVCtrlPipeline",
+        "CogVideoXVCtrlImageToVideoPipeline",
+    ]
+    _import_structure["wan"] = [
+        "WanPipeline",
+        "WanImageToVideoPipeline",
+    ]
     _import_structure["controlnet"].extend(
         [
             "BlipDiffusionControlNetPipeline",
@@ -112,6 +122,12 @@ else:
             "PaddleInferStableDiffusionControlNetPipeline",
         ]
     )
+    _import_structure["controlnet_sd3"].extend(
+        [
+            "StableDiffusion3ControlNetPipeline",
+            "StableDiffusion3ControlNetInpaintingPipeline",
+        ]
+    )
     _import_structure["deepfloyd_if"] = [
         "IFImg2ImgPipeline",
         "IFImg2ImgSuperResolutionPipeline",
@@ -119,6 +135,17 @@ else:
         "IFInpaintingSuperResolutionPipeline",
         "IFPipeline",
         "IFSuperResolutionPipeline",
+    ]
+    _import_structure["flux"] = [
+        "FluxControlPipeline",
+        "FluxControlInpaintPipeline",
+        "FluxControlImg2ImgPipeline",
+        "FluxImg2ImgPipeline",
+        "FluxInpaintPipeline",
+        "FluxPipeline",
+        "FluxFillPipeline",
+        "FluxPriorReduxPipeline",
+        "ReduxImageEncoder",
     ]
     _import_structure["kandinsky"] = [
         "KandinskyCombinedPipeline",
@@ -245,6 +272,11 @@ else:
         "LVDMUncondPipeline",
         "VideoPipelineOutput",
     ]
+    _import_structure["hunyuan_video"] = [
+        "HunyuanVideoPipeline",
+        "HunyuanVideoPipelineOutput",
+    ]
+    _import_structure["mochi"] = ["MochiPipeline"]
 try:
     if not is_fastdeploy_available():
         raise OptionalDependencyNotAvailable()
@@ -368,6 +400,11 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             AudioLDM2UNet2DConditionModel,
         )
         from .blip_diffusion import BlipDiffusionPipeline
+        from .cogvideo import (
+            CogVideoXPipeline,
+            CogVideoXVCtrlImageToVideoPipeline,
+            CogVideoXVCtrlPipeline,
+        )
         from .controlnet import (
             BlipDiffusionControlNetPipeline,
             PaddleInferStableDiffusionControlNetPipeline,
@@ -378,6 +415,10 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             StableDiffusionXLControlNetInpaintPipeline,
             StableDiffusionXLControlNetPipeline,
         )
+        from .controlnet_sd3 import (
+            StableDiffusion3ControlNetInpaintingPipeline,
+            StableDiffusion3ControlNetPipeline,
+        )
         from .deepfloyd_if import (
             IFImg2ImgPipeline,
             IFImg2ImgSuperResolutionPipeline,
@@ -386,6 +427,18 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             IFPipeline,
             IFSuperResolutionPipeline,
         )
+        from .flux import (
+            FluxControlImg2ImgPipeline,
+            FluxControlInpaintPipeline,
+            FluxControlPipeline,
+            FluxFillPipeline,
+            FluxImg2ImgPipeline,
+            FluxInpaintPipeline,
+            FluxPipeline,
+            FluxPriorReduxPipeline,
+            ReduxImageEncoder,
+        )
+        from .hunyuan_video import HunyuanVideoPipeline, HunyuanVideoPipelineOutput
         from .img_to_video import ImgToVideoSDPipeline, ImgToVideoSDPipelineOutput
         from .kandinsky import (
             KandinskyCombinedPipeline,
@@ -462,7 +515,10 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             StableUnCLIPImg2ImgPipeline,
             StableUnCLIPPipeline,
         )
-        from .stable_diffusion_3 import StableDiffusion3Img2ImgPipeline, StableDiffusion3Pipeline
+        from .stable_diffusion_3 import (
+            StableDiffusion3Img2ImgPipeline,
+            StableDiffusion3Pipeline,
+        )
         from .stable_diffusion_safe import StableDiffusionPipelineSafe
         from .stable_diffusion_xl import (
             PaddleInferStableDiffusionXLImg2ImgPipeline,
@@ -508,11 +564,13 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             VideoToVideoModelscopePipelineOutput,
         )
         from .vq_diffusion import VQDiffusionPipeline
+        from .wan import WanImageToVideoPipeline, WanPipeline
         from .wuerstchen import (
             WuerstchenCombinedPipeline,
             WuerstchenDecoderPipeline,
             WuerstchenPriorPipeline,
         )
+        from .mochi import MochiPipeline
 
         try:
             if not is_fastdeploy_available():

@@ -242,7 +242,7 @@ class AudioLDM2Pipeline(DiffusionPipeline):
                 *e.g.* prompt weighting. If not provided, negative_prompt_embeds will be computed from
                 `negative_prompt` input argument.
             generated_prompt_embeds (`paddle.Tensor`, *optional*):
-                Pre-generated text embeddings from the GPT2 langauge model. Can be used to easily tweak text inputs,
+                Pre-generated text embeddings from the GPT2 language model. Can be used to easily tweak text inputs,
                  *e.g.* prompt weighting. If not provided, text embeddings will be generated from `prompt` input
                  argument.
             negative_generated_prompt_embeds (`paddle.Tensor`, *optional*):
@@ -263,7 +263,7 @@ class AudioLDM2Pipeline(DiffusionPipeline):
             attention_mask (`paddle.Tensor`):
                 Attention mask to be applied to the `prompt_embeds`.
             generated_prompt_embeds (`paddle.Tensor`):
-                Text embeddings generated from the GPT2 langauge model.
+                Text embeddings generated from the GPT2 language model.
 
         Example:
 
@@ -734,7 +734,7 @@ class AudioLDM2Pipeline(DiffusionPipeline):
                 Pre-generated negative text embeddings. Can be used to easily tweak text inputs (prompt weighting). If
                 not provided, `negative_prompt_embeds` are generated from the `negative_prompt` input argument.
             generated_prompt_embeds (`paddle.Tensor`, *optional*):
-                Pre-generated text embeddings from the GPT2 langauge model. Can be used to easily tweak text inputs,
+                Pre-generated text embeddings from the GPT2 language model. Can be used to easily tweak text inputs,
                  *e.g.* prompt weighting. If not provided, text embeddings will be generated from `prompt` input
                  argument.
             negative_generated_prompt_embeds (`paddle.Tensor`, *optional*):

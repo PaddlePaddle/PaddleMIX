@@ -65,7 +65,7 @@ def get_sine_pos_embed(
         sin_x = paddle.stack((sin_x[..., 0::2].sin(), sin_x[..., 1::2].cos()), axis=3).flatten(2)
         return sin_x
 
-    pos_res = [sine_func(x) for x in pos_tensor.split([1] * pos_tensor.shape[-1], axis=-1)]
+    pos_res = [sine_func(x) for x in paddle.split(pos_tensor, [1] * pos_tensor.shape[-1], axis=-1)]
     if exchange_xy:
         pos_res[0], pos_res[1] = pos_res[1], pos_res[0]
     pos_res = paddle.concat(pos_res, axis=-1)
@@ -224,7 +224,7 @@ def gen_sineembed_for_position(pos_tensor):
     pos_x = paddle.stack((pos_x[:, :, 0::2].sin(), pos_x[:, :, 1::2].cos()), axis=3).flatten(2)
     pos_y = paddle.stack((pos_y[:, :, 0::2].sin(), pos_y[:, :, 1::2].cos()), axis=3).flatten(2)
     if pos_tensor.shape[-1] == 2:
-        pos = paddle.concat((pos_y, pos_x), aixs=2)
+        pos = paddle.concat((pos_y, pos_x), axis=2)
     elif pos_tensor.shape[-1] == 4:
         w_embed = pos_tensor[:, :, 2] * scale
         pos_w = w_embed[:, :, None] / dim_t

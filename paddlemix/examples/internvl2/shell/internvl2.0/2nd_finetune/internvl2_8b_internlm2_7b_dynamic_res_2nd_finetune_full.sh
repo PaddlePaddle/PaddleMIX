@@ -1,8 +1,22 @@
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+# 
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# 
+#     http://www.apache.org/licenses/LICENSE-2.0
+# 
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 set -x
 
 GPUS=${GPUS:-8}
 BATCH_SIZE=${BATCH_SIZE:-128}
-PER_DEVICE_BATCH_SIZE=${PER_DEVICE_BATCH_SIZE:-1}
+PER_DEVICE_BATCH_SIZE=${PER_DEVICE_BATCH_SIZE:-4}
 GRADIENT_ACC=$((BATCH_SIZE / PER_DEVICE_BATCH_SIZE / GPUS))
 tensor_parallel_degree=${tensor_parallel_degree:-1}
 sharding_parallel_degree=$((GPUS / tensor_parallel_degree))
@@ -11,7 +25,7 @@ export PYTHONPATH="${PYTHONPATH}:$(pwd)"
 export MASTER_PORT=34229
 export TF_CPP_MIN_LOG_LEVEL=3
 
-OUTPUT_DIR='work_dirs/internvl_chat_v2_0/internvl2_8b_internlm2_7b_dynamic_res_2nd_finetune_full'
+OUTPUT_DIR='work_dirs/internvl2-8B'
 
 if [ ! -d "$OUTPUT_DIR" ]; then
   mkdir -p "$OUTPUT_DIR"
@@ -57,7 +71,7 @@ ${TRAINING_PYTHON} --log_dir ${OUTPUT_DIR}/paddle_distributed_logs \
   --evaluation_strategy "no" \
   --save_strategy "epoch" \
   --save_steps 200 \
-  --save_total_limit 2 \
+  --save_total_limit 1 \
   --learning_rate 4e-5 \
   --weight_decay 0.01 \
   --warmup_ratio 0.03 \
@@ -65,7 +79,6 @@ ${TRAINING_PYTHON} --log_dir ${OUTPUT_DIR}/paddle_distributed_logs \
   --lr_scheduler_type "cosine" \
   --logging_steps 1 \
   --max_seq_length 4096 \
-  --grad_checkpoint True \
   --group_by_length True \
   --dynamic_image_size True \
   --use_thumbnail True \
@@ -75,6 +88,6 @@ ${TRAINING_PYTHON} --log_dir ${OUTPUT_DIR}/paddle_distributed_logs \
   --sharding_parallel_degree=${sharding_parallel_degree} \
   --pipeline_parallel_degree=1 \
   --sep_parallel_degree=1 \
-  --sharding="stage1" \
+  --sharding="stage2" \
   --amp_master_grad=1 \
   --hybrid_parallel_topo_order="sharding_first" \

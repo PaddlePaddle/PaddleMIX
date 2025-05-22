@@ -28,7 +28,7 @@ class BaseNoiseCond:
         pass
 
     def cond(self, logSNR):
-        raise NotImplementedError("this method needs to be overriden")
+        raise NotImplementedError("this method needs to be overridden")
 
     def __call__(self, logSNR):
         if self.shift != 1:

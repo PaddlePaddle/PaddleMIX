@@ -101,7 +101,7 @@ def normalize(clip, mean, std, inplace=False):
         clip = clip.clone()
     mean = paddle.to_tensor(data=mean, place=clip.place).astype(clip.dtype)
     std = paddle.to_tensor(data=std, place=clip.place).astype(clip.dtype)
-    clip = clip.substract(mean[:, (None), (None), (None)]).divide(std[:, (None), (None), (None)])
+    clip = clip.subtract(mean[:, (None), (None), (None)]).divide(std[:, (None), (None), (None)])
     return clip
 
 

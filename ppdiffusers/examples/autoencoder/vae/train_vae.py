@@ -138,7 +138,7 @@ def parse_args():
         type=int,
         help="The interval steps to logging images.",
     )
-    parser.add_argument("--save_steps", default=2000, type=int, help="The interval steps to saveing.")
+    parser.add_argument("--save_steps", default=2000, type=int, help="The interval steps to saving.")
     parser.add_argument(
         "--ignore_keys",
         default=[],

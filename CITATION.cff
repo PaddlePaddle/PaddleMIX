@@ -1,0 +1,15 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: Paddle Multimodal Integration and eXploration
+message: >-
+  If you use this repository, please cite it using the metadata from this file.
+type: software
+authors:
+  - given-names: PaddleMIX Authors
+repository-code: 'https://github.com/PaddlePaddle/PaddleMIX'
+repository: 'https://github.com/PaddlePaddle/PaddleMIX'
+keywords:
+  - paddlemix
+license: Apache-2.0

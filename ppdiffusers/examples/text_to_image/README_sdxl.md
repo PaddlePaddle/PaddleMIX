@@ -110,6 +110,34 @@ for file_name in sorted(os.listdir(dir_name)):
     image.save("sdxl_train_pokemon_" + file_name + ".png")
 ```
 
+## NPU硬件训练推理
+
+1. 请先参照[PaddleCustomDevice](https://github.com/PaddlePaddle/PaddleCustomDevice/blob/develop/backends/npu/README_cn.md)安装NPU硬件Paddle
+2. 使用NPU进行sdxl微调训练和推理时参考如下命令设置相应的环境变量，训练和推理运行命令可直接参照上述微调训练和推理命令。
+```bash
+export FLAGS_npu_storage_format=0
+export FLAGS_use_stride_kernel=0
+```
+
+注意NPU训练暂不支持enable_xformers_memory_efficient_attention选项，启动命令如下:
+```bash
+python -u train_text_to_image_sdxl.py \
+  --pretrained_model_name_or_path=$MODEL_NAME \
+  --pretrained_vae_model_name_or_path=$VAE_NAME \
+  --dataset_name=$DATASET_NAME \
+  --resolution=512 --center_crop --random_flip \
+  --proportion_empty_prompts=0.2 \
+  --train_batch_size=1 \
+  --gradient_accumulation_steps=4 --gradient_checkpointing \
+  --max_train_steps=10000 \
+  --learning_rate=1e-06 --lr_scheduler="constant" --lr_warmup_steps=0 \
+  --mixed_precision="fp16" \
+  --report_to="wandb" \
+  --validation_prompt="a cute Sundar Pichai creature" --validation_epochs 5 \
+  --checkpointing_steps=5000 \
+  --output_dir="sdxl-pokemon-model"
+```
+
 
 ## Stable Diffusion XL (SDXL) LoRA 训练示例
 
@@ -191,7 +219,7 @@ python -u train_text_to_image_lora_sdxl.py \
 
 ### 推理
 
-一旦你使用上面的命令训练了一个模型，推理可以简单地使用 `StableDiffusionXLPipeline` 在加载训练好的 LoRA 权重后进行。你需要传递 `output_dir` 来加载 LoRA 权重，在这个案例中，是 `sd-pokemon-model-lora-sdxl`。
+一旦你使用上面的命令训练了一个模型，推理可以简单地使用 `StableDiffusionXLPipeline` 在加载训练好的 LoRA 权重后进行。通过修改推理脚本中的model_path变量，可以传递需要加载的 LoRA 训练权重，在这个案例中，是 `sd-pokemon-model-lora-sdxl`。
 
 ```python
 from ppdiffusers import StableDiffusionXLPipeline
@@ -215,6 +243,8 @@ import os
 
 dir_name = "your-checkpoints-path/sd-pokemon-model-lora-sdxl/"
 for file_name in sorted(os.listdir(dir_name)):
+    if 'checkpoint' not in file_name:
+        continue
     print(file_name)
     model_path = os.path.join(dir_name, file_name)
     pipe = StableDiffusionXLPipeline.from_pretrained("stabilityai/stable-diffusion-xl-base-1.0", paddle_dtype=paddle.float16)
@@ -223,4 +253,14 @@ for file_name in sorted(os.listdir(dir_name)):
     prompt = "A pokemon with green eyes and red legs."
     image = pipe(prompt, num_inference_steps=30, guidance_scale=7.5).images[0]
     image.save("pokemon_" + file_name + ".png")
+```
+
+## NPU硬件训练
+1. 请先参照[PaddleCustomDevice](https://github.com/PaddlePaddle/PaddleCustomDevice/blob/develop/backends/npu/README_cn.md)安装NPU硬件Paddle
+2. 使用NPU进行LoRA训练和推理时参考如下命令设置相应的环境变量，训练和推理运行命令可直接参照上述LoRA训练和推理命令。
+```bash
+export FLAGS_npu_storage_format=0
+export FLAGS_use_stride_kernel=0
+export FLAGS_npu_scale_aclnn=True
+export FLAGS_allocator_strategy=auto_growth
 ```

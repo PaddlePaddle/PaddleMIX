@@ -105,7 +105,7 @@ def parse_arguments():
         ],
         help="The parse_prompt_type can be one of [raw, lpw]. ",
     )
-    parser.add_argument("--use_fp16", type=strtobool, default=True, help="Wheter to use FP16 mode")
+    parser.add_argument("--use_fp16", type=strtobool, default=True, help="Whether to use FP16 mode")
     parser.add_argument("--device_id", type=int, default=0, help="The selected gpu id. -1 means use cpu")
     parser.add_argument(
         "--scheduler",
@@ -226,7 +226,6 @@ def main(args):
     no_need_passes = [
         "trt_prompt_tuning_embedding_eltwise_layernorm_fuse_pass",
         "add_support_int8_pass",
-        "auto_mixed_precision_pass",
         "conv_elementwise_add_fuse_pass",
     ]
     paddle_delete_passes = dict(

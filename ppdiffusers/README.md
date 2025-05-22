@@ -20,7 +20,14 @@
 **PPDiffusers**是一款支持多种模态（如文本图像跨模态、图像、语音）扩散模型（Diffusion Model）训练和推理的国产化工具箱，依托于[**PaddlePaddle**](https://www.paddlepaddle.org.cn/)框架和[**PaddleNLP**](https://github.com/PaddlePaddle/PaddleNLP)自然语言处理开发库。
 
 ## News 📢
+* 🔥 **2025.03.11 发布 0.29.1 版本，发布自研可控视频模型 [PP-VCtrl](https://github.com/westfish/PaddleMIX/tree/develop/ppdiffusers/examples/ppvctrl)，支持在多种控制条件下的视频生成，广泛适用于人物动画、场景转换和视频编辑场景；集成高质量文生视频模型 [CogVideoX](https://github.com/westfish/PaddleMIX/tree/develop/ppdiffusers/examples/cogvideo) 和 HunyuanVideo，进一步提高了文本到视频生成的效果；新增对 SD3 ControlNet 和 SD3.5 的支持，提升了Stable Diffusion 3的兼容性，进一步强化图像生成的精细化控制能力。**
+
+* 🔥 **2024.10.18 发布 0.29.0 版本，新增图像生成模型[Stable Diffusion 3 (SD3)](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/examples/text_to_image/README_sd3.md)，支持DreamBooth训练及高性能推理；SD3、SDXL适配昇腾910B，提供国产计算芯片上的训推能力；DIT支持[高性能推理](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/examples/class_conditional_image_generation/DiT/README.md#23-paddle-inference-%E9%AB%98%E6%80%A7%E8%83%BD%E6%8E%A8%E7%90%86)；支持PaddleNLP 3.0 beta版本。**
+
 * 🔥 **2024.07.15 发布 0.24.1 版本，新增[Open-Sora](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/Open-Sora)，支持模型训练和推理；全面支持Paddle 3.0。**
+
+<details>
+<summary>点击展开更多历史版本更新</summary>
 
 * 🔥 **2024.04.17 发布 0.24.0 版本，支持[Sora相关技术](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/sora)，支持[DiT](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/class_conditional_image_generation/DiT)、[SiT](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/class_conditional_image_generation/DiT#exploring-flow-and-diffusion-based-generative-models-with-scalable-interpolant-transformers-sit)、[UViT](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/text_to_image_mscoco_uvit)训练推理，新增[NaViT](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/navit)、[MAGVIT-v2](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/video_tokenizer/magvit2)模型；
 视频生成能力全面升级；
@@ -37,13 +44,7 @@
 Stable Diffusion支持[BF16 O2训练](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/stable_diffusion)，效果对齐FP32；
 [LoRA加载升级](#加载HF-LoRA权重)，支持加载SDXL的LoRA权重；
 [Controlnet](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/ppdiffusers/pipelines/controlnet)升级，支持ControlNetImg2Img、ControlNetInpaint、StableDiffusionXLControlNet等。**
-
-* 🔥 **2023.06.20 发布 0.16.1 版本，新增[T2I-Adapter](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/t2i-adapter)，支持训练与推理；ControlNet升级，支持[reference only推理](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/community#controlnet-reference-only)；新增[WebUIStableDiffusionPipeline](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/community#automatic1111-webui-stable-diffusion)，
-支持通过prompt的方式动态加载lora、textual_inversion权重；
-新增[StableDiffusionHiresFixPipeline](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/community#stable-diffusion-with-high-resolution-fixing)，支持高分辨率修复；
-新增关键点控制生成任务评价指标[COCOeval](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/scripts/cocoeval_keypoints_score)；
-新增多种模态扩散模型Pipeline，包括视频生成（[Text-to-Video-Synth](#文本视频多模)、[Text-to-Video-Zero](#文本视频多模)）、音频生成（[AudioLDM](#文本音频多模)、[Spectrogram Diffusion](#音频)）；新增文图生成模型[IF](#文本图像多模)。**
-
+</details>
 
 
 ## 特性
@@ -87,6 +88,11 @@ pip install --upgrade ppdiffusers
 git clone https://github.com/PaddlePaddle/PaddleMIX
 cd PaddleMIX/ppdiffusers
 python setup.py install
+```
+### 设置代理
+```shell
+export HF_HUB_ENABLE_HF_TRANSFER=1
+export HF_ENDPOINT=https://hf-mirror.com
 ```
 
 ## 快速开始
@@ -1013,14 +1019,15 @@ imageio.mimsave("text_to_video_generation-zero-result-panda.mp4", result, fps=4)
 import paddle
 import scipy
 
-from ppdiffusers import AudioLDMPipeline
+from ppdiffusers import AudioLDM2Pipeline
 
-pipe = AudioLDMPipeline.from_pretrained("cvssp/audioldm", paddle_dtype=paddle.float16)
+pipe = AudioLDM2Pipeline.from_pretrained("cvssp/audioldm2", paddle_dtype=paddle.float16)
 
-prompt = "Techno music with a strong, upbeat tempo and high melodic riffs"
-audio = pipe(prompt, num_inference_steps=10, audio_length_in_s=5.0).audios[0]
+prompt = "Musical constellations twinkling in the night sky, forming a cosmic melody."
+negative_prompt = "Low quality."
+audio = pipe(prompt, negative_prompt=negative_prompt, num_inference_steps=200, audio_length_in_s=10).audios[0]
 
-output_path = "text_to_audio_generation-audio_ldm-techno.wav"
+output_path = f"{prompt}.wav"
 # save the audio sample as a .wav file
 scipy.io.wavfile.write(output_path, rate=16000, data=audio)
 ```
@@ -1030,7 +1037,7 @@ scipy.io.wavfile.write(output_path, rate=16000, data=audio)
   <tbody>
    <tr>
       <td align = "center">
-      <a href="https://paddlenlp.bj.bcebos.com/models/community/westfish/develop_ppdiffusers_data/techno.wav" rel="nofollow">
+      <a href="https://paddlenlp.bj.bcebos.com/models/community/paddlemix/ppdiffusers/AudioLDM2-Music.wav" rel="nofollow">
             <img align="center" src="https://user-images.githubusercontent.com/20476674/209344877-edbf1c24-f08d-4e3b-88a4-a27e1fd0a858.png" width="200 style="max-width: 100%;"></a><br>
       </td>
     </tr>
@@ -1038,6 +1045,10 @@ scipy.io.wavfile.write(output_path, rate=16000, data=audio)
 </div>
 </details>
 
+可以使用以下代码转换[huggingface](https://huggingface.co/docs/diffusers/api/pipelines/audioldm2)的模型，一键在paddle中使用
+```python
+pipe = AudioLDM2Pipeline.from_pretrained("cvssp/audioldm2-music", from_hf_hub=True, from_diffusers=True).save_pretrained("cvssp/audioldm2-music")
+```
 ### 图像
 
 <details><summary>&emsp;无条件图像生成（Unconditional Image Generation）</summary>

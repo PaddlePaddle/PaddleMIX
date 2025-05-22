@@ -16,7 +16,7 @@
 import contextlib
 import copy
 import random
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Union, List
 
 import numpy as np
 import paddle
@@ -85,6 +85,16 @@ def unet_lora_state_dict(unet: UNet2DConditionModel) -> Dict[str, paddle.Tensor]
                     lora_state_dict[f"unet.{name}.lora.{lora_layer_matrix_name}"] = lora_param
 
     return lora_state_dict
+
+
+def cast_training_params(model: Union[paddle.nn.Layer, List[paddle.nn.Layer]], dtype=paddle.float32):
+    if not isinstance(model, list):
+        model = [model]
+    for m in model:
+        for param in m.parameters():
+            # only upcast trainable parameters into fp32
+            if param.stop_gradient == False:
+                param.set_value(paddle.cast(param, dtype))
 
 
 # Adapted from torch-ema https://github.com/fadel/pytorch_ema/blob/master/torch_ema/ema.py#L14
@@ -201,7 +211,7 @@ class EMAModel:
         """
         Compute the decay factor for the exponential moving average.
         """
-        # NOTE we donot -1! (yujun06) diffirent from diffusers's implementation
+        # NOTE we do not -1! (yujun06) diffirent from diffusers's implementation
         step = max(0, optimization_step - self.update_after_step)
 
         if step <= 0:

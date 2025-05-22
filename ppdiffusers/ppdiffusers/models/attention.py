@@ -14,16 +14,21 @@
 from typing import Any, Dict, Optional
 
 import paddle
-from paddle import nn
 import paddle.nn.functional as F
+from paddle import nn
 
 from ..utils import USE_PEFT_BACKEND
 from ..utils.paddle_utils import maybe_allow_in_graph
-from .activations import GEGLU, GELU, ApproximateGELU
+from .activations import GEGLU, GELU, ApproximateGELU, LinearActivation, SwiGLU
 from .attention_processor import Attention, JointAttnProcessor2_5
 from .embeddings import SinusoidalPositionalEmbedding
 from .lora import LoRACompatibleLinear
-from .normalization import AdaLayerNorm, AdaLayerNormContinuous, AdaLayerNormZero
+from .normalization import (
+    AdaLayerNorm,
+    AdaLayerNormContinuous,
+    AdaLayerNormZero,
+    SD35AdaLayerNormZeroX,
+)
 
 
 def _chunked_feed_forward(
@@ -92,6 +97,7 @@ class GatedSelfAttentionDense(nn.Layer):
 
         return x
 
+
 @maybe_allow_in_graph
 class JointTransformerBlock(nn.Layer):
     r"""
@@ -105,13 +111,25 @@ class JointTransformerBlock(nn.Layer):
             processing of `context` conditions.
     """
 
-    def __init__(self, dim, num_attention_heads, attention_head_dim, context_pre_only=False):
+    def __init__(
+        self,
+        dim: int,
+        num_attention_heads: int,
+        attention_head_dim: int,
+        context_pre_only: bool = False,
+        qk_norm: Optional[str] = None,
+        use_dual_attention: bool = False,
+    ):
         super().__init__()
 
+        self.use_dual_attention = use_dual_attention
         self.context_pre_only = context_pre_only
         context_norm_type = "ada_norm_continous" if context_pre_only else "ada_norm_zero"
 
-        self.norm1 = AdaLayerNormZero(dim)
+        if use_dual_attention:
+            self.norm1 = SD35AdaLayerNormZeroX(dim)
+        else:
+            self.norm1 = AdaLayerNormZero(dim)
 
         if context_norm_type == "ada_norm_continous":
             self.norm1_context = AdaLayerNormContinuous(
@@ -123,12 +141,14 @@ class JointTransformerBlock(nn.Layer):
             raise ValueError(
                 f"Unknown context_norm_type: {context_norm_type}, currently only support `ada_norm_continous`, `ada_norm_zero`"
             )
+
         if hasattr(F, "scaled_dot_product_attention"):
             processor = JointAttnProcessor2_5()
         else:
             raise ValueError(
                 "The current PyTorch version does not support the `scaled_dot_product_attention` function."
             )
+
         self.attn = Attention(
             query_dim=dim,
             cross_attention_dim=None,
@@ -139,7 +159,24 @@ class JointTransformerBlock(nn.Layer):
             context_pre_only=context_pre_only,
             bias=True,
             processor=processor,
+            qk_norm=qk_norm,
+            eps=1e-6,
         )
+
+        if use_dual_attention:
+            self.attn2 = Attention(
+                query_dim=dim,
+                cross_attention_dim=None,
+                dim_head=attention_head_dim // num_attention_heads,
+                heads=num_attention_heads,
+                out_dim=attention_head_dim,
+                bias=True,
+                processor=processor,
+                qk_norm=qk_norm,
+                eps=1e-6,
+            )
+        else:
+            self.attn2 = None
 
         self.norm2 = nn.LayerNorm(dim, weight_attr=False, bias_attr=False, epsilon=1e-6)
         self.ff = FeedForward(dim=dim, dim_out=dim, activation_fn="gelu-approximate")
@@ -161,10 +198,13 @@ class JointTransformerBlock(nn.Layer):
         self._chunk_size = chunk_size
         self._chunk_dim = dim
 
-    def forward(
-        self, hidden_states: paddle.Tensor, encoder_hidden_states: paddle.Tensor, temb: paddle.Tensor
-    ):
-        norm_hidden_states, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.norm1(hidden_states, emb=temb)
+    def forward(self, hidden_states: paddle.Tensor, encoder_hidden_states: paddle.Tensor, temb: paddle.Tensor):
+        if self.use_dual_attention:
+            norm_hidden_states, gate_msa, shift_mlp, scale_mlp, gate_mlp, norm_hidden_states2, gate_msa2 = self.norm1(
+                hidden_states, emb=temb
+            )
+        else:
+            norm_hidden_states, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.norm1(hidden_states, emb=temb)
 
         if self.context_pre_only:
             norm_encoder_hidden_states = self.norm1_context(encoder_hidden_states, temb)
@@ -175,12 +215,18 @@ class JointTransformerBlock(nn.Layer):
 
         # Attention.
         attn_output, context_attn_output = self.attn(
-            hidden_states=norm_hidden_states, encoder_hidden_states=norm_encoder_hidden_states, 
+            hidden_states=norm_hidden_states,
+            encoder_hidden_states=norm_encoder_hidden_states,
         )
 
         # Process attention outputs for the `hidden_states`.
         attn_output = gate_msa.unsqueeze(1) * attn_output
         hidden_states = hidden_states + attn_output
+
+        if self.use_dual_attention:
+            attn_output2 = self.attn2(hidden_states=norm_hidden_states2)
+            attn_output2 = gate_msa2.unsqueeze(1) * attn_output2
+            hidden_states = hidden_states + attn_output2
 
         norm_hidden_states = self.norm2(hidden_states)
         norm_hidden_states = norm_hidden_states * (1 + scale_mlp[:, None]) + shift_mlp[:, None]
@@ -212,6 +258,7 @@ class JointTransformerBlock(nn.Layer):
             encoder_hidden_states = encoder_hidden_states + c_gate_mlp.unsqueeze(1) * context_ff_output
 
         return encoder_hidden_states, hidden_states
+
 
 @maybe_allow_in_graph
 class BasicTransformerBlock(nn.Layer):
@@ -641,20 +688,27 @@ class FeedForward(nn.Layer):
         dropout: float = 0.0,
         activation_fn: str = "geglu",
         final_dropout: bool = False,
+        inner_dim=None,
+        bias: bool = True,
     ):
         super().__init__()
-        inner_dim = int(dim * mult)
+        if inner_dim is None:
+            inner_dim = int(dim * mult)
         dim_out = dim_out if dim_out is not None else dim
         linear_cls = LoRACompatibleLinear if not USE_PEFT_BACKEND else nn.Linear
 
         if activation_fn == "gelu":
-            act_fn = GELU(dim, inner_dim)
+            act_fn = GELU(dim, inner_dim, bias=bias)
         if activation_fn == "gelu-approximate":
-            act_fn = GELU(dim, inner_dim, approximate="tanh")
+            act_fn = GELU(dim, inner_dim, approximate="tanh", bias=bias)
         elif activation_fn == "geglu":
-            act_fn = GEGLU(dim, inner_dim)
+            act_fn = GEGLU(dim, inner_dim, bias=bias)
         elif activation_fn == "geglu-approximate":
-            act_fn = ApproximateGELU(dim, inner_dim)
+            act_fn = ApproximateGELU(dim, inner_dim, bias=bias)
+        elif activation_fn == "linear-silu":
+            act_fn = LinearActivation(dim, inner_dim, bias=bias, activation="silu")
+        elif activation_fn == "swiglu":
+            act_fn = SwiGLU(dim, inner_dim, bias=bias)
 
         self.net = nn.LayerList([])
         # project in
@@ -662,7 +716,7 @@ class FeedForward(nn.Layer):
         # project dropout
         self.net.append(nn.Dropout(dropout))
         # project out
-        self.net.append(linear_cls(inner_dim, dim_out))
+        self.net.append(linear_cls(inner_dim, dim_out, bias_attr=bias))
         # FF as used in Vision Transformer, MLP-Mixer, etc. have a final dropout
         if final_dropout:
             self.net.append(nn.Dropout(dropout))

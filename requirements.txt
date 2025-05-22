@@ -1,5 +1,5 @@
-numpy
-paddlenlp>=2.6.1
+numpy==1.23.5
+paddlenlp>=3.0.0b3
 tensorboardX
 opencv-python
 Pillow
@@ -13,4 +13,5 @@ h5py
 jsonschema>=4.19.0
 referencing>=0.32.1
 decord>=0.6.0
-paddlenlp==3.0.0b0
+brisque
+av

@@ -13,35 +13,93 @@
 # limitations under the License.
 
 import argparse
+import json
+import os
+
+import numpy as np
 import paddle
 import paddle.vision.transforms as T
-from PIL import Image
-import numpy as np
 from decord import VideoReader, cpu
-from paddlemix.models.internvl2.internlm2 import InternLM2Tokenizer
-from paddlenlp.transformers import AutoTokenizer, Qwen2Tokenizer, LlamaTokenizer, Llama3Tokenizer
+from paddlenlp.transformers import Llama3Tokenizer, LlamaTokenizer, Qwen2Tokenizer
+from PIL import Image
+
 from paddlemix.datasets.internvl_dataset import dynamic_preprocess
+from paddlemix.models.internvl2.internlm2 import InternLM2Tokenizer
 from paddlemix.models.internvl2.internvl_chat import InternVLChatModel
+from paddlemix.models.qwen2_vl import MIXQwen2Tokenizer
 
 paddle.set_grad_enabled(False)
 
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD = (0.229, 0.224, 0.225)
 
+TOKENIZER_MAPPING = {
+    "InternLM2Tokenizer": InternLM2Tokenizer,
+    "Llama3Tokenizer": Llama3Tokenizer,
+    "LlamaTokenizer": LlamaTokenizer,
+    "MIXQwen2Tokenizer": MIXQwen2Tokenizer,
+    "Qwen2Tokenizer": Qwen2Tokenizer,
+}
+
+
+def check_dtype_compatibility():
+    """
+    检查当前环境下可用的数据类型
+    返回最优的可用数据类型
+    """
+    if not paddle.is_compiled_with_cuda():
+        print("CUDA not available, falling back to float32")
+        return paddle.float32
+
+    # 获取GPU计算能力
+    gpu_arch = paddle.device.cuda.get_device_capability()
+    if gpu_arch is None:
+        print("Unable to determine GPU architecture, falling back to float32")
+        return paddle.float32
+
+    major, minor = gpu_arch
+    compute_capability = major + minor / 10
+    print(f"GPU compute capability: {compute_capability}")
+
+    try:
+        # 测试bfloat16兼容性
+        if compute_capability >= 8.0:  # Ampere及更新架构
+            test_tensor = paddle.zeros([2, 2], dtype="bfloat16")
+            test_op = paddle.matmul(test_tensor, test_tensor)
+            print("bfloat16 is supported and working")
+            return paddle.bfloat16
+    except Exception as e:
+        print(f"bfloat16 test failed: {str(e)}")
+
+    try:
+        # 测试float16兼容性
+        if compute_capability >= 5.3:  # Maxwell及更新架构
+            test_tensor = paddle.zeros([2, 2], dtype="float16")
+            test_op = paddle.matmul(test_tensor, test_tensor)
+            print("float16 is supported and working")
+            return paddle.float16
+    except Exception as e:
+        print(f"float16 test failed: {str(e)}")
+
+    print("Falling back to float32 due to compatibility issues")
+    return paddle.float32
+
 
 def build_transform(input_size):
     MEAN, STD = IMAGENET_MEAN, IMAGENET_STD
-    transform = T.Compose([
-        # T.Lambda(lambda img: img.convert('RGB') if img.mode != 'RGB' else img),
-        T.Resize((input_size, input_size), interpolation='bicubic'),
-        T.ToTensor(),
-        T.Normalize(mean=MEAN, std=STD)
-    ])
+    transform = T.Compose(
+        [
+            # T.Lambda(lambda img: img.convert('RGB') if img.mode != 'RGB' else img),
+            T.Resize((input_size, input_size), interpolation="bicubic"),
+            T.ToTensor(),
+            T.Normalize(mean=MEAN, std=STD),
+        ]
+    )
     return transform
 
 
 def load_image(image_file, input_size=448, max_num=12):
-    image = Image.open(image_file).convert('RGB')
+    image = Image.open(image_file).convert("RGB")
     transform = build_transform(input_size=input_size)
     images = dynamic_preprocess(image, image_size=input_size, use_thumbnail=True, max_num=max_num)
     pixel_values = [transform(image) for image in images]
@@ -58,10 +116,9 @@ def get_index(bound, fps, max_frame, first_idx=0, num_segments=32):
     start_idx = max(first_idx, round(start * fps))
     end_idx = min(round(end * fps), max_frame)
     seg_size = float(end_idx - start_idx) / num_segments
-    frame_indices = np.array([
-        int(start_idx + (seg_size / 2) + np.round(seg_size * idx))
-        for idx in range(num_segments)
-    ])
+    frame_indices = np.array(
+        [int(start_idx + (seg_size / 2) + np.round(seg_size * idx)) for idx in range(num_segments)]
+    )
     return frame_indices
 
 
@@ -74,7 +131,7 @@ def load_video(video_path, bound=None, input_size=448, max_num=1, num_segments=3
     transform = build_transform(input_size=input_size)
     frame_indices = get_index(bound, fps, max_frame, first_idx=0, num_segments=num_segments)
     for frame_index in frame_indices:
-        img = Image.fromarray(vr[frame_index].asnumpy()).convert('RGB')
+        img = Image.fromarray(vr[frame_index].asnumpy()).convert("RGB")
         img = dynamic_preprocess(img, image_size=input_size, use_thumbnail=True, max_num=max_num)
         pixel_values = [transform(tile) for tile in img]
         pixel_values = paddle.stack(pixel_values)
@@ -84,48 +141,63 @@ def load_video(video_path, bound=None, input_size=448, max_num=1, num_segments=3
     return pixel_values, num_patches_list
 
 
-def load_tokenizer(model_size, model_path):
-    if model_size in ['1B']:
-        tokenizer = Qwen2Tokenizer.from_pretrained(model_path)
-        # TODO:
-        tokenizer.added_tokens_encoder =  {'<|endoftext|>': 151643, '<|im_start|>': 151644, '<|im_end|>': 151645, '<img>': 151646, '</img>': 151647, '<IMG_CONTEXT>': 151648, '<quad>': 151649, '</quad>': 151650, '<ref>': 151651, '</ref>': 151652, '<box>': 151653, '</box>': 151654}
-        tokenizer.added_tokens_decoder = {v: k for k, v in tokenizer.added_tokens_encoder.items()}
+def load_tokenizer(model_path):
+    import re
 
-    elif model_size in ['2B', '8B', '26B']:
-        tokenizer = InternLM2Tokenizer.from_pretrained(model_path)
-        # TODO:
-        tokenizer.added_tokens_encoder = {'<unk>': 0, '<s>': 1, '</s>': 2, '<|plugin|>': 92538, '<|interpreter|>': 92539, '<|action_end|>': 92540, '<|action_start|>': 92541, '<|im_end|>': 92542, '<|im_start|>': 92543, '<img>': 92544, '</img>': 92545, '<IMG_CONTEXT>': 92546, '<quad>': 92547, '</quad>': 92548, '<ref>': 92549, '</ref>': 92550, '<box>': 92551, '</box>': 92552}
-        tokenizer.added_tokens_decoder = {v: k for k, v in tokenizer.added_tokens_encoder.items()}
-
-    elif model_size in ['4B']:
-        tokenizer = LlamaTokenizer.from_pretrained(model_path)
-        # TODO:
-        tokenizer.added_tokens_encoder = {'<unk>': 0, '<s>': 1, '</s>': 2, '<|endoftext|>': 32000, '<|assistant|>': 32001, '<|placeholder1|>': 32002, '<|placeholder2|>': 32003, '<|placeholder3|>': 32004, '<|placeholder4|>': 32005, '<|system|>': 32006, '<|end|>': 32007, '<|placeholder5|>': 32008, '<|placeholder6|>': 32009, '<|user|>': 32010, '<img>': 32011, '</img>': 32012, '<IMG_CONTEXT>': 32013, '<quad>': 32014, '</quad>': 32015, '<ref>': 32016, '</ref>': 32017, '<box>': 32018, '</box>': 32019}
-        tokenizer.added_tokens_decoder = {v: k for k, v in tokenizer.added_tokens_encoder.items()}
-
-    elif model_size in ['40B']:
-        tokenizer = LlamaTokenizer.from_pretrained(model_path)
-        # TODO:
-        tokenizer.added_tokens_encoder = {'<unk>': 0, '<|startoftext|>': 1, '<|endoftext|>': 2, '<|im_start|>': 6, '<|im_end|>': 7, '<img>': 68, '</img>': 70, '<IMG_CONTEXT>': 64000, '<quad>': 64001, '</quad>': 64002, '<ref>': 64003, '</ref>': 64004, '<box>': 64005, '</box>': 64006}
-        tokenizer.added_tokens_decoder = {v: k for k, v in tokenizer.added_tokens_encoder.items()}
-
-    elif model_size in ['76B']:
-        tokenizer = Llama3Tokenizer.from_pretrained(model_path)
-        # TODO:
-        tokenizer.added_tokens_encoder = {'<img>': 128256, '</img>': 128257, '<IMG_CONTEXT>': 128258, '<quad>': 128259, '</quad>': 128260, '<ref>': 128261, '</ref>': 128262, '<box>': 128263, '</box>': 128264}
-        tokenizer.added_tokens_decoder = {v: k for k, v in tokenizer.added_tokens_encoder.items()}
-
+    match = re.search(r"\d+B", model_path)
+    model_v2_5 = "InternVL2_5" in model_path
+    model_v3 = "InternVL3" in model_path
+    if match:
+        model_size = match.group()
     else:
-        raise ValueError
+        tokenzer_path = os.path.join(model_path, "tokenizer_config.json")
+        if os.path.exists(tokenzer_path):
+            with open(tokenzer_path) as f:
+                tokenizer_class_name = json.load(f)["tokenizer_class"]
+            tokenizer_class = TOKENIZER_MAPPING.get(tokenizer_class_name, MIXQwen2Tokenizer)
+            tokenizer = tokenizer_class.from_pretrained(model_path)
+            return tokenizer
+        else:
+            raise ValueError
 
-    return tokenizer
+    if not model_v2_5 and not model_v3:
+        # InternVL2，暂不支持4B的phi3
+        if model_size in ["1B"]:
+            tokenizer = MIXQwen2Tokenizer.from_pretrained(model_path)
+        elif model_size in ["2B", "8B", "26B"]:
+            tokenizer = InternLM2Tokenizer.from_pretrained(model_path)
+        elif model_size in ["40B"]:
+            tokenizer = LlamaTokenizer.from_pretrained(model_path)
+        elif model_size in ["76B"]:
+            tokenizer = Llama3Tokenizer.from_pretrained(model_path)
+        else:
+            raise ValueError
+        return tokenizer
+
+    if model_v2_5:
+        if model_size in ["1B", "4B", "38B", "78B"]:
+            tokenizer = MIXQwen2Tokenizer.from_pretrained(model_path)
+        elif model_size in ["2B", "8B", "26B"]:
+            tokenizer = InternLM2Tokenizer.from_pretrained(model_path)
+        else:
+            raise ValueError
+        return tokenizer
+
+    if model_v3:
+        if model_size in ["1B", "2B", "8B", "14B", "38B", "78B"]:
+            tokenizer = MIXQwen2Tokenizer.from_pretrained(model_path)
+        elif model_size in ["9B"]:
+            tokenizer = InternLM2Tokenizer.from_pretrained(model_path)
+        else:
+            raise ValueError
+        return tokenizer
 
 
 def main(args):
-    if args.video_path is not None and args.video_path != 'None':
+    if args.video_path is not None and args.video_path != "None":
         pixel_values, num_patches_list = load_video(args.video_path, num_segments=8, max_num=1)
         pixel_values = pixel_values.to(paddle.bfloat16)
-        video_prefix = ''.join([f'Frame{i+1}: <image>\n' for i in range(len(num_patches_list))])
+        video_prefix = "".join([f"Frame{i+1}: <image>\n" for i in range(len(num_patches_list))])
         args.text = video_prefix + args.text
         # Frame1: <image>\nFrame2: <image>\n...\nFrame8: <image>\n{question}
 
@@ -134,21 +206,25 @@ def main(args):
 
     # init model and tokenizer
     MODEL_PATH = args.model_name_or_path
-    model_size = MODEL_PATH.split('-')[-1]
-    print(f'model size: {model_size}')
-    tokenizer = load_tokenizer(model_size, MODEL_PATH)
-    print('tokenizer:\n', tokenizer)
-    print('len(tokenizer): ', len(tokenizer))
+    tokenizer = load_tokenizer(MODEL_PATH)
+    print("tokenizer:\n", tokenizer)
+    print("len(tokenizer): ", len(tokenizer))
 
-    model = InternVLChatModel.from_pretrained(MODEL_PATH).eval()
-
+    model = InternVLChatModel.from_pretrained(MODEL_PATH, dtype=args.dtype).eval()
     generation_config = dict(max_new_tokens=1024, do_sample=False)
 
     with paddle.no_grad():
         # video multi-round conversation (视频多轮对话)
-        response, history = model.chat(tokenizer, pixel_values, args.text, generation_config,
-                               num_patches_list=num_patches_list, history=None, return_history=True)
-        print(f'User: {args.text}\nAssistant: {response}')
+        response, history = model.chat(
+            tokenizer,
+            pixel_values,
+            args.text,
+            generation_config,
+            num_patches_list=num_patches_list,
+            history=None,
+            return_history=True,
+        )
+        print(f"User: {args.text}\nAssistant: {response}")
 
 
 if __name__ == "__main__":
@@ -160,6 +236,37 @@ if __name__ == "__main__":
         help="pretrained ckpt and tokenizer",
     )
     parser.add_argument("--video_path", type=str, default=None)
-    parser.add_argument("--text", type=str, default='Please describe the video shortly.', required=True)
+    parser.add_argument("--text", type=str, default="Please describe the video shortly.", required=True)
+    parser.add_argument(
+        "--dtype", type=str, default="bfloat16", choices=["float32", "bfloat16", "float16"], help="Model dtype"
+    )
     args = parser.parse_args()
+
+    if args.dtype == "bfloat16":
+        args.dtype = paddle.bfloat16
+    elif args.dtype == "float16":
+        args.dtype = paddle.float16
+    else:
+        args.dtype = paddle.float32
+
+    # 检查环境支持的dtype并设置
+    available_dtype = check_dtype_compatibility()
+
+    # 如果用户指定了dtype，尝试使用用户指定的类型
+    if args.dtype == "bfloat16":
+        desired_dtype = paddle.bfloat16
+    elif args.dtype == "float16":
+        desired_dtype = paddle.float16
+    else:
+        desired_dtype = paddle.float32
+
+    # 如果用户指定的dtype不可用，使用检测到的可用dtype
+    if desired_dtype != available_dtype:
+        print(f"Warning: Requested dtype {args.dtype} is not available, using {available_dtype}")
+        args.dtype = available_dtype
+    else:
+        args.dtype = desired_dtype
+
+    print(f"Using dtype: {args.dtype}")
+
     main(args)

@@ -489,7 +489,7 @@ class PaddleInferStableVideoDiffusionPipeline(DiffusionPipeline):
                 latent_model_input = paddle.concat([latents] * 2) if do_classifier_free_guidance else latents
                 latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
-                # Concatenate image_latents over channels dimention
+                # Concatenate image_latents over channels dimension
 
                 # westfish
                 latent_model_input = latent_model_input.cast(image_latents.dtype)

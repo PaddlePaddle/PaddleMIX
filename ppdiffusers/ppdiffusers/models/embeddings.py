@@ -12,11 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import math
-from typing import Optional
+import warnings
+from typing import List, Optional, Tuple, Union
 
 import numpy as np
 import paddle
 from paddle import nn
+import paddle.nn.functional as F
 
 from ..utils import USE_PEFT_BACKEND
 from .activations import FP32SiLU, get_activation
@@ -225,19 +227,20 @@ class PatchEmbed(nn.Layer):
             latent = self.norm(latent)
 
         # Interpolate or crop positional embeddings as needed
-        if self.pos_embed_max_size:
-            pos_embed = self.cropped_pos_embed(height, width)
-        else:
-            if self.height != height or self.width != width:
-                pos_embed = get_2d_sincos_pos_embed(
-                    embed_dim=self.pos_embed.shape[-1],
-                    grid_size=(height, width),
-                    base_size=self.base_size,
-                    interpolation_scale=self.interpolation_scale,
-                )
-                pos_embed = paddle.to_tensor(pos_embed).astype(paddle.float32).unsqueeze(0)
+        if self.add_pos_embed:
+            if self.pos_embed_max_size:
+                pos_embed = self.cropped_pos_embed(height, width)
             else:
-                pos_embed = self.pos_embed
+                if self.height != height or self.width != width:
+                    pos_embed = get_2d_sincos_pos_embed(
+                        embed_dim=self.pos_embed.shape[-1],
+                        grid_size=(height, width),
+                        base_size=self.base_size,
+                        interpolation_scale=self.interpolation_scale,
+                    )
+                    pos_embed = paddle.to_tensor(pos_embed).astype(paddle.float32).unsqueeze(0)
+                else:
+                    pos_embed = self.pos_embed
 
         # NOTE, new add for unidiffusers!
         if self.add_pos_embed:
@@ -282,6 +285,7 @@ class TimestepEmbedding(nn.Layer):
     def forward(self, sample, condition=None):
         if condition is not None:
             sample = sample + self.cond_proj(condition.cast(sample.dtype))  # NEW ADD cast dtype
+
         sample = self.linear_1(sample)
 
         if self.act is not None:
@@ -564,6 +568,30 @@ class CombinedTimestepLabelEmbeddings(nn.Layer):
         return conditioning
 
 
+class CombinedTimestepGuidanceTextProjEmbeddings(nn.Layer):
+    def __init__(self, embedding_dim, pooled_projection_dim):
+        super().__init__()
+
+        self.time_proj = Timesteps(num_channels=256, flip_sin_to_cos=True, downscale_freq_shift=0)
+        self.timestep_embedder = TimestepEmbedding(in_channels=256, time_embed_dim=embedding_dim)
+        self.guidance_embedder = TimestepEmbedding(in_channels=256, time_embed_dim=embedding_dim)
+        self.text_embedder = PixArtAlphaTextProjection(pooled_projection_dim, embedding_dim, act_fn="silu")
+
+    def forward(self, timestep, guidance, pooled_projection):
+        timesteps_proj = self.time_proj(timestep)
+        timesteps_emb = self.timestep_embedder(timesteps_proj.astype(dtype=pooled_projection.dtype))  # (N, D)
+
+        guidance_proj = self.time_proj(guidance)
+        guidance_emb = self.guidance_embedder(guidance_proj.astype(dtype=pooled_projection.dtype))  # (N, D)
+
+        time_guidance_emb = timesteps_emb + guidance_emb
+
+        pooled_projections = self.text_embedder(pooled_projection)
+        conditioning = time_guidance_emb + pooled_projections
+
+        return conditioning
+
+
 class TextTimeEmbedding(nn.Layer):
     def __init__(self, encoder_dim: int, time_embed_dim: int, num_heads: int = 64):
         super().__init__()
@@ -789,7 +817,7 @@ class PositionNet(nn.Layer):
 
             objs = self.linears(paddle.concat([positive_embeddings, xyxy_embedding], axis=-1))
 
-        # positionet with text and image infomation
+        # positionet with text and image information
         else:
             phrases_masks = phrases_masks.unsqueeze(-1)
             image_masks = image_masks.unsqueeze(-1)
@@ -898,7 +926,7 @@ class PixArtAlphaTextProjection(nn.Layer):
             out_features = hidden_size
         self.linear_1 = nn.Linear(in_features=in_features, out_features=hidden_size, bias_attr=True)
         if act_fn == "gelu_tanh":
-            self.act_1 = nn.GELU(approximate="tanh")
+            self.act_1 = nn.GELU(approximate=True)
         elif act_fn == "silu":
             self.act_1 = nn.Silu()
         elif act_fn == "silu_fp32":
@@ -912,3 +940,565 @@ class PixArtAlphaTextProjection(nn.Layer):
         hidden_states = self.act_1(hidden_states)
         hidden_states = self.linear_2(hidden_states)
         return hidden_states
+
+
+def get_3d_sincos_pos_embed(
+    embed_dim: int,
+    spatial_size: Union[int, Tuple[int, int]],
+    temporal_size: int,
+    spatial_interpolation_scale: float = 1.0,
+    temporal_interpolation_scale: float = 1.0,
+) -> np.ndarray:
+    """
+    Args:
+        embed_dim (`int`):
+        spatial_size (`int` or `Tuple[int, int]`):
+        temporal_size (`int`):
+        spatial_interpolation_scale (`float`, defaults to 1.0):
+        temporal_interpolation_scale (`float`, defaults to 1.0):
+    """
+    if embed_dim % 4 != 0:
+        raise ValueError("`embed_dim` must be divisible by 4")
+    if isinstance(spatial_size, int):
+        spatial_size = spatial_size, spatial_size
+    embed_dim_spatial = 3 * embed_dim // 4
+    embed_dim_temporal = embed_dim // 4
+    grid_h = np.arange(spatial_size[1], dtype=np.float32) / spatial_interpolation_scale
+    grid_w = np.arange(spatial_size[0], dtype=np.float32) / spatial_interpolation_scale
+    grid = np.meshgrid(grid_w, grid_h)
+    grid = np.stack(grid, axis=0)
+    grid = grid.reshape([2, 1, spatial_size[1], spatial_size[0]])
+    pos_embed_spatial = get_2d_sincos_pos_embed_from_grid(embed_dim_spatial, grid)
+    grid_t = np.arange(temporal_size, dtype=np.float32) / temporal_interpolation_scale
+    pos_embed_temporal = get_1d_sincos_pos_embed_from_grid(embed_dim_temporal, grid_t)
+    pos_embed_spatial = pos_embed_spatial[np.newaxis, :, :]
+    pos_embed_spatial = np.repeat(pos_embed_spatial, temporal_size, axis=0)
+    pos_embed_temporal = pos_embed_temporal[:, np.newaxis, :]
+    pos_embed_temporal = np.repeat(pos_embed_temporal, spatial_size[0] * spatial_size[1], axis=1)
+    pos_embed = np.concatenate([pos_embed_temporal, pos_embed_spatial], axis=-1)
+    return pos_embed
+
+
+class CogVideoXPatchEmbed(paddle.nn.Layer):
+    def __init__(
+        self,
+        patch_size: int = 2,
+        in_channels: int = 16,
+        embed_dim: int = 1920,
+        text_embed_dim: int = 4096,
+        bias: bool = True,
+        sample_width: int = 90,
+        sample_height: int = 60,
+        sample_frames: int = 49,
+        temporal_compression_ratio: int = 4,
+        max_text_seq_length: int = 226,
+        spatial_interpolation_scale: float = 1.875,
+        temporal_interpolation_scale: float = 1.0,
+        use_positional_embeddings: bool = True,
+        use_learned_positional_embeddings: bool = True,
+    ) -> None:
+        super().__init__()
+        self.patch_size = patch_size
+        self.embed_dim = embed_dim
+        self.sample_height = sample_height
+        self.sample_width = sample_width
+        self.sample_frames = sample_frames
+        self.temporal_compression_ratio = temporal_compression_ratio
+        self.max_text_seq_length = max_text_seq_length
+        self.spatial_interpolation_scale = spatial_interpolation_scale
+        self.temporal_interpolation_scale = temporal_interpolation_scale
+        self.use_positional_embeddings = use_positional_embeddings
+        self.use_learned_positional_embeddings = use_learned_positional_embeddings
+
+        self.proj = paddle.nn.Conv2D(
+            in_channels=in_channels,
+            out_channels=embed_dim,
+            kernel_size=(patch_size, patch_size),
+            stride=patch_size,
+            bias_attr=bias,
+        )
+
+        self.text_proj = paddle.nn.Linear(in_features=text_embed_dim, out_features=embed_dim)
+
+        if use_positional_embeddings or use_learned_positional_embeddings:
+            persistent = use_learned_positional_embeddings
+            pos_embedding = self._get_positional_embeddings(sample_height, sample_width, sample_frames)
+            self.register_buffer(name="pos_embedding", tensor=pos_embedding, persistable=persistent)
+
+    def _get_positional_embeddings(self, sample_height: int, sample_width: int, sample_frames: int) -> paddle.Tensor:
+        post_patch_height = sample_height // self.patch_size
+        post_patch_width = sample_width // self.patch_size
+        post_time_compression_frames = (sample_frames - 1) // self.temporal_compression_ratio + 1
+        num_patches = post_patch_height * post_patch_width * post_time_compression_frames
+
+        pos_embedding = get_3d_sincos_pos_embed(
+            self.embed_dim,
+            (post_patch_width, post_patch_height),
+            post_time_compression_frames,
+            self.spatial_interpolation_scale,
+            self.temporal_interpolation_scale,
+        )
+        pos_embedding = paddle.to_tensor(data=pos_embedding).flatten(start_axis=0, stop_axis=1)
+        joint_pos_embedding = paddle.zeros([1, self.max_text_seq_length + num_patches, self.embed_dim])
+        joint_pos_embedding[0, self.max_text_seq_length :] = pos_embedding
+        return joint_pos_embedding
+
+    def forward(self, text_embeds: paddle.Tensor, image_embeds: paddle.Tensor):
+        """
+        Args:
+            text_embeds (`torch.Tensor`):
+                Input text embeddings. Expected shape: (batch_size, seq_length, embedding_dim).
+            image_embeds (`torch.Tensor`):
+                Input image embeddings. Expected shape: (batch_size, num_frames, channels, height, width).
+        """
+        text_embeds = self.text_proj(text_embeds)
+
+        batch, num_frames, channels, height, width = image_embeds.shape
+        image_embeds = image_embeds.reshape([-1, channels, height, width])
+        image_embeds = self.proj(image_embeds)
+        image_embeds = image_embeds.reshape([batch, num_frames] + image_embeds.shape[1:])
+        image_embeds = image_embeds.flatten(3).transpose([0, 1, 3, 2])  # [batch, num_frames, height x width, channels]
+        image_embeds = image_embeds.flatten(1, 2)  # [batch, num_frames x height x width, channels]
+
+        embeds = paddle.concat(x=[text_embeds, image_embeds], axis=1).contiguous()
+        if self.use_positional_embeddings or self.use_learned_positional_embeddings:
+            if self.use_learned_positional_embeddings and (self.sample_width != width or self.sample_height != height):
+                warnings.warn(
+                    "It is currently not possible to generate videos at a different resolution that the defaults. This should only be the case with 'THUDM/CogVideoX-5b-I2V'.If you think this is incorrect, please open an issue at https://github.com/huggingface/diffusers/issues."
+                )
+            pre_time_compression_frames = (num_frames - 1) * self.temporal_compression_ratio + 1
+            if (
+                self.sample_height != height
+                or self.sample_width != width
+                or self.sample_frames != pre_time_compression_frames
+            ):
+                pos_embedding = self._get_positional_embeddings(height, width, pre_time_compression_frames)
+                pos_embedding = pos_embedding.cast(embeds.dtype)
+            else:
+                pos_embedding = self.pos_embedding
+            embeds = embeds + pos_embedding
+        return embeds
+
+
+def get_3d_rotary_pos_embed(
+    embed_dim, crops_coords, grid_size, temporal_size, theta: int = 10000, use_real: bool = True
+) -> Union[paddle.Tensor, Tuple[paddle.Tensor, paddle.Tensor]]:
+    """
+    RoPE for video tokens with 3D structure.
+
+    Args:
+    embed_dim: (`int`):
+        The embedding dimension size, corresponding to hidden_size_head.
+    crops_coords (`Tuple[int]`):
+        The top-left and bottom-right coordinates of the crop.
+    grid_size (`Tuple[int]`):
+        The grid size of the spatial positional embedding (height, width).
+    temporal_size (`int`):
+        The size of the temporal dimension.
+    theta (`float`):
+        Scaling factor for frequency computation.
+    use_real (`bool`):
+        If True, return real part and imaginary part separately. Otherwise, return complex numbers.
+
+    Returns:
+        `torch.Tensor`: positional embedding with shape `(temporal_size * grid_size[0] * grid_size[1], embed_dim/2)`.
+    """
+    start, stop = crops_coords
+    grid_h = np.linspace(start[0], stop[0], grid_size[0], endpoint=False, dtype=np.float32)
+    grid_w = np.linspace(start[1], stop[1], grid_size[1], endpoint=False, dtype=np.float32)
+    grid_t = np.linspace(0, temporal_size, temporal_size, endpoint=False, dtype=np.float32)
+    dim_t = embed_dim // 4
+    dim_h = embed_dim // 8 * 3
+    dim_w = embed_dim // 8 * 3
+    freqs_t = 1.0 / theta ** (paddle.arange(start=0, end=dim_t, step=2).astype(dtype="float32") / dim_t)
+    grid_t = paddle.to_tensor(data=grid_t).astype(dtype="float32")
+    freqs_t = paddle.einsum("n , f -> n f", grid_t, freqs_t)
+    freqs_t = freqs_t.repeat_interleave(repeats=2, axis=-1)
+    freqs_h = 1.0 / theta ** (paddle.arange(start=0, end=dim_h, step=2).astype(dtype="float32") / dim_h)
+    freqs_w = 1.0 / theta ** (paddle.arange(start=0, end=dim_w, step=2).astype(dtype="float32") / dim_w)
+    grid_h = paddle.to_tensor(data=grid_h).astype(dtype="float32")
+    grid_w = paddle.to_tensor(data=grid_w).astype(dtype="float32")
+    freqs_h = paddle.einsum("n , f -> n f", grid_h, freqs_h)
+    freqs_w = paddle.einsum("n , f -> n f", grid_w, freqs_w)
+    freqs_h = freqs_h.repeat_interleave(repeats=2, axis=-1)
+    freqs_w = freqs_w.repeat_interleave(repeats=2, axis=-1)
+
+    def broadcast(tensors, dim=-1):
+        num_tensors = len(tensors)
+        shape_lens = {len(tuple(t.shape)) for t in tensors}
+        assert len(shape_lens) == 1, "tensors must all have the same number of dimensions"
+        shape_len = list(shape_lens)[0]
+        dim = dim + shape_len if dim < 0 else dim
+        dims = list(zip(*(list(tuple(t.shape)) for t in tensors)))
+        expandable_dims = [(i, val) for i, val in enumerate(dims) if i != dim]
+        assert all(
+            [*(len(set(t[1])) <= 2 for t in expandable_dims)]
+        ), "invalid dimensions for broadcastable concatenation"
+        max_dims = [(t[0], max(t[1])) for t in expandable_dims]
+        expanded_dims = [(t[0], (t[1],) * num_tensors) for t in max_dims]
+        expanded_dims.insert(dim, (dim, dims[dim]))
+        expandable_shapes = list(zip(*(t[1] for t in expanded_dims)))
+        tensors = [t[0].expand(shape=t[1]) for t in zip(tensors, expandable_shapes)]
+        return paddle.concat(x=tensors, axis=dim)
+
+    freqs = broadcast((freqs_t[:, None, None, :], freqs_h[None, :, None, :], freqs_w[None, None, :, :]), dim=-1)
+    t, h, w, d = tuple(freqs.shape)
+    freqs = freqs.reshape([t * h * w, d])
+    sin = freqs.sin()
+    cos = freqs.cos()
+    if use_real:
+        return cos, sin
+    else:
+        freqs_cis = paddle.complex(
+            paddle.ones_like(x=freqs) * paddle.cos(freqs), paddle.ones_like(x=freqs) * paddle.sin(freqs)
+        )
+        return freqs_cis
+
+
+def get_1d_rotary_pos_embed(
+    dim: int,
+    pos: Union[np.ndarray, int],
+    theta: float = 10000.0,
+    use_real=False,
+    linear_factor=1.0,
+    ntk_factor=1.0,
+    repeat_interleave_real=True,
+    freqs_dtype=paddle.float32,  # paddle.float32, paddle.float64 (flux)
+):
+    """
+    Precompute the frequency tensor for complex exponentials (cis) with given dimensions.
+
+    This function calculates a frequency tensor with complex exponentials using the given dimension 'dim' and the end
+    index 'end'. The 'theta' parameter scales the frequencies. The returned tensor contains complex values in complex64
+    data type.
+
+    Args:
+        dim (`int`): Dimension of the frequency tensor.
+        pos (`np.ndarray` or `int`): Position indices for the frequency tensor. [S] or scalar
+        theta (`float`, *optional*, defaults to 10000.0):
+            Scaling factor for frequency computation. Defaults to 10000.0.
+        use_real (`bool`, *optional*):
+            If True, return real part and imaginary part separately. Otherwise, return complex numbers.
+        linear_factor (`float`, *optional*, defaults to 1.0):
+            Scaling factor for the context extrapolation. Defaults to 1.0.
+        ntk_factor (`float`, *optional*, defaults to 1.0):
+            Scaling factor for the NTK-Aware RoPE. Defaults to 1.0.
+        repeat_interleave_real (`bool`, *optional*, defaults to `True`):
+            If `True` and `use_real`, real part and imaginary part are each interleaved with themselves to reach `dim`.
+            Otherwise, they are concateanted with themselves.
+        freqs_dtype (`paddle.float32` or `paddle.float64`, *optional*, defaults to `paddle.float32`):
+            the dtype of the frequency tensor.
+    Returns:
+        `paddle.Tensor`: Precomputed frequency tensor with complex exponentials. [S, D/2]
+    """
+    assert dim % 2 == 0
+
+    if isinstance(pos, int):
+        pos = paddle.arange(pos)
+    if isinstance(pos, np.ndarray):
+        pos = paddle.to_tensor(pos)  # type: ignore  # [S]
+
+    theta = theta * ntk_factor
+    freqs = 1.0 / (theta ** (paddle.arange(0, dim, 2, dtype=freqs_dtype)[: (dim // 2)] / dim)) / linear_factor  # [D/2]
+    pos = pos.astype(freqs_dtype)
+    freqs = paddle.outer(pos, freqs)  # type: ignore   # [S, D/2]
+    if use_real and repeat_interleave_real:
+        # flux, hunyuan-dit, cogvideox
+        freqs_cos = freqs.cos().repeat_interleave(2, axis=1).astype(dtype="float32")  # [S, D]
+        freqs_sin = freqs.sin().repeat_interleave(2, axis=1).astype(dtype="float32")  # [S, D]
+        return freqs_cos, freqs_sin
+    elif use_real:
+        # stable audio, allegro
+        freqs_cos = paddle.concat([freqs.cos(), freqs.cos()], axis=-1).astype(dtype="float32")  # [S, D]
+        freqs_sin = paddle.concat([freqs.sin(), freqs.sin()], axis=-1).astype(dtype="float32")  # [S, D]
+        return freqs_cos, freqs_sin
+    else:
+        # lumina
+        # paddle.complex(abs * paddle.cos(angle), abs * paddle.sin(angle))
+        freqs_cis = paddle.polar(paddle.ones_like(freqs), freqs)  # complex64     # [S, D/2]
+        return freqs_cis
+
+
+def apply_rotary_emb(
+    x: paddle.Tensor,
+    freqs_cis: Union[paddle.Tensor, Tuple[paddle.Tensor]],
+    use_real: bool = True,
+    use_real_unbind_dim: int = -1,
+) -> Tuple[paddle.Tensor, paddle.Tensor]:
+    """
+    Apply rotary embeddings to input tensors using the given frequency tensor. This function applies rotary embeddings
+    to the given query or key 'x' tensors using the provided frequency tensor 'freqs_cis'. The input tensors are
+    reshaped as complex numbers, and the frequency tensor is reshaped for broadcasting compatibility. The resulting
+    tensors contain rotary embeddings and are returned as real tensors.
+
+    Args:
+        x (`torch.Tensor`):
+            Query or key tensor to apply rotary embeddings. [B, H, S, D] xk (torch.Tensor): Key tensor to apply
+        freqs_cis (`Tuple[torch.Tensor]`): Precomputed frequency tensor for complex exponentials. ([S, D], [S, D],)
+
+    Returns:
+        Tuple[torch.Tensor, torch.Tensor]: Tuple of modified query tensor and key tensor with rotary embeddings.
+    """
+    if use_real:
+        cos, sin = freqs_cis
+        cos = cos[None, None]
+        sin = sin[None, None]
+        if use_real_unbind_dim == -1:
+            x_real, x_imag = x.reshape([*tuple(x.shape)[:-1], -1, 2]).unbind(axis=-1)
+            x_rotated = paddle.stack(x=[-x_imag, x_real], axis=-1).flatten(start_axis=3)
+        elif use_real_unbind_dim == -2:
+            x_real, x_imag = x.reshape([*tuple(x.shape)[:-1], 2, -1]).unbind(axis=-2)
+            x_rotated = paddle.concat(x=[-x_imag, x_real], axis=-1)
+        else:
+            raise ValueError(f"`use_real_unbind_dim={use_real_unbind_dim}` but should be -1 or -2.")
+        out = (x.astype(dtype="float32") * cos + x_rotated.astype(dtype="float32") * sin).astype(x.dtype)
+        return out
+    else:
+        x_rotated = paddle.as_complex(x=x.astype(dtype="float32").reshape(*tuple(x.shape)[:-1], -1, 2))
+        freqs_cis = freqs_cis.unsqueeze(axis=2)
+        x_out = paddle.as_real(x=x_rotated * freqs_cis).flatten(start_axis=3)
+        return x_out.astype(dtype=x.dtype)
+
+        
+class FluxPosEmbed(nn.Layer):
+    # modified from https://github.com/black-forest-labs/flux/blob/c00d7c60b085fce8058b9df845e036090873f2ce/src/flux/modules/layers.py#L11
+    def __init__(self, theta: int, axes_dim: List[int]):
+        super().__init__()
+        self.theta = theta
+        self.axes_dim = axes_dim
+
+    def forward(self, ids: paddle.Tensor) -> paddle.Tensor:
+        n_axes = ids.shape[-1]
+        cos_out = []
+        sin_out = []
+        pos = ids.astype("float32")
+        # TODO
+        # is_mps = ids.device.type == "mps"
+        is_mps = False
+        freqs_dtype = paddle.float32 if is_mps else paddle.float64
+        for i in range(n_axes):
+            cos, sin = get_1d_rotary_pos_embed(
+                self.axes_dim[i],
+                pos[:, i],
+                theta=self.theta,
+                repeat_interleave_real=True,
+                use_real=True,
+                freqs_dtype=freqs_dtype,
+            )
+            cos_out.append(cos)
+            sin_out.append(sin)
+        freqs_cos = paddle.concat(cos_out, axis=-1)
+        freqs_sin = paddle.concat(sin_out, axis=-1)
+        return freqs_cos, freqs_sin
+
+def get_1d_rotary_pos_embed(
+    dim: int,
+    pos: Union[np.ndarray, int],
+    theta: float = 10000.0,
+    use_real=False,
+    linear_factor=1.0,
+    ntk_factor=1.0,
+    repeat_interleave_real=True,
+    freqs_dtype="float32",
+):
+    """
+    Precompute the frequency tensor for complex exponentials (cis) with given dimensions.
+
+    This function calculates a frequency tensor with complex exponentials using the given dimension 'dim' and the end
+    index 'end'. The 'theta' parameter scales the frequencies. The returned tensor contains complex values in complex64
+    data type.
+
+    Args:
+        dim (`int`): Dimension of the frequency tensor.
+        pos (`np.ndarray` or `int`): Position indices for the frequency tensor. [S] or scalar
+        theta (`float`, *optional*, defaults to 10000.0):
+            Scaling factor for frequency computation. Defaults to 10000.0.
+        use_real (`bool`, *optional*):
+            If True, return real part and imaginary part separately. Otherwise, return complex numbers.
+        linear_factor (`float`, *optional*, defaults to 1.0):
+            Scaling factor for the context extrapolation. Defaults to 1.0.
+        ntk_factor (`float`, *optional*, defaults to 1.0):
+            Scaling factor for the NTK-Aware RoPE. Defaults to 1.0.
+        repeat_interleave_real (`bool`, *optional*, defaults to `True`):
+            If `True` and `use_real`, real part and imaginary part are each interleaved with themselves to reach `dim`.
+            Otherwise, they are concateanted with themselves.
+        freqs_dtype (`paddle.float32` or `paddle.float64`, *optional*, defaults to `paddle.float32`):
+            the dtype of the frequency tensor.
+    Returns:
+        `paddle.Tensor`: Precomputed frequency tensor with complex exponentials. [S, D/2]
+    """
+    assert dim % 2 == 0
+    if isinstance(pos, int):
+        pos = paddle.arange(end=pos)
+    if isinstance(pos, np.ndarray):
+        pos = paddle.to_tensor(data=pos)  # type: ignore  # [S]
+
+    theta = theta * ntk_factor
+    freqs = (
+        1.0 / theta ** (paddle.arange(start=0, end=dim, step=2, dtype=freqs_dtype)[: dim // 2] / dim) / linear_factor
+    )  # [D/2]
+    pos = pos.astype(freqs_dtype)
+    freqs = paddle.outer(x=pos, y=freqs)  # type: ignore   # [S, D/2]
+    if use_real and repeat_interleave_real:
+        # flux, hunyuan-dit, cogvideox
+        freqs_cos = freqs.cos().repeat_interleave(repeats=2, axis=1).astype(dtype="float32")  # [S, D]
+        freqs_sin = freqs.sin().repeat_interleave(repeats=2, axis=1).astype(dtype="float32")  # [S, D]
+        return freqs_cos, freqs_sin
+    elif use_real:
+        # stable audio, allegro
+        freqs_cos = paddle.concat(x=[freqs.cos(), freqs.cos()], axis=-1).astype(dtype="float32")  # [S, D]
+        freqs_sin = paddle.concat(x=[freqs.sin(), freqs.sin()], axis=-1).astype(dtype="float32")  # [S, D]
+        return freqs_cos, freqs_sin
+    else:
+        # lumina
+        freqs_cis = paddle.complex(
+            paddle.ones_like(x=freqs) * paddle.cos(freqs),
+            paddle.ones_like(x=freqs) * paddle.sin(freqs),
+        )  # complex64     # [S, D/2]
+        return freqs_cis
+    
+
+
+
+class MochiAttentionPool(nn.Layer):
+    def __init__(
+        self,
+        num_attention_heads: int,
+        embed_dim: int,
+        output_dim: int = None,
+    ):
+        super().__init__()
+
+        self.output_dim = output_dim if output_dim is not None else embed_dim
+        self.num_attention_heads = num_attention_heads
+
+        self.to_kv = nn.Linear(embed_dim, 2 * embed_dim)
+        self.to_q = nn.Linear(embed_dim, embed_dim)
+        self.to_out = nn.Linear(embed_dim, self.output_dim)
+
+    @staticmethod
+    def pool_tokens(x: paddle.Tensor, mask: paddle.Tensor, *, keepdim=False) -> paddle.Tensor:
+        """
+        Pool tokens in x using mask.
+
+        Args:
+            x: (B, L, D) tensor of tokens.
+            mask: (B, L) boolean tensor indicating which tokens are not padding.
+
+        Returns:
+            pooled: (B, D) tensor of pooled tokens.
+        """
+        assert x.shape[1] == mask.shape[1]  # Expected mask to have same length as tokens.
+        assert x.shape[0] == mask.shape[0]  # Expected mask to have same batch size as tokens.
+        mask = mask[:, :, None].astype(x.dtype)
+        mask = mask / mask.sum(axis=1, keepdim=True).clip(min=1)
+        pooled = (x * mask).sum(axis=1, keepdim=keepdim)
+        return pooled
+
+    def forward(self, x: paddle.Tensor, mask: paddle.Tensor) -> paddle.Tensor:
+        D = x.shape[2]
+
+        # Mask part remains unchanged
+        attn_mask = mask[:, None, None, :].astype('bool')
+        attn_mask = F.pad(attn_mask.astype('int32'), (1, 0), value=1)
+        attn_mask = attn_mask.astype('bool')
+
+        # Average non-padding token features
+        x_pool = self.pool_tokens(x, mask, keepdim=True)
+        x = paddle.concat([x_pool, x], axis=1)
+        
+        # Compute query, key, value
+        kv = self.to_kv(x)
+        q = self.to_q(x[:, 0])
+        
+        # Extract head information - this part mostly remains unchanged
+        head_dim = D // self.num_attention_heads
+        # kv = kv.reshape([0, 0, 2, self.num_attention_heads, head_dim])
+        kv = paddle.unflatten(kv, 2, (2, self.num_attention_heads, head_dim))
+        kv = kv.transpose([0, 3, 2, 1, 4])
+        k, v = kv.unbind(axis=2)
+        # q = q.reshape([0, self.num_attention_heads, head_dim])
+        q = paddle.unflatten(q, 1, (self.num_attention_heads, head_dim))
+        q = q.unsqueeze(axis=2)
+        
+        # Call attention function using Paddle format
+        x = F.scaled_dot_product_attention_(
+            q.transpose([0, 2, 1, 3]), 
+            k.transpose([0, 2, 1, 3]), 
+            v.transpose([0, 2, 1, 3]), 
+            attn_mask=attn_mask,
+            dropout_p=0.0
+        )  # Output should be [B,1,H,D]
+        
+        # Convert result back to original order
+        x = x.transpose([0, 2, 1, 3])  # [B,1,H,D] -> [B,H,1,D]
+        
+        # Subsequent processing remains unchanged
+        x = x.squeeze(axis=2).flatten(start_axis=1, stop_axis=2)
+        x = self.to_out(x)
+        return x
+
+
+class MochiCombinedTimestepCaptionEmbedding(nn.Layer):
+    """
+    A neural network layer that combines timestep embeddings with caption/text embeddings.
+    This is typically used in diffusion models where both time and textual conditioning are required.
+    The class processes timestep information and text embeddings separately, then combines them.
+    """
+    def __init__(
+        self,
+        embedding_dim: int,         # Dimension of the output embedding
+        pooled_projection_dim: int, # Dimension for the caption projection
+        text_embed_dim: int,        # Dimension of the input text embeddings
+        time_embed_dim: int = 256,  # Dimension for the time embeddings
+        num_attention_heads: int = 8, # Number of attention heads for pooling
+    ) -> None:
+        super().__init__()
+
+        # Process timesteps into sinusoidal embeddings
+        self.time_proj = Timesteps(num_channels=time_embed_dim, flip_sin_to_cos=True, downscale_freq_shift=0.0)
+        
+        # Embed timesteps into the model dimension
+        self.timestep_embedder = TimestepEmbedding(in_channels=time_embed_dim, time_embed_dim=embedding_dim)
+        
+        # Attention pooling mechanism for text embeddings
+        self.pooler = MochiAttentionPool(
+            num_attention_heads=num_attention_heads, embed_dim=text_embed_dim, output_dim=embedding_dim
+        )
+        
+        # Projection layer for caption embeddings
+        self.caption_proj = nn.Linear(text_embed_dim, pooled_projection_dim)
+
+    def forward(
+        self,
+        timestep: paddle.Tensor,              # Timestep values to embed
+        encoder_hidden_states: paddle.Tensor, # Text encoder output/embeddings
+        encoder_attention_mask: paddle.Tensor, # Attention mask for text encoder outputs
+        hidden_dtype: Optional[str] = None,    # Optional dtype for internal calculations
+    ):
+        """
+        Combines timestep embeddings with text embeddings for conditioning.
+        
+        Args:
+            timestep: Tensor containing timestep values
+            encoder_hidden_states: Text embeddings from an encoder
+            encoder_attention_mask: Attention mask for the encoder states
+            hidden_dtype: Optional data type for intermediate calculations
+            
+        Returns:
+            tuple: (combined embedding for conditioning, caption projection)
+        """
+        # Project timesteps to sinusoidal embeddings
+        time_proj = self.time_proj(timestep)
+        # Convert time projections to embeddings with the target dimension
+        time_emb = self.timestep_embedder(time_proj.astype(hidden_dtype))
+
+        # Pool the text embeddings using attention mechanism
+        pooled_projections = self.pooler(encoder_hidden_states, encoder_attention_mask)
+        # Project the text embeddings to the required dimension
+        caption_proj = self.caption_proj(encoder_hidden_states)
+
+        # Combine time embeddings with pooled text embeddings for final conditioning
+        conditioning = time_emb + pooled_projections
+        return conditioning, caption_proj
+

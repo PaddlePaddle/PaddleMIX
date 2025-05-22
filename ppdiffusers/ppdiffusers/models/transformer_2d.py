@@ -355,7 +355,7 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
             else:
                 batch, height, width, _ = hidden_states.shape
             residual = hidden_states
-
+            shape = paddle.shape(hidden_states)
             hidden_states = self.norm(hidden_states)
             if not self.use_linear_projection:
                 hidden_states = (
@@ -441,7 +441,10 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
         # 3. Output
         if self.is_input_continuous:
             if not self.use_linear_projection:
-                hidden_states = hidden_states.reshape([batch, height, width, self.inner_dim])
+                if self.data_format == "NCHW":
+                    hidden_states = hidden_states.reshape([shape[0], shape[2], shape[3], self.inner_dim])
+                else:
+                    hidden_states = hidden_states.reshape([shape[0], shape[1], shape[2], self.inner_dim])
                 if self.data_format == "NCHW":
                     hidden_states = hidden_states.transpose([0, 3, 1, 2])
                 hidden_states = (
@@ -455,7 +458,10 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
                     if not USE_PEFT_BACKEND
                     else self.proj_out(hidden_states)
                 )
-                hidden_states = hidden_states.reshape([batch, height, width, self.inner_dim])
+                if self.data_format == "NCHW":
+                    hidden_states = hidden_states.reshape([shape[0], shape[2], shape[3], self.inner_dim])
+                else:
+                    hidden_states = hidden_states.reshape([shape[0], shape[1], shape[2], self.inner_dim])
                 if self.data_format == "NCHW":
                     hidden_states = hidden_states.transpose([0, 3, 1, 2])
 
@@ -503,8 +509,8 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
         return Transformer2DModelOutput(sample=output)
 
     @classmethod
-    def custom_modify_weight(cls, state_dict):
-        if os.getenv("INFERENCE_OPTIMIZE") != "True":
+    def custom_modify_weight(cls, model_to_load, state_dict):
+        if not model_to_load.inference_optimize:
             return
         for i in range(28):
             map_from_my_dit = [
