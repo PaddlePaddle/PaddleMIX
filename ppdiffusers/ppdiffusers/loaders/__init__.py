@@ -31,6 +31,8 @@ if is_paddle_available():
             "StableDiffusionXLLoraLoaderMixin",
             "SD3LoraLoaderMixin",
             "WanLoraLoaderMixin",
+            "FluxLoraLoaderMixin",
+            "Mochi1LoraLoaderMixin",
         ]
         _import_structure["textual_inversion"] = ["TextualInversionLoaderMixin"]
         _import_structure["ip_adapter"] = ["IPAdapterMixin"]
@@ -56,6 +58,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
                 SD3LoraLoaderMixin,
                 StableDiffusionXLLoraLoaderMixin,
                 WanLoraLoaderMixin,
+                Mochi1LoraLoaderMixin,
             )
             from .single_file import FromCkptMixin, FromSingleFileMixin
             from .textual_inversion import TextualInversionLoaderMixin

@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # coding=utf-8
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2024 The HuggingFace Inc. team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -137,7 +138,7 @@ def log_validation(
     # run inference
     generator = paddle.Generator().manual_seed(args.seed) if args.seed else None
     # autocast_ctx = nullcontext()
-    autocast_ctx = paddle.amp.auto_cast(enable=True, custom_white_list=None, custom_black_list=None, level="O2", dtype='float16')
+    autocast_ctx = paddle.amp.auto_cast(enable=True, custom_white_list=None, custom_black_list=None, level="O2", dtype='float16' if args.mixed_precision == 'fp16' else 'bfloat16')
 
     with autocast_ctx:
         images = [pipeline(**pipeline_args, generator=generator).images[0] for _ in range(args.num_validation_images)]

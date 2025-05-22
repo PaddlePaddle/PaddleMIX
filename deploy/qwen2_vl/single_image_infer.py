@@ -129,7 +129,7 @@ def init_llm_model_inputs(vision_model_inputs, inputs_embeds, arg_config: Mix_Pr
     model_inputs["is_block_step"] = paddle.full(shape=[batch_size], fill_value=False, dtype="bool")
 
     cache_k_shapes, cache_v_shapes = fast_llm_model.get_cache_kvs_shape(fast_llm_model.config, arg_config.batch_size)
-    cachekv_dtype = config.dtype if arg_config.cachekv_int8_type is None else "uint8"
+    cachekv_dtype = arg_config.dtype if arg_config.cachekv_int8_type is None else "uint8"
 
     cache_kvs = []
     if cache_k_shapes and cache_v_shapes:
