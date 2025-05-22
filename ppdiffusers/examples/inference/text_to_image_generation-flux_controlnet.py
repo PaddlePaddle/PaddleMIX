@@ -19,10 +19,10 @@ from ppdiffusers import FluxControlNetModel
 from ppdiffusers.pipelines import FluxControlNetPipeline
 
 
-controlnet = FluxControlNetModel.from_pretrained("InstantX/FLUX.1-dev-controlnet-canny", 
-                                                 paddle_dtype=paddle.float16)
+controlnet = FluxControlNetModel.from_pretrained("InstantX/FLUX.1-dev-Controlnet-Canny", 
+                                                 paddle_dtype=paddle.bfloat16)
 pipe = FluxControlNetPipeline.from_pretrained(
-    "black-forest-labs/FLUX.1-dev", controlnet=controlnet, paddle_dtype=paddle.float16, low_cpu_mem_usage=True, map_location="cpu",
+    "black-forest-labs/FLUX.1-dev", controlnet=controlnet, paddle_dtype=paddle.bfloat16, low_cpu_mem_usage=True, map_location="cpu",
 )
 
 control_image = load_image("https://huggingface.co/InstantX/SD3-Controlnet-Canny/resolve/main/canny.jpg")
