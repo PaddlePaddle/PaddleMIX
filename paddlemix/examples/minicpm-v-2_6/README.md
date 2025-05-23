@@ -14,7 +14,6 @@
 
 1）[安装 PaddleMIX 环境依赖包](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/build_env.sh)
 
-2) pip install paddlenlp==3.0.0b2
 注意：Python版本最好为3.10及以上版本。
 
 ## 3 快速开始
