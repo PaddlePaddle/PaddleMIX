@@ -26,6 +26,7 @@ from ppdiffusers.schedulers import (
     LMSDiscreteScheduler,
     PNDMScheduler,
     UniPCMultistepScheduler,
+    FlowMatchEulerDiscreteScheduler,
 )
 
 
@@ -59,6 +60,8 @@ def get_scheduler(scheduler_type):
         scheduler = KDPM2DiscreteScheduler.from_config(original_scheduler_config)
     elif scheduler_type == "unipc-multi":
         scheduler = UniPCMultistepScheduler.from_config(original_scheduler_config)
+    elif scheduler_type == "flowmatch-euler":
+        scheduler = FlowMatchEulerDiscreteScheduler.from_config(original_scheduler_config)
     elif scheduler_type == "ddim":
         scheduler = DDIMScheduler.from_config(
             original_scheduler_config,
