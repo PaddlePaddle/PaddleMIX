@@ -34,3 +34,11 @@ cd ..
 # 安装依赖包
 echo "安装依赖包..."
 pip install -r requirements.txt
+
+# 可选：安装PaddleNLP的develop版本
+if [ "$1" = "--nlp_dev" ]; then
+    echo "开始安装PaddleNLP的Develop版本..."
+    pip uninstall -y paddlenlp && rm -rf PaddleNLP
+    git clone https://github.com/PaddlePaddle/PaddleNLP.git
+    pip install -e PaddleNLP
+fi
