@@ -26,13 +26,6 @@ from typing import Dict, Optional, Union
 from urllib import request
 
 from huggingface_hub import HfFolder, hf_hub_download, model_info
-
-try:
-    from huggingface_hub import cached_download
-except:
-    from huggingface_hub import hf_hub_download
-    cached_download = hf_hub_download
-    
 from packaging import version
 
 from . import logging
