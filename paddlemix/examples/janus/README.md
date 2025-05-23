@@ -26,7 +26,7 @@ Janus/JanusFlow 将视觉编码器解耦为理解和生成编码器，同时仍�
 
 1）[安装 PaddleMIX 环境依赖包](https://github.com/PaddlePaddle/PaddleMIX/tree/develop?tab=readme-ov-file#%E5%AE%89%E8%A3%85)
 
-2）pip install pillow tqdm paddlenlp==3.0.0b2
+2）pip install pillow tqdm
 
 注意：Python版本最好为3.10及以上版本。
 
