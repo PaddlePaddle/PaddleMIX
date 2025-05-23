@@ -1,3 +1,0 @@
-pillow
-tqdm
-paddlenlp==3.0.0b2
