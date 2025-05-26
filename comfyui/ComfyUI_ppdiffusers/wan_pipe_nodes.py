@@ -1,4 +1,4 @@
-# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -430,8 +430,6 @@ class PaddleWanText2VideoPipe:
         scheduler = UniPCMultistepScheduler(
             prediction_type="flow_prediction", use_flow_sigmas=True, num_train_timesteps=1000, flow_shift=flow_shift)
         tokenizer = T5Tokenizer.from_pretrained("Wan-AI/Wan2.1-T2V-1.3B-Diffusers",subfolder="tokenizer")
-        # tokenizer = T5Tokenizer.from_pretrained(
-        #         "/root/.cache/paddlenlp/ppdiffusers/Wan-AI/Wan2.1-T2V-1.3B-Diffusers/tokenizer")
         pipe = WanPipeline(vae=vae,text_encoder=text_encoders, tokenizer=tokenizer, transformer=wan_model, scheduler=scheduler)
 
         output = pipe(
