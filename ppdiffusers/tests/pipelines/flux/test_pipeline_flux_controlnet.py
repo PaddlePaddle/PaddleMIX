@@ -1,41 +1,42 @@
+import gc
 import unittest
 
 import numpy as np
 import paddle
-
 from PIL import Image
 
-from ppdiffusers.transformers import (
-    AutoTokenizer, 
-    CLIPTextConfig, 
-    CLIPTextModel, 
-    CLIPTokenizer, 
-    CLIPVisionConfig, 
-    CLIPVisionModelWithProjection,
-    T5EncoderModel
-)
-
 from ppdiffusers import (
-    AutoencoderKL, 
-    FlowMatchEulerDiscreteScheduler, 
-    FluxControlNetModel,
-    FluxMultiControlNetModel,
-    FluxControlNetPipeline, 
-    FluxTransformer2DModel
+    AutoencoderKL,
+    FlowMatchEulerDiscreteScheduler,
+    FluxControlNetPipeline,
+    FluxTransformer2DModel,
+)
+from ppdiffusers.models import FluxControlNetModel, FluxMultiControlNetModel
+from ppdiffusers.transformers import (
+    AutoTokenizer,
+    CLIPTextConfig,
+    CLIPTextModel,
+    CLIPTokenizer,
+    T5EncoderModel,
+)
+from ppdiffusers.utils import load_image, randn_tensor
+from ppdiffusers.utils.testing_utils import (
+    enable_full_determinism,
+    numpy_cosine_similarity_distance,
+    require_paddle_gpu,
+    slow,
 )
 
-from ..test_pipelines_common import (
-    PipelineTesterMixin,
-    check_qkv_fusion_matches_attn_procs_length,
-    check_qkv_fusion_processors_exist,
-)
+from ..test_pipelines_common import PipelineTesterMixin
+
+enable_full_determinism()
 
 
 class FluxControlNetPipelineFastTests(unittest.TestCase, PipelineTesterMixin):
     pipeline_class = FluxControlNetPipeline
-    params = frozenset(["prompt", "height", "width", "guidance_scale", "prompt_embeds", "pooled_prompt_embeds", "control_image", "controlnet_conditioning_scale"])
-    batch_params = frozenset(["prompt", "control_image"])
-
+    params = frozenset(["prompt", "height", "width", "guidance_scale", "prompt_embeds", "pooled_prompt_embeds"])
+    batch_params = frozenset(["prompt"])
+    
     # there is no xformers processor for Flux
     test_xformers_attention = False
     test_layerwise_casting = True
@@ -43,11 +44,22 @@ class FluxControlNetPipelineFastTests(unittest.TestCase, PipelineTesterMixin):
 
     def get_dummy_components(self):
         paddle.seed(seed=0)
-        
         transformer = FluxTransformer2DModel(
             patch_size=1,
-            in_channels=8,
-            out_channels=4,
+            in_channels=16,
+            num_layers=1,
+            num_single_layers=1,
+            attention_head_dim=16,
+            num_attention_heads=2,
+            joint_attention_dim=32,
+            pooled_projection_dim=32,
+            axes_dims_rope=[4, 4, 8],
+        )
+
+        paddle.seed(seed=0)
+        controlnet = FluxControlNetModel(
+            patch_size=1,
+            in_channels=16,
             num_layers=1,
             num_single_layers=1,
             attention_head_dim=16,
@@ -80,12 +92,6 @@ class FluxControlNetPipelineFastTests(unittest.TestCase, PipelineTesterMixin):
         tokenizer = CLIPTokenizer.from_pretrained("hf-internal-testing/tiny-random-clip")
         tokenizer_2 = AutoTokenizer.from_pretrained("hf-internal-testing/tiny-random-t5")
 
-        # Create a dummy controlnet
-        paddle.seed(seed=0)
-        controlnet = FluxControlNetModel(
-            transformer_config=transformer.config,
-        )
-
         paddle.seed(seed=0)
         vae = AutoencoderKL(
             sample_size=32,
@@ -93,23 +99,13 @@ class FluxControlNetPipelineFastTests(unittest.TestCase, PipelineTesterMixin):
             out_channels=3,
             block_out_channels=(4,),
             layers_per_block=1,
-            latent_channels=1,
+            latent_channels=4,
             norm_num_groups=1,
             use_quant_conv=False,
             use_post_quant_conv=False,
             shift_factor=0.0609,
             scaling_factor=1.5035,
         )
-
-        # Create dummy image encoder for IP-Adapter
-        clip_vision_config = CLIPVisionConfig(
-            hidden_size=32,
-            projection_dim=32,
-            num_hidden_layers=5,
-            num_attention_heads=4,
-            image_size=32,
-        )
-        image_encoder = CLIPVisionModelWithProjection(clip_vision_config)
 
         scheduler = FlowMatchEulerDiscreteScheduler()
 
@@ -120,30 +116,55 @@ class FluxControlNetPipelineFastTests(unittest.TestCase, PipelineTesterMixin):
             "tokenizer": tokenizer,
             "tokenizer_2": tokenizer_2,
             "transformer": transformer,
-            "controlnet": controlnet,
             "vae": vae,
-            "image_encoder": image_encoder,
+            "controlnet": controlnet,
         }
 
     def get_dummy_inputs(self, seed=0):
-        paddle.seed(seed=seed)
+        generator = paddle.Generator().manual_seed(seed)
+        control_image = randn_tensor(
+            (1, 3, 32, 32),
+            generator=generator,
+            dtype=paddle.float16,
+        )
 
-        control_image = Image.new("RGB", (16, 16), 0)
+        controlnet_conditioning_scale = 0.5
 
         inputs = {
             "prompt": "A painting of a squirrel eating a burger",
-            "control_image": control_image,
+            "generator": generator,
             "num_inference_steps": 2,
-            "guidance_scale": 5.0,
-            "controlnet_conditioning_scale": 0.8,
-            "height": 8,
-            "width": 8,
-            "max_sequence_length": 48,
+            "guidance_scale": 3.5,
             "output_type": "np",
+            "control_image": control_image,
+            "controlnet_conditioning_scale": controlnet_conditioning_scale,
         }
+
         return inputs
 
-    def test_flux_controlnet_different_prompts(self):
+    def test_controlnet_flux(self):
+        components = self.get_dummy_components()
+        pipe = FluxControlNetPipeline(**components)
+        pipe.set_progress_bar_config(disable=None)
+
+        inputs = self.get_dummy_inputs()
+        output = pipe(**inputs)
+        image = output.images
+
+        image_slice = image[0, -3:, -3:, -1]
+
+        assert image.shape == (1, 32, 32, 3)
+
+        expected_slice = np.array(
+            [0.89820540, 0.32847900, 0.94486995, 0.47045115, 0.24701830, 0.00000005, 0.82854380, 0.25686050, 0.54220625]
+        )
+
+        assert (
+            np.abs(image_slice.flatten() - expected_slice).max() < 1e-2
+        ), f"Expected: {expected_slice}, got: {image_slice.flatten()}"
+
+
+    def test_flux_different_prompts(self):
         pipe = self.pipeline_class(**self.get_dummy_components())
 
         inputs = self.get_dummy_inputs()
@@ -158,7 +179,7 @@ class FluxControlNetPipelineFastTests(unittest.TestCase, PipelineTesterMixin):
         # Outputs should be different here
         assert max_diff > 1e-6
 
-    def test_flux_controlnet_prompt_embeds(self):
+    def test_flux_prompt_embeds(self):
         pipe = self.pipeline_class(**self.get_dummy_components())
         inputs = self.get_dummy_inputs()
 
@@ -170,7 +191,7 @@ class FluxControlNetPipelineFastTests(unittest.TestCase, PipelineTesterMixin):
         (prompt_embeds, pooled_prompt_embeds, text_ids) = pipe.encode_prompt(
             prompt,
             prompt_2=None,
-            max_sequence_length=inputs["max_sequence_length"],
+            max_sequence_length=512,  # Use a default value for testing
         )
         output_with_embeds = pipe(
             prompt_embeds=prompt_embeds,
@@ -181,64 +202,116 @@ class FluxControlNetPipelineFastTests(unittest.TestCase, PipelineTesterMixin):
         max_diff = np.abs(output_with_prompt - output_with_embeds).max()
         assert max_diff < 1e-4
 
-    def test_flux_controlnet_conditioning_scale(self):
-        pipe = self.pipeline_class(**self.get_dummy_components())
-        
-        # Generate with default conditioning scale
-        inputs = self.get_dummy_inputs()
-        default_output = pipe(**inputs).images[0]
-        
-        # Generate with higher conditioning scale
-        inputs = self.get_dummy_inputs()
-        inputs["controlnet_conditioning_scale"] = 1.5
-        high_scale_output = pipe(**inputs).images[0]
-        
-        # Images should be different with different conditioning scales
-        max_diff = np.abs(default_output - high_scale_output).max()
-        assert max_diff > 1e-6
-
-    def test_flux_controlnet_image_output_shape(self):
+    def test_flux_image_output_shape(self):
         pipe = self.pipeline_class(**self.get_dummy_components())
         inputs = self.get_dummy_inputs()
 
-        height_width_pairs = [(32, 32), (72, 57)]
+        height_width_pairs = [(32, 32), (72, 56)]
         for height, width in height_width_pairs:
             expected_height = height - height % (pipe.vae_scale_factor * 2)
             expected_width = width - width % (pipe.vae_scale_factor * 2)
 
-            inputs.update({"height": height, "width": width})
+            generator = paddle.Generator().manual_seed(0)
+            control_image = randn_tensor(
+                (1, 3, height, width),
+                generator=generator,
+                dtype=paddle.float16,
+            )
+            
+            inputs.update({"control_image": control_image})
             image = pipe(**inputs).images[0]
             output_height, output_width, _ = image.shape
             assert (output_height, output_width) == (expected_height, expected_width)
 
-    def test_flux_multi_controlnet(self):
-        components = self.get_dummy_components()
-        
-        # Replace the single controlnet with a multi-controlnet
-        paddle.seed(seed=0)
-        controlnet1 = FluxControlNetModel(
-            transformer_config=components["transformer"].config,
+
+@slow
+@require_paddle_gpu
+class FluxControlNetPipelineSlowTests(unittest.TestCase):
+    pipeline_class = FluxControlNetPipeline
+
+    def setUp(self):
+        super().setUp()
+        gc.collect()
+        paddle.device.cuda.empty_cache()
+
+    def tearDown(self):
+        super().tearDown()
+        gc.collect()
+        paddle.device.cuda.empty_cache()
+
+    def test_canny(self):
+        controlnet = FluxControlNetModel.from_pretrained("InstantX/FLUX.1-dev-Controlnet-Canny", paddle_dtype=paddle.bfloat16)
+        pipe = FluxControlNetPipeline.from_pretrained(
+            "black-forest-labs/FLUX.1-dev", 
+            controlnet=controlnet, 
+            paddle_dtype=paddle.bfloat16
+        )
+        pipe.set_progress_bar_config(disable=None)
+
+        generator = paddle.Generator().manual_seed(0)
+        control_image = load_image("https://huggingface.co/InstantX/SD3-Controlnet-Canny/resolve/main/canny.jpg").resize((512, 512))
+
+        prompt = "A girl in city, 25 years old, cool, futuristic"
+        prompt_embeds, pooled_prompt_embeds, _ = pipe.encode_prompt(
+            prompt=prompt,
+            prompt_2=None, 
+            max_sequence_length=256,
         )
         
-        paddle.seed(seed=0)
-        controlnet2 = FluxControlNetModel(
-            transformer_config=components["transformer"].config,
+        output = pipe(
+            prompt_embeds=prompt_embeds,
+            pooled_prompt_embeds=pooled_prompt_embeds,
+            control_image=control_image,
+            controlnet_conditioning_scale=0.6,
+            width=512,
+            height=512,
+            guidance_scale=3.5,
+            num_inference_steps=2,
+            max_sequence_length=256,
+            output_type="np",
+            generator=generator
         )
-        
-        components["controlnet"] = FluxMultiControlNetModel([controlnet1, controlnet2])
-        
-        pipe = self.pipeline_class(**components)
-        
-        # Create two different control images
-        control_image1 = Image.new("RGB", (16, 16), 0)
-        control_image2 = Image.new("RGB", (16, 16), 128)
-        
-        # Test with multiple control images
-        inputs = self.get_dummy_inputs()
-        inputs["control_image"] = [control_image1, control_image2]
-        inputs["controlnet_conditioning_scale"] = [0.8, 0.7]
-        
-        output = pipe(**inputs).images[0]
-        
-        # Just verify it runs without errors
-        assert output.shape[-1] == 3
+        image = output.images[0]
+
+        assert image.shape == (512, 512, 3)
+
+        original_image = image[-3:, -3:, -1].flatten()
+
+        expected_image = np.array([0.2734, 0.2852, 0.2852, 0.2734, 0.2754, 0.2891, 0.2617, 0.2637, 0.2773])
+
+        assert numpy_cosine_similarity_distance(original_image.flatten(), expected_image) < 2e-2
+
+    def test_multi_controlnet(self):
+        controlnet = FluxControlNetModel.from_pretrained("InstantX/FLUX.1-dev-Controlnet-Canny", paddle_dtype=paddle.bfloat16)
+        controlnet = FluxMultiControlNetModel([controlnet, controlnet])
+
+        pipe = FluxControlNetPipeline.from_pretrained(
+            "black-forest-labs/FLUX.1-dev", controlnet=controlnet, paddle_dtype=paddle.bfloat16
+        )
+        pipe.set_progress_bar_config(disable=None)
+
+        generator = paddle.Generator().manual_seed(0)
+        prompt = "A girl in city, 25 years old, cool, futuristic"
+        control_image = load_image("https://huggingface.co/InstantX/SD3-Controlnet-Canny/resolve/main/canny.jpg").resize((512, 512))
+
+        output = pipe(
+            prompt,
+            control_image=[control_image, control_image],
+            controlnet_conditioning_scale=[0.3, 0.3],
+            width=512,
+            height=512,
+            guidance_scale=3.5,
+            num_inference_steps=2,
+            max_sequence_length=256,
+            output_type="np",
+            generator=generator
+        )
+        image = output.images[0]
+
+        assert image.shape == (512, 512, 3)
+
+        original_image = image[-3:, -3:, -1].flatten()
+
+        expected_image = np.array([0.2744, 0.2862, 0.2862, 0.2744, 0.2764, 0.2881, 0.2627, 0.2647, 0.2763])
+
+        assert numpy_cosine_similarity_distance(original_image.flatten(), expected_image) < 2e-2

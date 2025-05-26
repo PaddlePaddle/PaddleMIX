@@ -624,7 +624,7 @@ class FluxControlNetInpaintPipeline(
                     f" a total batch size of {batch_size}, but {mask.shape[0]} masks were passed. Make sure the number"
                     " of masks that you pass is divisible by the total requested batch size."
                 )
-            mask = mask.repeat(batch_size // mask.shape[0], 1, 1, 1)
+            mask = mask.tile([batch_size // mask.shape[0], 1, 1, 1])
         if masked_image_latents.shape[0] < batch_size:
             if not batch_size % masked_image_latents.shape[0] == 0:
                 raise ValueError(
@@ -632,7 +632,7 @@ class FluxControlNetInpaintPipeline(
                     f" to a total batch size of {batch_size}, but {masked_image_latents.shape[0]} images were passed."
                     " Make sure the number of images that you pass is divisible by the total requested batch size."
                 )
-            masked_image_latents = masked_image_latents.repeat(batch_size // masked_image_latents.shape[0], 1, 1, 1)
+            masked_image_latents = masked_image_latents.tile([batch_size // masked_image_latents.shape[0], 1, 1, 1])
 
         # aligning device to prevent device errors when concating it with the latent model input
         masked_image_latents = masked_image_latents.astype(dtype=dtype)
