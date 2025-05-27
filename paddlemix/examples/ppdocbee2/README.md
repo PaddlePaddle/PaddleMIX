@@ -54,7 +54,7 @@ sh build_env.sh
 
 ### 3.1 在线体验
 
-我们提供了在线体验环境，您可以通过[AI Studio](https://aistudio.baidu.com/application/detail/60135)快速体验 PP-DocBee2 的功能。
+我们提供了在线体验环境，您可以通过[AI Studio](https://aistudio.baidu.com/app/highcode/83545/app)快速体验 PP-DocBee2 的功能。
 
 ### 3.2 本地gradio部署
 ```bash
