@@ -166,6 +166,8 @@ else:
             "VCtrlModel",
             # new add
             "FluxTransformer2DModel",
+            "FluxControlNetModel",
+            "FluxMultiControlNetModel",
             "MochiTransformer3DModel",
             "WanTransformer3DModel",
         ]
@@ -303,6 +305,9 @@ else:
             "FluxInpaintPipeline",
             "FluxPipeline",
             "FluxPriorReduxPipeline",
+            "FluxControlNetPipeline",
+            "FluxControlNetImg2ImgPipeline",
+            "FluxControlNetInpaintPipeline",
             "WanPipeline",
             "WanImageToVideoPipeline",
             "IFImg2ImgPipeline",
@@ -538,6 +543,8 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             DiTLLaMA2DModel,
             DiTLLaMAT2IModel,
             FluxTransformer2DModel,
+            FluxControlNetModel,
+            FluxMultiControlNetModel,
             GaussianDiffusion,
             GaussianDiffusion_SDEdit,
             HunyuanVideoTransformer3DModel,
@@ -683,6 +690,9 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             FluxInpaintPipeline,
             FluxPipeline,
             FluxPriorReduxPipeline,
+            FluxControlNetPipeline,
+            
+            FluxControlNetInpaintPipeline,
             IFImg2ImgPipeline,
             IFImg2ImgSuperResolutionPipeline,
             IFInpaintingPipeline,
