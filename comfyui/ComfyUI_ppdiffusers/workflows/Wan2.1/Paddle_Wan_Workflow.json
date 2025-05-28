@@ -1,0 +1,311 @@
+{
+  "id": "636b8417-2f70-4b32-bc6e-66fd97f590de",
+  "revision": 0,
+  "last_node_id": 9,
+  "last_link_id": 7,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "PaddleWanT2VDiffusionLoader",
+      "pos": [
+        193.76171875,
+        207.5625
+      ],
+      "size": [
+        310.8023376464844,
+        58
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "links": [
+            5
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PaddleWanT2VDiffusionLoader"
+      },
+      "widgets_values": [
+        "wan2.1_t2v_1.3B_fp16.safetensors"
+      ]
+    },
+    {
+      "id": 2,
+      "type": "PaddleWanVaeLoader",
+      "pos": [
+        221.6953125,
+        85.3203125
+      ],
+      "size": [
+        270,
+        58
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "vae",
+          "type": "VAE",
+          "links": [
+            3
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PaddleWanVaeLoader"
+      },
+      "widgets_values": [
+        "wan_2.1_vae.safetensors"
+      ]
+    },
+    {
+      "id": 7,
+      "type": "PromptInput",
+      "pos": [
+        701.50390625,
+        559.95703125
+      ],
+      "size": [
+        400,
+        200
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "prompt",
+          "type": "PROMPT",
+          "links": [
+            2
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PromptInput"
+      },
+      "widgets_values": [
+        "Bright tones, overexposed, static, blurred details, subtitles, style, works, paintings, images, static, overall gray, worst quality, low quality, JPEG compression residue, ugly, incomplete, extra fingers, poorly drawn hands, poorly drawn faces, deformed, disfigured, misshapen limbs, fused fingers, still picture, messy background, three legs, many people in the background, walking backwards"
+      ]
+    },
+    {
+      "id": 3,
+      "type": "PaddleTextEncodersLoader",
+      "pos": [
+        186.828125,
+        379.1015625
+      ],
+      "size": [
+        279.6851501464844,
+        58
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "text_encoders",
+          "type": "TEXTENCODER",
+          "links": [
+            4
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PaddleTextEncodersLoader"
+      },
+      "widgets_values": [
+        "umt5_xxl_fp16.safetensors"
+      ]
+    },
+    {
+      "id": 4,
+      "type": "PaddleWanText2VideoPipe",
+      "pos": [
+        770.5078125,
+        211.2734375
+      ],
+      "size": [
+        280.4644470214844,
+        186
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "wan_model",
+          "type": "MODEL",
+          "link": 5
+        },
+        {
+          "name": "text_encoders",
+          "type": "TEXTENCODER",
+          "link": 4
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 3
+        },
+        {
+          "name": "prompt",
+          "type": "PROMPT",
+          "link": 1
+        },
+        {
+          "name": "negative_prompt",
+          "type": "PROMPT",
+          "link": 2
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            7
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PaddleWanText2VideoPipe"
+      },
+      "widgets_values": [
+        701909782310930,
+        "randomize",
+        3
+      ]
+    },
+    {
+      "id": 9,
+      "type": "PddleSaveWAN",
+      "pos": [
+        1163.394775390625,
+        172.0851287841797
+      ],
+      "size": [
+        624.6434326171875,
+        580.865234375
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 7
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "PddleSaveWAN"
+      },
+      "widgets_values": [
+        "ComfyUI",
+        16.000000000000004,
+        false,
+        90,
+        "default"
+      ]
+    },
+    {
+      "id": 5,
+      "type": "PromptInput",
+      "pos": [
+        275.19921875,
+        542.48828125
+      ],
+      "size": [
+        400,
+        200
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "prompt",
+          "type": "PROMPT",
+          "links": [
+            1
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PromptInput"
+      },
+      "widgets_values": [
+        "a fox moving quickly in a beautiful winter scenery nature trees mountains daytime tracking camera"
+      ]
+    }
+  ],
+  "links": [
+    [
+      1,
+      5,
+      0,
+      4,
+      3,
+      "PROMPT"
+    ],
+    [
+      2,
+      7,
+      0,
+      4,
+      4,
+      "PROMPT"
+    ],
+    [
+      3,
+      2,
+      0,
+      4,
+      2,
+      "VAE"
+    ],
+    [
+      4,
+      3,
+      0,
+      4,
+      1,
+      "TEXTENCODER"
+    ],
+    [
+      5,
+      1,
+      0,
+      4,
+      0,
+      "MODEL"
+    ],
+    [
+      7,
+      4,
+      0,
+      9,
+      0,
+      "IMAGE"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "frontendVersion": "1.18.9"
+  },
+  "version": 0.4
+}
