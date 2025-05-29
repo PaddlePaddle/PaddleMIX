@@ -2284,10 +2284,6 @@ class FluxAttnProcessor2_0:
             query = apply_rotary_emb(query, image_rotary_emb)
             key = apply_rotary_emb(key, image_rotary_emb)
 
-        dtype = query.dtype
-        query = query.cast(paddle.bfloat16)
-        key = key.cast(paddle.bfloat16)
-        value = value.cast(paddle.bfloat16)
         hidden_states = F.scaled_dot_product_attention_(
             query.transpose([0, 2, 1, 3]),
             key.transpose([0, 2, 1, 3]),
@@ -2298,10 +2294,8 @@ class FluxAttnProcessor2_0:
         )
         
         hidden_states = hidden_states.reshape([batch_size, -1, attn.heads * head_dim])
-        #hidden_states = hidden_states.astype(query.dtype)
-        if dtype != hidden_states.dtype:
-            hidden_states = hidden_states.cast(dtype)
-
+        hidden_states = hidden_states.astype(query.dtype)
+        
         if encoder_hidden_states is not None:
             encoder_hidden_states, hidden_states = (
                 hidden_states[:, : encoder_hidden_states.shape[1]],
