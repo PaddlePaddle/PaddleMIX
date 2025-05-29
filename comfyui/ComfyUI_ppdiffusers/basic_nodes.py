@@ -52,8 +52,6 @@ class PaddleSaveImage:
     CATEGORY = "🚢 paddlemix/ppdiffusers/output"
 
     def censor_image(self, image):
-        if self.serving_web_host is None or self.serving_app_token is None:
-            return True
         buffered = BytesIO()
         image.save(buffered, format="PNG")
         img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
