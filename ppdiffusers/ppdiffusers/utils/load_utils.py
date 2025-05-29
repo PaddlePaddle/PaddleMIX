@@ -315,6 +315,7 @@ def cast_to_paddle(tensor, return_numpy=False):
             is_bfloat16 = True
             tensor = tensor.float().contiguous().cpu().numpy()
         else:
+            tensor = tensor.to(torch.float32)
             tensor = tensor.contiguous().cpu().numpy()
         if return_numpy:
             return tensor

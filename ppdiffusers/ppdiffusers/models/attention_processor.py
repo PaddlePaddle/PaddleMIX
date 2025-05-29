@@ -2292,9 +2292,10 @@ class FluxAttnProcessor2_0:
             dropout_p=0.0,
             is_causal=False,
         )
+        
         hidden_states = hidden_states.reshape([batch_size, -1, attn.heads * head_dim])
         hidden_states = hidden_states.astype(query.dtype)
-
+        
         if encoder_hidden_states is not None:
             encoder_hidden_states, hidden_states = (
                 hidden_states[:, : encoder_hidden_states.shape[1]],
