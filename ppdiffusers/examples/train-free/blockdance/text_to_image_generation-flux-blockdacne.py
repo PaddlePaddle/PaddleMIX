@@ -42,14 +42,4 @@ image = pipe(
     max_sequence_length=512,
     generator=paddle.Generator().manual_seed(42),
 ).images[0]
-
-image = pipe(
-    prompt,
-    height=1024,
-    width=1024,
-    guidance_scale=3.5,
-    num_inference_steps=50,
-    max_sequence_length=512,
-    generator=paddle.Generator().manual_seed(42),
-).images[0]
 image.save("text_to_image_generation-flux-dev-result.png")

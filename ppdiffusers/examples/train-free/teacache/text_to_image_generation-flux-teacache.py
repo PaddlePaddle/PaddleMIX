@@ -40,7 +40,7 @@ image = pipe(
     height=1024,
     width=1024,
     guidance_scale=3.5,
-    num_inference_steps=50,
+    num_inference_steps=28,
     max_sequence_length=512,
     generator=paddle.Generator().manual_seed(42),
 ).images[0]
