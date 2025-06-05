@@ -18,4 +18,4 @@ huggingface_hub
 hf_transfer
 wandb
 imageio
-
+aistudio-sdk==0.2.6
