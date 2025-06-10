@@ -26,7 +26,7 @@ from paddlenlp.trainer import (
     TrainingArguments,
     get_last_checkpoint,
 )
-from paddlenlp.transformers import AutoModelForCausalLM, LlamaConfig
+from paddlenlp.transformers import AutoConfig, AutoModelForCausalLM
 from PIL import Image, ImageFile, PngImagePlugin
 from train.args_utils import DataTrainingArguments, ModelArguments
 from train.dataset import build_datasets
@@ -155,7 +155,7 @@ def main():
     tokenizer.added_tokens_decoder = {v: k for k, v in tokenizer.added_tokens_encoder.items()}
     num_new_tokens = tokenizer.add_tokens(token_list, special_tokens=True)
     img_context_token_id = tokenizer.convert_tokens_to_ids(IMG_CONTEXT_TOKEN)
-    tcs_loader = None #TCSLoader("~/petreloss.conf") if has_tcs_loader else None
+    tcs_loader = None  # TCSLoader("~/petreloss.conf") if has_tcs_loader else None
 
     if "npu" in paddle.get_device():
         is_bfloat16_supported = True
@@ -195,7 +195,7 @@ def main():
         vision_config.drop_path_rate = model_args.drop_path_rate
         vision_model = InternVisionModel.from_pretrained(model_args.vision_path, dtype=dtype, config=vision_config)
         logger.info("Loading LLaMA...")
-        llm_config = LlamaConfig.from_pretrained(model_args.llm_path)
+        llm_config = AutoConfig.from_pretrained(model_args.llm_path)
         if llm_config.model_type == "internlm2":
             model_type = InternLM2ForCausalLM
             llm_config.attn_implementation = "flash_attention_2"
