@@ -301,8 +301,8 @@ def tgate_processor_flux(
 
     residual = hidden_states
 
-    cross_attn = encoder_hidden_states is not None
-    self_attn =  encoder_hidden_states is None
+    self_attn= True
+    cross_attn= False
 
     input_ndim = hidden_states.ndim
 
@@ -313,8 +313,8 @@ def tgate_processor_flux(
             encoder_hidden_states = cache1
     elif self_attn and sa_reuse and cache is not None:
         hidden_states = cache
-        # if encoder_hidden_states is not None and cache1 is not None:
-        #     encoder_hidden_states = cache1
+        if encoder_hidden_states is not None and cache1 is not None:
+            encoder_hidden_states = cache1
     else:
 
         batch_size, _, _ = hidden_states.shape if encoder_hidden_states is None else encoder_hidden_states.shape
@@ -389,13 +389,11 @@ def tgate_processor_flux(
             encoder_hidden_states = attn.to_add_out(encoder_hidden_states)
             
             
-            if (cross_attn and ca_cache):
+            if (self_attn and sa_cache):
                 if keep_shape:
                     cache = hidden_states
                     cache1 = encoder_hidden_states
                 else:
-                    # 这里感觉要改 因为flux 的cfg 不一样
-                    #hidden_uncond, hidden_pred_text = hidden_states.chunk(2)
                     cache = hidden_states
                     cache1 = encoder_hidden_states
             else:
@@ -405,12 +403,10 @@ def tgate_processor_flux(
             return hidden_states, encoder_hidden_states,cache,cache1
         else:
             # cache1 = encoder_hidden_states
-            if (cross_attn and ca_cache) or (self_attn and sa_cache):
+            if (self_attn and sa_cache):
                 if keep_shape:
                     cache = hidden_states
                 else:
-                    # 这里感觉要改 因为flux 的cfg 不一样
-                    #hidden_uncond, hidden_pred_text = hidden_states.chunk(2)
                     cache = hidden_states
             else:
                 cache = None
@@ -419,16 +415,6 @@ def tgate_processor_flux(
         return hidden_states, encoder_hidden_states,cache,cache1
     else:
         return hidden_states,cache
-
-    # if input_ndim == 4:
-    #     hidden_states = hidden_states.transpose([0, 1, 3, 2]).reshape([batch_size, channel, height, width])
-
-    # if attn.residual_connection:
-    #     hidden_states = hidden_states + residual
-
-    # hidden_states = hidden_states / attn.rescale_output_factor
-
-    #return hidden_states,encoder_hidden_states,cache
 
 
 
