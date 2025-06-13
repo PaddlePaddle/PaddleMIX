@@ -16,4 +16,3 @@ decord>=0.6.0
 brisque
 av
 pyav
-aistudio-sdk==0.2.6

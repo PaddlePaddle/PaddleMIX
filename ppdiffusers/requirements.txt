@@ -16,4 +16,3 @@ paddlesde
 ligo-segments
 huggingface_hub
 hf_transfer
-aistudio-sdk==0.2.6
