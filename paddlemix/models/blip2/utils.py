@@ -214,7 +214,7 @@ def load_model(args, model, ckpt_dir="", map_location="cpu", prefix=None):
         return
 
     if not os.path.exists(ckpt_dir):
-        ValueError("Cannot find pretrained model path: {}".format(ckpt_dir))
+        raise ValueError("Cannot find pretrained model path: {}".format(ckpt_dir))
 
     if os.path.isfile(ckpt_dir):
         path = ckpt_dir
