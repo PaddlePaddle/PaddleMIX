@@ -155,6 +155,32 @@ sh paddlemix/examples/qwen2_5_vl/shell/baseline_7b_lora_bs32_1e8.sh
 CUDA_VISIBLE_DEVICES=0 python paddlemix/examples/qwen2_5_vl/single_image_infer.py
 ```
 
+## 5 模型权重转换
+
+### 5.1 Torch 转 Paddle
+* 安装PyTorch
+```
+# 安装PyTorch CPU版本
+pip install torch==2.6.0 torchvision==0.21.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cpu
+```
+* 转换权重
+```bash
+# model_size 3B或7B
+# src_dir 为PyTorch 权重，从hugingface中下载 https://huggingface.co/Qwen/Qwen2.5-VL-3B-Instruct
+# dst_dir 为Paddle 权重保存路径
+python paddlemix/examples/qwen2_5_vl/torch2paddle_weight_tran.py \
+  --src_dir /path/to/source_model \
+  --dest_dir /path/to/save_model \
+  --model_size 3B \
+  --overwrite \
+  --skip_config_update \
+```
+
+* 替换tokenizer_config.json 中的chat_template为以下模版
+```
+  "chat_template": "{% set image_count = namespace(value=0) %}{% set video_count = namespace(value=0) %}{% for message in messages %}{% if loop.first and message['role'] != 'system' %}<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n{% endif %}<|im_start|>{{ message['role'] }}\n{% if message['content'] is string %}{{ message['content'] }}<|im_end|>\n{% else %}{% for content in message['content'] %}{% if content['type'] == 'image' or 'image' in content or 'image_url' in content %}{% set image_count.value = image_count.value + 1 %}{% if add_vision_id %}Picture {{ image_count.value }}: {% endif %}<|vision_start|><|image_pad|><|vision_end|>{% elif content['type'] == 'video' or 'video' in content %}{% set video_count.value = video_count.value + 1 %}{% if add_vision_id %}Video {{ video_count.value }}: {% endif %}<|vision_start|><|video_pad|><|vision_end|>{% elif 'text' in content %}{{ content['text'] }}{% endif %}{% endfor %}<|im_end|>\n{% endif %}{% endfor %}{% if add_generation_prompt %}<|im_start|>assistant\n{% endif %}",
+```
+
 ## 参考文献
 ```BibTeX
 @article{Qwen2.5-VL,
