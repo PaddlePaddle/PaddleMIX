@@ -42,6 +42,10 @@ def str2bool(v):
         raise ValueError("Not supported value: {}".format(v))
 
 
+def is_npu_available():
+    return paddle.device.get_device().startswith("npu")
+
+
 # The package importlib_metadata is in a different place, depending on the python version.
 if sys.version_info < (3, 8):
     import importlib_metadata
@@ -76,17 +80,17 @@ if USE_PADDLE in ENV_VARS_TRUE_AND_AUTO_VALUES:
 
         if _paddle_available:
             try:
-                from paddle.incubate.nn.memory_efficient_attention import (  # noqa
-                    memory_efficient_attention,
+                _ = paddle.nn.functional.scaled_dot_product_attention(
+                    paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
+                    paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
+                    paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
+                    attn_mask=paddle.ones((1, 2, 1, 1), dtype=paddle.float16),
                 )
-
-                # _ = memory_efficient_attention(
-                #     paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
-                #     paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
-                #     paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
-                # )
                 _ppxformers_available = True
             except Exception:
+                _ppxformers_available = False
+
+            if is_npu_available():
                 _ppxformers_available = False
 
 else:
@@ -375,8 +379,6 @@ def is_scipy_available():
 def is_librosa_available():
     return _librosa_available
 
-def is_npu_available():
-    return paddle.device.get_device().startswith("npu")
 
 def is_ppxformers_available():
     USE_PPXFORMERS = str2bool(os.getenv("USE_PPXFORMERS", True))
