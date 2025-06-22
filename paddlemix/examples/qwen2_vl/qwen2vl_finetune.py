@@ -52,6 +52,7 @@ MaximumDecompressedSize = 1024
 MegaByte = 2**20
 PngImagePlugin.MAX_TEXT_CHUNK = MaximumDecompressedSize * MegaByte
 from paddlenlp.utils.log import logger
+from paddlenlp.utils.tools import get_env_device
 
 # Set constants for image processing and logging
 IGNORE_INDEX = -100
@@ -360,7 +361,7 @@ class LazySupervisedDataset(Dataset):
             attention_mask=attention_mask,
             images=[],
         )
-        
+
         return ret
 
     def __getitem__(self, i) -> Dict[str, paddle.Tensor]:
@@ -473,11 +474,11 @@ class MultiModalDataCollatorForSeq2Seq(DataCollatorForSeq2Seq):
             batch_videos.extend(videos)
             batch_imglens.append(len(images))
             batch_vidlens.append(len(videos))
-            batch_input_ids.append(feature["input_ids"])                
+            batch_input_ids.append(feature["input_ids"])
 
         if (
             self.processor is not None and sum(batch_imglens) == 0 and sum(batch_vidlens) == 0
-        ):  
+        ):
             fake_messages = [{"role": "user", "content": IMAGE_PLACEHOLDER}]
             fake_images = [Image.new("RGB", (64, 64), (255, 255, 255))]
             fake_messages = self.template.mm_plugin.process_messages(fake_messages, fake_images, [], self.processor)
@@ -678,6 +679,16 @@ def main():
                 f"Checkpoint detected, resuming training at {last_checkpoint}. To avoid this behavior, change "
                 "the `--output_dir` or add `--overwrite_output_dir` to train from scratch."
             )
+
+    if get_env_device == "xpu" and training_args.gradient_accumulation_steps > 1:
+        try:
+            from paddle_xpu.layers.nn.linear import LinearConfig  # noqa: F401
+
+            LinearConfig.enable_accumulate_steps_opt()
+            LinearConfig.set_accumulate_steps(training_args.gradient_accumulation_steps)
+        except ImportError:
+            # It's OK, not use accumulate_steps optimization
+            pass
 
     # Load model
     if "npu" in paddle.get_device():
