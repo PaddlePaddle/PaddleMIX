@@ -1,0 +1,225 @@
+{
+  "id": "7e3909b3-d20d-4895-9d61-e40d1dfb55cb",
+  "revision": 0,
+  "last_node_id": 5,
+  "last_link_id": 4,
+  "nodes": [
+    {
+      "id": 2,
+      "type": "PaddleFLUXCheckpointLoader",
+      "pos": [
+        656.590576171875,
+        312.5562744140625
+      ],
+      "size": [
+        304.5816345214844,
+        58
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "flux_pipe",
+          "type": "PIPELINE",
+          "links": [
+            1
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PaddleFLUXCheckpointLoader"
+      },
+      "widgets_values": [
+        "flux1-dev-fp8.safetensors"
+      ]
+    },
+    {
+      "id": 5,
+      "type": "PromptInput",
+      "pos": [
+        610.325927734375,
+        793.3912353515625
+      ],
+      "size": [
+        400,
+        200
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "prompt",
+          "type": "PROMPT",
+          "links": [
+            3
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PromptInput"
+      },
+      "widgets_values": [
+        "low, error, ugly, (extra hand), wrong hand, nsfw, nude, extra head"
+      ]
+    },
+    {
+      "id": 1,
+      "type": "PaddleSaveImage",
+      "pos": [
+        1559.344482421875,
+        447.1226501464844
+      ],
+      "size": [
+        457.0902404785156,
+        465.3569030761719
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 4
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "PaddleSaveImage"
+      },
+      "widgets_values": [
+        "ComfyUI",
+        true
+      ]
+    },
+    {
+      "id": 4,
+      "type": "PromptInput",
+      "pos": [
+        640.457763671875,
+        495.2711181640625
+      ],
+      "size": [
+        400,
+        200
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "prompt",
+          "type": "PROMPT",
+          "links": [
+            2
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PromptInput"
+      },
+      "widgets_values": [
+        "A cat holding a sign that says hello world"
+      ]
+    },
+    {
+      "id": 3,
+      "type": "PaddleFLUXText2ImagePipe",
+      "pos": [
+        1121.029052734375,
+        540.7008056640625
+      ],
+      "size": [
+        291.3404235839844,
+        266
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "flux_pipe",
+          "type": "PIPELINE",
+          "link": 1
+        },
+        {
+          "name": "prompt",
+          "type": "PROMPT",
+          "link": 2
+        },
+        {
+          "name": "negative_prompt",
+          "type": "PROMPT",
+          "link": 3
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "links": [
+            4
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PaddleFLUXText2ImagePipe"
+      },
+      "widgets_values": [
+        36,
+        1024,
+        1024,
+        1,
+        634272999287449,
+        "randomize",
+        5,
+        "flowmatch-euler"
+      ]
+    }
+  ],
+  "links": [
+    [
+      1,
+      2,
+      0,
+      3,
+      0,
+      "PIPELINE"
+    ],
+    [
+      2,
+      4,
+      0,
+      3,
+      1,
+      "PROMPT"
+    ],
+    [
+      3,
+      5,
+      0,
+      3,
+      2,
+      "PROMPT"
+    ],
+    [
+      4,
+      3,
+      0,
+      1,
+      0,
+      "IMAGE"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "frontendVersion": "1.18.9"
+  },
+  "version": 0.4
+}
