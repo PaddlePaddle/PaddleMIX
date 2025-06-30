@@ -131,7 +131,6 @@ def SortTaylor_forward(
             self.current_block_encoder_residual = [None] *len(self.transformer_blocks)
             self.current_single_block_residual = [None] *len(self.single_transformer_blocks)
             self.previous_block_residual = [None] *len(self.transformer_blocks)
-            # pipe.transformer.previous_block_encoder_residual = [None] *len(pipe.transformer.transformer_blocks)
             self.previous_single_block_residual = [None] *len(self.single_transformer_blocks)
             self.previous_encoder_block_residual = [None] *len(self.single_transformer_blocks)
             self.count = 0
@@ -189,10 +188,8 @@ def SortTaylor_forward(
                         encoder_hidden_states=encoder_hidden_states,
                         temb=temb,
                         image_rotary_emb=image_rotary_emb,
-                        # joint_attention_kwargs=joint_attention_kwargs,
                     )
 
-                # controlnet residual
                 if controlnet_block_samples is not None:
                     interval_control = len(self.transformer_blocks) / len(controlnet_block_samples)
                     interval_control = int(np.ceil(interval_control))
@@ -210,9 +207,7 @@ def SortTaylor_forward(
                 if self.count % self.step_Num == 0:
                     self.previous_block_residual[index_block] = hidden_states.clone() - ori_hidden_states
                     self.previous_encoder_block_residual[index_block] = encoder_hidden_states.clone() - ori_encoder_hidden_states
-                # elif self.count % self.step_Num == 1:
-                #     self.current_block_residual[index_block] = hidden_states.clone() - ori_hidden_states
-                #     self.current_block_encoder_residual[index_block] = encoder_hidden_states.clone() - ori_encoder_hidden_states
+                
             else:
                 if self.count % self.step_Num == 1:
                     current['module'] = 'hidden_states'
@@ -259,10 +254,9 @@ def SortTaylor_forward(
                         hidden_states=hidden_states,
                         temb=temb,
                         image_rotary_emb=image_rotary_emb,
-                        # joint_attention_kwargs=joint_attention_kwargs,
+
                     )
 
-                # controlnet residual
                 if controlnet_single_block_samples is not None:
                     interval_control = len(self.single_transformer_blocks) / len(controlnet_single_block_samples)
                     interval_control = int(np.ceil(interval_control))
@@ -274,8 +268,6 @@ def SortTaylor_forward(
                 derivative_approximation(cache_dic=cache_dic, current=current, feature=hidden_states.clone() - ori_hidden_states)
                 if self.count % self.step_Num == 0:
                     self.previous_single_block_residual[index_block] = hidden_states.clone() - ori_hidden_states
-                # elif self.count % self.step_Num == 1:
-                #     self.current_single_block_residual[index_block] = hidden_states.clone() - ori_hidden_states
             else:
                 if self.count % self.step_Num == 1:
                     current['module'] = 'hidden_states'
@@ -312,10 +304,6 @@ def SortTaylor_forward(
                     self.result_single_list.append(1)
                 else:
                     self.result_single_list.append(0)
-            # self.result_list[0] = 1
-            # self.result_single_list[0] = 1
-            # self.result_list[-1] = 1
-            # self.result_single_list[-1] = 1
 
             
 

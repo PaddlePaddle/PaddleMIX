@@ -13,7 +13,6 @@ def step_derivative_approximation(cache_dic: Dict, current: Dict, feature: paddl
     :param current: Information of the current step
     """
     difference_distance = current['activated_steps'][-1] - current['activated_steps'][-2]
-    #difference_distance = current['activated_times'][-1] - current['activated_times'][-2]
 
     updated_taylor_factors = {}
     updated_taylor_factors[0] = feature
@@ -34,7 +33,6 @@ def step_taylor_formula(cache_dic: Dict, current: Dict) -> paddle.Tensor:
     :param current: Information of the current step
     """
     x = current['step'] - current['activated_steps'][-1]
-    #x = current['t'] - current['activated_times'][-1]
     output = 0
 
     for i in range(len(cache_dic['cache']['hidden'])):
@@ -49,7 +47,6 @@ def derivative_approximation(cache_dic: Dict, current: Dict, feature: paddle.Ten
     :param current: Information of the current step
     """
     difference_distance = current['activated_steps'][-1] - current['activated_steps'][-2]
-    #difference_distance = current['activated_times'][-1] - current['activated_times'][-2]
 
     updated_taylor_factors = {}
     updated_taylor_factors[0] = feature
@@ -70,7 +67,6 @@ def taylor_formula(cache_dic: Dict, current: Dict) -> paddle.Tensor:
     :param current: Information of the current step
     """
     x = current['step'] - current['activated_steps'][-1]
-    #x = current['t'] - current['activated_times'][-1]
     output = 0
 
     for i in range(len(cache_dic['cache'][-1][current['stream']][current['layer']][current['module']])):

@@ -8,9 +8,7 @@ def cal_type(cache_dic, current):
         # FORA:Uniform
         first_step = (current['step'] == 0)
     else:
-        # ToCa: First enhanced
         first_step = (current['step'] < cache_dic['first_enhance'])
-        #first_step = (current['step'] <= 3)
 
     force_fresh = cache_dic['force_fresh']
     if not first_step:
@@ -22,7 +20,6 @@ def cal_type(cache_dic, current):
         current['type'] = 'full'
         cache_dic['cache_counter'] = 0
         current['activated_steps'].append(current['step'])
-        #current['activated_times'].append(current['t'])
         force_scheduler(cache_dic, current)
     
     elif (cache_dic['taylor_cache']):
@@ -40,10 +37,3 @@ def cal_type(cache_dic, current):
     else:
         cache_dic['cache_counter'] += 1
         current['type'] = 'ToCa'
-        #if current['step'] < 25:
-        #    current['type'] = 'FORA'
-        #else:    
-        #    current['type'] = 'aggressive'
-######################################################################
-    #if (current['step'] in [3,2,1,0]):
-    #    current['type'] = 'full'

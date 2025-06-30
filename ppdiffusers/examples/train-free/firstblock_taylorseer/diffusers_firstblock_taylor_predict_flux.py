@@ -16,18 +16,8 @@ seed = 42
 
 prompt = "An image of a squirrel in Picasso style"
 pipe = DiffusionPipeline.from_pretrained("black-forest-labs/FLUX.1-dev", paddle_dtype=paddle.float16)
-#pipeline.enable_model_cpu_offload() #save some VRAM by offloading the model to CPU. Remove this if you have enough GPU power
-
-# TaylorSeer settings
-# pipe.transformer.__class__.num_steps = num_inference_steps
 
 pipe.transformer.__class__.forward = FirstBlock_taylor_predict_Forward
-
-# for double_transformer_block in pipe.transformer.transformer_blocks:
-#     double_transformer_block.__class__.forward = taylorseer_flux_double_block_forward
-    
-# for single_transformer_block in pipe.transformer.single_transformer_blocks:
-#     single_transformer_block.__class__.forward = taylorseer_flux_single_block_forward
 
 pipe.transformer.enable_teacache = True
 pipe.transformer.cnt = 0

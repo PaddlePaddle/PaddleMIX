@@ -10,10 +10,6 @@ def cache_init_step(self: FluxTransformer2DModel):
     cache['hidden'] = {}
     cache_index[-1]={}
     cache_index['layer_index']={}
-    # cache_dic['attn_map'] = {}
-    # cache_dic['attn_map'][-1] = {}
-    # cache_dic['attn_map'][-1]['double_stream'] = {}
-    # cache_dic['attn_map'][-1]['single_stream'] = {}
 
     cache_dic['cache_counter'] = 0
 

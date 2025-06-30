@@ -152,11 +152,6 @@ def FirstBlock_taylor_predict_Forward(
                 if can_use_cache == False:
                     self.prev_first_hidden_states_residual = first_hidden_states_residual.clone()
                 
-                # if self.accumulated_rel_l1_distance < self.rel_l1_thresh:
-                #     should_calc = False
-                # else:
-                #     should_calc = True
-                #     self.accumulated_rel_l1_distance = 0
             
             self.cnt += 1
             if self.cnt == self.num_steps:
@@ -166,14 +161,11 @@ def FirstBlock_taylor_predict_Forward(
         current = joint_attention_kwargs['current']
         if self.enable_teacache:
             if not should_calc:
-                #hidden_states += self.previous_residual
                 hidden_states = step_taylor_formula(cache_dic=cache_dic, current=current)
 
             else:
-                # ori_hidden_states = hidden_states.clone()
                 current['activated_steps'].append(current['step'])
                 for index_block, block in enumerate(self.transformer_blocks):
-                    #因为上面已经算了现在就不应该算了
                     if index_block == 0:
                         continue
                     if self.training and self.gradient_checkpointing:
@@ -263,90 +255,6 @@ def FirstBlock_taylor_predict_Forward(
 
                 hidden_states = hidden_states[:, encoder_hidden_states.shape[1] :, ...]
                 step_derivative_approximation(cache_dic=cache_dic, current=current, feature=hidden_states)
-                # self.previous_residual = hidden_states - ori_hidden_states
-        # else:
-        #     for index_block, block in enumerate(self.transformer_blocks):
-        #         if self.training and self.gradient_checkpointing:
-
-        #             def create_custom_forward(module, return_dict=None):
-        #                 def custom_forward(*inputs):
-        #                     if return_dict is not None:
-        #                         return module(*inputs, return_dict=return_dict)
-        #                     else:
-        #                         return module(*inputs)
-
-        #                 return custom_forward
-
-        #             ckpt_kwargs: Dict[str, Any] = {"use_reentrant": False} if is_torch_version(">=", "1.11.0") else {}
-        #             encoder_hidden_states, hidden_states = paddle.utils.checkpoint.checkpoint(
-        #                 create_custom_forward(block),
-        #                 hidden_states,
-        #                 encoder_hidden_states,
-        #                 temb,
-        #                 image_rotary_emb,
-        #                 **ckpt_kwargs,
-        #             )
-
-        #         else:
-        #             encoder_hidden_states, hidden_states = block(
-        #                 hidden_states=hidden_states,
-        #                 encoder_hidden_states=encoder_hidden_states,
-        #                 temb=temb,
-        #                 image_rotary_emb=image_rotary_emb,
-        #                 joint_attention_kwargs=joint_attention_kwargs,
-        #             )
-
-        #         # controlnet residual
-        #         if controlnet_block_samples is not None:
-        #             interval_control = len(self.transformer_blocks) / len(controlnet_block_samples)
-        #             interval_control = int(np.ceil(interval_control))
-        #             # For Xlabs ControlNet.
-        #             if controlnet_blocks_repeat:
-        #                 hidden_states = (
-        #                     hidden_states + controlnet_block_samples[index_block % len(controlnet_block_samples)]
-        #                 )
-        #             else:
-        #                 hidden_states = hidden_states + controlnet_block_samples[index_block // interval_control]
-        #     hidden_states = paddle.concat([encoder_hidden_states, hidden_states], axis=1)
-
-        #     for index_block, block in enumerate(self.single_transformer_blocks):
-        #         if self.training and self.gradient_checkpointing:
-
-        #             def create_custom_forward(module, return_dict=None):
-        #                 def custom_forward(*inputs):
-        #                     if return_dict is not None:
-        #                         return module(*inputs, return_dict=return_dict)
-        #                     else:
-        #                         return module(*inputs)
-
-        #                 return custom_forward
-
-        #             ckpt_kwargs: Dict[str, Any] = {"use_reentrant": False} if is_torch_version(">=", "1.11.0") else {}
-        #             hidden_states = paddle.utils.checkpoint.checkpoint(
-        #                 create_custom_forward(block),
-        #                 hidden_states,
-        #                 temb,
-        #                 image_rotary_emb,
-        #                 **ckpt_kwargs,
-        #             )
-
-        #         else:
-        #             hidden_states = block(
-        #                 hidden_states=hidden_states,
-        #                 temb=temb,
-        #                 image_rotary_emb=image_rotary_emb,
-        #                 joint_attention_kwargs=joint_attention_kwargs,
-        #             )
-
-        #         # controlnet residual
-        #         if controlnet_single_block_samples is not None:
-        #             interval_control = len(self.single_transformer_blocks) / len(controlnet_single_block_samples)
-        #             interval_control = int(np.ceil(interval_control))
-        #             hidden_states[:, encoder_hidden_states.shape[1] :, ...] = (
-        #                 hidden_states[:, encoder_hidden_states.shape[1] :, ...]
-        #                 + controlnet_single_block_samples[index_block // interval_control]
-        #             )
-        #     hidden_states = hidden_states[:, encoder_hidden_states.shape[1] :, ...]
 
         hidden_states = self.norm_out(hidden_states, temb)
         output = self.proj_out(hidden_states)

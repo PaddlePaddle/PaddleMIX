@@ -1,4 +1,4 @@
-# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 num_inference_steps = 50
 seed = 42
 prompt = "An image of a squirrel in Picasso style"
-#
+
 pipeline = DiffusionPipeline.from_pretrained("black-forest-labs/FLUX.1-dev", paddle_dtype=paddle.bfloat16)
 #pipeline.enable_model_cpu_offload() #save some VRAM by offloading the model to CPU. Remove this if you have enough GPU power
 
@@ -47,11 +47,11 @@ pipeline.transformer.previous_encoder_block_residual = [None] *len(pipeline.tran
 pipeline.transformer.result_list = []
 pipeline.transformer.result_single_list = []
 pipeline.transformer.start = 900
-pipeline.transformer.end = 100
+pipeline.transformer.end = 50
 pipeline.transformer.precentage = 1
 pipeline.transformer.step_Num = 1
 pipeline.transformer.step_Num2 = 5
-pipeline.transformer.beta = 0.3
+pipeline.transformer.beta = 0.1
 pipeline.transformer.count = 0
 
 
