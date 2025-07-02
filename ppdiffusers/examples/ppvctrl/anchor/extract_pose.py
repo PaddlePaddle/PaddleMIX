@@ -820,6 +820,7 @@ class Detector(object):
         results = []
         try:
             import sahi
+
         except Exception as e:
             print(
                 "sahi not found, plaese install sahi. "
@@ -1190,7 +1191,6 @@ def visualize_pose(
     draw_box=False,
 ):
     try:
-
         import matplotlib.pyplot as plt
 
         plt.switch_backend("agg")
@@ -2226,57 +2226,92 @@ def predict_with_given_det(image, det_res, keypoint_detector, keypoint_batch_siz
     return keypoint_res
 
 
-# def topdown_unite_predict(topdown_keypoint_detector, image_list, keypoint_batch_size=1, save_res=False):
-#     det_timer = detector.get_timer()
-#     store_res = []
-#     for i, img_file in enumerate(image_list):
-#         # Decode image in advance in det + pose prediction
-#         det_timer.preprocess_time_s.start()
-#         image, _ = decode_image(img_file, {})
-#         det_timer.preprocess_time_s.end()
+def topdown_unite_predict(topdown_keypoint_detector, image_list, keypoint_batch_size=1, save_res=False):
+    # Initialize PaddleX model for detection
+    model = create_model(FLAGS.det_model_dir)
+    det_timer = topdown_keypoint_detector.get_timer()
+    store_res = []
+    for i, img_file in enumerate(image_list):
+        # Decode image in advance in det + pose prediction
+        det_timer.preprocess_time_s.start()
+        image, _ = decode_image(img_file, {})
+        det_timer.preprocess_time_s.end()
 
-#         if FLAGS.run_benchmark:
-#             results = detector.predict_image([image], run_benchmark=True, repeats=10)
+        if FLAGS.run_benchmark:
+            # Use PaddleX model for detection
+            pred_results = model.predict(image)
+            results = {"boxes": [], "boxes_num": []}
+            for res in pred_results:
+                for box in res["boxes"]:
+                    if box["score"] > FLAGS.det_threshold:
+                        temp = [
+                            0,
+                            box["score"],
+                            box["coordinate"][0],
+                            box["coordinate"][1],
+                            box["coordinate"][2],
+                            box["coordinate"][3],
+                        ]
+                        results["boxes"].append(temp)
+            results["boxes_num"] = [len(results["boxes"])]
+            results["boxes_num"] = np.array(results["boxes_num"])
+            results["boxes"] = np.array(results["boxes"])
 
-#             cm, gm, gu = get_current_memory_mb()
-#             detector.cpu_mem += cm
-#             detector.gpu_mem += gm
-#             detector.gpu_util += gu
-#         else:
-#             results = detector.predict_image([image], visual=False)
-#         results = detector.filter_box(results, FLAGS.det_threshold)
-#         if results["boxes_num"] > 0:
-#             keypoint_res = predict_with_given_det(
-#                 image, results, topdown_keypoint_detector, keypoint_batch_size, FLAGS.run_benchmark
-#             )
+            cm, gm, gu = get_current_memory_mb()
+            topdown_keypoint_detector.cpu_mem += cm
+            topdown_keypoint_detector.gpu_mem += gm
+            topdown_keypoint_detector.gpu_util += gu
+        else:
+            # Use PaddleX model for detection
+            pred_results = model.predict(image)
+            results = {"boxes": [], "boxes_num": []}
+            for res in pred_results:
+                for box in res["boxes"]:
+                    if box["score"] > FLAGS.det_threshold:
+                        temp = [
+                            0,
+                            box["score"],
+                            box["coordinate"][0],
+                            box["coordinate"][1],
+                            box["coordinate"][2],
+                            box["coordinate"][3],
+                        ]
+                        results["boxes"].append(temp)
+            results["boxes_num"] = [len(results["boxes"])]
+            results["boxes_num"] = np.array(results["boxes_num"])
+            results["boxes"] = np.array(results["boxes"])
+        if results["boxes_num"] > 0:
+            keypoint_res = predict_with_given_det(
+                image, results, topdown_keypoint_detector, keypoint_batch_size, FLAGS.run_benchmark
+            )
 
-#             if save_res:
-#                 save_name = img_file if isinstance(img_file, str) else i
-#                 store_res.append(
-#                     [save_name, keypoint_res["bbox"], [keypoint_res["keypoint"][0], keypoint_res["keypoint"][1]]]
-#                 )
-#         else:
-#             results["keypoint"] = [[], []]
-#             keypoint_res = results
-#         if FLAGS.run_benchmark:
-#             cm, gm, gu = get_current_memory_mb()
-#             topdown_keypoint_detector.cpu_mem += cm
-#             topdown_keypoint_detector.gpu_mem += gm
-#             topdown_keypoint_detector.gpu_util += gu
-#         else:
-#             if not os.path.exists(FLAGS.output_dir):
-#                 os.makedirs(FLAGS.output_dir)
-#             visualize_pose(img_file, keypoint_res, visual_thresh=FLAGS.keypoint_threshold, save_dir=FLAGS.output_dir)
-#     if save_res:
-#         """
-#         1) store_res: a list of image_data
-#         2) image_data: [imageid, rects, [keypoints, scores]]
-#         3) rects: list of rect [xmin, ymin, xmax, ymax]
-#         4) keypoints: 17(joint numbers)*[x, y, conf], total 51 data in list
-#         5) scores: mean of all joint conf
-#         """
-#         with open("det_keypoint_unite_image_results.json", "w") as wf:
-#             json.dump(store_res, wf, indent=4)
+            if save_res:
+                save_name = img_file if isinstance(img_file, str) else i
+                store_res.append(
+                    [save_name, keypoint_res["bbox"], [keypoint_res["keypoint"][0], keypoint_res["keypoint"][1]]]
+                )
+        else:
+            results["keypoint"] = [[], []]
+            keypoint_res = results
+        if FLAGS.run_benchmark:
+            cm, gm, gu = get_current_memory_mb()
+            topdown_keypoint_detector.cpu_mem += cm
+            topdown_keypoint_detector.gpu_mem += gm
+            topdown_keypoint_detector.gpu_util += gu
+        else:
+            if not os.path.exists(FLAGS.output_dir):
+                os.makedirs(FLAGS.output_dir)
+            visualize_pose(img_file, keypoint_res, visual_thresh=FLAGS.keypoint_threshold, save_dir=FLAGS.output_dir)
+    if save_res:
+        """
+        1) store_res: a list of image_data
+        2) image_data: [imageid, rects, [keypoints, scores]]
+        3) rects: list of rect [xmin, ymin, xmax, ymax]
+        4) keypoints: 17(joint numbers)*[x, y, conf], total 51 data in list
+        5) scores: mean of all joint conf
+        """
+        with open("det_keypoint_unite_image_results.json", "w") as wf:
+            json.dump(store_res, wf, indent=4)
 
 
 from paddlex import create_model
