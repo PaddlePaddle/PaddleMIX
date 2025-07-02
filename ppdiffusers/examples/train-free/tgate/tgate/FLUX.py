@@ -1,19 +1,28 @@
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 from types import MethodType
-from .tgate_utils import register_forward, tgate_scheduler
-import paddle
-import paddle.nn.functional as F
-import inspect
 from typing import Any, Callable, Dict, List, Optional, Union
-from ppdiffusers.callbacks import MultiPipelineCallbacks, PipelineCallback
-from ppdiffusers.image_processor import PipelineImageInput
-from ppdiffusers.pipelines.flux.pipeline_flux import (
-    retrieve_timesteps,
-    calculate_shift,
-)
-from typing import Any, Callable, Dict, List, Optional, Union
+
 import numpy as np
+import paddle
+
+from ppdiffusers.image_processor import PipelineImageInput
+from ppdiffusers.pipelines.flux.pipeline_flux import calculate_shift, retrieve_timesteps
 from ppdiffusers.pipelines.flux.pipeline_output import FluxPipelineOutput
+
+from .tgate_utils import register_forward, tgate_scheduler
 
 
 @paddle.no_grad()
@@ -166,15 +175,9 @@ def tgate(
     else:
         batch_size = prompt_embeds.shape[0]
 
-    lora_scale = (
-        self.joint_attention_kwargs.get("scale", None) if self.joint_attention_kwargs is not None else None
-    )
+    lora_scale = self.joint_attention_kwargs.get("scale", None) if self.joint_attention_kwargs is not None else None
     do_true_cfg = true_cfg_scale > 1 and negative_prompt is not None
-    (
-        prompt_embeds,
-        pooled_prompt_embeds,
-        text_ids,
-    ) = self.encode_prompt(
+    (prompt_embeds, pooled_prompt_embeds, text_ids,) = self.encode_prompt(
         prompt=prompt,
         prompt_2=prompt_2,
         prompt_embeds=prompt_embeds,
@@ -184,11 +187,7 @@ def tgate(
         lora_scale=lora_scale,
     )
     if do_true_cfg:
-        (
-            negative_prompt_embeds,
-            negative_pooled_prompt_embeds,
-            _,
-        ) = self.encode_prompt(
+        (negative_prompt_embeds, negative_pooled_prompt_embeds, _,) = self.encode_prompt(
             prompt=negative_prompt,
             prompt_2=negative_prompt_2,
             prompt_embeds=negative_prompt_embeds,
@@ -263,21 +262,23 @@ def tgate(
             batch_size * num_images_per_prompt,
         )
 
-    register_forward(self.transformer, 
-        'Attention',
-        ca_kward = {
-            'cache': False,
-            'reuse': False,
+    register_forward(
+        self.transformer,
+        "Attention",
+        ca_kward={
+            "cache": False,
+            "reuse": False,
         },
-        sa_kward = {
-            'cache': False,
-            'reuse': False,
+        sa_kward={
+            "cache": False,
+            "reuse": False,
         },
-        keep_shape=True
-        )
+        keep_shape=True,
+    )
 
     # 6. Denoising loop
     import time
+
     start_time = time.time()
     with self.progress_bar(total=num_inference_steps) as progress_bar:
         for i, t in enumerate(timesteps):
@@ -289,20 +290,17 @@ def tgate(
             timestep = t.expand(latents.shape[0]).astype(latents.dtype)
 
             if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
-                ca_kwards,sa_kwards,keep_shape=tgate_scheduler(
-                    cur_step=i-num_warmup_steps, 
+                ca_kwards, sa_kwards, keep_shape = tgate_scheduler(
+                    cur_step=i - num_warmup_steps,
                     gate_step=gate_step,
                     sp_interval=sp_interval,
                     fi_interval=fi_interval,
-                    warm_up=warm_up
+                    warm_up=warm_up,
                 )
                 keep_shape = keep_shape if not lcm else lcm
-                register_forward(self.transformer, 
-                    'Attention',
-                    ca_kward=ca_kwards,
-                    sa_kward=sa_kwards,
-                    keep_shape=keep_shape
-                    )
+                register_forward(
+                    self.transformer, "Attention", ca_kward=ca_kwards, sa_kward=sa_kwards, keep_shape=keep_shape
+                )
 
             noise_pred = self.transformer(
                 hidden_states=latents,
@@ -316,7 +314,7 @@ def tgate(
                 return_dict=False,
             )[0]
 
-            if do_true_cfg and (i-num_warmup_steps)< gate_step:
+            if do_true_cfg and (i - num_warmup_steps) < gate_step:
                 if negative_image_embeds is not None:
                     self._joint_attention_kwargs["ip_adapter_image_embeds"] = negative_image_embeds
                 neg_noise_pred = self.transformer(
@@ -369,7 +367,6 @@ def tgate(
     return FluxPipelineOutput(images=image)
 
 
-
 def TgateFLUXLoader(pipe, **kwargs):
-    pipe.tgate = MethodType(tgate,pipe)
+    pipe.tgate = MethodType(tgate, pipe)
     return pipe

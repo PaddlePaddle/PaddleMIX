@@ -12,17 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Dict, Optional, Tuple, Union
 import time
-from ppdiffusers import DiffusionPipeline
-from ppdiffusers.pipelines.flux import FluxPipeline
-from ppdiffusers.models import FluxTransformer2DModel
-from ppdiffusers.models.modeling_outputs import Transformer2DModelOutput
-from ppdiffusers.utils import USE_PEFT_BACKEND, is_paddle_version, logging, scale_lora_layers, unscale_lora_layers
+
 import paddle
-import numpy as np
-from forwards import ( taylorseer_flux_forward,
-                        SortTaylor_forward)
+from forwards import SortTaylor_forward
+
+from ppdiffusers import DiffusionPipeline
+from ppdiffusers.utils import logging
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -31,19 +27,19 @@ seed = 42
 prompt = "An image of a squirrel in Picasso style"
 
 pipeline = DiffusionPipeline.from_pretrained("black-forest-labs/FLUX.1-dev", paddle_dtype=paddle.bfloat16)
-#pipeline.enable_model_cpu_offload() #save some VRAM by offloading the model to CPU. Remove this if you have enough GPU power
+# pipeline.enable_model_cpu_offload() #save some VRAM by offloading the model to CPU. Remove this if you have enough GPU power
 
 # TaylorSeer settings
 pipeline.transformer.__class__.num_steps = num_inference_steps
 
 pipeline.transformer.__class__.forward = SortTaylor_forward
 
-pipeline.transformer.current_block_residual = [None] *len(pipeline.transformer.transformer_blocks)
-pipeline.transformer.current_block_encoder_residual = [None] *len(pipeline.transformer.transformer_blocks)
-pipeline.transformer.current_single_block_residual = [None] *len(pipeline.transformer.single_transformer_blocks)
-pipeline.transformer.previous_block_residual = [None] *len(pipeline.transformer.transformer_blocks)
-pipeline.transformer.previous_single_block_residual = [None] *len(pipeline.transformer.single_transformer_blocks)
-pipeline.transformer.previous_encoder_block_residual = [None] *len(pipeline.transformer.single_transformer_blocks)
+pipeline.transformer.current_block_residual = [None] * len(pipeline.transformer.transformer_blocks)
+pipeline.transformer.current_block_encoder_residual = [None] * len(pipeline.transformer.transformer_blocks)
+pipeline.transformer.current_single_block_residual = [None] * len(pipeline.transformer.single_transformer_blocks)
+pipeline.transformer.previous_block_residual = [None] * len(pipeline.transformer.transformer_blocks)
+pipeline.transformer.previous_single_block_residual = [None] * len(pipeline.transformer.single_transformer_blocks)
+pipeline.transformer.previous_encoder_block_residual = [None] * len(pipeline.transformer.single_transformer_blocks)
 pipeline.transformer.result_list = []
 pipeline.transformer.result_single_list = []
 pipeline.transformer.start = 900
@@ -53,7 +49,6 @@ pipeline.transformer.step_Num = 1
 pipeline.transformer.step_Num2 = 5
 pipeline.transformer.beta = 0.1
 pipeline.transformer.count = 0
-
 
 
 start_time = time.time()

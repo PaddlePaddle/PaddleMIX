@@ -1,12 +1,32 @@
-import os
-import argparse
-import paddle
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-from tgate import TgateSDXLLoader, TgateSDLoader,TgateFLUXLoader,TgatePixArtAlphaLoader
-from ppdiffusers import StableDiffusionXLPipeline, PixArtAlphaPipeline, StableVideoDiffusionPipeline
-from ppdiffusers import UNet2DConditionModel, LCMScheduler,FluxPipeline
-from ppdiffusers import DPMSolverMultistepScheduler
-from ppdiffusers.utils import load_image, export_to_video
+import argparse
+import os
+
+import paddle
+from tgate import TgateFLUXLoader, TgatePixArtAlphaLoader, TgateSDXLLoader
+
+from ppdiffusers import (
+    DPMSolverMultistepScheduler,
+    FluxPipeline,
+    LCMScheduler,
+    PixArtAlphaPipeline,
+    StableDiffusionXLPipeline,
+    UNet2DConditionModel,
+)
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Simple example of TGATE V2.")
@@ -32,7 +52,7 @@ def parse_args():
     parser.add_argument(
         "--model",
         type=str,
-        default='pixart',
+        default="pixart",
         help="[pixart_alpha,sdxl,lcm_sdxl,lcm_pixart_alpha,svd]",
     )
     parser.add_argument(
@@ -42,19 +62,19 @@ def parse_args():
         help="When re-using the cross-attention",
     )
     parser.add_argument(
-        '--sp_interval',
+        "--sp_interval",
         type=int,
         default=5,
         help="The time-step interval to cache self attention before gate_step (Semantics-Planning Phase).",
     )
     parser.add_argument(
-        '--fi_interval',
+        "--fi_interval",
         type=int,
         default=1,
         help="The time-step interval to cache self attention after gate_step (Fidelity-Improving Phase).",
     )
     parser.add_argument(
-        '--warm_up',
+        "--warm_up",
         type=int,
         default=2,
         help="The time step to warm up the model inference",
@@ -66,40 +86,40 @@ def parse_args():
         help="total inference steps",
     )
     parser.add_argument(
-        '--deepcache', 
-        action='store_true', 
-        default=False, 
-        help='do deep cache',
+        "--deepcache",
+        action="store_true",
+        default=False,
+        help="do deep cache",
     )
     parser.add_argument(
-        '--seed',
+        "--seed",
         type=int,
         default=None,
-        help='Random seed for generation. Set for reproducible results.',
+        help="Random seed for generation. Set for reproducible results.",
     )
-    
+
     args = parser.parse_args()
     return args
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     args = parse_args()
     os.makedirs(args.saved_path, exist_ok=True)
     if args.prompt:
-        saved_path = os.path.join(args.saved_path, 'test.png')
+        saved_path = os.path.join(args.saved_path, "test.png")
     elif args.image:
-        saved_path = os.path.join(args.saved_path, 'test.mp4')
+        saved_path = os.path.join(args.saved_path, "test.mp4")
 
     # Create generator if seed is provided
     generator = None
     if args.seed is not None:
         generator = paddle.Generator().manual_seed(args.seed)
 
-    if args.model == 'sdxl':
+    if args.model == "sdxl":
         pipe = StableDiffusionXLPipeline.from_pretrained(
-            "stabilityai/stable-diffusion-xl-base-1.0", 
-            paddle_dtype=paddle.float16, 
-            variant="fp16", 
+            "stabilityai/stable-diffusion-xl-base-1.0",
+            paddle_dtype=paddle.float16,
+            variant="fp16",
         )
         pipe = TgateSDXLLoader(pipe)
         pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
@@ -115,42 +135,41 @@ if __name__ == '__main__':
         ).images[0]
         image.save(saved_path)
 
-    elif args.model == 'lcm_sdxl':
+    elif args.model == "lcm_sdxl":
         unet = UNet2DConditionModel.from_pretrained(
             "latent-consistency/lcm-sdxl",
             paddle_dtype=paddle.float16,
             variant="fp16",
         )
         pipe = StableDiffusionXLPipeline.from_pretrained(
-            "stabilityai/stable-diffusion-xl-base-1.0", 
-            unet=unet, 
-            paddle_dtype=paddle.float16, 
+            "stabilityai/stable-diffusion-xl-base-1.0",
+            unet=unet,
+            paddle_dtype=paddle.float16,
             variant="fp16",
         )
         pipe.scheduler = LCMScheduler.from_config(pipe.scheduler.config)
         pipe = TgateSDXLLoader(pipe)
 
         image = pipe.tgate(
-            prompt=args.prompt, 
+            prompt=args.prompt,
             gate_step=args.gate_step,
             sp_interval=1,
             fi_interval=args.fi_interval,
-            warm_up=0, 
+            warm_up=0,
             num_inference_steps=args.inference_step,
             lcm=True,
             generator=generator,
         ).images[0]
         image.save(saved_path)
     elif args.model == "flux":
-        pipe = FluxPipeline.from_pretrained(
-                "black-forest-labs/FLUX.1-dev", paddle_dtype=paddle.float16)
+        pipe = FluxPipeline.from_pretrained("black-forest-labs/FLUX.1-dev", paddle_dtype=paddle.float16)
         pipe = TgateFLUXLoader(pipe)
         image = pipe.tgate(
             prompt=args.prompt,
             height=1024,
             width=1024,
             gate_step=args.gate_step,
-            sp_interval=args.sp_interval ,
+            sp_interval=args.sp_interval,
             fi_interval=args.fi_interval,
             warm_up=args.warm_up,
             num_inference_steps=args.inference_step,
@@ -158,9 +177,9 @@ if __name__ == '__main__':
         ).images[0]
         image.save(saved_path)
 
-    elif args.model == 'pixart_alpha':
+    elif args.model == "pixart_alpha":
         pipe = PixArtAlphaPipeline.from_pretrained(
-            "PixArt-alpha/PixArt-XL-2-1024-MS", 
+            "PixArt-alpha/PixArt-XL-2-1024-MS",
             paddle_dtype=paddle.float16,
         )
         pipe = TgatePixArtAlphaLoader(pipe)
@@ -170,15 +189,15 @@ if __name__ == '__main__':
             gate_step=args.gate_step,
             sp_interval=args.sp_interval,
             fi_interval=args.fi_interval,
-            warm_up=args.warm_up,   
+            warm_up=args.warm_up,
             num_inference_steps=args.inference_step,
             generator=generator,
         ).images[0]
         image.save(saved_path)
 
-    elif args.model == 'lcm_pixart':
+    elif args.model == "lcm_pixart":
         pipe = PixArtAlphaPipeline.from_pretrained(
-            "PixArt-alpha/PixArt-LCM-XL-2-1024-MS", 
+            "PixArt-alpha/PixArt-LCM-XL-2-1024-MS",
             paddle_dtype=paddle.float16,
         )
         pipe = TgatePixArtAlphaLoader(pipe)
@@ -191,15 +210,15 @@ if __name__ == '__main__':
             warm_up=0,
             num_inference_steps=args.inference_step,
             lcm=True,
-            guidance_scale=0.,
+            guidance_scale=0.0,
             generator=generator,
         ).images[0]
         image.save(saved_path)
 
     # elif args.model == 'svd':
     #     pipe = StableVideoDiffusionPipeline.from_pretrained(
-    #         "stabilityai/stable-video-diffusion-img2vid-xt", 
-    #         paddle_dtype=paddle.float16, 
+    #         "stabilityai/stable-video-diffusion-img2vid-xt",
+    #         paddle_dtype=paddle.float16,
     #         variant="fp16",
     #     )
     #     pipe = TgateSVDLoader(pipe)
@@ -220,4 +239,4 @@ if __name__ == '__main__':
     #     export_to_video(frames, saved_path, fps=7)
 
     else:
-        raise Exception('Please sepcify the model name!')
+        raise Exception("Please sepcify the model name!")

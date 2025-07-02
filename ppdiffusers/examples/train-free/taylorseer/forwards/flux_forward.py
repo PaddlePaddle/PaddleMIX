@@ -1,34 +1,35 @@
-import logging
-import time
-import paddle
-import paddle.distributed as dist
-from ppdiffusers.transformers import T5EncoderModel
-from xfuser import xFuserFluxPipeline, xFuserArgs
-from xfuser.config import FlexibleArgumentParser
-from xfuser.core.distributed import (
-    get_world_group,
-    get_data_parallel_rank,
-    get_data_parallel_world_size,
-    get_runtime_state,
-    is_dp_last_group,
-)
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-from typing import Any, Dict, Optional, Tuple, Union
-from ppdiffusers import DiffusionPipeline
-from ppdiffusers.models import FluxTransformer2DModel
-from ppdiffusers.models.modeling_outputs import Transformer2DModelOutput
-from ppdiffusers.utils import USE_PEFT_BACKEND, is_paddle_version, logging, scale_lora_layers, unscale_lora_layers
-import paddle
+from typing import Any, Dict, Optional, Union
+
 import numpy as np
-from xfuser.core.distributed.parallel_state import (
-    get_tensor_model_parallel_world_size,
-    is_pipeline_first_stage,
-    is_pipeline_last_stage,
-)
-
+import paddle
 from cache_functions import cache_init, cal_type
 
+from ppdiffusers.models import FluxTransformer2DModel
+from ppdiffusers.models.modeling_outputs import Transformer2DModelOutput
+from ppdiffusers.utils import (
+    USE_PEFT_BACKEND,
+    is_paddle_version,
+    logging,
+    scale_lora_layers,
+    unscale_lora_layers,
+)
+
 logger = logging.get_logger(__name__)
+
 
 def taylorseer_flux_forward(
     self: FluxTransformer2DModel,
@@ -69,13 +70,13 @@ def taylorseer_flux_forward(
         If `return_dict` is True, an [`~models.transformer_2d.Transformer2DModelOutput`] is returned, otherwise a
         `tuple` where the first element is the sample tensor.
     """
-    
+
     if joint_attention_kwargs is None:
         joint_attention_kwargs = {}
     if joint_attention_kwargs.get("cache_dic", None) is None:
-        joint_attention_kwargs['cache_dic'], joint_attention_kwargs['current'] = cache_init(self)
+        joint_attention_kwargs["cache_dic"], joint_attention_kwargs["current"] = cache_init(self)
 
-    cal_type(joint_attention_kwargs['cache_dic'], joint_attention_kwargs['current'])
+    cal_type(joint_attention_kwargs["cache_dic"], joint_attention_kwargs["current"])
 
     if joint_attention_kwargs is not None:
         joint_attention_kwargs = joint_attention_kwargs.copy()
@@ -128,11 +129,11 @@ def taylorseer_flux_forward(
         ip_hidden_states = self.encoder_hid_proj(ip_adapter_image_embeds)
         joint_attention_kwargs.update({"ip_hidden_states": ip_hidden_states})
 
-    joint_attention_kwargs['current']['stream'] = 'double_stream'
+    joint_attention_kwargs["current"]["stream"] = "double_stream"
 
     for index_block, block in enumerate(self.transformer_blocks):
 
-        joint_attention_kwargs['current']['layer'] = index_block
+        joint_attention_kwargs["current"]["layer"] = index_block
 
         if paddle.is_grad_enabled() and self.gradient_checkpointing:
 
@@ -142,9 +143,9 @@ def taylorseer_flux_forward(
                         return module(*inputs, return_dict=return_dict)
                     else:
                         return module(*inputs)
-                    
+
                 return custom_forward
-            
+
             ckpt_kwargs: Dict[str, Any] = {"use_reentrant": False} if is_paddle_version(">=", "1.11.0") else {}
             encoder_hidden_states, hidden_states = paddle.utils.checkpoint.checkpoint(
                 create_custom_forward(block),
@@ -163,25 +164,23 @@ def taylorseer_flux_forward(
                 image_rotary_emb=image_rotary_emb,
                 joint_attention_kwargs=joint_attention_kwargs,
             )
-            
+
         # controlnet residual
         if controlnet_block_samples is not None:
             interval_control = len(self.transformer_blocks) / len(controlnet_block_samples)
             interval_control = int(np.ceil(interval_control))
             # For Xlabs ControlNet.
             if controlnet_blocks_repeat:
-                hidden_states = (
-                    hidden_states + controlnet_block_samples[index_block % len(controlnet_block_samples)]
-                )
+                hidden_states = hidden_states + controlnet_block_samples[index_block % len(controlnet_block_samples)]
             else:
                 hidden_states = hidden_states + controlnet_block_samples[index_block // interval_control]
     hidden_states = paddle.concat([encoder_hidden_states, hidden_states], axis=1)
-    
-    joint_attention_kwargs['current']['stream'] = 'single_stream'
+
+    joint_attention_kwargs["current"]["stream"] = "single_stream"
 
     for index_block, block in enumerate(self.single_transformer_blocks):
 
-        joint_attention_kwargs['current']['layer'] = index_block
+        joint_attention_kwargs["current"]["layer"] = index_block
 
         if paddle.is_grad_enabled() and self.gradient_checkpointing:
 
@@ -191,8 +190,9 @@ def taylorseer_flux_forward(
                         return module(*inputs, return_dict=return_dict)
                     else:
                         return module(*inputs)
-                    
+
                 return custom_forward
+
             ckpt_kwargs: Dict[str, Any] = {"use_reentrant": False} if is_paddle_version(">=", "1.11.0") else {}
             hidden_states = paddle.utils.checkpoint.checkpoint(
                 create_custom_forward(block),
@@ -227,8 +227,8 @@ def taylorseer_flux_forward(
     if USE_PEFT_BACKEND:
         # remove `lora_scale` from each PEFT layer
         unscale_lora_layers(self, lora_scale)
-    
-    joint_attention_kwargs['current']['step'] += 1
+
+    joint_attention_kwargs["current"]["step"] += 1
 
     if not return_dict:
         return (output,)

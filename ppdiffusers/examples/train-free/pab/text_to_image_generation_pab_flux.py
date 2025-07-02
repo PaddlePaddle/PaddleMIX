@@ -14,16 +14,18 @@
 
 import paddle
 
-from ppdiffusers import FluxPipeline
-from ppdiffusers import CogVideoXPipeline,PyramidAttentionBroadcastConfig, apply_pyramid_attention_broadcast
+from ppdiffusers import (
+    FluxPipeline,
+    PyramidAttentionBroadcastConfig,
+    apply_pyramid_attention_broadcast,
+)
 
-
-pipe = FluxPipeline.from_pretrained("black-forest-labs/FLUX.1-dev", paddle_dtype=paddle.float16)
+pipe = FluxPipeline.from_pretrained("black-forest-labs/FLUX.1-dev", paddle_dtype=paddle.bfloat16)
 
 config = PyramidAttentionBroadcastConfig(
     spatial_attention_block_skip_range=4,
-    temporal_attention_block_skip_range = 2,
-    cross_attention_block_skip_range = 4,
+    temporal_attention_block_skip_range=2,
+    cross_attention_block_skip_range=4,
     spatial_attention_timestep_skip_range=(100, 800),
     current_timestep_callback=lambda: pipe._current_timestep,
 )
@@ -37,6 +39,6 @@ image = pipe(
     guidance_scale=3.5,
     num_inference_steps=50,
     max_sequence_length=512,
-    generator=paddle.Generator().manual_seed(42)
+    generator=paddle.Generator().manual_seed(42),
 ).images[0]
 image.save("text_to_image_generation-flux-dev-result.png")

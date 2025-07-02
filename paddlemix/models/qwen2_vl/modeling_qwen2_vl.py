@@ -1031,6 +1031,11 @@ class Qwen2VLFlashAttention2(Qwen2VLAttention):
                 cu_seqlens_q, cu_seqlens_k = cu_seq_lens
                 max_seqlen_in_batch_q, max_seqlen_in_batch_k = max_seq_lens
 
+                # 修改数据类型为bfloat16以支持flash_attn_varlen_func
+                query_states = query_states.astype("bfloat16")
+                key_states = key_states.astype("bfloat16")
+                value_states = value_states.astype("bfloat16")
+
                 attn_output_unpad = flash_attn_varlen_func(  # TODO: flash_attn_unpadded
                     query_states,  # [5998, 16, 128]
                     key_states,  # [5998, 8, 128]
@@ -1044,15 +1049,15 @@ class Qwen2VLFlashAttention2(Qwen2VLAttention):
                     causal=causal,
                 )[0]
 
-                attn_output = pad_input(attn_output_unpad, indices_q, batch_size, query_length)
+                attn_output = pad_input(attn_output_unpad, indices_q, batch_size, query_length).astype("float32")
             else:
                 attn_output = flash_attn_func(
-                    query_states,
-                    key_states,
-                    value_states,
+                    query_states.astype("bfloat16"),
+                    key_states.astype("bfloat16"),
+                    value_states.astype("bfloat16"),
                     dropout,
                     causal=causal,  # no softmax_scale=
-                )[0]
+                )[0].astype("float32")
 
         # # 修改这里的维度转换，考虑并行策略下的维度
         # batch_size = query_states.shape[0]
@@ -2164,5 +2169,5 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
 
         hidden_states = outputs[0]
         # get last hidden state
-        last_hidden_state = hidden_states[:, -1, :]  #  (2, 1536)
+        last_hidden_state = hidden_states[:, -1, :]  # (2, 1536)
         return last_hidden_state

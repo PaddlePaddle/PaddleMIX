@@ -17,4 +17,3 @@ python text_to_image_generation-flux-teacache.py
 |------------------------|--------|--------------------------------------------------|-------------|
 | `enable_teacache` | `bool`  |     是否使用teacache方法       | `True`    |
 | `rel_l1_thresh`  | `float`  | l1距离的阈值               | `0.25 - 0.8`   |
-

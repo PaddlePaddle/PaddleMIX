@@ -1,25 +1,34 @@
-from types import MethodType
-from .tgate_utils import register_forward, tgate_scheduler
-import paddle
-import paddle.nn.functional as F
-from ppdiffusers.callbacks import MultiPipelineCallbacks, PipelineCallback
-from ppdiffusers.image_processor import PipelineImageInput, VaeImageProcessor
-import inspect
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
-from ppdiffusers.pipelines.stable_diffusion_xl.pipeline_output import StableDiffusionXLPipelineOutput
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
+from types import MethodType
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+
+import paddle
+
+from ppdiffusers.callbacks import MultiPipelineCallbacks, PipelineCallback
+from ppdiffusers.image_processor import PipelineImageInput
+from ppdiffusers.pipelines.stable_diffusion_xl.pipeline_output import (
+    StableDiffusionXLPipelineOutput,
+)
 from ppdiffusers.pipelines.stable_diffusion_xl.pipeline_stable_diffusion_xl import (
     rescale_noise_cfg,
     retrieve_timesteps,
-    )
-from ppdiffusers.utils import (
-    USE_PEFT_BACKEND,
-    deprecate,
-    replace_example_docstring,
 )
+from ppdiffusers.utils import deprecate
 
-
-
+from .tgate_utils import register_forward, tgate_scheduler
 
 
 @paddle.no_grad()
@@ -276,16 +285,9 @@ def tgate(
         batch_size = prompt_embeds.shape[0]
 
     # 3. Encode input prompt
-    lora_scale = (
-        self.cross_attention_kwargs.get("scale", None) if self.cross_attention_kwargs is not None else None
-    )
+    lora_scale = self.cross_attention_kwargs.get("scale", None) if self.cross_attention_kwargs is not None else None
 
-    (
-        prompt_embeds,
-        negative_prompt_embeds,
-        pooled_prompt_embeds,
-        negative_pooled_prompt_embeds,
-    ) = self.encode_prompt(
+    (prompt_embeds, negative_prompt_embeds, pooled_prompt_embeds, negative_pooled_prompt_embeds,) = self.encode_prompt(
         prompt=prompt,
         prompt_2=prompt_2,
         num_images_per_prompt=num_images_per_prompt,
@@ -302,7 +304,9 @@ def tgate(
 
     # 4. Prepare timesteps
     timesteps, num_inference_steps = retrieve_timesteps(
-        self.scheduler, num_inference_steps, timesteps, 
+        self.scheduler,
+        num_inference_steps,
+        timesteps,
         # sigmas
     )
 
@@ -360,7 +364,7 @@ def tgate(
         negative_prompt_embeds = prompt_embeds
         negative_add_text_embeds = add_text_embeds
         negative_add_time_ids = add_time_ids.tile([batch_size * num_images_per_prompt, 1])
-    
+
     if ip_adapter_image is not None or ip_adapter_image_embeds is not None:
         image_embeds = self.prepare_ip_adapter_image_embeds(
             ip_adapter_image,
@@ -398,25 +402,26 @@ def tgate(
 
     self._num_timesteps = len(timesteps)
 
-    register_forward(self.unet, 
-        'Attention',
-        ca_kward = {
-            'cache': False,
-            'reuse': False,
+    register_forward(
+        self.unet,
+        "Attention",
+        ca_kward={
+            "cache": False,
+            "reuse": False,
         },
-        sa_kward = {
-            'cache': False,
-            'reuse': False,
+        sa_kward={
+            "cache": False,
+            "reuse": False,
         },
-        keep_shape=True
-        )
+        keep_shape=True,
+    )
     with self.progress_bar(total=num_inference_steps) as progress_bar:
         for i, t in enumerate(timesteps):
             if self.interrupt:
                 continue
 
             # expand the latents if we are doing classifier free guidance
-            if self.do_classifier_free_guidance and (i-num_warmup_steps) < gate_step:
+            if self.do_classifier_free_guidance and (i - num_warmup_steps) < gate_step:
                 latent_model_input = paddle.concat([latents] * 2)
                 prompt_embeds = cfg_embeds
                 added_cond_kwargs = {"text_embeds": cfg_add_text_embeds, "time_ids": cfg_add_time_ids}
@@ -424,7 +429,7 @@ def tgate(
                 latent_model_input = latents
                 prompt_embeds = negative_prompt_embeds
                 added_cond_kwargs = {"text_embeds": negative_add_text_embeds, "time_ids": negative_add_time_ids}
-            
+
             latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
             # predict the noise residual
@@ -433,20 +438,15 @@ def tgate(
 
             # TGATE
             if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
-                ca_kwards,sa_kwards,keep_shape=tgate_scheduler(
-                    cur_step=i-num_warmup_steps, 
+                ca_kwards, sa_kwards, keep_shape = tgate_scheduler(
+                    cur_step=i - num_warmup_steps,
                     gate_step=gate_step,
                     sp_interval=sp_interval,
                     fi_interval=fi_interval,
-                    warm_up=warm_up
+                    warm_up=warm_up,
                 )
                 keep_shape = keep_shape if not lcm else lcm
-                register_forward(self.unet, 
-                    'Attention',
-                    ca_kward=ca_kwards,
-                    sa_kward=sa_kwards,
-                    keep_shape=keep_shape
-                    )
+                register_forward(self.unet, "Attention", ca_kward=ca_kwards, sa_kward=sa_kwards, keep_shape=keep_shape)
 
             noise_pred = self.unet(
                 latent_model_input,
@@ -457,14 +457,17 @@ def tgate(
                 added_cond_kwargs=added_cond_kwargs,
                 return_dict=False,
             )[0]
-            paddle.save(latents, '/root/paddlejob/workspace/env_run/output/zhangxu/pab/alignment/records/100003_' + str(i+1) + '_.pd')
+            paddle.save(
+                latents,
+                "/root/paddlejob/workspace/env_run/output/zhangxu/pab/alignment/records/100003_" + str(i + 1) + "_.pd",
+            )
 
             # perform guidance
-            if self.do_classifier_free_guidance and (i-num_warmup_steps) < gate_step:
+            if self.do_classifier_free_guidance and (i - num_warmup_steps) < gate_step:
                 noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
                 noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_text - noise_pred_uncond)
 
-            if self.do_classifier_free_guidance and self.guidance_rescale > 0.0 and (i-num_warmup_steps) < gate_step:
+            if self.do_classifier_free_guidance and self.guidance_rescale > 0.0 and (i - num_warmup_steps) < gate_step:
                 # Based on 3.4. in https://arxiv.org/pdf/2305.08891.pdf
                 noise_pred = rescale_noise_cfg(noise_pred, noise_pred_text, guidance_rescale=self.guidance_rescale)
 
@@ -494,7 +497,7 @@ def tgate(
                 if callback is not None and i % callback_steps == 0:
                     step_idx = i // getattr(self.scheduler, "order", 1)
                     callback(step_idx, t, latents)
-        paddle.save(latents, '/root/paddlejob/workspace/env_run/output/zhangxu/pab/alignment/records/100004.pd')
+        paddle.save(latents, "/root/paddlejob/workspace/env_run/output/zhangxu/pab/alignment/records/100004.pd")
         if not output_type == "latent":
             # make sure the VAE is in float32 mode, as it overflows in float16
             needs_upcasting = self.vae.dtype == paddle.float16 and self.vae.config.force_upcast
@@ -507,18 +510,14 @@ def tgate(
             # denormalize with the mean and std if available and not None
             has_latents_mean = hasattr(self.vae.config, "latents_mean") and self.vae.config.latents_mean is not None
             has_latents_std = hasattr(self.vae.config, "latents_std") and self.vae.config.latents_std is not None
-            paddle.save(latents, '/root/paddlejob/workspace/env_run/output/zhangxu/pab/alignment/records/100005.pd')
+            paddle.save(latents, "/root/paddlejob/workspace/env_run/output/zhangxu/pab/alignment/records/100005.pd")
             if has_latents_mean and has_latents_std:
-                latents_mean = (
-                    paddle.to_tensor(self.vae.config.latents_mean).reshape([1, 4, 1, 1]).cast(latents.dtype)
-                )
-                latents_std = (
-                    paddle.to_tensor(self.vae.config.latents_std).reshape([1, 4, 1, 1]).cast(latents.dtype)
-                )
+                latents_mean = paddle.to_tensor(self.vae.config.latents_mean).reshape([1, 4, 1, 1]).cast(latents.dtype)
+                latents_std = paddle.to_tensor(self.vae.config.latents_std).reshape([1, 4, 1, 1]).cast(latents.dtype)
                 latents = latents * latents_std / self.vae.config.scaling_factor + latents_mean
             else:
                 latents = latents / self.vae.config.scaling_factor
-            paddle.save(latents, '/root/paddlejob/workspace/env_run/output/zhangxu/pab/alignment/records/100002.pd')
+            paddle.save(latents, "/root/paddlejob/workspace/env_run/output/zhangxu/pab/alignment/records/100002.pd")
 
             image = self.vae.decode(latents, return_dict=False)[0]
 
@@ -544,7 +543,6 @@ def tgate(
     return StableDiffusionXLPipelineOutput(images=image)
 
 
-
 def TgateSDXLLoader(pipe, **kwargs):
-    pipe.tgate = MethodType(tgate,pipe)
+    pipe.tgate = MethodType(tgate, pipe)
     return pipe

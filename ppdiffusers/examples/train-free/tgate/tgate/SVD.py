@@ -1,26 +1,38 @@
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from types import MethodType
-from .tgate_utils import register_forward,tgate_scheduler
-import inspect
-from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional, Union
-import numpy as np
-import PIL.Image
+
 import paddle
-from ppdiffusers.utils import replace_example_docstring
-from ppdiffusers.utils.paddle_utils import randn_tensor
+import PIL.Image
 
 from ppdiffusers.pipelines.stable_video_diffusion.pipeline_stable_video_diffusion import (
+    StableVideoDiffusionPipelineOutput,
     _append_dims,
     retrieve_timesteps,
-    StableVideoDiffusionPipelineOutput
-    )
+)
+from ppdiffusers.utils.paddle_utils import randn_tensor
 
-def _append_dims(x, target_dims):
-    """Appends dimensions to the end of a tensor until it has target_dims dimensions."""
-    dims_to_append = target_dims - x.ndim
-    if dims_to_append < 0:
-        raise ValueError(f"input has {x.ndim} dims but target_dims is {target_dims}, which is less")
-    return x[(...,) + (None,) * dims_to_append]
+from .tgate_utils import register_forward, tgate_scheduler
+
+# def _append_dims(x, target_dims):
+#     """Appends dimensions to the end of a tensor until it has target_dims dimensions."""
+#     dims_to_append = target_dims - x.ndim
+#     if dims_to_append < 0:
+#         raise ValueError(f"input has {x.ndim} dims but target_dims is {target_dims}, which is less")
+#     return x[(...,) + (None,) * dims_to_append]
 
 
 @paddle.no_grad()
@@ -207,7 +219,7 @@ def tgate(
         num_videos_per_prompt,
         False,
     )
-    
+
     # 6. Prepare timesteps
     timesteps, num_inference_steps = retrieve_timesteps(self.scheduler, num_inference_steps, None, sigmas)
 
@@ -235,50 +247,46 @@ def tgate(
     # 9. Denoising loop
     num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
 
-    register_forward(self.unet, 
-        'Attention',
-        ca_kward = {
-            'cache': False,
-            'reuse': False,
+    register_forward(
+        self.unet,
+        "Attention",
+        ca_kward={
+            "cache": False,
+            "reuse": False,
         },
-        sa_kward = {
-            'cache': False,
-            'reuse': False,
+        sa_kward={
+            "cache": False,
+            "reuse": False,
         },
-        keep_shape=True
-        )
+        keep_shape=True,
+    )
 
     self._num_timesteps = len(timesteps)
     with self.progress_bar(total=num_inference_steps) as progress_bar:
         for i, t in enumerate(timesteps):
             # expand the latents if we are doing classifier free guidance
-            if self.do_classifier_free_guidance and (i-num_warmup_steps)<gate_step: 
+            if self.do_classifier_free_guidance and (i - num_warmup_steps) < gate_step:
                 latent_model_input = paddle.concat([latents] * 2)
                 latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
             else:
                 latent_model_input = self.scheduler.scale_model_input(latents, t)
                 image_latents = negative_image_latents
                 image_latents = negative_image_latents
-                added_time_ids=negative_added_time_ids
+                added_time_ids = negative_added_time_ids
                 image_embeddings = negative_image_embeddings
             # Concatenate image_latents over channels dimension
             latent_model_input = paddle.concat([latent_model_input, image_latents], axis=2)
 
-
             if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
 
-                ca_kwards,sa_kwards,keep_shape=tgate_scheduler(
-                    cur_step=i-num_warmup_steps, 
+                ca_kwards, sa_kwards, keep_shape = tgate_scheduler(
+                    cur_step=i - num_warmup_steps,
                     gate_step=gate_step,
                     sp_interval=sp_interval,
                     fi_interval=fi_interval,
-                    warm_up=warm_up
+                    warm_up=warm_up,
                 )
-                register_forward(self.unet, 
-                    ca_kward=ca_kwards,
-                    sa_kward=sa_kwards,
-                    keep_shape=keep_shape
-                    )
+                register_forward(self.unet, ca_kward=ca_kwards, sa_kward=sa_kwards, keep_shape=keep_shape)
 
             # predict the noise residual
             noise_pred = self.unet(
@@ -290,7 +298,7 @@ def tgate(
             )[0]
 
             # perform guidance
-            if self.do_classifier_free_guidance and (i-num_warmup_steps)<gate_step:
+            if self.do_classifier_free_guidance and (i - num_warmup_steps) < gate_step:
                 noise_pred_uncond, noise_pred_cond = noise_pred.chunk(2)
                 noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_cond - noise_pred_uncond)
 
@@ -325,7 +333,6 @@ def tgate(
     return StableVideoDiffusionPipelineOutput(frames=frames)
 
 
-
 def TgateSVDLoader(pipe):
-    pipe.tgate = MethodType(tgate,pipe)
+    pipe.tgate = MethodType(tgate, pipe)
     return pipe

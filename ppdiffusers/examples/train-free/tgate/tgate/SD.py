@@ -1,25 +1,37 @@
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from types import MethodType
-from .tgate_utils import register_forward, tgate_scheduler
-import paddle
-import paddle.nn.functional as F
-import inspect
 from typing import Any, Callable, Dict, List, Optional, Union
+
+import paddle
+
 from ppdiffusers.callbacks import MultiPipelineCallbacks, PipelineCallback
+from ppdiffusers.image_processor import PipelineImageInput
 from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion import (
     EXAMPLE_DOC_STRING,
     rescale_noise_cfg,
     retrieve_timesteps,
-    )
-from ppdiffusers.image_processor import PipelineImageInput
-
-from ppdiffusers.utils import (
-    USE_PEFT_BACKEND,
-    deprecate,
-    logging,
-    replace_example_docstring,
 )
-logger = logging.get_logger(__name__)  
-from ppdiffusers.pipelines.stable_diffusion.pipeline_output import StableDiffusionPipelineOutput
+from ppdiffusers.utils import deprecate, logging, replace_example_docstring
+
+from .tgate_utils import register_forward, tgate_scheduler
+
+logger = logging.get_logger(__name__)
+from ppdiffusers.pipelines.stable_diffusion.pipeline_output import (
+    StableDiffusionPipelineOutput,
+)
 
 
 @paddle.no_grad()
@@ -56,7 +68,6 @@ def tgate(
     fi_interval: int = 1,
     warm_up: int = 2,
     **kwargs,
-
 ):
     r"""
     The call function to the pipeline for generation.
@@ -203,9 +214,7 @@ def tgate(
     device = self._execution_device
 
     # 3. Encode input prompt
-    lora_scale = (
-        self.cross_attention_kwargs.get("scale", None) if self.cross_attention_kwargs is not None else None
-    )
+    lora_scale = self.cross_attention_kwargs.get("scale", None) if self.cross_attention_kwargs is not None else None
 
     prompt_embeds, negative_prompt_embeds = self.encode_prompt(
         prompt,
@@ -236,9 +245,7 @@ def tgate(
         )
 
     # 4. Prepare timesteps
-    timesteps, num_inference_steps = retrieve_timesteps(
-        self.scheduler, num_inference_steps, device, timesteps, sigmas
-    )
+    timesteps, num_inference_steps = retrieve_timesteps(self.scheduler, num_inference_steps, device, timesteps, sigmas)
 
     # 5. Prepare latent variables
     num_channels_latents = self.unet.config.in_channels
@@ -275,26 +282,27 @@ def tgate(
     num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
     self._num_timesteps = len(timesteps)
 
-    register_forward(self.unet, 
-        'Attention',
-        ca_kward = {
-            'cache': False,
-            'reuse': False,
+    register_forward(
+        self.unet,
+        "Attention",
+        ca_kward={
+            "cache": False,
+            "reuse": False,
         },
-        sa_kward = {
-            'cache': False,
-            'reuse': False,
+        sa_kward={
+            "cache": False,
+            "reuse": False,
         },
-        keep_shape=True
-        )
+        keep_shape=True,
+    )
     with self.progress_bar(total=num_inference_steps) as progress_bar:
         for i, t in enumerate(timesteps):
             if self.interrupt:
                 continue
 
             # expand the latents if we are doing classifier free guidance
-            if self.do_classifier_free_guidance and (i-num_warmup_steps) < gate_step:
-                latent_model_input = paddle.concat([latents] * 2) 
+            if self.do_classifier_free_guidance and (i - num_warmup_steps) < gate_step:
+                latent_model_input = paddle.concat([latents] * 2)
                 prompt_embeds = prompt_cfg_embeds
             else:
                 latent_model_input = latents
@@ -303,19 +311,14 @@ def tgate(
 
             # TGATE
             if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
-                ca_kwards,sa_kwards,keep_shape=tgate_scheduler(
-                    cur_step=i-num_warmup_steps, 
+                ca_kwards, sa_kwards, keep_shape = tgate_scheduler(
+                    cur_step=i - num_warmup_steps,
                     gate_step=gate_step,
                     sp_interval=sp_interval,
                     fi_interval=fi_interval,
-                    warm_up=warm_up
+                    warm_up=warm_up,
                 )
-                register_forward(self.unet, 
-                    'Attention',
-                    ca_kward=ca_kwards,
-                    sa_kward=sa_kwards,
-                    keep_shape=keep_shape
-                    )
+                register_forward(self.unet, "Attention", ca_kward=ca_kwards, sa_kward=sa_kwards, keep_shape=keep_shape)
 
             # predict the noise residual
             noise_pred = self.unet(
@@ -329,11 +332,11 @@ def tgate(
             )[0]
 
             # perform guidance
-            if self.do_classifier_free_guidance and (i-num_warmup_steps) < gate_step:
+            if self.do_classifier_free_guidance and (i - num_warmup_steps) < gate_step:
                 noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
                 noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_text - noise_pred_uncond)
 
-            if self.do_classifier_free_guidance and self.guidance_rescale > 0.0 and (i-num_warmup_steps) < gate_step:
+            if self.do_classifier_free_guidance and self.guidance_rescale > 0.0 and (i - num_warmup_steps) < gate_step:
                 # Based on 3.4. in https://arxiv.org/pdf/2305.08891.pdf
                 noise_pred = rescale_noise_cfg(noise_pred, noise_pred_text, guidance_rescale=self.guidance_rescale)
 
@@ -358,9 +361,7 @@ def tgate(
                     callback(step_idx, t, latents)
 
     if not output_type == "latent":
-        image = self.vae.decode(latents / self.vae.config.scaling_factor, return_dict=False, generator=generator)[
-            0
-        ]
+        image = self.vae.decode(latents / self.vae.config.scaling_factor, return_dict=False, generator=generator)[0]
         image, has_nsfw_concept = self.run_safety_checker(image, device, prompt_embeds.dtype)
     else:
         image = latents
@@ -382,8 +383,6 @@ def tgate(
     return StableDiffusionPipelineOutput(images=image, nsfw_content_detected=has_nsfw_concept)
 
 
-
-
 def TgateSDLoader(pipe, **kwargs):
-    pipe.tgate = MethodType(tgate,pipe)
+    pipe.tgate = MethodType(tgate, pipe)
     return pipe

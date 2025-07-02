@@ -11,17 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import time
-from typing_extensions import Self
 
 import paddle
-from teacache_forward import TeaCache_forward 
+from teacache_flux_forward import TeaCache_forward
+
 from ppdiffusers import FluxPipeline
 from ppdiffusers.models.transformer_flux import FluxTransformer2DModel
-from ppdiffusers import CogVideoXPipeline,PyramidAttentionBroadcastConfig, apply_pyramid_attention_broadcast
 
-
-pipe = FluxPipeline.from_pretrained("black-forest-labs/FLUX.1-dev", paddle_dtype=paddle.float16)
+pipe = FluxPipeline.from_pretrained("black-forest-labs/FLUX.1-dev", paddle_dtype=paddle.bfloat16)
 FluxTransformer2DModel.forward = TeaCache_forward
 
 pipe.transformer.enable_teacache = True
@@ -40,7 +37,7 @@ image = pipe(
     height=1024,
     width=1024,
     guidance_scale=3.5,
-    num_inference_steps=28,
+    num_inference_steps=50,
     max_sequence_length=512,
     generator=paddle.Generator().manual_seed(42),
 ).images[0]

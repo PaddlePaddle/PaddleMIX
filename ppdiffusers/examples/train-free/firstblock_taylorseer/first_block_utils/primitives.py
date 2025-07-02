@@ -1,3 +1,17 @@
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from typing import List, Optional, Tuple, Union
 
 import torch
@@ -132,7 +146,9 @@ def get_assigned_chunk(
         idx = get_rank(group)
     world_size = get_world_size(group)
     total_size = tensor.shape[dim]
-    assert total_size % world_size == 0, f"tensor.shape[{dim}]={total_size} is not divisible by world_size={world_size}"
+    assert (
+        total_size % world_size == 0
+    ), f"tensor.shape[{dim}]={total_size} is not divisible by world_size={world_size}"
     return tensor.chunk(world_size, dim=dim)[idx]
 
 

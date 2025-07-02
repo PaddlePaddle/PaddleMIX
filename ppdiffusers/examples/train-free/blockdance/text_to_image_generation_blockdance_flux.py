@@ -14,12 +14,12 @@
 
 
 import paddle
-from BlockDance_forward import BlockDanceForward 
+from BlockDance_flux_forward import BlockDanceForward
+
 from ppdiffusers import FluxPipeline
 from ppdiffusers.models.transformer_flux import FluxTransformer2DModel
 
-
-pipe = FluxPipeline.from_pretrained("black-forest-labs/FLUX.1-dev", paddle_dtype=paddle.float16)
+pipe = FluxPipeline.from_pretrained("black-forest-labs/FLUX.1-dev", paddle_dtype=paddle.bfloat16)
 FluxTransformer2DModel.forward = BlockDanceForward
 
 pipe.transformer.previous_block = None

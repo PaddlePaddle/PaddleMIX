@@ -1,11 +1,22 @@
-import paddle
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-from typing import Any, Dict, Optional, Tuple, Union
+import paddle
+from taylorseer_utils import derivative_approximation, taylor_cache_init, taylor_formula
 
 from ppdiffusers.models.transformer_flux import FluxTransformerBlock
-import paddle
 
-from taylorseer_utils import derivative_approximation, taylor_formula, taylor_cache_init
 
 def taylorseer_flux_double_block_forward(
     self: FluxTransformerBlock,
@@ -15,7 +26,7 @@ def taylorseer_flux_double_block_forward(
     image_rotary_emb=None,
     joint_attention_kwargs=None,
 ):
-    
+
     norm_hidden_states, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.norm1(hidden_states, emb=temb)
 
     norm_encoder_hidden_states, c_gate_msa, c_shift_mlp, c_scale_mlp, c_gate_mlp = self.norm1_context(
@@ -23,12 +34,12 @@ def taylorseer_flux_double_block_forward(
     )
     joint_attention_kwargs = joint_attention_kwargs or {}
 
-    cache_dic = joint_attention_kwargs['cache_dic']
-    current = joint_attention_kwargs['current']
+    cache_dic = joint_attention_kwargs["cache_dic"]
+    current = joint_attention_kwargs["current"]
 
-    if current['type'] == 'full':
+    if current["type"] == "full":
 
-        current['module'] = 'attn'
+        current["module"] = "attn"
         taylor_cache_init(cache_dic=cache_dic, current=current)
         # encoder_hidden_states -> txt
         # hidden_states -> img
@@ -39,24 +50,24 @@ def taylorseer_flux_double_block_forward(
             hidden_states=norm_hidden_states,
             encoder_hidden_states=norm_encoder_hidden_states,
             image_rotary_emb=image_rotary_emb,
-            #**joint_attention_kwargs,
+            # **joint_attention_kwargs,
         )
 
         if len(attention_outputs) == 2:
             attn_output, context_attn_output = attention_outputs
         elif len(attention_outputs) == 3:
             attn_output, context_attn_output, ip_attn_output = attention_outputs
-            raise NotImplementedError("Not implemented for TaylorSeer yet.") 
+            raise NotImplementedError("Not implemented for TaylorSeer yet.")
 
         # Process attention outputs for the `hidden_states`.
-        current['module'] = 'img_attn'
+        current["module"] = "img_attn"
         taylor_cache_init(cache_dic=cache_dic, current=current)
 
         derivative_approximation(cache_dic=cache_dic, current=current, feature=attn_output)
         attn_output = gate_msa.unsqueeze(1) * attn_output
         hidden_states = hidden_states + attn_output
 
-        current['module'] = 'img_mlp'
+        current["module"] = "img_mlp"
         taylor_cache_init(cache_dic=cache_dic, current=current)
         norm_hidden_states = self.norm2(hidden_states)
         norm_hidden_states = norm_hidden_states * (1 + scale_mlp[:, None]) + shift_mlp[:, None]
@@ -66,19 +77,19 @@ def taylorseer_flux_double_block_forward(
 
         ff_output = gate_mlp.unsqueeze(1) * ff_output
         hidden_states = hidden_states + ff_output
-        
+
         if len(attention_outputs) == 3:
             hidden_states = hidden_states + ip_attn_output
 
         # Process attention outputs for the `encoder_hidden_states`.
-        current['module'] = 'txt_attn'
+        current["module"] = "txt_attn"
         taylor_cache_init(cache_dic=cache_dic, current=current)
 
         derivative_approximation(cache_dic=cache_dic, current=current, feature=context_attn_output)
         context_attn_output = c_gate_msa.unsqueeze(1) * context_attn_output
         encoder_hidden_states = encoder_hidden_states + context_attn_output
 
-        current['module'] = 'txt_mlp'
+        current["module"] = "txt_mlp"
         taylor_cache_init(cache_dic=cache_dic, current=current)
         norm_encoder_hidden_states = self.norm2_context(encoder_hidden_states)
         norm_encoder_hidden_states = norm_encoder_hidden_states * (1 + c_scale_mlp[:, None]) + c_shift_mlp[:, None]
@@ -91,40 +102,39 @@ def taylorseer_flux_double_block_forward(
         if encoder_hidden_states.dtype == paddle.float16:
             encoder_hidden_states = encoder_hidden_states.clip(-65504, 65504)
 
-    elif current['type'] == 'Taylor':
+    elif current["type"] == "Taylor":
 
-        current['module'] = 'attn'
+        current["module"] = "attn"
         # Attention.
         # symbolic placeholder
-        
 
         # Process attention outputs for the `hidden_states`.
-        current['module'] = 'img_attn'
+        current["module"] = "img_attn"
 
         attn_output = taylor_formula(cache_dic=cache_dic, current=current)
         attn_output = gate_msa.unsqueeze(1) * attn_output
         hidden_states = hidden_states + attn_output
-    
-        current['module'] = 'img_mlp'
+
+        current["module"] = "img_mlp"
 
         ff_output = taylor_formula(cache_dic=cache_dic, current=current)
         ff_output = gate_mlp.unsqueeze(1) * ff_output
         hidden_states = hidden_states + ff_output
-    
+
         # Process attention outputs for the `encoder_hidden_states`.
-        current['module'] = 'txt_attn'
+        current["module"] = "txt_attn"
 
         context_attn_output = taylor_formula(cache_dic=cache_dic, current=current)
 
         context_attn_output = c_gate_msa.unsqueeze(1) * context_attn_output
         encoder_hidden_states = encoder_hidden_states + context_attn_output
-    
-        current['module'] = 'txt_mlp'
+
+        current["module"] = "txt_mlp"
 
         context_ff_output = taylor_formula(cache_dic=cache_dic, current=current)
 
         encoder_hidden_states = encoder_hidden_states + c_gate_mlp.unsqueeze(1) * context_ff_output
-        
+
         if encoder_hidden_states.dtype == paddle.float16:
             encoder_hidden_states = encoder_hidden_states.clip(-65504, 65504)
 

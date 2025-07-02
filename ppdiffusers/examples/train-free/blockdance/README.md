@@ -20,4 +20,3 @@ python text_to_image_generation-flux-blockdance.py
 | `block_step_single`  | `int`  |  单流注意力跳步block的个数   | `26`   |
 | `block_step`  | `int`  | 双流注意力跳步block的个数               | `13`   |
 | `block_step_N`  | `int`  | 时间步复用范围               | `2 - 4`   |
-
