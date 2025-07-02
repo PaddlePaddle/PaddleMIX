@@ -15,11 +15,7 @@
 
 import unittest
 
-import numpy as np
-import paddle
-
-from ppdiffusers import VersatileDiffusionImageVariationPipeline
-from ppdiffusers.utils.testing_utils import load_image, require_paddle_gpu, slow
+from ppdiffusers.utils.testing_utils import require_paddle_gpu, slow
 
 
 class VersatileDiffusionImageVariationPipelineFastTests(unittest.TestCase):
@@ -46,4 +42,3 @@ class VersatileDiffusionImageVariationPipelineIntegrationTests(unittest.TestCase
         # )
         # assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
         pass
-        

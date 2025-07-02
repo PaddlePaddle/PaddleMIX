@@ -15,10 +15,8 @@
 import gc
 import unittest
 
-import numpy as np
 import paddle
 
-from ppdiffusers import UniDiffuserPipeline
 from ppdiffusers.utils import load_image, randn_tensor, slow
 from ppdiffusers.utils.testing_utils import require_paddle_gpu
 

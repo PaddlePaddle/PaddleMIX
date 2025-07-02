@@ -28,7 +28,7 @@ PPDiffusers基于Paddle Inference，提供了以下重点扩散模型的部署�
 |SD15 img2img|14.47|8.09|7.63|
 |SD15 inpaint|14.30|6.42|6.06| -->
 
-> Note: 
+> Note:
 > 测试环境或配置为Paddle 3.0 beta版本，V100 32G单卡，FP16。
 推理参数为Image Width = 512， Image Height = 512， Num Inference Steps = 50。
 

@@ -13,15 +13,14 @@
 # limitations under the License.
 
 
-
 import json
 import os
 import re
 import sys
 from pdb import line_prefix
 
-import numpy as np
-from numpy import mean, var
+from numpy import mean
+
 
 class TimeAnalyzer(object):
     def __init__(self, filename, keyword=None, loss_keyword=None):
@@ -51,16 +50,16 @@ class TimeAnalyzer(object):
                     line_words = line.split()
                     for i in range(len(line_words) - 1):
                         if line_words[i] == self.keyword:
-                            result = float(line_words[i + 1].replace(',', ''))
+                            result = float(line_words[i + 1].replace(",", ""))
                             ips_list.append(result)
                         if line_words[i] == self.loss_keyword:
                             # 剔除掉该值后面的逗号并保留5位小数点
-                            loss_value = line_words[i + 1].replace(',', '')  
+                            loss_value = line_words[i + 1].replace(",", "")
                             # 保留5位小数
                             # loss_value = float("{:.5f}".format(float(loss_str_without_comma)))
-                            
+
                     # Distil the result from the picked string.
-                except Exception as exc:
+                except Exception:
                     print("line is: {}; failed".format(line_prefix))
         if loss_value is None:
             loss_value = -1
@@ -69,7 +68,7 @@ class TimeAnalyzer(object):
 
 def analyze(model_item, log_file, res_log_file, device_num, bs, fp_item):
 
-    analyzer = TimeAnalyzer(log_file, 'interval_samples_per_second:', None)
+    analyzer = TimeAnalyzer(log_file, "interval_samples_per_second:", None)
     ips, convergence_value = analyzer.get_ips()
     ips = round(ips, 3)
     # with open(str(log_file), "r", encoding="utf8") as f:

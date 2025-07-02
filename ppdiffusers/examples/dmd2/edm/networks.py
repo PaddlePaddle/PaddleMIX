@@ -48,6 +48,7 @@ class Linear(paddle.nn.Layer):
         out = F.linear(x=x, weight=self.weight.cast(dtype=x.dtype).T, bias=self.bias, name=None)
         return out
 
+
 # ----------------------------------------------------------------------------
 # Convolutional layer with optional up/downsampling.
 

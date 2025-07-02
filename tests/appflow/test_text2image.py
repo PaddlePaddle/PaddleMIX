@@ -20,24 +20,23 @@ from paddlemix.processors.image_utils import load_image
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
 import paddle
+
 from paddlemix.appflow import Appflow
 
 
 class Text2ImageTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.expect_img_url = 'https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/appflow/test/test_text2image/riding_horse.png'
+        cls.expect_img_url = "https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/appflow/test/test_text2image/riding_horse.png"
 
     def test_text2image(self):
         paddle.seed(1024)
-        task = Appflow(app="text2image_generation",
-                    models=["stabilityai/stable-diffusion-v1-5"]
-                    )
+        task = Appflow(app="text2image_generation", models=["stabilityai/stable-diffusion-v1-5"])
         prompt = "a photo of an astronaut riding a horse on mars."
-        result = task(prompt=prompt)['result']
+        result = task(prompt=prompt)["result"]
 
         self.assertIsNotNone(result)
-        #增加结果对比
+        # 增加结果对比
         expect_img = load_image(self.expect_img_url)
 
         size = (768, 768)
@@ -56,6 +55,7 @@ class Text2ImageTest(unittest.TestCase):
         average_diff = diff_sum / len(data1)
 
         self.assertLessEqual(average_diff, 5)
+
 
 if __name__ == "__main__":
 

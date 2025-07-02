@@ -144,13 +144,13 @@ from .logging import get_logger
 from .outputs import BaseOutput
 from .paddle_utils import (
     apply_freeu,
+    dim2perm,
     fourier_filter,
     get_rng_state_tracker,
     maybe_allow_in_graph,
     rand_tensor,
     randint_tensor,
     randn_tensor,
-    dim2perm
 )
 from .peft_utils import (
     check_peft_version,

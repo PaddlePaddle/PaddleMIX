@@ -14,13 +14,10 @@
 # limitations under the License.
 
 import gc
-import tempfile
 import unittest
 
-import numpy as np
 import paddle
 
-from ppdiffusers import VersatileDiffusionTextToImagePipeline
 from ppdiffusers.utils.testing_utils import nightly, require_paddle_gpu
 
 

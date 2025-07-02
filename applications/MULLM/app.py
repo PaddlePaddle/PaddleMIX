@@ -1,22 +1,24 @@
 # Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+import subprocess
+
 import gradio as gr
 from model import ImageChatModel
 from ollama import chat
-import subprocess
-import os
+
 image_chat_model = ImageChatModel()
 
 
@@ -27,7 +29,8 @@ def start_ollama_service():
         os.system("ollama ls")
     except Exception as e:
         print(f"Error starting Ollama service: {e}")
-        
+
+
 def analyze_image(image):
     if not image:
         return "请先上传图片"
@@ -36,7 +39,6 @@ def analyze_image(image):
         yield analysis  # 返回中间状态消息
         if "请稍等，正在分析图片..." not in analysis:
             return analysis
-            
 
 
 def analyze_face(image):
@@ -72,13 +74,13 @@ def analyze_fortune(
     - MBTI：{mbti_type}
     - 分析类型：{analysis_type}
     - 特定问题：{custom_question if custom_question else "无"}
-    
+
     请根据以上信息进行分析：
     1. 结合性别、面相特征和MBTI给出性格解读
     2. 基于生日和当前时间给出运势预测
     3. 针对用户选择的分析类型给出具体建议
     4. 如果有特定问题，请特别关注相关方面
-    
+
     注意：保持专业性的同时要适当融入趣味性，最后注明"本结果仅供娱乐"。
     """
 
@@ -114,6 +116,7 @@ def analyze_traditional_texts(image):
         yield analysis  # 返回中间状态消息
         if "请稍等，正在分析图片..." not in analysis:
             return analysis
+
 
 def anime_creation(
     image, image_analysis, creation_type, poem_type, story_type, style, custom_prompt, progress=gr.Progress()
@@ -178,7 +181,7 @@ def chat_with_texts(message, history, text_content, history_flag=True):
         system_prompt = f"""你是一个专业的文献解读专家。
         ## 文档内容
         {text_content}
-        
+
         请基于以上文档内容和历史聊天记录回答用户问题。如果问题超出范围，请明确指出。
         """
 
@@ -257,13 +260,13 @@ def create_anime_creation_tab():
         gr.Markdown(
             """
         📖 本项目基于PaddleMIX和DeepSeek-R1实现！[✨PaddleMIX✨](https://github.com/PaddlePaddle/PaddleMIX) 让我们能够开箱即用许多SOTA模型，快来看看如何快速整合 Qwen2.5-VL 和 DeepSeek-R1为我们喜欢的动漫场景进行二创吧～
-        
+
         💡 **使用方法：** <br>
         1.上传图片 （或点击应用下方Examples）<br>
         2.选择创作类型（诗歌/故事）<br>
         3.输入补充信息（比如是哪一部动漫，角色是哪些，期望的剧情等）<br>
         4.点击"开始创作"
-                        
+
         🖌️ DeepSeek-R1凭借其强大的推理能力能为我们的创作提供更多思路，快来体验一下吧～
         """
         )
@@ -273,7 +276,7 @@ def create_anime_creation_tab():
                 image_input = gr.Image(type="pil", label="🖼️ Step 1: 上传动漫海报")
                 image_analysis = gr.Textbox(label="图片描述", interactive=False)
 
-                with gr.Group() as creation_type_group:
+                with gr.Group():
                     creation_type = gr.Radio(choices=["诗歌类", "故事类"], label="📝 Step 2: 选择创作类型", value="诗歌类")
 
                 with gr.Group() as poem_group:
@@ -288,27 +291,8 @@ def create_anime_creation_tab():
             with gr.Column():
                 custom_prompt = gr.Textbox(label="💭 Step 4: 创作补充信息（选填）", placeholder="输入额外的创作要求（动漫名称、任务、情节补充）")
                 generate_btn = gr.Button("🚀 Step 5: 开始创作")
-                progress_status = gr.HTML(
-                    visible=False,
-                    value="""
-                    <div style="padding: 1rem; border-radius: 0.5rem; background-color: #f3f4f6; margin-bottom: 1rem;">
-                        <p style="margin: 0; display: flex; align-items: center; gap: 0.5rem;">
-                            <span style="display: inline-block; animation: spin 1s linear infinite;">✨</span>
-                            <span id="progress-message">正在构思创意...</span>
-                        </p>
-                    </div>
-                    """,
-                )
-                output_text = gr.Textbox(label="创作结果", interactive=False)
 
-        examples = gr.Examples(
-            examples=[
-                ["./examples/haizeiwang.jpeg"],
-                ["./examples/xiamu.jpg"],
-                ["./examples/nezha.jpg"],
-            ],
-            inputs=[image_input],
-        )
+                output_text = gr.Textbox(label="创作结果", interactive=False)
 
         # 设置事件处理
         setup_events(
@@ -346,18 +330,18 @@ def create_fortune_tab():
         gr.Markdown("# 🔮 AI解命大师")
         gr.Markdown(
             """
-        📖 本项目基于PaddleMIX和DeepSeek-R1 实现！[✨PaddleMIX✨](https://github.com/PaddlePaddle/PaddleMIX) 让我们能够开箱即用许多SOTA模型，
+        📖 本项目基于PaddleMIX和DeepSeek-R1 实现！[✨PaddleMIX✨](https://github.com/PaddlePaddle/PaddleMIX) 让我们能够开箱即用许多SOTA模型,
         快来体验 Qwen2.5-VL 的图像解析能力和 DeepSeek-R1 的推理能力，为你的人生解密吧～
-        
+
         💡 **使用方法：** <br>
         1. 上传一张清晰的自拍照（建议半身照）<br>
         2. 填写您的生日和MBTI类型(选填)<br>
         3. 选择想要了解的运势类型(选填)<br>
         4. 可以输入具体想问的问题(选填)<br>
         5. 点击"开始解析"获取个性化解读
-        
+
         🎯 DeepSeek-R1凭借其强大的推理能力，结合现代心理学与东方玄学，为你提供独特的解读～
-        
+
         ⚠️ 本功能仅供娱乐，请理性对待分析结果
         """
         )
@@ -388,7 +372,7 @@ def create_fortune_tab():
                         "ESFP",
                     ],
                     label="🎭 Step 3: 选择MBTI类型(选填)",
-                    value="无"
+                    value="无",
                 )
                 analysis_type = gr.Radio(
                     choices=["整体运势", "感情运势", "事业财运", "健康运势"], label="🔮 Step 4: 选择分析类型", value="整体运势"
@@ -402,13 +386,6 @@ def create_fortune_tab():
         # 设置事件处理
         image_input.change(fn=analyze_face, inputs=[image_input], outputs=[image_analysis])
 
-        examples = gr.Examples(
-            examples=[
-                ["./examples/renxiang.JPG"],
-            ],
-            inputs=[image_input],
-        )
-        
         generate_btn.click(
             fn=analyze_fortune,
             inputs=[image_input, image_analysis, birthday, mbti_type, analysis_type, custom_question],
@@ -422,14 +399,14 @@ def create_traditional_qa_tab():
         gr.Markdown("# 📚 繁体文献智能问答助手")
         gr.Markdown(
             """
-        📖 本项目基于PaddleMIX和DeepSeek-R1 实现！[✨PaddleMIX✨](https://github.com/PaddlePaddle/PaddleMIX) 让我们能够开箱即用许多SOTA模型，
+        📖 本项目基于PaddleMIX和DeepSeek-R1 实现！[✨PaddleMIX✨](https://github.com/PaddlePaddle/PaddleMIX) 让我们能够开箱即用许多SOTA模型,
         快来体验 Qwen2.5-VL 的图像解析能力和 DeepSeek-R1 的推理能力，快来体验一下吧～
-                    
-        💡 **功能说明：** 
+
+        💡 **功能说明：**
         1. 上传含有繁体字的图片（或从下方选择示例）
         2. 本助手将自动识别繁体字并转换为简体中文
         3. 然后你可以针对文献内容进行提问
-                    
+
         PS: 支持多轮问答
         """
         )
@@ -452,15 +429,6 @@ def create_traditional_qa_tab():
 
         # 设置事件处理
         image_input.change(fn=analyze_traditional_texts, inputs=[image_input], outputs=[text_content])
-
-        examples = gr.Examples(
-            examples=[
-                ["./examples/doc_1.png"],
-                ["./examples/doc_2.png"],
-                ["./examples/doc_3.png"],
-            ],
-            inputs=[image_input],
-        )
 
 
 def create_interface():

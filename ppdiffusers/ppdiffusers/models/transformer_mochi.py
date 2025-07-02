@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Optional, Tuple
+
 import paddle
 import paddle.nn as nn
-
-from typing import Optional, Tuple
 
 from ..configuration_utils import ConfigMixin, register_to_config
 from ..utils import logging
@@ -29,6 +29,7 @@ from .normalization import AdaLayerNormContinuous, RMSNorm
 
 logger = logging.get_logger(__name__)
 
+
 class MochiModulatedRMSNorm(nn.Layer):
     def __init__(self, eps: float):
         super().__init__()
@@ -37,7 +38,7 @@ class MochiModulatedRMSNorm(nn.Layer):
 
     def forward(self, hidden_states, scale=None):
         hidden_states_dtype = hidden_states.dtype
-        hidden_states = hidden_states.astype('float32')
+        hidden_states = hidden_states.astype("float32")
         hidden_states = self.norm(hidden_states)
         if scale is not None:
             hidden_states = hidden_states * scale
@@ -65,8 +66,9 @@ class MochiLayerNormContinuous(nn.Layer):
     ) -> paddle.Tensor:
         input_dtype = x.dtype
         scale = self.linear_1(self.silu(conditioning_embedding).astype(x.dtype))
-        x = self.norm(x, (1 + scale.unsqueeze(1).astype('float32')))
+        x = self.norm(x, (1 + scale.unsqueeze(1).astype("float32")))
         return x.astype(input_dtype)
+
 
 class MochiRMSNormZero(nn.Layer):
     def __init__(
@@ -78,18 +80,19 @@ class MochiRMSNormZero(nn.Layer):
         self.norm = RMSNorm(0, eps, False)
 
     def forward(
-            self, hidden_states: paddle.Tensor, emb: paddle.Tensor
-        ) -> Tuple[paddle.Tensor, paddle.Tensor, paddle.Tensor, paddle.Tensor]:
-            hidden_states_dtype = hidden_states.dtype
+        self, hidden_states: paddle.Tensor, emb: paddle.Tensor
+    ) -> Tuple[paddle.Tensor, paddle.Tensor, paddle.Tensor, paddle.Tensor]:
+        hidden_states_dtype = hidden_states.dtype
 
-            emb = self.linear(self.silu(emb))
-            
-            scale_msa, gate_msa, scale_mlp, gate_mlp = paddle.chunk(emb, chunks=4, axis=1)
-            
-            hidden_states = self.norm(hidden_states.astype('float32')) * (1 + scale_msa[:, None].astype('float32'))
-            hidden_states = hidden_states.astype(hidden_states_dtype)
+        emb = self.linear(self.silu(emb))
 
-            return hidden_states, gate_msa, scale_mlp, gate_mlp
+        scale_msa, gate_msa, scale_mlp, gate_mlp = paddle.chunk(emb, chunks=4, axis=1)
+
+        hidden_states = self.norm(hidden_states.astype("float32")) * (1 + scale_msa[:, None].astype("float32"))
+        hidden_states = hidden_states.astype(hidden_states_dtype)
+
+        return hidden_states, gate_msa, scale_mlp, gate_mlp
+
 
 @maybe_allow_in_graph
 class MochiTransformerBlock(nn.Layer):
@@ -169,7 +172,7 @@ class MochiTransformerBlock(nn.Layer):
         )
 
         hidden_states = hidden_states + self.norm2(attn_hidden_states, paddle.tanh(gate_msa).unsqueeze(1))
-        norm_hidden_states = self.norm3(hidden_states, (1 + scale_mlp.unsqueeze(1).astype('float32')))
+        norm_hidden_states = self.norm3(hidden_states, (1 + scale_mlp.unsqueeze(1).astype("float32")))
         ff_output = self.ff(norm_hidden_states)
         hidden_states = hidden_states + self.norm4(ff_output, paddle.tanh(gate_mlp).unsqueeze(1))
         if not self.context_pre_only:
@@ -177,13 +180,14 @@ class MochiTransformerBlock(nn.Layer):
                 context_attn_hidden_states, paddle.tanh(enc_gate_msa).unsqueeze(1)
             )
             norm_encoder_hidden_states = self.norm3_context(
-                encoder_hidden_states, (1 + enc_scale_mlp.unsqueeze(1).astype('float32'))
+                encoder_hidden_states, (1 + enc_scale_mlp.unsqueeze(1).astype("float32"))
             )
             context_ff_output = self.ff_context(norm_encoder_hidden_states)
             encoder_hidden_states = encoder_hidden_states + self.norm4_context(
                 context_ff_output, paddle.tanh(enc_gate_mlp).unsqueeze(1)
             )
         return hidden_states, encoder_hidden_states
+
 
 class MochiRoPE(nn.Layer):
     def __init__(self, base_height: int = 192, base_width: int = 192) -> None:
@@ -210,7 +214,7 @@ class MochiRoPE(nn.Layer):
         return positions
 
     def _create_rope(self, freqs: paddle.Tensor, pos: paddle.Tensor) -> paddle.Tensor:
-        freqs = paddle.einsum('nd,dhf->nhf', pos.astype('float32'), freqs.astype('float32'))
+        freqs = paddle.einsum("nd,dhf->nhf", pos.astype("float32"), freqs.astype("float32"))
         freqs_cos = paddle.cos(freqs)
         freqs_sin = paddle.sin(freqs)
         return freqs_cos, freqs_sin
@@ -230,7 +234,7 @@ class MochiRoPE(nn.Layer):
 
 @maybe_allow_in_graph
 class MochiTransformer3DModel(ModelMixin, ConfigMixin):
-    
+
     _supports_gradient_checkpointing = True
     _no_split_modules = ["MochiTransformerBlock"]
     _skip_layerwise_casting_patterns = ["patch_embed", "norm"]
@@ -257,12 +261,9 @@ class MochiTransformer3DModel(ModelMixin, ConfigMixin):
         out_channels = out_channels or in_channels
 
         self.patch_embed = PatchEmbed(
-            patch_size=patch_size,
-            in_channels=in_channels,
-            embed_dim=inner_dim,
-            add_pos_embed=False
+            patch_size=patch_size, in_channels=in_channels, embed_dim=inner_dim, add_pos_embed=False
         )
-        
+
         self.time_embed = MochiCombinedTimestepCaptionEmbedding(
             embedding_dim=inner_dim,
             pooled_projection_dim=pooled_projection_dim,
@@ -270,14 +271,14 @@ class MochiTransformer3DModel(ModelMixin, ConfigMixin):
             time_embed_dim=time_embed_dim,
             num_attention_heads=8,
         )
-        
+
         self.pos_frequencies = self.create_parameter(
             shape=[3, num_attention_heads, attention_head_dim // 2],
-            default_initializer=nn.initializer.Constant(value=0.0)
+            default_initializer=nn.initializer.Constant(value=0.0),
         )
 
         self.rope = MochiRoPE()
-        
+
         self.transformer_blocks = nn.LayerList(
             [
                 MochiTransformerBlock(
@@ -300,11 +301,10 @@ class MochiTransformer3DModel(ModelMixin, ConfigMixin):
             eps=1e-6,
             norm_type="layer_norm",
         )
-        
+
         self.proj_out = nn.Linear(inner_dim, patch_size * patch_size * out_channels)
 
         self.gradient_checkpointing = False
-
 
     def forward(
         self,
@@ -336,26 +336,28 @@ class MochiTransformer3DModel(ModelMixin, ConfigMixin):
 
         # Reshape for transformer
         hidden_states = hidden_states.unflatten(0, [batch_size, -1]).flatten(1, 2)
-        
+
         # Rotary position embedding
         image_rotary_emb = self.rope(
             self.pos_frequencies,
             num_frames,
             post_patch_height,
             post_patch_width,
-            dtype='float32',
+            dtype="float32",
         )
-        
+
         # Transformer blocks
         for i, block in enumerate(self.transformer_blocks):
             if self.training and self.gradient_checkpointing:
+
                 def create_custom_forward(module):
                     def create_forward(*inputs):
                         return module(*inputs)
+
                     return create_forward
 
                 hidden_states, encoder_hidden_states = paddle.distributed.fleet.utils.recompute(
-                    create_custom_forward(block), 
+                    create_custom_forward(block),
                     hidden_states=hidden_states,
                     encoder_hidden_states=encoder_hidden_states,
                     temb=temb,
@@ -370,7 +372,7 @@ class MochiTransformer3DModel(ModelMixin, ConfigMixin):
                     encoder_attention_mask=encoder_attention_mask,
                     image_rotary_emb=image_rotary_emb,
                 )
-            
+
         hidden_states = self.norm_out(hidden_states, temb)
         hidden_states = self.proj_out(hidden_states)
 

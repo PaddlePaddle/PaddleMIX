@@ -14,50 +14,26 @@
 # limitations under the License.
 """ Conversion script for the Stable Diffusion checkpoints."""
 
-import re
-from io import BytesIO
+
 from typing import Dict, Optional, Union
-from ppdiffusers.transformers import AutoConfig
 
-import numpy as np
 import paddle
-import requests
-from contextlib import nullcontext
-
 
 from ppdiffusers.transformers import (
-    BertTokenizer,
-    CLIPImageProcessor,
+    AutoConfig,
     CLIPTextConfig,
     CLIPTextModel,
-    CLIPTextModelWithProjection,
     CLIPTokenizer,
-    CLIPVisionConfig,
-    CLIPVisionModelWithProjection,
-    T5Tokenizer,
     T5EncoderModel,
+    T5Tokenizer,
 )
-import transformers
 
-from ...models import (
-    AutoencoderKL,
-    ControlNetModel,
-    PriorTransformer,
-    UNet2DConditionModel,
-    FluxTransformer2DModel,
-)
-from ...schedulers import (
-    DDIMScheduler,
-    DDPMScheduler,
-    FlowMatchEulerDiscreteScheduler,
-
-
-)
-from ...utils import is_accelerate_available, is_omegaconf_available, is_paddlenlp_available, logging, smart_load
+from ...models import AutoencoderKL, FluxTransformer2DModel
+from ...schedulers import FlowMatchEulerDiscreteScheduler
+from ...utils import is_omegaconf_available, is_paddlenlp_available, logging, smart_load
 from ...utils.import_utils import BACKENDS_MAPPING
-from ..latent_diffusion.pipeline_latent_diffusion import LDMBertConfig, LDMBertModel
-from ..paint_by_example import PaintByExampleImageEncoder
 from ..pipeline_utils import DiffusionPipeline
+
 # from .safety_checker import StableDiffusionSafetyChecker
 # from .stable_unclip_image_normalizer import StableUnCLIPImageNormalizer
 
@@ -195,6 +171,7 @@ def update_vae_resnet_ldm_to_diffusers(keys, new_checkpoint, checkpoint, mapping
         diffusers_key = ldm_key.replace(mapping["old"], mapping["new"]).replace("nin_shortcut", "conv_shortcut")
         new_checkpoint[diffusers_key] = checkpoint.get(ldm_key)
 
+
 def update_vae_attentions_ldm_to_diffusers(keys, new_checkpoint, checkpoint, mapping):
     for ldm_key in keys:
         diffusers_key = (
@@ -219,6 +196,7 @@ def update_vae_attentions_ldm_to_diffusers(keys, new_checkpoint, checkpoint, map
             new_checkpoint[diffusers_key] = new_checkpoint[diffusers_key][:, :, 0]
         elif len(shape) == 4:
             new_checkpoint[diffusers_key] = new_checkpoint[diffusers_key][:, :, 0, 0]
+
 
 def convert_ldm_vae_checkpoint(checkpoint, config):
     # extract state dict for VAE
@@ -323,6 +301,7 @@ def convert_ldm_vae_checkpoint(checkpoint, config):
 
     return new_checkpoint
 
+
 def convert_flux_transformer_checkpoint_to_diffusers(checkpoint, **kwargs):
     converted_state_dict = {}
     keys = list(checkpoint.keys())
@@ -332,7 +311,9 @@ def convert_flux_transformer_checkpoint_to_diffusers(checkpoint, **kwargs):
             checkpoint[k.replace("model.diffusion_model.", "")] = checkpoint.pop(k)
 
     num_layers = list(set(int(k.split(".", 2)[1]) for k in checkpoint if "double_blocks." in k))[-1] + 1  # noqa: C401
-    num_single_layers = list(set(int(k.split(".", 2)[1]) for k in checkpoint if "single_blocks." in k))[-1] + 1  # noqa: C401
+    num_single_layers = (
+        list(set(int(k.split(".", 2)[1]) for k in checkpoint if "single_blocks." in k))[-1] + 1
+    )  # noqa: C401
     mlp_ratio = 4.0
     inner_dim = 3072
 
@@ -340,11 +321,11 @@ def convert_flux_transformer_checkpoint_to_diffusers(checkpoint, **kwargs):
     # while in diffusers it split into scale, shift. Here we swap the linear projection weights in order to be able to use diffusers implementation
     def swap_scale_shift(weight):
         weight = paddle.to_tensor(weight)
-        shift, scale = weight.chunk( chunks=2, axis=0)
+        shift, scale = weight.chunk(chunks=2, axis=0)
         new_weight = paddle.concat([scale, shift], axis=0)
         return new_weight
 
-    ## time_text_embed.timestep_embedder <-  time_in
+    # time_text_embed.timestep_embedder <-  time_in
     converted_state_dict["time_text_embed.timestep_embedder.linear_1.weight"] = checkpoint.pop(
         "time_in.in_layer.weight"
     )
@@ -354,7 +335,7 @@ def convert_flux_transformer_checkpoint_to_diffusers(checkpoint, **kwargs):
     )
     converted_state_dict["time_text_embed.timestep_embedder.linear_2.bias"] = checkpoint.pop("time_in.out_layer.bias")
 
-    ## time_text_embed.text_embedder <- vector_in
+    # time_text_embed.text_embedder <- vector_in
     converted_state_dict["time_text_embed.text_embedder.linear_1.weight"] = checkpoint.pop("vector_in.in_layer.weight")
     converted_state_dict["time_text_embed.text_embedder.linear_1.bias"] = checkpoint.pop("vector_in.in_layer.bias")
     converted_state_dict["time_text_embed.text_embedder.linear_2.weight"] = checkpoint.pop(
@@ -390,14 +371,14 @@ def convert_flux_transformer_checkpoint_to_diffusers(checkpoint, **kwargs):
     for i in range(num_layers):
         block_prefix = f"transformer_blocks.{i}."
         # norms.
-        ## norm1
+        # norm1
         converted_state_dict[f"{block_prefix}norm1.linear.weight"] = checkpoint.pop(
             f"double_blocks.{i}.img_mod.lin.weight"
         )
         converted_state_dict[f"{block_prefix}norm1.linear.bias"] = checkpoint.pop(
             f"double_blocks.{i}.img_mod.lin.bias"
         )
-        ## norm1_context
+        # norm1_context
         converted_state_dict[f"{block_prefix}norm1_context.linear.weight"] = checkpoint.pop(
             f"double_blocks.{i}.txt_mod.lin.weight"
         )
@@ -405,7 +386,9 @@ def convert_flux_transformer_checkpoint_to_diffusers(checkpoint, **kwargs):
             f"double_blocks.{i}.txt_mod.lin.bias"
         )
         # Q, K, V
-        sample_q, sample_k, sample_v = paddle.chunk(paddle.to_tensor(checkpoint.pop(f"double_blocks.{i}.img_attn.qkv.weight")), chunks=3, axis=0)
+        sample_q, sample_k, sample_v = paddle.chunk(
+            paddle.to_tensor(checkpoint.pop(f"double_blocks.{i}.img_attn.qkv.weight")), chunks=3, axis=0
+        )
         context_q, context_k, context_v = paddle.chunk(
             paddle.to_tensor(checkpoint.pop(f"double_blocks.{i}.txt_attn.qkv.weight")), chunks=3, axis=0
         )
@@ -486,8 +469,10 @@ def convert_flux_transformer_checkpoint_to_diffusers(checkpoint, **kwargs):
         # Q, K, V, mlp
         mlp_hidden_dim = int(inner_dim * mlp_ratio)
         split_size = (inner_dim, inner_dim, inner_dim, mlp_hidden_dim)
-        #q, k, v, mlp = torch.split(checkpoint.pop(f"single_blocks.{i}.linear1.weight"), split_size, dim=0)
-        q, k, v, mlp = paddle.split(paddle.to_tensor(checkpoint.pop(f"single_blocks.{i}.linear1.weight")), num_or_sections=split_size, axis=0)
+        # q, k, v, mlp = torch.split(checkpoint.pop(f"single_blocks.{i}.linear1.weight"), split_size, dim=0)
+        q, k, v, mlp = paddle.split(
+            paddle.to_tensor(checkpoint.pop(f"single_blocks.{i}.linear1.weight")), num_or_sections=split_size, axis=0
+        )
         q_bias, k_bias, v_bias, mlp_bias = paddle.split(
             paddle.to_tensor(checkpoint.pop(f"single_blocks.{i}.linear1.bias")), num_or_sections=split_size, axis=0
         )
@@ -565,7 +550,11 @@ def convert_ldm_clip_checkpoint(checkpoint, local_files_only=False, text_encoder
 
     text_model_dict = {}
 
-    remove_prefixes = ["cond_stage_model.transformer", "conditioner.embedders.0.transformer","text_encoders.clip_l.transformer"]
+    remove_prefixes = [
+        "cond_stage_model.transformer",
+        "conditioner.embedders.0.transformer",
+        "text_encoders.clip_l.transformer",
+    ]
 
     for key in keys:
         for prefix in remove_prefixes:
@@ -578,12 +567,14 @@ def convert_ldm_clip_checkpoint(checkpoint, local_files_only=False, text_encoder
     faster_set_state_dict(text_model, convert_diffusers_vae_unet_to_ppdiffusers(text_model, text_model_dict))
 
     return text_model
-def convert_sd3_t5_checkpoint_to_diffusers(checkpoint):  
-    keys = list(checkpoint.keys()) 
+
+
+def convert_sd3_t5_checkpoint_to_diffusers(checkpoint):
+    keys = list(checkpoint.keys())
     text_model_dict = {}
 
     remove_prefixes = ["text_encoders.t5xxl.transformer."]
-    
+
     for key in keys:
         for prefix in remove_prefixes:
             if key.startswith(prefix):
@@ -591,6 +582,7 @@ def convert_sd3_t5_checkpoint_to_diffusers(checkpoint):
                 text_model_dict[diffusers_key] = checkpoint.get(key)
 
     return text_model_dict
+
 
 def create_diffusers_t5_model_from_checkpoint(
     cls,
@@ -626,7 +618,6 @@ def create_diffusers_t5_model_from_checkpoint(
             if any(module_to_keep_in_fp32 in name.split(".") for module_to_keep_in_fp32 in keep_in_fp32_modules):
                 # param = param.to(torch.float32) does not work here as only in the local scope.
                 param.data = param.data.to(paddle.float32)
-    
 
     return model
 
@@ -728,16 +719,10 @@ def download_from_original_flux_ckpt(
     """
 
     # import pipelines here to avoid circular import error when using from_single_file method
-    from ppdiffusers import (
-        LDMTextToImagePipeline,
-        FluxPipeline,
-    )
-
+    from ppdiffusers import FluxPipeline
 
     if not is_omegaconf_available():
         raise ValueError(BACKENDS_MAPPING["omegaconf"][1])
-
-    from omegaconf import OmegaConf
 
     if isinstance(checkpoint_path_or_dict, str):
         checkpoint = smart_load(checkpoint_path_or_dict, return_numpy=True, return_global_step=True)
@@ -765,15 +750,12 @@ def download_from_original_flux_ckpt(
             continue
         newcheckpoint[k] = v.astype("float32")
     checkpoint = newcheckpoint
-    
 
-   
     # 此处先针对文生图的FLUX 没有针对其余功能的FLUX
-    if ( model_type is None )and (pipeline_class == FluxPipeline):
+    if (model_type is None) and (pipeline_class == FluxPipeline):
         model_type = "Flux"
         if image_size is None:
             image_size = 1024
-    
 
     if model_type in ["Flux"]:
         scheduler_dict = {
@@ -787,10 +769,10 @@ def download_from_original_flux_ckpt(
         }
         scheduler = FlowMatchEulerDiscreteScheduler.from_config(scheduler_dict)
     else:
-       pass
-    
+        pass
+
     converted_flux_checkpoint = convert_flux_transformer_checkpoint_to_diffusers(checkpoint)
-    
+
     init_contexts = []
     init_contexts.append(paddle.dtype_guard(paddle.float32))
     init_contexts.append(no_init_weights(_enable=True))
@@ -798,16 +780,16 @@ def download_from_original_flux_ckpt(
         init_contexts.append(paddle.LazyGuard())
     with ContextManagers(init_contexts):
         flux_transformer = FluxTransformer2DModel(guidance_embeds=True)
-        
 
-    faster_set_state_dict(flux_transformer, convert_diffusers_vae_unet_to_ppdiffusers(flux_transformer, converted_flux_checkpoint))
+    faster_set_state_dict(
+        flux_transformer, convert_diffusers_vae_unet_to_ppdiffusers(flux_transformer, converted_flux_checkpoint)
+    )
 
-    
     # Convert the VAE model.
     if vae_path is None and vae is None:
         vae_config = AutoencoderKL.load_config("black-forest-labs/FLUX.1-dev", subfolder="vae")
         converted_vae_checkpoint = convert_ldm_vae_checkpoint(checkpoint, vae_config)
-        vae_path 
+        vae_path
         init_contexts = []
         init_contexts.append(paddle.dtype_guard(paddle.float32))
         init_contexts.append(no_init_weights(_enable=True))
@@ -821,9 +803,8 @@ def download_from_original_flux_ckpt(
     elif vae is None:
         vae = AutoencoderKL.from_pretrained(vae_path, local_files_only=local_files_only)
 
-    
     if model_type in ["Flux"]:
-       
+
         try:
             tokenizer = CLIPTokenizer.from_pretrained(
                 "openai/clip-vit-large-patch14", local_files_only=local_files_only
@@ -833,12 +814,9 @@ def download_from_original_flux_ckpt(
                 f"With local_files_only set to {local_files_only}, you must first locally save the tokenizer in the following path: 'openai/clip-vit-large-patch14'."
             )
         text_encoder = convert_ldm_clip_checkpoint(checkpoint, local_files_only=local_files_only)
-        
 
         # try:
-        tokenizer_2 = T5Tokenizer.from_pretrained(
-            "google/t5-v1_1-xxl", local_files_only=local_files_only
-        )
+        tokenizer_2 = T5Tokenizer.from_pretrained("google/t5-v1_1-xxl", local_files_only=local_files_only)
         # except Exception:
         #     raise ValueError(
         #         f"With local_files_only set to {local_files_only}, you must first locally save the tokenizer in the following path: 'laion/CLIP-ViT-bigG-14-laion2B-39B-b160k' with `pad_token` set to '!'."
@@ -852,9 +830,8 @@ def download_from_original_flux_ckpt(
             torch_dtype=None,
             local_files_only=local_files_only,
         )
-        #text_encoder_2 = T5EncoderModel.from_pretrained("black-forest-labs/FLUX.1-dev",subfolder="text_encoder_2" , paddle_dtype="float32" )
+        # text_encoder_2 = T5EncoderModel.from_pretrained("black-forest-labs/FLUX.1-dev",subfolder="text_encoder_2" , paddle_dtype="float32" )
 
-        
         pipe = pipeline_class(
             vae=vae,
             text_encoder=text_encoder,
@@ -865,11 +842,8 @@ def download_from_original_flux_ckpt(
             scheduler=scheduler,
             # force_zeros_for_empty_prompt=True,
         )
-        
+
     if paddle_dtype is not None:
         pipe.to(paddle_dtype=paddle_dtype)
 
     return pipe
-
-
-

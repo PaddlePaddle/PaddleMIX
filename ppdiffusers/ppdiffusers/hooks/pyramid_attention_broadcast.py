@@ -1,7 +1,22 @@
-import paddle
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import re
 from dataclasses import dataclass
-from typing import Any, Callable, Optional, Tuple, Union
+from typing import Any, Callable, Optional, Tuple
+
+import paddle
 
 from ..models.attention_processor import Attention
 from ..utils import logging
@@ -11,10 +26,9 @@ logger = logging.get_logger(__name__)
 
 _ATTENTION_CLASSES = Attention
 
-_SPATIAL_ATTENTION_BLOCK_IDENTIFIERS = ('blocks', 'transformer_blocks',
-    'single_transformer_blocks')
-_TEMPORAL_ATTENTION_BLOCK_IDENTIFIERS = 'temporal_transformer_blocks',
-_CROSS_ATTENTION_BLOCK_IDENTIFIERS = 'blocks', 'transformer_blocks'
+_SPATIAL_ATTENTION_BLOCK_IDENTIFIERS = ("blocks", "transformer_blocks", "single_transformer_blocks")
+_TEMPORAL_ATTENTION_BLOCK_IDENTIFIERS = ("temporal_transformer_blocks",)
+_CROSS_ATTENTION_BLOCK_IDENTIFIERS = "blocks", "transformer_blocks"
 
 
 @dataclass
@@ -60,12 +74,9 @@ class PyramidAttentionBroadcastConfig:
     temporal_attention_timestep_skip_range: Tuple[int, int] = (100, 800)
     cross_attention_timestep_skip_range: Tuple[int, int] = (100, 800)
 
-    spatial_attention_block_identifiers: Tuple[str, ...
-        ] = _SPATIAL_ATTENTION_BLOCK_IDENTIFIERS
-    temporal_attention_block_identifiers: Tuple[str, ...
-        ] = _TEMPORAL_ATTENTION_BLOCK_IDENTIFIERS
-    cross_attention_block_identifiers: Tuple[str, ...
-        ] = _CROSS_ATTENTION_BLOCK_IDENTIFIERS
+    spatial_attention_block_identifiers: Tuple[str, ...] = _SPATIAL_ATTENTION_BLOCK_IDENTIFIERS
+    temporal_attention_block_identifiers: Tuple[str, ...] = _TEMPORAL_ATTENTION_BLOCK_IDENTIFIERS
+    cross_attention_block_identifiers: Tuple[str, ...] = _CROSS_ATTENTION_BLOCK_IDENTIFIERS
 
     current_timestep_callback: Callable[[], int] = None
 
@@ -85,6 +96,7 @@ class PyramidAttentionBroadcastConfig:
             ")"
         )
 
+
 class PyramidAttentionBroadcastState:
     """
     State for Pyramid Attention Broadcast.
@@ -98,7 +110,7 @@ class PyramidAttentionBroadcastState:
             attention computation is skipped. It is either a tensor or a tuple of tensors, depending on the module.
     """
 
-    def __init__(self) ->None:
+    def __init__(self) -> None:
         self.iteration = 0
         self.cache = None
 
@@ -115,14 +127,14 @@ class PyramidAttentionBroadcastState:
         return f"PyramidAttentionBroadcastState(iteration={self.iteration}, cache={cache_repr})"
 
 
-
 class PyramidAttentionBroadcastHook(ModelHook):
     """A hook that applies Pyramid Attention Broadcast to a given module."""
+
     _is_stateful = True
 
-    def __init__(self, timestep_skip_range: Tuple[int, int],
-        block_skip_range: int, current_timestep_callback: Callable[[], int]
-        ) ->None:
+    def __init__(
+        self, timestep_skip_range: Tuple[int, int], block_skip_range: int, current_timestep_callback: Callable[[], int]
+    ) -> None:
         super().__init__()
         self.timestep_skip_range = timestep_skip_range
         self.block_skip_range = block_skip_range
@@ -132,12 +144,16 @@ class PyramidAttentionBroadcastHook(ModelHook):
         self.state = PyramidAttentionBroadcastState()
         return module
 
-    def new_forward(self, module: paddle.nn.Layer, *args, **kwargs) ->Any:
-        is_within_timestep_range = self.timestep_skip_range[0
-            ] < self.current_timestep_callback() < self.timestep_skip_range[1]
-        should_compute_attention = (self.state.cache is None or self.state.
-            iteration == 0 or not is_within_timestep_range or self.state.
-            iteration % self.block_skip_range == 0)
+    def new_forward(self, module: paddle.nn.Layer, *args, **kwargs) -> Any:
+        is_within_timestep_range = (
+            self.timestep_skip_range[0] < self.current_timestep_callback() < self.timestep_skip_range[1]
+        )
+        should_compute_attention = (
+            self.state.cache is None
+            or self.state.iteration == 0
+            or not is_within_timestep_range
+            or self.state.iteration % self.block_skip_range == 0
+        )
         if should_compute_attention:
             output = self.fn_ref.original_forward(*args, **kwargs)
         else:
@@ -146,13 +162,12 @@ class PyramidAttentionBroadcastHook(ModelHook):
         self.state.iteration += 1
         return output
 
-    def reset_state(self, module: paddle.nn.Layer) ->None:
+    def reset_state(self, module: paddle.nn.Layer) -> None:
         self.state.reset()
         return module
 
 
-def apply_pyramid_attention_broadcast(module: paddle.nn.Layer, config:
-    PyramidAttentionBroadcastConfig):
+def apply_pyramid_attention_broadcast(module: paddle.nn.Layer, config: PyramidAttentionBroadcastConfig):
     """
     Apply [Pyramid Attention Broadcast](https://huggingface.co/papers/2408.12588) to a given pipeline.
 
@@ -211,45 +226,46 @@ def apply_pyramid_attention_broadcast(module: paddle.nn.Layer, config:
         _apply_pyramid_attention_broadcast_on_attention_class(name, submodule, config)
 
 
-
 def _apply_pyramid_attention_broadcast_on_attention_class(
     name: str, module: Attention, config: PyramidAttentionBroadcastConfig
 ) -> bool:
-    is_spatial_self_attention = (any(re.search(identifier, name) is not
-        None for identifier in config.spatial_attention_block_identifiers) and
-        config.spatial_attention_block_skip_range is not None and not
-        getattr(module, 'is_cross_attention', False))
-    is_temporal_self_attention = (any(re.search(identifier, name) is not
-        None for identifier in config.temporal_attention_block_identifiers) and
-        config.temporal_attention_block_skip_range is not None and not
-        getattr(module, 'is_cross_attention', False))
-    is_cross_attention = any(re.search(identifier, name) is not None for
-        identifier in config.cross_attention_block_identifiers
-        ) and config.cross_attention_block_skip_range is not None and getattr(
-        module, 'is_cross_attention', False)
+    is_spatial_self_attention = (
+        any(re.search(identifier, name) is not None for identifier in config.spatial_attention_block_identifiers)
+        and config.spatial_attention_block_skip_range is not None
+        and not getattr(module, "is_cross_attention", False)
+    )
+    is_temporal_self_attention = (
+        any(re.search(identifier, name) is not None for identifier in config.temporal_attention_block_identifiers)
+        and config.temporal_attention_block_skip_range is not None
+        and not getattr(module, "is_cross_attention", False)
+    )
+    is_cross_attention = (
+        any(re.search(identifier, name) is not None for identifier in config.cross_attention_block_identifiers)
+        and config.cross_attention_block_skip_range is not None
+        and getattr(module, "is_cross_attention", False)
+    )
     block_skip_range, timestep_skip_range, block_type = None, None, None
     if is_spatial_self_attention:
         block_skip_range = config.spatial_attention_block_skip_range
         timestep_skip_range = config.spatial_attention_timestep_skip_range
-        block_type = 'spatial'
+        block_type = "spatial"
     elif is_temporal_self_attention:
         block_skip_range = config.temporal_attention_block_skip_range
         timestep_skip_range = config.temporal_attention_timestep_skip_range
-        block_type = 'temporal'
+        block_type = "temporal"
     elif is_cross_attention:
         block_skip_range = config.cross_attention_block_skip_range
         timestep_skip_range = config.cross_attention_timestep_skip_range
-        block_type = 'cross'
+        block_type = "cross"
     if block_skip_range is None or timestep_skip_range is None:
         logger.info(
             f'Unable to apply Pyramid Attention Broadcast to the selected layer: "{name}" because it does not match any of the required criteria for spatial, temporal or cross attention layers. Note, however, that this layer may still be valid for applying PAB. Please specify the correct block identifiers in the configuration.'
-            )
-        return False
-    logger.debug(
-        f'Enabling Pyramid Attention Broadcast ({block_type}) in layer: {name}'
         )
-    _apply_pyramid_attention_broadcast_hook(module, timestep_skip_range,
-        block_skip_range, config.current_timestep_callback)
+        return False
+    logger.debug(f"Enabling Pyramid Attention Broadcast ({block_type}) in layer: {name}")
+    _apply_pyramid_attention_broadcast_hook(
+        module, timestep_skip_range, block_skip_range, config.current_timestep_callback
+    )
     return True
 
 
@@ -276,6 +292,5 @@ def _apply_pyramid_attention_broadcast_hook(
             A callback function that returns the current inference timestep.
     """
     registry = HookRegistry.check_if_exists_or_initialize(module)
-    hook = PyramidAttentionBroadcastHook(timestep_skip_range,
-        block_skip_range, current_timestep_callback)
-    registry.register_hook(hook, 'pyramid_attention_broadcast')
+    hook = PyramidAttentionBroadcastHook(timestep_skip_range, block_skip_range, current_timestep_callback)
+    registry.register_hook(hook, "pyramid_attention_broadcast")

@@ -23,7 +23,6 @@ from ...utils import (
     is_paddlenlp_available,
 )
 
-
 _dummy_objects = {}
 _import_structure = {}
 

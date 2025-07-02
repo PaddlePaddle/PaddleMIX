@@ -1,7 +1,24 @@
-import paddle
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import functools
 from typing import Any, Dict, Optional, Tuple
+
+import paddle
+
 from ..utils.logging import get_logger
+
 logger = get_logger(__name__)
 
 
@@ -9,10 +26,11 @@ class ModelHook:
     """
     A hook that contains callbacks to be executed just before and after the forward method of a model.
     """
+
     _is_stateful = False
 
     def __init__(self):
-        self.fn_ref: 'HookFunctionReference' = None
+        self.fn_ref: "HookFunctionReference" = None
 
     def initialize_hook(self, module: paddle.nn.Layer) -> paddle.nn.Layer:
         """
@@ -34,8 +52,7 @@ class ModelHook:
         """
         return module
 
-    def pre_forward(self, module: paddle.nn.Layer, *args, **kwargs) ->Tuple[
-        Tuple[Any], Dict[str, Any]]:
+    def pre_forward(self, module: paddle.nn.Layer, *args, **kwargs) -> Tuple[Tuple[Any], Dict[str, Any]]:
         """
         Hook that is executed just before the forward method of the model.
 
@@ -52,7 +69,7 @@ class ModelHook:
         """
         return args, kwargs
 
-    def post_forward(self, module: paddle.nn.Layer, output: Any) ->Any:
+    def post_forward(self, module: paddle.nn.Layer, output: Any) -> Any:
         """
         Hook that is executed just after the forward method of the model.
 
@@ -78,15 +95,12 @@ class ModelHook:
 
     def reset_state(self, module: paddle.nn.Layer):
         if self._is_stateful:
-            raise NotImplementedError(
-                'This hook is stateful and needs to implement the `reset_state` method.'
-                )
+            raise NotImplementedError("This hook is stateful and needs to implement the `reset_state` method.")
         return module
 
 
 class HookFunctionReference:
-
-    def __init__(self) ->None:
+    def __init__(self) -> None:
         """A container class that maintains mutable references to forward pass functions in a hook chain.
 
         Its mutable nature allows the hook system to modify the execution chain dynamically without rebuilding the
@@ -109,50 +123,51 @@ class HookFunctionReference:
 
 
 class HookRegistry:
-
-    def __init__(self, module_ref: paddle.nn.Layer) ->None:
+    def __init__(self, module_ref: paddle.nn.Layer) -> None:
         super().__init__()
         self.hooks: Dict[str, ModelHook] = {}
         self._module_ref = module_ref
         self._hook_order = []
         self._fn_refs = []
 
-    def register_hook(self, hook: ModelHook, name: str) ->None:
+    def register_hook(self, hook: ModelHook, name: str) -> None:
         if name in self.hooks.keys():
             raise ValueError(
-                f'Hook with name {name} already exists in the registry. Please use a different name or first remove the existing hook and then add a new one.'
-                )
+                f"Hook with name {name} already exists in the registry. Please use a different name or first remove the existing hook and then add a new one."
+            )
         self._module_ref = hook.initialize_hook(self._module_ref)
 
         def create_new_forward(function_reference: HookFunctionReference):
-
             def new_forward(module, *args, **kwargs):
-                args, kwargs = function_reference.pre_forward(module, *args,
-                    **kwargs)
+                args, kwargs = function_reference.pre_forward(module, *args, **kwargs)
                 output = function_reference.forward(*args, **kwargs)
                 return function_reference.post_forward(module, output)
+
             return new_forward
+
         forward = self._module_ref.forward
         fn_ref = HookFunctionReference()
         fn_ref.pre_forward = hook.pre_forward
         fn_ref.post_forward = hook.post_forward
         fn_ref.forward = forward
-        if hasattr(hook, 'new_forward'):
+        if hasattr(hook, "new_forward"):
             fn_ref.original_forward = forward
-            fn_ref.forward = functools.update_wrapper(functools.partial(
-                hook.new_forward, self._module_ref), hook.new_forward)
+            fn_ref.forward = functools.update_wrapper(
+                functools.partial(hook.new_forward, self._module_ref), hook.new_forward
+            )
         rewritten_forward = create_new_forward(fn_ref)
-        self._module_ref.forward = functools.update_wrapper(functools.
-            partial(rewritten_forward, self._module_ref), rewritten_forward)
+        self._module_ref.forward = functools.update_wrapper(
+            functools.partial(rewritten_forward, self._module_ref), rewritten_forward
+        )
         hook.fn_ref = fn_ref
         self.hooks[name] = hook
         self._hook_order.append(name)
         self._fn_refs.append(fn_ref)
 
-    def get_hook(self, name: str) ->Optional[ModelHook]:
+    def get_hook(self, name: str) -> Optional[ModelHook]:
         return self.hooks.get(name, None)
 
-    def remove_hook(self, name: str, recurse: bool=True) ->None:
+    def remove_hook(self, name: str, recurse: bool = True) -> None:
         if name in self.hooks.keys():
             num_hooks = len(self._hook_order)
             hook = self.hooks[name]
@@ -170,41 +185,38 @@ class HookRegistry:
             self._hook_order.pop(index)
             self._fn_refs.pop(index)
         if recurse:
-            for module_name, module in self._module_ref.named_sublayers(
-                include_self=True):
-                if module_name == '':
+            for module_name, module in self._module_ref.named_sublayers(include_self=True):
+                if module_name == "":
                     continue
-                if hasattr(module, '_diffusers_hook'):
+                if hasattr(module, "_diffusers_hook"):
                     module._diffusers_hook.remove_hook(name, recurse=False)
 
-    def reset_stateful_hooks(self, recurse: bool=True) ->None:
+    def reset_stateful_hooks(self, recurse: bool = True) -> None:
         for hook_name in reversed(self._hook_order):
             hook = self.hooks[hook_name]
             if hook._is_stateful:
                 hook.reset_state(self._module_ref)
         if recurse:
-            for module_name, module in self._module_ref.named_sublayers(
-                include_self=True):
-                if module_name == '':
+            for module_name, module in self._module_ref.named_sublayers(include_self=True):
+                if module_name == "":
                     continue
-                if hasattr(module, '_diffusers_hook'):
+                if hasattr(module, "_diffusers_hook"):
                     module._diffusers_hook.reset_stateful_hooks(recurse=False)
 
     @classmethod
-    def check_if_exists_or_initialize(cls, module: paddle.nn.Layer
-        ) ->'HookRegistry':
-        if not hasattr(module, '_diffusers_hook'):
+    def check_if_exists_or_initialize(cls, module: paddle.nn.Layer) -> "HookRegistry":
+        if not hasattr(module, "_diffusers_hook"):
             module._diffusers_hook = cls(module)
         return module._diffusers_hook
 
-    def __repr__(self) ->str:
-        registry_repr = ''
+    def __repr__(self) -> str:
+        registry_repr = ""
         for i, hook_name in enumerate(self._hook_order):
             if self.hooks[hook_name].__class__.__repr__ is not object.__repr__:
                 hook_repr = self.hooks[hook_name].__repr__()
             else:
                 hook_repr = self.hooks[hook_name].__class__.__name__
-            registry_repr += f'  ({i}) {hook_name} - {hook_repr}'
+            registry_repr += f"  ({i}) {hook_name} - {hook_repr}"
             if i < len(self._hook_order) - 1:
-                registry_repr += '\n'
-        return f'HookRegistry(\n{registry_repr}\n)'
+                registry_repr += "\n"
+        return f"HookRegistry(\n{registry_repr}\n)"

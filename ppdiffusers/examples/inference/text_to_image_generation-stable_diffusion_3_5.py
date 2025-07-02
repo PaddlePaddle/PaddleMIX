@@ -16,14 +16,13 @@ import paddle
 
 from ppdiffusers import StableDiffusion3Pipeline
 
-pipe = StableDiffusion3Pipeline.from_pretrained(
-    "stabilityai/stable-diffusion-3.5-medium", paddle_dtype=paddle.float16
-)
+pipe = StableDiffusion3Pipeline.from_pretrained("stabilityai/stable-diffusion-3.5-medium", paddle_dtype=paddle.float16)
 generator = paddle.Generator().manual_seed(42)
 prompt = "A cat holding a sign that says hello world"
-image = pipe(prompt, 
-             generator=generator,
-             num_inference_steps=40,
-             guidance_scale=4.5,
-        ).images[0]
+image = pipe(
+    prompt,
+    generator=generator,
+    num_inference_steps=40,
+    guidance_scale=4.5,
+).images[0]
 image.save("text_to_image_generation-stable_diffusion_3.5-result.png")

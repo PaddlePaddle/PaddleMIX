@@ -27,8 +27,6 @@ def img_psnr(img1, img2):
     return psnr
 
 
-
-
 def calculate_psnr(videos1, videos2):
     # videos [batch_size, timestamps, channel, h, w]
 

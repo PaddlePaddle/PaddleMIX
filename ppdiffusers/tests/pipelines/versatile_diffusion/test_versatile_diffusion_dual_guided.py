@@ -14,14 +14,11 @@
 # limitations under the License.
 
 import gc
-import tempfile
 import unittest
 
-import numpy as np
 import paddle
 
-from ppdiffusers import VersatileDiffusionDualGuidedPipeline
-from ppdiffusers.utils.testing_utils import load_image, nightly, require_paddle_gpu
+from ppdiffusers.utils.testing_utils import nightly, require_paddle_gpu
 
 
 @nightly

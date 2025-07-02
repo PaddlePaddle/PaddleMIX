@@ -351,27 +351,27 @@ def to(self=None, device=None, dtype=None, blocking=None):
 
 nn.Layer.to = to
 
-from ..utils.import_utils import is_ppxformers_available, is_npu_available
+from ..utils.import_utils import is_npu_available, is_ppxformers_available
 
 if is_npu_available():
     for lib in os.listdir(os.getenv("CUSTOM_DEVICE_ROOT")):
         if lib.endswith(".so"):
-            paddle.utils.cpp_extension.extension_utils.load_op_meta_info_and_register_op(
-                lib
-            )
+            paddle.utils.cpp_extension.extension_utils.load_op_meta_info_and_register_op(lib)
     from paddle.base import core
-    def scaled_dot_product_attention_npu(query,
-                                         key,
-                                         value,
-                                         attn_mask=None,
-                                         dropout_p=0.0,
-                                         is_causal=False,
-                                         training=True,
-                                         name=None,
-                                         fixed_seed_offset=None,
-                                         return_softmax=False,
-                                         is_triangle_upper_mask=True,
-                                         ):
+
+    def scaled_dot_product_attention_npu(
+        query,
+        key,
+        value,
+        attn_mask=None,
+        dropout_p=0.0,
+        is_causal=False,
+        training=True,
+        name=None,
+        fixed_seed_offset=None,
+        return_softmax=False,
+        is_triangle_upper_mask=True,
+    ):
         out = core.eager._run_custom_op(
             "flash_attention_npu",
             query,
@@ -386,8 +386,9 @@ if is_npu_available():
             is_triangle_upper_mask,
         )[0]
         return out
+
     paddle.nn.functional.scaled_dot_product_attention_npu = scaled_dot_product_attention_npu
-    
+
 if is_ppxformers_available() or is_npu_available():
     from paddle.incubate.nn.memory_efficient_attention import memory_efficient_attention
 
@@ -407,8 +408,9 @@ if is_ppxformers_available() or is_npu_available():
             paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
             attn_mask=paddle.ones((1, 2, 1, 1), dtype=paddle.float16),
         )
-        
+
         from paddle.nn.functional.flash_attention import flash_attention
+
         _ = flash_attention(
             paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
             paddle.ones((1, 1, 2, 40), dtype=paddle.float16),

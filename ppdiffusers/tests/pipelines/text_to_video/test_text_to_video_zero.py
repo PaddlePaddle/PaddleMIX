@@ -14,12 +14,7 @@
 
 import unittest
 
-import paddle
-
-from ppdiffusers import DDIMScheduler, TextToVideoZeroPipeline
-from ppdiffusers.utils import load_pd, require_paddle_gpu, slow
-
-from ..test_pipelines_common import assert_mean_pixel_difference
+from ppdiffusers.utils import require_paddle_gpu, slow
 
 
 @slow

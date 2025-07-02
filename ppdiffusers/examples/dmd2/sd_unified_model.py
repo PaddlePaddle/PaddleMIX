@@ -17,7 +17,7 @@ import paddle
 from paddle import nn
 from sd_guidance import SDGuidance
 from sdxl.sdxl_text_encoder import SDXLTextEncoder
-from utils import NoOpContext, get_x0_from_noise
+from utils import get_x0_from_noise
 
 from ppdiffusers import AutoencoderKL, AutoencoderTiny, UNet2DConditionModel
 from ppdiffusers.accelerate.utils import broadcast

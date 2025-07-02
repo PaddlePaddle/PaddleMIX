@@ -18,14 +18,14 @@ import matplotlib
 
 matplotlib.use("Agg")
 
-import os
-import time
-import wandb
-import shutil
-import logging
 import argparse
+import logging
+import os
+import shutil
+import time
 
 import paddle
+import wandb
 from data.lmdb_dataset import LMDBDataset
 from edm.edm_unified_model import EDMUniModel
 from utils import (

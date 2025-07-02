@@ -21,22 +21,35 @@ import paddle.nn as nn
 import paddle.nn.functional as F
 
 from ..configuration_utils import ConfigMixin, register_to_config
+
 # from ..loaders import FluxTransformer2DLoadersMixin, FromOriginalModelMixin, PeftAdapterMixin
 from ..models.attention import FeedForward
-from ..models.attention_processor import (
+from ..models.attention_processor import (  # FluxAttnProcessor2_0_NPU,
     Attention,
     AttentionProcessor,
     FluxAttnProcessor2_0,
-    # FluxAttnProcessor2_0_NPU,
     FusedFluxAttnProcessor2_0,
 )
 from ..models.modeling_utils import ModelMixin
-from ..models.normalization import AdaLayerNormContinuous, AdaLayerNormZero, AdaLayerNormZeroSingle
-from ..utils import USE_PEFT_BACKEND, is_torch_version, logging, scale_lora_layers, unscale_lora_layers
-from ..utils.paddle_utils  import maybe_allow_in_graph
-from .embeddings import CombinedTimestepGuidanceTextProjEmbeddings, CombinedTimestepTextProjEmbeddings, FluxPosEmbed
+from ..models.normalization import (
+    AdaLayerNormContinuous,
+    AdaLayerNormZero,
+    AdaLayerNormZeroSingle,
+)
+from ..utils import (
+    USE_PEFT_BACKEND,
+    is_torch_version,
+    logging,
+    scale_lora_layers,
+    unscale_lora_layers,
+)
+from ..utils.paddle_utils import maybe_allow_in_graph
+from .embeddings import (
+    CombinedTimestepGuidanceTextProjEmbeddings,
+    CombinedTimestepTextProjEmbeddings,
+    FluxPosEmbed,
+)
 from .modeling_outputs import Transformer2DModelOutput
-
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -148,10 +161,10 @@ class FluxTransformerBlock(nn.Layer):
             eps=eps,
         )
 
-        self.norm2 = nn.LayerNorm(dim,  epsilon=1e-06, weight_attr=False, bias_attr=False)
+        self.norm2 = nn.LayerNorm(dim, epsilon=1e-06, weight_attr=False, bias_attr=False)
         self.ff = FeedForward(dim=dim, dim_out=dim, activation_fn="gelu-approximate")
 
-        self.norm2_context = nn.LayerNorm(dim,  epsilon=1e-06, weight_attr=False, bias_attr=False)
+        self.norm2_context = nn.LayerNorm(dim, epsilon=1e-06, weight_attr=False, bias_attr=False)
         self.ff_context = FeedForward(dim=dim, dim_out=dim, activation_fn="gelu-approximate")
 
         # let chunk size default to None
@@ -216,7 +229,7 @@ class FluxTransformerBlock(nn.Layer):
 
 
 class FluxTransformer2DModel(
-    ModelMixin, ConfigMixin # , PeftAdapterMixin, FromOriginalModelMixin, FluxTransformer2DLoadersMixin
+    ModelMixin, ConfigMixin  # , PeftAdapterMixin, FromOriginalModelMixin, FluxTransformer2DLoadersMixin
 ):
     """
     The Transformer model introduced in Flux.

@@ -159,14 +159,14 @@ if __name__ == "__main__":
         validation_mask_images = load_images_from_video_to_pil(args.control_mask_video_path)
 
     if args.prompt_path is not None:
-        if not args.prompt_path.endswith('.txt'):
+        if not args.prompt_path.endswith(".txt"):
             prompt = args.prompt_path
         else:
             with open(args.prompt_path, "r") as f:
                 lines = f.readlines()
                 prompt = lines[0].strip()
     else:
-        prompt=None
+        prompt = None
 
     if args.vctrl_path.endswith(".pdparams"):
         vctrl = VCtrlModel.from_config(args.vctrl_config)
@@ -175,9 +175,7 @@ if __name__ == "__main__":
     elif args.random_initialization:
         vctrl = VCtrlModel.from_config(args.vctrl_config)
     else:
-        vctrl = VCtrlModel.from_pretrained(
-            args.vctrl_path,  low_cpu_mem_usage=True,paddle_dtype=paddle.float16
-        )
+        vctrl = VCtrlModel.from_pretrained(args.vctrl_path, low_cpu_mem_usage=True, paddle_dtype=paddle.float16)
 
     if args.transformer_path:
         transformer = CogVideoXTransformer3DVCtrlModel.from_pretrained(
@@ -189,7 +187,11 @@ if __name__ == "__main__":
         )
     else:
         pipeline = CogVideoXVCtrlPipeline.from_pretrained(
-            args.pretrained_model_name_or_path, vctrl=vctrl, paddle_dtype=paddle.float16, low_cpu_mem_usage=True,map_location="cpu",
+            args.pretrained_model_name_or_path,
+            vctrl=vctrl,
+            paddle_dtype=paddle.float16,
+            low_cpu_mem_usage=True,
+            map_location="cpu",
         )
 
     pipeline.scheduler = CogVideoXDDIMScheduler.from_config(pipeline.scheduler.config, timestep_spacing="trailing")

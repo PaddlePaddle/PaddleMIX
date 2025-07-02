@@ -44,17 +44,12 @@ from paddlenlp.trainer.trainer import (
     TRAINING_ARGS_NAME,
 )
 from paddlenlp.trainer.trainer_utils import PREFIX_CHECKPOINT_DIR
-from paddlenlp.transformers.model_utils import _add_variant
 from paddlenlp.utils import profiler
 from paddlenlp.utils.log import logger
 
-from ppdiffusers.optimization import get_scheduler
-
-from .ema_callback import EmaCallback
-
 use_tensorboard = False
 if use_tensorboard:
-    from tensorboardX import SummaryWriter
+    pass
 
 
 def worker_init_fn(_):

@@ -13,25 +13,23 @@
 # limitations under the License.
 
 import functools
-from typing import Dict, Optional, Tuple, Union
-
-import paddle
-import paddle.nn as nn
+from typing import Optional, Tuple, Union
 
 import numpy as np
+import paddle
+import paddle.nn as nn
 
 from ..configuration_utils import ConfigMixin, register_to_config
 from ..utils import logging
 from ..utils.accelerate_utils import apply_forward_hook
 from .activations import get_activation
 from .attention_processor import Attention, MochiVaeAttnProcessor2_0
+from .autoencoder_kl_cogvideox import CogVideoXCausalConv3d
 from .modeling_outputs import AutoencoderKLOutput
 from .modeling_utils import ModelMixin
-from .autoencoder_kl_cogvideox import CogVideoXCausalConv3d
 from .vae import DecoderOutput, DiagonalGaussianDistribution
 
-
-logger = logging.get_logger(__name__) 
+logger = logging.get_logger(__name__)
 
 
 class MochiChunkedGroupNorm3D(nn.Layer):
@@ -43,41 +41,44 @@ class MochiChunkedGroupNorm3D(nn.Layer):
         chunk_size: int = 8,
     ):
         super().__init__()
-        self.norm_layer = nn.GroupNorm(num_channels=num_channels, num_groups=num_groups, weight_attr=affine, bias_attr=affine)
+        self.norm_layer = nn.GroupNorm(
+            num_channels=num_channels, num_groups=num_groups, weight_attr=affine, bias_attr=affine
+        )
         self.chunk_size = chunk_size
 
     def forward(self, x: paddle.Tensor = None) -> paddle.Tensor:
         batch_size = x.shape[0]
 
         x = x.transpose([0, 2, 1, 3, 4]).flatten(0, 1)
-        
+
         if x.shape[0] <= self.chunk_size:
             output = self.norm_layer(x)
         elif x.shape[0] % self.chunk_size == 0:
-            output = paddle.concat([self.norm_layer(chunk) for chunk in paddle.split(x, num_or_sections=self.chunk_size, axis=0)], axis=0)
+            output = paddle.concat(
+                [self.norm_layer(chunk) for chunk in paddle.split(x, num_or_sections=self.chunk_size, axis=0)], axis=0
+            )
         else:
             chunks = []
             num_full_chunks = x.shape[0] // self.chunk_size
-            
+
             # Process the evenly divisible portion
             for i in range(num_full_chunks):
                 start_idx = i * self.chunk_size
                 end_idx = start_idx + self.chunk_size
                 chunk = x[start_idx:end_idx]
                 chunks.append(self.norm_layer(chunk))
-            
+
             # Process the remaining portion
             remainder = x.shape[0] % self.chunk_size
             if remainder > 0:
                 last_chunk = x[-remainder:]
                 chunks.append(self.norm_layer(last_chunk))
-            
+
             output = paddle.concat(chunks, axis=0)
-            
+
         output = output.reshape([batch_size, -1] + list(output.shape[1:])).transpose([0, 2, 1, 3, 4])
 
         return output
-
 
 
 class MochiResnetBlock3D(nn.Layer):
@@ -97,11 +98,21 @@ class MochiResnetBlock3D(nn.Layer):
 
         self.norm1 = MochiChunkedGroupNorm3D(num_channels=in_channels)
         self.conv1 = CogVideoXCausalConv3d(
-            in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, pad_mode="replicate", is_mochi=True
+            in_channels=in_channels,
+            out_channels=out_channels,
+            kernel_size=3,
+            stride=1,
+            pad_mode="replicate",
+            is_mochi=True,
         )
         self.norm2 = MochiChunkedGroupNorm3D(num_channels=out_channels)
         self.conv2 = CogVideoXCausalConv3d(
-            in_channels=out_channels, out_channels=out_channels, kernel_size=3, stride=1, pad_mode="replicate", is_mochi=True
+            in_channels=out_channels,
+            out_channels=out_channels,
+            kernel_size=3,
+            stride=1,
+            pad_mode="replicate",
+            is_mochi=True,
         )
 
     def forward(
@@ -143,7 +154,7 @@ class MochiDownBlock3D(nn.Layer):
             kernel_size=(temporal_expansion, spatial_expansion, spatial_expansion),
             stride=(temporal_expansion, spatial_expansion, spatial_expansion),
             pad_mode="replicate",
-            is_mochi=True
+            is_mochi=True,
         )
 
         resnets = []
@@ -183,6 +194,7 @@ class MochiDownBlock3D(nn.Layer):
 
         for i, (resnet, norm, attn) in enumerate(zip(self.resnets, self.norms, self.attentions)):
             if self.training and self.gradient_checkpointing:
+
                 def create_custom_forward(module):
                     def create_forward(*inputs):
                         return module(*inputs)
@@ -190,7 +202,8 @@ class MochiDownBlock3D(nn.Layer):
                     return create_forward
 
                 hidden_states = paddle.distributed.fleet.utils.recompute(
-                    create_custom_forward(resnet), hidden_states,
+                    create_custom_forward(resnet),
+                    hidden_states,
                 )
             else:
                 hidden_states = resnet(hidden_states)
@@ -212,13 +225,14 @@ class MochiDownBlock3D(nn.Layer):
                         hidden_states_chunks.append(hidden_states_chunk)
                     hidden_states = paddle.concat(hidden_states_chunks)
 
-                hidden_states = hidden_states.reshape([batch_size, height, width, num_frames, num_channels]).transpose([0, 4, 3, 1, 2])
+                hidden_states = hidden_states.reshape([batch_size, height, width, num_frames, num_channels]).transpose(
+                    [0, 4, 3, 1, 2]
+                )
 
                 hidden_states = residual + hidden_states
 
         return hidden_states
-    
-    
+
 
 class MochiMidBlock3D(nn.Layer):
     def __init__(
@@ -264,18 +278,16 @@ class MochiMidBlock3D(nn.Layer):
     ) -> paddle.Tensor:
 
         for i, (resnet, norm, attn) in enumerate(zip(self.resnets, self.norms, self.attentions)):
-            
+
             if self.training and self.gradient_checkpointing:
-                
+
                 def create_custom_forward(module):
                     def create_forward(*inputs):
                         return module(*inputs)
 
                     return create_forward
-                
-                hidden_states = paddle.distributed.fleet.utils.recompute(
-                    create_custom_forward(resnet), hidden_states
-                )
+
+                hidden_states = paddle.distributed.fleet.utils.recompute(create_custom_forward(resnet), hidden_states)
             else:
                 hidden_states = resnet(hidden_states)
 
@@ -284,9 +296,13 @@ class MochiMidBlock3D(nn.Layer):
                 hidden_states = norm(hidden_states)
 
                 batch_size, num_channels, num_frames, height, width = hidden_states.shape
-                hidden_states = hidden_states.transpose([0, 3, 4, 2, 1]).reshape([batch_size * height * width, num_frames, num_channels])
+                hidden_states = hidden_states.transpose([0, 3, 4, 2, 1]).reshape(
+                    [batch_size * height * width, num_frames, num_channels]
+                )
                 hidden_states = attn(hidden_states)
-                hidden_states = hidden_states.reshape([batch_size, height, width, num_frames, num_channels]).transpose([0, 4, 3, 1, 2])
+                hidden_states = hidden_states.reshape([batch_size, height, width, num_frames, num_channels]).transpose(
+                    [0, 4, 3, 1, 2]
+                )
 
                 hidden_states = residual + hidden_states
 
@@ -323,15 +339,14 @@ class MochiUpBlock3D(nn.Layer):
         for i, resnet in enumerate(self.resnets):
 
             if self.training and self.gradient_checkpointing:
+
                 def create_custom_forward(module):
                     def create_forward(*inputs):
                         return module(*inputs)
 
                     return create_forward
-                
-                hidden_states = paddle.distributed.fleet.utils.recompute(
-                    create_custom_forward(resnet), hidden_states
-                )
+
+                hidden_states = paddle.distributed.fleet.utils.recompute(create_custom_forward(resnet), hidden_states)
             else:
                 hidden_states = resnet(hidden_states)
 
@@ -361,7 +376,7 @@ class FourierFeatures(nn.Layer):
 
     def forward(self, inputs: paddle.Tensor) -> paddle.Tensor:
         original_dtype = inputs.dtype
-        inputs = inputs.astype('float32')
+        inputs = inputs.astype("float32")
         num_channels = inputs.shape[1]
         num_freqs = (self.stop - self.start) // self.step
 
@@ -417,7 +432,8 @@ class MochiEncoder3D(nn.Layer):
         self.proj_out = nn.Linear(block_out_channels[-1], 2 * out_channels, bias_attr=False)
 
     def forward(
-        self, hidden_states: paddle.Tensor,
+        self,
+        hidden_states: paddle.Tensor,
     ) -> paddle.Tensor:
 
         hidden_states = self.fourier_features(hidden_states)
@@ -427,13 +443,13 @@ class MochiEncoder3D(nn.Layer):
         hidden_states = hidden_states.transpose([0, 4, 1, 2, 3])
 
         if self.training and self.gradient_checkpointing:
-            
+
             def create_custom_forward(module):
                 def custom_forward(*inputs):
                     return module(*inputs)
 
                 return custom_forward
-            
+
             hidden_states = paddle.distributed.fleet.utils.recompute(
                 create_custom_forward(self.block_in), hidden_states
             )
@@ -443,18 +459,12 @@ class MochiEncoder3D(nn.Layer):
                     create_custom_forward(down_block), hidden_states
                 )
         else:
-            hidden_states = self.block_in(
-                hidden_states
-            )
+            hidden_states = self.block_in(hidden_states)
 
             for i, down_block in enumerate(self.down_blocks):
-                hidden_states = down_block(
-                    hidden_states
-                )
+                hidden_states = down_block(hidden_states)
 
-        hidden_states = self.block_out(
-            hidden_states
-        )
+        hidden_states = self.block_out(hidden_states)
 
         hidden_states = self.norm_out(hidden_states)
         hidden_states = self.nonlinearity(hidden_states)
@@ -509,20 +519,18 @@ class MochiDecoder3D(nn.Layer):
 
         self.gradient_checkpointing = False
 
-    def forward(
-        self, hidden_states: paddle.Tensor
-    ) -> paddle.Tensor:
+    def forward(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
 
         hidden_states = self.conv_in(hidden_states)
 
         if self.training and self.gradient_checkpointing:
-            
+
             def create_custom_forward(module):
                 def custom_forward(*inputs):
                     return module(*inputs)
 
                 return custom_forward
-            
+
             hidden_states = paddle.distributed.fleet.utils.recompute(
                 create_custom_forward(self.block_in), hidden_states
             )
@@ -532,18 +540,12 @@ class MochiDecoder3D(nn.Layer):
                     create_custom_forward(up_block), hidden_states
                 )
         else:
-            hidden_states = self.block_in(
-                hidden_states
-            )
+            hidden_states = self.block_in(hidden_states)
 
             for i, up_block in enumerate(self.up_blocks):
-                hidden_states = up_block(
-                    hidden_states
-                )
+                hidden_states = up_block(hidden_states)
 
-        hidden_states = self.block_out(
-            hidden_states
-        )
+        hidden_states = self.block_out(hidden_states)
 
         hidden_states = self.nonlinearity(hidden_states)
 
@@ -552,7 +554,7 @@ class MochiDecoder3D(nn.Layer):
         hidden_states = hidden_states.transpose([0, 4, 1, 2, 3])
 
         return hidden_states
-    
+
 
 class AutoencoderKLMochi(ModelMixin, ConfigMixin):
     _supports_gradient_checkpointing = True
@@ -691,7 +693,9 @@ class AutoencoderKLMochi(ModelMixin, ConfigMixin):
         return enc
 
     @apply_forward_hook
-    def encode(self, x: paddle.Tensor, return_dict: bool = True) -> Union[AutoencoderKLOutput, Tuple[DiagonalGaussianDistribution]]:
+    def encode(
+        self, x: paddle.Tensor, return_dict: bool = True
+    ) -> Union[AutoencoderKLOutput, Tuple[DiagonalGaussianDistribution]]:
         if self.use_slicing and x.shape[0] > 1:
             encoded_slices = [self._encode(x_slice) for x_slice in paddle.split(x, num_or_sections=1, axis=0)]
             h = paddle.concat(encoded_slices, axis=0)

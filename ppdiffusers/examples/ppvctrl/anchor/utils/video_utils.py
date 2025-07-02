@@ -13,8 +13,9 @@
 # limitations under the License.
 
 import os
-import moviepy.editor as mp
+
 import cv2
+import moviepy.editor as mp
 from tqdm import tqdm
 
 
@@ -48,11 +49,12 @@ def create_video(annotated_frames, height, width, output_video_path, frame_rate=
     video_writer.release()
     print(f"Video saved at {output_video_path}")
 
+
 def save_video_from_bgr(frames, output_path, frame_rate=25, width=None, height=None):
     # 确保frames是一个包含每一帧的列表
     if len(frames) == 0:
         raise ValueError("frames list is empty")
-    
+
     # 将BGR格式转换为RGB格式
     # frames_rgb = [cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) for frame in frames]
 
@@ -67,6 +69,6 @@ def save_video_from_bgr(frames, output_path, frame_rate=25, width=None, height=N
     video_clip = video_clip.resize(newsize=(width, height))
 
     # 保存为MP4文件
-    video_clip.write_videofile(output_path, codec='libx264')
+    video_clip.write_videofile(output_path, codec="libx264")
 
     print(f"Video saved at {output_path}")
