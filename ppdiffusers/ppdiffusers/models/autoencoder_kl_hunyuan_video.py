@@ -12,11 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Optional, Tuple, Union
 
 import numpy as np
 import paddle
-from ppdiffusers.utils.paddle_utils import *
 
 from ..configuration_utils import ConfigMixin, register_to_config
 from ..utils import logging
@@ -27,11 +26,17 @@ from .modeling_outputs import AutoencoderKLOutput
 from .modeling_utils import ModelMixin
 from .vae import DecoderOutput, DiagonalGaussianDistribution
 
+# from ppdiffusers.utils.paddle_utils import *
+
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
 
-def prepare_causal_attention_mask(num_frames: int, height_width: int, dtype: paddle.dtype, device: (paddle.CPUPlace, paddle.CUDAPlace, str), batch_size: int = None
+def prepare_causal_attention_mask(
+    num_frames: int,
+    height_width: int,
+    dtype: paddle.dtype,
+    batch_size: int = None,
 ) -> paddle.Tensor:
     seq_len = num_frames * height_width
     mask = paddle.full(shape=(seq_len, seq_len), fill_value=float("-inf"), dtype=dtype)
@@ -218,7 +223,7 @@ class HunyuanVideoMidBlock3D(paddle.nn.Layer):
         attention_head_dim: int = 1,
     ) -> None:
         super().__init__()
-        resnet_groups = (resnet_groups if resnet_groups is not None else min(in_channels // 4, 32))
+        resnet_groups = resnet_groups if resnet_groups is not None else min(in_channels // 4, 32)
         self.add_attention = add_attention
 
         # There is always at least one resnet
@@ -281,42 +286,44 @@ class HunyuanVideoMidBlock3D(paddle.nn.Layer):
                 return custom_forward
 
             hidden_states = paddle.distributed.fleet.utils.recompute(
-                    create_custom_forward(self.resnets[0]), hidden_states
-                )
+                create_custom_forward(self.resnets[0]), hidden_states
+            )
 
             for attn, resnet in zip(self.attentions, self.resnets[1:]):
                 if attn is not None:
                     batch_size, num_channels, num_frames, height, width = tuple(hidden_states.shape)
-                    hidden_states = hidden_states.transpose(
-                        perm=[0, 2, 3, 4, 1]
-                    ).flatten(start_axis=1, stop_axis=3)
+                    hidden_states = hidden_states.transpose(perm=[0, 2, 3, 4, 1]).flatten(start_axis=1, stop_axis=3)
                     attention_mask = prepare_causal_attention_mask(
-                        num_frames, height * width, hidden_states.dtype, hidden_states.place, batch_size=batch_size,
+                        num_frames,
+                        height * width,
+                        hidden_states.dtype,
+                        hidden_states.place,
+                        batch_size=batch_size,
                     )
                     hidden_states = attn(hidden_states, attention_mask=attention_mask, vae=True)
-                    hidden_states = hidden_states.unflatten(
-                        axis=1, shape=(num_frames, height, width)
-                    ).transpose(perm=[0, 4, 1, 2, 3])
+                    hidden_states = hidden_states.unflatten(axis=1, shape=(num_frames, height, width)).transpose(
+                        perm=[0, 4, 1, 2, 3]
+                    )
 
-                hidden_states = paddle.distributed.fleet.utils.recompute(
-                    create_custom_forward(resnet), hidden_states
-                )
+                hidden_states = paddle.distributed.fleet.utils.recompute(create_custom_forward(resnet), hidden_states)
 
         else:
             hidden_states = self.resnets[0](hidden_states)
             for attn, resnet in zip(self.attentions, self.resnets[1:]):
                 if attn is not None:
                     batch_size, num_channels, num_frames, height, width = tuple(hidden_states.shape)
-                    hidden_states = hidden_states.transpose(
-                        perm=[0, 2, 3, 4, 1]
-                    ).flatten(start_axis=1, stop_axis=3)
+                    hidden_states = hidden_states.transpose(perm=[0, 2, 3, 4, 1]).flatten(start_axis=1, stop_axis=3)
                     attention_mask = prepare_causal_attention_mask(
-                        num_frames, height * width, hidden_states.dtype, hidden_states.place, batch_size=batch_size,
+                        num_frames,
+                        height * width,
+                        hidden_states.dtype,
+                        hidden_states.place,
+                        batch_size=batch_size,
                     )
                     hidden_states = attn(hidden_states, attention_mask=attention_mask, vae=True)
-                    hidden_states = hidden_states.unflatten(
-                        axis=1, shape=(num_frames, height, width)
-                    ).transpose(perm=[0, 4, 1, 2, 3])
+                    hidden_states = hidden_states.unflatten(axis=1, shape=(num_frames, height, width)).transpose(
+                        perm=[0, 4, 1, 2, 3]
+                    )
                 hidden_states = resnet(hidden_states)
 
         return hidden_states
@@ -383,9 +390,7 @@ class HunyuanVideoDownBlock3D(paddle.nn.Layer):
                 return custom_forward
 
             for resnet in self.resnets:
-                hidden_states = paddle.distributed.fleet.utils.recompute(
-                    create_custom_forward(resnet), hidden_states
-                )
+                hidden_states = paddle.distributed.fleet.utils.recompute(create_custom_forward(resnet), hidden_states)
         else:
             for resnet in self.resnets:
                 hidden_states = resnet(hidden_states)
@@ -457,9 +462,7 @@ class HunyuanVideoUpBlock3D(paddle.nn.Layer):
                 return custom_forward
 
             for resnet in self.resnets:
-                hidden_states = paddle.distributed.fleet.utils.recompute(
-                    create_custom_forward(resnet), hidden_states
-                )
+                hidden_states = paddle.distributed.fleet.utils.recompute(create_custom_forward(resnet), hidden_states)
 
         else:
             for resnet in self.resnets:
@@ -551,7 +554,9 @@ class HunyuanVideoEncoder3D(paddle.nn.Layer):
             add_attention=mid_block_add_attention,
         )
 
-        self.conv_norm_out = paddle.nn.GroupNorm(num_channels=block_out_channels[-1], num_groups=norm_num_groups, epsilon=1e-06)
+        self.conv_norm_out = paddle.nn.GroupNorm(
+            num_channels=block_out_channels[-1], num_groups=norm_num_groups, epsilon=1e-06
+        )
         self.conv_act = paddle.nn.Silu()
 
         conv_out_channels = 2 * out_channels if double_z else out_channels
@@ -579,8 +584,8 @@ class HunyuanVideoEncoder3D(paddle.nn.Layer):
                 )
 
             hidden_states = paddle.distributed.fleet.utils.recompute(
-                    create_custom_forward(self.mid_block), hidden_states
-                )
+                create_custom_forward(self.mid_block), hidden_states
+            )
         else:
             for down_block in self.down_blocks:
                 hidden_states = down_block(hidden_states)
@@ -673,7 +678,9 @@ class HunyuanVideoDecoder3D(paddle.nn.Layer):
             prev_output_channel = output_channel
 
         # out
-        self.conv_norm_out = paddle.nn.GroupNorm(num_channels=block_out_channels[0], num_groups=norm_num_groups, epsilon=1e-06)
+        self.conv_norm_out = paddle.nn.GroupNorm(
+            num_channels=block_out_channels[0], num_groups=norm_num_groups, epsilon=1e-06
+        )
         self.conv_act = paddle.nn.Silu()
         self.conv_out = HunyuanVideoCausalConv3d(block_out_channels[0], out_channels, kernel_size=3)
 
@@ -694,8 +701,8 @@ class HunyuanVideoDecoder3D(paddle.nn.Layer):
                 return custom_forward
 
             hidden_states = paddle.distributed.fleet.utils.recompute(
-                    create_custom_forward(self.mid_block), hidden_states
-                )
+                create_custom_forward(self.mid_block), hidden_states
+            )
 
             for up_block in self.up_blocks:
                 hidden_states = paddle.distributed.fleet.utils.recompute(
@@ -926,15 +933,15 @@ class AutoencoderKLHunyuanVideo(ModelMixin, ConfigMixin):
 
     def _decode(self, z: paddle.Tensor, return_dict: bool = True) -> Union[DecoderOutput, paddle.Tensor]:
         batch_size, num_channels, num_frames, height, width = tuple(z.shape)
-        tile_latent_min_height = (self.tile_sample_min_height // self.spatial_compression_ratio)
-        tile_latent_min_width = (self.tile_sample_stride_width // self.spatial_compression_ratio)
-        tile_latent_min_num_frames = (self.tile_sample_min_num_frames // self.temporal_compression_ratio)
+        tile_latent_min_height = self.tile_sample_min_height // self.spatial_compression_ratio
+        tile_latent_min_width = self.tile_sample_stride_width // self.spatial_compression_ratio
+        tile_latent_min_num_frames = self.tile_sample_min_num_frames // self.temporal_compression_ratio
         if self.use_framewise_decoding and num_frames > tile_latent_min_num_frames:
             return self._temporal_tiled_decode(z, return_dict=return_dict)
 
         if self.use_tiling and (width > tile_latent_min_width or height > tile_latent_min_height):
             return self.tiled_decode(z, return_dict=return_dict)
-        
+
         z = self.post_quant_conv(z)
         dec = self.decoder(z)
 
@@ -972,25 +979,25 @@ class AutoencoderKLHunyuanVideo(ModelMixin, ConfigMixin):
     def blend_v(self, a: paddle.Tensor, b: paddle.Tensor, blend_extent: int) -> paddle.Tensor:
         blend_extent = min(tuple(a.shape)[-2], tuple(b.shape)[-2], blend_extent)
         for y in range(blend_extent):
-            b[:, :, :, (y), :] = a[:, :, :, (-blend_extent + y), :] * (
-                1 - y / blend_extent
-            ) + b[:, :, :, (y), :] * (y / blend_extent)
+            b[:, :, :, (y), :] = a[:, :, :, (-blend_extent + y), :] * (1 - y / blend_extent) + b[:, :, :, (y), :] * (
+                y / blend_extent
+            )
         return b
 
     def blend_h(self, a: paddle.Tensor, b: paddle.Tensor, blend_extent: int) -> paddle.Tensor:
         blend_extent = min(tuple(a.shape)[-1], tuple(b.shape)[-1], blend_extent)
         for x in range(blend_extent):
-            b[:, :, :, :, (x)] = a[:, :, :, :, (-blend_extent + x)] * (
-                1 - x / blend_extent
-            ) + b[:, :, :, :, (x)] * (x / blend_extent)
+            b[:, :, :, :, (x)] = a[:, :, :, :, (-blend_extent + x)] * (1 - x / blend_extent) + b[:, :, :, :, (x)] * (
+                x / blend_extent
+            )
         return b
 
     def blend_t(self, a: paddle.Tensor, b: paddle.Tensor, blend_extent: int) -> paddle.Tensor:
         blend_extent = min(tuple(a.shape)[-3], tuple(b.shape)[-3], blend_extent)
         for x in range(blend_extent):
-            b[:, :, (x), :, :] = a[:, :, (-blend_extent + x), :, :] * (
-                1 - x / blend_extent
-            ) + b[:, :, (x), :, :] * (x / blend_extent)
+            b[:, :, (x), :, :] = a[:, :, (-blend_extent + x), :, :] * (1 - x / blend_extent) + b[:, :, (x), :, :] * (
+                x / blend_extent
+            )
         return b
 
     def tiled_encode(self, x: paddle.Tensor) -> AutoencoderKLOutput:
@@ -1007,10 +1014,10 @@ class AutoencoderKLHunyuanVideo(ModelMixin, ConfigMixin):
         latent_height = height // self.spatial_compression_ratio
         latent_width = width // self.spatial_compression_ratio
 
-        tile_latent_min_height = (self.tile_sample_min_height // self.spatial_compression_ratio)
-        tile_latent_min_width = (self.tile_sample_min_width // self.spatial_compression_ratio)
-        tile_latent_stride_height = (self.tile_sample_stride_height // self.spatial_compression_ratio)
-        tile_latent_stride_width = (self.tile_sample_stride_width // self.spatial_compression_ratio)
+        tile_latent_min_height = self.tile_sample_min_height // self.spatial_compression_ratio
+        tile_latent_min_width = self.tile_sample_min_width // self.spatial_compression_ratio
+        tile_latent_stride_height = self.tile_sample_stride_height // self.spatial_compression_ratio
+        tile_latent_stride_width = self.tile_sample_stride_width // self.spatial_compression_ratio
 
         blend_height = tile_latent_min_height - tile_latent_stride_height
         blend_width = tile_latent_min_width - tile_latent_stride_width
@@ -1062,10 +1069,10 @@ class AutoencoderKLHunyuanVideo(ModelMixin, ConfigMixin):
         sample_height = height * self.spatial_compression_ratio
         sample_width = width * self.spatial_compression_ratio
 
-        tile_latent_min_height = (self.tile_sample_min_height // self.spatial_compression_ratio)
-        tile_latent_min_width = (self.tile_sample_min_width // self.spatial_compression_ratio)
-        tile_latent_stride_height = (self.tile_sample_stride_height // self.spatial_compression_ratio)
-        tile_latent_stride_width = (self.tile_sample_stride_width // self.spatial_compression_ratio)
+        tile_latent_min_height = self.tile_sample_min_height // self.spatial_compression_ratio
+        tile_latent_min_width = self.tile_sample_min_width // self.spatial_compression_ratio
+        tile_latent_stride_height = self.tile_sample_stride_height // self.spatial_compression_ratio
+        tile_latent_stride_width = self.tile_sample_stride_width // self.spatial_compression_ratio
 
         blend_height = self.tile_sample_min_height - self.tile_sample_stride_height
         blend_width = self.tile_sample_min_width - self.tile_sample_stride_width
@@ -1104,8 +1111,8 @@ class AutoencoderKLHunyuanVideo(ModelMixin, ConfigMixin):
         batch_size, num_channels, num_frames, height, width = tuple(x.shape)
         latent_num_frames = (num_frames - 1) // self.temporal_compression_ratio + 1
 
-        tile_latent_min_num_frames = (self.tile_sample_min_num_frames // self.temporal_compression_ratio)
-        tile_latent_stride_num_frames = (self.tile_sample_stride_num_frames // self.temporal_compression_ratio)
+        tile_latent_min_num_frames = self.tile_sample_min_num_frames // self.temporal_compression_ratio
+        tile_latent_stride_num_frames = self.tile_sample_stride_num_frames // self.temporal_compression_ratio
         blend_num_frames = tile_latent_min_num_frames - tile_latent_stride_num_frames
 
         row = []
@@ -1131,20 +1138,24 @@ class AutoencoderKLHunyuanVideo(ModelMixin, ConfigMixin):
         enc = paddle.concat(x=result_row, axis=2)[:, :, :latent_num_frames]
         return enc
 
-    def _temporal_tiled_decode(self, z: paddle.Tensor, return_dict: bool = True) -> Union[DecoderOutput, paddle.Tensor]:
+    def _temporal_tiled_decode(
+        self, z: paddle.Tensor, return_dict: bool = True
+    ) -> Union[DecoderOutput, paddle.Tensor]:
         batch_size, num_channels, num_frames, height, width = tuple(z.shape)
         num_sample_frames = (num_frames - 1) * self.temporal_compression_ratio + 1
 
-        tile_latent_min_height = (self.tile_sample_min_height // self.spatial_compression_ratio)
-        tile_latent_min_width = (self.tile_sample_min_width // self.spatial_compression_ratio)
-        tile_latent_min_num_frames = (self.tile_sample_min_num_frames // self.temporal_compression_ratio)
-        tile_latent_stride_num_frames = (self.tile_sample_stride_num_frames // self.temporal_compression_ratio)
-        blend_num_frames = (self.tile_sample_min_num_frames - self.tile_sample_stride_num_frames)
+        tile_latent_min_height = self.tile_sample_min_height // self.spatial_compression_ratio
+        tile_latent_min_width = self.tile_sample_min_width // self.spatial_compression_ratio
+        tile_latent_min_num_frames = self.tile_sample_min_num_frames // self.temporal_compression_ratio
+        tile_latent_stride_num_frames = self.tile_sample_stride_num_frames // self.temporal_compression_ratio
+        blend_num_frames = self.tile_sample_min_num_frames - self.tile_sample_stride_num_frames
 
         row = []
         for i in range(0, num_frames, tile_latent_stride_num_frames):
             tile = z[:, :, i : i + tile_latent_min_num_frames + 1, :, :]
-            if self.use_tiling and (tuple(tile.shape)[-1] > tile_latent_min_width or tuple(tile.shape)[-2] > tile_latent_min_height):
+            if self.use_tiling and (
+                tuple(tile.shape)[-1] > tile_latent_min_width or tuple(tile.shape)[-2] > tile_latent_min_height
+            ):
                 decoded = self.tiled_decode(tile, return_dict=True).sample
             else:
                 tile = self.post_quant_conv(tile)

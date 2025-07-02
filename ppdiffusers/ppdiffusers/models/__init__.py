@@ -70,7 +70,7 @@ if is_paddle_available():
     _import_structure["cogvideox_transformer_3d_vctrl"] = ["CogVideoXTransformer3DVCtrlModel"]
     _import_structure["transformer_hunyuan_video"] = ["HunyuanVideoTransformer3DModel"]
     _import_structure["transformer_flux"] = ["FluxTransformer2DModel"]
-    _import_structure["controlnet_flux"] = ["FluxControlNetModel", 'FluxMultiControlNetModel']
+    _import_structure["controlnet_flux"] = ["FluxControlNetModel", "FluxMultiControlNetModel"]
 
 
 if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
@@ -79,8 +79,8 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         from .autoencoder_asym_kl import AsymmetricAutoencoderKL
         from .autoencoder_kl import AutoencoderKL
         from .autoencoder_kl_cogvideox import AutoencoderKLCogVideoX
-        from .autoencoder_kl_mochi import AutoencoderKLMochi
         from .autoencoder_kl_hunyuan_video import AutoencoderKLHunyuanVideo
+        from .autoencoder_kl_mochi import AutoencoderKLMochi
         from .autoencoder_kl_temporal_decoder import AutoencoderKLTemporalDecoder
         from .autoencoder_kl_wan import AutoencoderKLWan
         from .autoencoder_tiny import AutoencoderTiny
@@ -88,12 +88,11 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         from .cogvideox_transformer_3d_vctrl import CogVideoXTransformer3DVCtrlModel
         from .consistency_decoder_vae import ConsistencyDecoderVAE
         from .controlnet import ControlNetModel
-        from .controlnet_sd3 import SD3ControlNetModel, SD3MultiControlNetModel
         from .controlnet_flux import FluxControlNetModel, FluxMultiControlNetModel
+        from .controlnet_sd3 import SD3ControlNetModel, SD3MultiControlNetModel
         from .dit_llama import DiTLLaMA2DModel
         from .dit_llama_t2i import DiTLLaMAT2IModel
         from .dual_transformer_2d import DualTransformer2DModel
-        from .transformer_mochi import MochiTransformer3DModel
 
         # NOTE, new add
         from .ema import LitEma
@@ -111,6 +110,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         from .transformer_2d import Transformer2DModel
         from .transformer_flux import FluxTransformer2DModel
         from .transformer_hunyuan_video import HunyuanVideoTransformer3DModel
+        from .transformer_mochi import MochiTransformer3DModel
         from .transformer_sd3 import SD3Transformer2DModel
         from .transformer_temporal import TransformerTemporalModel
         from .transformer_wan import WanTransformer3DModel

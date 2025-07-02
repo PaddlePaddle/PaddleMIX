@@ -20,11 +20,16 @@ from glob import glob
 import numpy as np
 import paddle
 from coco_eval import cleanfid
-from coco_eval.cleanfid.utils import *
-from PIL import Image
+from coco_eval.cleanfid.utils import (
+    EXTENSIONS,
+    ResizeArrayDataset,
+    ResizeDataset,
+    build_resizer,
+)
+
+# from PIL import Image
 from scipy import linalg
 from tqdm import tqdm
-
 
 """
 Numpy implementation of the Frechet Distance.
@@ -148,7 +153,7 @@ def get_files_features(
 
 
 """
-Compute the inception features for a numpy array 
+Compute the inception features for a numpy array
 """
 
 
@@ -316,6 +321,7 @@ def get_model_features(
         return np_feats, latents
     return np_feats
 
+
 """
 Computes the FID score between the two given folders
 """
@@ -416,197 +422,8 @@ def remove_custom_stats(name, mode="clean", model_name="inception_v3"):
 
 
 """
-Cache a custom dataset statistics file
-"""
-
-
-def make_custom_stats(
-    name,
-    fdir,
-    num=None,
-    mode="clean",
-    model_name="inception_v3",
-    num_workers=0,
-    batch_size=64,
-    device=None,
-    verbose=True,
-):
-    stats_folder = os.path.join(os.path.dirname(cleanfid.__file__), "stats")
-    os.makedirs(stats_folder, exist_ok=True)
-    split, res = "custom", "na"
-    if model_name == "inception_v3":
-        model_modifier = ""
-    else:
-        model_modifier = "_" + model_name
-    outf = os.path.join(stats_folder, f"{name}_{mode}{model_modifier}_{split}_{res}.npz".lower())
-    # if the custom stat file already exists
-    if os.path.exists(outf):
-        msg = f"The statistics file {name} already exists. "
-        msg += "Use remove_custom_stats function to delete it first."
-        raise Exception(msg)
-    if model_name == "inception_v3":
-        feat_model = build_feature_extractor(mode, device)
-        custom_fn_resize = None
-        custom_image_tranform = None
-    else:
-        raise ValueError(f"The entered model name - {model_name} was not recognized.")
-
-    # get all inception features for folder images
-    np_feats = get_folder_features(
-        fdir,
-        feat_model,
-        num_workers=num_workers,
-        num=num,
-        batch_size=batch_size,
-        device=device,
-        verbose=verbose,
-        mode=mode,
-        description=f"custom stats: {os.path.basename(fdir)} : ",
-        custom_image_tranform=custom_image_tranform,
-        custom_fn_resize=custom_fn_resize,
-    )
-
-    mu = np.mean(np_feats, axis=0)
-    sigma = np.cov(np_feats, rowvar=False)
-    print(f"saving custom FID stats to {outf}")
-    np.savez_compressed(outf, mu=mu, sigma=sigma)
-
-    # KID stats
-    outf = os.path.join(stats_folder, f"{name}_{mode}{model_modifier}_{split}_{res}_kid.npz".lower())
-    print(f"saving custom KID stats to {outf}")
-    np.savez_compressed(outf, feats=np_feats)
-
-
-def compute_kid(
-    fdir1=None,
-    fdir2=None,
-    gen=None,
-    mode="clean",
-    num_workers=12,
-    batch_size=32,
-    device=None,
-    dataset_name="FFHQ",
-    dataset_res=1024,
-    dataset_split="train",
-    num_gen=50_000,
-    z_dim=512,
-    verbose=True,
-    use_dataparallel=True,
-):
-    # build the feature extractor based on the mode
-    feat_model = build_feature_extractor(mode, device, use_dataparallel=use_dataparallel)
-
-    # if both dirs are specified, compute KID between folders
-    if fdir1 is not None and fdir2 is not None:
-        if verbose:
-            print("compute KID between two folders")
-        # get all inception features for the first folder
-        fbname1 = os.path.basename(fdir1)
-        np_feats1 = get_folder_features(
-            fdir1,
-            feat_model,
-            num_workers=num_workers,
-            batch_size=batch_size,
-            device=device,
-            mode=mode,
-            description=f"KID {fbname1} : ",
-            verbose=verbose,
-        )
-        # get all inception features for the second folder
-        fbname2 = os.path.basename(fdir2)
-        np_feats2 = get_folder_features(
-            fdir2,
-            feat_model,
-            num_workers=num_workers,
-            batch_size=batch_size,
-            device=device,
-            mode=mode,
-            description=f"KID {fbname2} : ",
-            verbose=verbose,
-        )
-        score = kernel_distance(np_feats1, np_feats2)
-        return score
-
-    # compute kid of a folder
-    elif fdir1 is not None and fdir2 is None:
-        if verbose:
-            print(f"compute KID of a folder with {dataset_name} statistics")
-        ref_feats = get_reference_statistics(
-            dataset_name, dataset_res, mode=mode, seed=0, split=dataset_split, metric="KID"
-        )
-        fbname = os.path.basename(fdir1)
-        # get all inception features for folder images
-        np_feats = get_folder_features(
-            fdir1,
-            feat_model,
-            num_workers=num_workers,
-            batch_size=batch_size,
-            device=device,
-            mode=mode,
-            description=f"KID {fbname} : ",
-            verbose=verbose,
-        )
-        score = kernel_distance(ref_feats, np_feats)
-        return score
-
-    # compute kid for a generator, using images in fdir2
-    elif gen is not None and fdir2 is not None:
-        if verbose:
-            print(f"compute KID of a model, using references in fdir2")
-        # get all inception features for the second folder
-        fbname2 = os.path.basename(fdir2)
-        ref_feats = get_folder_features(
-            fdir2,
-            feat_model,
-            num_workers=num_workers,
-            batch_size=batch_size,
-            device=device,
-            mode=mode,
-            description=f"KID {fbname2} : ",
-        )
-        # Generate test features
-        np_feats = get_model_features(
-            gen,
-            feat_model,
-            mode=mode,
-            z_dim=z_dim,
-            num_gen=num_gen,
-            desc="KID model: ",
-            batch_size=batch_size,
-            device=device,
-        )
-        score = kernel_distance(ref_feats, np_feats)
-        return score
-
-    # compute fid for a generator, using reference statistics
-    elif gen is not None:
-        if verbose:
-            print(f"compute KID of a model with {dataset_name}-{dataset_res} statistics")
-        ref_feats = get_reference_statistics(
-            dataset_name, dataset_res, mode=mode, seed=0, split=dataset_split, metric="KID"
-        )
-        # Generate test features
-        np_feats = get_model_features(
-            gen,
-            feat_model,
-            mode=mode,
-            z_dim=z_dim,
-            num_gen=num_gen,
-            desc="KID model: ",
-            batch_size=batch_size,
-            device=device,
-            verbose=verbose,
-        )
-        score = kernel_distance(ref_feats, np_feats)
-        return score
-
-    else:
-        raise ValueError("invalid combination of directories and models entered")
-
-
-"""
 custom_image_tranform:
-    function that takes an np_array image as input [0,255] and 
+    function that takes an np_array image as input [0,255] and
     applies a custom transform such as cropping
 """
 
@@ -672,27 +489,12 @@ def compute_fid(
     elif fdir1 is not None and fdir2 is None:
         if verbose:
             print(f"compute FID of a folder with {dataset_name} statistics")
-        score = fid_folder(
-            fdir1,
-            dataset_name,
-            dataset_res,
-            dataset_split,
-            model=feat_model,
-            mode=mode,
-            model_name=model_name,
-            custom_fn_resize=custom_fn_resize,
-            custom_image_tranform=custom_image_tranform,
-            num_workers=num_workers,
-            batch_size=batch_size,
-            device=device,
-            verbose=verbose,
-        )
-        return score
+        raise NotImplementedError
 
     # compute fid for a generator, using images in fdir2
     elif gen is not None and fdir2 is not None:
         if verbose:
-            print(f"compute FID of a model, using references in fdir2")
+            print("compute FID of a model, using references in fdir2")
         # get all inception features for the second folder
         fbname2 = os.path.basename(fdir2)
         np_feats2 = get_folder_features(
@@ -732,28 +534,11 @@ def compute_fid(
     elif gen is not None:
         if verbose:
             print(f"compute FID of a model with {dataset_name}-{dataset_res} statistics")
-        score = fid_model(
-            gen,
-            dataset_name,
-            dataset_res,
-            dataset_split,
-            model=feat_model,
-            model_name=model_name,
-            z_dim=z_dim,
-            num_gen=num_gen,
-            mode=mode,
-            num_workers=num_workers,
-            batch_size=batch_size,
-            custom_image_tranform=custom_image_tranform,
-            custom_fn_resize=custom_fn_resize,
-            device=device,
-            verbose=verbose,
-        )
-        return score
+        raise NotImplementedError
 
     elif pred_arr is not None:
         if verbose:
-            print(f"compute FID of a model, using references in fdir2")
+            print("compute FID of a model, using references in fdir2")
         # get all inception features for the second folder
         fbname2 = os.path.basename(fdir2)
         np_feats2 = get_folder_features(

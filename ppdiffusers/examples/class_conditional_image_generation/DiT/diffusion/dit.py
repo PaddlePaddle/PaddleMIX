@@ -31,6 +31,7 @@ from ppdiffusers.models.modeling_utils import ModelMixin
 
 from .transformer_engine_utils import TransformerEngineHelper
 
+
 def is_model_parrallel():
     """
     check whether the current training is model parallel or not.
@@ -219,6 +220,7 @@ class Attention(nn.Layer):
             x = self.proj_drop(x)
         return x
 
+
 class MlpWithNVTEBackend(nn.Layer):
     """MLP as used in Vision Transformer, MLP-Mixer and related networks"""
 
@@ -238,8 +240,12 @@ class MlpWithNVTEBackend(nn.Layer):
 
         te = TransformerEngineHelper.get_te()
         if is_model_parrallel():
-            self.fc1 = te.Linear(in_features, hidden_features, bias_attr=bias, parallel_mode='column', gather_output=True)
-            self.fc2 = te.Linear(hidden_features, out_features, bias_attr=bias, parallel_mode='column', gather_output=True)
+            self.fc1 = te.Linear(
+                in_features, hidden_features, bias_attr=bias, parallel_mode="column", gather_output=True
+            )
+            self.fc2 = te.Linear(
+                hidden_features, out_features, bias_attr=bias, parallel_mode="column", gather_output=True
+            )
         else:
             self.fc1 = te.Linear(in_features, hidden_features, bias_attr=bias)
             self.fc2 = te.Linear(hidden_features, out_features, bias_attr=bias)
@@ -259,7 +265,6 @@ class MlpWithNVTEBackend(nn.Layer):
         with get_rng_state_tracker().rng_state("global_seed"):
             x = self.drop2(x)
         return x
-
 
 
 class ParallelTimestepEmbedder(nn.Layer):
@@ -360,6 +365,7 @@ class ParallelLabelEmbedder(nn.Layer):
         embeddings = self.embedding_table(labels)
         return embeddings
 
+
 class DiTBlockWithNVTEBackend(nn.Layer):
     """
     A DiT block with adaptive layer norm zero (adaLN-Zero) conditioning.
@@ -370,7 +376,9 @@ class DiTBlockWithNVTEBackend(nn.Layer):
         te = TransformerEngineHelper.get_te()
         self.use_fp8 = use_fp8
         self.norm1 = te.LayerNorm(hidden_size, 1e-6, weight_attr=None, bias_attr=None)
-        self.attn = te.MultiHeadAttention(hidden_size, num_heads, attention_dropout=0.0, bias_attr=True, attn_mask_type='padding')
+        self.attn = te.MultiHeadAttention(
+            hidden_size, num_heads, attention_dropout=0.0, bias_attr=True, attn_mask_type="padding"
+        )
         self.norm2 = te.LayerNorm(hidden_size, 1e-6, weight_attr=None, bias_attr=None)
         mlp_hidden_dim = int(hidden_size * mlp_ratio)
         approx_gelu = lambda: nn.GELU(approximate=True)  # 'tanh'
@@ -383,7 +391,7 @@ class DiTBlockWithNVTEBackend(nn.Layer):
         if is_model_parrallel():
             self.adaLN_modulation = nn.Sequential(
                 nn.Silu(),
-                te.Linear(hidden_size, 6 * hidden_size, bias_attr=True, parallel_mode='column', gather_output=True)
+                te.Linear(hidden_size, 6 * hidden_size, bias_attr=True, parallel_mode="column", gather_output=True),
             )
         else:
             self.adaLN_modulation = nn.Sequential(
@@ -392,13 +400,12 @@ class DiTBlockWithNVTEBackend(nn.Layer):
             )
 
     def forward(self, x, c):
-        with TransformerEngineHelper.fp8_autocast(
-            self.use_fp8, TransformerEngineHelper.get_fp8_group()
-        ):
+        with TransformerEngineHelper.fp8_autocast(self.use_fp8, TransformerEngineHelper.get_fp8_group()):
             shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.adaLN_modulation(c).chunk(6, axis=1)
             x = x + gate_msa.unsqueeze(1) * self.attn(modulate(self.norm1(x), shift_msa, scale_msa))
             x = x + gate_mlp.unsqueeze(1) * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp))
         return x
+
 
 class DiTBlock(nn.Layer):
     """
@@ -524,11 +531,16 @@ class DiT(ModelMixin, ConfigMixin):
         # self.add_parameter("pos_embed", self.pos_embed)
 
         # 2. Define transformers blocks
-        if (transformer_engine_backend):
+        if transformer_engine_backend:
             self.blocks = nn.LayerList(
                 [
-                    DiTBlockWithNVTEBackend(hidden_size, num_attention_heads, mlp_ratio=mlp_ratio,
-                                            fused_attn=self.fused_attn, use_fp8=use_fp8)
+                    DiTBlockWithNVTEBackend(
+                        hidden_size,
+                        num_attention_heads,
+                        mlp_ratio=mlp_ratio,
+                        fused_attn=self.fused_attn,
+                        use_fp8=use_fp8,
+                    )
                     for _ in range(num_layers)
                 ]
             )
@@ -553,12 +565,18 @@ class DiT(ModelMixin, ConfigMixin):
             else:
                 TE_LINEAR = type(None)
             if isinstance(
-                module, (nn.Linear, fleet.meta_parallel.ColumnParallelLinear, fleet.meta_parallel.RowParallelLinear, TE_LINEAR)
+                module,
+                (
+                    nn.Linear,
+                    fleet.meta_parallel.ColumnParallelLinear,
+                    fleet.meta_parallel.RowParallelLinear,
+                    TE_LINEAR,
+                ),
             ):
                 if isinstance(module, (TE_LINEAR)):
-                    transpose_weight = paddle.transpose(module.weight, perm=[1,0])
+                    transpose_weight = paddle.transpose(module.weight, perm=[1, 0])
                     initializer.XavierUniform()(transpose_weight)
-                    module.weight.set_value(paddle.transpose(transpose_weight, perm=[1,0]))
+                    module.weight.set_value(paddle.transpose(transpose_weight, perm=[1, 0]))
                 else:
                     initializer.XavierUniform()(module.weight)
                 if module.bias is not None:
@@ -628,8 +646,10 @@ class DiT(ModelMixin, ConfigMixin):
         c = t + y  # (N, D)
 
         recompute = (
-            TransformerEngineHelper.get_te_recompute_func() if self.transformer_engine_backend
-            else paddle.distributed.fleet.utils.recompute)
+            TransformerEngineHelper.get_te_recompute_func()
+            if self.transformer_engine_backend
+            else paddle.distributed.fleet.utils.recompute
+        )
 
         for i, block in enumerate(self.blocks):
             if self.gradient_checkpointing:

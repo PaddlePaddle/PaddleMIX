@@ -237,13 +237,17 @@ class DiTDiffusionModel(nn.Layer):
         # init DiT
         if model_args.pretrained_model_name_or_path is None:
             if model_args.config_file.startswith("config/LargeDiT_"):
-                self.transformer = DiT_Llama(**read_json(model_args.config_file),
-                                             transformer_engine_backend=training_args.transformer_engine_backend,
-                                             use_fp8=training_args.use_fp8)
+                self.transformer = DiT_Llama(
+                    **read_json(model_args.config_file),
+                    transformer_engine_backend=training_args.transformer_engine_backend,
+                    use_fp8=training_args.use_fp8,
+                )
             else:
-                self.transformer = DiT(**read_json(model_args.config_file),
-                                       transformer_engine_backend=training_args.transformer_engine_backend,
-                                       use_fp8=training_args.use_fp8)
+                self.transformer = DiT(
+                    **read_json(model_args.config_file),
+                    transformer_engine_backend=training_args.transformer_engine_backend,
+                    use_fp8=training_args.use_fp8,
+                )
             # Note: Initialize DiT in diffusion/dit.py
             logger.info("Init DiT model from scratch!")
         else:

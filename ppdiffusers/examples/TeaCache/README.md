@@ -1,10 +1,10 @@
 # TeaCache
-> **TeaCache（Timestep Embedding Aware Cache）** 是一种**training-free**推理加速方法：  
+> **TeaCache（Timestep Embedding Aware Cache）** 是一种**training-free**推理加速方法：
 > 它通过 timestep embedding 估计各时间步输出变化，将**变化小**的层输出直接缓存并复用，可为图像 / 视频 / 音频扩散模型带来 **1.5–2×** 的速度提升，几乎不损失质量。
 
 
 ## 快速上手（以 SD3 为例）
-[TeaCache](https://github.com/LiewFeng/TeaCache) 可在**无需重新训练**的前提下，将 SD3 的推理速度提升约 2 倍，而且几乎不会降低视觉质量。  
+[TeaCache](https://github.com/LiewFeng/TeaCache) 可在**无需重新训练**的前提下，将 SD3 的推理速度提升约 2 倍，而且几乎不会降低视觉质量。
 下图展示了在不同 `rel_l1_thresh` 取值下（0 = 原始、0.2 = 1.60x 提速、0.3 = 1.80x、0.4 = 2.38x、0.6 = 2.82x、0.8=3.53x）使用 TeaCache‑SD3 生成的效果对比：
 
 ![visualization](assets/example.jpg)

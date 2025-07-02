@@ -306,7 +306,10 @@ class PaddleInferStableDiffusionPipeline(DiffusionPipeline, PaddleInferDiffusion
                 # predict the noise residual
                 noise_pred_unet = self.unet(**unet_inputs)[0]
                 if str(os.environ.get("FLAGS_model_return_data")).lower() in ("true", "1"):
-                    print(f"StableDiffusion infer: step {i+1} , origin output {noise_pred_unet.abs().numpy().mean()} ", flush=True)
+                    print(
+                        f"StableDiffusion infer: step {i+1} , origin output {noise_pred_unet.abs().numpy().mean()} ",
+                        flush=True,
+                    )
 
                 # perform guidance
                 if do_classifier_free_guidance:

@@ -18,19 +18,20 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import paddle
-from ...transformers import CLIPTextModel, CLIPTokenizer, LlamaModel, LlamaTokenizerFast
 
 from ...callbacks import MultiPipelineCallbacks, PipelineCallback
+
 # from ...loaders import HunyuanVideoLoraLoaderMixin
 from ...models import AutoencoderKLHunyuanVideo, HunyuanVideoTransformer3DModel
 from ...schedulers import FlowMatchEulerDiscreteScheduler
+from ...transformers import CLIPTextModel, CLIPTokenizer, LlamaModel, LlamaTokenizerFast
 from ...utils import logging, replace_example_docstring
 from ...utils.paddle_utils import randn_tensor
 from ...video_processor import VideoProcessor
 from ..pipeline_utils import DiffusionPipeline
 from .pipeline_output import HunyuanVideoPipelineOutput
 
-logger = logging.get_logger(__name__) # pylint: disable=invalid-name
+logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
 EXAMPLE_DOC_STRING = """
     Examples:
@@ -279,7 +280,10 @@ class HunyuanVideoPipeline(DiffusionPipeline):  # HunyuanVideoLoraLoaderMixin
 
         text_input_ids = text_inputs.input_ids
         untruncated_ids = self.tokenizer_2(prompt, padding="longest", return_tensors="pd").input_ids
-        if (tuple(untruncated_ids.shape)[-1] >= tuple(text_input_ids.shape)[-1] and not paddle.equal_all(x=text_input_ids, y=untruncated_ids).item()):
+        if (
+            tuple(untruncated_ids.shape)[-1] >= tuple(text_input_ids.shape)[-1]
+            and not paddle.equal_all(x=text_input_ids, y=untruncated_ids).item()
+        ):
             removed_text = self.tokenizer_2.batch_decode(untruncated_ids[:, max_sequence_length - 1 : -1])
             logger.warning(
                 "The following part of your input was truncated because CLIP can only handle sequences up to"
@@ -386,7 +390,7 @@ class HunyuanVideoPipeline(DiffusionPipeline):  # HunyuanVideoLoraLoaderMixin
         latents: Optional[paddle.Tensor] = None,
     ) -> paddle.Tensor:
         if latents is not None:
-            return latents.to( dtype=dtype)
+            return latents.to(dtype=dtype)
 
         shape = (
             batch_size,
@@ -573,7 +577,6 @@ class HunyuanVideoPipeline(DiffusionPipeline):  # HunyuanVideoLoraLoaderMixin
         self._current_timestep = None
         self._interrupt = False
 
-
         # 2. Define call parameters
         if prompt is not None and isinstance(prompt, str):
             batch_size = 1
@@ -581,7 +584,6 @@ class HunyuanVideoPipeline(DiffusionPipeline):  # HunyuanVideoLoraLoaderMixin
             batch_size = len(prompt)
         else:
             batch_size = tuple(prompt_embeds.shape)[0]
-
 
         # 3. Encode input prompt
         prompt_embeds, pooled_prompt_embeds, prompt_attention_mask = self.encode_prompt(
@@ -625,7 +627,13 @@ class HunyuanVideoPipeline(DiffusionPipeline):  # HunyuanVideoLoraLoaderMixin
         )
 
         # 6. Prepare guidance condition
-        guidance = (paddle.to_tensor(data=[guidance_scale] * tuple(latents.shape)[0], dtype=transformer_dtype,) * 1000.0)
+        guidance = (
+            paddle.to_tensor(
+                data=[guidance_scale] * tuple(latents.shape)[0],
+                dtype=transformer_dtype,
+            )
+            * 1000.0
+        )
 
         # 7. Denoising loop
         num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order

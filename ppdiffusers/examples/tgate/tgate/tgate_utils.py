@@ -1,24 +1,38 @@
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import inspect
+from typing import Optional
+
 import paddle
 import paddle.nn.functional as F
-from ppdiffusers.utils import (
-    BACKENDS_MAPPING,
-    deprecate,
-    logging
-)
-import inspect
-from typing import Callable, List, Optional, Tuple, Union
-logger = logging.get_logger(__name__) 
+
+from ppdiffusers.utils import deprecate, logging
+
+logger = logging.get_logger(__name__)
+
 
 def register_forward(
-    model, 
-    filter_name: str = 'Attention', 
+    model,
+    filter_name: str = "Attention",
     keep_shape: bool = True,
     sa_kward: dict = None,
     ca_kward: dict = None,
     **kwargs,
 ):
     """
-    A customized forward function for cross attention layer. 
+    A customized forward function for cross attention layer.
     Detailed information in https://github.com/HaozheLiu-ST/T-GATE
 
     Args:
@@ -29,18 +43,19 @@ def register_forward(
         keep_shape (`bool`):
             Whether or not to remain the shape of hidden features
         sa_kward: (`dict`):
-            A kwargs dictionary to pass along to the self attention for caching and reusing. 
+            A kwargs dictionary to pass along to the self attention for caching and reusing.
         ca_kward: (`dict`):
-            A kwargs dictionary to pass along to the cross attention for caching and reusing. 
+            A kwargs dictionary to pass along to the cross attention for caching and reusing.
 
     Returns:
         count (`int`): The number of the cross attention layers used in the given model.
     """
 
     count = 0
+
     def warp_custom(
         self: paddle.nn.Layer,
-        keep_shape:bool = True,
+        keep_shape: bool = True,
         ca_kward: dict = None,
         sa_kward: dict = None,
         **kwargs,
@@ -49,11 +64,11 @@ def register_forward(
             hidden_states: paddle.Tensor,
             encoder_hidden_states: Optional[paddle.Tensor] = None,
             attention_mask: Optional[paddle.Tensor] = None,
-            keep_shape = keep_shape,
-            ca_cache = ca_kward['cache'],
-            sa_cache = sa_kward['cache'],
-            ca_reuse = ca_kward['reuse'],
-            sa_reuse = sa_kward['reuse'],
+            keep_shape=keep_shape,
+            ca_cache=ca_kward["cache"],
+            sa_cache=sa_kward["cache"],
+            ca_reuse=ca_kward["reuse"],
+            sa_reuse=sa_kward["reuse"],
             **cross_attention_kwargs,
         ) -> paddle.Tensor:
             r"""
@@ -76,66 +91,63 @@ def register_forward(
             # here we simply pass along all tensors to the selected processor class
             # For standard processors that are defined here, `**cross_attention_kwargs` is empty
 
-            if not hasattr(self,'cache'):
+            if not hasattr(self, "cache"):
                 self.cache = None
             attn_parameters = set(inspect.signature(self.processor.__call__).parameters.keys())
             unused_kwargs = [k for k, _ in cross_attention_kwargs.items() if k not in attn_parameters]
-            
+
             if len(unused_kwargs) > 0:
                 logger.warning(
                     f"cross_attention_kwargs {unused_kwargs} are not expected by {self.processor.__class__.__name__} and will be ignored."
                 )
-            
+
             cross_attention_kwargs = {k: w for k, w in cross_attention_kwargs.items() if k in attn_parameters}
-            
-            hidden_states, cache =  tgate_processor(
+
+            hidden_states, cache = tgate_processor(
                 self,
                 hidden_states,
                 encoder_hidden_states=encoder_hidden_states,
                 attention_mask=attention_mask,
-                keep_shape = keep_shape,
-                cache = self.cache,
-                ca_cache = ca_cache,
-                sa_cache = sa_cache,
-                ca_reuse = ca_reuse,
-                sa_reuse = sa_reuse,
+                keep_shape=keep_shape,
+                cache=self.cache,
+                ca_cache=ca_cache,
+                sa_cache=sa_cache,
+                ca_reuse=ca_reuse,
+                sa_reuse=sa_reuse,
                 **cross_attention_kwargs,
             )
             if cache is not None:
                 self.cache = cache
             return hidden_states
+
         return forward
 
     def register_recr(
-        net: paddle.nn.Layer, 
-        count: int = None, 
-        keep_shape:bool = True, 
-        ca_kward:dict = None,
-        sa_kward:dict = None
+        net: paddle.nn.Layer, count: int = None, keep_shape: bool = True, ca_kward: dict = None, sa_kward: dict = None
     ):
         if net.__class__.__name__ == filter_name:
-            net.forward = warp_custom(net, keep_shape = keep_shape, ca_kward = ca_kward,sa_kward = sa_kward)
+            net.forward = warp_custom(net, keep_shape=keep_shape, ca_kward=ca_kward, sa_kward=sa_kward)
             return count + 1
-        elif hasattr(net, 'children'):
+        elif hasattr(net, "children"):
             for net_child in net.children():
-                count = register_recr(net_child, count, keep_shape = keep_shape, ca_kward = ca_kward,sa_kward = sa_kward)
+                count = register_recr(net_child, count, keep_shape=keep_shape, ca_kward=ca_kward, sa_kward=sa_kward)
         return count
 
-    return register_recr(model, count, keep_shape = keep_shape, ca_kward = ca_kward,sa_kward = sa_kward) 
+    return register_recr(model, count, keep_shape=keep_shape, ca_kward=ca_kward, sa_kward=sa_kward)
 
 
 def tgate_processor(
-    attn = None,
-    hidden_states = None,
-    encoder_hidden_states = None,
-    attention_mask  = None,
-    temb  = None,
-    cache = None,
-    keep_shape = True,
-    ca_cache = False,
-    sa_cache = False,
-    ca_reuse = False,
-    sa_reuse = False,
+    attn=None,
+    hidden_states=None,
+    encoder_hidden_states=None,
+    attention_mask=None,
+    temb=None,
+    cache=None,
+    keep_shape=True,
+    ca_cache=False,
+    sa_cache=False,
+    ca_reuse=False,
+    sa_reuse=False,
     *args,
     **kwargs,
 ) -> paddle.Tensor:
@@ -167,7 +179,7 @@ def tgate_processor(
     residual = hidden_states
 
     cross_attn = encoder_hidden_states is not None
-    self_attn =  encoder_hidden_states is None
+    self_attn = encoder_hidden_states is None
 
     input_ndim = hidden_states.ndim
 
@@ -234,7 +246,7 @@ def tgate_processor(
                 cache = hidden_states
             else:
                 hidden_uncond, hidden_pred_text = hidden_states.chunk(2)
-                cache = (hidden_uncond + hidden_pred_text ) / 2
+                cache = (hidden_uncond + hidden_pred_text) / 2
         else:
             cache = None
 
@@ -249,93 +261,81 @@ def tgate_processor(
     return hidden_states, cache
 
 
-
-
-
 def tgate_scheduler(
-    cur_step: int = None, 
-    gate_step: int = 10, 
+    cur_step: int = None,
+    gate_step: int = 10,
     sp_interval: int = 5,
     fi_interval: int = 1,
     warm_up: int = 2,
 ):
     r"""
-    The T-GATE scheduler function 
+    The T-GATE scheduler function
 
     Args:
         cur_step (`int`):
-            The current time step. 
-        gate_step (`int` defaults to 10): 
+            The current time step.
+        gate_step (`int` defaults to 10):
             The time step to stop calculating the cross attention.
-        sp_interval (`int` defaults to 5): 
+        sp_interval (`int` defaults to 5):
             The time-step interval to cache self attention before gate_step (Semantics-Planning Phase).
-        fi_interval (`int` defaults to 1): 
+        fi_interval (`int` defaults to 1):
             The time-step interval to cache self attention after gate_step (Fidelity-Improving Phase).
-        warm_up (`int` defaults to 2): 
+        warm_up (`int` defaults to 2):
             The time step to warm up the model inference.
 
     Returns:
         ca_kward: (`dict`):
-            A kwargs dictionary to pass along to the cross attention for caching and reusing. 
+            A kwargs dictionary to pass along to the cross attention for caching and reusing.
         sa_kward: (`dict`):
-            A kwargs dictionary to pass along to the self attention for caching and reusing. 
+            A kwargs dictionary to pass along to the self attention for caching and reusing.
         keep_shape (`bool`):
             Whether or not to remain the shape of hidden features
     """
-    if cur_step < gate_step-1:
+    if cur_step < gate_step - 1:
         # Semantics-Planning Stage
         ca_kwards = {
-            'cache': False,
-            'reuse': False,
+            "cache": False,
+            "reuse": False,
         }
         if cur_step < warm_up:
             sa_kwards = {
-                'cache': False,
-                'reuse': False,
+                "cache": False,
+                "reuse": False,
             }
         elif cur_step == warm_up:
             sa_kwards = {
-                'cache': True,
-                'reuse': False,
-            }   
+                "cache": True,
+                "reuse": False,
+            }
         else:
             if cur_step % sp_interval == 0:
                 sa_kwards = {
-                    'cache': True,
-                    'reuse': False,
+                    "cache": True,
+                    "reuse": False,
                 }
             else:
                 sa_kwards = {
-                    'cache': False,
-                    'reuse': True,
+                    "cache": False,
+                    "reuse": True,
                 }
         keep_shape = True
-    
-    elif cur_step == gate_step-1:
+
+    elif cur_step == gate_step - 1:
         ca_kwards = {
-            'cache': True,
-            'reuse': False,
+            "cache": True,
+            "reuse": False,
         }
-        sa_kwards = {
-            'cache':True,
-            'reuse':False
-        }
+        sa_kwards = {"cache": True, "reuse": False}
         keep_shape = False
     else:
         # Fidelity-Improving Stage
         ca_kwards = {
-            'cache': False,
-            'reuse': True,
+            "cache": False,
+            "reuse": True,
         }
         if cur_step % fi_interval == 0:
-            sa_kwards = {
-                'cache':True,
-                'reuse':False
-            }
+            sa_kwards = {"cache": True, "reuse": False}
         else:
-            sa_kwards = {
-                'cache':False,
-                'reuse':True
-            }
+            sa_kwards = {"cache": False, "reuse": True}
         keep_shape = True
     return ca_kwards, sa_kwards, keep_shape

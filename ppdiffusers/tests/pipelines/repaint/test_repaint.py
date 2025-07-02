@@ -22,8 +22,6 @@ import paddle
 from ppdiffusers import RePaintPipeline, RePaintScheduler, UNet2DModel
 from ppdiffusers.utils.testing_utils import (
     enable_full_determinism,
-    load_image,
-    load_numpy,
     nightly,
     require_paddle_gpu,
 )

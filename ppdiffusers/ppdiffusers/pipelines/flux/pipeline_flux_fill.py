@@ -17,19 +17,22 @@ from typing import Any, Callable, Dict, List, Optional, Union
 
 import numpy as np
 import paddle
-from ppdiffusers.transformers import CLIPTextModel, CLIPTokenizer, T5EncoderModel, T5Tokenizer #T5TokenizerFast
+
+from ppdiffusers.transformers import (  # T5TokenizerFast
+    CLIPTextModel,
+    CLIPTokenizer,
+    T5EncoderModel,
+    T5Tokenizer,
+)
 
 from ...image_processor import VaeImageProcessor
-from ...loaders import FromSingleFileMixin, TextualInversionLoaderMixin # FluxLoraLoaderMixin
-from ...models import AutoencoderKL
-from ...models import FluxTransformer2DModel
-from ...schedulers import FlowMatchEulerDiscreteScheduler
-from ...utils import (
-    logging,
-    replace_example_docstring,
-    scale_lora_layers,
-    unscale_lora_layers,
+from ...loaders import (  # FluxLoraLoaderMixin
+    FromSingleFileMixin,
+    TextualInversionLoaderMixin,
 )
+from ...models import AutoencoderKL, FluxTransformer2DModel
+from ...schedulers import FlowMatchEulerDiscreteScheduler
+from ...utils import logging, replace_example_docstring
 from ...utils.paddle_utils import randn_tensor
 from ..pipeline_utils import DiffusionPipeline
 from .pipeline_output import FluxPipelineOutput
@@ -41,6 +44,7 @@ except:
 
     def is_inference_mode(func):
         return False
+
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -158,6 +162,7 @@ def retrieve_latents(
     else:
         raise AttributeError("Could not access latents of provided encoder_output")
 
+
 # FluxLoraLoaderMixin
 class FluxFillPipeline(
     DiffusionPipeline,
@@ -235,11 +240,11 @@ class FluxFillPipeline(
 
     # Copied from diffusers.pipelines.flux.pipeline_flux.FluxPipeline._get_t5_prompt_embeds
     def _get_t5_prompt_embeds(
-            self,
-            prompt: Union[str, List[str]] = None,
-            num_images_per_prompt: int = 1,
-            max_sequence_length: int = 512,
-            dtype: Optional[paddle.dtype] = None,
+        self,
+        prompt: Union[str, List[str]] = None,
+        num_images_per_prompt: int = 1,
+        max_sequence_length: int = 512,
+        dtype: Optional[paddle.dtype] = None,
     ):
         dtype = dtype or self.text_encoder.dtype
 
@@ -261,9 +266,10 @@ class FluxFillPipeline(
         text_input_ids = text_inputs.input_ids
         untruncated_ids = self.tokenizer_2(prompt, padding="longest", return_tensors="pd").input_ids
 
-        if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(text_input_ids,
-                                                                                          untruncated_ids):
-            removed_text = self.tokenizer_2.batch_decode(untruncated_ids[:, self.tokenizer_max_length - 1: -1])
+        if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(
+            text_input_ids, untruncated_ids
+        ):
+            removed_text = self.tokenizer_2.batch_decode(untruncated_ids[:, self.tokenizer_max_length - 1 : -1])
             logger.warning(
                 "The following part of your input was truncated because `max_sequence_length` is set to "
                 f" {max_sequence_length} tokens: {removed_text}"
@@ -284,9 +290,9 @@ class FluxFillPipeline(
 
     # Copied from diffusers.pipelines.flux.pipeline_flux.FluxPipeline._get_clip_prompt_embeds
     def _get_clip_prompt_embeds(
-            self,
-            prompt: Union[str, List[str]],
-            num_images_per_prompt: int = 1,
+        self,
+        prompt: Union[str, List[str]],
+        num_images_per_prompt: int = 1,
     ):
 
         prompt = [prompt] if isinstance(prompt, str) else prompt
@@ -307,9 +313,10 @@ class FluxFillPipeline(
 
         text_input_ids = text_inputs.input_ids
         untruncated_ids = self.tokenizer(prompt, padding="longest", return_tensors="pd").input_ids
-        if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(text_input_ids,
-                                                                                          untruncated_ids):
-            removed_text = self.tokenizer.batch_decode(untruncated_ids[:, self.tokenizer_max_length - 1: -1])
+        if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(
+            text_input_ids, untruncated_ids
+        ):
+            removed_text = self.tokenizer.batch_decode(untruncated_ids[:, self.tokenizer_max_length - 1 : -1])
             logger.warning(
                 "The following part of your input was truncated because CLIP can only handle sequences up to"
                 f" {self.tokenizer_max_length} tokens: {removed_text}"
@@ -407,14 +414,14 @@ class FluxFillPipeline(
 
     # Copied from diffusers.pipelines.flux.pipeline_flux.FluxPipeline.encode_prompt
     def encode_prompt(
-            self,
-            prompt: Union[str, List[str]],
-            prompt_2: Union[str, List[str]],
-            num_images_per_prompt: int = 1,
-            prompt_embeds: Optional[paddle.Tensor] = None,
-            pooled_prompt_embeds: Optional[paddle.Tensor] = None,
-            max_sequence_length: int = 512,
-            lora_scale: Optional[float] = None,
+        self,
+        prompt: Union[str, List[str]],
+        prompt_2: Union[str, List[str]],
+        num_images_per_prompt: int = 1,
+        prompt_embeds: Optional[paddle.Tensor] = None,
+        pooled_prompt_embeds: Optional[paddle.Tensor] = None,
+        max_sequence_length: int = 512,
+        lora_scale: Optional[float] = None,
     ):
         r"""
 
@@ -596,14 +603,14 @@ class FluxFillPipeline(
 
     # Copied from diffusers.pipelines.flux.pipeline_flux.FluxPipeline.prepare_latents
     def prepare_latents(
-            self,
-            batch_size,
-            num_channels_latents,
-            height,
-            width,
-            dtype,
-            generator,
-            latents=None,
+        self,
+        batch_size,
+        num_channels_latents,
+        height,
+        width,
+        dtype,
+        generator,
+        latents=None,
     ):
         # VAE applies 8x compression on images but we must also account for packing which requires
         # latent height and width to be divisible by 2.
@@ -790,11 +797,7 @@ class FluxFillPipeline(
         lora_scale = (
             self.joint_attention_kwargs.get("scale", None) if self.joint_attention_kwargs is not None else None
         )
-        (
-            prompt_embeds,
-            pooled_prompt_embeds,
-            text_ids,
-        ) = self.encode_prompt(
+        (prompt_embeds, pooled_prompt_embeds, text_ids,) = self.encode_prompt(
             prompt=prompt,
             prompt_2=prompt_2,
             prompt_embeds=prompt_embeds,

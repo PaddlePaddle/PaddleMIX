@@ -15,6 +15,7 @@
 # See the License for the specific language governing permissions and
 
 import argparse
+import contextlib
 import copy
 import gc
 import itertools
@@ -24,40 +25,43 @@ import os
 import random
 import shutil
 import warnings
-import contextlib
-from contextlib import nullcontext
 from pathlib import Path
 
 import numpy as np
 import paddle
 import paddle.nn as nn
-from paddle.distributed.fleet.utils import recompute
-import ppdiffusers.transformers
-from ppdiffusers.accelerate import Accelerator
-from ppdiffusers.accelerate.logging import get_logger
-from ppdiffusers.accelerate.utils import DistributedDataParallelKwargs, ProjectConfiguration, set_seed
 from huggingface_hub.utils import insecure_hashlib
-from PIL import Image
-from PIL.ImageOps import exif_transpose
 from paddle.io import Dataset
 from paddle.vision import transforms
 from paddle.vision.transforms.functional import crop
+from PIL import Image
+from PIL.ImageOps import exif_transpose
 from tqdm.auto import tqdm
-from ppdiffusers.transformers import CLIPTextModelWithProjection, CLIPTokenizer, PretrainedConfig, T5EncoderModel, T5Tokenizer
 
 import ppdiffusers
+import ppdiffusers.transformers
 from ppdiffusers import (
     AutoencoderKL,
     FlowMatchEulerDiscreteScheduler,
     SD3Transformer2DModel,
     StableDiffusion3Pipeline,
 )
-from ppdiffusers.optimization import get_scheduler
-from ppdiffusers.utils import (
-    check_min_version,
-    is_wandb_available,
+from ppdiffusers.accelerate import Accelerator
+from ppdiffusers.accelerate.logging import get_logger
+from ppdiffusers.accelerate.utils import (
+    DistributedDataParallelKwargs,
+    ProjectConfiguration,
+    set_seed,
 )
-
+from ppdiffusers.optimization import get_scheduler
+from ppdiffusers.transformers import (
+    CLIPTextModelWithProjection,
+    CLIPTokenizer,
+    PretrainedConfig,
+    T5EncoderModel,
+    T5Tokenizer,
+)
+from ppdiffusers.utils import check_min_version, is_wandb_available
 
 if is_wandb_available():
     import wandb
@@ -66,6 +70,7 @@ if is_wandb_available():
 check_min_version("0.24.1")
 
 logger = get_logger(__name__)
+
 
 def get_params(img, output_size):
     """Get parameters for ``crop`` for a random crop in PaddlePaddle.
@@ -86,9 +91,7 @@ def get_params(img, output_size):
     th, tw = output_size
 
     if h + 1 < th or w + 1 < tw:
-        raise ValueError(
-            "Required crop size {} is larger than input image size {}".format((th, tw), (h, w))
-        )
+        raise ValueError("Required crop size {} is larger than input image size {}".format((th, tw), (h, w)))
 
     if w == tw and h == th:
         return 0, 0, h, w
@@ -96,6 +99,7 @@ def get_params(img, output_size):
     i = paddle.randint(0, h - th + 1).item()
     j = paddle.randint(0, w - tw + 1).item()
     return i, j, th, tw
+
 
 def load_text_encoders(class_one, class_two, class_three):
     text_encoder_one = class_one.from_pretrained(
@@ -127,7 +131,9 @@ def log_validation(
     # run inference
     generator = paddle.Generator().manual_seed(args.seed) if args.seed else None
     # autocast_ctx = nullcontext()
-    autocast_ctx = paddle.amp.auto_cast(enable=True, custom_white_list=None, custom_black_list=None, level="O2", dtype='float16')
+    autocast_ctx = paddle.amp.auto_cast(
+        enable=True, custom_white_list=None, custom_black_list=None, level="O2", dtype="float16"
+    )
 
     with autocast_ctx:
         images = [pipeline(**pipeline_args, generator=generator).images[0] for _ in range(args.num_validation_images)]
@@ -637,8 +643,10 @@ class DreamBoothDataset(Dataset):
             self.instance_images.extend(itertools.repeat(img, repeats))
 
         self.pixel_values = []
-        train_resize = paddle.vision.transforms.Resize(size, interpolation='bilinear')
-        train_crop = paddle.vision.transforms.CenterCrop(size) if center_crop else paddle.vision.transforms.RandomCrop(size)
+        train_resize = paddle.vision.transforms.Resize(size, interpolation="bilinear")
+        train_crop = (
+            paddle.vision.transforms.CenterCrop(size) if center_crop else paddle.vision.transforms.RandomCrop(size)
+        )
         train_flip = paddle.vision.transforms.RandomHorizontalFlip(prob=1.0)
         train_transforms = paddle.vision.transforms.Compose(
             [
@@ -681,7 +689,7 @@ class DreamBoothDataset(Dataset):
 
         self.image_transforms = transforms.Compose(
             [
-                transforms.Resize(size, interpolation='bilinear'),
+                transforms.Resize(size, interpolation="bilinear"),
                 transforms.CenterCrop(size) if center_crop else transforms.RandomCrop(size),
                 transforms.ToTensor(),
                 transforms.Normalize([0.5], [0.5]),
@@ -865,7 +873,9 @@ def encode_prompt(
     )
 
     clip_prompt_embeds = paddle.nn.functional.pad(
-        clip_prompt_embeds, (0, t5_prompt_embed.shape[-1] - clip_prompt_embeds.shape[-1]), data_format='NCL',
+        clip_prompt_embeds,
+        (0, t5_prompt_embed.shape[-1] - clip_prompt_embeds.shape[-1]),
+        data_format="NCL",
     )
     prompt_embeds = paddle.concat([clip_prompt_embeds, t5_prompt_embed], axis=-2)
 
@@ -907,7 +917,6 @@ def main(args):
 
     else:
         ppdiffusers.utils.logging.set_verbosity_error()
-
 
     # If passed along, set the training seed now.
     if args.seed is not None:
@@ -964,7 +973,6 @@ def main(args):
         if args.output_dir is not None:
             os.makedirs(args.output_dir, exist_ok=True)
 
-
     # Load the tokenizers
     tokenizer_one = CLIPTokenizer.from_pretrained(
         args.pretrained_model_name_or_path,
@@ -1014,6 +1022,7 @@ def main(args):
     def set_requires_grad(model, is_enabled):
         for param in model.parameters():
             param.stop_gradient = not is_enabled
+
     set_requires_grad(transformer, True)
     set_requires_grad(vae, False)
     if args.train_text_encoder:
@@ -1156,7 +1165,6 @@ def main(args):
             grad_clip=nn.ClipGradByGlobalNorm(args.max_grad_norm) if args.max_grad_norm > 0 else None,
         )
 
-
     # Dataset and DataLoaders creation:
     train_dataset = DreamBoothDataset(
         instance_data_root=args.instance_data_dir,
@@ -1208,7 +1216,6 @@ def main(args):
         del tokenizers, text_encoders
         gc.collect()
         paddle.device.cuda.empty_cache()
-
 
     # If custom instance prompts are NOT provided (i.e. the instance prompt is used for all images),
     # pack the statically computed variables appropriately here. This is so that we don't
@@ -1351,7 +1358,7 @@ def main(args):
         return sigma
 
     # add amp
-    if args.mixed_precision in ['fp16', 'bf16']:
+    if args.mixed_precision in ["fp16", "bf16"]:
         scaler = paddle.amp.GradScaler(init_loss_scaling=1024)
         transformer = paddle.amp.decorate(models=transformer.to(dtype=paddle.float32), level="O2")
 
@@ -1406,7 +1413,13 @@ def main(args):
 
                 # Predict the noise residual
                 # westfish: add amp
-                with paddle.amp.auto_cast(enable=args.mixed_precision in ['fp16', 'bf16'], custom_white_list=None, custom_black_list=None, level="O2", dtype='float16' if args.mixed_precision == 'fp16' else 'bfloat16'):
+                with paddle.amp.auto_cast(
+                    enable=args.mixed_precision in ["fp16", "bf16"],
+                    custom_white_list=None,
+                    custom_black_list=None,
+                    level="O2",
+                    dtype="float16" if args.mixed_precision == "fp16" else "bfloat16",
+                ):
                     if not args.train_text_encoder:
                         model_pred = transformer(
                             hidden_states=noisy_model_input,
@@ -1457,16 +1470,20 @@ def main(args):
 
                     # Compute prior loss
                     prior_loss = paddle.mean(
-                        (weighting.astype(dtype="float32") * (model_pred_prior.astype(dtype="float32") - target_prior.astype(dtype="float32")) ** 2).reshape(
-                            target_prior.shape[0], -1
-                        ),
+                        (
+                            weighting.astype(dtype="float32")
+                            * (model_pred_prior.astype(dtype="float32") - target_prior.astype(dtype="float32")) ** 2
+                        ).reshape(target_prior.shape[0], -1),
                         1,
                     )
                     prior_loss = prior_loss.mean()
 
                 # Compute regular loss.
                 loss = paddle.mean(
-                    (weighting.astype(dtype="float32") * (model_pred.astype(dtype="float32") - target.astype(dtype="float32")) ** 2).reshape([target.shape[0], -1]),
+                    (
+                        weighting.astype(dtype="float32")
+                        * (model_pred.astype(dtype="float32") - target.astype(dtype="float32")) ** 2
+                    ).reshape([target.shape[0], -1]),
                     1,
                 )
                 loss = loss.mean()
@@ -1474,10 +1491,10 @@ def main(args):
                 if args.with_prior_preservation:
                     # Add the prior loss to the instance loss.
                     loss = loss + args.prior_loss_weight * prior_loss
-                
+
                 # westfish: add amp
                 # accelerator.backward(loss)
-                if args.mixed_precision in ['fp16', 'bf16']:
+                if args.mixed_precision in ["fp16", "bf16"]:
                     scaled = scaler.scale(loss)
                     scaled.backward()
                     scaler.step(optimizer)
@@ -1612,16 +1629,16 @@ def main(args):
             # save the pipeline
             pipeline.save_pretrained(args.output_dir)
 
-        # Final inference
-        # Load previous pipeline
-        # if not args.not_validation_final:
+            # Final inference
+            # Load previous pipeline
+            # if not args.not_validation_final:
             pipeline = StableDiffusion3Pipeline.from_pretrained(
                 args.output_dir,
                 revision=args.revision,
                 variant=args.variant,
                 paddle_dtype=weight_dtype,
             )
-            
+
             # run inference
             images = []
             if args.validation_prompt and args.num_validation_images > 0:

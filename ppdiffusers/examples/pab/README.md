@@ -6,8 +6,8 @@
 
 ## 1. 工作原理
 
-1. **注意力冗余**：相邻时间步的注意力权重差异呈 *U* 形分布，尤其在交叉注意力层（Cross‑Attn）最小。  
-2. **分层跳步**：按「交叉 → 时间 → 空间」重要性递减顺序，给不同注意力层设置 `block_skip_range`/`timestep_skip_range`，冗余高的层跳得更多。  
+1. **注意力冗余**：相邻时间步的注意力权重差异呈 *U* 形分布，尤其在交叉注意力层（Cross‑Attn）最小。
+2. **分层跳步**：按「交叉 → 时间 → 空间」重要性递减顺序，给不同注意力层设置 `block_skip_range`/`timestep_skip_range`，冗余高的层跳得更多。
 3. **广播缓存**：跳过的时间步直接复用上一次的注意力输出，无需重新计算 Q/K/V。
 
 > 结果：无需重新训练模型即可加速推理，特别适用于 **DiT 系列视频/图像扩散模型**（如 *CogVideoX*）。
@@ -51,4 +51,3 @@ export_to_video(video, "output.mp4", fps=8)
 | `temporal_attention_block_skip_range` | `int`             | 时间自注意力跳步间隔         | `1 ~ 2`      |
 | `cross_attention_block_skip_range`   | `int`             | 交叉注意力跳步间隔           | `4 ~ 8`      |
 | `current_timestep_callback`          | `Callable`        | 返回当前时间步（回调函数）   | **必填**     |
-

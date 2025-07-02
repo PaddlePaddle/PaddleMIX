@@ -1621,7 +1621,6 @@ class MochiPipeline(metaclass=DummyObject):
         requires_backends(cls, ["paddle", "paddlenlp"])
 
 
-
 class FluxControlNetInpaintPipeline(metaclass=DummyObject):
     _backends = ["paddle", "paddlenlp"]
 
@@ -1650,6 +1649,7 @@ class FluxControlNetImg2ImgPipeline(metaclass=DummyObject):
     @classmethod
     def from_pretrained(cls, *args, **kwargs):
         requires_backends(cls, ["paddle", "paddlenlp"])
+
 
 class FluxControlNetPipeline(metaclass=DummyObject):
     _backends = ["paddle", "paddlenlp"]

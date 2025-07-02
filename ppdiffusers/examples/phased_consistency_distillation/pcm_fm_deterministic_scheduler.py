@@ -19,10 +19,8 @@ import numpy as np
 import paddle
 
 from ppdiffusers.configuration_utils import ConfigMixin, register_to_config
-from ppdiffusers.utils import BaseOutput, logging
-from ppdiffusers.utils.paddle_utils import randn_tensor
 from ppdiffusers.schedulers.scheduling_utils import SchedulerMixin
-
+from ppdiffusers.utils import BaseOutput, logging
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -44,9 +42,7 @@ class PCMFMDeterministicScheduler(SchedulerMixin, ConfigMixin):
         shift: float = 1.0,
         pcm_timesteps: int = 50,
     ):
-        timesteps = np.linspace(
-            1, num_train_timesteps, num_train_timesteps, dtype=np.float32
-        )[::-1].copy()
+        timesteps = np.linspace(1, num_train_timesteps, num_train_timesteps, dtype=np.float32)[::-1].copy()
         timesteps = paddle.to_tensor(timesteps).to(dtype=paddle.float32)
         sigmas = timesteps / num_train_timesteps
         sigmas = shift * sigmas / (1 + (shift - 1) * sigmas)
@@ -118,7 +114,8 @@ class PCMFMDeterministicScheduler(SchedulerMixin, ConfigMixin):
         return sigma * self.config.num_train_timesteps
 
     def set_timesteps(
-        self, num_inference_steps: int,
+        self,
+        num_inference_steps: int,
     ):
         """
         Sets the discrete timesteps used for the diffusion chain (to be run before inference).
@@ -130,9 +127,7 @@ class PCMFMDeterministicScheduler(SchedulerMixin, ConfigMixin):
                 The device to which the timesteps should be moved to. If `None`, the timesteps are not moved.
         """
         self.num_inference_steps = num_inference_steps
-        inference_indices = np.linspace(
-            0, self.config.pcm_timesteps, num=num_inference_steps, endpoint=False
-        )
+        inference_indices = np.linspace(0, self.config.pcm_timesteps, num=num_inference_steps, endpoint=False)
         inference_indices = np.floor(inference_indices).astype(np.int64)
         inference_indices = paddle.to_tensor(inference_indices).astype("int64")
 

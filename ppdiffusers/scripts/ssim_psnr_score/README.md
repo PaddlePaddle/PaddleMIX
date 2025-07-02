@@ -1,4 +1,4 @@
-# SSIM and PSNR 
+# SSIM and PSNR
 
 SSIM（Structural Similarity Index）是一种用于衡量两幅图像结构相似度的指标，常用于图像质量评价任务。与像素级别的误差不同，SSIM 模拟人类视觉系统从亮度、对比度和结构等多个维度来评估图像之间的差异。其取值范围为 [-1, 1]，其中 1 表示两张图像完全相同，值越高说明图像质量越接近参考图像。
 
@@ -25,7 +25,7 @@ python evaluation.py --dataset1 path/to/dataset1 --dataset2 path/to/dataset2
     ├── 00001.png
     ......
     ├── 00999.png
-    
+
 ```
 
 参数说明

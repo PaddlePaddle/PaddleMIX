@@ -13,19 +13,21 @@
 # limitations under the License.
 
 import unittest
+
 import paddle
+
 from ppdiffusers import SD3Transformer2DModel
-from ppdiffusers.utils.testing_utils import (
-    enable_full_determinism,
-    paddle_device,
-)
+from ppdiffusers.utils.testing_utils import enable_full_determinism
+
 from .test_modeling_common import ModelTesterMixin
 
 enable_full_determinism()
 
+
 class SD3TransformerTests(ModelTesterMixin, unittest.TestCase):
     model_class = SD3Transformer2DModel
     main_input_name = "hidden_states"
+
     @property
     def dummy_input(self):
         batch_size = 2
@@ -43,12 +45,15 @@ class SD3TransformerTests(ModelTesterMixin, unittest.TestCase):
             "pooled_projections": pooled_prompt_embeds,
             "timestep": timestep,
         }
+
     @property
     def input_shape(self):
         return (4, 32, 32)
+
     @property
     def output_shape(self):
         return (4, 32, 32)
+
     def prepare_init_args_and_inputs_for_common(self):
         init_dict = {
             "sample_size": 32,
@@ -76,4 +81,3 @@ class SD3TransformerTests(ModelTesterMixin, unittest.TestCase):
     @unittest.skip("SD3Transformer2DModel uses a dedicated attention processor. This test doesn't apply")
     def test_set_attn_processor_for_determinism(self):
         pass
-

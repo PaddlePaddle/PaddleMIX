@@ -11,21 +11,21 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import os
 import inspect
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
-import numpy as np
 
+import numpy as np
 import paddle
-from  ppdiffusers.transformers import (
+
+from ppdiffusers.transformers import (
     CLIPTextModel,
     CLIPTokenizer,
     T5EncoderModel,
-    T5Tokenizer
+    T5Tokenizer,
 )
 
 from ...image_processor import PipelineImageInput, VaeImageProcessor
-from ...loaders import FromSingleFileMixin, FromSingleFileMixin, TextualInversionLoaderMixin
+from ...loaders import FromSingleFileMixin, TextualInversionLoaderMixin
 from ...models.autoencoder_kl import AutoencoderKL
 from ...models.controlnet_flux import FluxControlNetModel, FluxMultiControlNetModel
 from ...models.transformer_flux import FluxTransformer2DModel
@@ -42,23 +42,23 @@ EXAMPLE_DOC_STRING = """
         >>> from ppdiffusers import FluxControlNetModel
         >>> from ppdiffusers.pipelines import FluxControlNetImg2ImgPipeline
         >>> from ppdiffusers.utils import load_image
-        
+
         >>> controlnet = FluxControlNetModel.from_pretrained(
         ...     "InstantX/FLUX.1-dev-controlnet-canny", paddle_dtype=paddle.float16
         ... )
-        
+
         >>> pipe = FluxControlNetImg2ImgPipeline.from_pretrained(
-        ...     "black-forest-labs/FLUX.1-dev", controlnet=controlnet, paddle_dtype=paddle.float16, 
+        ...     "black-forest-labs/FLUX.1-dev", controlnet=controlnet, paddle_dtype=paddle.float16,
         ...     low_cpu_mem_usage=True, map_location="cpu"
         ... )
-        
+
         >>> control_image = load_image(
         ...     "https://huggingface.co/InstantX/SD3-Controlnet-Canny/resolve/main/canny.jpg"
         ... )
         >>> init_image = load_image(
         ...     "https://raw.githubusercontent.com/CompVis/stable-diffusion/main/assets/stable-samples/img2img/sketch-mountains-input.jpg"
         ... )
-        
+
         >>> prompt = "A girl in city, 25 years old, cool, futuristic"
         >>> image = pipe(
         ...     prompt,
@@ -86,6 +86,7 @@ except:
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
+
 def calculate_shift(
     image_seq_len,
     base_seq_len: int = 256,
@@ -98,9 +99,8 @@ def calculate_shift(
     mu = image_seq_len * m + b
     return mu
 
-def retrieve_latents(
-    encoder_output: paddle.Tensor, generator: Optional[int] = None, sample_mode: str = "sample"
-):
+
+def retrieve_latents(encoder_output: paddle.Tensor, generator: Optional[int] = None, sample_mode: str = "sample"):
     if hasattr(encoder_output, "latent_dist") and sample_mode == "sample":
         return encoder_output.latent_dist.sample(generator)
     elif hasattr(encoder_output, "latent_dist") and sample_mode == "argmax":
@@ -167,7 +167,6 @@ def retrieve_timesteps(
     return timesteps, num_inference_steps
 
 
-
 class FluxControlNetImg2ImgPipeline(
     DiffusionPipeline,
     FromSingleFileMixin,
@@ -200,7 +199,7 @@ class FluxControlNetImg2ImgPipeline(
         tokenizer_2: T5Tokenizer,
         transformer: FluxTransformer2DModel,
         controlnet: Union[
-            FluxControlNetModel, List[FluxControlNetModel],Tuple[FluxControlNetModel], FluxMultiControlNetModel
+            FluxControlNetModel, List[FluxControlNetModel], Tuple[FluxControlNetModel], FluxMultiControlNetModel
         ],
     ):
         super().__init__()
@@ -251,7 +250,9 @@ class FluxControlNetImg2ImgPipeline(
         text_input_ids = text_inputs.input_ids
         untruncated_ids = self.tokenizer_2(prompt, padding="longest", return_tensors="pd").input_ids
 
-        if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(text_input_ids, untruncated_ids):
+        if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(
+            text_input_ids, untruncated_ids
+        ):
             removed_text = self.tokenizer_2.batch_decode(untruncated_ids[:, self.tokenizer_max_length - 1 : -1])
             logger.warning(
                 "The following part of your input was truncated because `max_sequence_length` is set to "
@@ -295,7 +296,9 @@ class FluxControlNetImg2ImgPipeline(
 
         text_input_ids = text_inputs.input_ids
         untruncated_ids = self.tokenizer(prompt, padding="longest", return_tensors="pd").input_ids
-        if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(text_input_ids, untruncated_ids):
+        if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(
+            text_input_ids, untruncated_ids
+        ):
             removed_text = self.tokenizer.batch_decode(untruncated_ids[:, self.tokenizer_max_length - 1 : -1])
             logger.warning(
                 "The following part of your input was truncated because CLIP can only handle sequences up to"
@@ -312,7 +315,7 @@ class FluxControlNetImg2ImgPipeline(
         prompt_embeds = prompt_embeds.reshape([batch_size * num_images_per_prompt, -1])
 
         return prompt_embeds
-    
+
     def encode_prompt(
         self,
         prompt: Union[str, List[str]],
@@ -369,8 +372,7 @@ class FluxControlNetImg2ImgPipeline(
         text_ids = paddle.zeros([prompt_embeds.shape[1], 3]).astype(dtype=dtype)
 
         return prompt_embeds, pooled_prompt_embeds, text_ids
-    
-    
+
     def _encode_vae_image(self, image: paddle.Tensor, generator: paddle.Generator):
         if isinstance(generator, list):
             image_latents = [
@@ -384,73 +386,72 @@ class FluxControlNetImg2ImgPipeline(
         image_latents = (image_latents - self.vae.config.shift_factor) * self.vae.config.scaling_factor
 
         return image_latents
-    
-    
+
     def get_timesteps(self, num_inference_steps, strength):
         # get the original timestep using init_timestep
         init_timestep = min(num_inference_steps * strength, num_inference_steps)
 
         t_start = int(max(num_inference_steps - init_timestep, 0))
-        timesteps = self.scheduler.timesteps[t_start * self.scheduler.order:]
+        timesteps = self.scheduler.timesteps[t_start * self.scheduler.order :]
         if hasattr(self.scheduler, "set_begin_index"):
             self.scheduler.set_begin_index(t_start * self.scheduler.order)
 
         return timesteps, num_inference_steps - t_start
 
     def check_inputs(
-            self,
-            prompt,
-            prompt_2,
-            strength,
-            height,
-            width,
-            callback_on_step_end_tensor_inputs,
-            prompt_embeds=None,
-            pooled_prompt_embeds=None,
-            max_sequence_length=None,
+        self,
+        prompt,
+        prompt_2,
+        strength,
+        height,
+        width,
+        callback_on_step_end_tensor_inputs,
+        prompt_embeds=None,
+        pooled_prompt_embeds=None,
+        max_sequence_length=None,
+    ):
+        if strength < 0 or strength > 1:
+            raise ValueError(f"The value of strength should in [0.0, 1.0] but is {strength}")
+
+        if height % self.vae_scale_factor * 2 != 0 or width % self.vae_scale_factor * 2 != 0:
+            logger.warning(
+                f"`height` and `width` have to be divisible by {self.vae_scale_factor * 2} but are {height} and {width}. Dimensions will be resized accordingly"
+            )
+
+        if callback_on_step_end_tensor_inputs is not None and not all(
+            k in self._callback_tensor_inputs for k in callback_on_step_end_tensor_inputs
         ):
-            if strength < 0 or strength > 1:
-                raise ValueError(f"The value of strength should in [0.0, 1.0] but is {strength}")
+            raise ValueError(
+                f"`callback_on_step_end_tensor_inputs` has to be in {self._callback_tensor_inputs}, but found {[k for k in callback_on_step_end_tensor_inputs if k not in self._callback_tensor_inputs]}"
+            )
 
-            if height % self.vae_scale_factor * 2 != 0 or width % self.vae_scale_factor * 2 != 0:
-                logger.warning(
-                    f"`height` and `width` have to be divisible by {self.vae_scale_factor * 2} but are {height} and {width}. Dimensions will be resized accordingly"
-                )
+        if prompt is not None and prompt_embeds is not None:
+            raise ValueError(
+                f"Cannot forward both `prompt`: {prompt} and `prompt_embeds`: {prompt_embeds}. Please make sure to"
+                " only forward one of the two."
+            )
+        elif prompt_2 is not None and prompt_embeds is not None:
+            raise ValueError(
+                f"Cannot forward both `prompt_2`: {prompt_2} and `prompt_embeds`: {prompt_embeds}. Please make sure to"
+                " only forward one of the two."
+            )
+        elif prompt is None and prompt_embeds is None:
+            raise ValueError(
+                "Provide either `prompt` or `prompt_embeds`. Cannot leave both `prompt` and `prompt_embeds` undefined."
+            )
+        elif prompt is not None and (not isinstance(prompt, str) and not isinstance(prompt, list)):
+            raise ValueError(f"`prompt` has to be of type `str` or `list` but is {type(prompt)}")
+        elif prompt_2 is not None and (not isinstance(prompt_2, str) and not isinstance(prompt_2, list)):
+            raise ValueError(f"`prompt_2` has to be of type `str` or `list` but is {type(prompt_2)}")
 
-            if callback_on_step_end_tensor_inputs is not None and not all(
-                k in self._callback_tensor_inputs for k in callback_on_step_end_tensor_inputs
-            ):
-                raise ValueError(
-                    f"`callback_on_step_end_tensor_inputs` has to be in {self._callback_tensor_inputs}, but found {[k for k in callback_on_step_end_tensor_inputs if k not in self._callback_tensor_inputs]}"
-                )
+        if prompt_embeds is not None and pooled_prompt_embeds is None:
+            raise ValueError(
+                "If `prompt_embeds` are provided, `pooled_prompt_embeds` also have to be passed. Make sure to generate `pooled_prompt_embeds` from the same text encoder that was used to generate `prompt_embeds`."
+            )
 
-            if prompt is not None and prompt_embeds is not None:
-                raise ValueError(
-                    f"Cannot forward both `prompt`: {prompt} and `prompt_embeds`: {prompt_embeds}. Please make sure to"
-                    " only forward one of the two."
-                )
-            elif prompt_2 is not None and prompt_embeds is not None:
-                raise ValueError(
-                    f"Cannot forward both `prompt_2`: {prompt_2} and `prompt_embeds`: {prompt_embeds}. Please make sure to"
-                    " only forward one of the two."
-                )
-            elif prompt is None and prompt_embeds is None:
-                raise ValueError(
-                    "Provide either `prompt` or `prompt_embeds`. Cannot leave both `prompt` and `prompt_embeds` undefined."
-                )
-            elif prompt is not None and (not isinstance(prompt, str) and not isinstance(prompt, list)):
-                raise ValueError(f"`prompt` has to be of type `str` or `list` but is {type(prompt)}")
-            elif prompt_2 is not None and (not isinstance(prompt_2, str) and not isinstance(prompt_2, list)):
-                raise ValueError(f"`prompt_2` has to be of type `str` or `list` but is {type(prompt_2)}")
+        if max_sequence_length is not None and max_sequence_length > 512:
+            raise ValueError(f"`max_sequence_length` cannot be greater than 512 but is {max_sequence_length}")
 
-            if prompt_embeds is not None and pooled_prompt_embeds is None:
-                raise ValueError(
-                    "If `prompt_embeds` are provided, `pooled_prompt_embeds` also have to be passed. Make sure to generate `pooled_prompt_embeds` from the same text encoder that was used to generate `prompt_embeds`."
-                )
-
-            if max_sequence_length is not None and max_sequence_length > 512:
-                raise ValueError(f"`max_sequence_length` cannot be greater than 512 but is {max_sequence_length}")
-        
     @staticmethod
     def _prepare_latent_image_ids(batch_size, height, width, dtype):
         latent_image_ids = paddle.zeros([height, width, 3], dtype=dtype)
@@ -488,18 +489,18 @@ class FluxControlNetImg2ImgPipeline(
         latents = latents.reshape([batch_size, channels // (2 * 2), height, width])
 
         return latents
-    
+
     def prepare_latents(
-            self,
-            image,
-            timestep,
-            batch_size,
-            num_channels_latents,
-            height,
-            width,
-            dtype,
-            generator,
-            latents=None,
+        self,
+        image,
+        timestep,
+        batch_size,
+        num_channels_latents,
+        height,
+        width,
+        dtype,
+        generator,
+        latents=None,
     ):
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
@@ -534,8 +535,6 @@ class FluxControlNetImg2ImgPipeline(
         latents = self.scheduler.scale_noise(image_latents, timestep, noise)
         latents = self._pack_latents(latents, batch_size, num_channels_latents, height, width)
         return latents, latent_image_ids
-    
-    
 
     def prepare_image(
         self,
@@ -569,7 +568,7 @@ class FluxControlNetImg2ImgPipeline(
             image = paddle.concat([image] * 2)
 
         return image
-    
+
     @property
     def guidance_scale(self):
         return self._guidance_scale
@@ -585,7 +584,6 @@ class FluxControlNetImg2ImgPipeline(
     @property
     def interrupt(self):
         return self._interrupt
-    
 
     @paddle.no_grad()
     @replace_example_docstring(EXAMPLE_DOC_STRING)
@@ -688,7 +686,7 @@ class FluxControlNetImg2ImgPipeline(
         elif not isinstance(control_guidance_end, list) and isinstance(control_guidance_start, list):
             control_guidance_end = len(control_guidance_start) * [control_guidance_end]
         elif not isinstance(control_guidance_start, list) and not isinstance(control_guidance_end, list):
-            mult = len(self.controlnet.nets) if hasattr(self.controlnet, 'nets') else 1
+            mult = len(self.controlnet.nets) if hasattr(self.controlnet, "nets") else 1
             control_guidance_start, control_guidance_end = (
                 mult * [control_guidance_start],
                 mult * [control_guidance_end],
@@ -722,11 +720,7 @@ class FluxControlNetImg2ImgPipeline(
         lora_scale = (
             self.joint_attention_kwargs.get("scale", None) if self.joint_attention_kwargs is not None else None
         )
-        (
-            prompt_embeds,
-            pooled_prompt_embeds,
-            text_ids,
-        ) = self.encode_prompt(
+        (prompt_embeds, pooled_prompt_embeds, text_ids,) = self.encode_prompt(
             prompt=prompt,
             prompt_2=prompt_2,
             prompt_embeds=prompt_embeds,
@@ -887,8 +881,9 @@ class FluxControlNetImg2ImgPipeline(
                         joint_attention_kwargs=self.joint_attention_kwargs,
                         return_dict=False,
                     )
-                except Exception as e:
+                except Exception:
                     import traceback
+
                     traceback.print_exc()
                     raise
 
@@ -909,8 +904,9 @@ class FluxControlNetImg2ImgPipeline(
                         joint_attention_kwargs=self.joint_attention_kwargs,
                         return_dict=False,
                     )[0]
-                except Exception as e:
+                except Exception:
                     import traceback
+
                     traceback.print_exc()
                     raise
 

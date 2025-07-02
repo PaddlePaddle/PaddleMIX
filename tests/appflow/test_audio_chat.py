@@ -14,12 +14,14 @@
 
 import os
 import sys
-import unittest
 import tempfile
+import unittest
+
 import requests
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
 import paddle
+
 from paddlemix.appflow import Appflow
 
 
@@ -35,15 +37,17 @@ if __name__ == "__main__":
         def test_audio_chat(self):
 
             paddle.seed(1024)
-            task = Appflow(app="audio_chat", models=["conformer_u2pp_online_wenetspeech", "THUDM/chatglm-6b", "speech"])
-            audio_file_url = "https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/appflow/test/test_audio/zh.wav"
-
-            prompt = (
-                "描述这段话：{}."
+            task = Appflow(
+                app="audio_chat", models=["conformer_u2pp_online_wenetspeech", "THUDM/chatglm-6b", "speech"]
             )
-            
+            audio_file_url = (
+                "https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/appflow/test/test_audio/zh.wav"
+            )
+
+            prompt = "描述这段话：{}."
+
             output_path = "tmp.wav"
-            
+
             with tempfile.NamedTemporaryFile() as audio_file:
                 audio_file.write(requests.get(audio_file_url).content)
                 result = task(audio=audio_file.name, prompt=prompt, output=output_path)

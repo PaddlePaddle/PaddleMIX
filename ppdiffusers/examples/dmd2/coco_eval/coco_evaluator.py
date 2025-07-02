@@ -18,7 +18,7 @@
 import numpy as np
 import paddle
 import paddle.vision.transforms as transforms
-from paddle.io import DataLoader, Dataset
+from paddle.io import Dataset
 from PIL import Image
 
 
