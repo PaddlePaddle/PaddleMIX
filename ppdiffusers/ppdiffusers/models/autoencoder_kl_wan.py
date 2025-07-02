@@ -29,7 +29,6 @@ from .modeling_outputs import AutoencoderKLOutput
 from .modeling_utils import ModelMixin
 from .vae import DecoderOutput, DiagonalGaussianDistribution
 
-
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
 CACHE_T = 2

@@ -183,14 +183,13 @@ class FromSingleFileMixin:
         ```
         """
         # import here to avoid circular dependency
+        from ..pipelines.flux.convert_from_ckpt import (  # 修改此处路径
+            download_from_original_flux_ckpt,
+        )
         from ..pipelines.stable_diffusion.convert_from_ckpt import (
             download_from_original_stable_diffusion_ckpt,
         )
-        from ..pipelines.flux.convert_from_ckpt import(  # 修改此处路径
-            download_from_original_flux_ckpt,
 
-        )
-       
         # from ..pipelines.flux
 
         from_hf_hub = any(p in pretrained_model_link_or_path for p in ["huggingface.co", "hf.co", "hf-mirror"])
@@ -327,7 +326,7 @@ class FromSingleFileMixin:
                 )
         else:
             checkpoint_path = pretrained_model_link_or_path
-        
+
         if "Flux" in pipeline_name:
             pipe = download_from_original_flux_ckpt(
                 checkpoint_path,
@@ -353,7 +352,6 @@ class FromSingleFileMixin:
                 local_files_only=local_files_only,
             )
         else:
-
 
             pipe = download_from_original_stable_diffusion_ckpt(
                 checkpoint_path,
@@ -680,8 +678,7 @@ class FromOriginalControlnetMixin:
         from ..pipelines.stable_diffusion.convert_from_ckpt import (
             download_controlnet_from_original_ckpt,
         )
-        
-        
+
         from_hf_hub = any(p in pretrained_model_link_or_path for p in ["huggingface.co", "hf.co", "hf-mirror"])
         cache_dir = (
             kwargs.pop("cache_dir", DIFFUSERS_CACHE) if from_hf_hub else kwargs.pop("cache_dir", PPDIFFUSERS_CACHE)

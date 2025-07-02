@@ -431,7 +431,7 @@ class EulerDiscreteScheduler(SchedulerMixin, ConfigMixin):
         # NOTE(laixinlu) convert sigmas to the dtype of the model output
         if self.sigmas.dtype != model_output.dtype:
             self.sigmas = self.sigmas.cast(model_output.dtype)
-            
+
         if self.step_index is None:
             self._init_step_index(timestep)
 

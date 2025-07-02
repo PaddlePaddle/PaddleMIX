@@ -94,7 +94,7 @@ MM-DiT在继承DiT核心设计理念的基础上进行了扩展，以更好地�
 
 因为图像和文本属于两个不同的模态， SD3中 采用两套独立的权重参数来学习这两个不同模态的特征，所以只通过Self-Attention机制来实现特征的交互融合。**这也是SD 3论文称这个结构为MM-DiT的本质原因，这是一个多模态扩散模型。**
 
-## Rectified Flow 
+## Rectified Flow
 
 **SD 3不再使用DDPM作为扩散模型，而是该用优化的RF（Rectified Flow）做为扩散模型。**
 

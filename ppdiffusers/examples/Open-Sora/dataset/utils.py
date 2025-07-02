@@ -248,6 +248,7 @@ def read_from_path(path, image_size, transform_name="center"):
         assert ext.lower() in IMG_EXTENSIONS, f"Unsupported file format: {ext}"
     return read_image_from_path(path, image_size=image_size, transform_name=transform_name)
 
+
 def save_sample(x, fps=8, save_path=None, normalize=True, value_range=(-1.0, 1.0)):
     """
     Saves a video sample from a tensor without using OpenCV.
@@ -286,7 +287,7 @@ def save_sample(x, fps=8, save_path=None, normalize=True, value_range=(-1.0, 1.0
     frames, height, width, channels = video_data.shape
 
     # Initialize the video writer using imageio
-    writer = imageio.get_writer(save_path, fps=fps, codec='libx264', format='mp4')
+    writer = imageio.get_writer(save_path, fps=fps, codec="libx264", format="mp4")
 
     try:
         for i in range(frames):

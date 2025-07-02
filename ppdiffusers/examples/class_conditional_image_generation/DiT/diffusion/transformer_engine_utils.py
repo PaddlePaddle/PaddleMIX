@@ -14,12 +14,10 @@
 
 from contextlib import contextmanager
 
-import paddle
 from paddle.distributed import fleet
 
 try:
     import transformer_engine.paddle as te
-    import transformer_engine.paddle.layer.rmsnorm
     from transformer_engine.common.recipe import DelayedScaling, Format
 
     _IS_TRANSFORMER_ENGINE_INSTALLED = True

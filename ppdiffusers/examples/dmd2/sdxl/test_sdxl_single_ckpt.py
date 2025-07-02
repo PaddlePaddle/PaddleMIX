@@ -38,7 +38,6 @@ from ppdiffusers import (
     UNet2DConditionModel,
 )
 from ppdiffusers.accelerate import Accelerator
-
 from ppdiffusers.accelerate.logging import get_logger
 from ppdiffusers.accelerate.utils import ProjectConfiguration, set_seed
 from ppdiffusers.peft import LoraConfig
@@ -85,7 +84,7 @@ def create_generator(checkpoint_path, base_model=None, args=None):
     counter = 0
     while True:
         try:
-            if checkpoint_path.endswith('safetensors'):
+            if checkpoint_path.endswith("safetensors"):
                 state_dict = load_file(checkpoint_path)
             else:
                 state_dict = paddle.load(checkpoint_path)
@@ -281,8 +280,6 @@ def evaluate():
         teacher_pipeline.safety_checker = None
     elif args.sdxl_lightning_4step:
         base = "stabilityai/stable-diffusion-xl-base-1.0"
-        repo = "ByteDance/SDXL-Lightning"
-        ckpt = "sdxl_lightning_4step_unet.safetensors"  # Use the correct ckpt for your step setting!
 
         # Load model.
         unet = UNet2DConditionModel.from_pretrained(base, subfolder="unet").to(accelerator.device, paddle.float32)
@@ -300,15 +297,11 @@ def evaluate():
 
     elif args.sdxl_lightning_1step:
         base = "stabilityai/stable-diffusion-xl-base-1.0"
-        repo = "ByteDance/SDXL-Lightning"
-        ckpt = "sdxl_lightning_1step_unet_x0.safetensors"  # Use the correct ckpt for your step setting!
 
         # Load model.
         unet = UNet2DConditionModel.from_pretrained(base, subfolder="unet").to(accelerator.device, paddle.float32)
 
-        lightning_pipeline = StableDiffusionXLPipeline.from_pretrained(
-            base, unet=unet, paddle_dtype=paddle.float32
-        ) 
+        lightning_pipeline = StableDiffusionXLPipeline.from_pretrained(base, unet=unet, paddle_dtype=paddle.float32)
 
         # Ensure sampler uses "trailing" timesteps.
         lightning_pipeline.scheduler = EulerDiscreteScheduler.from_config(

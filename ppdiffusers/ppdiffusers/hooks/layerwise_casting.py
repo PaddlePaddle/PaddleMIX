@@ -1,22 +1,72 @@
-import paddle
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import re
+from contextlib import contextmanager
 from typing import Optional, Tuple, Type, Union
+
+import paddle
+
 from ..utils import get_logger
 from .hooks import HookRegistry, ModelHook
 
 logger = get_logger(__name__)
 
-_LAYERWISE_CASTING_HOOK = 'layerwise_casting'
-_PEFT_AUTOCAST_DISABLE_HOOK = 'peft_autocast_disable'
+_LAYERWISE_CASTING_HOOK = "layerwise_casting"
+_PEFT_AUTOCAST_DISABLE_HOOK = "peft_autocast_disable"
+
+# Flag to control PEFT input autocast disabling
+_SHOULD_DISABLE_PEFT_INPUT_AUTOCAST = True
+
+# Base class for PEFT tuner layers - simplified placeholder
+
+
+class BaseTunerLayer(paddle.nn.Layer):
+    """Base class for PEFT tuner layers"""
+
+    def __init__(self):
+        super().__init__()
+
+
+@contextmanager
+def disable_input_dtype_casting(module):
+    """Context manager to disable input dtype casting for a module"""
+    # Store original state if it exists
+    original_disable_adapters = getattr(module, "disable_adapters", None)
+
+    try:
+        # Temporarily disable input dtype casting
+        if hasattr(module, "disable_adapters"):
+            module.disable_adapters = True
+        yield
+    finally:
+        # Restore original state
+        if original_disable_adapters is not None:
+            module.disable_adapters = original_disable_adapters
+
 
 SUPPORTED_PADDLE_LAYERS = (
-    paddle.nn.Conv1D, paddle.nn.Conv2D, paddle.nn.
-    Conv3D, paddle.nn.Conv1DTranspose, paddle.nn.Conv2DTranspose, paddle.nn
-    .Conv3DTranspose, paddle.nn.Linear
+    paddle.nn.Conv1D,
+    paddle.nn.Conv2D,
+    paddle.nn.Conv3D,
+    paddle.nn.Conv1DTranspose,
+    paddle.nn.Conv2DTranspose,
+    paddle.nn.Conv3DTranspose,
+    paddle.nn.Linear,
 )
 
 DEFAULT_SKIP_MODULES_PATTERN = ("pos_embed", "patch_embed", "norm", "^proj_in$", "^proj_out$")
-
 
 
 class LayerwiseCastingHook(ModelHook):
@@ -25,10 +75,10 @@ class LayerwiseCastingHook(ModelHook):
     for storage. This process may lead to quality loss in the output, but can significantly reduce the memory
     footprint.
     """
+
     _is_stateful = False
 
-    def __init__(self, storage_dtype: paddle.dtype, compute_dtype: paddle.
-        dtype, non_blocking: bool) ->None:
+    def __init__(self, storage_dtype: paddle.dtype, compute_dtype: paddle.dtype, non_blocking: bool) -> None:
         self.storage_dtype = storage_dtype
         self.compute_dtype = compute_dtype
         self.non_blocking = non_blocking
@@ -69,17 +119,24 @@ class PeftInputAutocastDisableHook(ModelHook):
             1. Making forward implementations independent of device/dtype casting operations as much as possible.
             2. Peforming inference without losing information from casting to different precisions. With the current
                PEFT implementation (as linked in the reference above), and assuming running layerwise casting inference
-               with storage_dtype=torch.float8_e4m3fn and compute_dtype=paddle.bfloat16
-, inputs are cast to
-               torch.float8_e4m3fn in the lora layer. We will then upcast back to paddle.bfloat16
- when we continue the
+               with storage_dtype=torch.float8_e4m3fn and compute_dtype=paddle.bfloat16, inputs are cast to
+               torch.float8_e4m3fn in the lora layer. We will then upcast back to paddle.bfloat16 when we continue the
                forward pass in PEFT linear forward or Diffusers layer forward, with a `send_to_dtype` operation from
                LayerwiseCastingHook. This will be a lossy operation and result in poorer generation quality.
     """
 
+    def __init__(self):
+        super().__init__()
+        self.original_forward = None
+
+    def initialize_hook(self, module: paddle.nn.Layer):
+        # Store the original forward method
+        self.original_forward = module.forward
+        return module
+
     def new_forward(self, module: paddle.nn.Layer, *args, **kwargs):
         with disable_input_dtype_casting(module):
-            return self.fn_ref.original_forward(*args, **kwargs)
+            return self.original_forward(*args, **kwargs)
 
 
 def apply_layerwise_casting(
@@ -91,49 +148,49 @@ def apply_layerwise_casting(
     non_blocking: bool = False,
 ) -> None:
     """
-    Applies layerwise casting to a given module. The module expected here is a PPDiffusers ModelMixin but it can be any
-    nn.Layer using ppdiffusers layers or paddle primitives.
+        Applies layerwise casting to a given module. The module expected here is a PPDiffusers ModelMixin but it can be any
+        nn.Layer using ppdiffusers layers or paddle primitives.
 
-    Example:
+        Example:
 
-    ```python
-    >>> import paddle
-    >>> from ppdiffusers import CogVideoXTransformer3DModel
+        ```python
+        >>> import paddle
+        >>> from ppdiffusers import CogVideoXTransformer3DModel
 
-    >>> transformer = CogVideoXTransformer3DModel.from_pretrained(
-    ...     model_id, subfolder="transformer", paddle_dtype=paddle.bfloat16
+        >>> transformer = CogVideoXTransformer3DModel.from_pretrained(
+        ...     model_id, subfolder="transformer", paddle_dtype=paddle.bfloat16
 
-    ... )
+        ... )
 
-    >>> apply_layerwise_casting(
-    ...     transformer,
-    ...     storage_dtype=torch.float8_e4m3fn,
-    ...     compute_dtype=paddle.bfloat16
-,
-    ...     skip_modules_pattern=["patch_embed", "norm", "proj_out"],
-    ...     non_blocking=True,
-    ... )
-    ```
+        >>> apply_layerwise_casting(
+        ...     transformer,
+        ...     storage_dtype=torch.float8_e4m3fn,
+        ...     compute_dtype=paddle.bfloat16
+    ,
+        ...     skip_modules_pattern=["patch_embed", "norm", "proj_out"],
+        ...     non_blocking=True,
+        ... )
+        ```
 
-    Args:
-        module (`paddle.nn.Layer`):
-            The module whose leaf modules will be cast to a high precision dtype for computation, and to a low
-            precision dtype for storage.
-        storage_dtype (`paddle.dtype`):
-            The dtype to cast the module to before/after the forward pass for storage.
-        compute_dtype (`paddle.dtype`):
-            The dtype to cast the module to during the forward pass for computation.
-        skip_modules_pattern (`Tuple[str, ...]`, defaults to `"auto"`):
-            A list of patterns to match the names of the modules to skip during the layerwise casting process. If set
-            to `"auto"`, the default patterns are used. If set to `None`, no modules are skipped. If set to `None`
-            alongside `skip_modules_classes` being `None`, the layerwise casting is applied directly to the module
-            instead of its internal submodules.
-        skip_modules_classes (`Tuple[Type[paddle.nn.Layer], ...]`, defaults to `None`):
-            A list of module classes to skip during the layerwise casting process.
-        non_blocking (`bool`, defaults to `False`):
-            If `True`, the weight casting operations are non-blocking.
+        Args:
+            module (`paddle.nn.Layer`):
+                The module whose leaf modules will be cast to a high precision dtype for computation, and to a low
+                precision dtype for storage.
+            storage_dtype (`paddle.dtype`):
+                The dtype to cast the module to before/after the forward pass for storage.
+            compute_dtype (`paddle.dtype`):
+                The dtype to cast the module to during the forward pass for computation.
+            skip_modules_pattern (`Tuple[str, ...]`, defaults to `"auto"`):
+                A list of patterns to match the names of the modules to skip during the layerwise casting process. If set
+                to `"auto"`, the default patterns are used. If set to `None`, no modules are skipped. If set to `None`
+                alongside `skip_modules_classes` being `None`, the layerwise casting is applied directly to the module
+                instead of its internal submodules.
+            skip_modules_classes (`Tuple[Type[paddle.nn.Layer], ...]`, defaults to `None`):
+                A list of module classes to skip during the layerwise casting process.
+            non_blocking (`bool`, defaults to `False`):
+                If `True`, the weight casting operations are non-blocking.
     """
-    if skip_modules_pattern == 'auto':
+    if skip_modules_pattern == "auto":
         skip_modules_pattern = DEFAULT_SKIP_MODULES_PATTERN
 
     if skip_modules_classes is None and skip_modules_pattern is None:
@@ -152,37 +209,43 @@ def apply_layerwise_casting(
 
 
 def _apply_layerwise_casting(
-    module: paddle.nn.Layer, 
-    storage_dtype: paddle.dtype, 
-    compute_dtype: paddle.dtype, 
-    skip_modules_pattern: Optional[Tuple[str, ...]]=None, 
-    skip_modules_classes: Optional[Tuple[Type[paddle.nn.Layer], ...]]=None, 
-    non_blocking: bool=False, _prefix: str=''
-) ->None:
-    should_skip = skip_modules_classes is not None and isinstance(module,
-        skip_modules_classes) or skip_modules_pattern is not None and any(
-        re.search(pattern, _prefix) for pattern in skip_modules_pattern)
+    module: paddle.nn.Layer,
+    storage_dtype: paddle.dtype,
+    compute_dtype: paddle.dtype,
+    skip_modules_pattern: Optional[Tuple[str, ...]] = None,
+    skip_modules_classes: Optional[Tuple[Type[paddle.nn.Layer], ...]] = None,
+    non_blocking: bool = False,
+    _prefix: str = "",
+) -> None:
+    should_skip = (
+        skip_modules_classes is not None
+        and isinstance(module, skip_modules_classes)
+        or skip_modules_pattern is not None
+        and any(re.search(pattern, _prefix) for pattern in skip_modules_pattern)
+    )
     if should_skip:
         logger.debug(f'Skipping layerwise casting for layer "{_prefix}"')
         return
     if isinstance(module, SUPPORTED_PADDLE_LAYERS):
         logger.debug(f'Applying layerwise casting to layer "{_prefix}"')
-        apply_layerwise_casting_hook(module, storage_dtype, compute_dtype,
-            non_blocking)
+        apply_layerwise_casting_hook(module, storage_dtype, compute_dtype, non_blocking)
         return
     for name, submodule in module.named_children():
-        layer_name = f'{_prefix}.{name}' if _prefix else name
-        _apply_layerwise_casting(submodule, storage_dtype, compute_dtype,
-            skip_modules_pattern, skip_modules_classes, non_blocking,
-            _prefix=layer_name)
+        layer_name = f"{_prefix}.{name}" if _prefix else name
+        _apply_layerwise_casting(
+            submodule,
+            storage_dtype,
+            compute_dtype,
+            skip_modules_pattern,
+            skip_modules_classes,
+            non_blocking,
+            _prefix=layer_name,
+        )
 
 
 def apply_layerwise_casting_hook(
-    module: paddle.nn.Layer, 
-    storage_dtype: paddle.dtype, 
-    compute_dtype: paddle.dtype, 
-    non_blocking: bool
-) ->None:
+    module: paddle.nn.Layer, storage_dtype: paddle.dtype, compute_dtype: paddle.dtype, non_blocking: bool
+) -> None:
     """
     Applies a `LayerwiseCastingHook` to a given module.
 
@@ -201,21 +264,21 @@ def apply_layerwise_casting_hook(
     registry.register_hook(hook, _LAYERWISE_CASTING_HOOK)
 
 
-def _is_layerwise_casting_active(module: paddle.nn.Layer) ->bool:
+def _is_layerwise_casting_active(module: paddle.nn.Layer) -> bool:
     for submodule in module.sublayers():
-        if hasattr(submodule, '_diffusers_hook'
-            ) and submodule._diffusers_hook.get_hook(_LAYERWISE_CASTING_HOOK
-            ) is not None:
+        if (
+            hasattr(submodule, "_diffusers_hook")
+            and submodule._diffusers_hook.get_hook(_LAYERWISE_CASTING_HOOK) is not None
+        ):
             return True
     return False
 
 
-def _disable_peft_input_autocast(module: paddle.nn.Layer) ->None:
+def _disable_peft_input_autocast(module: paddle.nn.Layer) -> None:
     if not _SHOULD_DISABLE_PEFT_INPUT_AUTOCAST:
         return
     for submodule in module.sublayers():
-        if isinstance(submodule, BaseTunerLayer
-            ) and _is_layerwise_casting_active(submodule):
+        if isinstance(submodule, BaseTunerLayer) and _is_layerwise_casting_active(submodule):
             registry = HookRegistry.check_if_exists_or_initialize(submodule)
             hook = PeftInputAutocastDisableHook()
             registry.register_hook(hook, _PEFT_AUTOCAST_DISABLE_HOOK)

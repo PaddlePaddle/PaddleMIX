@@ -30,6 +30,7 @@ class AutoencoderKLOutput(BaseOutput):
 
     latent_dist: "DiagonalGaussianDistribution"  # noqa: F821
 
+
 @dataclass
 class Transformer2DModelOutput(BaseOutput):
     """

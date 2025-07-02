@@ -14,24 +14,24 @@
 
 import os
 import sys
+
 os.environ["FLAGS_use_cuda_managed_memory"] = "True"
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
 
-import unittest
-import numpy as np
-import tempfile
 import inspect
+import tempfile
+import unittest
+
+import numpy as np
 import paddle
 
+from paddlemix.examples.internvl2.chat_demo import load_tokenizer
+from paddlemix.models.blip2.Qformer import BertLMHeadModel
 from paddlemix.models.internvl2.conversation import get_conv_template
 from paddlemix.models.internvl2.internvl_chat import (
     InternVLChatConfig,
     InternVLChatModel,
 )
-from paddlemix.models.blip2.Qformer import BertLMHeadModel
-from tests.models.test_modeling_common import ModelTesterMixin
-from paddlemix.examples.internvl2.chat_demo import load_tokenizer
-
 from tests.models.test_modeling_common import ModelTesterMixin
 from tests.testing_utils import slow
 
@@ -59,10 +59,13 @@ def prepare_model_inputs(model, tokenizer, inputs_dict, question="Who are you?")
     inputs_dict["input_ids"] = model_inputs["input_ids"]
     inputs_dict["attention_mask"] = model_inputs["attention_mask"]
     batch_size = inputs_dict["input_ids"].shape[0]
-    position_ids = paddle.arange(inputs_dict["input_ids"].shape[1]).expand((batch_size, inputs_dict["input_ids"].shape[1]))
+    position_ids = paddle.arange(inputs_dict["input_ids"].shape[1]).expand(
+        (batch_size, inputs_dict["input_ids"].shape[1])
+    )
     inputs_dict["position_ids"] = position_ids
 
     return inputs_dict
+
 
 class InternVLChatModelTester:
     def __init__(self, parent):
@@ -74,13 +77,11 @@ class InternVLChatModelTester:
         # InternVL2-2B
         test_config = {
             "_commit_hash": None,
-            "architectures": [
-                "InternVLChatModel"
-            ],
+            "architectures": ["InternVLChatModel"],
             "auto_map": {
                 "AutoConfig": "configuration_internvl_chat.InternVLChatConfig",
                 "AutoModel": "modeling_internvl_chat.InternVLChatModel",
-                "AutoModelForCausalLM": "modeling_internvl_chat.InternVLChatModel"
+                "AutoModelForCausalLM": "modeling_internvl_chat.InternVLChatModel",
             },
             "downsample_ratio": 0.5,
             "dynamic_image_size": True,
@@ -88,15 +89,13 @@ class InternVLChatModelTester:
             "llm_config": {
                 "_name_or_path": "internlm/internlm2_5-1_8b-chat",
                 "add_cross_attention": False,
-                "architectures": [
-                "InternLM2ForCausalLM"
-                ],
+                "architectures": ["InternLM2ForCausalLM"],
                 "attn_implementation": "eager",
                 "auto_map": {
-                "AutoConfig": "configuration_internlm2.InternLM2Config",
-                "AutoModel": "modeling_internlm2.InternLM2ForCausalLM",
-                "AutoModelForCausalLM": "modeling_internlm2.InternLM2ForCausalLM",
-                "AutoModelForSequenceClassification": "modeling_internlm2.InternLM2ForSequenceClassification"
+                    "AutoConfig": "configuration_internlm2.InternLM2Config",
+                    "AutoModel": "modeling_internlm2.InternLM2ForCausalLM",
+                    "AutoModelForCausalLM": "modeling_internlm2.InternLM2ForCausalLM",
+                    "AutoModelForSequenceClassification": "modeling_internlm2.InternLM2ForSequenceClassification",
                 },
                 "bad_words_ids": None,
                 "begin_suppress_tokens": None,
@@ -116,18 +115,12 @@ class InternVLChatModelTester:
                 "forced_eos_token_id": None,
                 "hidden_act": "silu",
                 "hidden_size": 2048,
-                "id2label": {
-                "0": "LABEL_0",
-                "1": "LABEL_1"
-                },
+                "id2label": {"0": "LABEL_0", "1": "LABEL_1"},
                 "initializer_range": 0.02,
                 "intermediate_size": 8192,
                 "is_decoder": False,
                 "is_encoder_decoder": False,
-                "label2id": {
-                "LABEL_0": 0,
-                "LABEL_1": 1
-                },
+                "label2id": {"LABEL_0": 0, "LABEL_1": 1},
                 "length_penalty": 1.0,
                 "max_length": 20,
                 "max_position_embeddings": 32768,
@@ -153,10 +146,7 @@ class InternVLChatModelTester:
                 "return_dict": True,
                 "return_dict_in_generate": False,
                 "rms_norm_eps": 1e-05,
-                "rope_scaling": {
-                "factor": 2.0,
-                "type": "dynamic"
-                },
+                "rope_scaling": {"factor": 2.0, "type": "dynamic"},
                 "rope_theta": 1000000,
                 "sep_token_id": None,
                 "suppress_tokens": None,
@@ -173,7 +163,7 @@ class InternVLChatModelTester:
                 "typical_p": 1.0,
                 "use_bfloat16": False,
                 "use_cache": True,
-                "vocab_size": 92553
+                "vocab_size": 92553,
             },
             "max_dynamic_patch": 12,
             "min_dynamic_patch": 1,
@@ -186,9 +176,7 @@ class InternVLChatModelTester:
             "use_llm_lora": 0,
             "use_thumbnail": True,
             "vision_config": {
-                "architectures": [
-                "InternVisionModel"
-                ],
+                "architectures": ["InternVisionModel"],
                 "attention_dropout": 0.0,
                 "drop_path_rate": 0.0,
                 "dropout": 0.0,
@@ -212,20 +200,19 @@ class InternVLChatModelTester:
                 "return_dict": True,
                 "dtype": "float16",
                 "use_bfloat16": False,
-                "use_flash_attn": False
-            }
-            }
+                "use_flash_attn": False,
+            },
+        }
 
         return InternVLChatConfig(**test_config)
 
     def prepare_config_and_inputs_for_common(self):
         config = self.get_config()
-        pixel_values = paddle.to_tensor(np.random.rand(14, 3, 448, 448), dtype='float16')  
-        input_ids = paddle.to_tensor(np.random.randint(0, 1000, (2, 1918)), dtype='int64')  
-        attention_mask = paddle.to_tensor(np.ones((2, 1918)), dtype='int64')  
-        position_ids = paddle.to_tensor(np.arange(1918).reshape(1, -1).repeat(2, axis=0), dtype='int64')  
-        image_flags = paddle.to_tensor(np.ones((14, 1)), dtype='int64')  
-
+        pixel_values = paddle.to_tensor(np.random.rand(14, 3, 448, 448), dtype="float16")
+        input_ids = paddle.to_tensor(np.random.randint(0, 1000, (2, 1918)), dtype="int64")
+        attention_mask = paddle.to_tensor(np.ones((2, 1918)), dtype="int64")
+        position_ids = paddle.to_tensor(np.arange(1918).reshape(1, -1).repeat(2, axis=0), dtype="int64")
+        image_flags = paddle.to_tensor(np.ones((14, 1)), dtype="int64")
 
         inputs_dict = {
             "pixel_values": pixel_values,
@@ -233,11 +220,11 @@ class InternVLChatModelTester:
             "attention_mask": attention_mask,
             "position_ids": position_ids,
             "image_flags": image_flags,
-            "labels": None
+            "labels": None,
         }
 
         return config, inputs_dict
-    
+
     def create_and_check_model(self, pixel_values):
         model = InternVLChatModel.from_pretrained(self.model_name_or_path, dtype="float16")
         model.eval()
@@ -251,6 +238,7 @@ class InternVLChatModelTester:
             )
 
         self.parent.assertIsNotNone(result)
+
 
 class InternVLChatModelTest(ModelTesterMixin, unittest.TestCase):
     all_model_classes = (InternVLChatModel,)
@@ -271,7 +259,7 @@ class InternVLChatModelTest(ModelTesterMixin, unittest.TestCase):
 
         def check_determinism(first, second):
             # Handle both tuple outputs and model output objects
-            if hasattr(first, 'logits'):
+            if hasattr(first, "logits"):
                 first = first.logits
                 second = second.logits
             out_1 = first.numpy()
@@ -305,7 +293,7 @@ class InternVLChatModelTest(ModelTesterMixin, unittest.TestCase):
 
     def test_hidden_states_output(self):
         pass
-    
+
     def test_save_load(self):
         config, inputs_dict = self.model_tester.prepare_config_and_inputs_for_common()
 
@@ -358,7 +346,7 @@ class InternVLChatModelTest(ModelTesterMixin, unittest.TestCase):
             signature = inspect.signature(model.forward)
             # signature.parameters is an OrderedDict => so arg_names order is deterministic
             arg_names = [*signature.parameters.keys()]
-            expected_arg_names = ['pixel_values']
+            expected_arg_names = ["pixel_values"]
             self.assertListEqual(arg_names[:1], expected_arg_names)
 
     def test_model(self):
@@ -370,6 +358,7 @@ class InternVLChatModelTest(ModelTesterMixin, unittest.TestCase):
     def test_model_from_pretrained(self):
         model = InternVLChatModel.from_pretrained(self.model_tester.model_name_or_path)
         self.assertIsNotNone(model)
+
 
 if __name__ == "__main__":
     unittest.main()

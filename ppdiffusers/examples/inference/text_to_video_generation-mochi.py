@@ -13,9 +13,9 @@
 # limitations under the License.
 
 import paddle
+
 from ppdiffusers import MochiPipeline
 from ppdiffusers.utils import export_to_video
-
 
 pipe = MochiPipeline.from_pretrained("genmo/mochi-1-preview", paddle_dtype=paddle.bfloat16)
 

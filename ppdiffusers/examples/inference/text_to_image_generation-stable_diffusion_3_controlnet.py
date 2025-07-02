@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import paddle
+
 from ppdiffusers import SD3ControlNetModel
 from ppdiffusers.pipelines import StableDiffusion3ControlNetPipeline
 from ppdiffusers.utils import load_image
@@ -24,16 +25,16 @@ pipe = StableDiffusion3ControlNetPipeline.from_pretrained(
 )
 
 # download an image
-control_image = load_image("https://huggingface.co/InstantX/SD3-Controlnet-Canny/resolve/main/canny.jpg") #FIXME
+control_image = load_image("https://huggingface.co/InstantX/SD3-Controlnet-Canny/resolve/main/canny.jpg")  # FIXME
 
 # generate image
 generator = paddle.Generator().manual_seed(0)
 prompt = "Anime style illustration of a girl wearing a suit. A moon in sky. In the background we see a big rain approaching. text 'InstantX' on image"
 n_prompt = "NSFW, nude, naked, porn, ugly"
 image = pipe(
-    prompt, 
-    negative_prompt=n_prompt, 
-    control_image=control_image, 
+    prompt,
+    negative_prompt=n_prompt,
+    control_image=control_image,
     controlnet_conditioning_scale=0.5,
     generator=generator,
 ).images[0]

@@ -14,6 +14,7 @@
 
 import argparse
 import gc
+import math
 import os
 import re
 
@@ -22,7 +23,7 @@ import paddle
 from decord import VideoReader
 from moviepy.editor import ImageSequenceClip
 from PIL import Image
-import math
+
 from ppdiffusers import (
     CogVideoXDDIMScheduler,
     CogVideoXTransformer3DVCtrlModel,
@@ -160,15 +161,15 @@ if __name__ == "__main__":
         validation_mask_images = load_images_from_video_to_pil(args.control_mask_video_path)
 
     if args.prompt_path is not None:
-        if not args.prompt_path.endswith('.txt'):
+        if not args.prompt_path.endswith(".txt"):
             prompt = args.prompt_path
         else:
             with open(args.prompt_path, "r") as f:
                 lines = f.readlines()
                 prompt = lines[0].strip()
     else:
-        prompt=None
-    
+        prompt = None
+
     if args.vctrl_path.endswith(".pdparams"):
         vctrl = VCtrlModel.from_config(args.vctrl_config)
         vctrl.set_state_dict(state_dict=paddle.load(args.vctrl_path))
@@ -176,9 +177,7 @@ if __name__ == "__main__":
     elif args.random_initialization:
         vctrl = VCtrlModel.from_config(args.vctrl_config)
     else:
-        vctrl = VCtrlModel.from_pretrained(
-            args.vctrl_path, low_cpu_mem_usage=True, paddle_dtype=paddle.float16
-        )
+        vctrl = VCtrlModel.from_pretrained(args.vctrl_path, low_cpu_mem_usage=True, paddle_dtype=paddle.float16)
     if args.transformer_path:
         transformer = CogVideoXTransformer3DVCtrlModel.from_pretrained(
             args.pretrained_model_name_or_path,
@@ -191,7 +190,11 @@ if __name__ == "__main__":
         )
     else:
         pipeline = CogVideoXVCtrlImageToVideoPipeline.from_pretrained(
-            args.pretrained_model_name_or_path, vctrl=vctrl, paddle_dtype=paddle.float16,low_cpu_mem_usage=True, map_location="cpu",
+            args.pretrained_model_name_or_path,
+            vctrl=vctrl,
+            paddle_dtype=paddle.float16,
+            low_cpu_mem_usage=True,
+            map_location="cpu",
         )
 
     pipeline.scheduler = CogVideoXDDIMScheduler.from_config(pipeline.scheduler.config, timestep_spacing="trailing")
@@ -207,25 +210,24 @@ if __name__ == "__main__":
         ref_image = Image.open(args.ref_image_path).convert("RGB")
         if args.task == "character_pose":
             validation_control_images = [ref_image] + validation_control_images
-    # Total frames of input video. 
+    # Total frames of input video.
     total_frames = len(validation_control_images)
-    
+
     # Inference times for a long video.
-    inference_times=math.ceil((total_frames-args.max_frame)/args.strides)+1
-    num_frames=args.max_frame
-    
-    
+    inference_times = math.ceil((total_frames - args.max_frame) / args.strides) + 1
+    num_frames = args.max_frame
+
     for step in range(inference_times):
-        end_frame=min(step*args.strides+num_frames,total_frames)
-        if end_frame!=total_frames:
-            start_frame=step*args.strides
+        end_frame = min(step * args.strides + num_frames, total_frames)
+        if end_frame != total_frames:
+            start_frame = step * args.strides
         else:
-            start_frame=end_frame-num_frames
-            
-        validation_control_images_slice = validation_control_images[start_frame:end_frame ]
-        
+            start_frame = end_frame - num_frames
+
+        validation_control_images_slice = validation_control_images[start_frame:end_frame]
+
         if args.control_mask_video_path is not None:
-            validation_mask_images_slice = validation_mask_images[start_frame:end_frame ]
+            validation_mask_images_slice = validation_mask_images[start_frame:end_frame]
         print(f"step:{step},start_frame:{start_frame},end_frame:{end_frame}")
         print(len(validation_control_images_slice))
         print(total_frames)
@@ -245,19 +247,18 @@ if __name__ == "__main__":
             task=args.task,
             conditioning_masks=validation_mask_images_slice if args.task == "mask" else None,
             vctrl_layout_type=args.vctrl_layout_type,
-            ).frames[0]
+        ).frames[0]
         # reference image for next video generation
-        if step !=inference_times-2:
+        if step != inference_times - 2:
             ref_image = video[args.strides - 1]
         else:
-            ref_image=video[total_frames-num_frames-start_frame]
-        
+            ref_image = video[total_frames - num_frames - start_frame]
+
         paddle.device.cuda.empty_cache()
-        if end_frame!=total_frames:
-            final_result.append(video[:args.strides])
+        if end_frame != total_frames:
+            final_result.append(video[: args.strides])
         else:
-            final_result.append(video[step*args.strides-start_frame:])
-        
-        
-save_vid_side_by_side(final_result, validation_control_images[:total_frames], args.output_dir,fps=args.fps)
-        
+            final_result.append(video[step * args.strides - start_frame :])
+
+
+save_vid_side_by_side(final_result, validation_control_images[:total_frames], args.output_dir, fps=args.fps)

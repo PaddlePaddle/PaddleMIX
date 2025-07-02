@@ -1,6 +1,3 @@
-
-
-
 # Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,20 +14,28 @@
 
 import os
 import sys
-from tkinter.messagebox import NO
+
 os.environ["FLAGS_use_cuda_managed_memory"] = "True"
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
 import unittest
+
 import numpy as np
 import paddle
 
 # 配置和模型定义的导入
-from paddlemix.models.llava.language_model.llava_llama import LlavaConfig, LlavaLlamaForCausalLM
-
+from paddlemix.models.llava.language_model.llava_llama import (
+    LlavaConfig,
+    LlavaLlamaForCausalLM,
+)
 
 # 测试工具导入
 from tests.models.test_configuration_common import ConfigTester
-from tests.models.test_modeling_common import ModelTesterMixin, floats_tensor, ids_tensor, random_attention_mask
+from tests.models.test_modeling_common import (
+    ModelTesterMixin,
+    floats_tensor,
+    ids_tensor,
+    random_attention_mask,
+)
 from tests.testing_utils import slow
 
 
@@ -38,83 +43,60 @@ class LlavaModelTester:
     def __init__(self, parent):
         self.parent = parent
         self.model_name_or_path = "liuhaotian/llava-v1.6-vicuna-7b"
+
     def get_config(self):
         # llava_llama configs copy from paddlemix liuhaotian/llava-v1.6-vicuna-7b
         test_config = {
-  "_name_or_path": "./checkpoints/vicuna-7b-v1-6",
-  "architectures": [
-    "LlavaLlamaForCausalLM"
-  ],
-  "attention_bias": False,
-  "attention_dropout": 0.0,
-  "bos_token_id": 1,
-  "eos_token_id": 2,
-  "freeze_mm_mlp_adapter": False,
-  "freeze_mm_vision_resampler": False,
-  "hidden_act": "silu",
-  "hidden_size": 4096,
-  "image_aspect_ratio": "anyres",
-  "image_crop_resolution": 224,
-  "image_grid_pinpoints": [
-    [
-      336,
-      672
-    ],
-    [
-      672,
-      336
-    ],
-    [
-      672,
-      672
-    ],
-    [
-      1008,
-      336
-    ],
-    [
-      336,
-      1008
-    ]
-  ],
-  "image_split_resolution": 224,
-  "initializer_range": 0.02,
-  "intermediate_size": 11008,
-  "max_position_embeddings": 4096,
-  "mm_hidden_size": 1024,
-  "mm_patch_merge_type": "spatial_unpad",
-  "mm_projector_lr": None,
-  "mm_projector_type": "mlp2x_gelu",
-  "mm_resampler_type": None,
-  "mm_use_im_patch_token": False,
-  "mm_use_im_start_end": False,
-  "pretrain_mm_mlp_adapter": None,
-  "mm_vision_select_feature": "patch",
-  "mm_vision_select_layer": -2,
-  "mm_vision_tower": "openai/clip-vit-large-patch14-336",
-  "mm_vision_tower_lr": 2e-06,
-  "model_type": "llava",
-  "num_attention_heads": 32,
-  "num_hidden_layers": 32,
-  "num_key_value_heads": 32,
-  "pad_token_id": 0,
-  "pretraining_tp": 1,
-  "rms_norm_eps": 1e-05,
-  "rope_scaling": None,
-  "rope_theta": 10000.0,
-  "tie_word_embeddings": False,
-  "tokenizer_model_max_length": 4096,
-  "tokenizer_padding_side": "right",
-  "transformers_version": "4.36.2",
-  "tune_mm_mlp_adapter": False,
-  "tune_mm_vision_resampler": False,
-  "unfreeze_mm_vision_tower": True,
-  "use_cache": True,
-  "use_mm_proj": True,
-  "vocab_size": 32000
-}
+            "_name_or_path": "./checkpoints/vicuna-7b-v1-6",
+            "architectures": ["LlavaLlamaForCausalLM"],
+            "attention_bias": False,
+            "attention_dropout": 0.0,
+            "bos_token_id": 1,
+            "eos_token_id": 2,
+            "freeze_mm_mlp_adapter": False,
+            "freeze_mm_vision_resampler": False,
+            "hidden_act": "silu",
+            "hidden_size": 4096,
+            "image_aspect_ratio": "anyres",
+            "image_crop_resolution": 224,
+            "image_grid_pinpoints": [[336, 672], [672, 336], [672, 672], [1008, 336], [336, 1008]],
+            "image_split_resolution": 224,
+            "initializer_range": 0.02,
+            "intermediate_size": 11008,
+            "max_position_embeddings": 4096,
+            "mm_hidden_size": 1024,
+            "mm_patch_merge_type": "spatial_unpad",
+            "mm_projector_lr": None,
+            "mm_projector_type": "mlp2x_gelu",
+            "mm_resampler_type": None,
+            "mm_use_im_patch_token": False,
+            "mm_use_im_start_end": False,
+            "pretrain_mm_mlp_adapter": None,
+            "mm_vision_select_feature": "patch",
+            "mm_vision_select_layer": -2,
+            "mm_vision_tower": "openai/clip-vit-large-patch14-336",
+            "mm_vision_tower_lr": 2e-06,
+            "model_type": "llava",
+            "num_attention_heads": 32,
+            "num_hidden_layers": 32,
+            "num_key_value_heads": 32,
+            "pad_token_id": 0,
+            "pretraining_tp": 1,
+            "rms_norm_eps": 1e-05,
+            "rope_scaling": None,
+            "rope_theta": 10000.0,
+            "tie_word_embeddings": False,
+            "tokenizer_model_max_length": 4096,
+            "tokenizer_padding_side": "right",
+            "transformers_version": "4.36.2",
+            "tune_mm_mlp_adapter": False,
+            "tune_mm_vision_resampler": False,
+            "unfreeze_mm_vision_tower": True,
+            "use_cache": True,
+            "use_mm_proj": True,
+            "vocab_size": 32000,
+        }
 
-        
         return LlavaConfig(**test_config)
 
     def prepare_config_and_inputs(self):
@@ -137,7 +119,7 @@ class LlavaModelTester:
             "input_ids": tokenized_out["input_ids"],
             "attention_mask": tokenized_out["attention_mask"],
             "position_ids": tokenized_out["position_ids"],
-            "image_size": tokenized_out["image_size"]
+            "image_size": tokenized_out["image_size"],
         }
 
         return config, inputs_dict
@@ -157,7 +139,7 @@ class LlavaModelTester:
 
 
 class LlavaModelTest(ModelTesterMixin, unittest.TestCase):
-    all_model_classes = (LlavaLlamaForCausalLM, )
+    all_model_classes = (LlavaLlamaForCausalLM,)
     fx_compatible = False
     test_head_masking = False
     test_pruning = False
@@ -205,11 +187,10 @@ class LlavaModelTest(ModelTesterMixin, unittest.TestCase):
     @unittest.skip(reason="Hidden_states is tested in individual model tests")
     def test_hidden_states_output(self):
         pass
-    
+
     def test_model(self):
         config, inputs_dict = self.model_tester.prepare_config_and_inputs_for_common()
         self.model_tester.create_and_check_model(**inputs_dict)
-
 
     @slow
     def test_model_from_pretrained(self):

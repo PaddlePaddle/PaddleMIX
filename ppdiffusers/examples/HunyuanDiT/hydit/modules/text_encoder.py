@@ -1,6 +1,25 @@
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import paddle
 import paddle.nn as nn
-from ppdiffusers.transformers import AutoTokenizer, T5EncoderModel, T5ForConditionalGeneration
+
+from ppdiffusers.transformers import (
+    AutoTokenizer,
+    T5EncoderModel,
+    T5ForConditionalGeneration,
+)
 
 
 class MT5Embedder(nn.Layer):
@@ -28,9 +47,7 @@ class MT5Embedder(nn.Layer):
             return
         if conditional_generation:
             self.model = None
-            self.generation_model = T5ForConditionalGeneration.from_pretrained(
-                model_dir
-            )
+            self.generation_model = T5ForConditionalGeneration.from_pretrained(model_dir)
             return
         self.model = T5EncoderModel.from_pretrained(model_dir, **model_kwargs).eval().to(dtype=self.paddle_dtype)
 
@@ -64,9 +81,7 @@ class MT5Embedder(nn.Layer):
         with paddle.no_grad():
             outputs = self.model(
                 input_ids=text_tokens_and_mask["input_ids"],
-                attention_mask=text_tokens_and_mask["attention_mask"]
-                if attention_mask
-                else None,
+                attention_mask=text_tokens_and_mask["attention_mask"] if attention_mask else None,
                 output_hidden_states=True,
             )
             text_encoder_embs = outputs["hidden_states"][layer_index].detach()

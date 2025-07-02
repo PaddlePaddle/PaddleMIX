@@ -17,9 +17,9 @@ python -m pip install paddlemix
 
 ```
 
-## 推理优化内容：  
-目前PP-VCtrl通过使用部分高性能的融合算子来提升推理性能，例如`ln_partial_rotary_emb`和`partial_rotary_emb`等高性能融合算子。   
-其中，`ln_partial_rotary_emb`将Q，K的Norm以及ROPE算子融合；  
+## 推理优化内容：
+目前PP-VCtrl通过使用部分高性能的融合算子来提升推理性能，例如`ln_partial_rotary_emb`和`partial_rotary_emb`等高性能融合算子。
+其中，`ln_partial_rotary_emb`将Q，K的Norm以及ROPE算子融合；
 
 ## 高性能推理指令：
 ```shell
@@ -35,5 +35,3 @@ bash scripts/infer_cogvideox_i2v_pose_vctrl.sh
 |                     model                  | Paddle Inference | Paddle 动态图 |
 | ------------------------------------------ | ---------------  | ------------ |
 | cogvideox-5b-i2v-vctrl & vctrl_pose_5b_i2v |     122.184 s    |   136.375 s  |
-
-

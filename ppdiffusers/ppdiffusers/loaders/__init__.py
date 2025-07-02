@@ -55,10 +55,10 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             from .lora import (
                 FluxLoraLoaderMixin,
                 LoraLoaderMixin,
+                Mochi1LoraLoaderMixin,
                 SD3LoraLoaderMixin,
                 StableDiffusionXLLoraLoaderMixin,
                 WanLoraLoaderMixin,
-                Mochi1LoraLoaderMixin,
             )
             from .single_file import FromCkptMixin, FromSingleFileMixin
             from .textual_inversion import TextualInversionLoaderMixin

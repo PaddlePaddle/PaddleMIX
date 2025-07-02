@@ -14,6 +14,7 @@
 
 import os
 import sys
+
 os.environ["FLAGS_use_cuda_managed_memory"] = "true"
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
 import unittest
@@ -107,7 +108,7 @@ class QWenLMHeadModelTester:
 
 
 class QWenLMHeadModelTest(ModelTesterMixin, unittest.TestCase):
-    all_model_classes = ( QWenLMHeadModel,)
+    all_model_classes = (QWenLMHeadModel,)
     fx_compatible = False
     test_head_masking = False
     test_pruning = False

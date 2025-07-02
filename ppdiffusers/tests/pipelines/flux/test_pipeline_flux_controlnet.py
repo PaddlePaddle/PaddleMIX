@@ -1,9 +1,22 @@
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import gc
 import unittest
 
 import numpy as np
 import paddle
-from PIL import Image
 
 from ppdiffusers import (
     AutoencoderKL,
@@ -36,7 +49,7 @@ class FluxControlNetPipelineFastTests(unittest.TestCase, PipelineTesterMixin):
     pipeline_class = FluxControlNetPipeline
     params = frozenset(["prompt", "height", "width", "guidance_scale", "prompt_embeds", "pooled_prompt_embeds"])
     batch_params = frozenset(["prompt"])
-    
+
     # there is no xformers processor for Flux
     test_xformers_attention = False
     test_layerwise_casting = True
@@ -68,7 +81,7 @@ class FluxControlNetPipelineFastTests(unittest.TestCase, PipelineTesterMixin):
             pooled_projection_dim=32,
             axes_dims_rope=[4, 4, 8],
         )
-        
+
         clip_text_encoder_config = CLIPTextConfig(
             bos_token_id=0,
             eos_token_id=2,
@@ -156,13 +169,22 @@ class FluxControlNetPipelineFastTests(unittest.TestCase, PipelineTesterMixin):
         assert image.shape == (1, 32, 32, 3)
 
         expected_slice = np.array(
-            [0.89820540, 0.32847900, 0.94486995, 0.47045115, 0.24701830, 0.00000005, 0.82854380, 0.25686050, 0.54220625]
+            [
+                0.89820540,
+                0.32847900,
+                0.94486995,
+                0.47045115,
+                0.24701830,
+                0.00000005,
+                0.82854380,
+                0.25686050,
+                0.54220625,
+            ]
         )
 
         assert (
             np.abs(image_slice.flatten() - expected_slice).max() < 1e-2
         ), f"Expected: {expected_slice}, got: {image_slice.flatten()}"
-
 
     def test_flux_different_prompts(self):
         pipe = self.pipeline_class(**self.get_dummy_components())
@@ -217,7 +239,7 @@ class FluxControlNetPipelineFastTests(unittest.TestCase, PipelineTesterMixin):
                 generator=generator,
                 dtype=paddle.float16,
             )
-            
+
             inputs.update({"control_image": control_image})
             image = pipe(**inputs).images[0]
             output_height, output_width, _ = image.shape
@@ -240,24 +262,26 @@ class FluxControlNetPipelineSlowTests(unittest.TestCase):
         paddle.device.cuda.empty_cache()
 
     def test_canny(self):
-        controlnet = FluxControlNetModel.from_pretrained("InstantX/FLUX.1-dev-Controlnet-Canny", paddle_dtype=paddle.bfloat16)
+        controlnet = FluxControlNetModel.from_pretrained(
+            "InstantX/FLUX.1-dev-Controlnet-Canny", paddle_dtype=paddle.bfloat16
+        )
         pipe = FluxControlNetPipeline.from_pretrained(
-            "black-forest-labs/FLUX.1-dev", 
-            controlnet=controlnet, 
-            paddle_dtype=paddle.bfloat16
+            "black-forest-labs/FLUX.1-dev", controlnet=controlnet, paddle_dtype=paddle.bfloat16
         )
         pipe.set_progress_bar_config(disable=None)
 
         generator = paddle.Generator().manual_seed(0)
-        control_image = load_image("https://huggingface.co/InstantX/SD3-Controlnet-Canny/resolve/main/canny.jpg").resize((512, 512))
+        control_image = load_image(
+            "https://huggingface.co/InstantX/SD3-Controlnet-Canny/resolve/main/canny.jpg"
+        ).resize((512, 512))
 
         prompt = "A girl in city, 25 years old, cool, futuristic"
         prompt_embeds, pooled_prompt_embeds, _ = pipe.encode_prompt(
             prompt=prompt,
-            prompt_2=None, 
+            prompt_2=None,
             max_sequence_length=256,
         )
-        
+
         output = pipe(
             prompt_embeds=prompt_embeds,
             pooled_prompt_embeds=pooled_prompt_embeds,
@@ -269,7 +293,7 @@ class FluxControlNetPipelineSlowTests(unittest.TestCase):
             num_inference_steps=2,
             max_sequence_length=256,
             output_type="np",
-            generator=generator
+            generator=generator,
         )
         image = output.images[0]
 
@@ -282,7 +306,9 @@ class FluxControlNetPipelineSlowTests(unittest.TestCase):
         assert numpy_cosine_similarity_distance(original_image.flatten(), expected_image) < 2e-2
 
     def test_multi_controlnet(self):
-        controlnet = FluxControlNetModel.from_pretrained("InstantX/FLUX.1-dev-Controlnet-Canny", paddle_dtype=paddle.bfloat16)
+        controlnet = FluxControlNetModel.from_pretrained(
+            "InstantX/FLUX.1-dev-Controlnet-Canny", paddle_dtype=paddle.bfloat16
+        )
         controlnet = FluxMultiControlNetModel([controlnet, controlnet])
 
         pipe = FluxControlNetPipeline.from_pretrained(
@@ -292,7 +318,9 @@ class FluxControlNetPipelineSlowTests(unittest.TestCase):
 
         generator = paddle.Generator().manual_seed(0)
         prompt = "A girl in city, 25 years old, cool, futuristic"
-        control_image = load_image("https://huggingface.co/InstantX/SD3-Controlnet-Canny/resolve/main/canny.jpg").resize((512, 512))
+        control_image = load_image(
+            "https://huggingface.co/InstantX/SD3-Controlnet-Canny/resolve/main/canny.jpg"
+        ).resize((512, 512))
 
         output = pipe(
             prompt,
@@ -304,7 +332,7 @@ class FluxControlNetPipelineSlowTests(unittest.TestCase):
             num_inference_steps=2,
             max_sequence_length=256,
             output_type="np",
-            generator=generator
+            generator=generator,
         )
         image = output.images[0]
 

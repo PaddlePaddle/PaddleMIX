@@ -701,7 +701,7 @@ class StableDiffusionXLPipeline(
     @property
     def interrupt(self):
         return self._interrupt
-        
+
     @paddle.no_grad()
     @replace_example_docstring(EXAMPLE_DOC_STRING)
     def __call__(

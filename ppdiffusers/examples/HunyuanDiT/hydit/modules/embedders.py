@@ -1,4 +1,19 @@
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import math
+
 import paddle
 import paddle.nn as nn
 from einops import repeat
@@ -7,7 +22,7 @@ from .helpers import to_2tuple
 
 
 class PatchEmbed(nn.Layer):
-    """ 2D Image to Patch Embedding
+    """2D Image to Patch Embedding
 
     Image to Patch Embedding using Conv2d
 
@@ -19,15 +34,16 @@ class PatchEmbed(nn.Layer):
 
     Remove the _assert function in forward function to be compatible with multi-resolution images.
     """
+
     def __init__(
-            self,
-            img_size=224,
-            patch_size=16,
-            in_chans=3,
-            embed_dim=768,
-            norm_layer=None,
-            flatten=True,
-            bias=True,
+        self,
+        img_size=224,
+        patch_size=16,
+        in_chans=3,
+        embed_dim=768,
+        norm_layer=None,
+        flatten=True,
+        bias=True,
     ):
         super().__init__()
         if isinstance(img_size, int):
@@ -79,16 +95,12 @@ def timestep_embedding(t, dim, max_period=10000, repeat_only=False):
     if not repeat_only:
         half = dim // 2
         freqs = paddle.exp(
-            -math.log(max_period)
-            * paddle.arange(start=0, end=half, dtype='float32')
-            / half
-        )   # size: [dim/2], 一个指数衰减的曲线
-        args = t[:, None].astype(dtype='float32') * freqs[None]
+            -math.log(max_period) * paddle.arange(start=0, end=half, dtype="float32") / half
+        )  # size: [dim/2], 一个指数衰减的曲线
+        args = t[:, None].astype(dtype="float32") * freqs[None]
         embedding = paddle.concat([paddle.cos(args), paddle.sin(args)], axis=-1)
         if dim % 2:
-            embedding = paddle.concat(
-                [embedding, paddle.zeros_like(embedding[:, :1])], axis=-1
-            )
+            embedding = paddle.concat([embedding, paddle.zeros_like(embedding[:, :1])], axis=-1)
     else:
         embedding = repeat(t, "b -> b d", d=dim)
     return embedding
@@ -98,6 +110,7 @@ class TimestepEmbedder(nn.Layer):
     """
     Embeds scalar timesteps into vector representations.
     """
+
     def __init__(self, hidden_size, frequency_embedding_size=256, out_size=None):
         super().__init__()
         if out_size is None:
@@ -110,7 +123,6 @@ class TimestepEmbedder(nn.Layer):
         self.frequency_embedding_size = frequency_embedding_size
 
     def forward(self, t):
-        t_freq = timestep_embedding(t, self.frequency_embedding_size).astype(
-            self.mlp[0].weight.dtype)
+        t_freq = timestep_embedding(t, self.frequency_embedding_size).astype(self.mlp[0].weight.dtype)
         t_emb = self.mlp(t_freq)
         return t_emb

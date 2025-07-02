@@ -5,7 +5,7 @@
 `train_dreambooth_lora_flux.py` 脚本中展示了如何进行DreamBooth LoRA微调。
 
 
-> [!NOTE]  
+> [!NOTE]
 > FLUX LoRA 微调需要40GB以上的显存。
 
 
@@ -79,4 +79,3 @@ pipe.load_lora_weights('your-lora-checkpoint')
 image = pipe("A picture of a sks dog in a bucket", num_inference_steps=25).images[0]
 image.save("sks_dog_dreambooth_lora.png")
 ```
-

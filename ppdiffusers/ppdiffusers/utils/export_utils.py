@@ -161,6 +161,7 @@ def export_to_video(
         video_writer.write(img)
     return output_video_path
 
+
 def export_to_video_2(
     video_frames: Union[List[np.ndarray], List[PIL.Image.Image]], output_video_path: str = None, fps: int = 10
 ) -> str:

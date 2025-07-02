@@ -35,13 +35,11 @@ from ...image_processor import PipelineImageInput
 from ...loaders import WanLoraLoaderMixin
 from ...models import AutoencoderKLWan, WanTransformer3DModel
 from ...schedulers import UniPCMultistepScheduler
-
 from ...utils import logging, replace_example_docstring
 from ...utils.paddle_utils import randn_tensor
 from ...video_processor import VideoProcessor
 from ..pipeline_utils import DiffusionPipeline
 from .pipeline_output import WanPipelineOutput
-
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -196,7 +194,7 @@ class WanImageToVideoPipeline(DiffusionPipeline, WanLoraLoaderMixin):
                 paddle.concat([u, paddle.zeros([max_sequence_length - u.shape[0], u.shape[1]], dtype=u.dtype)])
                 for u in prompt_embeds
             ],
-            axis=0
+            axis=0,
         )
 
         # duplicate text embeddings for each generation per prompt, using mps friendly method

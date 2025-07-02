@@ -408,7 +408,7 @@ def main(args):
                 f"Mean iter/sec: {1 / (np.mean(time_costs) / args.inference_steps):2f} it/s, "
                 f"average end-to-end time :  {np.mean(time_costs)*1000 :2f} ms."
             )
-            print(f"GPU max_memory_allocated: {paddle.device.cuda.max_memory_allocated() / 1024 ** 3:.2f} GB")
+            print(f"GPU max_memory_allocated: {torch.device.cuda.max_memory_allocated() / 1024 ** 3:.2f} GB")
             images[0].save(f"{folder}/{task_name}.png")
 
 

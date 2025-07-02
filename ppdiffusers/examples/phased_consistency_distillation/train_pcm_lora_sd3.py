@@ -14,53 +14,40 @@
 # See the License for the specific language governing permissions and
 
 import argparse
-import copy
 import gc
-import itertools
 import logging
 import math
 import os
+
 os.environ["USE_PEFT_BACKEND"] = "True"
-import random
+
 import shutil
-import warnings
 from contextlib import nullcontext
 from pathlib import Path
-from typing import List, Optional, Tuple, Union
+from typing import List, Union
 
 import numpy as np
-from PIL import Image
-from PIL.ImageOps import exif_transpose
+import paddle
 from paddle.vision import transforms
+from paddlenlp.transformers import PretrainedConfig
+from PIL import Image
 from tqdm.auto import tqdm
 
-import paddle
 import ppdiffusers
-from ppdiffusers.accelerate import Accelerator
-from ppdiffusers.accelerate.logging import get_logger
-from ppdiffusers.accelerate.utils import (
-    DistributedDataParallelKwargs,
-    ProjectConfiguration,
-    set_seed,
-)
-from ppdiffusers.peft import LoraConfig, set_peft_model_state_dict
-from ppdiffusers.peft.utils import get_peft_model_state_dict
-from paddlenlp.transformers import PretrainedConfig
-from ppdiffusers.transformers import CLIPTokenizer, T5Tokenizer
-from ppdiffusers.accelerate import Accelerator
-from ppdiffusers.utils import (
-    check_min_version,
-    convert_unet_state_dict_to_peft,
-    is_wandb_available
-)
 from ppdiffusers import (
     AutoencoderKL,
     FlowMatchEulerDiscreteScheduler,
     SD3Transformer2DModel,
     StableDiffusion3Pipeline,
 )
+from ppdiffusers.accelerate import Accelerator
+from ppdiffusers.accelerate.logging import get_logger
+from ppdiffusers.accelerate.utils import ProjectConfiguration, set_seed
 from ppdiffusers.optimization import get_scheduler
-from pcm_fm_deterministic_scheduler import PCMFMDeterministicScheduler
+from ppdiffusers.peft import LoraConfig, set_peft_model_state_dict
+from ppdiffusers.peft.utils import get_peft_model_state_dict
+from ppdiffusers.transformers import CLIPTokenizer, T5Tokenizer
+from ppdiffusers.utils import convert_unet_state_dict_to_peft, is_wandb_available
 
 if is_wandb_available():
     import wandb
@@ -107,18 +94,11 @@ def log_validation(
     pipeline.set_progress_bar_config(disable=True)
 
     # run inference
-    generator = (
-        paddle.Generator().manual_seed(args.seed)
-        if args.seed
-        else None
-    )
+    generator = paddle.Generator().manual_seed(args.seed) if args.seed else None
     autocast_ctx = nullcontext()
 
     with autocast_ctx:
-        images = [
-            pipeline(**pipeline_args, generator=generator).images[0]
-            for _ in range(args.num_validation_images)
-        ]
+        images = [pipeline(**pipeline_args, generator=generator).images[0] for _ in range(args.num_validation_images)]
 
     for tracker in accelerator.trackers:
         phase_name = "test" if is_final_validation else "validation"
@@ -129,8 +109,7 @@ def log_validation(
             tracker.log(
                 {
                     phase_name: [
-                        wandb.Image(image, caption=f"{i}: {pipeline_args['prompt']}")
-                        for i, image in enumerate(images)
+                        wandb.Image(image, caption=f"{i}: {pipeline_args['prompt']}") for i, image in enumerate(images)
                     ]
                 }
             )
@@ -151,9 +130,7 @@ def extract_into_tensor(a, t, x_shape):
 class EulerSolver:
     def __init__(self, sigmas, timesteps=1000, euler_timesteps=50):
         self.step_ratio = timesteps // euler_timesteps
-        self.euler_timesteps = (
-            np.arange(1, euler_timesteps + 1) * self.step_ratio
-        ).round().astype(np.int64) - 1
+        self.euler_timesteps = (np.arange(1, euler_timesteps + 1) * self.step_ratio).round().astype(np.int64) - 1
         self.euler_timesteps_prev = np.asarray([0] + self.euler_timesteps[:-1].tolist())
         self.sigmas = sigmas[self.euler_timesteps]
         self.sigmas_prev = np.asarray(
@@ -175,9 +152,7 @@ class EulerSolver:
 
     def euler_step(self, sample, model_pred, timestep_index):
         sigma = extract_into_tensor(self.sigmas, timestep_index, model_pred.shape)
-        sigma_prev = extract_into_tensor(
-            self.sigmas_prev, timestep_index, model_pred.shape
-        )
+        sigma_prev = extract_into_tensor(self.sigmas_prev, timestep_index, model_pred.shape)
         x_prev = sample + (sigma_prev - sigma) * model_pred
         return x_prev
 
@@ -190,16 +165,10 @@ class EulerSolver:
         is_target=False,
     ):
 
-        inference_indices = np.linspace(
-            0, len(self.euler_timesteps), num=multiphase, endpoint=False
-        )
+        inference_indices = np.linspace(0, len(self.euler_timesteps), num=multiphase, endpoint=False)
         inference_indices = np.floor(inference_indices).astype(np.int64)
-        inference_indices = (
-            paddle.to_tensor(inference_indices).astype(dtype="int64")
-        )
-        expanded_timestep_index = timestep_index.unsqueeze(1).expand(
-            [-1, inference_indices.shape[0]]
-        )
+        inference_indices = paddle.to_tensor(inference_indices).astype(dtype="int64")
+        expanded_timestep_index = timestep_index.unsqueeze(1).expand([-1, inference_indices.shape[0]])
         valid_indices_mask = expanded_timestep_index >= inference_indices
         last_valid_index = valid_indices_mask.flip(axis=[1]).astype(dtype="int64").argmax(axis=1)
         last_valid_index = inference_indices.shape[0] - 1 - last_valid_index
@@ -209,9 +178,7 @@ class EulerSolver:
             sigma = extract_into_tensor(self.sigmas_prev, timestep_index, sample.shape)
         else:
             sigma = extract_into_tensor(self.sigmas, timestep_index, sample.shape)
-        sigma_prev = extract_into_tensor(
-            self.sigmas_prev, timestep_index_end, sample.shape
-        )
+        sigma_prev = extract_into_tensor(self.sigmas_prev, timestep_index_end, sample.shape)
         x_prev = sample + (sigma_prev - sigma) * model_pred
 
         return x_prev, timestep_index_end
@@ -297,9 +264,7 @@ def parse_args(input_args=None):
         default="sd3-dreambooth",
         help="The output directory where the model predictions and checkpoints will be written.",
     )
-    parser.add_argument(
-        "--seed", type=int, default=None, help="A seed for reproducible training."
-    )
+    parser.add_argument("--seed", type=int, default=None, help="A seed for reproducible training.")
     parser.add_argument(
         "--resolution",
         type=int,
@@ -545,9 +510,7 @@ def parse_args(input_args=None):
         help="Remove lr from the denominator of D estimate to avoid issues during warm-up stage. True by default. "
         "Ignored if optimizer is adamW",
     )
-    parser.add_argument(
-        "--max_grad_norm", default=1.0, type=float, help="Max gradient norm."
-    )
+    parser.add_argument("--max_grad_norm", default=1.0, type=float, help="Max gradient norm.")
     parser.add_argument(
         "--push_to_hub",
         action="store_true",
@@ -656,14 +619,10 @@ class CustomImageDataset(paddle.io.Dataset):
         """
         self.img_dir = img_dir
         self.sample_size = sample_size
-        self.img_names = [
-            f for f in os.listdir(img_dir) if f.endswith((".png", ".jpg"))
-        ]
+        self.img_names = [f for f in os.listdir(img_dir) if f.endswith((".png", ".jpg"))]
         self.transform = transforms.Compose(
             [
-                transforms.Resize(
-                    self.sample_size, interpolation="lanczos"
-                ),
+                transforms.Resize(self.sample_size, interpolation="lanczos"),
                 transforms.CenterCrop(self.sample_size),
                 transforms.ToTensor(),
                 transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
@@ -821,6 +780,7 @@ def cast_training_params(model: Union[paddle.nn.Layer, List[paddle.nn.Layer]], d
             if not param.stop_gradient:
                 param.set_value(param.to(dtype=dtype))
 
+
 def main(args):
     if args.report_to == "wandb" and args.hub_token is not None:
         raise ValueError(
@@ -836,9 +796,7 @@ def main(args):
 
     logging_dir = Path(args.output_dir, args.logging_dir)
 
-    accelerator_project_config = ProjectConfiguration(
-        project_dir=args.output_dir, logging_dir=logging_dir
-    )
+    accelerator_project_config = ProjectConfiguration(project_dir=args.output_dir, logging_dir=logging_dir)
     # kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
     accelerator = Accelerator(
         gradient_accumulation_steps=args.gradient_accumulation_steps,
@@ -854,9 +812,7 @@ def main(args):
 
     if args.report_to == "wandb":
         if not is_wandb_available():
-            raise ImportError(
-                "Make sure to install wandb if you want to use it for logging during training."
-            )
+            raise ImportError("Make sure to install wandb if you want to use it for logging during training.")
 
     # Make one log on every process with the configuration for debugging.
     logging.basicConfig(
@@ -900,9 +856,7 @@ def main(args):
     )
 
     # import correct text encoder classes
-    text_encoder_cls_one = import_model_class_from_model_name_or_path(
-        args.pretrained_teacher_model, args.revision
-    )
+    text_encoder_cls_one = import_model_class_from_model_name_or_path(args.pretrained_teacher_model, args.revision)
     text_encoder_cls_two = import_model_class_from_model_name_or_path(
         args.pretrained_teacher_model, args.revision, subfolder="text_encoder_2"
     )
@@ -914,7 +868,7 @@ def main(args):
     noise_scheduler = FlowMatchEulerDiscreteScheduler.from_pretrained(
         args.pretrained_teacher_model, subfolder="scheduler"
     )
-    noise_scheduler_copy = copy.deepcopy(noise_scheduler)
+
     text_encoder_one, text_encoder_two, text_encoder_three = load_text_encoders(
         text_encoder_cls_one, text_encoder_cls_two, text_encoder_cls_three
     )
@@ -1036,9 +990,7 @@ def main(args):
             if k.startswith("transformer.")
         }
         transformer_state_dict = convert_unet_state_dict_to_peft(transformer_state_dict)
-        incompatible_keys = set_peft_model_state_dict(
-            transformer_, transformer_state_dict, adapter_name="default"
-        )
+        incompatible_keys = set_peft_model_state_dict(transformer_, transformer_state_dict, adapter_name="default")
         if incompatible_keys is not None:
             # check only for unexpected keys
             unexpected_keys = getattr(incompatible_keys, "unexpected_keys", None)
@@ -1066,10 +1018,7 @@ def main(args):
 
     if args.scale_lr:
         args.learning_rate = (
-            args.learning_rate
-            * args.gradient_accumulation_steps
-            * args.train_batch_size
-            * accelerator.num_processes
+            args.learning_rate * args.gradient_accumulation_steps * args.train_batch_size * accelerator.num_processes
         )
 
     # Make sure the trainable params are in float32.
@@ -1078,9 +1027,7 @@ def main(args):
         # only upcast trainable parameters (LoRA) into fp32
         cast_training_params(models, dtype=paddle.float32)
 
-    transformer_lora_parameters = list(
-        filter(lambda p: p.requires_grad, transformer.parameters())
-    )
+    transformer_lora_parameters = list(filter(lambda p: p.requires_grad, transformer.parameters()))
 
     # Optimization parameters
     transformer_parameters_with_lr = {
@@ -1129,9 +1076,7 @@ def main(args):
         try:
             import prodigyopt
         except ImportError:
-            raise ImportError(
-                "To use Prodigy, please install the prodigyopt library: `pip install prodigyopt`"
-            )
+            raise ImportError("To use Prodigy, please install the prodigyopt library: `pip install prodigyopt`")
 
         optimizer_class = prodigyopt.Prodigy
 
@@ -1167,15 +1112,11 @@ def main(args):
 
     def compute_text_embeddings(prompt, text_encoders, tokenizers):
         with paddle.no_grad():
-            prompt_embeds, pooled_prompt_embeds = encode_prompt(
-                text_encoders, tokenizers, prompt
-            )
+            prompt_embeds, pooled_prompt_embeds = encode_prompt(text_encoders, tokenizers, prompt)
         return prompt_embeds, pooled_prompt_embeds
 
     overrode_max_train_steps = False
-    num_update_steps_per_epoch = math.ceil(
-        len(train_dataloader) / args.gradient_accumulation_steps
-    )
+    num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
     if args.max_train_steps is None:
         args.max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
         overrode_max_train_steps = True
@@ -1195,9 +1136,7 @@ def main(args):
     )
 
     # We need to recalculate our total training steps as the size of the training dataloader may have changed.
-    num_update_steps_per_epoch = math.ceil(
-        len(train_dataloader) / args.gradient_accumulation_steps
-    )
+    num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
     if overrode_max_train_steps:
         args.max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
     # Afterwards we recalculate our number of training epochs
@@ -1209,20 +1148,14 @@ def main(args):
         accelerator.init_trackers(args.tracker_project_name, config=vars(args))
 
     # Train!
-    total_batch_size = (
-        args.train_batch_size
-        * accelerator.num_processes
-        * args.gradient_accumulation_steps
-    )
+    total_batch_size = args.train_batch_size * accelerator.num_processes * args.gradient_accumulation_steps
 
     logger.info("***** Running training *****")
     logger.info(f"  Num examples = {len(train_dataset)}")
     logger.info(f"  Num batches each epoch = {len(train_dataloader)}")
     logger.info(f"  Num Epochs = {args.num_train_epochs}")
     logger.info(f"  Instantaneous batch size per device = {args.train_batch_size}")
-    logger.info(
-        f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}"
-    )
+    logger.info(f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}")
     logger.info(f"  Gradient Accumulation steps = {args.gradient_accumulation_steps}")
     logger.info(f"  Total optimization steps = {args.max_train_steps}")
     global_step = 0
@@ -1276,9 +1209,7 @@ def main(args):
                 pixel_values = batch["pixel_values"].to(dtype=vae.dtype)
                 prompts = batch["prompts"]
 
-                prompt_embeds, pooled_prompt_embeds = compute_text_embeddings(
-                    prompts, text_encoders, tokenizers
-                )
+                prompt_embeds, pooled_prompt_embeds = compute_text_embeddings(prompts, text_encoders, tokenizers)
 
                 # Convert images to latent space
                 model_input = vae.encode(pixel_values).latent_dist.sample()
@@ -1289,22 +1220,14 @@ def main(args):
                 noise = paddle.randn(shape=model_input.shape, dtype=model_input.dtype)
                 bsz = model_input.shape[0]
 
-                index = paddle.randint(
-                    0, args.num_euler_timesteps, (bsz,)
-                ).astype(dtype="int64")
+                index = paddle.randint(0, args.num_euler_timesteps, (bsz,)).astype(dtype="int64")
 
                 # Add noise according to flow matching.
                 # sigmas = get_sigmas(start_timesteps, n_dim=model_input.ndim, dtype=model_input.dtype)
                 sigmas = extract_into_tensor(solver.sigmas, index, model_input.shape)
-                sigmas_prev = extract_into_tensor(
-                    solver.sigmas_prev, index, model_input.shape
-                )
-                timesteps = (
-                    sigmas * noise_scheduler.config.num_train_timesteps
-                ).squeeze([1, 2, 3])
-                timesteps_prev = (
-                    sigmas_prev * noise_scheduler.config.num_train_timesteps
-                ).squeeze([1, 2, 3])
+                sigmas_prev = extract_into_tensor(solver.sigmas_prev, index, model_input.shape)
+                timesteps = (sigmas * noise_scheduler.config.num_train_timesteps).squeeze([1, 2, 3])
+                timesteps_prev = (sigmas_prev * noise_scheduler.config.num_train_timesteps).squeeze([1, 2, 3])
                 noisy_model_input = sigmas * noise + (1.0 - sigmas) * model_input
 
                 # Predict the noise residual
@@ -1331,7 +1254,7 @@ def main(args):
                 #     # See sec 3.1 in the SD3 paper (20).
                 #     u = torch.rand(size=(bsz,), device=accelerator.device)
                 #     weighting = 1 - u - args.mode_scale * (torch.cos(math.pi * u / 2) ** 2 - 1 + u)
-                weighting = 1.0
+
                 # # simplified flow matching aka 0-rectified flow matching loss
                 # # target = model_input - noise
                 # target = model_input
@@ -1355,12 +1278,8 @@ def main(args):
                                 encoder_hidden_states=uncond_prompt_embeds.astype(dtype="float32"),
                                 pooled_projections=uncond_pooled_prompt_embeds.astype(dtype="float32"),
                             ).sample
-                        teacher_output = cond_teacher_output + w * (
-                            cond_teacher_output - uncond_teacher_output
-                        )
-                        x_prev = solver.euler_step(
-                            noisy_model_input, teacher_output, index
-                        )
+                        teacher_output = cond_teacher_output + w * (cond_teacher_output - uncond_teacher_output)
+                        x_prev = solver.euler_step(noisy_model_input, teacher_output, index)
 
                 # 20.4.12. Get target LCM prediction on x_prev, w, c, t_n
                 with paddle.no_grad():
@@ -1375,8 +1294,6 @@ def main(args):
                     target, end_index = solver.euler_style_multiphase_pred(
                         x_prev, target_pred, index, args.multiphase, True
                     )
-
-
 
                 # loss = loss.mean()
                 loss = paddle.mean(
@@ -1405,36 +1322,24 @@ def main(args):
                         # _before_ saving state, check if this save would set us over the `checkpoints_total_limit`
                         if args.checkpoints_total_limit is not None:
                             checkpoints = os.listdir(args.output_dir)
-                            checkpoints = [
-                                d for d in checkpoints if d.startswith("checkpoint")
-                            ]
-                            checkpoints = sorted(
-                                checkpoints, key=lambda x: int(x.split("-")[1])
-                            )
+                            checkpoints = [d for d in checkpoints if d.startswith("checkpoint")]
+                            checkpoints = sorted(checkpoints, key=lambda x: int(x.split("-")[1]))
 
                             # before we save the new checkpoint, we need to have at _most_ `checkpoints_total_limit - 1` checkpoints
                             if len(checkpoints) >= args.checkpoints_total_limit:
-                                num_to_remove = (
-                                    len(checkpoints) - args.checkpoints_total_limit + 1
-                                )
+                                num_to_remove = len(checkpoints) - args.checkpoints_total_limit + 1
                                 removing_checkpoints = checkpoints[0:num_to_remove]
 
                                 logger.info(
                                     f"{len(checkpoints)} checkpoints already exist, removing {len(removing_checkpoints)} checkpoints"
                                 )
-                                logger.info(
-                                    f"removing checkpoints: {', '.join(removing_checkpoints)}"
-                                )
+                                logger.info(f"removing checkpoints: {', '.join(removing_checkpoints)}")
 
                                 for removing_checkpoint in removing_checkpoints:
-                                    removing_checkpoint = os.path.join(
-                                        args.output_dir, removing_checkpoint
-                                    )
+                                    removing_checkpoint = os.path.join(args.output_dir, removing_checkpoint)
                                     shutil.rmtree(removing_checkpoint)
 
-                        save_path = os.path.join(
-                            args.output_dir, f"checkpoint-{global_step}"
-                        )
+                        save_path = os.path.join(args.output_dir, f"checkpoint-{global_step}")
                         accelerator.save_state(save_path)
                         logger.info(f"Saved state to {save_path}")
 
@@ -1448,47 +1353,12 @@ def main(args):
             if accelerator.is_main_process:
                 if global_step % args.validation_steps == 0:
                     # create pipeline
-                    text_encoder_one, text_encoder_two, text_encoder_three = (
-                        load_text_encoders(
-                            text_encoder_cls_one,
-                            text_encoder_cls_two,
-                            text_encoder_cls_three,
-                        )
+                    text_encoder_one, text_encoder_two, text_encoder_three = load_text_encoders(
+                        text_encoder_cls_one,
+                        text_encoder_cls_two,
+                        text_encoder_cls_three,
                     )
-                    pipeline = StableDiffusion3Pipeline.from_pretrained(
-                        args.pretrained_teacher_model,
-                        vae=vae,
-                        text_encoder=accelerator.unwrap_model(text_encoder_one),
-                        text_encoder_2=accelerator.unwrap_model(text_encoder_two),
-                        text_encoder_3=accelerator.unwrap_model(text_encoder_three),
-                        transformer=accelerator.unwrap_model(transformer),
-                        revision=args.revision,
-                        variant=args.variant,
-                        paddle_dtype=weight_dtype,
-                        scheduler=PCMFMDeterministicScheduler(1000, 3.0, args.num_euler_timesteps),
 
-                    )
-                    # pipeline.enable_xformers_memory_efficient_attention()
-                    validation_prompts = [
-                        "portrait photo of a girl, photograph, highly detailed face, depth of field, moody light, golden hour, style by Dan Winters, Russell James, Steve McCurry, centered, extremely detailed, Nikon D850, award winning photography",
-                        # "Self-portrait oil painting, a beautiful cyborg with golden hair, 8k",
-                        # "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k",
-                        # "A photo of beautiful mountain with realistic sunset and blue lake, highly detailed, masterpiece",
-                    ]
-                    for prompt in validation_prompts:
-                        pipeline_args = {
-                            "prompt": prompt,
-                            "num_inference_steps": args.multiphase,
-                            "guidance_scale": 1.5,
-                        }
-                        with paddle.no_grad():
-                            images = log_validation(
-                                pipeline=pipeline,
-                                args=args,
-                                accelerator=accelerator,
-                                pipeline_args=pipeline_args,
-                                step=global_step,
-                            )
                     del text_encoder_one, text_encoder_two, text_encoder_three
                     del pipeline
                     paddle.device.cuda.empty_cache()

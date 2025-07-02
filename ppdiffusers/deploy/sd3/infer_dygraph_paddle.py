@@ -15,16 +15,12 @@
 import argparse
 import os
 import time
-import warnings
 
-import cv2
 import numpy as np
 import paddle
-from PIL import Image
 from tqdm.auto import trange
 
 from ppdiffusers import (
-    FlowMatchEulerDiscreteScheduler,
     DDIMScheduler,
     DDPMScheduler,
     DEISMultistepScheduler,
@@ -32,6 +28,7 @@ from ppdiffusers import (
     DPMSolverSinglestepScheduler,
     EulerAncestralDiscreteScheduler,
     EulerDiscreteScheduler,
+    FlowMatchEulerDiscreteScheduler,
     HeunDiscreteScheduler,
     KDPM2AncestralDiscreteScheduler,
     KDPM2DiscreteScheduler,
@@ -40,8 +37,6 @@ from ppdiffusers import (
     StableDiffusion3Pipeline,
     UniPCMultistepScheduler,
 )
-from ppdiffusers.utils import load_image
-
 
 
 def strtobool(v):
@@ -101,6 +96,7 @@ def change_scheduler(self, scheduler_type="ddim"):
         raise ValueError(f"Scheduler of type {scheduler_type} doesn't exist!")
     return scheduler
 
+
 def get_paddle_memory_info():
     """get_memory_info"""
     divisor = 2**30
@@ -110,7 +106,8 @@ def get_paddle_memory_info():
         paddle.device.cuda.memory_reserved() / divisor,
         paddle.device.cuda.max_memory_reserved() / divisor,
     )
-    
+
+
 def parse_arguments():
 
     parser = argparse.ArgumentParser()
@@ -202,14 +199,14 @@ def main(args):
     height = args.height
     pipe.set_progress_bar_config(disable=False)
 
-    folder = f"paddle_fp16" if args.use_fp16 else f"paddle_fp32"
+    folder = "paddle_fp16" if args.use_fp16 else "paddle_fp32"
     os.makedirs(folder, exist_ok=True)
     if args.task_name in ["text2img", "all"]:
         # text2img
         prompt = "bird"
         time_costs = []
         memory_metrics = []
-        
+
         # warmup
         pipe(
             prompt,
@@ -229,14 +226,11 @@ def main(args):
             ).images
             latency = time.time() - start
             time_costs += [latency]
-            
+
             # 收集显存信息
             memory_allocated, max_memory_allocated, memory_reserved, max_memory_reserved = get_paddle_memory_info()
             memory_metrics.append([memory_allocated, max_memory_allocated, memory_reserved, max_memory_reserved])
-            
-        # 计算平均显存使用情况
-        avg_memory = np.mean(memory_metrics, axis=0)
-        
+
         print(
             f"Use fp16: {'true' if args.use_fp16 else 'false'}, "
             f"Mean iter/sec: {1 / (np.mean(time_costs) / args.inference_steps):2f} it/s, "
