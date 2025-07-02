@@ -259,7 +259,7 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
                 x=mel2ph, pad=[0, tuple(base_pitch.shape)[1] - tuple(mel2ph.shape)[1]], pad_from_left_axis=False
             )
         encoder_out = paddle.nn.functional.pad(x=encoder_out, pad=[0, 0, 1, 0], pad_from_left_axis=False)
-        mel2ph_ = mel2ph[..., None].tile(repeat_times=[1, 1, hparams[hidden_size]])
+        mel2ph_ = mel2ph[..., None].tile(repeat_times=[1, 1, hparams[["hidden_size"]]])
         condition = paddle.take_along_axis(arr=encoder_out, axis=1, indices=mel2ph_, broadcast=False)
         if self.use_spk_id:
             condition += spk_embed
@@ -269,7 +269,7 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
                 melody_encoder_out = paddle.nn.functional.pad(
                     x=melody_encoder_out, pad=[0, 0, 1, 0], pad_from_left_axis=False
                 )
-                mel2note_ = mel2note[..., None].tile(repeat_times=[1, 1, hparams[hidden_size]])
+                mel2note_ = mel2note[..., None].tile(repeat_times=[1, 1, hparams[["hidden_size"]]])
                 melody_condition = paddle.take_along_axis(
                     arr=melody_encoder_out, axis=1, indices=mel2note_, broadcast=False
                 )

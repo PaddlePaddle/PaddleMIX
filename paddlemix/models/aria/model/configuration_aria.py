@@ -14,10 +14,10 @@
 
 import logging
 
+from paddlenlp.transformers.configuration_utils import PretrainedConfig
+
 from .moe_lm import AriaMoELMConfig
 from .vision_encoder import AriaVisionConfig
-
-from paddlenlp.transformers.configuration_utils import PretrainedConfig
 
 logger = logging.getLogger(__name__)
 
@@ -65,29 +65,21 @@ class AriaConfig(PretrainedConfig):
         self.image_token_index = image_token_index
         self.tie_word_embeddings = tie_word_embeddings
         attn_implementation = kwargs.pop("attn_implementation", None)
-        self._attn_implementation = (
-            "flash_attention_2" if attn_implementation is None else attn_implementation
-        )
-        self.projector_patch_to_query_dict = {
-            int(k): int(v) for k, v in projector_patch_to_query_dict.items()
-        }
+        self._attn_implementation = "flash_attention_2" if attn_implementation is None else attn_implementation
+        self.projector_patch_to_query_dict = {int(k): int(v) for k, v in projector_patch_to_query_dict.items()}
         if isinstance(vision_config, dict) and "model_type" in vision_config:
             vision_config = AriaVisionConfig(**vision_config)
             if attn_implementation is None:
                 vision_attn_implementation = "flash_attention_2"
             elif attn_implementation == "sdpa":
-                logger.warning(
-                    "SDPA is not supported for vit, using flash_attention_2 instead"
-                )
+                logger.warning("SDPA is not supported for vit, using flash_attention_2 instead")
                 vision_attn_implementation = "flash_attention_2"
             else:
                 vision_attn_implementation = attn_implementation
             vision_config._attn_implementation = vision_attn_implementation
         self.vision_config = vision_config
         if isinstance(text_config, dict) and "model_type" in text_config:
-            text_attn_implementation = (
-                "sdpa" if attn_implementation is None else attn_implementation
-            )
+            text_attn_implementation = "sdpa" if attn_implementation is None else attn_implementation
             text_config = AriaMoELMConfig(**text_config)
             text_config._attn_implementation = text_attn_implementation
         self.text_config = text_config

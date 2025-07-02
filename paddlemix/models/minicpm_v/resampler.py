@@ -243,7 +243,6 @@ class MultiheadAttention(nn.MultiHeadAttention):
             self.bias_v = None
 
         self.add_zero_attn = add_zero_attn
-        
 
     def forward(
         self,

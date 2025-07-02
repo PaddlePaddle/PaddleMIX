@@ -13,9 +13,10 @@
 # limitations under the License.
 
 
-from typing import Optional
-from ...core import MMDataset, register
 from functools import partial
+from typing import Optional
+
+from ...core import MMDataset, register
 
 
 def is_chat_length_valid(item, max_length: int = 2048) -> bool:
@@ -30,27 +31,26 @@ def is_chat_length_valid(item, max_length: int = 2048) -> bool:
         bool: Returns True if the conversation length is less than max_length; otherwise, False.
     """
     # Concatenate the content of conversations
-    user_conv = '\n\n'.join(
-        ''.join(conversation) for conversation in item['conversations']
-    ).replace('<image>\n', '').replace('\n<image>', '').replace('<image>', '')
+    user_conv = (
+        "\n\n".join("".join(conversation) for conversation in item["conversations"])
+        .replace("<image>\n", "")
+        .replace("\n<image>", "")
+        .replace("<image>", "")
+    )
 
     return len(user_conv) < max_length
 
 
 @register()
 def conversation_length_filter(
-    dataset: MMDataset, 
-    max_length: Optional[int] = 2048, 
+    dataset: MMDataset,
+    max_length: Optional[int] = 2048,
 ) -> MMDataset:
     print("Filtering out conversations that are too long...")
     # Create the filter function
     filter_func = partial(is_chat_length_valid, max_length=max_length)
-    
+
     # Apply dataset.filter
-    filtered_dataset = dataset.filter(
-        func=filter_func, 
-        max_workers=8, 
-        progress=True
-    )
-    
+    filtered_dataset = dataset.filter(func=filter_func, max_workers=8, progress=True)
+
     return filtered_dataset

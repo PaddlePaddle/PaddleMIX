@@ -12,10 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import sys
-
 import paddle
-import paddle_aux
 
 
 def crop_center(h1, h2):

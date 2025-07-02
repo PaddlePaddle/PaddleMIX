@@ -13,13 +13,12 @@
 # limitations under the License.
 
 
-from .schema import T, SCHEMA, is_valid_schema
 from .dataset import MMDataset, ParallelMode
 from .register import register
-
+from .schema import SCHEMA, T, is_valid_schema
 
 MODILATY_TOKENS = {
-    'image': '<image>\d+</image>',
-    'audio': '<audio>\d+</audio>',
-    'video': '<video>\d+</video>',
+    "image": "<image>\d+</image>",
+    "audio": "<audio>\d+</audio>",
+    "video": "<video>\d+</video>",
 }

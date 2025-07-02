@@ -13,15 +13,15 @@
 # limitations under the License.
 # reference from Dao-AILAB flash-attn
 # https://github.com/Dao-AILab/flash-attention/blob/74b0761ff7efc7b90d4e5aeb529c1b2a09a7458c/flash_attn/bert_padding.py#L38
+import operator
+from functools import reduce
+
 import paddle
 import paddle.nn.functional as F
 from einops import rearrange, repeat
-from functools import reduce  
-import operator  
 
 
 class IndexFirstAxis(paddle.autograd.PyLayer):
-
     @staticmethod
     def forward(ctx, input, indices):
         ctx.save_for_backward(indices)
@@ -29,9 +29,7 @@ class IndexFirstAxis(paddle.autograd.PyLayer):
         ctx.first_axis_dim, other_shape = input.shape[0], input.shape[1:]
         second_dim = reduce(operator.mul, other_shape, 1)
         return paddle.take_along_axis(
-            arr=rearrange(input, 'b ... -> b (...)'),
-            axis=0,
-            indices=repeat(indices, 'z -> z d', d=second_dim)
+            arr=rearrange(input, "b ... -> b (...)"), axis=0, indices=repeat(indices, "z -> z d", d=second_dim)
         ).reshape([-1, *other_shape])
 
     @staticmethod
@@ -40,13 +38,12 @@ class IndexFirstAxis(paddle.autograd.PyLayer):
         (indices,) = ctx.saved_tensor()
         assert grad_output.ndim >= 2
         other_shape = grad_output.shape[1:]
-        grad_output = rearrange(grad_output, 'b ... -> b (...)')
-        grad_input = paddle.zeros(shape=[ctx.first_axis_dim, tuple(
-            grad_output.shape)[1]], dtype=grad_output.dtype)
+        grad_output = rearrange(grad_output, "b ... -> b (...)")
+        grad_input = paddle.zeros(shape=[ctx.first_axis_dim, tuple(grad_output.shape)[1]], dtype=grad_output.dtype)
 
         grad_input.put_along_axis_(
             axis=0,
-            indices=repeat(indices, 'z -> z d', d=tuple(grad_output.shape)[1]),
+            indices=repeat(indices, "z -> z d", d=tuple(grad_output.shape)[1]),
             values=grad_output,
         )
         return grad_input.reshape([ctx.first_axis_dim, *other_shape]), None
@@ -56,14 +53,12 @@ index_first_axis = IndexFirstAxis.apply
 
 
 class IndexPutFirstAxis(paddle.autograd.PyLayer):
-
     @staticmethod
     def forward(ctx, values, indices, first_axis_dim):
         ctx.save_for_backward(indices)
         assert indices.ndim == 1
         assert values.ndim >= 2
-        output = paddle.zeros(shape=[first_axis_dim, *tuple(values.shape)[1
-            :]], dtype=values.dtype)
+        output = paddle.zeros(shape=[first_axis_dim, *tuple(values.shape)[1:]], dtype=values.dtype)
         output[indices] = values
         return output
 

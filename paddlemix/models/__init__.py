@@ -13,31 +13,31 @@
 # see the license for the specific language governing permissions and
 # limitations under the license.
 
+import pkg_resources
+
+from .aria import *
 from .audioldm2.configuration import *
 from .audioldm2.modeling import *
 from .blip2.modeling import *
 from .cogvlm.configuration import *
 from .cogvlm.modeling import *
+from .diffsinger import *
 from .imagebind.modeling import *
 from .imagebind.multimodal_preprocessors import *
 from .internlm_xcomposer2 import *
+from .janus import *
 from .llava import *
+from .minicpm_v import *
 from .minigpt4.configuration import *
 from .minigpt4.modeling import *
+from .qwen2_5_vl import *
+from .qwen_vl import *
 from .visualglm.configuration import *
 from .visualglm.modeling import *
-from .qwen_vl import *
-from .qwen2_5_vl import *
-from .minicpm_v import *
-from .janus import *
-from .diffsinger import *
-from .aria import *
 
-import pkg_resources
-
-version = pkg_resources.get_distribution("paddlenlp").version   
+version = pkg_resources.get_distribution("paddlenlp").version
 try:
-    if version.startswith('3'):
+    if version.startswith("3"):
         from .internvl2 import *
         from .qwen2_vl import *
 
@@ -46,5 +46,3 @@ try:
 
 except ImportError:
     print("paddlenlp is not installed.")
-
-

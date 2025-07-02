@@ -1,9 +1,23 @@
-from typing import Optional, Tuple, Union, Iterable
-import sys
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-from paddlenlp.trl import ModelConfig
-from paddlenlp.trl.utils import ScriptArguments
-from paddlenlp.trainer.argparser import PdArgumentParser,DataClassType,DataClass
+import os
+import sys
+from typing import Iterable, Optional, Union
+
+import yaml
+from paddlenlp.trainer.argparser import DataClass, DataClassType, PdArgumentParser
 
 
 class TrlParser(PdArgumentParser):
@@ -18,7 +32,7 @@ class TrlParser(PdArgumentParser):
         elif not isinstance(dataclass_types, Iterable):
             dataclass_types = [dataclass_types]
 
-        # TODO: 
+        # TODO:
         # Check that none of the dataclasses have the "config" field
         # for dataclass_type in dataclass_types:
         #     if "config" in dataclass_type.__dataclass_fields__:

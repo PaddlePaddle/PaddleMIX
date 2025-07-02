@@ -14,10 +14,13 @@
 
 import os
 from typing import Union
+
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
+
 from paddlemix.utils.log import logger
 
 __all__ = ["AudioLDM2Config"]
+
 
 class AudioLDM2Config(PretrainedConfig):
 
@@ -75,7 +78,7 @@ class AudioLDM2Config(PretrainedConfig):
         sequence2audiomae_base_learning_rate: float = 0.0002,
         sequence2audiomae_sequence_gen_length: int = 8,
         sequence2audiomae_use_warmup: bool = True,
-        sequence2audiomae_sequence_input_key: list = ['film_clap_cond1', 'crossattn_flan_t5'],
+        sequence2audiomae_sequence_input_key: list = ["film_clap_cond1", "crossattn_flan_t5"],
         sequence2audiomae_sequence_input_embed_dim: list = [512, 1024],
         sequence2audiomae_batchsize: int = 16,
         sequence2audiomae_cond_stage_configs: dict = None,
@@ -140,19 +143,35 @@ class AudioLDM2Config(PretrainedConfig):
         self.cond_stage_config["crossattn_audiomae_generated"] = {}
         self.cond_stage_config["crossattn_audiomae_generated"]["cond_stage_key"] = "all"
         self.cond_stage_config["crossattn_audiomae_generated"]["conditioning_key"] = "crossattn"
-        self.cond_stage_config["crossattn_audiomae_generated"]["target"] = ".encoders.sequence2audiomae_encoder.SequenceGenAudioMAECond"  # gpt2
+        self.cond_stage_config["crossattn_audiomae_generated"][
+            "target"
+        ] = ".encoders.sequence2audiomae_encoder.SequenceGenAudioMAECond"  # gpt2
         self.cond_stage_config["crossattn_audiomae_generated"]["params"] = {}
-        self.cond_stage_config["crossattn_audiomae_generated"]["params"]["always_output_audiomae_gt"] = sequence2audiomae_always_output_audiomae_gt
+        self.cond_stage_config["crossattn_audiomae_generated"]["params"][
+            "always_output_audiomae_gt"
+        ] = sequence2audiomae_always_output_audiomae_gt
         self.cond_stage_config["crossattn_audiomae_generated"]["params"]["learnable"] = sequence2audiomae_learnable
-        self.cond_stage_config["crossattn_audiomae_generated"]["params"]["use_gt_mae_output"] = sequence2audiomae_use_gt_mae_output
-        self.cond_stage_config["crossattn_audiomae_generated"]["params"]["use_gt_mae_prob"] = sequence2audiomae_use_gt_mae_prob
-        self.cond_stage_config["crossattn_audiomae_generated"]["params"]["base_learning_rate"] = sequence2audiomae_base_learning_rate
-        self.cond_stage_config["crossattn_audiomae_generated"]["params"]["sequence_gen_length"] = sequence2audiomae_sequence_gen_length
+        self.cond_stage_config["crossattn_audiomae_generated"]["params"][
+            "use_gt_mae_output"
+        ] = sequence2audiomae_use_gt_mae_output
+        self.cond_stage_config["crossattn_audiomae_generated"]["params"][
+            "use_gt_mae_prob"
+        ] = sequence2audiomae_use_gt_mae_prob
+        self.cond_stage_config["crossattn_audiomae_generated"]["params"][
+            "base_learning_rate"
+        ] = sequence2audiomae_base_learning_rate
+        self.cond_stage_config["crossattn_audiomae_generated"]["params"][
+            "sequence_gen_length"
+        ] = sequence2audiomae_sequence_gen_length
         self.cond_stage_config["crossattn_audiomae_generated"]["params"]["use_warmup"] = sequence2audiomae_use_warmup
-        self.cond_stage_config["crossattn_audiomae_generated"]["params"]["sequence_input_key"] = sequence2audiomae_sequence_input_key
-        self.cond_stage_config["crossattn_audiomae_generated"]["params"]["sequence_input_embed_dim"] = sequence2audiomae_sequence_input_embed_dim
+        self.cond_stage_config["crossattn_audiomae_generated"]["params"][
+            "sequence_input_key"
+        ] = sequence2audiomae_sequence_input_key
+        self.cond_stage_config["crossattn_audiomae_generated"]["params"][
+            "sequence_input_embed_dim"
+        ] = sequence2audiomae_sequence_input_embed_dim
         self.cond_stage_config["crossattn_audiomae_generated"]["params"]["batchsize"] = sequence2audiomae_batchsize
-        
+
         if "speech" not in model_name:
             self.cond_stage_config["crossattn_flan_t5"] = {}
             self.cond_stage_config["crossattn_flan_t5"]["cond_stage_key"] = "text"
@@ -161,35 +180,84 @@ class AudioLDM2Config(PretrainedConfig):
 
         if sequence2audiomae_cond_stage_configs is None:
             self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"] = {}
-            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"]["film_clap_cond1"] = {}
-            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"]["film_clap_cond1"]["cond_stage_key"] = "text"
-            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"]["film_clap_cond1"]["conditioning_key"] = "film"
-            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"]["film_clap_cond1"]["target"] = ".encoders.clap_encoder.CLAPAudioEmbeddingClassifierFreev2"
-            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"]["film_clap_cond1"]["params"] = {}
-            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"]["film_clap_cond1"]["params"]["sampling_rate"] = 48000
-            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"]["film_clap_cond1"]["params"]["embed_mode"] = "text"
-            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"]["film_clap_cond1"]["params"]["amodel"] = "HTSAT-base"
+            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"][
+                "film_clap_cond1"
+            ] = {}
+            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"]["film_clap_cond1"][
+                "cond_stage_key"
+            ] = "text"
+            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"]["film_clap_cond1"][
+                "conditioning_key"
+            ] = "film"
+            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"]["film_clap_cond1"][
+                "target"
+            ] = ".encoders.clap_encoder.CLAPAudioEmbeddingClassifierFreev2"
+            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"]["film_clap_cond1"][
+                "params"
+            ] = {}
+            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"]["film_clap_cond1"][
+                "params"
+            ]["sampling_rate"] = 48000
+            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"]["film_clap_cond1"][
+                "params"
+            ]["embed_mode"] = "text"
+            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"]["film_clap_cond1"][
+                "params"
+            ]["amodel"] = "HTSAT-base"
 
-            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"]["crossattn_flan_t5"] = {}
-            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"]["crossattn_flan_t5"]["cond_stage_key"] = "text"
-            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"]["crossattn_flan_t5"]["conditioning_key"] = "crossattn"
-            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"]["crossattn_flan_t5"]["target"] = ".encoders.flant5_encoder.FlanT5HiddenState"
+            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"][
+                "crossattn_flan_t5"
+            ] = {}
+            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"]["crossattn_flan_t5"][
+                "cond_stage_key"
+            ] = "text"
+            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"]["crossattn_flan_t5"][
+                "conditioning_key"
+            ] = "crossattn"
+            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"]["crossattn_flan_t5"][
+                "target"
+            ] = ".encoders.flant5_encoder.FlanT5HiddenState"
 
-            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"]["crossattn_audiomae_pooled"] = {}
-            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"]["crossattn_audiomae_pooled"]["cond_stage_key"] = "ta_kaldi_fbank"
-            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"]["crossattn_audiomae_pooled"]["conditioning_key"] = "crossattn"
-            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"]["crossattn_audiomae_pooled"]["target"] = ".encoders.audiomae_encoder.AudioMAEConditionCTPoolRand"
-            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"]["crossattn_audiomae_pooled"]["params"] = {}
-            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"]["crossattn_audiomae_pooled"]["params"]["regularization"] = False
-            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"]["crossattn_audiomae_pooled"]["params"]["no_audiomae_mask"] = True
-            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"]["crossattn_audiomae_pooled"]["params"]["time_pooling_factors"] = [8]
-            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"]["crossattn_audiomae_pooled"]["params"]["freq_pooling_factors"] = [8]
-            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"]["crossattn_audiomae_pooled"]["params"]["eval_time_pooling"] = 8
-            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"]["crossattn_audiomae_pooled"]["params"]["eval_freq_pooling"] = 8
-            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"]["crossattn_audiomae_pooled"]["params"]["mask_ratio"] = 0
+            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"][
+                "crossattn_audiomae_pooled"
+            ] = {}
+            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"][
+                "crossattn_audiomae_pooled"
+            ]["cond_stage_key"] = "ta_kaldi_fbank"
+            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"][
+                "crossattn_audiomae_pooled"
+            ]["conditioning_key"] = "crossattn"
+            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"][
+                "crossattn_audiomae_pooled"
+            ]["target"] = ".encoders.audiomae_encoder.AudioMAEConditionCTPoolRand"
+            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"][
+                "crossattn_audiomae_pooled"
+            ]["params"] = {}
+            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"][
+                "crossattn_audiomae_pooled"
+            ]["params"]["regularization"] = False
+            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"][
+                "crossattn_audiomae_pooled"
+            ]["params"]["no_audiomae_mask"] = True
+            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"][
+                "crossattn_audiomae_pooled"
+            ]["params"]["time_pooling_factors"] = [8]
+            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"][
+                "crossattn_audiomae_pooled"
+            ]["params"]["freq_pooling_factors"] = [8]
+            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"][
+                "crossattn_audiomae_pooled"
+            ]["params"]["eval_time_pooling"] = 8
+            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"][
+                "crossattn_audiomae_pooled"
+            ]["params"]["eval_freq_pooling"] = 8
+            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"][
+                "crossattn_audiomae_pooled"
+            ]["params"]["mask_ratio"] = 0
         else:
-            self.cond_stage_config["crossattn_audiomae_generated"]["params"]["cond_stage_config"] = sequence2audiomae_cond_stage_configs
-        
+            self.cond_stage_config["crossattn_audiomae_generated"]["params"][
+                "cond_stage_config"
+            ] = sequence2audiomae_cond_stage_configs
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path: Union[str, os.PathLike], **kwargs) -> "PretrainedConfig":

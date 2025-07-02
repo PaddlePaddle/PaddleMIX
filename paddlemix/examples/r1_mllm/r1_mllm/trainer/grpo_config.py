@@ -1,7 +1,22 @@
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from dataclasses import dataclass, field
 from typing import Optional
 
 from paddlenlp.trainer import TrainingArguments
+
 
 @dataclass
 class GRPOConfig(TrainingArguments):
@@ -103,9 +118,7 @@ class GRPOConfig(TrainingArguments):
     )
     temperature: Optional[float] = field(
         default=0.9,
-        metadata={
-            "help": "Temperature for sampling. The higher the temperature, the more random the completions."
-        },
+        metadata={"help": "Temperature for sampling. The higher the temperature, the more random the completions."},
     )
     max_completion_length: Optional[int] = field(
         default=256, metadata={"help": "Maximum length of the generated completion."}
@@ -130,13 +143,9 @@ class GRPOConfig(TrainingArguments):
     )
     num_iterations: int = field(
         default=1,
-        metadata={
-            "help": "Number of iterations per batch (denoted as μ in the algorithm)."
-        },
+        metadata={"help": "Number of iterations per batch (denoted as μ in the algorithm)."},
     )
-    epsilon: float = field(
-        default=0.2, metadata={"help": "Epsilon value for clipping."}
-    )
+    epsilon: float = field(default=0.2, metadata={"help": "Epsilon value for clipping."})
     reward_weights: Optional[list[float]] = field(
         default=None,
         metadata={
@@ -167,7 +176,5 @@ class GRPOConfig(TrainingArguments):
             "help": "Whether to log a sample of (prompt, completion) pairs every `logging_steps` steps. If `rich` is installed, it prints the sample. If `wandb` logging is enabled, it logs it to `wandb`."
         },
     )
-    
-    freeze_vision: bool = field(
-        default=False, metadata={"help": "Whether to freeze the vision model"}
-    )
+
+    freeze_vision: bool = field(default=False, metadata={"help": "Whether to freeze the vision model"})

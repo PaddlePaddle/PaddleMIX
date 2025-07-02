@@ -13,14 +13,15 @@
 # limitations under the License.
 
 
-from typing import Optional
-from ...core import MMDataset, register
 from functools import partial
+from typing import Optional
+
+from ...core import MMDataset, register
 
 
-def is_alnum_ratio_valid(item, min_ratio: float = 0.25, max_ratio: float = float('inf')) -> bool:
+def is_alnum_ratio_valid(item, min_ratio: float = 0.25, max_ratio: float = float("inf")) -> bool:
     """
-    Checks whether the ratio of alphanumeric characters (letters or digits) 
+    Checks whether the ratio of alphanumeric characters (letters or digits)
     to the total number of characters in a sample is within the specified range.
 
     Args:
@@ -32,13 +33,16 @@ def is_alnum_ratio_valid(item, min_ratio: float = 0.25, max_ratio: float = float
         bool: True if the ratio is within the range [min_ratio, max_ratio], False otherwise.
     """
     # Retrieve text content from conversations
-    user_conv = '\n\n'.join(
-        ''.join(conversation) for conversation in item['conversations']
-    ).replace('<image>\n', '').replace('\n<image>', '').replace('<image>', '')
+    user_conv = (
+        "\n\n".join("".join(conversation) for conversation in item["conversations"])
+        .replace("<image>\n", "")
+        .replace("\n<image>", "")
+        .replace("<image>", "")
+    )
 
     # Count the total number of alphanumeric characters
     alnum_count = sum(1 for char in user_conv if char.isalnum())
-    
+
     # Calculate the ratio of alphanumeric characters
     alnum_ratio = alnum_count / len(user_conv) if len(user_conv) > 0 else 0.0
 
@@ -48,9 +52,7 @@ def is_alnum_ratio_valid(item, min_ratio: float = 0.25, max_ratio: float = float
 
 @register()
 def alphanumeric_ratio_filter(
-    dataset: MMDataset, 
-    min_ratio: Optional[float] = 0.25, 
-    max_ratio: Optional[float] = float('inf')
+    dataset: MMDataset, min_ratio: Optional[float] = 0.25, max_ratio: Optional[float] = float("inf")
 ) -> MMDataset:
     """
     Filters the dataset based on the ratio of alphanumeric characters in each sample.
@@ -66,12 +68,8 @@ def alphanumeric_ratio_filter(
     print("Filtering samples based on the ratio of alphanumeric characters...")
     # Create the filter function
     filter_func = partial(is_alnum_ratio_valid, min_ratio=min_ratio, max_ratio=max_ratio)
-    
+
     # Apply dataset.filter
-    filtered_dataset = dataset.filter(
-        func=filter_func, 
-        max_workers=8, 
-        progress=True
-    )
-    
+    filtered_dataset = dataset.filter(func=filter_func, max_workers=8, progress=True)
+
     return filtered_dataset

@@ -22,7 +22,7 @@ import re
 import traceback
 from collections import Counter
 from copy import deepcopy
-from typing import TYPE_CHECKING, Dict
+from typing import Dict  # ,TYPE_CHECKING
 
 import cv2
 import imageio
@@ -36,14 +36,14 @@ from paddlemix.datasets.internvl_dataset import (
     WeightedConcatDataset,
     build_transform,
     dynamic_preprocess,
-    pil_loader,
     preprocess,
     preprocess_internlm,
+    preprocess_internvl2_5,
     preprocess_mpt,
     preprocess_phi3,
-    preprocess_internvl2_5,
 )
 from paddlemix.models.internvl2.constants import IMG_END_TOKEN
+
 from .dataset_packed import PackedDataset
 from .trainer_utils import LabelSmoother
 
@@ -52,13 +52,13 @@ logger = logging.getLogger(__name__)
 IGNORE_TOKEN_ID = LabelSmoother.ignore_index
 
 
-try:
-    from petrel_client.client import Client
-except ImportError:
-    print("petrel_client is not installed. If you read data locally instead of from ceph, ignore it.")
+# try:
+#     from petrel_client.client import Client
+# except ImportError:
+#     print("petrel_client is not installed. If you read data locally instead of from ceph, ignore it.")
 
-if TYPE_CHECKING:
-    from paddlenlp.transformers import PreTrainedTokenizer
+# if TYPE_CHECKING:
+#     from paddlenlp.transformers import PreTrainedTokenizer
 
 
 def calculate_ngram_repetition(text, n):

@@ -13,10 +13,12 @@
 # limitations under the License.
 
 
-from typing import Optional
-from ...core import MMDataset, register
 from functools import partial
+from typing import Optional
+
 import numpy as np
+
+from ...core import MMDataset, register
 
 
 def is_word_ngram_valid(item, rep_len: int = 10, min_ratio: float = 0.0, max_ratio: float = 0.5) -> bool:
@@ -33,9 +35,12 @@ def is_word_ngram_valid(item, rep_len: int = 10, min_ratio: float = 0.0, max_rat
         bool: True if the repetition ratio is within [min_ratio, max_ratio], otherwise False.
     """
     # Concatenate conversation content
-    user_conv = '\n\n'.join(
-        ''.join(conversation) for conversation in item['conversations']
-    ).replace('<image>\n', '').replace('\n<image>', '').replace('<image>', '')
+    user_conv = (
+        "\n\n".join("".join(conversation) for conversation in item["conversations"])
+        .replace("<image>\n", "")
+        .replace("\n<image>", "")
+        .replace("<image>", "")
+    )
 
     # Return False if the text length is smaller than the n-gram length
     if len(user_conv.split()) < rep_len:  # Based on word count
@@ -43,10 +48,7 @@ def is_word_ngram_valid(item, rep_len: int = 10, min_ratio: float = 0.0, max_rat
 
     # Generate n-grams
     words = user_conv.split()  # Split by whitespace
-    word_ngrams = [
-        ' '.join(words[i:i + rep_len])
-        for i in range(len(words) - rep_len + 1)
-    ]
+    word_ngrams = [" ".join(words[i : i + rep_len]) for i in range(len(words) - rep_len + 1)]
 
     # Count the frequency of each n-gram
     freq_word_ngrams = {}
@@ -61,10 +63,7 @@ def is_word_ngram_valid(item, rep_len: int = 10, min_ratio: float = 0.0, max_rat
     freq_values = list(freq_word_ngrams.values())
     total_ngrams = sum(freq_values)
     num_no_rep_ngrams = len([freq for freq in freq_values if freq == 1])
-    num_rep_ngrams = min(
-        int(np.sqrt(len(freq_values))),
-        len(freq_values) - num_no_rep_ngrams
-    )
+    num_rep_ngrams = min(int(np.sqrt(len(freq_values))), len(freq_values) - num_no_rep_ngrams)
     rep_ratio = sum(sorted(freq_values, reverse=True)[:num_rep_ngrams]) / total_ngrams
 
     # Check if the ratio is within the specified range
@@ -73,10 +72,7 @@ def is_word_ngram_valid(item, rep_len: int = 10, min_ratio: float = 0.0, max_rat
 
 @register()
 def word_ngram_repetition_filter(
-    dataset, 
-    rep_len: Optional[int] = 10, 
-    min_ratio: Optional[float] = 0.0, 
-    max_ratio: Optional[float] = 0.2
+    dataset, rep_len: Optional[int] = 10, min_ratio: Optional[float] = 0.0, max_ratio: Optional[float] = 0.2
 ) -> MMDataset:
     """
     Filters the dataset based on the word n-gram repetition ratio in the conversations.
@@ -93,12 +89,8 @@ def word_ngram_repetition_filter(
     print("Filtering samples with invalid word n-gram repetition ratios...")
     # Create the filter function
     filter_func = partial(is_word_ngram_valid, rep_len=rep_len, min_ratio=min_ratio, max_ratio=max_ratio)
-    
+
     # Apply dataset.filter
-    filtered_dataset = dataset.filter(
-        func=filter_func, 
-        max_workers=8, 
-        progress=True
-    )
-    
+    filtered_dataset = dataset.filter(func=filter_func, max_workers=8, progress=True)
+
     return filtered_dataset

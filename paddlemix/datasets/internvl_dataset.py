@@ -13,25 +13,42 @@
 # limitations under the License.
 
 import io
-import numpy as np
+import logging
 import sys
-IGNORE_TOKEN_ID = -100 # LabelSmoother.ignore_index
+
+import torch
+
+logger = logging.getLogger(__name__)
+import numpy as np
+
+IGNORE_TOKEN_ID = -100  # LabelSmoother.ignore_index
 import random
-from typing import Dict
 from collections.abc import Sequence
+from typing import Dict
+
 import paddle
 import paddle.vision.transforms as T
-from paddlemix.models.internvl2.conversation import get_conv_template
-from PIL import Image
 from paddle.io import ConcatDataset, WeightedRandomSampler
-from paddlemix.models.internvl2.constants import (CLIP_MEAN, CLIP_STD, IMAGENET_MEAN, IMAGENET_STD,
-                        IMG_CONTEXT_TOKEN, IMG_END_TOKEN, IMG_START_TOKEN,
-                        SIGLIP_MEAN, SIGLIP_STD)
+from PIL import Image
+
+from paddlemix.models.internvl2.constants import (
+    CLIP_MEAN,
+    CLIP_STD,
+    IMAGENET_MEAN,
+    IMAGENET_STD,
+    IMG_CONTEXT_TOKEN,
+    IMG_END_TOKEN,
+    IMG_START_TOKEN,
+    SIGLIP_MEAN,
+    SIGLIP_STD,
+)
+from paddlemix.models.internvl2.conversation import get_conv_template
+
 
 class WeightedConcatDataset(ConcatDataset):
     def __init__(self, datasets, weights):
         super().__init__(datasets)
-        self.weights = paddle.to_tensor(weights, dtype='float32')
+        self.weights = paddle.to_tensor(weights, dtype="float32")
         self.total_size = sum(len(d) for d in datasets)
         self.sampler = WeightedRandomSampler(weights=self.weights, num_samples=self.total_size, replacement=True)
 
@@ -45,7 +62,7 @@ class WeightedConcatDataset(ConcatDataset):
 def pil_loader(img_str):
     buff = io.BytesIO(img_str)
     img = Image.open(buff)
-    return img.convert('RGB')
+    return img.convert("RGB")
 
 
 def expand2square(pil_img, background_color):
@@ -65,10 +82,11 @@ def expand2square(pil_img, background_color):
 def simulate_jpeg_degradation(quality):
     def jpeg_degrade(img):
         with io.BytesIO() as output:
-            img.convert('RGB').save(output, format='JPEG', quality=quality)
+            img.convert("RGB").save(output, format="JPEG", quality=quality)
             output.seek(0)  # Move the reading cursor to the start of the stream
             img_jpeg = Image.open(output).copy()  # Use .copy() to make sure the image is loaded in memory
         return img_jpeg
+
     return jpeg_degrade
 
 
@@ -85,7 +103,7 @@ class Lambda:
     """
 
     def __init__(self, lambd):
-        #_log_api_usage_once(self)
+        # _log_api_usage_once(self)
         if not callable(lambd):
             raise TypeError(f"Argument lambd should be callable, got {repr(type(lambd).__name__)}")
         self.lambd = lambd
@@ -105,7 +123,7 @@ class RandomTransforms:
     """
 
     def __init__(self, transforms):
-        #_log_api_usage_once(self)
+        # _log_api_usage_once(self)
         if not isinstance(transforms, Sequence):
             raise TypeError("Argument transforms should be a sequence")
         self.transforms = transforms
@@ -139,40 +157,46 @@ class RandomChoice(RandomTransforms):
         return f"{super().__repr__()}(p={self.p})"
 
 
-def build_transform(is_train, input_size, pad2square=False, normalize_type='imagenet'):
-    if normalize_type == 'imagenet':
+def build_transform(is_train, input_size, pad2square=False, normalize_type="imagenet"):
+    if normalize_type == "imagenet":
         MEAN, STD = IMAGENET_MEAN, IMAGENET_STD
-    elif normalize_type == 'clip':
+    elif normalize_type == "clip":
         MEAN, STD = CLIP_MEAN, CLIP_STD
-    elif normalize_type == 'siglip':
+    elif normalize_type == "siglip":
         MEAN, STD = SIGLIP_MEAN, SIGLIP_STD
     else:
         raise NotImplementedError
     if is_train:  # use data augumentation
-        transform = T.Compose([
-            Lambda(lambda img: img.convert('RGB') if img.mode != 'RGB' else img),
-            RandomChoice([Lambda(jpeg_degrade_functions[quality]) for quality in qualities]),
-            T.Resize((input_size, input_size), interpolation='bicubic'),
-            T.ToTensor(),
-            T.Normalize(mean=MEAN, std=STD)
-        ])
+        transform = T.Compose(
+            [
+                Lambda(lambda img: img.convert("RGB") if img.mode != "RGB" else img),
+                RandomChoice([Lambda(jpeg_degrade_functions[quality]) for quality in qualities]),
+                T.Resize((input_size, input_size), interpolation="bicubic"),
+                T.ToTensor(),
+                T.Normalize(mean=MEAN, std=STD),
+            ]
+        )
     else:
         if pad2square is False:  # now we use this transform function by default
             # run this
-            transform = T.Compose([
-                Lambda(lambda img: img.convert('RGB') if img.mode != 'RGB' else img),
-                T.Resize((input_size, input_size), interpolation='bicubic'),
-                T.ToTensor(),
-                T.Normalize(mean=MEAN, std=STD)
-            ])
+            transform = T.Compose(
+                [
+                    Lambda(lambda img: img.convert("RGB") if img.mode != "RGB" else img),
+                    T.Resize((input_size, input_size), interpolation="bicubic"),
+                    T.ToTensor(),
+                    T.Normalize(mean=MEAN, std=STD),
+                ]
+            )
         else:
-            transform = T.Compose([
-                Lambda(lambda img: img.convert('RGB') if img.mode != 'RGB' else img),
-                Lambda(lambda img: expand2square(img, tuple(int(x * 255) for x in MEAN))),
-                T.Resize((input_size, input_size), interpolation='bicubic'),
-                T.ToTensor(),
-                T.Normalize(mean=MEAN, std=STD)
-            ])
+            transform = T.Compose(
+                [
+                    Lambda(lambda img: img.convert("RGB") if img.mode != "RGB" else img),
+                    Lambda(lambda img: expand2square(img, tuple(int(x * 255) for x in MEAN))),
+                    T.Resize((input_size, input_size), interpolation="bicubic"),
+                    T.ToTensor(),
+                    T.Normalize(mean=MEAN, std=STD),
+                ]
+            )
 
     return transform
 
@@ -189,36 +213,36 @@ def preprocess(
     num_image: int = 1,
 ):
     conv = get_conv_template(template_name)
-    roles = {'human': conv.roles[0], 'gpt': conv.roles[1]}
+    roles = {"human": conv.roles[0], "gpt": conv.roles[1]}
 
     # Apply prompt templates
     conversations = []
     for i, source in enumerate(sources):
-        if roles[source[0]['from']] != conv.roles[0]:
+        if roles[source[0]["from"]] != conv.roles[0]:
             # Skip the first one if it is not from human
             source = source[1:]
 
         conv.messages = []
         for j, sentence in enumerate(source):
-            role = roles[sentence['from']]
-            assert role == conv.roles[j % 2], f'{i}'
-            conv.append_message(role, sentence['value'])
+            role = roles[sentence["from"]]
+            assert role == conv.roles[j % 2], f"{i}"
+            conv.append_message(role, sentence["value"])
         conversations.append(conv.get_prompt())
 
     if not text_only:
         new_conversations = []
         for conversation in conversations:
             for i in range(num_image):
-                image_tokens = f'{IMG_START_TOKEN}{IMG_CONTEXT_TOKEN * num_image_token_list[i]}{IMG_END_TOKEN}'
-                conversation = conversation.replace('<image>', image_tokens, 1)
+                image_tokens = f"{IMG_START_TOKEN}{IMG_CONTEXT_TOKEN * num_image_token_list[i]}{IMG_END_TOKEN}"
+                conversation = conversation.replace("<image>", image_tokens, 1)
             new_conversations.append(conversation)
         conversations = new_conversations
 
     # Tokenize conversations
     input_ids = tokenizer(
         conversations,
-        return_tensors='pd',
-        padding=False if group_by_length or use_packed_ds else 'max_length',
+        return_tensors="pd",
+        padding=False if group_by_length or use_packed_ds else "max_length",
         max_length=tokenizer.model_max_length,
         truncation=True,
     ).input_ids
@@ -227,7 +251,7 @@ def preprocess(
     # assert conv.sep_style == SeparatorStyle.ADD_COLON_TWO
 
     # Mask targets. Only compute loss on the assistant outputs.
-    sep = conv.sep + conv.roles[1] + ': '
+    sep = conv.sep + conv.roles[1] + ": "
     for conversation, target in zip(conversations, targets):
         total_len = int(target.not_equal(paddle.to_tensor(tokenizer.pad_token_id)).sum())
 
@@ -235,7 +259,7 @@ def preprocess(
         cur_len = 1
         target[:cur_len] = IGNORE_TOKEN_ID
         for i, turn in enumerate(turns):
-            if turn == '':
+            if turn == "":
                 break
             turn_len = len(tokenizer(turn).input_ids)
 
@@ -251,7 +275,7 @@ def preprocess(
                 instruction_len -= 1
 
             # Ignore the user instructions
-            target[cur_len: cur_len + instruction_len] = IGNORE_TOKEN_ID
+            target[cur_len : cur_len + instruction_len] = IGNORE_TOKEN_ID
             cur_len += turn_len
 
             if i != 0 and not tokenizer.legacy:
@@ -270,8 +294,8 @@ def preprocess(
             if cur_len != total_len:
                 target[:] = IGNORE_TOKEN_ID
                 print(
-                    f'WARNING: tokenization mismatch: {cur_len} vs. {total_len}.'
-                    f' #turn = {len(turns) - 1}. (ignored). This dataset is {ds_name}.'
+                    f"WARNING: tokenization mismatch: {cur_len} vs. {total_len}."
+                    f" #turn = {len(turns) - 1}. (ignored). This dataset is {ds_name}."
                 )
                 sys.stdout.flush()
 
@@ -291,39 +315,39 @@ def preprocess_mpt(
     group_by_length: bool = False,
     use_packed_ds: bool = False,
     ds_name: str = None,
-    num_image: int = 1
+    num_image: int = 1,
 ) -> Dict:
     conv = get_conv_template(template_name)
-    roles = {'human': conv.roles[0], 'gpt': conv.roles[1]}
+    roles = {"human": conv.roles[0], "gpt": conv.roles[1]}
 
     # Apply prompt templates
     conversations = []
     for i, source in enumerate(sources):
-        if roles[source[0]['from']] != conv.roles[0]:
+        if roles[source[0]["from"]] != conv.roles[0]:
             # Skip the first one if it is not from human
             source = source[1:]
 
         conv.messages = []
         for j, sentence in enumerate(source):
-            role = roles[sentence['from']]
-            assert role == conv.roles[j % 2], f'{i}'
-            conv.append_message(role, sentence['value'])
+            role = roles[sentence["from"]]
+            assert role == conv.roles[j % 2], f"{i}"
+            conv.append_message(role, sentence["value"])
         conversations.append(conv.get_prompt())
 
     if not text_only:
         new_conversations = []
         for conversation in conversations:
             for i in range(num_image):
-                image_tokens = f'{IMG_START_TOKEN}{IMG_CONTEXT_TOKEN * num_image_token_list[i]}{IMG_END_TOKEN}'
-                conversation = conversation.replace('<image>', image_tokens, 1)
+                image_tokens = f"{IMG_START_TOKEN}{IMG_CONTEXT_TOKEN * num_image_token_list[i]}{IMG_END_TOKEN}"
+                conversation = conversation.replace("<image>", image_tokens, 1)
             new_conversations.append(conversation)
         conversations = new_conversations
 
     # Tokenize conversations
     input_ids = tokenizer(
         conversations,
-        return_tensors='pd',
-        padding=False if group_by_length or use_packed_ds else 'max_length',
+        return_tensors="pd",
+        padding=False if group_by_length or use_packed_ds else "max_length",
         max_length=tokenizer.model_max_length,
         truncation=True,
     ).input_ids
@@ -337,11 +361,11 @@ def preprocess_mpt(
         turns = conversation.split(conv.sep)
         re_turns = [conv.sep.join(turns[:3])]  # system + user + gpt
         for conv_idx in range(3, len(turns), 2):
-            re_turns.append(conv.sep.join(turns[conv_idx:conv_idx + 2]))  # user + gpt
+            re_turns.append(conv.sep.join(turns[conv_idx : conv_idx + 2]))  # user + gpt
         cur_len = 0
         targets[idx, :cur_len] = IGNORE_TOKEN_ID
         for i, turn in enumerate(re_turns):
-            if turn == '':
+            if turn == "":
                 break
             turn_len = len(tokenizer(turn).input_ids) + 1
 
@@ -352,7 +376,7 @@ def preprocess_mpt(
             instruction_len = len(tokenizer(parts[0]).input_ids)
 
             # Ignore the user instructions
-            targets[idx, cur_len: cur_len + instruction_len] = IGNORE_TOKEN_ID
+            targets[idx, cur_len : cur_len + instruction_len] = IGNORE_TOKEN_ID
             # print(f'[question {i}]', tokenizer.decode(input_ids[:, cur_len: cur_len + instruction_len][0]))
             # print(f'[answer {i}]', tokenizer.decode(input_ids[:, cur_len + instruction_len: cur_len + turn_len][0]))
             # print(f'[label {i}]', targets[idx, cur_len + instruction_len: cur_len + turn_len])
@@ -364,8 +388,8 @@ def preprocess_mpt(
             if cur_len != total_len:
                 targets[idx, :] = IGNORE_TOKEN_ID
                 print(
-                    f'WARNING: tokenization mismatch: {cur_len} vs. {total_len}.'
-                    f' #turn = {len(turns) - 1}. (ignored). This dataset is {ds_name}.'
+                    f"WARNING: tokenization mismatch: {cur_len} vs. {total_len}."
+                    f" #turn = {len(turns) - 1}. (ignored). This dataset is {ds_name}."
                 )
                 sys.stdout.flush()
 
@@ -385,40 +409,40 @@ def preprocess_phi3(
     group_by_length: bool = False,
     use_packed_ds: bool = False,
     ds_name: str = None,
-    num_image: int = 1
+    num_image: int = 1,
 ) -> Dict:
     conv = get_conv_template(template_name)
-    roles = {'human': conv.roles[0], 'gpt': conv.roles[1]}
+    roles = {"human": conv.roles[0], "gpt": conv.roles[1]}
 
     # Apply prompt templates
     conversations = []
     for i, source in enumerate(sources):
-        if roles[source[0]['from']] != conv.roles[0]:
+        if roles[source[0]["from"]] != conv.roles[0]:
             # Skip the first one if it is not from human
             source = source[1:]
 
         conv.messages = []
         for j, sentence in enumerate(source):
-            role = roles[sentence['from']]
-            assert role == conv.roles[j % 2], f'{i}'
-            conv.append_message(role, sentence['value'])
+            role = roles[sentence["from"]]
+            assert role == conv.roles[j % 2], f"{i}"
+            conv.append_message(role, sentence["value"])
         conversations.append(conv.get_prompt())
 
     if not text_only:
         new_conversations = []
         for conversation in conversations:
             for i in range(num_image):
-                image_tokens = f'{IMG_START_TOKEN}{IMG_CONTEXT_TOKEN * num_image_token_list[i]}{IMG_END_TOKEN}'
-                conversation = conversation.replace('<image>', image_tokens, 1)
+                image_tokens = f"{IMG_START_TOKEN}{IMG_CONTEXT_TOKEN * num_image_token_list[i]}{IMG_END_TOKEN}"
+                conversation = conversation.replace("<image>", image_tokens, 1)
             new_conversations.append(conversation)
         conversations = new_conversations
 
     # Tokenize conversations
-    tokenizer.padding_side = 'right'
+    tokenizer.padding_side = "right"
     input_ids = tokenizer(
         conversations,
-        return_tensors='pd',
-        padding=False if group_by_length or use_packed_ds else 'max_length',
+        return_tensors="pd",
+        padding=False if group_by_length or use_packed_ds else "max_length",
         max_length=tokenizer.model_max_length,
         truncation=True,
     ).input_ids
@@ -432,14 +456,14 @@ def preprocess_phi3(
         turns = conversation.split(conv.sep)
         re_turns = [conv.sep.join(turns[:3])]  # system + user + gpt
         for conv_idx in range(3, len(turns), 2):
-            re_turns.append(conv.sep.join(turns[conv_idx:conv_idx + 2]))  # user + gpt
+            re_turns.append(conv.sep.join(turns[conv_idx : conv_idx + 2]))  # user + gpt
         cur_len = 1
         target[:cur_len] = IGNORE_TOKEN_ID
-        endoftext_id = tokenizer.convert_tokens_to_ids('<|endoftext|>')
+        endoftext_id = tokenizer.convert_tokens_to_ids("<|endoftext|>")
         target[target == endoftext_id] = IGNORE_TOKEN_ID
 
         for i, turn in enumerate(re_turns):
-            if turn == '':
+            if turn == "":
                 break
             if i == 0:
                 turn_len = len(tokenizer(turn).input_ids)
@@ -456,7 +480,7 @@ def preprocess_phi3(
                 instruction_len = len(tokenizer(parts[0]).input_ids) - 2
 
             # Ignore the user instructions
-            target[cur_len: cur_len + instruction_len] = IGNORE_TOKEN_ID
+            target[cur_len : cur_len + instruction_len] = IGNORE_TOKEN_ID
             # print(f'[question {i}]', tokenizer.decode(input_ids[:, cur_len: cur_len + instruction_len][0]))
             # print(f'[answer {i}]', tokenizer.decode(input_ids[:, cur_len + instruction_len: cur_len + turn_len][0]))
             # print(f'[label {i}]', target[cur_len + instruction_len: cur_len + turn_len])
@@ -473,8 +497,8 @@ def preprocess_phi3(
             if cur_len != total_len:
                 target[:] = IGNORE_TOKEN_ID
                 print(
-                    f'WARNING: tokenization mismatch: {cur_len} vs. {total_len}.'
-                    f' #turn = {len(turns) - 1}. (ignored). This dataset is {ds_name}.'
+                    f"WARNING: tokenization mismatch: {cur_len} vs. {total_len}."
+                    f" #turn = {len(turns) - 1}. (ignored). This dataset is {ds_name}."
                 )
                 sys.stdout.flush()
 
@@ -494,40 +518,40 @@ def preprocess_internlm(
     group_by_length: bool = False,
     use_packed_ds: bool = False,
     ds_name: str = None,
-    num_image: int = 1
+    num_image: int = 1,
 ) -> Dict:
     conv = get_conv_template(template_name)
-    roles = {'human': conv.roles[0], 'gpt': conv.roles[1]}
+    roles = {"human": conv.roles[0], "gpt": conv.roles[1]}
 
     # Apply prompt templates
     conversations = []
     for i, source in enumerate(sources):
-        if roles[source[0]['from']] != conv.roles[0]:
+        if roles[source[0]["from"]] != conv.roles[0]:
             # Skip the first one if it is not from human
             source = source[1:]
 
         conv.messages = []
         for j, sentence in enumerate(source):
-            role = roles[sentence['from']]
-            assert role == conv.roles[j % 2], f'{i}'
-            sentence['value'] = sentence['value'].strip()
-            conv.append_message(role, sentence['value'])
+            role = roles[sentence["from"]]
+            assert role == conv.roles[j % 2], f"{i}"
+            sentence["value"] = sentence["value"].strip()
+            conv.append_message(role, sentence["value"])
         conversations.append(conv.get_prompt())
 
     if not text_only:
         new_conversations = []
         for conversation in conversations:
             for i in range(num_image):
-                image_tokens = f'{IMG_START_TOKEN}{IMG_CONTEXT_TOKEN * num_image_token_list[i]}{IMG_END_TOKEN}'
-                conversation = conversation.replace('<image>', image_tokens, 1)
+                image_tokens = f"{IMG_START_TOKEN}{IMG_CONTEXT_TOKEN * num_image_token_list[i]}{IMG_END_TOKEN}"
+                conversation = conversation.replace("<image>", image_tokens, 1)
             new_conversations.append(conversation)
         conversations = new_conversations
 
     # Tokenize conversations
     input_ids = tokenizer(
         conversations,
-        return_tensors='pd',
-        padding=False if group_by_length or use_packed_ds else 'max_length',
+        return_tensors="pd",
+        padding=False if group_by_length or use_packed_ds else "max_length",
         max_length=tokenizer.model_max_length,
         truncation=True,
     ).input_ids
@@ -538,13 +562,15 @@ def preprocess_internlm(
     # print('targets', targets, targets.shape, targets.sum().item())
     # [[151644, 8948  , 198   , ..., 103978, 1773  , 151645]]   [1, 1918]   281157253
     for conversation, target in zip(conversations, targets):
-        total_len = int(target.not_equal(paddle.to_tensor(tokenizer.pad_token_id)).sum())  # 浦语里面 pad_token_id = eos_token_id
+        total_len = int(
+            target.not_equal(paddle.to_tensor(tokenizer.pad_token_id)).sum()
+        )  # 浦语里面 pad_token_id = eos_token_id
         cur_len = 1
         target[:cur_len] = IGNORE_TOKEN_ID  # <s>
         parts = conversation.split(conv.roles[1])  # [UNUSED_TOKEN_146]assistant\n
         info = parts[0] + conv.roles[1]
         temp_len = len(tokenizer(info).input_ids) - 1  # 去除tokenizer的<s>
-        target[cur_len: cur_len + temp_len] = IGNORE_TOKEN_ID
+        target[cur_len : cur_len + temp_len] = IGNORE_TOKEN_ID
         cur_len = cur_len + temp_len
 
         for index in range(1, len(parts) - 1):
@@ -554,7 +580,7 @@ def preprocess_internlm(
             cur_len = cur_len + temp_len
             part = conv.roles[0] + part2 + conv.roles[1]
             temp_len = len(tokenizer(part).input_ids) - 1
-            target[cur_len: cur_len + temp_len] = IGNORE_TOKEN_ID
+            target[cur_len : cur_len + temp_len] = IGNORE_TOKEN_ID
             cur_len = cur_len + temp_len
         last_info = parts[-1]
         temp_len = len(tokenizer(last_info).input_ids) - 1
@@ -569,11 +595,11 @@ def preprocess_internlm(
         if cur_len < tokenizer.model_max_length:
             if cur_len != total_len:
                 target[:] = IGNORE_TOKEN_ID
-                print(f'WARNING: tokenization mismatch: {cur_len} vs. {total_len}. This dataset is {ds_name}.')
+                print(f"WARNING: tokenization mismatch: {cur_len} vs. {total_len}. This dataset is {ds_name}.")
                 sys.stdout.flush()
-        
+
         new_targets.append(target)
-    
+
     new_targets = paddle.stack(new_targets, axis=0)
 
     return dict(
@@ -634,17 +660,13 @@ def preprocess_internvl2_5(
         else:
             raise NotImplementedError
 
-    add_bos_token = getattr(tokenizer, 'add_bos_token', False)
+    add_bos_token = getattr(tokenizer, "add_bos_token", False)
     if add_bos_token:  # for InternLM series
         batches[0] = tokenizer.bos_token + batches[0]
 
     # Tokenize conversations
     input_ids = tokenizer(
-        batches,
-        return_tensors='np',
-        padding=False,
-        max_length=tokenizer.model_max_length,
-        truncation=False
+        batches, return_tensors="np", padding=False, max_length=tokenizer.model_max_length, truncation=False
     ).input_ids
 
     input_ids = [np.array(inp) for inp in input_ids]  # pack input ids that have different length
@@ -690,7 +712,7 @@ def preprocess_internvl2_5(
 
 
 def find_closest_aspect_ratio(aspect_ratio, target_ratios, width, height, image_size):
-    best_ratio_diff = float('inf')
+    best_ratio_diff = float("inf")
     best_ratio = (1, 1)
     area = width * height
     for ratio in target_ratios:
@@ -706,19 +728,24 @@ def find_closest_aspect_ratio(aspect_ratio, target_ratios, width, height, image_
     return best_ratio
 
 
-def dynamic_preprocess(image, min_num=1, max_num=6, image_size=448, use_thumbnail=False, return_target_aspect_ratio=False):
+def dynamic_preprocess(
+    image, min_num=1, max_num=6, image_size=448, use_thumbnail=False, return_target_aspect_ratio=False
+):
     orig_width, orig_height = image.size
     aspect_ratio = orig_width / orig_height
 
     # calculate the existing image aspect ratio
     target_ratios = set(
-        (i, j) for n in range(min_num, max_num + 1) for i in range(1, n + 1) for j in range(1, n + 1) if
-        i * j <= max_num and i * j >= min_num)
+        (i, j)
+        for n in range(min_num, max_num + 1)
+        for i in range(1, n + 1)
+        for j in range(1, n + 1)
+        if i * j <= max_num and i * j >= min_num
+    )
     target_ratios = sorted(target_ratios, key=lambda x: x[0] * x[1])
 
     # find the closest aspect ratio to the target
-    target_aspect_ratio = find_closest_aspect_ratio(
-        aspect_ratio, target_ratios, orig_width, orig_height, image_size)
+    target_aspect_ratio = find_closest_aspect_ratio(aspect_ratio, target_ratios, orig_width, orig_height, image_size)
 
     # calculate the target width and height
     target_width = image_size * target_aspect_ratio[0]
@@ -733,7 +760,7 @@ def dynamic_preprocess(image, min_num=1, max_num=6, image_size=448, use_thumbnai
             (i % (target_width // image_size)) * image_size,
             (i // (target_width // image_size)) * image_size,
             ((i % (target_width // image_size)) + 1) * image_size,
-            ((i // (target_width // image_size)) + 1) * image_size
+            ((i // (target_width // image_size)) + 1) * image_size,
         )
         # split the image
         split_img = resized_img.crop(box)
@@ -754,21 +781,26 @@ def dynamic_preprocess2(image, min_num=1, max_num=6, image_size=448, use_thumbna
 
     # calculate the existing image aspect ratio
     target_ratios = set(
-        (i, j) for n in range(min_num, max_num + 1) for i in range(1, n + 1) for j in range(1, n + 1) if
-        i * j <= max_num and i * j >= min_num)
+        (i, j)
+        for n in range(min_num, max_num + 1)
+        for i in range(1, n + 1)
+        for j in range(1, n + 1)
+        if i * j <= max_num and i * j >= min_num
+    )
     target_ratios = sorted(target_ratios, key=lambda x: x[0] * x[1])
 
     new_target_ratios = []
     if prior_aspect_ratio is not None:
         for i in target_ratios:
-            if prior_aspect_ratio[0]%i[0] != 0 and prior_aspect_ratio[1]%i[1] != 0:
+            if prior_aspect_ratio[0] % i[0] != 0 and prior_aspect_ratio[1] % i[1] != 0:
                 new_target_ratios.append(i)
             else:
                 continue
 
     # find the closest aspect ratio to the target
     target_aspect_ratio = find_closest_aspect_ratio(
-        aspect_ratio, new_target_ratios, orig_width, orig_height, image_size)
+        aspect_ratio, new_target_ratios, orig_width, orig_height, image_size
+    )
 
     # calculate the target width and height
     target_width = image_size * target_aspect_ratio[0]
@@ -783,7 +815,7 @@ def dynamic_preprocess2(image, min_num=1, max_num=6, image_size=448, use_thumbna
             (i % (target_width // image_size)) * image_size,
             (i // (target_width // image_size)) * image_size,
             ((i % (target_width // image_size)) + 1) * image_size,
-            ((i // (target_width // image_size)) + 1) * image_size
+            ((i // (target_width // image_size)) + 1) * image_size,
         )
         # split the image
         split_img = resized_img.crop(box)

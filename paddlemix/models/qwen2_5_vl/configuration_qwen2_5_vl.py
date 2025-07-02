@@ -1,14 +1,41 @@
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
 
-class Qwen2_5_VLVisionConfig(PretrainedConfig):
-    model_type = 'qwen2_5_vl'
-    base_config_key = 'vision_config'
 
-    def __init__(self, depth=32, hidden_size=3584, hidden_act='silu',
-        intermediate_size=3420, num_heads=16, in_channels=3, patch_size=14,
-        spatial_merge_size=2, temporal_patch_size=2, tokens_per_second=4,
-        window_size=112, out_hidden_size=3584, fullatt_block_indexes=[7, 15,
-        23, 31], **kwargs):
+class Qwen2_5_VLVisionConfig(PretrainedConfig):
+    model_type = "qwen2_5_vl"
+    base_config_key = "vision_config"
+
+    def __init__(
+        self,
+        depth=32,
+        hidden_size=3584,
+        hidden_act="silu",
+        intermediate_size=3420,
+        num_heads=16,
+        in_channels=3,
+        patch_size=14,
+        spatial_merge_size=2,
+        temporal_patch_size=2,
+        tokens_per_second=4,
+        window_size=112,
+        out_hidden_size=3584,
+        fullatt_block_indexes=[7, 15, 23, 31],
+        **kwargs
+    ):
         super().__init__(**kwargs)
         self.depth = depth
         self.hidden_size = hidden_size
@@ -130,28 +157,47 @@ class Qwen2_5_VLConfig(PretrainedConfig):
     >>> # Accessing the model configuration
     >>> configuration = model.config
     ```"""
-    model_type = 'qwen2_5_vl'
-    sub_configs = {'vision_config': Qwen2_5_VLVisionConfig}
-    keys_to_ignore_at_inference = ['past_key_values']
-    base_model_tp_plan = {'layers.*.self_attn.q_proj': 'colwise',
-        'layers.*.self_attn.k_proj': 'colwise', 'layers.*.self_attn.v_proj':
-        'colwise', 'layers.*.self_attn.o_proj': 'rowwise',
-        'layers.*.mlp.gate_proj': 'colwise', 'layers.*.mlp.up_proj':
-        'colwise', 'layers.*.mlp.down_proj': 'rowwise'}
 
-    def __init__(self, vocab_size=152064, hidden_size=8192,
-        intermediate_size=29568, num_hidden_layers=80, num_attention_heads=
-        64, num_key_value_heads=8, hidden_act='silu',
-        max_position_embeddings=32768, initializer_range=0.02, rms_norm_eps
-        =1e-05, use_cache=True, tie_word_embeddings=False, rope_theta=
-        1000000.0, use_sliding_window=False, sliding_window=4096,
-        max_window_layers=80, attention_dropout=0.0, vision_config=None,
-        rope_scaling=None, **kwargs):
+    model_type = "qwen2_5_vl"
+    sub_configs = {"vision_config": Qwen2_5_VLVisionConfig}
+    keys_to_ignore_at_inference = ["past_key_values"]
+    base_model_tp_plan = {
+        "layers.*.self_attn.q_proj": "colwise",
+        "layers.*.self_attn.k_proj": "colwise",
+        "layers.*.self_attn.v_proj": "colwise",
+        "layers.*.self_attn.o_proj": "rowwise",
+        "layers.*.mlp.gate_proj": "colwise",
+        "layers.*.mlp.up_proj": "colwise",
+        "layers.*.mlp.down_proj": "rowwise",
+    }
+
+    def __init__(
+        self,
+        vocab_size=152064,
+        hidden_size=8192,
+        intermediate_size=29568,
+        num_hidden_layers=80,
+        num_attention_heads=64,
+        num_key_value_heads=8,
+        hidden_act="silu",
+        max_position_embeddings=32768,
+        initializer_range=0.02,
+        rms_norm_eps=1e-05,
+        use_cache=True,
+        tie_word_embeddings=False,
+        rope_theta=1000000.0,
+        use_sliding_window=False,
+        sliding_window=4096,
+        max_window_layers=80,
+        attention_dropout=0.0,
+        vision_config=None,
+        rope_scaling=None,
+        **kwargs
+    ):
         if isinstance(vision_config, dict):
-            self.vision_config = self.sub_configs['vision_config'](**
-                vision_config)
+            self.vision_config = self.sub_configs["vision_config"](**vision_config)
         elif vision_config is None:
-            self.vision_config = self.sub_configs['vision_config']()
+            self.vision_config = self.sub_configs["vision_config"]()
         self.vocab_size = vocab_size
         self.max_position_embeddings = max_position_embeddings
         self.hidden_size = hidden_size
@@ -171,12 +217,12 @@ class Qwen2_5_VLConfig(PretrainedConfig):
         self.rope_theta = rope_theta
         self.attention_dropout = attention_dropout
         self.rope_scaling = rope_scaling
-        if self.rope_scaling is not None and 'type' in self.rope_scaling:
-            if self.rope_scaling['type'] == 'mrope':
-                self.rope_scaling['type'] = 'default'
-            self.rope_scaling['rope_type'] = self.rope_scaling['type']
-        
+        if self.rope_scaling is not None and "type" in self.rope_scaling:
+            if self.rope_scaling["type"] == "mrope":
+                self.rope_scaling["type"] = "default"
+            self.rope_scaling["rope_type"] = self.rope_scaling["type"]
+
         super().__init__(tie_word_embeddings=tie_word_embeddings, **kwargs)
 
 
-__all__ = ['Qwen2_5_VLConfig']
+__all__ = ["Qwen2_5_VLConfig"]

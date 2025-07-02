@@ -12,11 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import sys
 
 import paddle
 
-from paddlemix.models.diffsinger.utils import paddle_aux
 from paddlemix.models.diffsinger.modules.commons.common_layers import (
     NormalInitEmbedding as Embedding,
 )

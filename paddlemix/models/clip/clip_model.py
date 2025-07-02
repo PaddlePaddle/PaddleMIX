@@ -290,7 +290,6 @@ class CLIP(CLIPPretrainedModel):
         )
         return loss_itc, image_features, text_features, self.logit_scale.exp()
 
-
     def clip_score(self, image, input_ids=None, text_emb=None, **kwargs):
         """
         Calculate the CLIP score (cosine similarity) between image and text embeddings.
@@ -316,7 +315,7 @@ class CLIP(CLIPPretrainedModel):
         else:
             print("Text input or embedding is empty, returning a score of 0.")
             return 0.0
-        
+
         # Compute cosine similarity as the CLIP score
         clip_score = F.cosine_similarity(image_features, text_features)
 

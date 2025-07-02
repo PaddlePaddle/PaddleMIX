@@ -14,18 +14,16 @@
 
 
 from enum import Enum
-from typing import Dict, Any, TypeVar
+from typing import Any, Dict, TypeVar
 
 from ..misc import JsonSchemaValidator
 
-
-T = TypeVar('T', bound=Dict[str, Any])
+T = TypeVar("T", bound=Dict[str, Any])
 
 
 class SCHEMA(Enum):
     # data-type
-    MM = \
-"""
+    MM = """
 $id: 'https://multi-modality-llm-schema'
 $schema: 'https://json-schema.org/draft/2020-12/schema'
 
@@ -33,13 +31,12 @@ type: object
 properties:
   id:
     anyOf:
-      - 
+      -
         type: string
         pattern: '\S{1,}'
-      - 
+      -
         type: integer
         minimum: 0
-  
   image:
     type: string
     pattern: '\.(jpg|jpeg|png|JPG|JPEG|PNG)$'
@@ -60,10 +57,10 @@ properties:
           description: 'Non whitespace characters must be at least 1 in length'
       required: ['from', 'value']
 
-  meta: 
+  meta:
     type: 'object'
     properties:
-      width: 
+      width:
         type: ['integer', 'null']
       height:
         type: ['integer', 'null']
@@ -74,8 +71,7 @@ properties:
 required: ['id', 'image', 'conversations']
 """
 
-    MIX = \
-"""
+    MIX = """
 $id: 'https://example.com/schemas/multimodal_mix'
 $schema: 'https://json-schema.org/draft/2020-12/schema'
 
@@ -83,18 +79,18 @@ type: object
 properties:
   id:
     anyOf:
-      - 
+      -
         type: string
         pattern: '\S{1,}'
-      - 
+      -
         type: integer
         minimum: 0
 
   images:
     anyOf:
-      - 
+      -
         type: 'null'
-      - 
+      -
         type: array
         minItems: 1
         items:
@@ -116,7 +112,7 @@ properties:
           required:
             - id
             - url
-            
+
   conversations:
     type: array
     minItems: 1
@@ -126,7 +122,7 @@ properties:
         from:
           type: string
           description: 'user or assistant'
-          enum: 
+          enum:
             - user
             - assistant
         value:
@@ -142,21 +138,21 @@ required:
   - conversations
 """
 
-SCHEMA_VALIDATORS = {
-    k: JsonSchemaValidator.from_string(k.value) for k in SCHEMA
-}
 
-def is_valid_schema(item: T, schema: SCHEMA, suppress_exceptions: bool=False) -> bool:
+SCHEMA_VALIDATORS = {k: JsonSchemaValidator.from_string(k.value) for k in SCHEMA}
+
+
+def is_valid_schema(item: T, schema: SCHEMA, suppress_exceptions: bool = False) -> bool:
     if suppress_exceptions:
         try:
             SCHEMA_VALIDATORS[schema].validate(item)
             return True
-        except Exception as e:
+        except Exception:
             return False
     else:
         SCHEMA_VALIDATORS[schema].validate(item)
         return True
 
-def assert_mm_schema(item) -> None:
-    assert is_valid_schema(item, SCHEMA.MM), f'{item} is not valid mm schema'
 
+def assert_mm_schema(item) -> None:
+    assert is_valid_schema(item, SCHEMA.MM), f"{item} is not valid mm schema"

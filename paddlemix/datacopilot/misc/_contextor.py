@@ -16,14 +16,14 @@
 import random
 import shutil
 import tempfile
-import numpy as np
 from contextlib import contextmanager
+from typing import Iterator, Optional
 
-from typing import Optional, Iterator, Sequence
+import numpy as np
 
 
 @contextmanager
-def freeze_rng_state(seed: Optional[int]=None):
+def freeze_rng_state(seed: Optional[int] = None):
     state = random.getstate()
     np_state = np.random.get_state()
     if seed is not None:
@@ -46,6 +46,4 @@ def open_tmp_dir() -> Iterator[str]:
 @contextmanager
 def open_tmp_file():
     with tempfile.NamedTemporaryFile(delete=True) as f:
-        yield f  
-
-
+        yield f

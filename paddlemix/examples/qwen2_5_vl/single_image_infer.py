@@ -17,13 +17,16 @@ import argparse
 import paddle
 
 from paddlemix.models.qwen2_5_vl import MIXQwen2_5_Tokenizer
-from paddlemix.models.qwen2_5_vl.modeling_qwen2_5_vl import Qwen2_5_VLForConditionalGeneration
+from paddlemix.models.qwen2_5_vl.modeling_qwen2_5_vl import (
+    Qwen2_5_VLForConditionalGeneration,
+)
 from paddlemix.processors.qwen2_5_vl_processing import (
     Qwen2_5_VLImageProcessor,
     Qwen2_5_VLProcessor,
     process_vision_info,
 )
 from paddlemix.utils.log import logger
+
 
 def main(args):
     paddle.seed(seed=0)
@@ -38,7 +41,9 @@ def main(args):
     print("compute_dtype", compute_dtype)
 
     paddle.set_default_dtype(compute_dtype)
-    model = Qwen2_5_VLForConditionalGeneration.from_pretrained(args.model_path, dtype=compute_dtype, attn_implementation=args.attn_implementation)
+    model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+        args.model_path, dtype=compute_dtype, attn_implementation=args.attn_implementation
+    )
 
     image_processor = Qwen2_5_VLImageProcessor()
     tokenizer = MIXQwen2_5_Tokenizer.from_pretrained(args.model_path)
@@ -74,6 +79,7 @@ def main(args):
 
     if args.benchmark:
         import time
+
         start = 0.0
         total = 0.0
         for i in range(20):

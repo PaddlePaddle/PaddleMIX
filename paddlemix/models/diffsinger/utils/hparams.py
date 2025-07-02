@@ -14,8 +14,8 @@
 
 import argparse
 import os
-import yaml
 
+import yaml
 
 global_print_hparams = True
 hparams = {}
@@ -136,7 +136,7 @@ def set_hparams(config="", exp_name="", hparams_str="", print_hparams=True, glob
         hparams["exp_name"] = args.exp_name
     if hparams_.get("exp_name") is None:
         hparams_["exp_name"] = args.exp_name
-    
+
     hparams["vocoder_ckpt"] = os.path.join(os.path.dirname(args.exp_name), hparams_["vocoder_ckpt"])
 
     # @rank_zero_only
@@ -151,6 +151,5 @@ def set_hparams(config="", exp_name="", hparams_str="", print_hparams=True, glob
             global_print_hparams = False
 
     print_out_hparams()
-
 
     return hparams_

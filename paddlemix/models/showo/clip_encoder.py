@@ -14,11 +14,11 @@
 
 import paddle
 import paddle.nn as nn
-from paddlenlp.transformers import CLIPVisionModel, CLIPImageProcessor, CLIPVisionConfig
+from paddlenlp.transformers import CLIPImageProcessor, CLIPVisionConfig, CLIPVisionModel
 
 
 class CLIPVisionTower(nn.Layer):
-    def __init__(self, vision_tower,dtype="float32"):
+    def __init__(self, vision_tower, dtype="float32"):
         super().__init__()
 
         self.is_loaded = False
@@ -27,27 +27,27 @@ class CLIPVisionTower(nn.Layer):
         self.select_layer = -2
         self.select_feature = "patch"
         self.load_model(dtype)
-        self.cfg_only = CLIPVisionConfig.from_pretrained(self.vision_tower_name,dtype=dtype)
+        self.cfg_only = CLIPVisionConfig.from_pretrained(self.vision_tower_name, dtype=dtype)
 
-    def load_model(self,dtype="float32"):
+    def load_model(self, dtype="float32"):
         if self.is_loaded:
-            print('{} is already loaded, `load_model` called again, skipping.'.format(self.vision_tower_name))
+            print("{} is already loaded, `load_model` called again, skipping.".format(self.vision_tower_name))
             return
 
         self.image_processor = CLIPImageProcessor.from_pretrained(self.vision_tower_name)
-        self.vision_tower = CLIPVisionModel.from_pretrained(self.vision_tower_name,dtype=dtype)
+        self.vision_tower = CLIPVisionModel.from_pretrained(self.vision_tower_name, dtype=dtype)
         self.vision_tower.stop_gradient = True
 
         self.is_loaded = True
 
     def feature_select(self, image_forward_outs):
         image_features = image_forward_outs.hidden_states[self.select_layer]
-        if self.select_feature == 'patch':
+        if self.select_feature == "patch":
             image_features = image_features[:, 1:]
-        elif self.select_feature == 'cls_patch':
+        elif self.select_feature == "cls_patch":
             image_features = image_features
         else:
-            raise ValueError(f'Unexpected select feature: {self.select_feature}')
+            raise ValueError(f"Unexpected select feature: {self.select_feature}")
         return image_features
 
     @paddle.no_grad()
@@ -55,7 +55,9 @@ class CLIPVisionTower(nn.Layer):
         if type(images) is list:
             image_features = []
             for image in images:
-                image_forward_out = self.vision_tower(image.to(dtype=self.dtype).unsqueeze(0), output_hidden_states=True)
+                image_forward_out = self.vision_tower(
+                    image.to(dtype=self.dtype).unsqueeze(0), output_hidden_states=True
+                )
                 image_feature = self.feature_select(image_forward_out).to(image.dtype)
                 image_features.append(image_feature)
         else:

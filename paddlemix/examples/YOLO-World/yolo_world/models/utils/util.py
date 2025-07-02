@@ -174,7 +174,5 @@ def filter_scores_and_topk(scores, score_thr, topk, results=None):
         elif isinstance(results, paddle.Tensor):
             filtered_results = results[keep_idxs]
         else:
-            raise NotImplementedError(
-                f"Only supports dict or list or Tensor, " f"but get {type(results)}."
-            )
+            raise NotImplementedError(f"Only supports dict or list or Tensor, " f"but get {type(results)}.")
     return scores, labels, keep_idxs, filtered_results

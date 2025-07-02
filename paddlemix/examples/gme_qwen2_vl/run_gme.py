@@ -13,9 +13,8 @@
 # limitations under the License.
 
 import paddle
-import paddle.nn.functional as F
-from paddlemix.models.gme_qwen2_vl.modeling_gme_qwen2_vl import GmeQwen2VL
 
+from paddlemix.models.gme_qwen2_vl.modeling_gme_qwen2_vl import GmeQwen2VL
 
 if __name__ == "__main__":
     """
@@ -25,15 +24,15 @@ if __name__ == "__main__":
     # **1. Initialize model**
     print("\n=== Initializing GmeQwen2VL model ===")
     gme = GmeQwen2VL(model_name="GME-Qwen2-VL/gme-Qwen2-VL-2B-Instruct")
-    
+
     # **2. Define text and images**
     texts = [
         "What kind of car is this?",
         "The Tesla Cybertruck is a battery electric pickup truck built by Tesla, Inc. since 2023.",
     ]
     images = [
-        'https://en.wikipedia.org/wiki/File:Tesla_Cybertruck_damaged_window.jpg',
-        'https://en.wikipedia.org/wiki/File:2024_Tesla_Cybertruck_Foundation_Series,_front_left_(Greenwich).jpg',
+        "https://en.wikipedia.org/wiki/File:Tesla_Cybertruck_damaged_window.jpg",
+        "https://en.wikipedia.org/wiki/File:2024_Tesla_Cybertruck_Foundation_Series,_front_left_(Greenwich).jpg",
     ]
 
     # **3. Compute text embeddings**
@@ -74,7 +73,7 @@ if __name__ == "__main__":
     print("\n=== Simulating information retrieval task: database text ===")
     corpus = [
         {"title": "Tesla Cybertruck", "text": "A battery electric pickup truck by Tesla."},
-        {"title": "Ford F-150", "text": "A popular American pickup truck."}
+        {"title": "Ford F-150", "text": "A popular American pickup truck."},
     ]
     e_corpus = gme.encode_corpus(corpus)
     print(f"Corpus embeddings:\n{e_corpus}")

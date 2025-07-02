@@ -405,7 +405,7 @@ def rendering_common_template(
     paddle_attr_sig = ""
 
     for i in range(len(arg_names)):
-        if arg_defaults[i] == None:
+        if arg_defaults[i] is None:
             input_and_attr += f"paddle::optional<paddle::Tensor> & {arg_names[i]},"
             paddle_input_sig += f"""paddle::Optional("{arg_names[i]}"),"""
         elif type(arg_defaults[i]) == float:
@@ -484,7 +484,7 @@ class KernelInterface:
         self.arg_names = [v.name for v in signature.parameters.values()]
         for ele in self.arg_names:
             assert self.arg_names.count(ele) == 1
-        arg_defaults = [v.default for v in signature.parameters.values()]
+        # arg_defaults = [v.default for v in signature.parameters.values()]
 
         # self.annotations = {
         #     name: ty for name, ty in func.__annotations__.items()

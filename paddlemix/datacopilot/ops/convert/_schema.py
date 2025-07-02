@@ -13,61 +13,54 @@
 # limitations under the License.
 
 
-from ...core import T
-from ...core import SCHEMA, is_valid_schema
+from ...core import SCHEMA, T
 
 
-def convert_schema(
-    item: T, 
-    in_schema: SCHEMA=SCHEMA.MM, 
-    out_schema: SCHEMA=SCHEMA.MIX
-)-> T:
-    """convert scheme
-    """  
+def convert_schema(item: T, in_schema: SCHEMA = SCHEMA.MM, out_schema: SCHEMA = SCHEMA.MIX) -> T:
+    """convert scheme"""
     if in_schema == out_schema:
         return item
-    
+
     # MM <-> MIX
     elif in_schema == SCHEMA.MM and out_schema == SCHEMA.MIX:
         return _convert_mm_mix(item)
 
     else:
-        raise NotImplementedError('')
+        raise NotImplementedError("")
 
 
 def _convert_mm_mix(item):
-    if 'image' in item:
-        images = [{
-            'id': 0,
-            'url': item['image'],
-        }]
+    if "image" in item:
+        images = [
+            {
+                "id": 0,
+                "url": item["image"],
+            }
+        ]
     else:
         images = None
 
     conversations = []
-    for conv in item['conversations']:
-        if conv['from'] == 'human':
-            role = 'user'
-            if 'image' in item:
-                if '<image>' in conv['value']:
-                    value = conv['value'].replace('<image>', '<image>0</image>')
+    for conv in item["conversations"]:
+        if conv["from"] == "human":
+            role = "user"
+            if "image" in item:
+                if "<image>" in conv["value"]:
+                    value = conv["value"].replace("<image>", "<image>0</image>")
                 else:
-                    value = '<image>0</image>\n' + conv['value']
+                    value = "<image>0</image>\n" + conv["value"]
             else:
-                value = conv['value']
+                value = conv["value"]
         else:
-            role = 'assistant'
-            value = conv['value']
-        
-        conversations.append({
-            'from': role,
-            'value': value,
-        })
+            role = "assistant"
+            value = conv["value"]
 
-    newitem = {
-        'id': item['id'],
-        'images': images,
-        'conversations': conversations
-    }
+        conversations.append(
+            {
+                "from": role,
+                "value": value,
+            }
+        )
+
+    newitem = {"id": item["id"], "images": images, "conversations": conversations}
     return newitem
-

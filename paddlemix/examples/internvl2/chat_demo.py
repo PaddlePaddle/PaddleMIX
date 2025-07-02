@@ -63,7 +63,7 @@ def check_dtype_compatibility():
         # 测试bfloat16兼容性
         if compute_capability >= 8.0:  # Ampere及更新架构
             test_tensor = paddle.zeros([2, 2], dtype="bfloat16")
-            test_op = paddle.matmul(test_tensor, test_tensor)
+            paddle.matmul(test_tensor, test_tensor)
             print("bfloat16 is supported and working")
             return paddle.bfloat16
     except Exception as e:
@@ -73,7 +73,7 @@ def check_dtype_compatibility():
         # 测试float16兼容性
         if compute_capability >= 5.3:  # Maxwell及更新架构
             test_tensor = paddle.zeros([2, 2], dtype="float16")
-            test_op = paddle.matmul(test_tensor, test_tensor)
+            paddle.matmul(test_tensor, test_tensor)
             print("float16 is supported and working")
             return paddle.float16
     except Exception as e:
@@ -123,7 +123,7 @@ def load_tokenizer(model_path):
             return tokenizer
         else:
             raise ValueError
-        
+
     if not model_v2_5 and not model_v3:
         # InternVL2，暂不支持4B的phi3
         if model_size in ["1B"]:

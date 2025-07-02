@@ -12,13 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from tqdm import tqdm
 from typing import Dict
 
 import paddle
 from paddlenlp.transformers import Qwen2Tokenizer
+from tqdm import tqdm
+
 from paddlemix.models.qwen2_vl.modeling_qwen2_vl import Qwen2VLForConditionalGeneration
-from paddlemix.processors.qwen2_vl_processing import Qwen2VLImageProcessor, Qwen2VLProcessor, process_vision_info
+from paddlemix.processors.qwen2_vl_processing import (
+    Qwen2VLImageProcessor,
+    Qwen2VLProcessor,
+    process_vision_info,
+)
+
 from ...core import MMDataset, register
 
 # Predefined evaluation metrics and corresponding prompt templates
@@ -35,12 +41,15 @@ DEFAULT_PROMPT_TEMPLATE = """Text Caption: {caption}
 A higher score indicates a higher level of {aspect}. Ensure that your scoring is nuanced and uses the entire range from 0 to 100, reflecting the subtle differences. The score should be given as an integer, with each number between 0 and 100 considered as a potential score, avoiding the tendency to round to multiples of 10. Please first output a single line containing the value indicating the score. In the subsequent line, please provide a comprehensive explanation of your evaluation, avoiding any potential bias."""
 
 # Load the Qwen2-VL-7B-Instruct model and processor
+
+
 def load_model(model_name: str):
     model = Qwen2VLForConditionalGeneration.from_pretrained(model_name, dtype="bfloat16")
     tokenizer = Qwen2Tokenizer.from_pretrained(model_name)
     image_processor = Qwen2VLImageProcessor()
     processor = Qwen2VLProcessor(image_processor, tokenizer)
     return model, processor
+
 
 def parse_model_output(output: str) -> int:
     """
@@ -52,7 +61,7 @@ def parse_model_output(output: str) -> int:
     Returns:
         int: The extracted score (integer between 0 and 100).
     """
-    lines = output.strip().split('\n')
+    lines = output.strip().split("\n")
     for line in lines:
         # Try to find the first line that contains a valid integer score
         try:
@@ -69,10 +78,9 @@ def parse_model_output(output: str) -> int:
     # If no valid score is found, return a default value or raise an error
     return -1  # -1 indicates an invalid or missing score
 
+
 def evaluate_image_caption(
-    dataset: MMDataset,
-    model_name: str = "Qwen/Qwen2-VL-7B-Instruct",
-    analysis_flags: Dict[str, bool] = None
+    dataset: MMDataset, model_name: str = "Qwen/Qwen2-VL-7B-Instruct", analysis_flags: Dict[str, bool] = None
 ) -> Dict:
     """
     Evaluate the quality of image captions based on predefined metrics.
@@ -111,18 +119,20 @@ def evaluate_image_caption(
             full_caption += f"Question: {question}\nAnswer: {answer}\n"
 
         # Prepare image input
-        image_inputs, video_inputs = process_vision_info([
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "image": item_id,
-                    },
-                    {"type": "text", "text": "Describe this image."},
-                ],
-            }
-        ])
+        image_inputs, video_inputs = process_vision_info(
+            [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image",
+                            "image": item_id,
+                        },
+                        {"type": "text", "text": "Describe this image."},
+                    ],
+                }
+            ]
+        )
 
         # Evaluate each selected metric
         for metric in selected_metrics:
@@ -132,11 +142,7 @@ def evaluate_image_caption(
             print(f"metric:{metric}, caption:{caption}")
 
             # Generate the full prompt
-            full_prompt = DEFAULT_PROMPT_TEMPLATE.format(
-                caption=caption,
-                criteria=criteria,
-                aspect=aspect
-            )
+            full_prompt = DEFAULT_PROMPT_TEMPLATE.format(caption=caption, criteria=criteria, aspect=aspect)
 
             # Combine instruction and question
             image_pad_token = "<|vision_start|><|image_pad|><|vision_end|>"
@@ -155,14 +161,12 @@ def evaluate_image_caption(
             with paddle.no_grad():
                 outputs = model.generate(**inputs, max_new_tokens=512)
                 decoded_output = processor.batch_decode(
-                    outputs[0],
-                    skip_special_tokens=True,
-                    clean_up_tokenization_spaces=False
+                    outputs[0], skip_special_tokens=True, clean_up_tokenization_spaces=False
                 )
                 # Extract the score from the model's output
                 score = parse_model_output(decoded_output[0])
                 print(decoded_output[0])
-                print("*"*50)
+                print("*" * 50)
 
             # Store results (only the score)
             if item_id not in results:
@@ -171,12 +175,9 @@ def evaluate_image_caption(
 
     return results
 
+
 @register()
-def quality_analysis(
-    dataset: MMDataset,
-    model_name: str,
-    quality_analysis_flags: Dict[str, bool] = None
-):
+def quality_analysis(dataset: MMDataset, model_name: str, quality_analysis_flags: Dict[str, bool] = None):
     """
     Analyze the quality of multi-turn conversations for image captioning.
 
@@ -188,9 +189,5 @@ def quality_analysis(
     Returns:
         Dict: Evaluation results for each dataset item.
     """
-    results = evaluate_image_caption(
-        dataset,
-        model_name,
-        quality_analysis_flags
-    )
+    results = evaluate_image_caption(dataset, model_name, quality_analysis_flags)
     return results

@@ -17,6 +17,7 @@
 
 import paddlenlp.transformers as transformers
 
+
 class InternLMXcomposer2Config(transformers.configuration_utils.PretrainedConfig):
     """
     This is the configuration class to store the configuration of a [`InternLMModel`]. It is used to instantiate

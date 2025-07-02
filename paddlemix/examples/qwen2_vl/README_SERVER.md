@@ -25,7 +25,7 @@
 
 1. 使用默认配置启动：
 ```bash
-sh paddlemix/examples/qwen2_vl/start_server.sh 
+sh paddlemix/examples/qwen2_vl/start_server.sh
 ```
 
 2. 自定义配置启动：
@@ -47,7 +47,7 @@ from openai import OpenAI
 # 初始化OpenAI客户端
 client = OpenAI(
     api_key='xxxxxxxxx',
-    base_url='http://10.67.188.11:8080/v1/chat/completions' 
+    base_url='http://10.67.188.11:8080/v1/chat/completions'
 )
 
 
@@ -58,7 +58,7 @@ def encode_image(image_path):
 
 #输入图片路径
 image_path = "paddlemix/demo_images/examples_image1.jpg"
- 
+
 #原图片转base64
 base64_image = encode_image(image_path)
 

@@ -13,12 +13,13 @@
 # limitations under the License.
 
 import paddle
-from paddle.nn.utils import weight_norm, remove_weight_norm
 import paddle.nn as nn
 import paddle.nn.functional as F
 from paddle.nn import Conv1D, Conv1DTranspose
+from paddle.nn.utils import remove_weight_norm, weight_norm
 
 LRELU_SLOPE = 0.1
+
 
 class AttrDict(dict):
     def __init__(self, *args, **kwargs):
@@ -74,32 +75,22 @@ def get_vocoder_config_48k():
         "adam_b2": 0.99,
         "lr_decay": 0.999,
         "seed": 1234,
-
-        "upsample_rates": [6,5,4,2,2],
-        "upsample_kernel_sizes": [12,10,8,4,4],
+        "upsample_rates": [6, 5, 4, 2, 2],
+        "upsample_kernel_sizes": [12, 10, 8, 4, 4],
         "upsample_initial_channel": 1536,
-        "resblock_kernel_sizes": [3,7,11,15],
-        "resblock_dilation_sizes": [[1,3,5], [1,3,5], [1,3,5], [1,3,5]],
-
+        "resblock_kernel_sizes": [3, 7, 11, 15],
+        "resblock_dilation_sizes": [[1, 3, 5], [1, 3, 5], [1, 3, 5], [1, 3, 5]],
         "segment_size": 15360,
         "num_mels": 256,
         "n_fft": 2048,
         "hop_size": 480,
         "win_size": 2048,
-
         "sampling_rate": 48000,
-
         "fmin": 20,
         "fmax": 24000,
         "fmax_for_loss": None,
-
         "num_workers": 8,
-
-        "dist_config": {
-            "dist_backend": "nccl",
-            "dist_url": "tcp://localhost:18273",
-            "world_size": 1
-        }
+        "dist_config": {"dist_backend": "nccl", "dist_url": "tcp://localhost:18273", "world_size": 1},
     }
 
 
@@ -107,15 +98,9 @@ class ResBlock(nn.Layer):
     def __init__(self, h, channels, kernel_size=3, dilation=(1, 3, 5)):
         super(ResBlock, self).__init__()
         self.h = h
-        weight_attr1 = paddle.ParamAttr(
-            initializer=nn.initializer.Normal(mean=0.0, std=0.01)
-        )
-        weight_attr2 = paddle.ParamAttr(
-            initializer=nn.initializer.Normal(mean=0.0, std=0.01)
-        )
-        weight_attr3 = paddle.ParamAttr(
-            initializer=nn.initializer.Normal(mean=0.0, std=0.01)
-        )
+        weight_attr1 = paddle.ParamAttr(initializer=nn.initializer.Normal(mean=0.0, std=0.01))
+        weight_attr2 = paddle.ParamAttr(initializer=nn.initializer.Normal(mean=0.0, std=0.01))
+        weight_attr3 = paddle.ParamAttr(initializer=nn.initializer.Normal(mean=0.0, std=0.01))
         self.convs1 = nn.LayerList(
             [
                 weight_norm(
@@ -154,15 +139,9 @@ class ResBlock(nn.Layer):
             ]
         )
 
-        weight_attr4 = paddle.ParamAttr(
-            initializer=nn.initializer.Normal(mean=0.0, std=0.01)
-        )
-        weight_attr5 = paddle.ParamAttr(
-            initializer=nn.initializer.Normal(mean=0.0, std=0.01)
-        )
-        weight_attr6 = paddle.ParamAttr(
-            initializer=nn.initializer.Normal(mean=0.0, std=0.01)
-        )
+        weight_attr4 = paddle.ParamAttr(initializer=nn.initializer.Normal(mean=0.0, std=0.01))
+        weight_attr5 = paddle.ParamAttr(initializer=nn.initializer.Normal(mean=0.0, std=0.01))
+        weight_attr6 = paddle.ParamAttr(initializer=nn.initializer.Normal(mean=0.0, std=0.01))
         self.convs2 = nn.LayerList(
             [
                 weight_norm(
@@ -223,16 +202,12 @@ class Generator(nn.Layer):
         self.h = h
         self.num_kernels = len(h.resblock_kernel_sizes)
         self.num_upsamples = len(h.upsample_rates)
-        self.conv_pre = weight_norm(
-            Conv1D(h.num_mels, h.upsample_initial_channel, 7, 1, padding=3)
-        )
+        self.conv_pre = weight_norm(Conv1D(h.num_mels, h.upsample_initial_channel, 7, 1, padding=3))
         resblock = ResBlock
 
         self.ups = nn.LayerList()
         for i, (u, k) in enumerate(zip(h.upsample_rates, h.upsample_kernel_sizes)):
-            weight_attr_tmp = paddle.ParamAttr(
-                initializer=nn.initializer.Normal(mean=0.0, std=0.01)
-            )
+            weight_attr_tmp = paddle.ParamAttr(initializer=nn.initializer.Normal(mean=0.0, std=0.01))
             self.ups.append(
                 weight_norm(
                     Conv1DTranspose(
@@ -249,14 +224,10 @@ class Generator(nn.Layer):
         self.resblocks = nn.LayerList()
         for i in range(len(self.ups)):
             ch = h.upsample_initial_channel // (2 ** (i + 1))
-            for j, (k, d) in enumerate(
-                zip(h.resblock_kernel_sizes, h.resblock_dilation_sizes)
-            ):
+            for j, (k, d) in enumerate(zip(h.resblock_kernel_sizes, h.resblock_dilation_sizes)):
                 self.resblocks.append(resblock(h, ch, k, d))
 
-        weight_attr = paddle.ParamAttr(
-            initializer=nn.initializer.Normal(mean=0.0, std=0.01)
-        )
+        weight_attr = paddle.ParamAttr(initializer=nn.initializer.Normal(mean=0.0, std=0.01))
         self.conv_post = weight_norm(Conv1D(ch, 1, 7, 1, padding=3, weight_attr=weight_attr))
 
     def forward(self, x):
@@ -288,7 +259,7 @@ class Generator(nn.Layer):
 
 
 def get_vocoder(config, mel_bins):
-    if(mel_bins == 64):
+    if mel_bins == 64:
         config = get_vocoder_config()
         config = AttrDict(config)
         vocoder = Generator(config)
@@ -312,7 +283,7 @@ def vocoder_infer(mels, vocoder, lengths=None):
 
     if lengths is not None:
         wavs = wavs[:, :lengths]
-        
+
     return wavs
 
 

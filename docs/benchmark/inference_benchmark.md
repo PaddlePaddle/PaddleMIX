@@ -35,20 +35,20 @@ PaddleNLP    | Nightly
 Python       | 3.10
 </details>
 
-<!-- 
+<!--
 ```python
 import matplotlib.pyplot as plt
 import numpy as np
 
 # 数据
 models = [
-    "LLaVA 1.6 7B", 
-    "LLaVA 1.6 13B", 
-    "Qwen2-VL 2B", 
-    "Qwen2-VL 7B", 
+    "LLaVA 1.6 7B",
+    "LLaVA 1.6 13B",
+    "Qwen2-VL 2B",
+    "Qwen2-VL 7B",
     "Qwen2.5-VL 3B",
     "Qwen2.5-VL 7B"
-    "Stable Diffusion 1.5", 
+    "Stable Diffusion 1.5",
     "Stable Diffusion 3"
 ]
 
@@ -93,7 +93,7 @@ for idx, model in enumerate(models):
     # 在每个柱子上显示速度提升百分比
     # for i, contrast in enumerate(contrasts[idx]):
     #     plt.text(x[i], max(filter(None, [paddle_inference[idx], torch_inference[idx], vllm_inference[idx], tensorrt_inference[idx]])) + 0.05, contrast, ha='center', va='bottom', fontsize=8)
-    
+
     # 在每个柱子上显示数据值和速度提升百分比
     for i, value in enumerate([paddle_inference[idx], torch_inference[idx], vllm_inference[idx], tensorrt_inference[idx]]):
         if value is not None:

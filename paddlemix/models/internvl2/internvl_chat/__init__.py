@@ -23,6 +23,4 @@ from .modeling_intern_vit import InternVisionModel
 from .modeling_internvl_chat import InternVLChatModel
 from .modeling_minimonkey_chat import MiniMonkeyChatModel
 
-__all__ = ['InternVisionConfig', 'InternVisionModel',
-           'InternVLChatConfig', 'InternVLChatModel', 'MiniMonkeyChatModel']
-
+__all__ = ["InternVisionConfig", "InternVisionModel", "InternVLChatConfig", "InternVLChatModel", "MiniMonkeyChatModel"]

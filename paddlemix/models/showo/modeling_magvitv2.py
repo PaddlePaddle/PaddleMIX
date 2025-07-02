@@ -21,7 +21,14 @@ import paddle
 from ppdiffusers.configuration_utils import ConfigMixin
 from ppdiffusers.models.modeling_utils import ModelMixin  # , register_to_config
 
-from .common_modules import AttnBlock, Downsample, Normalize, ResnetBlock, Upsample, nonlinearity
+from .common_modules import (
+    AttnBlock,
+    Downsample,
+    Normalize,
+    ResnetBlock,
+    Upsample,
+    nonlinearity,
+)
 
 
 class Updateable:

@@ -30,7 +30,7 @@ paddlemix `examples` 目录下提供模型的一站式体验，包括模型推�
         <td> <a href="./qwen_vl/"> qwen_vl </a></td>
         <td> 7B </td>
         <td> qwen_vl </td>
-    </tr>    
+    </tr>
     <tr align="center" valign="center">
         <td> <a href="./minimonkey/">minimonkey </a></td>
         <td> 2B </td>
@@ -84,7 +84,7 @@ paddlemix `examples` 目录下提供模型的一站式体验，包括模型推�
     <tr align="center" valign="center">
         <td rowspan="34"> 快速上手体验模型 </td>
         <td> <a href="./deepseek_vl2/"> deepseek_vl2 </a></td>
-        <td> 3B/16B/27B	</td>
+        <td> 3B/16B/27B    </td>
         <td> deepseek_vl2 </td>
     </tr>
     <tr align="center" valign="center">
@@ -156,10 +156,10 @@ paddlemix `examples` 目录下提供模型的一站式体验，包括模型推�
         <td> <a href="./YOLO-World/">YOLO-World </a></td>
         <td> 640M/800M/1280M</td>
         <td> yolo_world </td>
-    </tr>  
+    </tr>
     <tr align="center" valign="center">
         <td> <a href="./groundingdino/">groundingdino </a></td>
-        <td>172M/341M	</td>
+        <td>172M/341M    </td>
         <td>groundingdino</td>
     </tr>
     <tr align="center" valign="center">
@@ -181,7 +181,7 @@ paddlemix `examples` 目录下提供模型的一站式体验，包括模型推�
         <td> <a href="./qwen_vl/"> qwen_vl </a></td>
         <td> 7B </td>
         <td> qwen_vl </td>
-    </tr>    
+    </tr>
     <tr align="center" valign="center">
         <td> <a href="./minimonkey/">minimonkey </a></td>
         <td> 2B </td>

@@ -14,19 +14,21 @@
 
 
 import functools
+
 from .dataset import MMDataset
 
 
 def register(cls=MMDataset, force=False):
-    '''register
-    '''
+    """register"""
+
     def decorator(func):
         @functools.wraps(func)
         def wraps(*args, **kwargs):
             return func(*args, **kwargs)
+
         if not force:
-            assert func.__name__ not in cls.__dict__, \
-                f'{func.__name__} already in ({cls.__name__})'
+            assert func.__name__ not in cls.__dict__, f"{func.__name__} already in ({cls.__name__})"
         setattr(cls, func.__name__, wraps)
         return wraps
+
     return decorator

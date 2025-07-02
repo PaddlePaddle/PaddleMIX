@@ -1,11 +1,11 @@
 # Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -104,7 +104,7 @@ class HyperQwen2Config(PretrainedConfig):
         sliding_window=4096,
         max_window_layers=28,
         attention_dropout=0.0,
-        hyper_layers=[1,9,17,25],
+        hyper_layers=[1, 9, 17, 25],
         vision_batch_size=16,
         rope_scaling=None,
         **kwargs,
@@ -134,7 +134,7 @@ class HyperQwen2Config(PretrainedConfig):
         self.attention_dropout = attention_dropout
         self.hyper_layers = hyper_layers
         self.vision_batch_size = vision_batch_size
-        self.seq_length = 1 #self.max_length ###
+        self.seq_length = 1  # self.max_length ###
         super().__init__(
             tie_word_embeddings=tie_word_embeddings,
             **kwargs,

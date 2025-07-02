@@ -2164,5 +2164,6 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
 
         hidden_states = outputs[0]
         # get last hidden state
-        last_hidden_state = hidden_states[:, -1, :]  #  (2, 1536)
+        last_hidden_state = hidden_states[:, -1, :]
+        #  (2, 1536)
         return last_hidden_state

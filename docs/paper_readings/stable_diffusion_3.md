@@ -144,7 +144,7 @@ SD3 的 文本编码器的输出包括**全局语义特征**和**细粒度语义
 
 - **全局语义（Pooled Text Embeddings）**：
 
-​	CLIP ViT-L 和 OpenCLIP ViT-bigG 的 `pooled_prompt_embed` 沿最后一个维度拼接，生成表示全局语义的张量 `[B, 2048]`：，代表每个样本的全局语义特征，具体如下：
+​    CLIP ViT-L 和 OpenCLIP ViT-bigG 的 `pooled_prompt_embed` 沿最后一个维度拼接，生成表示全局语义的张量 `[B, 2048]`：，代表每个样本的全局语义特征，具体如下：
 
 ```python
 pooled_prompt_embeds = paddle.concat([pooled_prompt_embed, pooled_prompt_2_embed], axis=-1)
@@ -152,9 +152,9 @@ pooled_prompt_embeds = paddle.concat([pooled_prompt_embed, pooled_prompt_2_embed
 
 - **细粒度语义（Text Embeddings）**：
 
-​	首先，将CLIP ViT-L 和 OpenCLIP ViT-bigG 编码得到的 prompt_embeds 沿最后一个维度拼接，形成 `[B, 77, 2048]`的张量。
+​    首先，将CLIP ViT-L 和 OpenCLIP ViT-bigG 编码得到的 prompt_embeds 沿最后一个维度拼接，形成 `[B, 77, 2048]`的张量。
 
-​	接着，对拼接后的张量进行零填充，使其与 T5-XXL 的最后一维对齐( `[B, 77, 4096]`)：
+​    接着，对拼接后的张量进行零填充，使其与 T5-XXL 的最后一维对齐( `[B, 77, 4096]`)：
 
 ```python
 clip_prompt_embeds = paddle.concat([prompt_embed, prompt_2_embed], axis=-1)
@@ -165,7 +165,7 @@ clip_prompt_embeds = paddle.nn.functional.pad(
 )
 ```
 
-​	最后，将填充后的张量与 T5-XXL 的 `prompt_embed` 沿序列长度维度拼接，生成最终的细粒度语义表示 `[B, 333, 4096]`：
+​    最后，将填充后的张量与 T5-XXL 的 `prompt_embed` 沿序列长度维度拼接，生成最终的细粒度语义表示 `[B, 333, 4096]`：
 
 ```python
 prompt_embeds = paddle.concat([clip_prompt_embeds, t5_prompt_embed], axis=-2)
@@ -268,7 +268,7 @@ class PatchEmbed(nn.Layer):
         )
         ...
     def forward(self, latent):
-		...
+        ...
 ```
 
 前向过程包括以下步骤：
@@ -346,7 +346,7 @@ class JointTransformerBlock(nn.Layer):
         ...
         # 定义图像分支的 AdaLN 函数
         self.norm1 = AdaLayerNormZero(dim)
-		# 定义文本分支的 AdaLN 函数
+        # 定义文本分支的 AdaLN 函数
         if context_norm_type == "ada_norm_continous":
             self.norm1_context = AdaLayerNormContinuous(
                 dim, dim, elementwise_affine=False, eps=1e-6, bias=True, norm_type="layer_norm"
@@ -359,11 +359,11 @@ class JointTransformerBlock(nn.Layer):
     ):
         # temb 作为条件， 为图像分支生成约束
         norm_hidden_states, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.norm1(hidden_states, emb=temb)
-		# temb 作为条件， 为文本分支生成约束
+        # temb 作为条件， 为文本分支生成约束
         if self.context_pre_only:
             norm_encoder_hidden_states = self.norm1_context(encoder_hidden_states, temb)
         else:
-            norm_encoder_hidden_states, c_gate_msa, c_shift_mlp, c_scale_mlp, c_gate_mlp 			= self.norm1_context(
+            norm_encoder_hidden_states, c_gate_msa, c_shift_mlp, c_scale_mlp, c_gate_mlp             = self.norm1_context(
            encoder_hidden_states, emb=temb
            )
 ```
@@ -383,7 +383,7 @@ class AdaLayerNormZero(nn.Layer):
         self.silu = nn.Silu()
         self.linear = nn.Linear(embedding_dim, 6 * embedding_dim)
         norm_elementwise_affine_kwargs = dict(weight_attr=False, bias_attr=False)
-        
+
         self.norm = nn.LayerNorm(embedding_dim, epsilon=1e-6, **norm_elementwise_affine_kwargs)
 ```
 
@@ -430,7 +430,7 @@ return x, gate_msa, shift_mlp, scale_mlp, gate_mlp
 
 在多模态模型中，Self-Attention 是关键模块，用于捕获不同模态间（例如图像和文本）以及模态内的长距离依赖。以下是 `JointTransformerBlock` 中 Self-Attention 的核心流程及其实现细节。
 
-##### JointTransformerBlock 
+##### JointTransformerBlock
 
 `JointTransformerBlock` 是 MM-DiT 中用于处理多模态输入的 Transformer 块。其 Self-Attention 部分通过 `JointAttnProcessor2_5` 处理，支持图像和文本模态的联合注意力。
 
@@ -463,13 +463,13 @@ class JointTransformerBlock(nn.Layer):
     ):
         # Attention.
         attn_output, context_attn_output = self.attn(
-            hidden_states=norm_hidden_states, encoder_hidden_states=norm_encoder_hidden_states, 
+            hidden_states=norm_hidden_states, encoder_hidden_states=norm_encoder_hidden_states,
         )
 
         # Process attention outputs for the `hidden_states`.
         attn_output = gate_msa.unsqueeze(1) * attn_output
         hidden_states = hidden_states + attn_output
-        
+
         # Process attention outputs for the `encoder_hidden_states`.
         context_attn_output = c_gate_msa.unsqueeze(1) * context_attn_output
         encoder_hidden_states = encoder_hidden_states + context_attn_output
@@ -498,7 +498,7 @@ class JointAttnProcessor2_5:
     ) -> paddle.Tensor:
         residual = hidden_states
         batch_size = encoder_hidden_states.shape[0]
-		...
+        ...
         return hidden_states, encoder_hidden_states
 ```
 
@@ -526,7 +526,7 @@ if context_input_ndim == 4:
     encoder_hidden_states = encoder_hidden_states.reshape([batch_size, channel, height * width]).transpose([0, 2, 1])
 ```
 
-##### 2. 计算 Q、K、V 
+##### 2. 计算 Q、K、V
 
 对图像和文本模态分别计算查询（Query, `Q`）、键（Key, `K`）、值（Value, `V`）向量，并将两模态的 Q、K、V 在序列维度上拼接，实现多模态融合。
 
@@ -608,7 +608,7 @@ https://github.com/PaddlePaddle/PaddleMIX/blob/77498418ac49fadd23bbd6f7abda0d7f5
 class JointTransformerBlock(nn.Layer):
     def __init__(self, dim, num_attention_heads, attention_head_dim, context_pre_only=False):
         super().__init__()
-		...
+        ...
         self.norm2 = nn.LayerNorm(dim, weight_attr=False, bias_attr=False, epsilon=1e-6)
         self.ff = FeedForward(dim=dim, dim_out=dim, activation_fn="gelu-approximate")
 
@@ -670,8 +670,3 @@ encoder_hidden_states = encoder_hidden_states + c_gate_mlp.unsqueeze(1) * contex
 随着SD3模型的参数量持续增大，官方发现在进行高分辨率图像训练时，Attention层的attention-logit（Q和K的矩阵乘）会变得不稳定，导致训练会跑飞，梯度出现NaN的情况。Stable Diffusion 3的另外一个创新点就是在每一个attention运算之前，对Q和K进行了RMS-Norm归一化，用于增强模型训练的稳定性。
 
 RMSNorm（Root Mean Square Normalization）主要是**基于Layer Normalization的一种改进方法**，它通过**计算参数激活值的均方根（RMS）进行归一化**，而不是像Layer Normalization那样计算均值和方差。
-
-
-
-
-

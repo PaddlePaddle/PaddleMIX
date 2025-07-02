@@ -45,5 +45,3 @@ pip install -r PaddleMIX/comfyui/ComfyUI_ppdiffusers/requirements.txt
 ### 三、加载工作流
 
 每个扩展程序目录下都有一个workflows文件夹，你可以通过浏览器加载其中的json文件来使用对应的工作流。具体用例可参考：[PaddleMIX ComfyUI扩展程序示例](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/comfyui/ComfyUI_ppdiffusers)。
-
-
