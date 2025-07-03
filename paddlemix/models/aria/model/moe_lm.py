@@ -417,15 +417,16 @@ def sequential_gemm(input, weight, tokens_per_expert):
 
 
 try:
-    from grouped_gemm.ops import gmm as experts_gemm
+    from grouped_gemm.ops import gmm
 
     if os.environ.get("USE_GROUPED_GEMM", "1") == "0":
-        logger.warning("environment variable USE_GROUPED_GEMM is set to 0, using sequential GEMM instead.")
-        # experts_gemm = sequential_gemm
-
+        logger.warning("USE_GROUPED_GEMM is set to 0, using sequential GEMM.")
+        experts_gemm = sequential_gemm
+    else:
+        experts_gemm = gmm
 except ImportError:
-    logger.warning("`grouped_gemm` is not installed, using sequential GEMM, which is slower.")
-    # experts_gemm = sequential_gemm
+    logger.warning("`grouped_gemm` is not installed, using sequential GEMM.")
+    experts_gemm = sequential_gemm
 
 
 class GroupedGEMM(paddle.nn.Layer):
