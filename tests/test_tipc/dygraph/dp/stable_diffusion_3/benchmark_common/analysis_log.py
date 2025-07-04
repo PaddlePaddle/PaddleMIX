@@ -13,15 +13,13 @@
 # limitations under the License.
 
 
-
 import json
 import os
 import re
 import sys
-from pdb import line_prefix
 
-import numpy as np
-from numpy import mean, var
+from numpy import mean
+
 
 class TimeAnalyzer(object):
     def __init__(self, filename, keyword=None, loss_keyword=None):
@@ -56,20 +54,20 @@ class TimeAnalyzer(object):
                     #         ips_list.append(result)
                     #     if line_words[i] == self.loss_keyword:
                     #         # 剔除掉该值后面的逗号并保留5位小数点
-                    #         loss_value = line_words[i + 1].replace(',', '')  
+                    #         loss_value = line_words[i + 1].replace(',', '')
                     #         # 保留5位小数
                     #         # loss_value = float("{:.5f}".format(float(loss_str_without_comma)))
-                            
+
                     # # Distil the result from the picked string.
 
                     # 提取 ips
-                    ips_match = re.search(r'(\d+\.\d+)it/s', line)
+                    ips_match = re.search(r"(\d+\.\d+)it/s", line)
                     if ips_match:
                         ips = float(ips_match.group(1))
                         ips_list.append(ips)
 
                     # 提取 loss
-                    loss_match = re.search(r'loss=(\d+\.\d+)', line)
+                    loss_match = re.search(r"loss=(\d+\.\d+)", line)
                     if loss_match:
                         loss = float(loss_match.group(1))
                         loss_list.append(loss)
@@ -80,6 +78,7 @@ class TimeAnalyzer(object):
                     print("Exception: {}".format(exc))
         if loss_value is None:
             loss_value = -1
+
         def ewma(data, alpha):
             smoothed_data = []
             for i, value in enumerate(data):
@@ -89,13 +88,14 @@ class TimeAnalyzer(object):
                     smoothed_value = alpha * value + (1 - alpha) * smoothed_data[-1]
                     smoothed_data.append(smoothed_value)
             return smoothed_data
+
         smoothed_loss = ewma(loss_list, 0.9)[-1]
         return mean(ips_list[4:]), loss_value, smoothed_loss
 
 
 def analyze(model_item, log_file, res_log_file, device_num, bs, fp_item):
 
-    analyzer = TimeAnalyzer(log_file, 'Steps:', None)
+    analyzer = TimeAnalyzer(log_file, "Steps:", None)
     ips, convergence_value, smoothed_value = analyzer.get_ips()
     ips = round(ips, 3)
     # with open(str(log_file), "r", encoding="utf8") as f:
@@ -143,7 +143,6 @@ if __name__ == "__main__":
     if len(sys.argv) != 7:
         print("Usage:" + sys.argv[0] + " model_item path/to/log/file path/to/res/log/file")
         sys.exit()
-    
 
     model_item = sys.argv[1]
     log_file = sys.argv[2]

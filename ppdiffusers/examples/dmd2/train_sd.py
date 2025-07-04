@@ -24,9 +24,6 @@ import time
 
 import paddle
 import wandb
-from paddle.distributed.fleet.utils.hybrid_parallel_util import (
-    fused_allreduce_gradients,
-)
 from paddle.distributed.sharding import group_sharded_parallel
 from sd_image_dataset import SDImageDatasetLMDB
 from sd_unified_model import SDUniModel
@@ -323,7 +320,7 @@ class Trainer:
         # 4 channel for SD-VAE, please adapt for other autoencoders
         noise = paddle.randn(
             [self.batch_size, self.latent_channel, self.latent_resolution, self.latent_resolution],
-        ) 
+        )
         visual = self.step % self.wandb_iters == 0
 
         COMPUTE_GENERATOR_GRADIENT = self.step % self.dfake_gen_update_ratio == 0
@@ -419,7 +416,7 @@ class Trainer:
         self.optimizer_guidance.step()
         self.optimizer_guidance.clear_grad()
         # zero out the generator's gradient as well
-        self.optimizer_generator.clear_grad()  
+        self.optimizer_generator.clear_grad()
 
         self.scheduler_guidance.step()
 

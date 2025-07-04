@@ -12,18 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import inspect
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-import inspect
-import math
 import paddle
-import paddle.nn.functional as F
-# from paddle_utils import *
 
 from ..configuration_utils import ConfigMixin, register_to_config
+
 # from ..loaders import FromOriginalModelMixin, PeftAdapterMixin
-from ..utils import logging, USE_PEFT_BACKEND
-from ..utils.paddle_utils import maybe_allow_in_graph, dim2perm
+from ..utils import USE_PEFT_BACKEND, logging, scale_lora_layers, unscale_lora_layers
+from ..utils.paddle_utils import dim2perm
 from .attention import FeedForward
 from .attention_processor import Attention, AttentionProcessor
 from .cache_utils import CacheMixin
@@ -34,9 +32,17 @@ from .embeddings import (
 )
 from .modeling_outputs import Transformer2DModelOutput
 from .modeling_utils import ModelMixin
-from .normalization import AdaLayerNormContinuous, AdaLayerNormZero, AdaLayerNormZeroSingle
+from .normalization import (
+    AdaLayerNormContinuous,
+    AdaLayerNormZero,
+    AdaLayerNormZeroSingle,
+)
+
+# from paddle_utils import *
+
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
+
 
 class HunyuanVideoAttnProcessor2_0:
     def __init__(self):
@@ -56,29 +62,28 @@ class HunyuanVideoAttnProcessor2_0:
         if attn.add_q_proj is None and encoder_hidden_states is not None:
             hidden_states = paddle.concat(x=[hidden_states, encoder_hidden_states], axis=1)
 
-
         query = attn.to_q(hidden_states)
         key = attn.to_k(hidden_states)
         value = attn.to_v(hidden_states)
 
         query = query.unflatten(axis=2, shape=(attn.heads, -1))
-        query = query.transpose(perm=dim2perm(query.ndim,1,2))
+        query = query.transpose(perm=dim2perm(query.ndim, 1, 2))
 
         key = key.unflatten(axis=2, shape=(attn.heads, -1))
-        key = key.transpose(perm=dim2perm(key.ndim,1,2))
+        key = key.transpose(perm=dim2perm(key.ndim, 1, 2))
 
         value = value.unflatten(axis=2, shape=(attn.heads, -1))
-        value = value.transpose(perm=dim2perm(value.ndim,1,2))
+        value = value.transpose(perm=dim2perm(value.ndim, 1, 2))
 
         # 2. QK normalization
         if attn.norm_q is not None:
-            if 'begin_norm_axis' in inspect.signature(attn.norm_q.forward).parameters:
-                query = attn.norm_q(query, begin_norm_axis=len(query.shape)-1)
+            if "begin_norm_axis" in inspect.signature(attn.norm_q.forward).parameters:
+                query = attn.norm_q(query, begin_norm_axis=len(query.shape) - 1)
             else:
                 query = attn.norm_q(query)
         if attn.norm_k is not None:
-            if 'begin_norm_axis' in inspect.signature(attn.norm_k.forward).parameters:
-                key = attn.norm_k(key, begin_norm_axis=len(query.shape)-1)
+            if "begin_norm_axis" in inspect.signature(attn.norm_k.forward).parameters:
+                key = attn.norm_k(key, begin_norm_axis=len(query.shape) - 1)
             else:
                 key = attn.norm_k(key)
 
@@ -112,22 +117,22 @@ class HunyuanVideoAttnProcessor2_0:
             encoder_value = attn.add_v_proj(encoder_hidden_states)
 
             encoder_query = encoder_query.unflatten(axis=2, shape=(attn.heads, -1))
-            encoder_query = encoder_query.transpose(perm=dim2perm(encoder_query.ndim,1,2))
+            encoder_query = encoder_query.transpose(perm=dim2perm(encoder_query.ndim, 1, 2))
 
             encoder_key = encoder_key.unflatten(axis=2, shape=(attn.heads, -1))
-            encoder_key = encoder_key.transpose(perm=dim2perm(encoder_key.ndim,1,2))
+            encoder_key = encoder_key.transpose(perm=dim2perm(encoder_key.ndim, 1, 2))
 
             encoder_value = encoder_value.unflatten(axis=2, shape=(attn.heads, -1))
-            encoder_value = encoder_value.transpose(perm=dim2perm(encoder_value.ndim,1,2))
+            encoder_value = encoder_value.transpose(perm=dim2perm(encoder_value.ndim, 1, 2))
 
             if attn.norm_added_q is not None:
-                if 'begin_norm_axis' in inspect.signature(attn.norm_added_q.forward).parameters:
-                    encoder_query = attn.norm_added_q(encoder_query, begin_norm_axis=len(encoder_query.shape)-1)
+                if "begin_norm_axis" in inspect.signature(attn.norm_added_q.forward).parameters:
+                    encoder_query = attn.norm_added_q(encoder_query, begin_norm_axis=len(encoder_query.shape) - 1)
                 else:
                     encoder_query = attn.norm_added_q(encoder_query)
             if attn.norm_added_k is not None:
-                if 'begin_norm_axis' in inspect.signature(attn.norm_added_k.forward).parameters:
-                    encoder_key = attn.norm_added_k(encoder_key, begin_norm_axis=len(encoder_key.shape)-1)
+                if "begin_norm_axis" in inspect.signature(attn.norm_added_k.forward).parameters:
+                    encoder_key = attn.norm_added_k(encoder_key, begin_norm_axis=len(encoder_key.shape) - 1)
                 else:
                     encoder_key = attn.norm_added_k(encoder_key)
 
@@ -139,22 +144,22 @@ class HunyuanVideoAttnProcessor2_0:
 
         if attention_mask.dtype == paddle.bool:
             L, S = query.shape[-2], key.shape[-2]
-            attention_mask_tmp = paddle.zeros([1,1,L, S], dtype=query.dtype)
+            attention_mask_tmp = paddle.zeros([1, 1, L, S], dtype=query.dtype)
             attention_mask_tmp = attention_mask_tmp.masked_fill(attention_mask.logical_not(), float("-inf"))
             attention_mask = attention_mask_tmp
 
         hidden_states = paddle.nn.functional.scaled_dot_product_attention(
-            query=query.transpose([0,2,1,3]),
-            key=key.transpose([0,2,1,3]),
-            value=value.transpose([0,2,1,3]),
+            query=query.transpose([0, 2, 1, 3]),
+            key=key.transpose([0, 2, 1, 3]),
+            value=value.transpose([0, 2, 1, 3]),
             attn_mask=attention_mask,
             dropout_p=0.0,
             is_causal=False,
-        ).transpose([0,2,1,3])
+        ).transpose([0, 2, 1, 3])
 
-        hidden_states = hidden_states.transpose(
-            perm=dim2perm(hidden_states.ndim, 1, 2)
-        ).flatten(start_axis=2, stop_axis=3)
+        hidden_states = hidden_states.transpose(perm=dim2perm(hidden_states.ndim, 1, 2)).flatten(
+            start_axis=2, stop_axis=3
+        )
         hidden_states = hidden_states.to(query.dtype)
 
         # 6. Output projection
@@ -182,7 +187,7 @@ class HunyuanVideoPatchEmbed(paddle.nn.Layer):
         embed_dim: int = 768,
     ) -> None:
         super().__init__()
-        patch_size = ((patch_size, patch_size, patch_size) if isinstance(patch_size, int) else patch_size)
+        patch_size = (patch_size, patch_size, patch_size) if isinstance(patch_size, int) else patch_size
         self.proj = paddle.nn.Conv3D(
             in_channels=in_chans,
             out_channels=embed_dim,
@@ -193,7 +198,7 @@ class HunyuanVideoPatchEmbed(paddle.nn.Layer):
     def forward(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
         hidden_states = self.proj(hidden_states)
         hidden_states = hidden_states.flatten(start_axis=2)
-        hidden_states = hidden_states.transpose(perm=dim2perm(hidden_states.ndim,1,2))  # BCFHW -> BNC
+        hidden_states = hidden_states.transpose(perm=dim2perm(hidden_states.ndim, 1, 2))  # BCFHW -> BNC
         return hidden_states
 
 
@@ -546,20 +551,20 @@ class HunyuanVideoTransformerBlock(paddle.nn.Layer):
 
         # 3. Modulation and residual connection
         hidden_states = hidden_states + attn_output * gate_msa.unsqueeze(axis=1)
-        encoder_hidden_states = (encoder_hidden_states + context_attn_output * c_gate_msa.unsqueeze(axis=1))
+        encoder_hidden_states = encoder_hidden_states + context_attn_output * c_gate_msa.unsqueeze(axis=1)
 
         norm_hidden_states = self.norm2(hidden_states)
         norm_encoder_hidden_states = self.norm2_context(encoder_hidden_states)
 
-        norm_hidden_states = (norm_hidden_states * (1 + scale_mlp[:, (None)]) + shift_mlp[:, (None)])
-        norm_encoder_hidden_states = (norm_encoder_hidden_states * (1 + c_scale_mlp[:, (None)]) + c_shift_mlp[:, (None)])
+        norm_hidden_states = norm_hidden_states * (1 + scale_mlp[:, (None)]) + shift_mlp[:, (None)]
+        norm_encoder_hidden_states = norm_encoder_hidden_states * (1 + c_scale_mlp[:, (None)]) + c_shift_mlp[:, (None)]
 
         # 4. Feed-forward
         ff_output = self.ff(norm_hidden_states)
         context_ff_output = self.ff_context(norm_encoder_hidden_states)
 
         hidden_states = hidden_states + gate_mlp.unsqueeze(axis=1) * ff_output
-        encoder_hidden_states = (encoder_hidden_states + c_gate_mlp.unsqueeze(axis=1) * context_ff_output)
+        encoder_hidden_states = encoder_hidden_states + c_gate_mlp.unsqueeze(axis=1) * context_ff_output
 
         return hidden_states, encoder_hidden_states
 
@@ -678,7 +683,11 @@ class HunyuanVideoTransformer3DModel(ModelMixin, ConfigMixin, CacheMixin):  # Fr
         # set recursively
         processors = {}
 
-        def fn_recursive_add_processors(name: str, module: paddle.nn.Layer, processors: Dict[str, AttentionProcessor],):
+        def fn_recursive_add_processors(
+            name: str,
+            module: paddle.nn.Layer,
+            processors: Dict[str, AttentionProcessor],
+        ):
             if hasattr(module, "get_processor"):
                 processors[f"{name}.processor"] = module.get_processor()
 
@@ -692,9 +701,7 @@ class HunyuanVideoTransformer3DModel(ModelMixin, ConfigMixin, CacheMixin):  # Fr
 
         return processors
 
-    def set_attn_processor(
-        self, processor: Union[AttentionProcessor, Dict[str, AttentionProcessor]]
-    ):
+    def set_attn_processor(self, processor: Union[AttentionProcessor, Dict[str, AttentionProcessor]]):
         """
         Sets the attention processor to use to compute attention.
 
@@ -751,13 +758,8 @@ class HunyuanVideoTransformer3DModel(ModelMixin, ConfigMixin, CacheMixin):  # Fr
 
         if USE_PEFT_BACKEND:
             scale_lora_layers(self, lora_scale)
-        elif (
-            attention_kwargs is not None
-            and attention_kwargs.get("scale", None) is not None
-        ):
-            logger.warning(
-                "Passing `scale` via `attention_kwargs` when not using the PEFT backend is ineffective."
-            )
+        elif attention_kwargs is not None and attention_kwargs.get("scale", None) is not None:
+            logger.warning("Passing `scale` via `attention_kwargs` when not using the PEFT backend is ineffective.")
 
         batch_size, num_channels, num_frames, height, width = tuple(hidden_states.shape)
         p, p_t = self.config.patch_size, self.config.patch_size_t
@@ -777,11 +779,10 @@ class HunyuanVideoTransformer3DModel(ModelMixin, ConfigMixin, CacheMixin):  # Fr
         latent_sequence_length = tuple(hidden_states.shape)[1]
         condition_sequence_length = tuple(encoder_hidden_states.shape)[1]
         sequence_length = latent_sequence_length + condition_sequence_length
-        attention_mask = paddle.zeros(
-            shape=[batch_size, sequence_length]).to(paddle.bool) # [B, N]
+        attention_mask = paddle.zeros(shape=[batch_size, sequence_length]).to(paddle.bool)  # [B, N]
 
         effective_condition_sequence_length = encoder_attention_mask.sum(axis=1, dtype="int32")  # [B,]
-        effective_sequence_length = (latent_sequence_length + effective_condition_sequence_length)
+        effective_sequence_length = latent_sequence_length + effective_condition_sequence_length
         for i in range(batch_size):
             attention_mask[(i), : effective_sequence_length[i]] = 1
         # [B, 1, 1, N], for broadcasting across attention heads
@@ -850,10 +851,14 @@ class HunyuanVideoTransformer3DModel(ModelMixin, ConfigMixin, CacheMixin):  # Fr
             [batch_size, post_patch_num_frames, post_patch_height, post_patch_width, -1, p_t, p, p]
         )
         hidden_states = hidden_states.transpose(perm=[0, 4, 1, 5, 2, 6, 3, 7])
-        hidden_states = (hidden_states.flatten(start_axis=6, stop_axis=7).flatten(start_axis=4, stop_axis=5).flatten(start_axis=2, stop_axis=3))
+        hidden_states = (
+            hidden_states.flatten(start_axis=6, stop_axis=7)
+            .flatten(start_axis=4, stop_axis=5)
+            .flatten(start_axis=2, stop_axis=3)
+        )
 
         if USE_PEFT_BACKEND:
-           # remove `lora_scale` from each PEFT layer
+            # remove `lora_scale` from each PEFT layer
             unscale_lora_layers(self, lora_scale)
 
         if not return_dict:

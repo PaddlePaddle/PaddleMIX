@@ -16,19 +16,21 @@ import os
 import sys
 import unittest
 
-import numpy as np
-
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
-from paddlemix.appflow import Appflow
-from ppdiffusers.utils import load_image, load_numpy
 import paddle
+
+from paddlemix.appflow import Appflow
+from ppdiffusers.utils import load_image
+
 
 class TextGuidedImageInpaintingTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.img_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations.png"
+        cls.img_url = (
+            "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations.png"
+        )
         cls.mask_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations-mask.png"
-        cls.expected_image = 'https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/appflow/test/test_TextGuidedImageInpainting/inpainting.png'
+        cls.expected_image = "https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/appflow/test/test_TextGuidedImageInpainting/inpainting.png"
 
     def test_image_inpainting(self):
         image = load_image(self.img_url)
@@ -37,11 +39,11 @@ class TextGuidedImageInpaintingTest(unittest.TestCase):
 
         prompt = "Face of a yellow cat, high resolution, sitting on a park bench"
 
-        app = Appflow(app='inpainting',models=['stabilityai/stable-diffusion-2-inpainting'])
-        image = app(inpaint_prompt=prompt,image=image,seg_masks=mask_image)['result']
+        app = Appflow(app="inpainting", models=["stabilityai/stable-diffusion-2-inpainting"])
+        image = app(inpaint_prompt=prompt, image=image, seg_masks=mask_image)["result"]
 
-        self.assertIsNotNone(image)        
-        #增加结果对比
+        self.assertIsNotNone(image)
+        # 增加结果对比
         expect_img = load_image(self.expected_image)
 
         size = (512, 512)
@@ -60,6 +62,7 @@ class TextGuidedImageInpaintingTest(unittest.TestCase):
         average_diff = diff_sum / len(data1)
 
         self.assertLessEqual(average_diff, 5)
+
 
 if __name__ == "__main__":
 

@@ -1,23 +1,34 @@
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from typing import Any, Dict, Optional, Union
 
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
 
-from ppdiffusers.configuration_utils import ConfigMixin, register_to_config
-from ppdiffusers.models.attention import JointTransformerBlock
-from ppdiffusers.models.attention_processor import Attention, AttentionProcessor
-from ppdiffusers.models.modeling_utils import ModelMixin
-from ppdiffusers.models.normalization import AdaLayerNormContinuous
+from ppdiffusers import SD3Transformer2DModel
+from ppdiffusers.models.transformer_2d import Transformer2DModelOutput
 from ppdiffusers.utils import (
     USE_PEFT_BACKEND,
     logging,
     scale_lora_layers,
     unscale_lora_layers,
 )
-from ppdiffusers.models.embeddings import CombinedTimestepTextProjEmbeddings, PatchEmbed
-from ppdiffusers.models.transformer_2d import Transformer2DModelOutput
-from ppdiffusers import SD3Transformer2DModel
+
+logger = logging.getLogger(__name__)
+
 
 def modified_forward(
     self,
@@ -59,17 +70,12 @@ def modified_forward(
         # weight the lora layers by setting `lora_scale` for each PEFT layer
         scale_lora_layers(self, lora_scale)
     else:
-        if (
-            joint_attention_kwargs is not None
-            and joint_attention_kwargs.get("scale", None) is not None
-        ):
+        if joint_attention_kwargs is not None and joint_attention_kwargs.get("scale", None) is not None:
             logger.warning(
                 "Passing `scale` via `joint_attention_kwargs` when not using the PEFT backend is ineffective."
             )
     height, width = hidden_states.shape[-2:]
-    hidden_states = self.pos_embed(
-        hidden_states
-    )  # takes care of adding positional embeddings too.
+    hidden_states = self.pos_embed(hidden_states)  # takes care of adding positional embeddings too.
     temb = self.time_text_embed(timestep, pooled_projections)
     encoder_hidden_states = self.context_embedder(encoder_hidden_states)
     output_features = []
@@ -117,14 +123,7 @@ def modified_forward(
         )
     )
     hidden_states = paddle.einsum("nhwpqc->nchpwq", hidden_states)
-    output = hidden_states.reshape(
-        shape=(
-            hidden_states.shape[0],
-            self.out_channels,
-            height * patch_size,
-            width * patch_size,
-        )
-    )
+
     if USE_PEFT_BACKEND:
         # remove `lora_scale` from each PEFT layer
         unscale_lora_layers(self, lora_scale)
@@ -158,7 +157,6 @@ class DiscriminatorHead(nn.Layer):
 
 
 class Discriminator(nn.Layer):
-
     def __init__(
         self,
         unet,
@@ -171,19 +169,12 @@ class Discriminator(nn.Layer):
         self.head_num = len(adapter_channel_dims)
         self.heads = nn.LayerList(
             [
-                nn.LayerList(
-                    [
-                        DiscriminatorHead(adapter_channel)
-                        for _ in range(self.num_h_per_head)
-                    ]
-                )
+                nn.LayerList([DiscriminatorHead(adapter_channel) for _ in range(self.num_h_per_head)])
                 for adapter_channel in adapter_channel_dims
             ]
         )
 
-    def _forward(
-        self, sample, timestep, encoder_hidden_states, pooled_encoder_hidden_states
-    ):
+    def _forward(self, sample, timestep, encoder_hidden_states, pooled_encoder_hidden_states):
         features = modified_forward(
             self.unet,
             hidden_states=sample,
@@ -245,25 +236,17 @@ class Discriminator(nn.Layer):
         weight,
     ):
         loss = 0.0
-        fake_outputs = self._forward(
-            sample_fake, timestep, encoder_hidden_states, pooled_encoder_hidden_states
-        )
+        fake_outputs = self._forward(sample_fake, timestep, encoder_hidden_states, pooled_encoder_hidden_states)
         for fake_output in fake_outputs:
             loss += paddle.mean(weight * F.relu(1 - fake_output.astype(dtype="float32"))) / (
                 self.head_num * self.num_h_per_head
             )
         return loss
 
-    def feature_loss(
-        self, sample_fake, sample_real, timestep, encoder_hidden_states, weight
-    ):
+    def feature_loss(self, sample_fake, sample_real, timestep, encoder_hidden_states, weight):
         loss = 0.0
-        features_fake = modified_forward(
-            self.unet, sample_fake, timestep, encoder_hidden_states
-        )
-        features_real = modified_forward(
-            self.unet, sample_real.detach(), timestep, encoder_hidden_states
-        )
+        features_fake = modified_forward(self.unet, sample_fake, timestep, encoder_hidden_states)
+        features_real = modified_forward(self.unet, sample_real.detach(), timestep, encoder_hidden_states)
         for feature_fake, feature_real in zip(features_fake, features_real):
             loss += paddle.mean((feature_fake - feature_real) ** 2) / (self.head_num)
         return loss
@@ -282,8 +265,6 @@ if __name__ == "__main__":
     pooled_encoder_hidden_states = paddle.randn((1, 2048)).cuda()
     timesteps = paddle.randn((1,)).cuda()
 
-    features = discriminator._forward(
-        sample, timesteps, encoder_hidden_states, pooled_encoder_hidden_states
-    )
+    features = discriminator._forward(sample, timesteps, encoder_hidden_states, pooled_encoder_hidden_states)
     for feature in features:
         print(feature.shape)

@@ -299,7 +299,7 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
                 encoder_hidden_states, hidden_states = block(
                     hidden_states=hidden_states, encoder_hidden_states=encoder_hidden_states, temb=temb
                 )
-            
+
             # controlnet residual
             if block_controlnet_hidden_states is not None and block.context_pre_only is False:
                 interval_control = len(self.transformer_blocks) // len(block_controlnet_hidden_states)
@@ -368,7 +368,10 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin):  # , PeftAdapterMixin, Fro
             encoder_hidden_states = None
         else:
             encoder_hidden_states, hidden_states = self.sd3_origin_transformer(
-                hidden_states=hidden_states, encoder_hidden_states=encoder_hidden_states, temb=temb, block_controlnet_hidden_states=block_controlnet_hidden_states
+                hidden_states=hidden_states,
+                encoder_hidden_states=encoder_hidden_states,
+                temb=temb,
+                block_controlnet_hidden_states=block_controlnet_hidden_states,
             )
 
         hidden_states = self.norm_out(hidden_states, temb)

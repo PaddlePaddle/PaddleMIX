@@ -13,8 +13,10 @@
 # limitations under the License.
 
 import paddle
+
 from ppdiffusers import StableDiffusion3Img2ImgPipeline
 from ppdiffusers.utils import load_image
+
 model_id_or_path = "stabilityai/stable-diffusion-3-medium-diffusers"
 pipe = StableDiffusion3Img2ImgPipeline.from_pretrained(model_id_or_path, paddle_dtype=paddle.float16)
 url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/sketch-mountains-input.png"

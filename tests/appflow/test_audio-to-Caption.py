@@ -14,13 +14,15 @@
 
 import os
 import sys
-import unittest
 import tempfile
+import unittest
+
 import requests
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
-from paddlemix.appflow import Appflow
 import paddle
+
+from paddlemix.appflow import Appflow
 from tests.testing_utils import _run_slow_test
 
 
@@ -37,18 +39,18 @@ if __name__ == "__main__":
 
             paddle.seed(1024)
             task = Appflow(app="audio2caption", models=["conformer_u2pp_online_wenetspeech", "THUDM/chatglm-6b"])
-            audio_file_url = "https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/appflow/test/test_audio/zh.wav"
-
-            prompt = (
-                "描述这段话：{}."
+            audio_file_url = (
+                "https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/appflow/test/test_audio/zh.wav"
             )
+
+            prompt = "描述这段话：{}."
 
             with tempfile.NamedTemporaryFile() as audio_file:
                 audio_file.write(requests.get(audio_file_url).content)
-                result = task(audio=audio_file.name, prompt=prompt)['prompt']
+                result = task(audio=audio_file.name, prompt=prompt)["prompt"]
 
                 self.assertIsNotNone(result)
-                self.assertIn('健康', result)
+                self.assertIn("健康", result)
 
         setattr(AudioToCaptionTest, name, test_audio2caption)
 

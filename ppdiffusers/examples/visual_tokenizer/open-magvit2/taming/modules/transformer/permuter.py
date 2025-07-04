@@ -1,10 +1,23 @@
-import sys
-import paddle
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
 import numpy as np
+import paddle
 
 
 class AbstractPermuter(paddle.nn.Layer):
-
     def __init__(self, *args, **kwargs):
         super().__init__()
 
@@ -13,7 +26,6 @@ class AbstractPermuter(paddle.nn.Layer):
 
 
 class ShiftPermuter(AbstractPermuter):
-
     def __init__(self, shift_pos):
         super().__init__()
         self.shift_pos = shift_pos
@@ -27,7 +39,6 @@ class ShiftPermuter(AbstractPermuter):
 
 
 class Identity(AbstractPermuter):
-
     def __init__(self):
         super().__init__()
 
@@ -36,7 +47,6 @@ class Identity(AbstractPermuter):
 
 
 class Subsample(AbstractPermuter):
-
     def __init__(self, H, W):
         super().__init__()
         C = 1
@@ -50,11 +60,14 @@ class Subsample(AbstractPermuter):
             C = C * 4
         assert H == W == 1
         idx = paddle.to_tensor(data=indices.flatten())
-        self.register_buffer(name='forward_shuffle_idx', tensor=paddle.base
-            .framework.EagerParamBase.from_tensor(tensor=idx, trainable=False))
-        self.register_buffer(name='backward_shuffle_idx', tensor=paddle.
-            base.framework.EagerParamBase.from_tensor(tensor=paddle.argsort
-            (x=idx), trainable=False))
+        self.register_buffer(
+            name="forward_shuffle_idx",
+            tensor=paddle.base.framework.EagerParamBase.from_tensor(tensor=idx, trainable=False),
+        )
+        self.register_buffer(
+            name="backward_shuffle_idx",
+            tensor=paddle.base.framework.EagerParamBase.from_tensor(tensor=paddle.argsort(x=idx), trainable=False),
+        )
 
     def forward(self, x, reverse=False):
         if not reverse:
@@ -69,22 +82,23 @@ def mortonify(i, j):
     j = np.uint64(j)
     z = np.uint(0)
     for pos in range(32):
-        z = z | (j & np.uint64(1) << np.uint64(pos)) << np.uint64(pos) | (i &
-            np.uint64(1) << np.uint64(pos)) << np.uint64(pos + 1)
+        z = (
+            z
+            | (j & np.uint64(1) << np.uint64(pos)) << np.uint64(pos)
+            | (i & np.uint64(1) << np.uint64(pos)) << np.uint64(pos + 1)
+        )
     return z
 
 
 class ZCurve(AbstractPermuter):
-
     def __init__(self, H, W):
         super().__init__()
-        reverseidx = [np.int64(mortonify(i, j)) for i in range(H) for j in
-            range(W)]
+        reverseidx = [np.int64(mortonify(i, j)) for i in range(H) for j in range(W)]
         idx = np.argsort(reverseidx)
         idx = paddle.to_tensor(data=idx)
         reverseidx = paddle.to_tensor(data=reverseidx)
-        self.register_buffer(name='forward_shuffle_idx', tensor=idx)
-        self.register_buffer(name='backward_shuffle_idx', tensor=reverseidx)
+        self.register_buffer(name="forward_shuffle_idx", tensor=idx)
+        self.register_buffer(name="backward_shuffle_idx", tensor=reverseidx)
 
     def forward(self, x, reverse=False):
         if not reverse:
@@ -94,7 +108,6 @@ class ZCurve(AbstractPermuter):
 
 
 class SpiralOut(AbstractPermuter):
-
     def __init__(self, H, W):
         super().__init__()
         assert H == W
@@ -132,9 +145,8 @@ class SpiralOut(AbstractPermuter):
                     idx.append(indices[i, j])
         assert len(idx) == size * size
         idx = paddle.to_tensor(data=idx)
-        self.register_buffer(name='forward_shuffle_idx', tensor=idx)
-        self.register_buffer(name='backward_shuffle_idx', tensor=paddle.
-            argsort(x=idx))
+        self.register_buffer(name="forward_shuffle_idx", tensor=idx)
+        self.register_buffer(name="backward_shuffle_idx", tensor=paddle.argsort(x=idx))
 
     def forward(self, x, reverse=False):
         if not reverse:
@@ -144,7 +156,6 @@ class SpiralOut(AbstractPermuter):
 
 
 class SpiralIn(AbstractPermuter):
-
     def __init__(self, H, W):
         super().__init__()
         assert H == W
@@ -183,9 +194,8 @@ class SpiralIn(AbstractPermuter):
         assert len(idx) == size * size
         idx = idx[::-1]
         idx = paddle.to_tensor(data=idx)
-        self.register_buffer(name='forward_shuffle_idx', tensor=idx)
-        self.register_buffer(name='backward_shuffle_idx', tensor=paddle.
-            argsort(x=idx))
+        self.register_buffer(name="forward_shuffle_idx", tensor=idx)
+        self.register_buffer(name="backward_shuffle_idx", tensor=paddle.argsort(x=idx))
 
     def forward(self, x, reverse=False):
         if not reverse:
@@ -195,14 +205,12 @@ class SpiralIn(AbstractPermuter):
 
 
 class Random(paddle.nn.Layer):
-
     def __init__(self, H, W):
         super().__init__()
         indices = np.random.RandomState(1).permutation(H * W)
         idx = paddle.to_tensor(data=indices.flatten())
-        self.register_buffer(name='forward_shuffle_idx', tensor=idx)
-        self.register_buffer(name='backward_shuffle_idx', tensor=paddle.
-            argsort(x=idx))
+        self.register_buffer(name="forward_shuffle_idx", tensor=idx)
+        self.register_buffer(name="backward_shuffle_idx", tensor=paddle.argsort(x=idx))
 
     def forward(self, x, reverse=False):
         if not reverse:
@@ -212,7 +220,6 @@ class Random(paddle.nn.Layer):
 
 
 class AlternateParsing(AbstractPermuter):
-
     def __init__(self, H, W):
         super().__init__()
         indices = np.arange(W * H).reshape(H, W)
@@ -221,9 +228,8 @@ class AlternateParsing(AbstractPermuter):
         idx = indices.flatten()
         assert len(idx) == H * W
         idx = paddle.to_tensor(data=idx)
-        self.register_buffer(name='forward_shuffle_idx', tensor=idx)
-        self.register_buffer(name='backward_shuffle_idx', tensor=paddle.
-            argsort(x=idx))
+        self.register_buffer(name="forward_shuffle_idx", tensor=idx)
+        self.register_buffer(name="backward_shuffle_idx", tensor=paddle.argsort(x=idx))
 
     def forward(self, x, reverse=False):
         if not reverse:
@@ -232,7 +238,7 @@ class AlternateParsing(AbstractPermuter):
             return x[:, self.backward_shuffle_idx]
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     p0 = AlternateParsing(16, 16)
     print(p0.forward_shuffle_idx)
     print(p0.backward_shuffle_idx)

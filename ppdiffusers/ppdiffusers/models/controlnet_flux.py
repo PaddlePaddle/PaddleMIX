@@ -22,17 +22,30 @@ from paddle.distributed.fleet.utils import recompute
 from ..configuration_utils import ConfigMixin, register_to_config
 from ..models.attention_processor import AttentionProcessor
 from ..models.modeling_utils import ModelMixin
-from ..utils import USE_PEFT_BACKEND, logging, recompute_use_reentrant, scale_lora_layers, unscale_lora_layers, use_old_recompute
+from ..utils import (
+    USE_PEFT_BACKEND,
+    logging,
+    recompute_use_reentrant,
+    scale_lora_layers,
+    unscale_lora_layers,
+    use_old_recompute,
+)
 from .controlnet import BaseOutput, ControlNetConditioningEmbedding, zero_module
-from .embeddings import CombinedTimestepGuidanceTextProjEmbeddings, CombinedTimestepTextProjEmbeddings, FluxPosEmbed
+from .embeddings import (
+    CombinedTimestepGuidanceTextProjEmbeddings,
+    CombinedTimestepTextProjEmbeddings,
+    FluxPosEmbed,
+)
 from .transformer_flux import FluxSingleTransformerBlock, FluxTransformerBlock
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
+
 
 @dataclass
 class FluxControlNetOutput(BaseOutput):
     controlnet_block_samples: Tuple[paddle.Tensor]
     controlnet_single_block_samples: Tuple[paddle.Tensor]
+
 
 class FluxControlNetModel(ModelMixin, ConfigMixin):
     _supports_gradient_checkpointing = True
@@ -59,15 +72,13 @@ class FluxControlNetModel(ModelMixin, ConfigMixin):
 
         # Positional embedding
         self.pos_embed = FluxPosEmbed(theta=10000, axes_dim=axes_dims_rope)
-        
+
         # Time-text embedding
         text_time_guidance_cls = (
-            CombinedTimestepGuidanceTextProjEmbeddings if guidance_embeds 
-            else CombinedTimestepTextProjEmbeddings
+            CombinedTimestepGuidanceTextProjEmbeddings if guidance_embeds else CombinedTimestepTextProjEmbeddings
         )
         self.time_text_embed = text_time_guidance_cls(
-            embedding_dim=self.inner_dim, 
-            pooled_projection_dim=pooled_projection_dim
+            embedding_dim=self.inner_dim, pooled_projection_dim=pooled_projection_dim
         )
 
         # Context embedding
@@ -75,32 +86,39 @@ class FluxControlNetModel(ModelMixin, ConfigMixin):
         self.x_embedder = nn.Linear(in_channels, self.inner_dim)
 
         # Transformer blocks
-        self.transformer_blocks = nn.LayerList([
-            FluxTransformerBlock(
-                dim=self.inner_dim,
-                num_attention_heads=num_attention_heads,
-                attention_head_dim=attention_head_dim,
-            ) for _ in range(num_layers)
-        ])
+        self.transformer_blocks = nn.LayerList(
+            [
+                FluxTransformerBlock(
+                    dim=self.inner_dim,
+                    num_attention_heads=num_attention_heads,
+                    attention_head_dim=attention_head_dim,
+                )
+                for _ in range(num_layers)
+            ]
+        )
 
-        self.single_transformer_blocks = nn.LayerList([
-            FluxSingleTransformerBlock(
-                dim=self.inner_dim,
-                num_attention_heads=num_attention_heads,
-                attention_head_dim=attention_head_dim,
-            ) for _ in range(num_single_layers)
-        ])
+        self.single_transformer_blocks = nn.LayerList(
+            [
+                FluxSingleTransformerBlock(
+                    dim=self.inner_dim,
+                    num_attention_heads=num_attention_heads,
+                    attention_head_dim=attention_head_dim,
+                )
+                for _ in range(num_single_layers)
+            ]
+        )
 
         # ControlNet blocks
-        self.controlnet_blocks = nn.LayerList([
-            zero_module(nn.Linear(self.inner_dim, self.inner_dim))
-            for _ in range(len(self.transformer_blocks))
-        ])
-        
-        self.controlnet_single_blocks = nn.LayerList([
-            zero_module(nn.Linear(self.inner_dim, self.inner_dim))
-            for _ in range(len(self.single_transformer_blocks))
-        ])
+        self.controlnet_blocks = nn.LayerList(
+            [zero_module(nn.Linear(self.inner_dim, self.inner_dim)) for _ in range(len(self.transformer_blocks))]
+        )
+
+        self.controlnet_single_blocks = nn.LayerList(
+            [
+                zero_module(nn.Linear(self.inner_dim, self.inner_dim))
+                for _ in range(len(self.single_transformer_blocks))
+            ]
+        )
 
         # Union mode handling
         self.union = num_mode is not None
@@ -110,8 +128,7 @@ class FluxControlNetModel(ModelMixin, ConfigMixin):
         # Input hint block
         if conditioning_embedding_channels is not None:
             self.input_hint_block = ControlNetConditioningEmbedding(
-                conditioning_embedding_channels=conditioning_embedding_channels,
-                block_out_channels=(16, 16, 16, 16)
+                conditioning_embedding_channels=conditioning_embedding_channels, block_out_channels=(16, 16, 16, 16)
             )
             self.controlnet_x_embedder = nn.Linear(in_channels, self.inner_dim)
         else:
@@ -181,16 +198,14 @@ class FluxControlNetModel(ModelMixin, ConfigMixin):
             controlnet.controlnet_x_embedder = zero_module(controlnet.controlnet_x_embedder)
         return controlnet
 
-
     def create_custom_forward(self, module, return_dict=None):
         def custom_forward(*inputs):
             if return_dict is not None:
                 return module(*inputs, return_dict=return_dict)
             return module(*inputs)
+
         return custom_forward
 
-    
-    
     def forward(
         self,
         hidden_states: paddle.Tensor,
@@ -227,7 +242,7 @@ class FluxControlNetModel(ModelMixin, ConfigMixin):
         # Process conditional input
         if self.input_hint_block is not None:
             controlnet_cond = self.input_hint_block(controlnet_cond)
-            
+
             batch_size, channels, height_pw, width_pw = controlnet_cond.shape
             height = height_pw // self.config.patch_size
             width = width_pw // self.config.patch_size
@@ -236,18 +251,18 @@ class FluxControlNetModel(ModelMixin, ConfigMixin):
             )
             controlnet_cond = controlnet_cond.permute(0, 2, 4, 1, 3, 5)
             controlnet_cond = controlnet_cond.reshape(batch_size, height * width, -1)
-        
+
         # Add conditional embedding
         controlnet_x_embed = self.controlnet_x_embedder(controlnet_cond)
         hidden_states += controlnet_x_embed
         # Time embeddings
         timestep = timestep.astype(hidden_states.dtype) * 1000
-        
+
         if guidance is not None:
             guidance = guidance.astype(hidden_states.dtype) * 1000
         else:
             guidance = None
-            
+
         temb = (
             self.time_text_embed(timestep, pooled_projections)
             if guidance is None
@@ -256,7 +271,7 @@ class FluxControlNetModel(ModelMixin, ConfigMixin):
 
         # Context embedding
         encoder_hidden_states = self.context_embedder(encoder_hidden_states)
-        
+
         if txt_ids.ndim == 3:
             logger.warning(
                 "Passing `txt_ids` 3d paddle.Tensor is deprecated."
@@ -277,20 +292,20 @@ class FluxControlNetModel(ModelMixin, ConfigMixin):
                 raise ValueError("`controlnet_mode` cannot be `None` when applying ControlNet-Union")
             # union mode emb
             controlnet_mode_emb = self.controlnet_mode_embedder(controlnet_mode)
-            
+
             encoder_hidden_states = paddle.concat([controlnet_mode_emb, encoder_hidden_states], axis=1)
-            
+
             txt_ids = paddle.concat([txt_ids[:1], txt_ids], axis=0)
         # Positional embedding
         ids = paddle.concat([txt_ids, img_ids], axis=0)
-        
+
         image_rotary_emb = self.pos_embed(ids)
 
         # Transformer blocks processing
         block_samples = ()
-        
+
         for i, block in enumerate(self.transformer_blocks):
-            
+
             if self.gradient_checkpointing and self.training and not use_old_recompute():
                 ckpt_kwargs = {} if recompute_use_reentrant() else {"use_reentrant": False}
                 hidden_states = recompute(
@@ -306,9 +321,8 @@ class FluxControlNetModel(ModelMixin, ConfigMixin):
                     hidden_states=hidden_states,
                     encoder_hidden_states=encoder_hidden_states,
                     temb=temb,
-                    image_rotary_emb=image_rotary_emb
+                    image_rotary_emb=image_rotary_emb,
                 )
-            
 
             block_samples += (hidden_states,)
 
@@ -318,40 +332,33 @@ class FluxControlNetModel(ModelMixin, ConfigMixin):
         single_block_samples = ()
 
         for i, block in enumerate(self.single_transformer_blocks):
-            
+
             if self.gradient_checkpointing and self.training:
                 ckpt_kwargs = {} if recompute_use_reentrant() else {"use_reentrant": False}
                 hidden_states = recompute(
-                    self.create_custom_forward(block),
-                    hidden_states,
-                    temb,
-                    image_rotary_emb,
-                    **ckpt_kwargs
+                    self.create_custom_forward(block), hidden_states, temb, image_rotary_emb, **ckpt_kwargs
                 )
             else:
-                hidden_states = block(
-                    hidden_states=hidden_states,
-                    temb=temb,
-                    image_rotary_emb=image_rotary_emb
-                )
-            
-            single_block_sample = hidden_states[:, encoder_hidden_states.shape[1]:]
+                hidden_states = block(hidden_states=hidden_states, temb=temb, image_rotary_emb=image_rotary_emb)
+
+            single_block_sample = hidden_states[:, encoder_hidden_states.shape[1] :]
             single_block_samples += (single_block_sample,)
-            
+
         # controlnet block
         controlnet_block_samples = ()
-        
+
         for i, (block_sample, controlnet_block) in enumerate(zip(block_samples, self.controlnet_blocks)):
             block_sample = controlnet_block(block_sample)
-            
+
             controlnet_block_samples = controlnet_block_samples + (block_sample,)
 
         controlnet_single_block_samples = ()
-        
-        for i, (single_block_sample, controlnet_block) in enumerate(zip(single_block_samples, self.controlnet_single_blocks)):
+
+        for i, (single_block_sample, controlnet_block) in enumerate(
+            zip(single_block_samples, self.controlnet_single_blocks)
+        ):
             single_block_sample = controlnet_block(single_block_sample)
-            
-            
+
             controlnet_single_block_samples = controlnet_single_block_samples + (single_block_sample,)
 
         # scaling
@@ -388,6 +395,7 @@ class FluxMultiControlNetModel(ModelMixin):
             Provides additional conditioning to the unet during the denoising process. You must set multiple
             `FluxControlNetModel` as a list.
     """
+
     def __init__(self, controlnets):
         super().__init__()
         self.nets = nn.LayerList(controlnets)

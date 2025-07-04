@@ -16,11 +16,11 @@ import os
 import sys
 import unittest
 
-
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
-from paddlemix.appflow import Appflow
-from ppdiffusers.utils import load_image, load_numpy
 import paddle
+
+from paddlemix.appflow import Appflow
+
 
 class MusicGenerationTest(unittest.TestCase):
     @classmethod
@@ -31,17 +31,23 @@ class MusicGenerationTest(unittest.TestCase):
 
         task = Appflow(app="music_generation", models=["cvssp/audioldm"])
         prompt = "A classic cocktail lounge vibe with smooth jazz piano and a cool, relaxed atmosphere."
-        negative_prompt = 'low quality, average quality, muffled quality, noise interference, poor and low-grade quality, inaudible quality, low-fidelity quality'  
+        negative_prompt = "low quality, average quality, muffled quality, noise interference, poor and low-grade quality, inaudible quality, low-fidelity quality"
         audio_length_in_s = 5
         num_inference_steps = 20
-        output_path = "tmp.wav"
-        result = task(prompt=prompt, negative_prompt=negative_prompt, num_inference_steps=num_inference_steps, audio_length_in_s=audio_length_in_s, generator = paddle.Generator().manual_seed(120))['result']
+
+        result = task(
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            num_inference_steps=num_inference_steps,
+            audio_length_in_s=audio_length_in_s,
+            generator=paddle.Generator().manual_seed(120),
+        )["result"]
 
         self.assertIsNotNone(result)
 
     # def test_image2music(self):
     #     task1 = Appflow(app="music_generation", models=["miniGPT4/MiniGPT4-7B"])
-    #     negative_prompt = 'low quality, average quality, muffled quality, noise interference, poor and low-grade quality, inaudible quality, low-fidelity quality'  
+    #     negative_prompt = 'low quality, average quality, muffled quality, noise interference, poor and low-grade quality, inaudible quality, low-fidelity quality'
     #     audio_length_in_s = 5
     #     num_inference_steps = 20
     #     output_path = "tmp.wav"

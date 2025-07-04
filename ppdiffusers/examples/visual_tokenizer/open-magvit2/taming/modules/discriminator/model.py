@@ -1,14 +1,29 @@
-import paddle
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import functools
+
+import paddle
 from taming.modules.util import ActNorm
 
 
 def weights_init(m):
     classname = m.__class__.__name__
-    if classname.find('Conv') != -1:
+    if classname.find("Conv") != -1:
         init_Normal = paddle.nn.initializer.Normal(mean=0.0, std=0.02)
         init_Normal(m.weight.data)
-    elif classname.find('BatchNorm') != -1:
+    elif classname.find("BatchNorm") != -1:
         init_Normal = paddle.nn.initializer.Normal(mean=1.0, std=0.02)
         init_Normal(m.weight.data)
         init_Constant = paddle.nn.initializer.Constant(value=0)
@@ -17,7 +32,7 @@ def weights_init(m):
 
 class NLayerDiscriminator(paddle.nn.Layer):
     """Defines a PatchGAN discriminator as in Pix2Pix
-        --> see https://github.com/junyanz/pytorch-CycleGAN-and-pix2pix/blob/master/models/networks.py
+    --> see https://github.com/junyanz/pytorch-CycleGAN-and-pix2pix/blob/master/models/networks.py
     """
 
     def __init__(self, input_nc=3, ndf=64, n_layers=3, use_actnorm=False):
@@ -39,26 +54,44 @@ class NLayerDiscriminator(paddle.nn.Layer):
             use_bias = norm_layer != paddle.nn.BatchNorm2D
         kw = 4
         padw = 1
-        sequence = [paddle.nn.Conv2D(in_channels=input_nc, out_channels=ndf,
-            kernel_size=kw, stride=2, padding=padw), paddle.nn.LeakyReLU(
-            negative_slope=0.2)]
+        sequence = [
+            paddle.nn.Conv2D(in_channels=input_nc, out_channels=ndf, kernel_size=kw, stride=2, padding=padw),
+            paddle.nn.LeakyReLU(negative_slope=0.2),
+        ]
         nf_mult = 1
         nf_mult_prev = 1
         for n in range(1, n_layers):
             nf_mult_prev = nf_mult
-            nf_mult = min(2 ** n, 8)
-            sequence += [paddle.nn.Conv2D(in_channels=ndf * nf_mult_prev,
-                out_channels=ndf * nf_mult, kernel_size=kw, stride=2,
-                padding=padw, bias_attr=use_bias), norm_layer(ndf * nf_mult
-                ), paddle.nn.LeakyReLU(negative_slope=0.2)]
+            nf_mult = min(2**n, 8)
+            sequence += [
+                paddle.nn.Conv2D(
+                    in_channels=ndf * nf_mult_prev,
+                    out_channels=ndf * nf_mult,
+                    kernel_size=kw,
+                    stride=2,
+                    padding=padw,
+                    bias_attr=use_bias,
+                ),
+                norm_layer(ndf * nf_mult),
+                paddle.nn.LeakyReLU(negative_slope=0.2),
+            ]
         nf_mult_prev = nf_mult
-        nf_mult = min(2 ** n_layers, 8)
-        sequence += [paddle.nn.Conv2D(in_channels=ndf * nf_mult_prev,
-            out_channels=ndf * nf_mult, kernel_size=kw, stride=1, padding=
-            padw, bias_attr=use_bias), norm_layer(ndf * nf_mult), paddle.nn
-            .LeakyReLU(negative_slope=0.2)]
-        sequence += [paddle.nn.Conv2D(in_channels=ndf * nf_mult,
-            out_channels=1, kernel_size=kw, stride=1, padding=padw)]
+        nf_mult = min(2**n_layers, 8)
+        sequence += [
+            paddle.nn.Conv2D(
+                in_channels=ndf * nf_mult_prev,
+                out_channels=ndf * nf_mult,
+                kernel_size=kw,
+                stride=1,
+                padding=padw,
+                bias_attr=use_bias,
+            ),
+            norm_layer(ndf * nf_mult),
+            paddle.nn.LeakyReLU(negative_slope=0.2),
+        ]
+        sequence += [
+            paddle.nn.Conv2D(in_channels=ndf * nf_mult, out_channels=1, kernel_size=kw, stride=1, padding=padw)
+        ]
         self.main = paddle.nn.Sequential(*sequence)
 
     def forward(self, input):

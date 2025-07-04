@@ -2292,10 +2292,10 @@ class FluxAttnProcessor2_0:
             dropout_p=0.0,
             is_causal=False,
         )
-        
+
         hidden_states = hidden_states.reshape([batch_size, -1, attn.heads * head_dim])
         hidden_states = hidden_states.astype(query.dtype)
-        
+
         if encoder_hidden_states is not None:
             encoder_hidden_states, hidden_states = (
                 hidden_states[:, : encoder_hidden_states.shape[1]],
@@ -2589,7 +2589,6 @@ class FusedCogVideoXAttnProcessor2_0:
             [text_seq_length, hidden_states.shape[1] - text_seq_length], axis=1
         )
         return hidden_states, encoder_hidden_states
-    
 
 
 class MochiAttention(nn.Layer):
@@ -2658,10 +2657,9 @@ class MochiAttention(nn.Layer):
         )
 
 
-
 class MochiAttnProcessor2_0:
     """Attention processor used in Mochi."""
-    
+
     def __call__(
         self,
         attn: "MochiAttention",
@@ -2676,7 +2674,7 @@ class MochiAttnProcessor2_0:
         query = paddle.unflatten(query, 2, (attn.heads, -1))
         key = paddle.unflatten(key, 2, (attn.heads, -1))
         value = paddle.unflatten(value, 2, (attn.heads, -1))
-        
+
         if attn.norm_q is not None:
             query = attn.norm_q(query)
         if attn.norm_k is not None:
@@ -2688,7 +2686,6 @@ class MochiAttnProcessor2_0:
         encoder_query = paddle.unflatten(encoder_query, 2, (attn.heads, -1))
         encoder_key = paddle.unflatten(encoder_key, 2, (attn.heads, -1))
         encoder_value = paddle.unflatten(encoder_value, 2, (attn.heads, -1))
-        
 
         if attn.norm_added_q is not None:
             encoder_query = attn.norm_added_q(encoder_query)
@@ -2696,12 +2693,14 @@ class MochiAttnProcessor2_0:
             encoder_key = attn.norm_added_k(encoder_key)
 
         if image_rotary_emb is not None:
+
             def apply_rotary_emb(x, freqs_cos, freqs_sin):
-                x_even = x[..., 0::2].astype('float32')
-                x_odd = x[..., 1::2].astype('float32')
+                x_even = x[..., 0::2].astype("float32")
+                x_odd = x[..., 1::2].astype("float32")
                 cos = (x_even * freqs_cos - x_odd * freqs_sin).astype(x.dtype)
                 sin = (x_even * freqs_sin + x_odd * freqs_cos).astype(x.dtype)
                 return paddle.stack([cos, sin], axis=-1).flatten(-2)
+
             query = apply_rotary_emb(query, *image_rotary_emb)
             key = apply_rotary_emb(key, *image_rotary_emb)
 
@@ -2722,42 +2721,41 @@ class MochiAttnProcessor2_0:
         for idx in range(batch_size):
             mask = attention_mask[idx][None, :]
             valid_prompt_token_indices = paddle.nonzero(mask.flatten()).flatten()
-            
-            valid_encoder_query = encoder_query[idx:idx+1, :, valid_prompt_token_indices, :]
-            valid_encoder_key = encoder_key[idx:idx+1, :, valid_prompt_token_indices, :]
-            valid_encoder_value = encoder_value[idx:idx+1, :, valid_prompt_token_indices, :]
-            
-            valid_query = paddle.concat([query[idx:idx+1], valid_encoder_query], axis=2)
-            valid_key = paddle.concat([key[idx:idx+1], valid_encoder_key], axis=2)
-            valid_value = paddle.concat([value[idx:idx+1], valid_encoder_value], axis=2)
-            
+
+            valid_encoder_query = encoder_query[idx : idx + 1, :, valid_prompt_token_indices, :]
+            valid_encoder_key = encoder_key[idx : idx + 1, :, valid_prompt_token_indices, :]
+            valid_encoder_value = encoder_value[idx : idx + 1, :, valid_prompt_token_indices, :]
+
+            valid_query = paddle.concat([query[idx : idx + 1], valid_encoder_query], axis=2)
+            valid_key = paddle.concat([key[idx : idx + 1], valid_encoder_key], axis=2)
+            valid_value = paddle.concat([value[idx : idx + 1], valid_encoder_value], axis=2)
+
             attn_output = F.scaled_dot_product_attention(
-                valid_query.transpose([0, 2, 1, 3]), 
-                valid_key.transpose([0, 2, 1, 3]), 
-                valid_value.transpose([0, 2, 1, 3]), 
-                dropout_p=0.0, 
-                is_causal=False
+                valid_query.transpose([0, 2, 1, 3]),
+                valid_key.transpose([0, 2, 1, 3]),
+                valid_value.transpose([0, 2, 1, 3]),
+                dropout_p=0.0,
+                is_causal=False,
             )
 
             attn_output = attn_output.transpose([0, 2, 1, 3])  # [B,S,H,D] -> [B,H,S,D]
-            
+
             valid_sequence_length = attn_output.shape[2]
             pad_length = total_length - valid_sequence_length
 
             if pad_length > 0:
-                attn_output = F.pad(
-                    attn_output, pad=[0, 0, 0, pad_length], mode='constant', value=0
-                )
-            
-            attn_outputs.append(attn_output)
+                attn_output = F.pad(attn_output, pad=[0, 0, 0, pad_length], mode="constant", value=0)
 
+            attn_outputs.append(attn_output)
 
         hidden_states = paddle.concat(attn_outputs, axis=0)
         hidden_states = hidden_states.transpose([0, 2, 1, 3])
 
         hidden_states = paddle.flatten(hidden_states, start_axis=2, stop_axis=3)
 
-        hidden_states, encoder_hidden_states = paddle.split(hidden_states, [sequence_length, encoder_sequence_length], axis=1)
+        hidden_states, encoder_hidden_states = paddle.split(
+            hidden_states, [sequence_length, encoder_sequence_length], axis=1
+        )
         # linear proj
         hidden_states = attn.to_out[0](hidden_states)
         # dropout
@@ -2767,7 +2765,6 @@ class MochiAttnProcessor2_0:
             encoder_hidden_states = attn.to_add_out(encoder_hidden_states)
 
         return hidden_states, encoder_hidden_states
-
 
 
 class MochiVaeAttnProcessor2_0:
@@ -2828,14 +2825,14 @@ class MochiVaeAttnProcessor2_0:
             key = attn.norm_k(key)
 
         hidden_states = F.scaled_dot_product_attention(
-            query.transpose((0, 2, 1, 3)), 
-            key.transpose((0, 2, 1, 3)), 
-            value.transpose((0, 2, 1, 3)), 
-            attn_mask=attention_mask, 
-            dropout_p=0.0, 
-            is_causal=attn.is_causal
+            query.transpose((0, 2, 1, 3)),
+            key.transpose((0, 2, 1, 3)),
+            value.transpose((0, 2, 1, 3)),
+            attn_mask=attention_mask,
+            dropout_p=0.0,
+            is_causal=attn.is_causal,
         )
-        
+
         hidden_states = hidden_states.reshape((batch_size, -1, attn.heads * head_dim))
         hidden_states = hidden_states.astype(query.dtype)
 
@@ -2850,7 +2847,7 @@ class MochiVaeAttnProcessor2_0:
         hidden_states = hidden_states / attn.rescale_output_factor
 
         return hidden_states
-    
+
 
 LoRAAttnProcessor2_5 = LoRAXFormersAttnProcessor
 AttnAddedKVProcessor2_5 = XFormersAttnAddedKVProcessor

@@ -694,7 +694,7 @@ class UNetMidBlock2DCrossAttn(nn.Layer):
                 non_linearity=resnet_act_fn,
                 output_scale_factor=output_scale_factor,
                 pre_norm=resnet_pre_norm,
-                data_format=data_format
+                data_format=data_format,
             )
         ]
         attentions = []
@@ -1130,7 +1130,12 @@ class CrossAttnDownBlock2D(nn.Layer):
             self.downsamplers = nn.LayerList(
                 [
                     Downsample2D(
-                        out_channels, use_conv=True, out_channels=out_channels, padding=downsample_padding, name="op", data_format=data_format,
+                        out_channels,
+                        use_conv=True,
+                        out_channels=out_channels,
+                        padding=downsample_padding,
+                        name="op",
+                        data_format=data_format,
                     )
                 ]
             )
@@ -1268,7 +1273,12 @@ class DownBlock2D(nn.Layer):
             self.downsamplers = nn.LayerList(
                 [
                     Downsample2D(
-                        out_channels, use_conv=True, out_channels=out_channels, padding=downsample_padding, name="op", data_format=data_format,
+                        out_channels,
+                        use_conv=True,
+                        out_channels=out_channels,
+                        padding=downsample_padding,
+                        name="op",
+                        data_format=data_format,
                     )
                 ]
             )
@@ -2307,7 +2317,9 @@ class CrossAttnUpBlock2D(nn.Layer):
         self.resnets = nn.LayerList(resnets)
 
         if add_upsample:
-            self.upsamplers = nn.LayerList([Upsample2D(out_channels, use_conv=True, out_channels=out_channels, data_format=data_format)])
+            self.upsamplers = nn.LayerList(
+                [Upsample2D(out_channels, use_conv=True, out_channels=out_channels, data_format=data_format)]
+            )
         else:
             self.upsamplers = None
 
@@ -2460,7 +2472,9 @@ class UpBlock2D(nn.Layer):
         self.resnets = nn.LayerList(resnets)
 
         if add_upsample:
-            self.upsamplers = nn.LayerList([Upsample2D(out_channels, use_conv=True, out_channels=out_channels, data_format=data_format)])
+            self.upsamplers = nn.LayerList(
+                [Upsample2D(out_channels, use_conv=True, out_channels=out_channels, data_format=data_format)]
+            )
         else:
             self.upsamplers = None
 

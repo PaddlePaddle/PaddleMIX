@@ -17,7 +17,6 @@ import unittest
 
 import numpy as np
 import paddle
-from ppdiffusers.transformers import AutoTokenizer, CLIPTextConfig, CLIPTextModelWithProjection, CLIPTokenizer, T5EncoderModel
 
 from ppdiffusers import (
     AutoencoderKL,
@@ -26,13 +25,17 @@ from ppdiffusers import (
     StableDiffusion3ControlNetInpaintingPipeline,
 )
 from ppdiffusers.models import SD3ControlNetModel
-from ppdiffusers.utils.testing_utils import (
-    enable_full_determinism,
+from ppdiffusers.transformers import (
+    AutoTokenizer,
+    CLIPTextConfig,
+    CLIPTextModelWithProjection,
+    CLIPTokenizer,
+    T5EncoderModel,
 )
 from ppdiffusers.utils import randn_tensor
+from ppdiffusers.utils.testing_utils import enable_full_determinism
 
 from ..test_pipelines_common import PipelineTesterMixin
-
 
 enable_full_determinism()
 
@@ -181,7 +184,7 @@ class StableDiffusion3ControlInpaintNetPipelineFastTests(unittest.TestCase, Pipe
         assert image.shape == (1, 32, 32, 3)
 
         expected_slice = np.array(
-            [0.66951287, 0.10724381, 0.5473986,  0.15890905, 0.52206504, 0.44725734, 0.31528556, 0.41522938, 0.50141734]
+            [0.66951287, 0.10724381, 0.5473986, 0.15890905, 0.52206504, 0.44725734, 0.31528556, 0.41522938, 0.50141734]
         )
 
         assert (

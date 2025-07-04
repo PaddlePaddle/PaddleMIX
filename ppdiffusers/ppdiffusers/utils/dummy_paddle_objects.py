@@ -49,6 +49,7 @@ class PyramidAttentionBroadcastConfig(metaclass=DummyObject):
 def apply_pyramid_attention_broadcast(*args, **kwargs):
     requires_backends(apply_pyramid_attention_broadcast, ["paddle"])
 
+
 class AsymmetricAutoencoderKL(metaclass=DummyObject):
     _backends = ["paddle"]
 
@@ -122,6 +123,7 @@ class CacheMixin(metaclass=DummyObject):
     @classmethod
     def from_pretrained(cls, *args, **kwargs):
         requires_backends(cls, ["paddle"])
+
 
 class ConsistencyDecoderVAE(metaclass=DummyObject):
     _backends = ["paddle"]
@@ -227,6 +229,7 @@ class PriorTransformer(metaclass=DummyObject):
     def from_pretrained(cls, *args, **kwargs):
         requires_backends(cls, ["paddle"])
 
+
 class SD3Transformer2DModel(metaclass=DummyObject):
     _backends = ["paddle"]
 
@@ -240,6 +243,7 @@ class SD3Transformer2DModel(metaclass=DummyObject):
     @classmethod
     def from_pretrained(cls, *args, **kwargs):
         requires_backends(cls, ["paddle"])
+
 
 class T2IAdapter(metaclass=DummyObject):
     _backends = ["paddle"]
@@ -944,6 +948,7 @@ class EulerDiscreteScheduler(metaclass=DummyObject):
     def from_pretrained(cls, *args, **kwargs):
         requires_backends(cls, ["paddle"])
 
+
 class FlowMatchEulerDiscreteScheduler(metaclass=DummyObject):
     _backends = ["paddle"]
 
@@ -957,6 +962,7 @@ class FlowMatchEulerDiscreteScheduler(metaclass=DummyObject):
     @classmethod
     def from_pretrained(cls, *args, **kwargs):
         requires_backends(cls, ["paddle"])
+
 
 class HeunDiscreteScheduler(metaclass=DummyObject):
     _backends = ["paddle"]

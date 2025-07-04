@@ -15,6 +15,7 @@
 # See the License for the specific language governing permissions and
 
 import argparse
+import contextlib
 import copy
 import gc
 import itertools
@@ -24,45 +25,40 @@ import os
 import random
 import shutil
 import warnings
-import contextlib
-from contextlib import nullcontext
 from pathlib import Path
 from typing import Optional
 
 import numpy as np
 import paddle
 import paddle.nn as nn
-from paddle.distributed.fleet.utils import recompute
-import ppdiffusers.transformers
-from ppdiffusers.accelerate import Accelerator
-from ppdiffusers.accelerate.logging import get_logger
-from ppdiffusers.accelerate.utils import DistributedDataParallelKwargs, ProjectConfiguration, set_seed
 from huggingface_hub.utils import insecure_hashlib
-from ppdiffusers.peft import LoraConfig, set_peft_model_state_dict
-from ppdiffusers.peft.utils import get_peft_model_state_dict
-from PIL import Image
-from PIL.ImageOps import exif_transpose
 from paddle.io import Dataset
 from paddle.vision import transforms
 from paddle.vision.transforms.functional import crop
+from PIL import Image
+from PIL.ImageOps import exif_transpose
 from tqdm.auto import tqdm
-from ppdiffusers.transformers import CLIPTokenizer, PretrainedConfig, T5Tokenizer
 
 import ppdiffusers
+import ppdiffusers.transformers
 from ppdiffusers import (
     AutoencoderKL,
     FlowMatchEulerDiscreteScheduler,
     FluxPipeline,
     FluxTransformer2DModel,
 )
-from ppdiffusers.optimization import get_scheduler
-from ppdiffusers.training_utils import cast_training_params
-from ppdiffusers.utils import (
-    check_min_version,
-    convert_unet_state_dict_to_peft,
-    is_wandb_available,
+from ppdiffusers.accelerate import Accelerator
+from ppdiffusers.accelerate.logging import get_logger
+from ppdiffusers.accelerate.utils import (
+    DistributedDataParallelKwargs,
+    ProjectConfiguration,
+    set_seed,
 )
-
+from ppdiffusers.optimization import get_scheduler
+from ppdiffusers.peft import LoraConfig
+from ppdiffusers.peft.utils import get_peft_model_state_dict
+from ppdiffusers.transformers import CLIPTokenizer, PretrainedConfig, T5Tokenizer
+from ppdiffusers.utils import check_min_version, is_wandb_available
 
 if is_wandb_available():
     import wandb
@@ -72,12 +68,6 @@ check_min_version("0.24.1")
 
 logger = get_logger(__name__)
 
-import paddle
-from paddle import Tensor
-from typing import Tuple
-
-import paddle
-from PIL import Image
 
 def compute_loss_weighting_for_sd3(weighting_scheme: str, sigmas=None):
     """
@@ -95,6 +85,7 @@ def compute_loss_weighting_for_sd3(weighting_scheme: str, sigmas=None):
     else:
         weighting = paddle.ones_like(sigmas)
     return weighting
+
 
 def compute_density_for_timestep_sampling(
     weighting_scheme: str,
@@ -141,9 +132,7 @@ def get_params(img, output_size):
     th, tw = output_size
 
     if h + 1 < th or w + 1 < tw:
-        raise ValueError(
-            "Required crop size {} is larger than input image size {}".format((th, tw), (h, w))
-        )
+        raise ValueError("Required crop size {} is larger than input image size {}".format((th, tw), (h, w)))
 
     if w == tw and h == th:
         return 0, 0, h, w
@@ -151,6 +140,7 @@ def get_params(img, output_size):
     i = paddle.randint(0, h - th + 1).item()
     j = paddle.randint(0, w - tw + 1).item()
     return i, j, th, tw
+
 
 def load_text_encoders(class_one, class_two):
     text_encoder_one = class_one.from_pretrained(
@@ -179,7 +169,13 @@ def log_validation(
     # run inference
     generator = paddle.Generator().manual_seed(args.seed) if args.seed else None
     # autocast_ctx = nullcontext()
-    autocast_ctx = paddle.amp.auto_cast(enable=True, custom_white_list=None, custom_black_list=None, level="O2", dtype='float16' if args.mixed_precision == 'fp16' else 'bfloat16')
+    autocast_ctx = paddle.amp.auto_cast(
+        enable=True,
+        custom_white_list=None,
+        custom_black_list=None,
+        level="O2",
+        dtype="float16" if args.mixed_precision == "fp16" else "bfloat16",
+    )
 
     with autocast_ctx:
         images = [pipeline(**pipeline_args, generator=generator).images[0] for _ in range(args.num_validation_images)]
@@ -723,7 +719,7 @@ class DreamBoothDataset(Dataset):
             self.instance_images.extend(itertools.repeat(img, repeats))
 
         self.pixel_values = []
-        train_resize = transforms.Resize(size, interpolation='bilinear')
+        train_resize = transforms.Resize(size, interpolation="bilinear")
         train_crop = transforms.CenterCrop(size) if center_crop else transforms.RandomCrop(size)
         train_flip = transforms.RandomHorizontalFlip(prob=1.0)
         train_transforms = transforms.Compose(
@@ -767,7 +763,7 @@ class DreamBoothDataset(Dataset):
 
         self.image_transforms = transforms.Compose(
             [
-                transforms.Resize(size, interpolation='bilinear'),
+                transforms.Resize(size, interpolation="bilinear"),
                 transforms.CenterCrop(size) if center_crop else transforms.RandomCrop(size),
                 transforms.ToTensor(),
                 transforms.Normalize([0.5], [0.5]),
@@ -963,7 +959,6 @@ def encode_prompt(
     return prompt_embeds, pooled_prompt_embeds, text_ids
 
 
-
 def main(args):
     if args.report_to == "wandb" and args.hub_token is not None:
         raise ValueError(
@@ -998,7 +993,6 @@ def main(args):
         ppdiffusers.utils.logging.set_verbosity_info()
     else:
         ppdiffusers.utils.logging.set_verbosity_error()
-
 
     # If passed along, set the training seed now.
     if args.seed is not None:
@@ -1055,7 +1049,6 @@ def main(args):
         if args.output_dir is not None:
             os.makedirs(args.output_dir, exist_ok=True)
 
-
     # Load the tokenizers
     tokenizer_one = CLIPTokenizer.from_pretrained(
         args.pretrained_model_name_or_path,
@@ -1098,6 +1091,7 @@ def main(args):
     def set_requires_grad(model, is_enabled):
         for param in model.parameters():
             param.stop_gradient = not is_enabled
+
     set_requires_grad(transformer, False)
     set_requires_grad(vae, False)
     set_requires_grad(text_encoder_one, False)
@@ -1179,53 +1173,53 @@ def main(args):
                 weights.pop()
 
             FluxPipeline.save_lora_weights(
-                output_dir, 
+                output_dir,
                 transformer_lora_layers=transformer_lora_layers_to_save,
                 text_encoder_lora_layers=text_encoder_one_lora_layers_to_save,
             )
 
-    def load_model_hook(models, input_dir):
-        transformer_ = None
-        text_encoder_one_ = None
+    # def load_model_hook(models, input_dir):
+    #     transformer_ = None
+    #     text_encoder_one_ = None
 
-        while len(models) > 0:
-            model = models.pop()
+    #     while len(models) > 0:
+    #         model = models.pop()
 
-            if isinstance(model, type(unwrap_model(transformer))):
-                transformer_ = model
-            elif isinstance(model, type(unwrap_model(text_encoder_one))):
-                text_encoder_one_ = model
-            else:
-                raise ValueError(f"unexpected save model: {model.__class__}")
+    #         if isinstance(model, type(unwrap_model(transformer))):
+    #             transformer_ = model
+    #         elif isinstance(model, type(unwrap_model(text_encoder_one))):
+    #             text_encoder_one_ = model
+    #         else:
+    #             raise ValueError(f"unexpected save model: {model.__class__}")
 
-        lora_state_dict = FluxPipeline.lora_state_dict(input_dir)
+    #     lora_state_dict = FluxPipeline.lora_state_dict(input_dir)
 
-        transformer_state_dict = {
-            f'{k.replace("transformer.", "")}': v for k, v in lora_state_dict.items() if k.startswith("transformer.")
-        }
-        transformer_state_dict = convert_unet_state_dict_to_peft(transformer_state_dict)
-        incompatible_keys = set_peft_model_state_dict(transformer_, transformer_state_dict, adapter_name="default")
-        if incompatible_keys is not None:
-            # check only for unexpected keys
-            unexpected_keys = getattr(incompatible_keys, "unexpected_keys", None)
-            if unexpected_keys:
-                logger.warning(
-                    f"Loading adapter weights from state_dict led to unexpected keys not found in the model: "
-                    f" {unexpected_keys}. "
-                )
-        if args.train_text_encoder:
-            # Do we need to call `scale_lora_layers()` here?
-            _set_state_dict_into_text_encoder(lora_state_dict, prefix="text_encoder.", text_encoder=text_encoder_one_)
+    #     transformer_state_dict = {
+    #         f'{k.replace("transformer.", "")}': v for k, v in lora_state_dict.items() if k.startswith("transformer.")
+    #     }
+    #     transformer_state_dict = convert_unet_state_dict_to_peft(transformer_state_dict)
+    #     incompatible_keys = set_peft_model_state_dict(transformer_, transformer_state_dict, adapter_name="default")
+    #     if incompatible_keys is not None:
+    #         # check only for unexpected keys
+    #         unexpected_keys = getattr(incompatible_keys, "unexpected_keys", None)
+    #         if unexpected_keys:
+    #             logger.warning(
+    #                 f"Loading adapter weights from state_dict led to unexpected keys not found in the model: "
+    #                 f" {unexpected_keys}. "
+    #             )
+    #     if args.train_text_encoder:
+    #         # Do we need to call `scale_lora_layers()` here?
+    #         _set_state_dict_into_text_encoder(lora_state_dict, prefix="text_encoder.", text_encoder=text_encoder_one_)
 
-        # Make sure the trainable params are in float32. This is again needed since the base models
-        # are in `weight_dtype`. More details:
-        # https://github.com/huggingface/diffusers/pull/6514#discussion_r1449796804
-        if args.mixed_precision == "fp16":
-            models = [transformer_]
-            if args.train_text_encoder:
-                models.extend([text_encoder_one_])
-            # only upcast trainable parameters (LoRA) into fp32
-            # cast_training_params(models)
+    #     # Make sure the trainable params are in float32. This is again needed since the base models
+    #     # are in `weight_dtype`. More details:
+    #     # https://github.com/huggingface/diffusers/pull/6514#discussion_r1449796804
+    #     if args.mixed_precision == "fp16":
+    #         models = [transformer_]
+    #         if args.train_text_encoder:
+    #             models.extend([text_encoder_one_])
+    #         # only upcast trainable parameters (LoRA) into fp32
+    #         # cast_training_params(models)
 
     # accelerator.register_save_state_pre_hook(save_model_hook)
     # accelerator.register_load_state_pre_hook(load_model_hook)
@@ -1276,7 +1270,6 @@ def main(args):
             epsilon=args.adam_epsilon,
             grad_clip=nn.ClipGradByGlobalNorm(args.max_grad_norm) if args.max_grad_norm > 0 else None,
         )
-
 
     # Dataset and DataLoaders creation:
     train_dataset = DreamBoothDataset(
@@ -1391,7 +1384,7 @@ def main(args):
         power=args.lr_power,
     )
     optimizer.set_lr_scheduler(lr_scheduler)
-     # westfish: dont prepare
+    # westfish: dont prepare
     # # Prepare everything with our `accelerator`.
     # transformer, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
     #     transformer, optimizer, train_dataloader, lr_scheduler
@@ -1472,9 +1465,13 @@ def main(args):
         return sigma
 
     # add amp
-    if args.mixed_precision in ['fp16', 'bf16']:
+    if args.mixed_precision in ["fp16", "bf16"]:
         scaler = paddle.amp.GradScaler(init_loss_scaling=1024)
-        transformer = paddle.amp.decorate(models=transformer.to(dtype=paddle.float32), level="O2", dtype="bfloat16" if args.mixed_precision == 'bf16' else "float16")
+        transformer = paddle.amp.decorate(
+            models=transformer.to(dtype=paddle.float32),
+            level="O2",
+            dtype="bfloat16" if args.mixed_precision == "bf16" else "float16",
+        )
     for epoch in range(first_epoch, args.num_train_epochs):
         transformer.train()
         if args.train_text_encoder:
@@ -1495,7 +1492,9 @@ def main(args):
                 # encode batch prompts when custom prompts are provided for each image -
                 if train_dataset.custom_instance_prompts:
                     if not args.train_text_encoder:
-                        prompt_embeds, pooled_prompt_embeds, text_ids = compute_text_embeddings(prompts, text_encoders, tokenizers)
+                        prompt_embeds, pooled_prompt_embeds, text_ids = compute_text_embeddings(
+                            prompts, text_encoders, tokenizers
+                        )
                     else:
                         tokens_one = tokenize_prompt(tokenizer_one, prompts, max_sequence_length=77)
                         tokens_two = tokenize_prompt(
@@ -1577,7 +1576,13 @@ def main(args):
 
                 # Predict the noise residual
                 # westfish: add amp
-                with paddle.amp.auto_cast(enable=args.mixed_precision in ['fp16', 'bf16'], custom_white_list=["lookup_table", "lookup_table_v2"], custom_black_list=["reduce_sum", "c_softmax_with_cross_entropy"], level="O2", dtype='float16' if args.mixed_precision == 'fp16' else 'bfloat16'):
+                with paddle.amp.auto_cast(
+                    enable=args.mixed_precision in ["fp16", "bf16"],
+                    custom_white_list=["lookup_table", "lookup_table_v2"],
+                    custom_black_list=["reduce_sum", "c_softmax_with_cross_entropy"],
+                    level="O2",
+                    dtype="float16" if args.mixed_precision == "fp16" else "bfloat16",
+                ):
                     model_pred = transformer(
                         hidden_states=packed_noisy_model_input,
                         # YiYi notes: divide it by 1000 for now because we scale it by 1000 in the transforme rmodel (we should not keep it but I want to keep the inputs same for the model for testing)
@@ -1610,16 +1615,20 @@ def main(args):
 
                     # Compute prior loss
                     prior_loss = paddle.mean(
-                        (weighting.astype(dtype="float32") * (model_pred_prior.astype(dtype="float32") - target_prior.astype(dtype="float32")) ** 2).reshape(
-                            target_prior.shape[0], -1
-                        ),
+                        (
+                            weighting.astype(dtype="float32")
+                            * (model_pred_prior.astype(dtype="float32") - target_prior.astype(dtype="float32")) ** 2
+                        ).reshape(target_prior.shape[0], -1),
                         1,
                     )
                     prior_loss = prior_loss.mean()
 
                 # Compute regular loss.
                 loss = paddle.mean(
-                    (weighting.astype(dtype="float32") * (model_pred.astype(dtype="float32") - target.astype(dtype="float32")) ** 2).reshape([target.shape[0], -1]),
+                    (
+                        weighting.astype(dtype="float32")
+                        * (model_pred.astype(dtype="float32") - target.astype(dtype="float32")) ** 2
+                    ).reshape([target.shape[0], -1]),
                     1,
                 )
                 loss = loss.mean()
@@ -1630,7 +1639,7 @@ def main(args):
 
                 # westfish: add amp
                 # accelerator.backward(loss)
-                if args.mixed_precision in ['fp16', 'bf16']:
+                if args.mixed_precision in ["fp16", "bf16"]:
                     scaled = scaler.scale(loss)
                     scaled.backward()
                     scaler.step(optimizer)
@@ -1677,9 +1686,9 @@ def main(args):
                             if fp32_on_cpu:
                                 cpu_state = {}
                                 for k, v in state_dict.items():
-                                    t = v.cpu()                     
+                                    t = v.cpu()
                                     if t.dtype == paddle.float16:
-                                        t = t.cast('float32')       
+                                        t = t.cast("float32")
                                     cpu_state[k] = t
                                 paddle.save(cpu_state, save_path)
                             else:
@@ -1726,7 +1735,7 @@ def main(args):
                     del text_encoder_one, text_encoder_two
                     gc.collect()
                     paddle.device.cuda.empty_cache()
-                
+
                 images = None
                 del pipeline
         if global_step >= args.max_train_steps:
@@ -1739,9 +1748,7 @@ def main(args):
         transformer = transformer.to(dtype=weight_dtype)
         transformer_lora_layers = get_peft_model_state_dict(transformer)
 
-        FluxPipeline.save_lora_weights(
-            save_directory=args.output_dir, transformer_lora_layers=transformer_lora_layers
-        )
+        FluxPipeline.save_lora_weights(save_directory=args.output_dir, transformer_lora_layers=transformer_lora_layers)
 
         if not args.not_validation_final:
             # Final inference

@@ -16,14 +16,13 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import paddle
 import paddle.nn as nn
-import paddle.nn.functional as F
 from paddle.distributed.fleet.utils import recompute
 
 from ..configuration_utils import ConfigMixin, register_to_config
 from ..loaders import FromOriginalControlnetMixin
 from ..models.attention import JointTransformerBlock
 from ..models.attention_processor import Attention, AttentionProcessor
-from ..models.modeling_outputs  import Transformer2DModelOutput
+from ..models.modeling_outputs import Transformer2DModelOutput
 from ..models.modeling_utils import ModelMixin
 from ..utils import (
     USE_PEFT_BACKEND,
@@ -35,7 +34,6 @@ from ..utils import (
 )
 from .controlnet import BaseOutput, zero_module
 from .embeddings import CombinedTimestepTextProjEmbeddings, PatchEmbed
-
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -109,7 +107,7 @@ class SD3ControlNetModel(ModelMixin, ConfigMixin, FromOriginalControlnetMixin):
             patch_size=patch_size,
             in_channels=in_channels + extra_conditioning_channels,
             embed_dim=self.inner_dim,
-            add_pos_embed=False, # to verify
+            add_pos_embed=False,  # to verify
         )
         self.pos_embed_input = zero_module(pos_embed_input)
 
@@ -169,7 +167,6 @@ class SD3ControlNetModel(ModelMixin, ConfigMixin, FromOriginalControlnetMixin):
 
         return processors
 
-
     # Copied from diffusers.models.unets.unet_2d_condition.UNet2DConditionModel.set_attn_processor
     def set_attn_processor(self, processor: Union[AttentionProcessor, Dict[str, AttentionProcessor]]):
         r"""
@@ -222,7 +219,7 @@ class SD3ControlNetModel(ModelMixin, ConfigMixin, FromOriginalControlnetMixin):
         for module in self.modules():
             if isinstance(module, Attention):
                 module.fuse_projections(fuse=True)
-        
+
         # TODO: ?
         # self.set_attn_processor(FusedJointAttnProcessor2_0())
 
@@ -239,7 +236,7 @@ class SD3ControlNetModel(ModelMixin, ConfigMixin, FromOriginalControlnetMixin):
     def _set_gradient_checkpointing(self, module, value=False):
         if hasattr(module, "gradient_checkpointing"):
             module.gradient_checkpointing = value
-     
+
     #  TODO
     @classmethod
     def from_transformer(

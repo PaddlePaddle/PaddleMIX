@@ -305,7 +305,7 @@ class VaeImageProcessor(ConfigMixin):
                 image = [i.crop(crops_coords) for i in image]
             if self.config.do_resize:
                 height, width = self.get_default_height_width(image[0], height, width)
-                # Todo: resize_mode 
+                # Todo: resize_mode
                 image = [self.resize(i, height, width) for i in image]
             if self.config.do_convert_rgb:
                 image = [self.convert_to_rgb(i) for i in image]
@@ -357,7 +357,7 @@ class VaeImageProcessor(ConfigMixin):
         # laixinlu: add this, for paddle not auto support float32 * bool
         if isinstance(image, paddle.Tensor) and image.dtype == paddle.bool:
             image = image.cast(dtype="float32")
-            
+
         return image
 
     def postprocess(
@@ -658,7 +658,9 @@ class VaeImageProcessorLDM3D(VaeImageProcessor):
 
 
 def is_valid_image(image):
-    return isinstance(image, PIL.Image.Image) or isinstance(image, (np.ndarray, paddle.Tensor)) and image.ndim in (2, 3)
+    return (
+        isinstance(image, PIL.Image.Image) or isinstance(image, (np.ndarray, paddle.Tensor)) and image.ndim in (2, 3)
+    )
 
 
 def is_valid_image_imagelist(images):

@@ -17,7 +17,10 @@ import paddle
 from ppdiffusers import FluxPipeline
 
 pipe = FluxPipeline.from_pretrained(
-    "black-forest-labs/FLUX.1-dev", paddle_dtype=paddle.bfloat16, low_cpu_mem_usage=True, map_location="cpu",
+    "black-forest-labs/FLUX.1-dev",
+    paddle_dtype=paddle.bfloat16,
+    low_cpu_mem_usage=True,
+    map_location="cpu",
 )
 
 prompt = "A cat holding a sign that says hello world"
@@ -28,6 +31,6 @@ image = pipe(
     guidance_scale=3.5,
     num_inference_steps=50,
     max_sequence_length=512,
-    generator=paddle.Generator().manual_seed(42)
+    generator=paddle.Generator().manual_seed(42),
 ).images[0]
 image.save("text_to_image_generation-flux-dev-result.png")

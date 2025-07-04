@@ -1,7 +1,22 @@
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from pathlib import Path
-from loguru import logger
+
 from hydit.config import get_args
 from hydit.inference import End2End
+from loguru import logger
 
 
 def inferencer():
@@ -38,24 +53,25 @@ if __name__ == "__main__":
     # Run inference
     logger.info("Generating images...")
     height, width = args.image_size
-    results = gen.predict(args.prompt,
-                          height=height,
-                          width=width,
-                          seed=args.seed,
-                          enhanced_prompt=enhanced_prompt,
-                          negative_prompt=args.negative,
-                          infer_steps=args.infer_steps,
-                          guidance_scale=args.cfg_scale,
-                          batch_size=args.batch_size,
-                          src_size_cond=args.size_cond,
-                          )
-    images = results['images']
+    results = gen.predict(
+        args.prompt,
+        height=height,
+        width=width,
+        seed=args.seed,
+        enhanced_prompt=enhanced_prompt,
+        negative_prompt=args.negative,
+        infer_steps=args.infer_steps,
+        guidance_scale=args.cfg_scale,
+        batch_size=args.batch_size,
+        src_size_cond=args.size_cond,
+    )
+    images = results["images"]
 
     # Save images
-    save_dir = Path('results')
+    save_dir = Path("results")
     save_dir.mkdir(exist_ok=True)
     # Find the first available index
-    all_files = list(save_dir.glob('*.png'))
+    all_files = list(save_dir.glob("*.png"))
     if all_files:
         start = max([int(f.stem) for f in all_files]) + 1
     else:

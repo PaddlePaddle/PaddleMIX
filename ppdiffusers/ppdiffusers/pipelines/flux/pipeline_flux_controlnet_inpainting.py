@@ -11,22 +11,22 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import os
 import inspect
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+
 import numpy as np
+import paddle
 import PIL
 
-import paddle
-from  ppdiffusers.transformers import (
+from ppdiffusers.transformers import (
     CLIPTextModel,
     CLIPTokenizer,
     T5EncoderModel,
-    T5Tokenizer
+    T5Tokenizer,
 )
 
 from ...image_processor import PipelineImageInput, VaeImageProcessor
-from ...loaders import FromSingleFileMixin, FromSingleFileMixin, TextualInversionLoaderMixin
+from ...loaders import FromSingleFileMixin, TextualInversionLoaderMixin
 from ...models.autoencoder_kl import AutoencoderKL
 from ...models.controlnet_flux import FluxControlNetModel, FluxMultiControlNetModel
 from ...models.transformer_flux import FluxTransformer2DModel
@@ -43,15 +43,15 @@ EXAMPLE_DOC_STRING = """
         >>> from ppdiffusers import FluxControlNetInpaintPipeline
         >>> from ppdiffusers.models import FluxControlNetModel
         >>> from ppdiffusers.utils import load_image
-        
+
         >>> controlnet = FluxControlNetModel.from_pretrained(
         ...     "InstantX/FLUX.1-dev-controlnet-canny", paddle_dtype=paddle.float16
         ... )
         >>> pipe = FluxControlNetInpaintPipeline.from_pretrained(
-        ...     "black-forest-labs/FLUX.1-dev", controlnet=controlnet, paddle_dtype=paddle.float16, 
+        ...     "black-forest-labs/FLUX.1-dev", controlnet=controlnet, paddle_dtype=paddle.float16,
         ...     low_cpu_mem_usage=True, map_location="cpu"
         ... )
-        
+
         >>> control_image = load_image(
         ...     "https://huggingface.co/InstantX/FLUX.1-dev-Controlnet-Canny-alpha/resolve/main/canny.jpg"
         ... )
@@ -61,7 +61,7 @@ EXAMPLE_DOC_STRING = """
         >>> mask_image = load_image(
         ...     "https://raw.githubusercontent.com/CompVis/latent-diffusion/main/data/inpainting_examples/overture-creations-5sI6fQgYIuo_mask.png"
         ... )
-        
+
         >>> prompt = "A girl holding a sign that says InstantX"
         >>> image = pipe(
         ...     prompt,
@@ -90,6 +90,7 @@ except:
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
+
 def calculate_shift(
     image_seq_len,
     base_seq_len: int = 256,
@@ -102,9 +103,8 @@ def calculate_shift(
     mu = image_seq_len * m + b
     return mu
 
-def retrieve_latents(
-    encoder_output: paddle.Tensor, generator: Optional[int] = None, sample_mode: str = "sample"
-):
+
+def retrieve_latents(encoder_output: paddle.Tensor, generator: Optional[int] = None, sample_mode: str = "sample"):
     if hasattr(encoder_output, "latent_dist") and sample_mode == "sample":
         return encoder_output.latent_dist.sample(generator)
     elif hasattr(encoder_output, "latent_dist") and sample_mode == "argmax":
@@ -171,7 +171,6 @@ def retrieve_timesteps(
     return timesteps, num_inference_steps
 
 
-
 class FluxControlNetInpaintPipeline(
     DiffusionPipeline,
     FromSingleFileMixin,
@@ -194,7 +193,6 @@ class FluxControlNetInpaintPipeline(
     _optional_components = []
     _callback_tensor_inputs = ["latents", "prompt_embeds", "control_image", "mask", "masked_image_latents"]
 
-
     def __init__(
         self,
         scheduler: FlowMatchEulerDiscreteScheduler,
@@ -205,7 +203,7 @@ class FluxControlNetInpaintPipeline(
         tokenizer_2: T5Tokenizer,
         transformer: FluxTransformer2DModel,
         controlnet: Union[
-            FluxControlNetModel, List[FluxControlNetModel],Tuple[FluxControlNetModel], FluxMultiControlNetModel
+            FluxControlNetModel, List[FluxControlNetModel], Tuple[FluxControlNetModel], FluxMultiControlNetModel
         ],
     ):
         super().__init__()
@@ -262,7 +260,9 @@ class FluxControlNetInpaintPipeline(
         text_input_ids = text_inputs.input_ids
         untruncated_ids = self.tokenizer_2(prompt, padding="longest", return_tensors="pd").input_ids
 
-        if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(text_input_ids, untruncated_ids):
+        if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(
+            text_input_ids, untruncated_ids
+        ):
             removed_text = self.tokenizer_2.batch_decode(untruncated_ids[:, self.tokenizer_max_length - 1 : -1])
             logger.warning(
                 "The following part of your input was truncated because `max_sequence_length` is set to "
@@ -306,7 +306,9 @@ class FluxControlNetInpaintPipeline(
 
         text_input_ids = text_inputs.input_ids
         untruncated_ids = self.tokenizer(prompt, padding="longest", return_tensors="pd").input_ids
-        if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(text_input_ids, untruncated_ids):
+        if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(
+            text_input_ids, untruncated_ids
+        ):
             removed_text = self.tokenizer.batch_decode(untruncated_ids[:, self.tokenizer_max_length - 1 : -1])
             logger.warning(
                 "The following part of your input was truncated because CLIP can only handle sequences up to"
@@ -323,7 +325,7 @@ class FluxControlNetInpaintPipeline(
         prompt_embeds = prompt_embeds.reshape([batch_size * num_images_per_prompt, -1])
 
         return prompt_embeds
-    
+
     def encode_prompt(
         self,
         prompt: Union[str, List[str]],
@@ -380,7 +382,7 @@ class FluxControlNetInpaintPipeline(
         text_ids = paddle.zeros([prompt_embeds.shape[1], 3]).astype(dtype=dtype)
 
         return prompt_embeds, pooled_prompt_embeds, text_ids
-    
+
     def encode_image(self, image, num_images_per_prompt):
         dtype = next(self.image_encoder.parameters()).dtype
 
@@ -391,7 +393,7 @@ class FluxControlNetInpaintPipeline(
         image_embeds = self.image_encoder(image).image_embeds
         image_embeds = image_embeds.repeat_interleave(num_images_per_prompt, axis=0)
         return image_embeds
-    
+
     def _encode_vae_image(self, image: paddle.Tensor, generator: paddle.Generator):
         if isinstance(generator, list):
             image_latents = [
@@ -405,14 +407,13 @@ class FluxControlNetInpaintPipeline(
         image_latents = (image_latents - self.vae.config.shift_factor) * self.vae.config.scaling_factor
 
         return image_latents
-    
-    
+
     def get_timesteps(self, num_inference_steps, strength):
         # get the original timestep using init_timestep
         init_timestep = min(num_inference_steps * strength, num_inference_steps)
 
         t_start = int(max(num_inference_steps - init_timestep, 0))
-        timesteps = self.scheduler.timesteps[t_start * self.scheduler.order:]
+        timesteps = self.scheduler.timesteps[t_start * self.scheduler.order :]
         if hasattr(self.scheduler, "set_begin_index"):
             self.scheduler.set_begin_index(t_start * self.scheduler.order)
 
@@ -488,8 +489,7 @@ class FluxControlNetInpaintPipeline(
 
         if max_sequence_length is not None and max_sequence_length > 512:
             raise ValueError(f"`max_sequence_length` cannot be greater than 512 but is {max_sequence_length}")
-        
-        
+
     @staticmethod
     def _prepare_latent_image_ids(batch_size, height, width, dtype):
         latent_image_ids = paddle.zeros([height, width, 3], dtype=dtype)
@@ -527,19 +527,18 @@ class FluxControlNetInpaintPipeline(
         latents = latents.reshape([batch_size, channels // (2 * 2), height, width])
 
         return latents
-    
-    
+
     def prepare_latents(
-            self,
-            image,
-            timestep,
-            batch_size,
-            num_channels_latents,
-            height,
-            width,
-            dtype,
-            generator,
-            latents=None,
+        self,
+        image,
+        timestep,
+        batch_size,
+        num_channels_latents,
+        height,
+        width,
+        dtype,
+        generator,
+        latents=None,
     ):
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
@@ -555,7 +554,7 @@ class FluxControlNetInpaintPipeline(
         latent_image_ids = self._prepare_latent_image_ids(batch_size, height // 2, width // 2, dtype)
         image = image.astype(dtype=dtype)
         image_latents = self._encode_vae_image(image=image, generator=generator)
-        
+
         if batch_size > image_latents.shape[0] and batch_size % image_latents.shape[0] == 0:
             # expand init_latents for batch_size
             additional_image_per_prompt = batch_size // image_latents.shape[0]
@@ -566,23 +565,21 @@ class FluxControlNetInpaintPipeline(
             )
         else:
             image_latents = paddle.concat([image_latents], axis=0)
-            
+
         if latents is None:
             noise = randn_tensor(shape, generator=generator, dtype=dtype)
             latents = self.scheduler.scale_noise(image_latents, timestep, noise)
         else:
             noise = latents.astype(dtype=dtype)
             latents = noise
-            
+
             latents = self.scheduler.scale_noise(image_latents, timestep, noise)
-            
 
         noise = self._pack_latents(noise, batch_size, num_channels_latents, height, width)
         image_latents = self._pack_latents(image_latents, batch_size, num_channels_latents, height, width)
         latents = self._pack_latents(latents, batch_size, num_channels_latents, height, width)
         return latents, noise, image_latents, latent_image_ids
-    
-    
+
     def prepare_mask_latents(
         self,
         mask,
@@ -653,9 +650,6 @@ class FluxControlNetInpaintPipeline(
 
         return mask, masked_image_latents
 
-
-    
-
     def prepare_image(
         self,
         image,
@@ -688,7 +682,7 @@ class FluxControlNetInpaintPipeline(
             image = paddle.concat([image] * 2)
 
         return image
-    
+
     @property
     def guidance_scale(self):
         return self._guidance_scale
@@ -704,7 +698,6 @@ class FluxControlNetInpaintPipeline(
     @property
     def interrupt(self):
         return self._interrupt
-    
 
     @paddle.no_grad()
     @replace_example_docstring(EXAMPLE_DOC_STRING)
@@ -1013,7 +1006,7 @@ class FluxControlNetInpaintPipeline(
             generator,
             latents,
         )
-        
+
         # 8. Prepare mask latents
         mask_condition = self.mask_processor.preprocess(
             mask_image, height=global_height, width=global_width, resize_mode=resize_mode, crops_coords=crops_coords
@@ -1021,7 +1014,7 @@ class FluxControlNetInpaintPipeline(
 
         if masked_image_latents is None:
             # Convert boolean mask to float32 before multiplication
-            mask_float = paddle.cast(mask_condition < 0.5, dtype='float32')
+            mask_float = paddle.cast(mask_condition < 0.5, dtype="float32")
             masked_image = init_image * mask_float
         else:
             masked_image = masked_image_latents
@@ -1062,7 +1055,7 @@ class FluxControlNetInpaintPipeline(
                     use_guidance = self.controlnet.nets[0].config.guidance_embeds
                 else:
                     use_guidance = self.controlnet.config.guidance_embeds
-                    
+
                 if use_guidance:
                     guidance = paddle.full([1], guidance_scale, dtype=paddle.float32)
                     guidance = guidance.expand([latents.shape[0]])
@@ -1092,8 +1085,9 @@ class FluxControlNetInpaintPipeline(
                         joint_attention_kwargs=self.joint_attention_kwargs,
                         return_dict=False,
                     )
-                except Exception as e:
+                except Exception:
                     import traceback
+
                     traceback.print_exc()
                     raise
 
@@ -1118,8 +1112,9 @@ class FluxControlNetInpaintPipeline(
                         return_dict=False,
                         controlnet_blocks_repeat=controlnet_blocks_repeat,
                     )[0]
-                except Exception as e:
+                except Exception:
                     import traceback
+
                     traceback.print_exc()
                     raise
 

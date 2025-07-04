@@ -5,9 +5,9 @@
 <h5 align="center">
 
 [![hf_paper](https://img.shields.io/badge/🤗-Models%20In%20HF-red.svg)](https://huggingface.co/PaddleMIX)
-[![arXiv](https://img.shields.io/badge/Arxiv-2411.19108-b31b1b.svg?logo=arXiv)](https://arxiv.org/abs/2503.16983) 
-[![Home Page](https://img.shields.io/badge/Project-<Website>-blue.svg)](https://pp-vctrl.github.io/) 
-[![License](https://img.shields.io/badge/License-Apache%202.0-yellow)](./LICENSE) 
+[![arXiv](https://img.shields.io/badge/Arxiv-2411.19108-b31b1b.svg?logo=arXiv)](https://arxiv.org/abs/2503.16983)
+[![Home Page](https://img.shields.io/badge/Project-<Website>-blue.svg)](https://pp-vctrl.github.io/)
+[![License](https://img.shields.io/badge/License-Apache%202.0-yellow)](./LICENSE)
 
 </h5>
 
@@ -23,7 +23,7 @@
 
 
 
-<!-- **[PP-Vctrl: Controllable Video Generation Models](https://arxiv.org/absadada/)** 
+<!-- **[PP-Vctrl: Controllable Video Generation Models](https://arxiv.org/absadada/)**
 </br> -->
 <!-- [![arXiv](https://img.shields.io/badge/arXiv-2307-b31b1b.svg)](https://arxiv.org/abs/) -->
 <!-- [![Project Page](https://img.shields.io/badge/Project-Website-green)](https://https://github.com/PaddlePaddle/PaddleMIX.github.io/) -->
@@ -42,7 +42,7 @@
 
 
 ## 📷 快速展示
-### PP-VCtr-I2V 生成的精彩演示 
+### PP-VCtr-I2V 生成的精彩演示
 首先对源视频提取视频控制序列（边缘，蒙版，姿态）。然后利用ControlNet重新制作视频首帧。将视频控制序列和重新制作的视频首帧输入PP-VCtrl-I2V中生成新的视频。
 
 ### 1.边缘控制PPVCtrl-I2V
@@ -71,12 +71,12 @@
 
 
 
-    
+
 
 
 
 ## 🚀 快速开始
-***注意:*** 
+***注意:***
 PP-VCtrl模型是建立在 **PaddlePaddle** 和 **ppdiffusers** 上的。以下是使用和操作说明。
 
 ### 1. 设置仓库和环境
@@ -231,13 +231,13 @@ bash scripts/infer_cogvideox_i2v_mask_vctrl.sh
 ##t2v
 bash scripts/infer_cogvideox_t2v_mask_vctrl.sh
 ```
-***注意:*** 边缘和蒙版控制模型可以同时支持t2v和i2v模型。 
+***注意:*** 边缘和蒙版控制模型可以同时支持t2v和i2v模型。
 ### 3. 通过人物姿态图控制生成视频
 ```bash
 ##i2v
 bash scripts/infer_cogvideox_i2v_pose_vctrl.sh
 ```
-***注意:*** 人物姿态控制模型只适用于i2v模型。 
+***注意:*** 人物姿态控制模型只适用于i2v模型。
 ### 4. Gradio 应用
 我们还创建了一个 Gradio 应用，供您与我们的模型进行交互。
 
@@ -297,17 +297,17 @@ python gradios/gradio_mask2video.py
 
 <img src="assets/models/eval_2.png" style="width:100%">
 
-<!-- 
+<!--
 ## More version
 <details close>
 <summary>Model Versions</summary>
 </details>
 -->
-<!-- 
+<!--
 ## Contact us
-Users: [Users@example.com](Users@example.com)  
+Users: [Users@example.com](Users@example.com)
 -->
-<!-- 
+<!--
  ## BibTex
 
 ```

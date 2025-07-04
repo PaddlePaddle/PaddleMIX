@@ -83,7 +83,7 @@ class SDGuidance(nn.Layer):
         self.fake_unet.requires_grad_(True)
 
         self.fake_unet.enable_xformers_memory_efficient_attention()
-        #TODO remove it
+        # TODO remove it
         self.dummy_network = DummyNetwork()
         self.dummy_network.requires_grad_(False)
 
