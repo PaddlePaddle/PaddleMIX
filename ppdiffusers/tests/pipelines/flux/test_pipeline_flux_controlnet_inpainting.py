@@ -1,3 +1,17 @@
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import random
 import unittest
 
@@ -22,7 +36,6 @@ from ppdiffusers.utils import floats_tensor, randn_tensor
 from ppdiffusers.utils.testing_utils import enable_full_determinism
 
 from ..test_pipelines_common import PipelineTesterMixin
-
 
 enable_full_determinism()
 
@@ -53,7 +66,7 @@ class FluxControlNetInpaintPipelineTests(unittest.TestCase, PipelineTesterMixin)
         transformer = FluxTransformer2DModel(
             patch_size=1,
             in_channels=8,
-            out_channels=8, # Coincide con in_channels para consistencia
+            out_channels=8,  # Coincide con in_channels para consistencia
             num_layers=1,
             num_single_layers=1,
             attention_head_dim=16,
@@ -132,9 +145,9 @@ class FluxControlNetInpaintPipelineTests(unittest.TestCase, PipelineTesterMixin)
         # Crear tensores y normalizarlos al rango [0,1]
         image = floats_tensor((1, 3, 32, 32), rng=random.Random(seed))
         image = paddle.clip(image, 0.0, 1.0)  # Asegurar que está en [0,1]
-        
+
         mask_image = paddle.ones([1, 1, 32, 32])
-        
+
         control_image = floats_tensor((1, 3, 32, 32), rng=random.Random(seed))
         control_image = paddle.clip(control_image, 0.0, 1.0)  # Asegurar que está en [0,1]
 
@@ -206,7 +219,7 @@ class FluxControlNetInpaintPipelineTests(unittest.TestCase, PipelineTesterMixin)
             )
             control_image = (control_image + 1) / 2.0
             control_image = paddle.clip(control_image, 0.0, 1.0)
-            
+
             image = randn_tensor(
                 (1, 3, height, width),
                 generator=generator,
@@ -214,17 +227,19 @@ class FluxControlNetInpaintPipelineTests(unittest.TestCase, PipelineTesterMixin)
             )
             image = (image + 1) / 2.0
             image = paddle.clip(image, 0.0, 1.0)
-            
+
             mask_image = paddle.ones([1, 1, height, width])
-            
-            inputs.update({
-                "control_image": control_image,
-                "image": image,
-                "mask_image": mask_image,
-                "height": height,
-                "width": width,
-            })
-            
+
+            inputs.update(
+                {
+                    "control_image": control_image,
+                    "image": image,
+                    "mask_image": mask_image,
+                    "height": height,
+                    "width": width,
+                }
+            )
+
             output = pipe(**inputs).images[0]
             output_height, output_width, _ = output.shape
             assert (output_height, output_width) == (expected_height, expected_width)

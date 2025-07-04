@@ -176,15 +176,15 @@ if __name__ == "__main__":
         validation_mask_images = load_images_from_video_to_pil(args.control_mask_video_path)
 
     if args.prompt_path is not None:
-        if not args.prompt_path.endswith('.txt'):
+        if not args.prompt_path.endswith(".txt"):
             prompt = args.prompt_path
         else:
             with open(args.prompt_path, "r") as f:
                 lines = f.readlines()
                 prompt = lines[0].strip()
     else:
-        prompt=None
-    
+        prompt = None
+
     if args.vctrl_path.endswith(".pdparams"):
         vctrl = VCtrlModel.from_config(args.vctrl_config)
         vctrl.set_state_dict(state_dict=paddle.load(args.vctrl_path))
@@ -207,7 +207,11 @@ if __name__ == "__main__":
         )
     else:
         pipeline = CogVideoXVCtrlImageToVideoPipeline.from_pretrained(
-            args.pretrained_model_name_or_path, vctrl=vctrl, paddle_dtype=paddle.float16,low_cpu_mem_usage=True, map_location="cpu",
+            args.pretrained_model_name_or_path,
+            vctrl=vctrl,
+            paddle_dtype=paddle.float16,
+            low_cpu_mem_usage=True,
+            map_location="cpu",
         )
 
     pipeline.scheduler = CogVideoXDDIMScheduler.from_config(pipeline.scheduler.config, timestep_spacing="trailing")
@@ -225,7 +229,7 @@ if __name__ == "__main__":
             validation_control_images = [ref_image] + validation_control_images
     num_frames = len(validation_control_images)
     num_frames = min(num_frames, args.max_frame)
-    
+
     if args.benchmark:
         print("Benchmarking...")
         warm_up = 1
@@ -238,27 +242,29 @@ if __name__ == "__main__":
                 starttime = datetime.datetime.now()
             with paddle.no_grad():
                 video = pipeline(
-                        image=ref_image,
-                        prompt=prompt,
-                        num_inference_steps=args.num_inference_steps,
-                        num_frames=num_frames,
-                        guidance_scale=args.guidance_scale,
-                        generator=paddle.Generator().manual_seed(42),
-                        conditioning_frames=validation_control_images[:num_frames],
-                        conditioning_frame_indices=list(range(num_frames)),
-                        conditioning_scale=args.conditioning_scale,
-                        width=args.width,
-                        height=args.height,
-                        task=args.task,
-                        conditioning_masks=validation_mask_images[:num_frames] if args.task == "mask" else None,
-                        vctrl_layout_type=args.vctrl_layout_type,
-                    ).frames[0]
+                    image=ref_image,
+                    prompt=prompt,
+                    num_inference_steps=args.num_inference_steps,
+                    num_frames=num_frames,
+                    guidance_scale=args.guidance_scale,
+                    generator=paddle.Generator().manual_seed(42),
+                    conditioning_frames=validation_control_images[:num_frames],
+                    conditioning_frame_indices=list(range(num_frames)),
+                    conditioning_scale=args.conditioning_scale,
+                    width=args.width,
+                    height=args.height,
+                    task=args.task,
+                    conditioning_masks=validation_mask_images[:num_frames] if args.task == "mask" else None,
+                    vctrl_layout_type=args.vctrl_layout_type,
+                ).frames[0]
             if i > 0:
                 paddle.device.synchronize()
                 endtime = datetime.datetime.now()
 
                 final_result.append(video)
-                save_vid_side_by_side(final_result, validation_control_images[:num_frames], args.output_dir, fps=args.fps)
+                save_vid_side_by_side(
+                    final_result, validation_control_images[:num_frames], args.output_dir, fps=args.fps
+                )
 
             if i > 0:
                 duringtime = endtime - starttime

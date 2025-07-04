@@ -12,10 +12,15 @@
 
 # code is heavily based on https://github.com/tianweiy/DMD2
 
+import contextlib
+import json
 import os
 import random
+import shutil
 import sys
 import time
+import warnings
+from collections import OrderedDict
 from typing import Optional
 
 import numpy as np
@@ -28,35 +33,64 @@ from paddle.distributed.fleet.meta_parallel.sharding.group_sharded_stage2 import
 from paddlenlp.trainer import Trainer as NLPTrainer
 from paddlenlp.trainer import get_last_checkpoint
 from paddlenlp.trainer.trainer import (
+    COMPUTE_GENERATOR_GRADIENT,
+    LORA_WEIGHTS_NAME,
+    LOSS_INF_ERROR,
+    LOSS_NAN_ERROR,
     OPTIMIZER_NAME,
     PADDLE_WEIGHTS_INDEX_NAME,
     PADDLE_WEIGHTS_NAME,
     PREFIX_CHECKPOINT_DIR,
+    PREFIX_WEIGHTS_NAME,
+    SCALER_NAME,
     SCHEDULER_NAME,
     TRAINER_STATE_NAME,
     TRAINING_ARGS_NAME,
+    Dict,
+    DistributedBatchSampler,
     GroupShardedOptimizerStage2,
     HybridParallelOptimizer,
+    IntervalStrategy,
     LoKrModel,
     LoRAModel,
+    NlpDistributedBatchSampler,
+    OptimizerNames,
     PrefixModelForCausalLM,
     PretrainedModel,
+    QuantizationLinear,
     ReFTModel,
     ShardingOption,
     TrainerState,
+    TrainOutput,
     VeRAModel,
     _add_variant,
     _obtain_optimizer_parameters_list,
+    autocast,
+    broadcast_dataset_rank0_model,
     core,
     dist,
+    distributed_file,
+    distributed_isfile,
+    fused_allreduce_gradients,
+    get_env_device,
+    get_scheduler,
+    has_length,
     in_auto_parallel_align_mode,
     is_paddle_cuda_available,
+    load_sharded_checkpoint,
     logger,
+    mix_precision_utils,
     reshard_util,
     should_skip_data,
+    speed_metrics,
+    split_inputs_sequence_dim,
+    split_inputs_sequence_dim_load_balance,
+    split_parallel_config,
     strtobool,
     unwrap_model,
+    visual,
 )
+from tqdm import tqdm
 
 from .wandb_callback import WandbCallback
 
@@ -1173,19 +1207,6 @@ class DMD2Trainer(NLPTrainer):
                 logs["current_memory_reserved"] = current_memory_reserved / divisor
                 logs["max_memory_allocated"] = max_memory_allocated / divisor
                 logs["max_memory_reserved"] = max_memory_reserved / divisor
-
-            total_train_batch_size = (
-                self.args.train_batch_size * self.args.gradient_accumulation_steps * self.args.dataset_world_size
-            )
-
-            seq_length = None
-            model_flops = None
-            if getattr(self, "is_pretraining", False) and hasattr(self.model, "config"):
-                seq_length = getattr(self.model.config, "seq_length", None)
-                try:
-                    model_flops = self.model.get_hardware_flops(seq_length=seq_length, recompute=self.args.recompute)
-                except NotImplementedError:
-                    model_flops = None
 
             self._total_loss_scalar += tr_loss_scalar
             self._globalstep_last_logged = self.state.global_step

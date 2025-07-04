@@ -16,20 +16,19 @@ import os
 import sys
 import unittest
 
-import numpy as np
 import paddle
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
 from paddlemix.appflow import Appflow
-from ppdiffusers.utils import load_image, load_numpy
+from ppdiffusers.utils import load_image
 
 
 class TextGuidedImageUpscalingTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/data/low_res_cat.png"
-        cls.expected_image = 'https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/appflow/test/test_TextGuidedImageUpscaling/upscaled_white_cat.png'
-    
+        cls.expected_image = "https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/appflow/test/test_TextGuidedImageUpscaling/upscaled_white_cat.png"
+
     def test_image_upscaling(self):
 
         low_res_img = load_image(self.url).resize((128, 128))
@@ -37,11 +36,11 @@ class TextGuidedImageUpscalingTest(unittest.TestCase):
         prompt = "a white cat"
         paddle.seed(1024)
 
-        app = Appflow(app='image2image_text_guided_upscaling',models=['stabilityai/stable-diffusion-x4-upscaler'])
-        image = app(prompt=prompt,image=low_res_img)['result']
+        app = Appflow(app="image2image_text_guided_upscaling", models=["stabilityai/stable-diffusion-x4-upscaler"])
+        image = app(prompt=prompt, image=low_res_img)["result"]
 
         self.assertIsNotNone(image)
-        #增加结果对比
+        # 增加结果对比
         expect_img = load_image(self.expected_image)
 
         size = (512, 512)
@@ -60,6 +59,7 @@ class TextGuidedImageUpscalingTest(unittest.TestCase):
         average_diff = diff_sum / len(data1)
 
         self.assertLessEqual(average_diff, 5)
+
 
 if __name__ == "__main__":
 

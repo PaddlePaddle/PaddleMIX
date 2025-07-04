@@ -15,28 +15,29 @@
 import os
 import sys
 import unittest
+
 import paddle
-import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
 from paddlemix.appflow import Appflow
-from ppdiffusers.utils import load_image, load_numpy
+from ppdiffusers.utils import load_image
 
 
 class DualTextGuidedImageGeneration(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/data/benz.jpg"
-        cls.expected_image = 'https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/appflow/test/test_DualTextAndImageGuidedGeneration/dual_text_and_image_guided_generation.png'
+        cls.expected_image = "https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/appflow/test/test_DualTextAndImageGuidedGeneration/dual_text_and_image_guided_generation.png"
+
     def test_image_generation(self):
         image = load_image(self.url)
         prompt = "a red car in the sun"
         paddle.seed(1024)
-        app = Appflow(app='dual_text_and_image_guided_generation',models=['shi-labs/versatile-diffusion'])
-        image = app(prompt=prompt,image=image)['result']
+        app = Appflow(app="dual_text_and_image_guided_generation", models=["shi-labs/versatile-diffusion"])
+        image = app(prompt=prompt, image=image)["result"]
 
         self.assertIsNotNone(image)
-        #增加结果对比
+        # 增加结果对比
         expect_img = load_image(self.expected_image)
 
         size = (512, 512)
@@ -55,6 +56,7 @@ class DualTextGuidedImageGeneration(unittest.TestCase):
         average_diff = diff_sum / len(data1)
 
         self.assertLessEqual(average_diff, 5)
+
 
 if __name__ == "__main__":
 

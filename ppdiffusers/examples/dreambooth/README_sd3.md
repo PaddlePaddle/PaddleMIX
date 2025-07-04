@@ -5,7 +5,7 @@
 `train_dreambooth_sd3.py` 脚本展示了如何进行DreamBooth全参数微调[Stable Diffusion 3](https://huggingface.co/papers/2403.03206)， `train_dreambooth_lora_sd3.py` 脚本中展示了如何进行DreamBooth LoRA微调。
 
 
-> [!NOTE]  
+> [!NOTE]
 > Stable Diffusion 3遵循 [Stability Community 开源协议](https://stability.ai/license)。
 > Community License: Free for research, non-commercial, and commercial use for organisations or individuals with less than $1M annual revenue. You only need a paid Enterprise license if your yearly revenues exceed USD$1M and you use Stability AI models in commercial products or services. Read more: https://stability.ai/license
 

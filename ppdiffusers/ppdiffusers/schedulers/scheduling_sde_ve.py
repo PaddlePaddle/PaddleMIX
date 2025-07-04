@@ -206,7 +206,7 @@ class ScoreSdeVeScheduler(SchedulerMixin, ConfigMixin):
         # NOTE(laixinlu) convert sigmas to the dtype of the model output
         if self.discrete_sigmas.dtype != model_output.dtype:
             self.discrete_sigmas = self.discrete_sigmas.cast(model_output.dtype)
-            
+
         sigma = self.discrete_sigmas[timesteps]
         adjacent_sigma = self.get_adjacent_sigma(timesteps, timestep)
         drift = paddle.zeros_like(sample)
@@ -265,7 +265,7 @@ class ScoreSdeVeScheduler(SchedulerMixin, ConfigMixin):
         # NOTE(laixinlu) convert sigmas to the dtype of the model output
         if self.sigmas.dtype != model_output.dtype:
             self.sigmas = self.sigmas.cast(model_output.dtype)
-            
+
         # For small batch sizes, the paper "suggest replacing norm(z) with sqrt(d), where d is the dim. of z"
         # sample noise for correction
         noise = randn_tensor(sample.shape, generator=generator)

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import gc
+
 import random
 import tempfile
 import unittest
@@ -32,22 +32,14 @@ from ppdiffusers.transformers import (
     CLIPVisionConfig,
     CLIPVisionModelWithProjection,
 )
-from ppdiffusers.utils import (
-    is_accelerate_available,
-    is_accelerate_version,
-    load_image,
-    logging,
-)
+from ppdiffusers.utils import is_accelerate_available, is_accelerate_version, logging
 from ppdiffusers.utils.import_utils import is_ppxformers_available
 from ppdiffusers.utils.testing_utils import (
     CaptureLogger,
     disable_full_determinism,
     enable_full_determinism,
     floats_tensor,
-    numpy_cosine_similarity_distance,
     paddle_device,
-    require_paddle_gpu,
-    slow,
 )
 
 from ..test_pipelines_common import PipelineTesterMixin

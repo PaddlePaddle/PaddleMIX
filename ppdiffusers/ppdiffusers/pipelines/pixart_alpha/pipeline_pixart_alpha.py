@@ -167,6 +167,7 @@ ASPECT_RATIO_256_BIN = {
     "4.0": [512.0, 128.0],
 }
 
+
 def retrieve_timesteps(
     scheduler,
     num_inference_steps: Optional[int] = None,

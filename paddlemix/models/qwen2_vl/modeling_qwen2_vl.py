@@ -1965,7 +1965,10 @@ class Qwen2VLForConditionalGeneration(Qwen2VLPreTrainedModel):
                 image_mask = input_ids == self.config.image_token_id
                 if self.training:
                     inputs_embeds = inputs_embeds.clone()
-                inputs_embeds[image_mask] = image_embeds
+                # TODO(LielinJiang) paddle develop bug, remove this check when paddle fix
+                if inputs_embeds[image_mask].shape[0] != 0:
+                    inputs_embeds[image_mask] = image_embeds
+
             if pixel_values_videos is not None:
                 # 确保 pixel_values_videos 和 inputs_embeds 使用相同的数据类型
                 pixel_values_videos = paddle.cast(pixel_values_videos, inputs_embeds.dtype)

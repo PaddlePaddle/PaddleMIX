@@ -16,28 +16,22 @@ import inspect
 from typing import Any, Callable, Dict, List, Optional, Union
 
 import numpy as np
-import PIL.Image
 import paddle
-from  ppdiffusers.transformers import ( # T5TokenizerFast,
-    CLIPImageProcessor,
+import PIL.Image
+
+from ppdiffusers.transformers import (  # T5TokenizerFast,
     CLIPTextModel,
     CLIPTokenizer,
-    CLIPVisionModelWithProjection,
     T5EncoderModel,
-    T5Tokenizer
+    T5Tokenizer,
 )
 
 from ...image_processor import PipelineImageInput, VaeImageProcessor
-from ...loaders import TextualInversionLoaderMixin # FluxLoraLoaderMixin
+from ...loaders import TextualInversionLoaderMixin  # FluxLoraLoaderMixin
 from ...models.autoencoder_kl import AutoencoderKL
 from ...models.transformer_flux import FluxTransformer2DModel
 from ...schedulers import FlowMatchEulerDiscreteScheduler
-from ...utils import (
-    logging,
-    replace_example_docstring,
-    scale_lora_layers,
-    unscale_lora_layers,
-)
+from ...utils import logging, replace_example_docstring
 from ...utils.paddle_utils import randn_tensor
 from ..pipeline_utils import DiffusionPipeline
 from .pipeline_output import FluxPipelineOutput
@@ -49,6 +43,7 @@ except:
 
     def is_inference_mode(func):
         return False
+
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -156,6 +151,7 @@ def retrieve_timesteps(
         timesteps = scheduler.timesteps
     return timesteps, num_inference_steps
 
+
 # FluxLoraLoaderMixin
 class FluxInpaintPipeline(DiffusionPipeline):
     r"""
@@ -255,7 +251,9 @@ class FluxInpaintPipeline(DiffusionPipeline):
         text_input_ids = text_inputs.input_ids
         untruncated_ids = self.tokenizer_2(prompt, padding="longest", return_tensors="pd").input_ids
 
-        if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(text_input_ids, untruncated_ids):
+        if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(
+            text_input_ids, untruncated_ids
+        ):
             removed_text = self.tokenizer_2.batch_decode(untruncated_ids[:, self.tokenizer_max_length - 1 : -1])
             logger.warning(
                 "The following part of your input was truncated because `max_sequence_length` is set to "
@@ -300,7 +298,9 @@ class FluxInpaintPipeline(DiffusionPipeline):
 
         text_input_ids = text_inputs.input_ids
         untruncated_ids = self.tokenizer(prompt, padding="longest", return_tensors="pd").input_ids
-        if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(text_input_ids, untruncated_ids):
+        if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(
+            text_input_ids, untruncated_ids
+        ):
             removed_text = self.tokenizer.batch_decode(untruncated_ids[:, self.tokenizer_max_length - 1 : -1])
             logger.warning(
                 "The following part of your input was truncated because CLIP can only handle sequences up to"
@@ -828,11 +828,7 @@ class FluxInpaintPipeline(DiffusionPipeline):
         lora_scale = (
             self.joint_attention_kwargs.get("scale", None) if self.joint_attention_kwargs is not None else None
         )
-        (
-            prompt_embeds,
-            pooled_prompt_embeds,
-            text_ids,
-        ) = self.encode_prompt(
+        (prompt_embeds, pooled_prompt_embeds, text_ids,) = self.encode_prompt(
             prompt=prompt,
             prompt_2=prompt_2,
             prompt_embeds=prompt_embeds,
@@ -888,7 +884,7 @@ class FluxInpaintPipeline(DiffusionPipeline):
         )
 
         if masked_image_latents is None:
-            masked_image = init_image * (mask_condition < 0.5).astype('float32')
+            masked_image = init_image * (mask_condition < 0.5).astype("float32")
         else:
             masked_image = masked_image_latents
 
@@ -962,7 +958,6 @@ class FluxInpaintPipeline(DiffusionPipeline):
                 # call the callback, if provided
                 if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
                     progress_bar.update()
-
 
         if output_type == "latent":
             image = latents

@@ -16,15 +16,9 @@ import argparse
 import os
 import time
 
-import torch
-
-# torch.nn.functional.scaled_dot_product_attention_ = torch.nn.functional.scaled_dot_product_attention
-# delattr(torch.nn.functional, "scaled_dot_product_attention")
-
-import cv2
 import numpy as np
+import torch
 from diffusers import (
-    FlowMatchEulerDiscreteScheduler,
     DDIMScheduler,
     DDPMScheduler,
     DEISMultistepScheduler,
@@ -32,6 +26,7 @@ from diffusers import (
     DPMSolverSinglestepScheduler,
     EulerAncestralDiscreteScheduler,
     EulerDiscreteScheduler,
+    FlowMatchEulerDiscreteScheduler,
     HeunDiscreteScheduler,
     KDPM2AncestralDiscreteScheduler,
     KDPM2DiscreteScheduler,
@@ -40,11 +35,10 @@ from diffusers import (
     StableDiffusion3Pipeline,
     UniPCMultistepScheduler,
 )
-from diffusers.models.attention_processor import AttnProcessor, AttnProcessor2_0
-from diffusers.utils import load_image
-from PIL import Image
 from tqdm.auto import trange
 
+# torch.nn.functional.scaled_dot_product_attention_ = torch.nn.functional.scaled_dot_product_attention
+# delattr(torch.nn.functional, "scaled_dot_product_attention")
 
 
 def strtobool(v):
@@ -294,14 +288,11 @@ def main(args):
         folder = f"torch_attn_{attention_type}_fp16" if args.use_fp16 else f"torch_attn_{attention_type}_fp32"
         os.makedirs(folder, exist_ok=True)
         if args.task_name in ["text2img", "all"]:
-            init_image = load_image(
-                "https://paddlenlp.bj.bcebos.com/models/community/junnyu/develop/control_bird_canny_demo.png"
-            )
             # text2img
             prompt = "bird"
             time_costs = []
-            memory_metrics = []  
-            
+            memory_metrics = []
+
             # warmup
             pipe(
                 prompt,
@@ -321,22 +312,19 @@ def main(args):
                 ).images
                 latency = time.time() - start
                 time_costs += [latency]
-                
+
                 memory_allocated, max_memory_allocated, memory_reserved, max_memory_reserved = get_torch_memory_info()
                 memory_metrics.append([memory_allocated, max_memory_allocated, memory_reserved, max_memory_reserved])
-                
-            avg_memory = np.mean(memory_metrics, axis=0)
-            
+
             print(
                 f"Attention type: {attention_type}, "
                 f"Use fp16: {'true' if args.use_fp16 else 'false'}, "
                 f"Mean iter/sec: {1 / (np.mean(time_costs) / args.inference_steps):2f} it/s, "
                 f"average end-to-end time :  {np.mean(time_costs)*1000 :2f} ms."
             )
-            print(f"GPU max_memory_allocated: {paddle.device.cuda.max_memory_allocated() / 1024 ** 3:.2f} GB")
+            print(f"GPU max_memory_allocated: {torch.device.cuda.max_memory_allocated() / 1024 ** 3:.2f} GB")
 
             images[0].save(f"{folder}/text2img.png")
-
 
 
 if __name__ == "__main__":

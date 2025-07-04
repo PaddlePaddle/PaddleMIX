@@ -19,7 +19,7 @@ Stable Diffusion 是一个基于 Latent Diffusion Models（潜在扩散模型，
 
 <div align="center">
 
-| model name | params | 
+| model name | params |
 |------------|:-------:|
 | `CompVis/stable-diffusion-v1-4` | 0.98B |
 | `runwayml/stable-diffusion-v1-5` | 0.98B |

@@ -187,8 +187,8 @@ class FlowMatchEulerDiscreteScheduler(SchedulerMixin, ConfigMixin):
         return sigma * self.config.num_train_timesteps
 
     def time_shift(self, mu: float, sigma: float, t: paddle.Tensor):
-            return math.exp(mu) / (math.exp(mu) + (1 / t - 1) ** sigma)
-    
+        return math.exp(mu) / (math.exp(mu) + (1 / t - 1) ** sigma)
+
     def stretch_shift_to_terminal(self, t: paddle.Tensor) -> paddle.Tensor:
         r"""
         Stretches and shifts the timestep schedule to ensure it terminates at the configured `shift_terminal` config
@@ -209,9 +209,9 @@ class FlowMatchEulerDiscreteScheduler(SchedulerMixin, ConfigMixin):
         scale_factor = one_minus_z[-1] / (1 - self.config.shift_terminal)
         stretched_t = 1 - (one_minus_z / scale_factor)
         return stretched_t
-    
+
     def set_timesteps(
-        self, 
+        self,
         num_inference_steps: int = None,
         sigmas: Optional[List[float]] = None,
         mu: Optional[float] = None,
@@ -225,7 +225,7 @@ class FlowMatchEulerDiscreteScheduler(SchedulerMixin, ConfigMixin):
         """
         if self.config.use_dynamic_shifting and mu is None:
             raise ValueError(" you have a pass a value for `mu` when `use_dynamic_shifting` is set to be `True`")
-        
+
         if sigmas is None:
             timesteps = np.linspace(
                 self._sigma_to_t(self.sigma_max), self._sigma_to_t(self.sigma_min), num_inference_steps
@@ -241,7 +241,7 @@ class FlowMatchEulerDiscreteScheduler(SchedulerMixin, ConfigMixin):
             sigmas = self.time_shift(mu, 1.0, sigmas)
         else:
             sigmas = self.shift * sigmas / (1 + (self.shift - 1) * sigmas)
-        
+
         if self.config.shift_terminal:
             sigmas = self.stretch_shift_to_terminal(sigmas)
 
@@ -257,7 +257,7 @@ class FlowMatchEulerDiscreteScheduler(SchedulerMixin, ConfigMixin):
         timesteps = np.linspace(
             self._sigma_to_t(self.sigma_max), self._sigma_to_t(self.sigma_min), num_inference_steps
         )
-    
+
         sigmas = paddle.to_tensor(sigmas).astype(dtype=paddle.float32)
         timesteps = sigmas * self.config.num_train_timesteps
 
@@ -272,7 +272,7 @@ class FlowMatchEulerDiscreteScheduler(SchedulerMixin, ConfigMixin):
         self.sigmas = sigmas
         self._step_index = None
         self._begin_index = None
-    
+
     def index_for_timestep(self, timestep, schedule_timesteps=None):
         if schedule_timesteps is None:
             schedule_timesteps = self.timesteps
@@ -356,7 +356,7 @@ class FlowMatchEulerDiscreteScheduler(SchedulerMixin, ConfigMixin):
 
         sigma = self.sigmas[self.step_index]
         sigma_next = self.sigmas[self.step_index + 1]
-        
+
         prev_sample = sample + (sigma_next - sigma) * model_output
         # Cast sample back to model compatible dtype
         prev_sample = prev_sample.cast(model_output.dtype)

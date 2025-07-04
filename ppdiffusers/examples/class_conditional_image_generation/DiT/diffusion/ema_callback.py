@@ -30,7 +30,7 @@ class EmaCallback(TrainerCallback):
         if paddle.distributed.get_world_size() > 1 and hasattr(fleet.fleet, "_hcg"):
             hcg = fleet.get_hybrid_communicate_group()
             self._sharding_world_size = max(1, hcg.get_sharding_parallel_world_size())
-            self._sharding_rank = max(0, hcg.get_sharding_parallel_rank())     
+            self._sharding_rank = max(0, hcg.get_sharding_parallel_rank())
         else:
             self._sharding_world_size = 1
             self._sharding_rank = 0

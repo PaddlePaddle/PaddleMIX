@@ -136,8 +136,7 @@ class FluxControlNetImg2ImgPipelineFastTests(unittest.TestCase, PipelineTesterMi
             "vae": vae,
             "controlnet": controlnet,
         }
-    
-    
+
     def get_dummy_inputs(self, seed=0):
         generator = paddle.Generator().manual_seed(seed)
 
@@ -145,7 +144,7 @@ class FluxControlNetImg2ImgPipelineFastTests(unittest.TestCase, PipelineTesterMi
         image = paddle.randn([1, 3, 32, 32])
         image = (image + 1) / 2.0  # Normaliza de [-1,1] a [0,1]
         image = paddle.clip(image, 0.0, 1.0)  # Asegura que está en [0,1]
-        
+
         control_image = paddle.randn([1, 3, 32, 32])
         control_image = (control_image + 1) / 2.0
         control_image = paddle.clip(control_image, 0.0, 1.0)
@@ -166,8 +165,6 @@ class FluxControlNetImg2ImgPipelineFastTests(unittest.TestCase, PipelineTesterMi
         }
         return inputs
 
-
-
     def test_flux_controlnet_different_prompts(self):
         pipe = self.pipeline_class(**self.get_dummy_components())
 
@@ -182,7 +179,6 @@ class FluxControlNetImg2ImgPipelineFastTests(unittest.TestCase, PipelineTesterMi
 
         assert max_diff > 1e-6
 
-
     def test_flux_image_output_shape(self):
         pipe = self.pipeline_class(**self.get_dummy_components())
         inputs = self.get_dummy_inputs()
@@ -191,7 +187,7 @@ class FluxControlNetImg2ImgPipelineFastTests(unittest.TestCase, PipelineTesterMi
         for height, width in height_width_pairs:
             expected_height = height - height % (pipe.vae_scale_factor * 2)
             expected_width = width - width % (pipe.vae_scale_factor * 2)
-            
+
             generator = paddle.Generator().manual_seed(0)
             # Generar y normalizar
             control_image = randn_tensor(
@@ -201,7 +197,7 @@ class FluxControlNetImg2ImgPipelineFastTests(unittest.TestCase, PipelineTesterMi
             )
             control_image = (control_image + 1) / 2.0
             control_image = paddle.clip(control_image, 0.0, 1.0)
-            
+
             image = randn_tensor(
                 (1, 3, height, width),
                 generator=generator,
@@ -209,14 +205,16 @@ class FluxControlNetImg2ImgPipelineFastTests(unittest.TestCase, PipelineTesterMi
             )
             image = (image + 1) / 2.0
             image = paddle.clip(image, 0.0, 1.0)
-            
-            inputs.update({
-                "control_image": control_image,
-                "image": image,
-                "height": height,
-                "width": width,
-            })
-            
+
+            inputs.update(
+                {
+                    "control_image": control_image,
+                    "image": image,
+                    "height": height,
+                    "width": width,
+                }
+            )
+
             output = pipe(**inputs).images[0]
             output_height, output_width, _ = output.shape
             assert (output_height, output_width) == (expected_height, expected_width)

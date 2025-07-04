@@ -11,23 +11,23 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import os
 import inspect
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
-import numpy as np
 
+import numpy as np
 import paddle
-from  ppdiffusers.transformers import ( 
+
+from ppdiffusers.transformers import (
     CLIPImageProcessor,
     CLIPTextModel,
     CLIPTokenizer,
     CLIPVisionModelWithProjection,
     T5EncoderModel,
-    T5Tokenizer
+    T5Tokenizer,
 )
 
 from ...image_processor import PipelineImageInput, VaeImageProcessor
-from ...loaders import FromSingleFileMixin, FromSingleFileMixin, TextualInversionLoaderMixin
+from ...loaders import FromSingleFileMixin, TextualInversionLoaderMixin
 from ...models.autoencoder_kl import AutoencoderKL
 from ...models.controlnet_flux import FluxControlNetModel, FluxMultiControlNetModel
 from ...models.transformer_flux import FluxTransformer2DModel
@@ -44,7 +44,7 @@ EXAMPLE_DOC_STRING = """
         >>> from ppdiffusers import FluxControlNetModel
         >>> from ppdiffusers.pipelines import FluxControlNetPipeline
         >>> from ppdiffusers.utils import load_image
-        
+
         >>> controlnet = FluxControlNetModel.from_pretrained(
         ...     "InstantX/FLUX.1-dev-controlnet-canny", paddle_dtype=paddle.float16
         ... )
@@ -52,7 +52,7 @@ EXAMPLE_DOC_STRING = """
         ...     "black-forest-labs/FLUX.1-dev", controlnet=controlnet, paddle_dtype=paddle.float16,
         ...     low_cpu_mem_usage=True, map_location="cpu"
         ... )
-        
+
         >>> control_image = load_image(
         ...     "https://huggingface.co/InstantX/SD3-Controlnet-Canny/resolve/main/canny.jpg"
         ... )
@@ -84,6 +84,7 @@ except:
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
+
 def calculate_shift(
     image_seq_len,
     base_seq_len: int = 256,
@@ -96,9 +97,8 @@ def calculate_shift(
     mu = image_seq_len * m + b
     return mu
 
-def retrieve_latents(
-    encoder_output: paddle.Tensor, generator: Optional[int] = None, sample_mode: str = "sample"
-):
+
+def retrieve_latents(encoder_output: paddle.Tensor, generator: Optional[int] = None, sample_mode: str = "sample"):
     if hasattr(encoder_output, "latent_dist") and sample_mode == "sample":
         return encoder_output.latent_dist.sample(generator)
     elif hasattr(encoder_output, "latent_dist") and sample_mode == "argmax":
@@ -165,7 +165,6 @@ def retrieve_timesteps(
     return timesteps, num_inference_steps
 
 
-
 class FluxControlNetPipeline(
     DiffusionPipeline,
     FromSingleFileMixin,
@@ -188,7 +187,6 @@ class FluxControlNetPipeline(
     _optional_components = ["image_encoder", "feature_extractor"]
     _callback_tensor_inputs = ["latents", "prompt_embeds", "control_image"]
 
-
     def __init__(
         self,
         scheduler: FlowMatchEulerDiscreteScheduler,
@@ -199,7 +197,7 @@ class FluxControlNetPipeline(
         tokenizer_2: T5Tokenizer,
         transformer: FluxTransformer2DModel,
         controlnet: Union[
-            FluxControlNetModel, List[FluxControlNetModel],Tuple[FluxControlNetModel], FluxMultiControlNetModel
+            FluxControlNetModel, List[FluxControlNetModel], Tuple[FluxControlNetModel], FluxMultiControlNetModel
         ],
         image_encoder: CLIPVisionModelWithProjection = None,
         feature_extractor: CLIPImageProcessor = None,
@@ -255,7 +253,9 @@ class FluxControlNetPipeline(
         text_input_ids = text_inputs.input_ids
         untruncated_ids = self.tokenizer_2(prompt, padding="longest", return_tensors="pd").input_ids
 
-        if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(text_input_ids, untruncated_ids):
+        if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(
+            text_input_ids, untruncated_ids
+        ):
             removed_text = self.tokenizer_2.batch_decode(untruncated_ids[:, self.tokenizer_max_length - 1 : -1])
             logger.warning(
                 "The following part of your input was truncated because `max_sequence_length` is set to "
@@ -299,7 +299,9 @@ class FluxControlNetPipeline(
 
         text_input_ids = text_inputs.input_ids
         untruncated_ids = self.tokenizer(prompt, padding="longest", return_tensors="pd").input_ids
-        if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(text_input_ids, untruncated_ids):
+        if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(
+            text_input_ids, untruncated_ids
+        ):
             removed_text = self.tokenizer.batch_decode(untruncated_ids[:, self.tokenizer_max_length - 1 : -1])
             logger.warning(
                 "The following part of your input was truncated because CLIP can only handle sequences up to"
@@ -316,7 +318,7 @@ class FluxControlNetPipeline(
         prompt_embeds = prompt_embeds.reshape([batch_size * num_images_per_prompt, -1])
 
         return prompt_embeds
-    
+
     def encode_prompt(
         self,
         prompt: Union[str, List[str]],
@@ -373,7 +375,7 @@ class FluxControlNetPipeline(
         text_ids = paddle.zeros([prompt_embeds.shape[1], 3]).astype(dtype=dtype)
 
         return prompt_embeds, pooled_prompt_embeds, text_ids
-    
+
     def encode_image(self, image, num_images_per_prompt):
         dtype = next(self.image_encoder.parameters()).dtype
 
@@ -385,9 +387,7 @@ class FluxControlNetPipeline(
         image_embeds = image_embeds.repeat_interleave(num_images_per_prompt, axis=0)
         return image_embeds
 
-    def prepare_ip_adapter_image_embeds(
-        self, ip_adapter_image, ip_adapter_image_embeds, num_images_per_prompt
-    ):
+    def prepare_ip_adapter_image_embeds(self, ip_adapter_image, ip_adapter_image_embeds, num_images_per_prompt):
         image_embeds = []
         if ip_adapter_image_embeds is None:
             if not isinstance(ip_adapter_image, list):
@@ -414,7 +414,6 @@ class FluxControlNetPipeline(
             ip_adapter_image_embeds.append(single_image_embeds)
 
         return ip_adapter_image_embeds
-    
 
     def check_inputs(
         self,
@@ -492,8 +491,7 @@ class FluxControlNetPipeline(
 
         if max_sequence_length is not None and max_sequence_length > 512:
             raise ValueError(f"`max_sequence_length` cannot be greater than 512 but is {max_sequence_length}")
-        
-        
+
     @staticmethod
     def _prepare_latent_image_ids(batch_size, height, width, dtype):
         latent_image_ids = paddle.zeros([height, width, 3], dtype=dtype)
@@ -531,7 +529,7 @@ class FluxControlNetPipeline(
         latents = latents.reshape([batch_size, channels // (2 * 2), height, width])
 
         return latents
-    
+
     def enable_vae_slicing(self):
         r"""
         Enable sliced VAE decoding. When this option is enabled, the VAE will split the input tensor in slices to
@@ -561,8 +559,6 @@ class FluxControlNetPipeline(
         """
         self.vae.disable_tiling()
 
-
-    
     def prepare_latents(
         self,
         batch_size,
@@ -585,21 +581,19 @@ class FluxControlNetPipeline(
         if latents is not None:
             latent_image_ids = self._prepare_latent_image_ids(batch_size, height // 2, width // 2, dtype)
             return latents.astype(dtype), latent_image_ids
-        
+
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
                 f"You have passed a list of generators of length {len(generator)}, but requested an effective batch"
                 f" size of {batch_size}. Make sure the batch size matches the length of the generators."
             )
-        
+
         latents = randn_tensor(shape, generator=generator, dtype=dtype)
-        
+
         latents = self._pack_latents(latents, batch_size, num_channels_latents, height, width)
         latent_image_ids = self._prepare_latent_image_ids(batch_size, height // 2, width // 2, dtype)
 
         return latents, latent_image_ids
-    
-    
 
     def prepare_image(
         self,
@@ -633,7 +627,7 @@ class FluxControlNetPipeline(
             image = paddle.concat([image] * 2)
 
         return image
-    
+
     @property
     def guidance_scale(self):
         return self._guidance_scale
@@ -649,7 +643,6 @@ class FluxControlNetPipeline(
     @property
     def interrupt(self):
         return self._interrupt
-    
 
     @paddle.no_grad()
     @replace_example_docstring(EXAMPLE_DOC_STRING)
@@ -785,7 +778,6 @@ class FluxControlNetPipeline(
             is True, otherwise a `tuple`. When returning a tuple, the first element is a list with the generated
             images.
         """
-        
 
         height = height or self.default_sample_size * self.vae_scale_factor
         width = width or self.default_sample_size * self.vae_scale_factor
@@ -795,13 +787,13 @@ class FluxControlNetPipeline(
         elif not isinstance(control_guidance_end, list) and isinstance(control_guidance_start, list):
             control_guidance_end = len(control_guidance_start) * [control_guidance_end]
         elif not isinstance(control_guidance_start, list) and not isinstance(control_guidance_end, list):
-            mult = len(self.controlnet.nets) if hasattr(self.controlnet, 'nets') else 1
+            mult = len(self.controlnet.nets) if hasattr(self.controlnet, "nets") else 1
             control_guidance_start, control_guidance_end = (
                 mult * [control_guidance_start],
                 mult * [control_guidance_end],
             )
 
-        # 1. Check inputs. 
+        # 1. Check inputs.
         self.check_inputs(
             prompt,
             prompt_2,
@@ -836,11 +828,7 @@ class FluxControlNetPipeline(
         )
         do_true_cfg = true_cfg_scale > 1 and negative_prompt is not None
 
-        (
-            prompt_embeds,
-            pooled_prompt_embeds,
-            text_ids,
-        ) = self.encode_prompt(
+        (prompt_embeds, pooled_prompt_embeds, text_ids,) = self.encode_prompt(
             prompt=prompt,
             prompt_2=prompt_2,
             prompt_embeds=prompt_embeds,
@@ -851,11 +839,7 @@ class FluxControlNetPipeline(
         )
 
         if do_true_cfg:
-            (
-                negative_prompt_embeds,
-                negative_pooled_prompt_embeds,
-                _,
-            ) = self.encode_prompt(
+            (negative_prompt_embeds, negative_pooled_prompt_embeds, _,) = self.encode_prompt(
                 prompt=negative_prompt,
                 prompt_2=negative_prompt_2,
                 prompt_embeds=negative_prompt_embeds,
@@ -881,7 +865,7 @@ class FluxControlNetPipeline(
 
             # xlab controlnet has a input_hint_block and instantx controlnet does not
             controlnet_blocks_repeat = False if self.controlnet.input_hint_block is None else True
-            
+
             if self.controlnet.input_hint_block is None:
                 # vae encode
                 vae_output = self.vae.encode(control_image)
@@ -896,7 +880,6 @@ class FluxControlNetPipeline(
                     height_control_image,
                     width_control_image,
                 )
-
 
             if control_mode is not None:
                 if not isinstance(control_mode, int):
@@ -924,7 +907,7 @@ class FluxControlNetPipeline(
                     # vae encode
                     vae_output = self.vae.encode(control_image_)
                     control_image_ = retrieve_latents(vae_output, generator=generator)
-                    
+
                     control_image_ = (control_image_ - self.vae.config.shift_factor) * self.vae.config.scaling_factor
                     # pack
                     height_control_image, width_control_image = control_image_.shape[2:]
@@ -935,7 +918,7 @@ class FluxControlNetPipeline(
                         height_control_image,
                         width_control_image,
                     )
-                    
+
                 control_images.append(control_image_)
 
             control_image = control_images
@@ -1000,7 +983,6 @@ class FluxControlNetPipeline(
             ]
             controlnet_keep.append(keeps[0] if isinstance(self.controlnet, FluxControlNetModel) else keeps)
 
-
         if (ip_adapter_image is not None or ip_adapter_image_embeds is not None) and (
             negative_ip_adapter_image is None and negative_ip_adapter_image_embeds is None
         ):
@@ -1012,7 +994,7 @@ class FluxControlNetPipeline(
 
         if self.joint_attention_kwargs is None:
             self._joint_attention_kwargs = {}
-            
+
         image_embeds = None
         negative_image_embeds = None
         if ip_adapter_image is not None or ip_adapter_image_embeds is not None:
@@ -1021,7 +1003,7 @@ class FluxControlNetPipeline(
                 ip_adapter_image_embeds,
                 batch_size * num_images_per_prompt,
             )
-            
+
         if negative_ip_adapter_image is not None or negative_ip_adapter_image_embeds is not None:
             negative_image_embeds = self.prepare_ip_adapter_image_embeds(
                 negative_ip_adapter_image,
@@ -1037,7 +1019,7 @@ class FluxControlNetPipeline(
 
                 if image_embeds is not None:
                     self._joint_attention_kwargs["ip_adapter_image_embeds"] = image_embeds
-                    
+
                 # broadcast to batch dimension
                 timestep = t.expand([latents.shape[0]]).astype(latents.dtype)
 
@@ -1073,9 +1055,10 @@ class FluxControlNetPipeline(
                         joint_attention_kwargs=self.joint_attention_kwargs,
                         return_dict=False,
                     )
-                    
-                except Exception as e:
+
+                except Exception:
                     import traceback
+
                     traceback.print_exc()
                     raise
 
@@ -1097,8 +1080,9 @@ class FluxControlNetPipeline(
                         return_dict=False,
                         controlnet_blocks_repeat=controlnet_blocks_repeat,
                     )[0]
-                except Exception as e:
+                except Exception:
                     import traceback
+
                     traceback.print_exc()
                     raise
 
@@ -1120,7 +1104,7 @@ class FluxControlNetPipeline(
                         return_dict=False,
                         controlnet_blocks_repeat=controlnet_blocks_repeat,
                     )[0]
-                    
+
                     noise_pred = neg_noise_pred + true_cfg_scale * (noise_pred - neg_noise_pred)
 
                 # compute the previous noisy sample x_t -> x_t-1
@@ -1144,10 +1128,10 @@ class FluxControlNetPipeline(
             image = latents
         else:
             latents = self._unpack_latents(latents, height, width, self.vae_scale_factor)
-            
+
             latents = (latents / self.vae.config.scaling_factor) + self.vae.config.shift_factor
             image = self.vae.decode(latents, return_dict=False)[0]
-            
+
             image = self.image_processor.postprocess(image, output_type=output_type)
 
         # Offload all models

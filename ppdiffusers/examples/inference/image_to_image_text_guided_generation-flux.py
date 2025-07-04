@@ -13,11 +13,15 @@
 # limitations under the License.
 
 import paddle
+
 from ppdiffusers import FluxImg2ImgPipeline
 from ppdiffusers.utils import load_image
 
 pipe = FluxImg2ImgPipeline.from_pretrained(
-    "black-forest-labs/FLUX.1-dev", paddle_dtype=paddle.bfloat16, low_cpu_mem_usage=True, map_location="cpu",
+    "black-forest-labs/FLUX.1-dev",
+    paddle_dtype=paddle.bfloat16,
+    low_cpu_mem_usage=True,
+    map_location="cpu",
 )
 
 
@@ -27,9 +31,7 @@ init_image = load_image(url).resize((768, 512))
 prompt = "A fantasy landscape, trending on artstation"
 
 images = pipe(
-    height=512,
-    width=768,
-    prompt=prompt, image=init_image, num_inference_steps=50, strength=0.95, guidance_scale=0.0
+    height=512, width=768, prompt=prompt, image=init_image, num_inference_steps=50, strength=0.95, guidance_scale=0.0
 ).images[0]
 
 images.save("text_to_image_generation-flux-dev-result_img2img.png")

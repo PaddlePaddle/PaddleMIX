@@ -84,7 +84,7 @@ class CogVideoXCausalConv3d(paddle.nn.Layer):
         time_kernel_size, height_kernel_size, width_kernel_size = kernel_size
         self.pad_mode = pad_mode
         self.is_mochi = is_mochi
-        
+
         # Calculate padding based on model type
         if is_mochi:
             # Mochi-specific padding calculation
@@ -96,14 +96,14 @@ class CogVideoXCausalConv3d(paddle.nn.Layer):
             time_pad = dilation * (time_kernel_size - 1) + (1 - stride)
             height_pad = height_kernel_size // 2
             width_pad = width_kernel_size // 2
-        
+
         self.height_pad = height_pad
         self.width_pad = width_pad
         self.time_pad = time_pad
         self.time_causal_padding = (width_pad, width_pad, height_pad, height_pad, time_pad, 0)
         self.temporal_dim = 2
         self.time_kernel_size = time_kernel_size
-        
+
         # Set stride and dilation as tuples
         if is_mochi:
             stride = (stride, 1, 1) if not isinstance(stride, tuple) else stride
@@ -111,7 +111,7 @@ class CogVideoXCausalConv3d(paddle.nn.Layer):
         else:
             stride = (stride, 1, 1)
             dilation = (dilation, 1, 1)
-        
+
         self.conv = CogVideoXSafeConv3d(
             in_channels=in_channels,
             out_channels=out_channels,
@@ -128,7 +128,7 @@ class CogVideoXCausalConv3d(paddle.nn.Layer):
         kernel_size = self.time_kernel_size
         if kernel_size > 1:
             current_shape = inputs.shape
-            
+
             # Check if cache exists and if shapes match
             if self.conv_cache is not None:
                 # If input shape has changed, adjust cache shape
@@ -137,31 +137,33 @@ class CogVideoXCausalConv3d(paddle.nn.Layer):
                         # Correctly handle 5D tensor for interpolation
                         batch, channels, time_dim, old_h, old_w = self.conv_cache.shape
                         height, width = current_shape[-2:]
-                        
+
                         # Flatten and reshape to 4D tensor for interpolation
                         reshaped = self.conv_cache.reshape([batch * channels * time_dim, 1, old_h, old_w])
-                        resized = paddle.nn.functional.interpolate(
-                            reshaped, 
-                            size=[height, width], 
-                            mode='bilinear'
-                        )
+                        resized = paddle.nn.functional.interpolate(reshaped, size=[height, width], mode="bilinear")
                         # Reshape back to 5D
                         resized_cache = resized.reshape([batch, channels, time_dim, height, width])
                         cached_inputs = [resized_cache]
                     except Exception as e:
                         print(f"Warning: Failed to resize cache: {e}")
                         # Fallback: create zero tensor instead
-                        zeros = paddle.zeros([
-                            current_shape[0], current_shape[1], self.conv_cache.shape[2], 
-                            current_shape[3], current_shape[4]
-                        ], dtype=inputs.dtype)
+                        zeros = paddle.zeros(
+                            [
+                                current_shape[0],
+                                current_shape[1],
+                                self.conv_cache.shape[2],
+                                current_shape[3],
+                                current_shape[4],
+                            ],
+                            dtype=inputs.dtype,
+                        )
                         cached_inputs = [zeros]
                 else:
                     cached_inputs = [self.conv_cache]
             else:
                 # If no cache exists, repeat first frame of input
                 cached_inputs = [inputs[:, :, :1]] * (kernel_size - 1)
-            
+
             # Concatenate cache and inputs
             try:
                 inputs = paddle.concat(x=cached_inputs + [inputs], axis=2)
@@ -170,44 +172,42 @@ class CogVideoXCausalConv3d(paddle.nn.Layer):
                 # Emergency recovery: ignore cache, use input only
                 cached_inputs = [inputs[:, :, :1]] * (kernel_size - 1)
                 inputs = paddle.concat(x=cached_inputs + [inputs], axis=2)
-                    
-        return inputs
 
+        return inputs
 
     def _clear_fake_context_parallel_cache(self):
         """Safely clear the convolution cache."""
-        if hasattr(self, 'conv_cache') and self.conv_cache is not None:
+        if hasattr(self, "conv_cache") and self.conv_cache is not None:
             del self.conv_cache
             self.conv_cache = None
 
     def forward(self, inputs: paddle.Tensor) -> paddle.Tensor:
         """Enhanced forward pass that supports VAE tiling and different model types.
-        
+
         Args:
             inputs: Input tensor to process
-            
+
         Returns:
             Output tensor after convolution
         """
         # Apply context parallel
         inputs = self.fake_context_parallel_forward(inputs)
-        
+
         # Save new cache
         try:
             self._clear_fake_context_parallel_cache()
-            self.conv_cache = inputs[:, :, -self.time_kernel_size + 1:].clone()
+            self.conv_cache = inputs[:, :, -self.time_kernel_size + 1 :].clone()
         except Exception as e:
             print(f"Warning: Failed to update cache: {e}")
             self.conv_cache = None
-        
+
         # Apply padding
         padding_2d = (self.width_pad, self.width_pad, self.height_pad, self.height_pad, 0, 0)
         inputs = paddle.nn.functional.pad(x=inputs, pad=padding_2d, mode="constant", value=0, data_format="NCDHW")
-        
+
         # Execute convolution
         output = self.conv(inputs)
         return output
-
 
 
 class CogVideoXSpatialNorm3D(paddle.nn.Layer):

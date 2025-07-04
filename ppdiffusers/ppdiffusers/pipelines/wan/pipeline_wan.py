@@ -28,7 +28,6 @@ from ...callbacks import MultiPipelineCallbacks, PipelineCallback
 from ...loaders import WanLoraLoaderMixin
 from ...models import AutoencoderKLWan, WanTransformer3DModel
 from ...schedulers import UniPCMultistepScheduler
-
 from ...utils import logging, replace_example_docstring
 from ...utils.paddle_utils import randn_tensor
 from ...video_processor import VideoProcessor

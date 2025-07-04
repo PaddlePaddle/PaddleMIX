@@ -107,6 +107,7 @@ def calculate_ssim(videos1, videos2):
 
     return result
 
+
 def main():
     NUMBER_OF_VIDEOS = 8
     VIDEO_LENGTH = 50
