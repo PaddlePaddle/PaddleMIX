@@ -26,6 +26,7 @@ from paddlenlp.transformers.tokenizer_utils import PretrainedTokenizer
 from PIL import Image
 from PIL.Image import Image as ImageObject
 from typing_extensions import override
+
 from paddlemix.processors.processing_utils import BaseImageProcessor
 
 IGNORE_INDEX = -100
@@ -70,12 +71,12 @@ class BasePlugin:
         if (image.width * image.height) > image_max_pixels:
             resize_factor = math.sqrt(image_max_pixels / (image.width * image.height))
             width, height = int(image.width * resize_factor), int(image.height * resize_factor)
-            image = image.resize((width, height), resample=Image.Resampling.NEAREST)
+            image = image.resize((width, height))
 
         if (image.width * image.height) < image_min_pixels:
             resize_factor = math.sqrt(image_min_pixels / (image.width * image.height))
             width, height = int(image.width * resize_factor), int(image.height * resize_factor)
-            image = image.resize((width, height), resample=Image.Resampling.NEAREST)
+            image = image.resize((width, height))
 
         if image.mode != "RGB":
             image = image.convert("RGB")
@@ -168,13 +169,12 @@ class BasePlugin:
         if len(videos) != 0:
             videos = self._regularize_videos(
                 videos,
-                image_max_pixels=getattr(processor, "video_max_pixels", 256 * 256),
-                image_min_pixels=getattr(processor, "video_min_pixels", 16 * 16),
+                image_max_pixels=getattr(processor, "image_max_pixels", 256 * 256),
+                image_min_pixels=getattr(processor, "image_min_pixels", 16 * 16),
                 video_fps=getattr(processor, "video_fps", 2.0),
                 video_maxlen=getattr(processor, "video_maxlen", 128),
             )
             input_dict["videos"] = videos
-
         mm_inputs = {}
         if image_processor != video_processor:
             if input_dict.get("images") is not None:
@@ -336,6 +336,7 @@ PLUGINS = {
     "base": BasePlugin,
     "qwen2_5_vl": Qwen2_5_vlPlugin,
 }
+
 
 def get_mm_plugin(
     name: str,

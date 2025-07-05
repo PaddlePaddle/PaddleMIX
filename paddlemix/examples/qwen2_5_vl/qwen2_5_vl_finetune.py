@@ -20,7 +20,7 @@ import random
 import sys
 import traceback
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Sequence, Any
+from typing import Any, Dict, Optional, Sequence
 
 import numpy as np
 import paddle
@@ -31,15 +31,20 @@ from paddlenlp.peft import LoRAConfig, LoRAModel
 from paddlenlp.trainer import PdArgumentParser, TrainingArguments, set_seed
 from paddlenlp.trainer.trainer import Trainer
 from paddlenlp.trainer.trainer_utils import get_last_checkpoint
+from paddlenlp.transformers.processing_utils import ProcessorMixin
 from PIL import Image, ImageFile, PngImagePlugin, UnidentifiedImageError
 
 from paddlemix.datasets.internvl_dataset import ConcatDataset, WeightedConcatDataset
 from paddlemix.models.qwen2_5_vl import MIXQwen2_5_Tokenizer
-from paddlemix.models.qwen2_5_vl.modeling_qwen2_5_vl import Qwen2_5_VLForConditionalGeneration
+from paddlemix.models.qwen2_5_vl.modeling_qwen2_5_vl import (
+    Qwen2_5_VLForConditionalGeneration,
+)
 from paddlemix.models.qwen2_5_vl.supervised import _encode_supervised_example
 from paddlemix.models.qwen2_5_vl.template import TEMPLATES
-from paddlemix.processors.qwen2_5_vl_processing import Qwen2_5_VLImageProcessor, Qwen2_5_VLProcessor
-from paddlenlp.transformers.processing_utils import ProcessorMixin
+from paddlemix.processors.qwen2_5_vl_processing import (
+    Qwen2_5_VLImageProcessor,
+    Qwen2_5_VLProcessor,
+)
 
 Image.MAX_IMAGE_PIXELS = None
 ImageFile.LOAD_TRUNCATED_IMAGES = True
@@ -291,9 +296,6 @@ class LazySupervisedDataset(Dataset):
         return self.processor.image_processor
 
     def multi_modal_get_item(self, data_item):
-        # Build transformation function
-        transform = self.get_transform()
-
         # Ensure the first conversation contains an image placeholder
         if "<image>" not in data_item["messages"][0]["content"]:
             data_item["messages"][0]["content"] = "<image>\n" + data_item["messages"][0]["content"]
@@ -352,7 +354,7 @@ class LazySupervisedDataset(Dataset):
             attention_mask=attention_mask,
             images=[],
         )
-        
+
         return ret
 
     def __getitem__(self, i) -> Dict[str, paddle.Tensor]:
@@ -457,7 +459,7 @@ class MultiModalDataCollatorForSeq2Seq(DataCollatorForSeq2Seq):
 
     def __call__(self, features: Sequence[Dict[str, Any]]) -> Dict[str, "paddle.Tensor"]:
         batch_images, batch_videos, batch_imglens, batch_vidlens, batch_input_ids = [], [], [], [], []
-        
+
         for feature in features:
             images = feature.pop("images", None) or []
             videos = feature.pop("videos", None) or []
@@ -467,9 +469,7 @@ class MultiModalDataCollatorForSeq2Seq(DataCollatorForSeq2Seq):
             batch_vidlens.append(len(videos))
             batch_input_ids.append(feature["input_ids"])
 
-        if (
-            self.processor is not None and sum(batch_imglens) == 0 and sum(batch_vidlens) == 0
-        ):  
+        if self.processor is not None and sum(batch_imglens) == 0 and sum(batch_vidlens) == 0:
             fake_messages = [{"role": "user", "content": IMAGE_PLACEHOLDER}]
             fake_images = [Image.new("RGB", (64, 64), (255, 255, 255))]
             fake_messages = self.template.mm_plugin.process_messages(fake_messages, fake_images, [], self.processor)
@@ -480,12 +480,16 @@ class MultiModalDataCollatorForSeq2Seq(DataCollatorForSeq2Seq):
 
             if len(fake_input_ids) != 0:
                 if self.tokenizer.padding_side == "right":
-                    features[0]["input_ids"] = features[0]["input_ids"]+ fake_input_ids["input_ids"]
-                    features[0]["attention_mask"] = features[0]["attention_mask"] + [0] * len(fake_input_ids["input_ids"])
+                    features[0]["input_ids"] = features[0]["input_ids"] + fake_input_ids["input_ids"]
+                    features[0]["attention_mask"] = features[0]["attention_mask"] + [0] * len(
+                        fake_input_ids["input_ids"]
+                    )
                     features[0]["labels"] = features[0]["labels"] + [IGNORE_INDEX] * len(fake_input_ids["input_ids"])
                 else:
                     features[0]["input_ids"] = fake_input_ids["input_ids"] + features[0]["input_ids"]
-                    features[0]["attention_mask"] = [0] * len(fake_input_ids["input_ids"]) + features[0]["attention_mask"]
+                    features[0]["attention_mask"] = [0] * len(fake_input_ids["input_ids"]) + features[0][
+                        "attention_mask"
+                    ]
                     features[0]["labels"] = [IGNORE_INDEX] * len(fake_input_ids["input_ids"]) + features[0]["labels"]
 
             batch_images = fake_images
@@ -499,7 +503,6 @@ class MultiModalDataCollatorForSeq2Seq(DataCollatorForSeq2Seq):
             token_type_ids = mm_inputs.pop("token_type_ids")
             for i, feature in enumerate(features):
                 feature["token_type_ids"] = token_type_ids[i]
-
         features: Dict[str, "paddle.Tensor"] = super().__call__(features)
 
         if self.model is not None and hasattr(self.model, "get_rope_index"):  # for qwen2_5_vl mrope
@@ -514,13 +517,13 @@ class MultiModalDataCollatorForSeq2Seq(DataCollatorForSeq2Seq):
 
             features["position_ids"], features["rope_deltas"] = self.model.get_rope_index(**rope_index_kwargs)
 
-
-
         if "cross_attention_mask" in mm_inputs:  # for mllama inputs when pad_to_multiple_of is enabled
             cross_attention_mask = mm_inputs.pop("cross_attention_mask")
-            seq_len = features["input_ids"].size(1)
-            orig_len = cross_attention_mask.size(1)
-            mm_inputs["cross_attention_mask"] = F.pad(cross_attention_mask, (0, 0, 0, 0, 0, seq_len - orig_len))
+            seq_len = features["input_ids"].shape[1]
+            orig_len = cross_attention_mask.shape[1]
+            mm_inputs["cross_attention_mask"] = paddle.nn.functional.pad(
+                cross_attention_mask, (0, 0, 0, 0, 0, seq_len - orig_len)
+            )
 
         features.update(mm_inputs)
         if isinstance(features.get("pixel_values"), list):  # for pixtral inputs
@@ -528,11 +531,9 @@ class MultiModalDataCollatorForSeq2Seq(DataCollatorForSeq2Seq):
 
         if "image_bound" in features:  # for minicpmv inputs
             bsz, seq_length = features["input_ids"].shape
-            features["position_ids"] = paddle.arange(seq_length).long().repeat(bsz, 1)
+            features["position_ids"] = paddle.arange(seq_length).long().tile([bsz, 1])
             return {"data": features, "input_ids": features["input_ids"], "labels": features["labels"]}
-
         return features
-
 
 
 def main():
@@ -592,10 +593,12 @@ def main():
     print(f"Loading Tokenizer: {tokenizer_path}")
 
     MODEL_NAME = model_args.model_name_or_path
-    model = Qwen2_5_VLForConditionalGeneration.from_pretrained(MODEL_NAME, dtype=dtype, attn_implementation="flash_attention_2")
+    model = Qwen2_5_VLForConditionalGeneration.from_pretrained(MODEL_NAME, dtype=dtype, attn_implementation="sdpa")
     image_processor = Qwen2_5_VLImageProcessor()
     tokenizer = MIXQwen2_5_Tokenizer.from_pretrained(MODEL_NAME, padding_side="right")
-    processor = Qwen2_5_VLProcessor(image_processor, tokenizer)
+    processor = Qwen2_5_VLProcessor(
+        image_processor, tokenizer, image_max_pixels=model_args.image_resolution**2, image_min_pixels=1024
+    )
 
     tokenizer.tokenizer_path = tokenizer_path
     tokenizer.model_max_length = data_args.max_seq_length

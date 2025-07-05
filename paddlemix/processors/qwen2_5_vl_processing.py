@@ -1,3 +1,17 @@
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import base64
 import math
 import os
@@ -80,6 +94,7 @@ __all__ = [
     "Qwen2_5_VLImageProcessor",
 ]
 
+
 def is_scaled_image(image: np.ndarray) -> bool:
     """
     Checks to see whether the pixel values have already been rescaled to [0, 1].
@@ -104,16 +119,19 @@ class Qwen2_5_VLProcessor(ProcessorMixin):
         chat_template (`str`, *optional*): A Jinja template which will be used to convert lists of messages
             in a chat into a tokenizable string.
     """
+
     attributes = ["image_processor", "tokenizer"]
     image_processor_class = "Qwen2_5_VLImageProcessor"
-    tokenizer_class = 'MIXQwen2_5_Tokenizer'
+    tokenizer_class = "MIXQwen2_5_Tokenizer"
     # , 'Qwen2TokenizerFast'
 
     def __init__(self, image_processor, text_processor, **kwargs):
         super().__init__(image_processor, text_processor)
-        self.image_processor.min_pixels = kwargs.get("min_pixels", 3136)
-        self.image_processor.max_pixels = kwargs.get("max_pixels", 12845056)
-        # self.image_token = "<|image_pad|>" if not hasattr(tokenizer, "image_token") else tokenizer.image_token
+
+        # qwen2.5-vl training (liaojincheng) image_min_pixels is used for template get mm_input
+        self.image_min_pixels = kwargs.get("image_min_pixels", self.image_processor.min_pixels)
+        self.image_max_pixels = kwargs.get("image_max_pixels", self.image_processor.max_pixels)
+        # self.image_token = "" if not hasattr(tokenizer, "image_token") else tokenizer.image_token
         # self.video_token = "<|video_pad|>" if not hasattr(tokenizer, "video_token") else tokenizer.video_token
 
     def __call__(
@@ -171,19 +189,17 @@ class Qwen2_5_VLProcessor(ProcessorMixin):
             image_grid_thw = None
         if videos is not None:
             videos_inputs = self.image_processor(images=None, videos=videos, return_tensors=return_tensors)
-            video_grid_thw = videos_inputs['video_grid_thw']
-            fps = videos_inputs.pop('fps', 2.0)
+            video_grid_thw = videos_inputs["video_grid_thw"]
+            fps = videos_inputs.pop("fps", 2.0)
             if isinstance(fps, (int, float)):
-                second_per_grid_ts = [self.image_processor.
-                    temporal_patch_size / fps] * len(video_grid_thw)
-            elif hasattr(fps, '__len__') and len(fps) == len(video_grid_thw):
-                second_per_grid_ts = [(self.image_processor.
-                    temporal_patch_size / tmp) for tmp in fps]
+                second_per_grid_ts = [self.image_processor.temporal_patch_size / fps] * len(video_grid_thw)
+            elif hasattr(fps, "__len__") and len(fps) == len(video_grid_thw):
+                second_per_grid_ts = [(self.image_processor.temporal_patch_size / tmp) for tmp in fps]
             else:
                 raise ValueError(
                     f"The length of fps ({len(fps) if hasattr(fps, '__len__') else fps}) must be equal to the length of video_grid_thw ({len(video_grid_thw)}) or fps should be a single number."
-                    )
-            videos_inputs.update({'second_per_grid_ts': second_per_grid_ts})
+                )
+            videos_inputs.update({"second_per_grid_ts": second_per_grid_ts})
         else:
             videos_inputs = {}
             video_grid_thw = None
@@ -237,7 +253,6 @@ class Qwen2_5_VLProcessor(ProcessorMixin):
         image_processor_input_names = self.image_processor.model_input_names
         return list(dict.fromkeys(tokenizer_input_names + image_processor_input_names))
 
-
     def post_process_image_text_to_text(self, generated_outputs):
         """
         Post-process the output of the model to decode the text.
@@ -250,17 +265,9 @@ class Qwen2_5_VLProcessor(ProcessorMixin):
         Returns:
             `List[str]`: The decoded text.
         """
-        return self.tokenizer.batch_decode(generated_outputs,
-            skip_special_tokens=True, clean_up_tokenization_spaces=False)
-
-    @property
-    def model_input_names(self):
-        tokenizer_input_names = self.tokenizer.model_input_names
-        image_processor_input_names = self.image_processor.model_input_names
-        return list(dict.fromkeys(tokenizer_input_names +
-            image_processor_input_names))
-
-
+        return self.tokenizer.batch_decode(
+            generated_outputs, skip_special_tokens=True, clean_up_tokenization_spaces=False
+        )
 
 
 def make_batched_images(images) -> List[List[ImageInput]]:
@@ -302,6 +309,7 @@ def make_batched_videos(videos) -> List[VideoInput]:
 
     raise ValueError(f"Could not make batched video from {videos}")
 
+
 class Qwen2_5_VLImageProcessor(BaseImageProcessor):
     """
     Constructs a Qwen2.5-VL image processor that dynamically resizes images based on the original images.
@@ -335,7 +343,13 @@ class Qwen2_5_VLImageProcessor(BaseImageProcessor):
             The merge size of the vision encoder to llm encoder.
     """
 
-    model_input_names = ["pixel_values", "image_grid_thw", "pixel_values_videos", "video_grid_thw", "second_per_grid_ts"]
+    model_input_names = [
+        "pixel_values",
+        "image_grid_thw",
+        "pixel_values_videos",
+        "video_grid_thw",
+        "second_per_grid_ts",
+    ]
 
     def __init__(
         self,
@@ -347,8 +361,10 @@ class Qwen2_5_VLImageProcessor(BaseImageProcessor):
         image_mean: Optional[Union[float, List[float]]] = None,
         image_std: Optional[Union[float, List[float]]] = None,
         do_convert_rgb: bool = True,
+        size: Dict[str, int] = None,
         min_pixels: int = 56 * 56,
-        max_pixels: int = 28 * 28 * 1280,
+        # max_pixels: int = 28 * 28 * 1280,
+        max_pixels: int = 12845056,
         patch_size: int = 14,
         temporal_patch_size: int = 2,
         merge_size: int = 2,
@@ -362,12 +378,24 @@ class Qwen2_5_VLImageProcessor(BaseImageProcessor):
         self.do_normalize = do_normalize
         self.image_mean = image_mean if image_mean is not None else OPENAI_CLIP_MEAN
         self.image_std = image_std if image_std is not None else OPENAI_CLIP_STD
-        self.min_pixels = min_pixels
-        self.max_pixels = max_pixels
         self.patch_size = patch_size
         self.temporal_patch_size = temporal_patch_size
         self.merge_size = merge_size
-        self.size = {"min_pixels": min_pixels, "max_pixels": max_pixels}
+
+        # liaojincheng fix qwen2.5-vl image processor
+        if size is not None and ("shortest_edge" not in size or "longest_edge" not in size):
+            raise ValueError("size must contain 'shortest_edge' and 'longest_edge' keys.")
+        else:
+            size = {"shortest_edge": 56 * 56, "longest_edge": 28 * 28 * 1280}
+        # backward compatibility: override size with min_pixels and max_pixels if they are provided
+        if min_pixels is not None:
+            size["shortest_edge"] = min_pixels
+        if max_pixels is not None:
+            size["longest_edge"] = max_pixels
+        self.min_pixels = size["shortest_edge"]
+        self.max_pixels = size["longest_edge"]
+        self.size = size
+
         self.do_convert_rgb = do_convert_rgb
 
     def _preprocess(
@@ -441,7 +469,6 @@ class Qwen2_5_VLImageProcessor(BaseImageProcessor):
         processed_images = []
 
         for image in images:
-            
             if do_resize:
                 resized_height, resized_width = smart_resize(
                     height,
@@ -450,9 +477,12 @@ class Qwen2_5_VLImageProcessor(BaseImageProcessor):
                     min_pixels=self.min_pixels,
                     max_pixels=self.max_pixels,
                 )
-                image = image.astype('uint8') #TODO : 需要手动加上，否则多除255 导致结果会出错
+                image = image.astype("uint8")  # TODO : 需要手动加上，否则多除255 导致结果会出错
                 image = resize(
-                    image, size=(resized_height, resized_width), resample=resample, data_format=input_data_format,
+                    image,
+                    size=(resized_height, resized_width),
+                    resample=resample,
+                    data_format=input_data_format,
                 )
 
             if do_rescale:
@@ -498,6 +528,8 @@ class Qwen2_5_VLImageProcessor(BaseImageProcessor):
         videos: VideoInput = None,
         do_resize: bool = None,
         size: Dict[str, int] = None,
+        min_pixels: int = None,
+        max_pixels: int = None,
         resample: PILImageResampling = None,
         do_rescale: bool = None,
         rescale_factor: float = None,
@@ -556,6 +588,18 @@ class Qwen2_5_VLImageProcessor(BaseImageProcessor):
                 - `"none"` or `ChannelDimension.NONE`: image in (height, width) format.
 
         """
+        if size is not None:
+            if "shortest_edge" not in size or "longest_edge" not in size:
+                raise ValueError("size must contain 'shortest_edge' and 'longest_edge' keys.")
+            min_pixels = size["shortest_edge"]
+        else:
+            size = self.size
+        # backward compatibility: override size with min_pixels and max_pixels if they are provided
+        if min_pixels is not None:
+            size["shortest_edge"] = min_pixels
+        if max_pixels is not None:
+            size["longest_edge"] = max_pixels
+
         do_resize = do_resize if do_resize is not None else self.do_resize
         size = size if size is not None else self.size
         resample = resample if resample is not None else self.resample
@@ -638,31 +682,33 @@ def floor_by_factor(number: int, factor: int) -> int:
 
 
 def smart_resize(
-    height: int, width: int, factor: int = IMAGE_FACTOR, min_pixels: int = MIN_PIXELS, max_pixels: int = MAX_PIXELS
-) -> Tuple[int, int]:
-    """
-    Rescales the image so that the following conditions are met:
+    height: int, width: int, factor: int = 28, min_pixels: int = 56 * 56, max_pixels: int = 14 * 14 * 4 * 1280
+):
+    """Rescales the image so that the following conditions are met:
 
     1. Both dimensions (height and width) are divisible by 'factor'.
 
     2. The total number of pixels is within the range ['min_pixels', 'max_pixels'].
 
     3. The aspect ratio of the image is maintained as closely as possible.
+
     """
-    if max(height, width) / min(height, width) > MAX_RATIO:
+    if height < factor or width < factor:
+        raise ValueError(f"height:{height} and width:{width} must be larger than factor:{factor}")
+    elif max(height, width) / min(height, width) > 200:
         raise ValueError(
-            f"absolute aspect ratio must be smaller than {MAX_RATIO}, got {max(height, width) / min(height, width)}"
+            f"absolute aspect ratio must be smaller than 200, got {max(height, width) / min(height, width)}"
         )
-    h_bar = max(factor, round_by_factor(height, factor))
-    w_bar = max(factor, round_by_factor(width, factor))
+    h_bar = round(height / factor) * factor
+    w_bar = round(width / factor) * factor
     if h_bar * w_bar > max_pixels:
         beta = math.sqrt((height * width) / max_pixels)
-        h_bar = floor_by_factor(height / beta, factor)
-        w_bar = floor_by_factor(width / beta, factor)
+        h_bar = math.floor(height / beta / factor) * factor
+        w_bar = math.floor(width / beta / factor) * factor
     elif h_bar * w_bar < min_pixels:
         beta = math.sqrt(min_pixels / (height * width))
-        h_bar = ceil_by_factor(height * beta, factor)
-        w_bar = ceil_by_factor(width * beta, factor)
+        h_bar = math.ceil(height * beta / factor) * factor
+        w_bar = math.ceil(width * beta / factor) * factor
     return h_bar, w_bar
 
 
@@ -751,6 +797,7 @@ def smart_nframes(
 
 def is_decord_available() -> bool:
     import importlib.util
+
     return importlib.util.find_spec("decord") is not None
 
 
@@ -758,15 +805,16 @@ def _read_video_decord(
     ele: dict,
 ) -> paddle.Tensor:
     import decord
+
     video_path = ele["video"]
     st = time.time()
     vr = decord.VideoReader(video_path)
-    if 'video_start' in ele or 'video_end' in ele:
+    if "video_start" in ele or "video_end" in ele:
         raise NotImplementedError("not support start_pts and end_pts in decord for now.")
     total_frames, video_fps = len(vr), vr.get_avg_fps()
     logger.info(f"decord:  {video_path=}, {total_frames=}, {video_fps=}, time={time.time() - st:.3f}s")
     nframes = smart_nframes(ele, total_frames=total_frames, video_fps=video_fps)
-    idx = paddle.linspace(0, total_frames - 1, nframes).round().astype('int64')
+    idx = paddle.linspace(0, total_frames - 1, nframes).round().astype("int64")
     idx = paddle.clip(idx, 0, total_frames - 1).tolist()
     video = vr.get_batch(idx).asnumpy()
     video = paddle.to_tensor(video).transpose([0, 3, 1, 2])  # Convert to TCHW format
@@ -793,65 +841,65 @@ def get_video_reader_backend() -> str:
     return video_reader_backend
 
 
-def custom_resize(video, size, interpolation='bicubic', antialias=True):
+def custom_resize(video, size, interpolation="bicubic", antialias=True):
     """
     Custom resize function for PaddlePaddle to mimic PyTorch's functionality.
-    
+
     Args:
         video (paddle.Tensor): Input video tensor of shape [T, C, H, W]
         size (list[int]): Target size [H, W]
         interpolation (str): Interpolation method, default is 'bicubic'
         antialias (bool): Whether to use anti-aliasing, default is True
-    
+
     Returns:
         paddle.Tensor: Resized video tensor
     """
     # 确保输入是4D张量 [T, C, H, W]
     if video.ndim != 4:
         raise ValueError(f"Expected 4D tensor, got {video.ndim}D tensor")
-    
+
     # 转换为浮点类型
-    video = video.astype('float32')
-    
+    video = video.astype("float32")
+
     # 获取原始尺寸
     T, C, H, W = video.shape
-    
+
     # 设置插值模式
-    if interpolation == 'bicubic':
-        mode = 'bicubic'
-    elif interpolation == 'bilinear':
-        mode = 'bilinear'
-    elif interpolation == 'nearest':
-        mode = 'nearest'
+    if interpolation == "bicubic":
+        mode = "bicubic"
+    elif interpolation == "bilinear":
+        mode = "bilinear"
+    elif interpolation == "nearest":
+        mode = "nearest"
     else:
         raise ValueError(f"Unsupported interpolation mode: {interpolation}")
-    
+
     # 重塑张量以便于处理
     video = video.reshape([-1, C, H, W])
-    
+
     # 执行resize操作
-    if antialias and mode in ['bicubic', 'bilinear']:
+    if antialias and mode in ["bicubic", "bilinear"]:
         # PaddlePaddle目前没有直接支持antialias的选项，我们可以通过先下采样再上采样来模拟
         if H > size[0] or W > size[1]:
             # 下采样
-            scale_factor = min(size[0]/H, size[1]/W, 1)
+            scale_factor = min(size[0] / H, size[1] / W, 1)
             if scale_factor < 1:
                 video = F.interpolate(video, scale_factor=scale_factor, mode=mode, align_corners=False)
         # 上采样到目标尺寸
         video = F.interpolate(video, size=size, mode=mode, align_corners=False)
     else:
         video = F.interpolate(video, size=size, mode=mode, align_corners=False)
-    
+
     # 恢复原始形状
     video = video.reshape([T, C, size[0], size[1]])
-    
+
     return video
 
 
 def gaussian_kernel_1d(size, sigma):
     """生成1D高斯核"""
     x = np.arange(-(size // 2), size // 2 + 1)
-    kernel = np.exp(-x**2 / (2 * sigma**2))
+    kernel = np.exp(-(x**2) / (2 * sigma**2))
     return kernel / kernel.sum()
 
 
@@ -881,11 +929,11 @@ def fetch_video(ele: dict, image_factor: int = IMAGE_FACTOR) -> Union[paddle.Ten
                 max_pixels=max_pixels,
             )
         video = F.interpolate(
-            video.astype('float32'), 
-            size=[resized_height, resized_width], 
-            mode='bicubic',
+            video.astype("float32"),
+            size=[resized_height, resized_width],
+            mode="bicubic",
             align_corners=False,
-            data_format='NCHW'
+            data_format="NCHW",
         )
 
         video = paddle.clip(video, 0, 255)
