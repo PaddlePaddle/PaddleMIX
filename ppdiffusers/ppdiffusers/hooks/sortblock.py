@@ -12,14 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import paddle
-import numpy as np
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Optional, Union
+
+import numpy as np
+import paddle
 
 from ..models import FluxTransformer2DModel
 from ..models.modeling_outputs import Transformer2DModelOutput
-from ..utils import USE_PEFT_BACKEND, is_paddle_version, logging, scale_lora_layers, unscale_lora_layers
+from ..utils import USE_PEFT_BACKEND, logging, scale_lora_layers, unscale_lora_layers
 from .hooks import HookRegistry, ModelHook
 
 logger = logging.get_logger(__name__)
@@ -31,7 +32,7 @@ class SortBlockConfig:
 
     Args:
         num_inference_steps (`int`, defaults to `50`):
-            The number of denoising steps. More denoising steps usually lead to a 
+            The number of denoising steps. More denoising steps usually lead to a
             higher quality image at the expense of slower inference.
         timestep_start (`int`, defaults to `900`):
             The timestep to start applying SortBlock optimization.
@@ -46,10 +47,10 @@ class SortBlockConfig:
         beta (`float`, defaults to `0.3`):
             The beta parameter for rescaling.
         current_timestep_callback (`Callable[[], int]`, *optional*):
-            A callback function that returns the current inference timestep. This 
+            A callback function that returns the current inference timestep. This
             is required for timestep-based optimization.
     """
-    
+
     num_inference_steps: int = 50
     timestep_start: int = 900
     timestep_end: int = 100
@@ -130,7 +131,7 @@ class SortBlockState:
 
 class SortBlockHook(ModelHook):
     """A hook that applies SortBlock optimization to FluxTransformer2DModel."""
-    
+
     _is_stateful = True
 
     def __init__(self, config: SortBlockConfig):
@@ -139,17 +140,14 @@ class SortBlockHook(ModelHook):
 
     def initialize_hook(self, module):
         if not isinstance(module, FluxTransformer2DModel):
-            raise ValueError(
-                "SortBlock optimization can only be applied to FluxTransformer2DModel"
-            )
-        
+            raise ValueError("SortBlock optimization can only be applied to FluxTransformer2DModel")
+
         transformer_blocks_len = len(module.transformer_blocks)
         single_transformer_blocks_len = len(module.single_transformer_blocks)
         self.state = SortBlockState(transformer_blocks_len, single_transformer_blocks_len)
-        
+
         # Store original forward method
         self.original_forward = module.forward
-
 
         # Set configuration attributes on module
         module.num_steps = self.config.num_inference_steps
@@ -160,7 +158,7 @@ class SortBlockHook(ModelHook):
         module.step_Num2 = self.config.step_num2
         module.beta = self.config.beta
         module.count = 0
-        
+
         # Initialize state attributes on module
         module.current_block_residual = self.state.current_block_residual
         module.current_block_encoder_residual = self.state.current_block_encoder_residual
@@ -170,10 +168,10 @@ class SortBlockHook(ModelHook):
         module.previous_encoder_block_residual = self.state.previous_encoder_block_residual
         module.result_list = self.state.result_list
         module.result_single_list = self.state.result_single_list
-        
+
         # Store reference to hook for state management
         module._sort_block_hook = self
-        
+
         # Replace forward method with SortBlock implementation
         def sort_block_forward_wrapper(
             hidden_states: paddle.Tensor,
@@ -204,17 +202,17 @@ class SortBlockHook(ModelHook):
                 return_dict,
                 controlnet_blocks_repeat,
             )
-        
+
         module.forward = sort_block_forward_wrapper
-        
+
         return module
 
     def reset_state(self, module):
-        if hasattr(self, 'state'):
+        if hasattr(self, "state"):
             transformer_blocks_len = len(module.transformer_blocks)
             single_transformer_blocks_len = len(module.single_transformer_blocks)
             self.state.reset(transformer_blocks_len, single_transformer_blocks_len)
-            
+
             # Reset module attributes
             module.count = 0
             module.current_block_residual = self.state.current_block_residual
@@ -225,7 +223,7 @@ class SortBlockHook(ModelHook):
             module.previous_encoder_block_residual = self.state.previous_encoder_block_residual
             module.result_list = self.state.result_list
             module.result_single_list = self.state.result_single_list
-        
+
         return module
 
     def _derivative_approximation(self, feature, step_diff):
@@ -291,7 +289,7 @@ class SortBlockHook(ModelHook):
 
         ids = paddle.concat((txt_ids, img_ids), axis=0)
         image_rotary_emb = module.pos_embed(ids)
-        
+
         module.count += 1
 
         # Reset at the beginning of inference
@@ -318,13 +316,14 @@ class SortBlockHook(ModelHook):
 
         # Process transformer blocks
         for index_block, block in enumerate(module.transformer_blocks):
-            should_compute_block = (module.count % module.step_Num == 0 or 
-                                  (module.result_list != [] and module.result_list[index_block] == 1))
-            
+            should_compute_block = module.count % module.step_Num == 0 or (
+                module.result_list != [] and module.result_list[index_block] == 1
+            )
+
             if should_compute_block:
                 ori_hidden_states = hidden_states.clone()
                 ori_encoder_hidden_states = encoder_hidden_states.clone()
-                
+
                 encoder_hidden_states, hidden_states = block(
                     hidden_states=hidden_states,
                     encoder_hidden_states=encoder_hidden_states,
@@ -346,33 +345,42 @@ class SortBlockHook(ModelHook):
                 # Store residuals for future approximations
                 if module.count % module.step_Num == 0:
                     module.previous_block_residual[index_block] = hidden_states.clone() - ori_hidden_states
-                    module.previous_encoder_block_residual[index_block] = encoder_hidden_states.clone() - ori_encoder_hidden_states
+                    module.previous_encoder_block_residual[index_block] = (
+                        encoder_hidden_states.clone() - ori_encoder_hidden_states
+                    )
             else:
                 # Use Taylor approximation
                 if module.count % module.step_Num == 1 and index_block < len(module.previous_block_residual):
                     if module.previous_block_residual[index_block] is not None:
                         module.current_block_residual[index_block] = module.previous_block_residual[index_block]
                     if module.previous_encoder_block_residual[index_block] is not None:
-                        module.current_block_encoder_residual[index_block] = module.previous_encoder_block_residual[index_block]
-                
+                        module.current_block_encoder_residual[index_block] = module.previous_encoder_block_residual[
+                            index_block
+                        ]
+
                 # Apply approximated residuals
-                if (index_block < len(module.previous_block_residual) and 
-                    module.previous_block_residual[index_block] is not None):
+                if (
+                    index_block < len(module.previous_block_residual)
+                    and module.previous_block_residual[index_block] is not None
+                ):
                     hidden_states += module.previous_block_residual[index_block]
-                if (index_block < len(module.previous_encoder_block_residual) and 
-                    module.previous_encoder_block_residual[index_block] is not None):
+                if (
+                    index_block < len(module.previous_encoder_block_residual)
+                    and module.previous_encoder_block_residual[index_block] is not None
+                ):
                     encoder_hidden_states += module.previous_encoder_block_residual[index_block]
 
         hidden_states = paddle.concat([encoder_hidden_states, hidden_states], axis=1)
 
         # Process single transformer blocks
         for index_block, block in enumerate(module.single_transformer_blocks):
-            should_compute_block = (module.count % module.step_Num == 0 or 
-                                  (module.result_single_list != [] and module.result_single_list[index_block] == 1))
-            
+            should_compute_block = module.count % module.step_Num == 0 or (
+                module.result_single_list != [] and module.result_single_list[index_block] == 1
+            )
+
             if should_compute_block:
                 ori_hidden_states = hidden_states.clone()
-                
+
                 hidden_states = block(
                     hidden_states=hidden_states,
                     temb=temb,
@@ -383,8 +391,8 @@ class SortBlockHook(ModelHook):
                 if controlnet_single_block_samples is not None:
                     interval_control = len(module.single_transformer_blocks) / len(controlnet_single_block_samples)
                     interval_control = int(np.ceil(interval_control))
-                    hidden_states[:, encoder_hidden_states.shape[1]:, ...] = (
-                        hidden_states[:, encoder_hidden_states.shape[1]:, ...]
+                    hidden_states[:, encoder_hidden_states.shape[1] :, ...] = (
+                        hidden_states[:, encoder_hidden_states.shape[1] :, ...]
                         + controlnet_single_block_samples[index_block // interval_control]
                     )
 
@@ -394,11 +402,15 @@ class SortBlockHook(ModelHook):
                 # Use Taylor approximation
                 if module.count % module.step_Num == 1 and index_block < len(module.previous_single_block_residual):
                     if module.previous_single_block_residual[index_block] is not None:
-                        module.current_single_block_residual[index_block] = module.previous_single_block_residual[index_block]
-                
+                        module.current_single_block_residual[index_block] = module.previous_single_block_residual[
+                            index_block
+                        ]
+
                 # Apply approximated residuals
-                if (index_block < len(module.previous_single_block_residual) and 
-                    module.previous_single_block_residual[index_block] is not None):
+                if (
+                    index_block < len(module.previous_single_block_residual)
+                    and module.previous_single_block_residual[index_block] is not None
+                ):
                     hidden_states += module.previous_single_block_residual[index_block]
 
         # Compute similarity and update result lists
@@ -406,46 +418,55 @@ class SortBlockHook(ModelHook):
             coefficients = [5.67621e-14, -1.36659e-10, 1.16246e-7, -3.97725e-5, 0.00361, 0.56088]
             rescale_func = np.poly1d(coefficients)
             module.precentage = rescale_func(timestep.item()) * module.beta
-            
+
             # Compute cosine similarities for transformer blocks
             cosine_similarities = []
             for i in range(len(module.transformer_blocks)):
-                if (module.previous_block_residual[i] is not None and 
-                    module.current_block_residual[i] is not None):
+                if module.previous_block_residual[i] is not None and module.current_block_residual[i] is not None:
                     cosine_similarity = paddle.nn.functional.cosine_similarity(
-                        module.previous_block_residual[i][:, :, :module.previous_block_residual[i].shape[-1]//8].to(paddle.float32),
-                        module.current_block_residual[i][:, :, :module.current_block_residual[i].shape[-1]//8].to(paddle.float32),
-                        axis=-1
+                        module.previous_block_residual[i][:, :, : module.previous_block_residual[i].shape[-1] // 8].to(
+                            paddle.float32
+                        ),
+                        module.current_block_residual[i][:, :, : module.current_block_residual[i].shape[-1] // 8].to(
+                            paddle.float32
+                        ),
+                        axis=-1,
                     )
                     cosine_similarities.append(cosine_similarity.mean().item())
                 else:
                     cosine_similarities.append(1.0)  # Default to high similarity
-            
+
             if cosine_similarities:
                 sorted_cos = sorted(cosine_similarities)
                 threshold = sorted_cos[int(len(module.transformer_blocks) * module.precentage)]
                 module.result_list = [1 if j <= threshold else 0 for j in cosine_similarities]
-            
+
             # Compute cosine similarities for single transformer blocks
             cosine_single_similarities = []
             for i in range(len(module.single_transformer_blocks)):
-                if (module.previous_single_block_residual[i] is not None and 
-                    module.current_single_block_residual[i] is not None):
+                if (
+                    module.previous_single_block_residual[i] is not None
+                    and module.current_single_block_residual[i] is not None
+                ):
                     cosine_similarity = paddle.nn.functional.cosine_similarity(
-                        module.previous_single_block_residual[i][:, :, :module.previous_single_block_residual[i].shape[-1]//8].to(paddle.float32),
-                        module.current_single_block_residual[i][:, :, :module.current_single_block_residual[i].shape[-1]//8].to(paddle.float32),
-                        axis=-1
+                        module.previous_single_block_residual[i][
+                            :, :, : module.previous_single_block_residual[i].shape[-1] // 8
+                        ].to(paddle.float32),
+                        module.current_single_block_residual[i][
+                            :, :, : module.current_single_block_residual[i].shape[-1] // 8
+                        ].to(paddle.float32),
+                        axis=-1,
                     )
                     cosine_single_similarities.append(cosine_similarity.mean().item())
                 else:
                     cosine_single_similarities.append(1.0)  # Default to high similarity
-            
+
             if cosine_single_similarities:
                 sorted_cos = sorted(cosine_single_similarities)
                 threshold = sorted_cos[int(len(module.single_transformer_blocks) * module.precentage)]
                 module.result_single_list = [1 if j <= threshold else 0 for j in cosine_single_similarities]
 
-        hidden_states = hidden_states[:, encoder_hidden_states.shape[1]:, ...]
+        hidden_states = hidden_states[:, encoder_hidden_states.shape[1] :, ...]
 
         hidden_states = module.norm_out(hidden_states, temb)
         output = module.proj_out(hidden_states)
@@ -501,6 +522,6 @@ def apply_sort_block(module: paddle.nn.Layer, config: SortBlockConfig):
 
     registry = HookRegistry.check_if_exists_or_initialize(module)
     hook = SortBlockHook(config)
-    registry.register_hook(hook, 'sort_block')
-    
-    logger.info("SortBlock optimization has been applied to the FluxTransformer2DModel") 
+    registry.register_hook(hook, "sort_block")
+
+    logger.info("SortBlock optimization has been applied to the FluxTransformer2DModel")

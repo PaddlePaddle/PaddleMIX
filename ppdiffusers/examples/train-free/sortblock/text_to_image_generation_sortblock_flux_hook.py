@@ -12,8 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import paddle
 import time
+
+import paddle
 
 from ppdiffusers import FluxPipeline, SortBlockConfig, apply_sort_block
 
@@ -29,7 +30,7 @@ config = SortBlockConfig(
     step_num=1,
     step_num2=5,
     beta=0.3,
-    current_timestep_callback=lambda: getattr(pipe, '_current_timestep', None),
+    current_timestep_callback=lambda: getattr(pipe, "_current_timestep", None),
 )
 
 # Apply SortBlock optimization using the integrated framework
@@ -49,7 +50,7 @@ image = pipe(
     guidance_scale=3.5,
     num_inference_steps=50,
     max_sequence_length=512,
-    generator=paddle.Generator().manual_seed(42)
+    generator=paddle.Generator().manual_seed(42),
 ).images[0]
 
 end_time = time.time()
@@ -69,7 +70,7 @@ image = pipe(
     guidance_scale=3.5,
     num_inference_steps=50,
     max_sequence_length=512,
-    generator=paddle.Generator().manual_seed(42)
+    generator=paddle.Generator().manual_seed(42),
 ).images[0]
 
 end_time = time.time()
@@ -79,4 +80,4 @@ print(f"Elapsed time: {elapsed_time:.2f} seconds")
 image.save("text_to_image_generation-sortblock-flux-hook-result-1.png")
 
 # Disable optimization if needed
-# pipe.transformer.disable_cache() 
+# pipe.transformer.disable_cache()

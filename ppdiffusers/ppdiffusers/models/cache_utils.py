@@ -58,7 +58,7 @@ class CacheMixin:
         ...     current_timestep_callback=lambda: pipe.current_timestep,
         ... )
         >>> pipe.transformer.enable_cache(config)
-        
+
         >>> # Or for SortBlock optimization:
         >>> from ppdiffusers import FluxPipeline, SortBlockConfig
         >>> pipe = FluxPipeline.from_pretrained("black-forest-labs/FLUX.1-dev", paddle_dtype=paddle.float16)
@@ -69,7 +69,7 @@ class CacheMixin:
         ...     current_timestep_callback=lambda: pipe._current_timestep,
         ... )
         >>> pipe.transformer.enable_cache(config)
-        
+
         >>> # Or for TeaBlockCache + Taylor optimization:
         >>> from ppdiffusers import FluxPipeline, TeaBlockCacheTaylorConfig
         >>> pipe = FluxPipeline.from_pretrained("black-forest-labs/FLUX.1-dev", paddle_dtype=paddle.bfloat16)
@@ -86,12 +86,12 @@ class CacheMixin:
         ```
         """
         from ..hooks import (
-            PyramidAttentionBroadcastConfig, 
-            apply_pyramid_attention_broadcast, 
-            SortBlockConfig, 
-            apply_sort_block, 
-            TeaBlockCacheTaylorConfig, 
-            apply_teablockcache_taylor
+            PyramidAttentionBroadcastConfig,
+            SortBlockConfig,
+            TeaBlockCacheTaylorConfig,
+            apply_pyramid_attention_broadcast,
+            apply_sort_block,
+            apply_teablockcache_taylor,
         )
 
         if isinstance(config, PyramidAttentionBroadcastConfig):
@@ -105,7 +105,12 @@ class CacheMixin:
         self._cache_config = config
 
     def disable_cache(self) -> None:
-        from ..hooks import HookRegistry, PyramidAttentionBroadcastConfig, SortBlockConfig, TeaBlockCacheTaylorConfig
+        from ..hooks import (
+            HookRegistry,
+            PyramidAttentionBroadcastConfig,
+            SortBlockConfig,
+            TeaBlockCacheTaylorConfig,
+        )
 
         if self._cache_config is None:
             logger.warning("Caching techniques have not been enabled, so there's nothing to disable.")
@@ -115,10 +120,10 @@ class CacheMixin:
             registry.remove_hook("pyramid_attention_broadcast", recurse=True)
         elif isinstance(self._cache_config, SortBlockConfig):
             registry = HookRegistry.check_if_exists_or_initialize(self)
-            registry.remove_hook('sort_block', recurse=True)
+            registry.remove_hook("sort_block", recurse=True)
         elif isinstance(self._cache_config, TeaBlockCacheTaylorConfig):
             registry = HookRegistry.check_if_exists_or_initialize(self)
-            registry.remove_hook('teablockcache_taylor', recurse=True)
+            registry.remove_hook("teablockcache_taylor", recurse=True)
         else:
             raise ValueError(f"Cache config {type(self._cache_config)} is not supported.")
         self._cache_config = None

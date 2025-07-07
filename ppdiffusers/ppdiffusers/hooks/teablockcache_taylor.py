@@ -1,7 +1,21 @@
-import paddle
-import re
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional, Tuple, Union
+from typing import Callable, Optional
+
+import paddle
 
 from ..models.transformer_flux import FluxTransformer2DModel
 from ..utils import logging
@@ -39,7 +53,7 @@ class TeaBlockCacheTaylorConfig:
         current_timestep_callback (`Callable[[], int]`, defaults to `None`):
             A callback function that returns the current inference timestep.
     """
-    
+
     step_start: int = 50
     step_end: int = 950
     block_cache_start: int = 1
@@ -80,11 +94,11 @@ class TeaBlockCacheTaylorState:
         self.block_heuristic_states = {}
         self.single_block_heuristic_states = {}
         self.taylor_cache_system = {
-            'max_order': 1,
-            'first_enhance': 1,
-            'cache': {'hidden': {}},
-            'activated_steps': [],
-            'step_counter': 0
+            "max_order": 1,
+            "first_enhance": 1,
+            "cache": {"hidden": {}},
+            "activated_steps": [],
+            "step_counter": 0,
         }
         # TeaCache global state
         self.accumulated_rel_l1_distance = 0
@@ -96,11 +110,11 @@ class TeaBlockCacheTaylorState:
         self.block_heuristic_states = {}
         self.single_block_heuristic_states = {}
         self.taylor_cache_system = {
-            'max_order': 1,
-            'first_enhance': 1,
-            'cache': {'hidden': {}},
-            'activated_steps': [],
-            'step_counter': 0
+            "max_order": 1,
+            "first_enhance": 1,
+            "cache": {"hidden": {}},
+            "activated_steps": [],
+            "step_counter": 0,
         }
         self.accumulated_rel_l1_distance = 0
         self.previous_modulated_input = None
@@ -119,6 +133,7 @@ class TeaBlockCacheTaylorState:
 
 class TeaBlockCacheTaylorHook(ModelHook):
     """A hook that applies TeaBlockCache + Taylor optimization to FluxTransformer2DModel."""
+
     _is_stateful = True
 
     def __init__(self, config: TeaBlockCacheTaylorConfig) -> None:
@@ -127,7 +142,7 @@ class TeaBlockCacheTaylorHook(ModelHook):
 
     def initialize_hook(self, module):
         self.state = TeaBlockCacheTaylorState()
-        
+
         # Apply configuration to the transformer module
         module.cnt = 0
         module.num_steps = self.config.num_inference_steps
@@ -137,43 +152,51 @@ class TeaBlockCacheTaylorHook(ModelHook):
         module.single_block_cache_start = self.config.single_block_cache_start
         module.block_rel_l1_thresh = self.config.block_rel_l1_thresh
         module.single_block_rel_l1_thresh = self.config.single_block_rel_l1_thresh
-        
+
         # Initialize state dictionaries
         module.block_heuristic_states = {}
         module.single_block_heuristic_states = {}
-        
+
         # Initialize Taylor cache system
         module.enable_teacache = True
         module.rel_l1_thresh = self.config.rel_l1_thresh
         module.taylor_cache_system = {
-            'max_order': self.config.taylor_max_order,
-            'first_enhance': self.config.taylor_first_enhance,
-            'cache': {'hidden': {}},
-            'activated_steps': [],
-            'step_counter': 0
+            "max_order": self.config.taylor_max_order,
+            "first_enhance": self.config.taylor_first_enhance,
+            "cache": {"hidden": {}},
+            "activated_steps": [],
+            "step_counter": 0,
         }
-        
+
         # Store original forward method and replace it
-        if not hasattr(module, '_original_forward'):
+        if not hasattr(module, "_original_forward"):
             module._original_forward = module.forward
-            
+
             # Import and set the TeaBlockCache Taylor forward function
             try:
-                import sys
                 import os
+                import sys
+
                 # Add the examples directory to the path temporarily
-                examples_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'examples', 'train-free', 'teablockcache', 'forwards')
+                examples_path = os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+                    "examples",
+                    "train-free",
+                    "teablockcache",
+                    "forwards",
+                )
                 if examples_path not in sys.path:
                     sys.path.insert(0, examples_path)
-                from teablockcache_taylor_flux_forward import TeaBlockCacheTaylorForward
-                
                 # Replace the forward method
                 import types
+
+                from teablockcache_taylor_flux_forward import TeaBlockCacheTaylorForward
+
                 module.forward = types.MethodType(TeaBlockCacheTaylorForward, module)
-                
+
             except ImportError:
                 logger.warning("TeaBlockCache Taylor forward implementation not found, keeping original forward")
-        
+
         return module
 
     def reset_state(self, module: FluxTransformer2DModel) -> None:
@@ -183,11 +206,11 @@ class TeaBlockCacheTaylorHook(ModelHook):
         module.block_heuristic_states = {}
         module.single_block_heuristic_states = {}
         module.taylor_cache_system = {
-            'max_order': self.config.taylor_max_order,
-            'first_enhance': self.config.taylor_first_enhance,
-            'cache': {'hidden': {}},
-            'activated_steps': [],
-            'step_counter': 0
+            "max_order": self.config.taylor_max_order,
+            "first_enhance": self.config.taylor_first_enhance,
+            "cache": {"hidden": {}},
+            "activated_steps": [],
+            "step_counter": 0,
         }
         return module
 
@@ -231,7 +254,7 @@ def apply_teablockcache_taylor(module: paddle.nn.Layer, config: TeaBlockCacheTay
             f"TeaBlockCache + Taylor optimization can only be applied to FluxTransformer2DModel, "
             f"but got {type(module)}."
         )
-    
+
     if config.current_timestep_callback is None:
         raise ValueError(
             "The `current_timestep_callback` function must be provided in the configuration "
@@ -239,10 +262,10 @@ def apply_teablockcache_taylor(module: paddle.nn.Layer, config: TeaBlockCacheTay
         )
 
     logger.info("Applying TeaBlockCache + Taylor optimization to FluxTransformer2DModel")
-    
+
     registry = HookRegistry.check_if_exists_or_initialize(module)
     hook = TeaBlockCacheTaylorHook(config)
-    registry.register_hook(hook, 'teablockcache_taylor')
+    registry.register_hook(hook, "teablockcache_taylor")
 
 
 def remove_teablockcache_taylor(module: paddle.nn.Layer):
@@ -253,9 +276,9 @@ def remove_teablockcache_taylor(module: paddle.nn.Layer):
         module (`paddle.nn.Layer`):
             The FluxTransformer2DModel to remove TeaBlockCache + Taylor optimization from.
     """
-    if hasattr(module, '_original_forward'):
+    if hasattr(module, "_original_forward"):
         module.forward = module._original_forward
-        delattr(module, '_original_forward')
-    
+        delattr(module, "_original_forward")
+
     registry = HookRegistry.check_if_exists_or_initialize(module)
-    registry.remove_hook('teablockcache_taylor', recurse=True) 
+    registry.remove_hook("teablockcache_taylor", recurse=True)
