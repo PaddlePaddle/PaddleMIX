@@ -112,6 +112,10 @@ else:
             "HookRegistry",
             "PyramidAttentionBroadcastConfig",
             "apply_pyramid_attention_broadcast",
+            "SortBlockConfig",
+            "apply_sort_block",
+            "TeaBlockCacheTaylorConfig",
+            "apply_teablockcache_taylor",
         ]
     )
     _import_structure["models"].extend(
@@ -575,6 +579,15 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             Vid2VidSTUNet,
             VQModel,
             WanTransformer3DModel,
+        )
+        from .hooks import (
+            HookRegistry,
+            PyramidAttentionBroadcastConfig,
+            apply_pyramid_attention_broadcast,
+            SortBlockConfig,
+            apply_sort_block,
+            TeaBlockCacheTaylorConfig,
+            apply_teablockcache_taylor,
         )
         from .optimization import (
             get_constant_schedule,
