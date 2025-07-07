@@ -59,7 +59,7 @@ class Qwen2vlModelTester:
             "rope_theta": 1000000.0,
             "sliding_window": 32768,
             "tie_word_embeddings": True,
-            "dtype": "bfloat16",
+            "dtype": "float32",
             "use_cache": True,
             "use_sliding_window": False,
             "vision_config": {
