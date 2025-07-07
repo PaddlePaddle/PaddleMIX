@@ -16,8 +16,6 @@ import io
 import logging
 import sys
 
-import torch
-
 logger = logging.getLogger(__name__)
 import numpy as np
 
@@ -285,9 +283,9 @@ def preprocess(
         target[cur_len:] = IGNORE_TOKEN_ID
 
         if False:  # Inspect and check the correctness of masking
-            z = target.clone()
-            z = torch.where(z == IGNORE_TOKEN_ID, tokenizer.unk_token_id, z)
-            logger.info(tokenizer.decode(z))
+            z = target.clone()  # noqa
+            z = torch.where(z == IGNORE_TOKEN_ID, tokenizer.unk_token_id, z)  # noqa
+            logger.info(tokenizer.decode(z))  # noqa
             exit()
 
         if cur_len < tokenizer.model_max_length:
@@ -489,8 +487,8 @@ def preprocess_phi3(
         target[cur_len:] = IGNORE_TOKEN_ID
 
         if False:  # Inspect and check the correctness of masking
-            z = target.clone()
-            z = torch.where(z == IGNORE_TOKEN_ID, tokenizer.unk_token_id, z)
+            z = target.clone()  # noqa
+            z = torch.where(z == IGNORE_TOKEN_ID, tokenizer.unk_token_id, z)  # noqa
             print(repr(tokenizer.decode(z)))
 
         if cur_len < tokenizer.model_max_length:
@@ -588,8 +586,8 @@ def preprocess_internlm(
 
         target[cur_len:] = IGNORE_TOKEN_ID
         if False:  # Inspect and check the correctness of masking
-            z = target.clone()
-            z = torch.where(z == IGNORE_TOKEN_ID, tokenizer.unk_token_id, z)
+            z = target.clone()  # noqa
+            z = torch.where(z == IGNORE_TOKEN_ID, tokenizer.unk_token_id, z)  # noqa
             print(repr(tokenizer.decode(z)))
 
         if cur_len < tokenizer.model_max_length:
