@@ -20,26 +20,33 @@ import random
 import sys
 import traceback
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Sequence, Any
+from typing import Any, Dict, Optional, Sequence
 
 import numpy as np
 import paddle
 import paddle.distributed as dist
+from paddle.distributed import fleet
+from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
 from paddle.io import Dataset
 from paddlenlp.data import DataCollatorForSeq2Seq
 from paddlenlp.peft import LoRAConfig, LoRAModel
 from paddlenlp.trainer import PdArgumentParser, TrainingArguments, set_seed
 from paddlenlp.trainer.trainer import Trainer
 from paddlenlp.trainer.trainer_utils import get_last_checkpoint
+from paddlenlp.transformers.processing_utils import ProcessorMixin
 from PIL import Image, ImageFile, PngImagePlugin, UnidentifiedImageError
 
 from paddlemix.datasets.internvl_dataset import ConcatDataset, WeightedConcatDataset
 from paddlemix.models.qwen2_5_vl import MIXQwen2_5_Tokenizer
-from paddlemix.models.qwen2_5_vl.modeling_qwen2_5_vl import Qwen2_5_VLForConditionalGeneration
+from paddlemix.models.qwen2_5_vl.modeling_qwen2_5_vl import (
+    Qwen2_5_VLForConditionalGeneration,
+)
 from paddlemix.models.qwen2_5_vl.supervised import _encode_supervised_example
 from paddlemix.models.qwen2_5_vl.template import TEMPLATES
-from paddlemix.processors.qwen2_5_vl_processing import Qwen2_5_VLImageProcessor, Qwen2_5_VLProcessor
-from paddlenlp.transformers.processing_utils import ProcessorMixin
+from paddlemix.processors.qwen2_5_vl_processing import (
+    Qwen2_5_VLImageProcessor,
+    Qwen2_5_VLProcessor,
+)
 
 Image.MAX_IMAGE_PIXELS = None
 ImageFile.LOAD_TRUNCATED_IMAGES = True
@@ -53,6 +60,71 @@ logger = logging.getLogger(__name__)
 IGNORE_INDEX = -100
 VIDEO_PLACEHOLDER = "<video>"
 IMAGE_PLACEHOLDER = "<image>"
+
+
+def set_hyrbid_parallel_seed(basic_seed, data_world_rank, mp_rank, pp_rank=0):
+    device_id = paddle.device.get_device()
+    assert "gpu" in device_id
+
+    random.seed(basic_seed + data_world_rank)
+    np.random.seed(basic_seed + data_world_rank)
+    paddle.seed(basic_seed + data_world_rank)
+
+    # local_seed/ global_seed is used to control dropout in ModelParallel
+    local_seed = 1024 + basic_seed + mp_rank * 100 + data_world_rank
+    global_seed = 2048 + basic_seed + data_world_rank
+    tracker = get_rng_state_tracker()
+    tracker.add("global_seed", global_seed)
+    tracker.add("local_seed", local_seed)
+
+
+def setdistenv(args):
+    world_size = dist.get_world_size()
+    if world_size > 1:
+        args.dp_degree = max(args.data_parallel_degree, 1)
+        args.sharding_parallel_degree = max(args.sharding_parallel_degree, 1)
+        args.tensor_parallel_degree = max(args.tensor_parallel_degree, 1)
+        args.sep_parallel_degree = max(args.sep_parallel_degree, 1)
+        args.pipeline_parallel_degree = max(args.pipeline_parallel_degree, 1)
+
+        assert (
+            world_size % (args.tensor_parallel_degree * args.pipeline_parallel_degree) == 0
+        ), f"Total world_size:{world_size} should be divided by tensor_parallel_degree: {args.tensor_parallel_degree} and pipeline_parallel_degree: {args.pipeline_parallel_degree}."
+
+        args.dp_degree = world_size // (
+            args.tensor_parallel_degree * args.sharding_parallel_degree * args.pipeline_parallel_degree
+        )
+        strategy = fleet.DistributedStrategy()
+        strategy.hybrid_configs = {
+            "dp_degree": args.dp_degree,
+            "mp_degree": args.tensor_parallel_degree,
+            "sharding_degree": args.sharding_parallel_degree,
+            "pp_degree": args.pipeline_parallel_degree,
+        }
+        # strategy.find_unused_parameters = True
+
+        # set control in tensor parallel
+        strategy.tensor_parallel_configs = {"tensor_init_seed": args.seed}
+
+        fleet.init(is_collective=True, strategy=strategy)
+
+        args.rank = dist.get_rank()
+        # obtain rank message of hybrid parallel
+        hcg = fleet.get_hybrid_communicate_group()
+        args.mp_rank = hcg.get_model_parallel_rank()
+        args.dp_rank = hcg.get_data_parallel_rank()
+        args.sharding_rank = hcg.get_sharding_parallel_rank()
+
+        args.data_world_rank = args.dp_rank * args.sharding_parallel_degree + args.sharding_rank
+        args.data_world_size = world_size // abs(args.tensor_parallel_degree * args.pipeline_parallel_degree)
+    else:
+        args.data_world_rank = 0
+        args.data_world_size = 1
+        args.mp_rank = 0
+        args.rank = 0
+
+    # seed control in hybrid parallel
+    set_hyrbid_parallel_seed(args.seed, args.data_world_rank, args.mp_rank)
 
 
 @dataclass
@@ -352,7 +424,7 @@ class LazySupervisedDataset(Dataset):
             attention_mask=attention_mask,
             images=[],
         )
-        
+
         return ret
 
     def __getitem__(self, i) -> Dict[str, paddle.Tensor]:
@@ -457,7 +529,7 @@ class MultiModalDataCollatorForSeq2Seq(DataCollatorForSeq2Seq):
 
     def __call__(self, features: Sequence[Dict[str, Any]]) -> Dict[str, "paddle.Tensor"]:
         batch_images, batch_videos, batch_imglens, batch_vidlens, batch_input_ids = [], [], [], [], []
-        
+
         for feature in features:
             images = feature.pop("images", None) or []
             videos = feature.pop("videos", None) or []
@@ -467,9 +539,7 @@ class MultiModalDataCollatorForSeq2Seq(DataCollatorForSeq2Seq):
             batch_vidlens.append(len(videos))
             batch_input_ids.append(feature["input_ids"])
 
-        if (
-            self.processor is not None and sum(batch_imglens) == 0 and sum(batch_vidlens) == 0
-        ):  
+        if self.processor is not None and sum(batch_imglens) == 0 and sum(batch_vidlens) == 0:
             fake_messages = [{"role": "user", "content": IMAGE_PLACEHOLDER}]
             fake_images = [Image.new("RGB", (64, 64), (255, 255, 255))]
             fake_messages = self.template.mm_plugin.process_messages(fake_messages, fake_images, [], self.processor)
@@ -480,12 +550,16 @@ class MultiModalDataCollatorForSeq2Seq(DataCollatorForSeq2Seq):
 
             if len(fake_input_ids) != 0:
                 if self.tokenizer.padding_side == "right":
-                    features[0]["input_ids"] = features[0]["input_ids"]+ fake_input_ids["input_ids"]
-                    features[0]["attention_mask"] = features[0]["attention_mask"] + [0] * len(fake_input_ids["input_ids"])
+                    features[0]["input_ids"] = features[0]["input_ids"] + fake_input_ids["input_ids"]
+                    features[0]["attention_mask"] = features[0]["attention_mask"] + [0] * len(
+                        fake_input_ids["input_ids"]
+                    )
                     features[0]["labels"] = features[0]["labels"] + [IGNORE_INDEX] * len(fake_input_ids["input_ids"])
                 else:
                     features[0]["input_ids"] = fake_input_ids["input_ids"] + features[0]["input_ids"]
-                    features[0]["attention_mask"] = [0] * len(fake_input_ids["input_ids"]) + features[0]["attention_mask"]
+                    features[0]["attention_mask"] = [0] * len(fake_input_ids["input_ids"]) + features[0][
+                        "attention_mask"
+                    ]
                     features[0]["labels"] = [IGNORE_INDEX] * len(fake_input_ids["input_ids"]) + features[0]["labels"]
 
             batch_images = fake_images
@@ -514,8 +588,6 @@ class MultiModalDataCollatorForSeq2Seq(DataCollatorForSeq2Seq):
 
             features["position_ids"], features["rope_deltas"] = self.model.get_rope_index(**rope_index_kwargs)
 
-
-
         if "cross_attention_mask" in mm_inputs:  # for mllama inputs when pad_to_multiple_of is enabled
             cross_attention_mask = mm_inputs.pop("cross_attention_mask")
             seq_len = features["input_ids"].size(1)
@@ -534,7 +606,6 @@ class MultiModalDataCollatorForSeq2Seq(DataCollatorForSeq2Seq):
         return features
 
 
-
 def main():
     parser = PdArgumentParser((ModelArguments, DataTrainingArguments, PreTrainingArguments))
     if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
@@ -546,6 +617,10 @@ def main():
 
     training_args.print_config(model_args, "Model")
     training_args.print_config(data_args, "Data")
+
+    setdistenv(training_args)
+    hcg = fleet.get_hybrid_communicate_group()
+    tensor_parallel_rank = hcg.get_model_parallel_rank()
 
     # Log on each process the small summary:
     logger.warning(
@@ -592,7 +667,14 @@ def main():
     print(f"Loading Tokenizer: {tokenizer_path}")
 
     MODEL_NAME = model_args.model_name_or_path
-    model = Qwen2_5_VLForConditionalGeneration.from_pretrained(MODEL_NAME, dtype=dtype, attn_implementation="flash_attention_2")
+    model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+        MODEL_NAME,
+        tensor_parallel_degree=training_args.tensor_parallel_degree,
+        tensor_parallel_rank=tensor_parallel_rank,
+        tensor_parallel_output=False,
+        dtype=dtype,
+        attn_implementation="flash_attention_2",
+    )  # ,tensor_parallel_output=False
     image_processor = Qwen2_5_VLImageProcessor()
     tokenizer = MIXQwen2_5_Tokenizer.from_pretrained(MODEL_NAME, padding_side="right")
     processor = Qwen2_5_VLProcessor(image_processor, tokenizer)
