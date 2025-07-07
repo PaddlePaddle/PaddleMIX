@@ -21,3 +21,5 @@ if is_paddle_available():
         PyramidAttentionBroadcastConfig,
         apply_pyramid_attention_broadcast,
     )
+    from .sortblock import SortBlockConfig, apply_sort_block
+    from .teablockcache_taylor import TeaBlockCacheTaylorConfig, apply_teablockcache_taylor
