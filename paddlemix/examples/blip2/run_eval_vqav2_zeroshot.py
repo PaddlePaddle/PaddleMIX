@@ -252,7 +252,6 @@ def setdistenv(args):
     args.pipeline_parallel_degree = 1 if args.pipeline_parallel_degree == -1 else args.pipeline_parallel_degree
     args.sharding_parallel_degree = 1 if args.sharding_parallel_degree == -1 else args.sharding_parallel_degree
 
-
     if args.tensor_parallel_degree * args.sharding_parallel_degree * args.pipeline_parallel_degree != 1:
         args.use_hybrid_parallel = True
     args.dp_degree = dist.get_world_size() // (

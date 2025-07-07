@@ -12,19 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from decord import VideoReader, cpu  # pip install decord
+
 # from paddlenlp.transformers import AutoTokenizer
 from PIL import Image
 
 from paddlemix.models.minicpm_v.modeling_minicpmv import MiniCPMV
 from paddlemix.models.minicpm_v.tokenization_minicpmv_fast import MiniCPMVTokenizerFast
 
-from decord import VideoReader, cpu    # pip install decord
 MODEL_NAME = "openbmb/MiniCPM-V-2_6"
 model = MiniCPMV.from_pretrained(MODEL_NAME, dtype="bfloat16")
 model = model.eval()
 tokenizer = MiniCPMVTokenizerFast.from_pretrained(MODEL_NAME)
 
-MAX_NUM_FRAMES=64 # if cuda OOM set a smaller number
+MAX_NUM_FRAMES = 64  # if cuda OOM set a smaller number
+
 
 def encode_video(video_path):
     def uniform_sample(l, n):
@@ -38,27 +40,22 @@ def encode_video(video_path):
     if len(frame_idx) > MAX_NUM_FRAMES:
         frame_idx = uniform_sample(frame_idx, MAX_NUM_FRAMES)
     frames = vr.get_batch(frame_idx).asnumpy()
-    frames = [Image.fromarray(v.astype('uint8')) for v in frames]
-    print('num frames:', len(frames))
+    frames = [Image.fromarray(v.astype("uint8")) for v in frames]
+    print("num frames:", len(frames))
     return frames
 
-video_path="paddlemix/demo_images/red-panda.mp4"
+
+video_path = "paddlemix/demo_images/red-panda.mp4"
 frames = encode_video(video_path)
 question = "Describe the video"
 msgs = [
-    {'role': 'user', 'content': frames + [question]}, 
+    {"role": "user", "content": frames + [question]},
 ]
 
 # Set decode params for video
 params = {}
 params["use_image_id"] = False
-params["max_slice_nums"] = 2 # use 1 if cuda OOM and video resolution > 448*448
+params["max_slice_nums"] = 2  # use 1 if cuda OOM and video resolution > 448*448
 
-res = model.chat(
-    image=None,
-    msgs=msgs,
-    tokenizer=tokenizer,
-    max_new_tokens=2048,  # 2048
-    **params
-)
+res = model.chat(image=None, msgs=msgs, tokenizer=tokenizer, max_new_tokens=2048, **params)  # 2048
 print(res)

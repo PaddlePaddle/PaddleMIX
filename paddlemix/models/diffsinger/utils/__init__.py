@@ -27,6 +27,7 @@ from paddlemix.models.diffsinger.basics.base_module import CategorizedModule
 from paddlemix.models.diffsinger.utils import paddle_aux
 from paddlemix.models.diffsinger.utils.hparams import hparams
 
+
 def tensors_to_scalars(metrics):
     new_metrics = {}
     for k, v in metrics.items():
@@ -303,7 +304,7 @@ def build_lr_scheduler_from_config(optimizer, scheduler_args):
                     resolved["cls"] == "torch.optim.lr_scheduler.ChainedScheduler"
                     and scheduler_args["scheduler_cls"] == "torch.optim.lr_scheduler.SequentialLR"
                 ):
-                    raise ValueError(f"ChainedScheduler cannot be part of a SequentialLR.")
+                    raise ValueError("ChainedScheduler cannot be part of a SequentialLR.")
                 resolved["optimizer"] = optimizer
                 obj = build_object_from_class_name(resolved["cls"], LRScheduler, **resolved)
                 return obj

@@ -12,45 +12,44 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import os
+
 import paddle
 from paddlenlp.generation import TextStreamer
-from paddlemix.models.llava.language_model.llava_llama import (
-    LlavaConfig,
-    LlavaLlamaForCausalLM,
-)
-from paddlemix.models.llava.language_model.tokenizer import LLavaTokenizer
-from paddlemix.processors import LlavaProcessor
+from paddlenlp.transformers import CLIPImageProcessor
+
 from paddlemix.models.llava.constants import (
     DEFAULT_IM_END_TOKEN,
     DEFAULT_IM_START_TOKEN,
     DEFAULT_IMAGE_TOKEN,
 )
 from paddlemix.models.llava.conversation import conv_templates
+from paddlemix.models.llava.language_model.llava_llama import (
+    LlavaConfig,
+    LlavaLlamaForCausalLM,
+)
+from paddlemix.models.llava.language_model.tokenizer import LLavaTokenizer
 from paddlemix.models.llava.mm_utils import load_image
-from paddlenlp.transformers import CLIPImageProcessor
+from paddlemix.processors import LlavaProcessor
+
 
 class PPInsCapTagger(object):
-    def __init__(self, model_name_or_path, max_new_tokens = 4096, dtype='float16') -> None:
+    def __init__(self, model_name_or_path, max_new_tokens=4096, dtype="float16") -> None:
         self.dtype = dtype
         self.model_name_or_path = model_name_or_path
         self.max_new_tokens = max_new_tokens
         self.init_model(model_name_or_path, max_new_tokens, dtype)
-
 
     def init_model(self, model_name_or_path, max_new_tokens, dtype):
         tokenizer = LLavaTokenizer.from_pretrained(model_name_or_path)
         model_config = LlavaConfig.from_pretrained(model_name_or_path)
         model = LlavaLlamaForCausalLM.from_pretrained(model_name_or_path, dtype=dtype)
         model.eval()
-        name_or_path = (os.path.join(model_name_or_path, "processor", "eval"))
+        name_or_path = os.path.join(model_name_or_path, "processor", "eval")
         image_processor = CLIPImageProcessor.from_pretrained(name_or_path)
         processor = LlavaProcessor(
-            image_processor, 
-            tokenizer,
-            max_length=max_new_tokens, 
-            image_aspect_ratio=model_config.image_aspect_ratio
-            )
-        
+            image_processor, tokenizer, max_length=max_new_tokens, image_aspect_ratio=model_config.image_aspect_ratio
+        )
+
         model.resize_token_embeddings(len(tokenizer))
         vision_tower = model.get_vision_tower()
 
@@ -61,10 +60,8 @@ class PPInsCapTagger(object):
         self.processor = processor
         self.tokenizer = tokenizer
 
-
     def __call__(self, item):
         return self.inference(item)
-        
 
     def inference(self, item):
 
@@ -72,24 +69,27 @@ class PPInsCapTagger(object):
 
         image_file = item["image"]
 
-        conversations = item['conversations']
+        conversations = item["conversations"]
 
-        conversations = [''.join(sublist) for sublist in conversations]
-        instructions = '\n\n'.join(conversations)
+        conversations = ["".join(sublist) for sublist in conversations]
+        instructions = "\n\n".join(conversations)
 
-        instructions = 'Label this piece of data based on the image and the following conversations:/n/n' +  instructions.replace("\n<image>", "").replace("<image>\n", "")
+        instructions = (
+            "Label this piece of data based on the image and the following conversations:/n/n"
+            + instructions.replace("\n<image>", "").replace("<image>\n", "")
+        )
 
         n = self.max_new_tokens - 1
         if len(instructions) >= n:
-            instructions = instructions[:n-1]
+            instructions = instructions[: n - 1]
 
         temperature = 0.0
-        
-        conv = conv_templates['llava_v1'].copy()
+
+        conv = conv_templates["llava_v1"].copy()
 
         first_message = True
         inp = instructions
-        
+
         if image_file is not None and first_message:
             if model_config.mm_use_im_start_end:
                 inp = DEFAULT_IM_START_TOKEN + DEFAULT_IMAGE_TOKEN + DEFAULT_IM_END_TOKEN + "\n" + inp
@@ -122,21 +122,11 @@ class PPInsCapTagger(object):
 
             outputs = tokenizer.decode(output_ids[0][0]).strip()
 
-            out_item = {
-                'image':item["image"],
-                'conversations':item['conversations'],
-                'tag':outputs[:-4]
-            }
+            out_item = {"image": item["image"], "conversations": item["conversations"], "tag": outputs[:-4]}
             # tag = outputs[:-4]
         except:
             # tag = None
             print(item)
-            out_item = {
-                'image':item["image"],
-                'conversations':item['conversations'],
-                'tag':None
-            }
+            out_item = {"image": item["image"], "conversations": item["conversations"], "tag": None}
 
         return out_item
-
-

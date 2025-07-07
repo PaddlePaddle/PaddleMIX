@@ -1,8 +1,21 @@
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from paddlemix.datacopilot.core import MMDataset
-from paddlemix.datacopilot.ops.filter._image_resolution_filter import image_resolution_filter
 
 # Path to the dataset
-anno_path = 'random_samples.json'
+anno_path = "random_samples.json"
 
 # Load the dataset
 print("Loading the dataset...")
@@ -11,10 +24,10 @@ print("Initial dataset size:", len(dataset))
 
 # Apply the image resolution filter operator
 dataset = dataset.image_resolution_filter(
-    min_width=112,   # Minimum width
+    min_width=112,  # Minimum width
     min_height=112,  # Minimum height
     max_width=1920,  # Maximum width (optional)
-    max_height=1080  # Maximum height (optional)
+    max_height=1080,  # Maximum height (optional)
 )
 
 # Print the size of the filtered dataset
@@ -22,4 +35,4 @@ print("Filtered dataset size:", len(dataset))
 print("Image resolution filtering complete.")
 
 # Export the filtered dataset
-dataset.export_json(anno_path.replace('.json', '_resolution_filtered.json'))
+dataset.export_json(anno_path.replace(".json", "_resolution_filtered.json"))

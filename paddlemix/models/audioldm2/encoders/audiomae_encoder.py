@@ -12,10 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import numpy as np
 import paddle
 import paddle.nn as nn
-import numpy as np
+
 from ..audiomae import mae as models_mae
+
 
 class Vanilla_AudioMAE(nn.Layer):
     """Audio Masked Autoencoder (MAE) pre-trained on AudioSet (for AudioLDM2)"""
@@ -24,9 +26,7 @@ class Vanilla_AudioMAE(nn.Layer):
         self,
     ):
         super().__init__()
-        model = models_mae.__dict__["mae_vit_base_patch16"](
-            in_chans=1, audio_exp=True, img_size=(1024, 128)
-        )
+        model = models_mae.__dict__["mae_vit_base_patch16"](in_chans=1, audio_exp=True, img_size=(1024, 128))
 
         self.model = model.eval()
 
@@ -45,7 +45,8 @@ class Vanilla_AudioMAE(nn.Layer):
             else:
                 raise RuntimeError("This function is deprecated")
         return embed
-    
+
+
 class AudioMAEConditionCTPoolRand(nn.Layer):
     def __init__(
         self,
@@ -78,12 +79,10 @@ class AudioMAEConditionCTPoolRand(nn.Layer):
     # Required
     def get_unconditional_condition(self, batchsize):
         param = self.audiomae.parameters()[0]
-        assert param.stop_gradient == True
+        assert param.stop_gradient
 
-        time_pool, freq_pool = min(self.eval_time_pooling, 64), min(
-            self.eval_freq_pooling, 8
-        )
-        
+        time_pool, freq_pool = min(self.eval_time_pooling, 64), min(self.eval_freq_pooling, 8)
+
         token_num = int(512 / (time_pool * freq_pool))
         return [
             paddle.zeros((batchsize, token_num, 768), dtype="float32"),
@@ -104,22 +103,14 @@ class AudioMAEConditionCTPoolRand(nn.Layer):
             if time_pool is None and freq_pool is None:
                 time_pool = min(
                     64,
-                    self.time_pooling_factors[
-                        np.random.choice(list(range(len(self.time_pooling_factors))))
-                    ],
+                    self.time_pooling_factors[np.random.choice(list(range(len(self.time_pooling_factors))))],
                 )
                 freq_pool = min(8, time_pool)  # TODO here I make some modification.
         else:
-            time_pool, freq_pool = min(self.eval_time_pooling, 64), min(
-                self.eval_freq_pooling, 8
-            )
+            time_pool, freq_pool = min(self.eval_time_pooling, 64), min(self.eval_freq_pooling, 8)
 
-        self.avgpooling = nn.AvgPool2D(
-            kernel_size=(time_pool, freq_pool), stride=(time_pool, freq_pool)
-        )
-        self.maxpooling = nn.MaxPool2D(
-            kernel_size=(time_pool, freq_pool), stride=(time_pool, freq_pool)
-        )
+        self.avgpooling = nn.AvgPool2D(kernel_size=(time_pool, freq_pool), stride=(time_pool, freq_pool))
+        self.maxpooling = nn.MaxPool2D(kernel_size=(time_pool, freq_pool), stride=(time_pool, freq_pool))
 
         pooled = (
             self.avgpooling(representation) + self.maxpooling(representation)
@@ -152,4 +143,3 @@ class AudioMAEConditionCTPoolRand(nn.Layer):
                 representation,
                 paddle.ones((representation.shape[0], representation.shape[1]), dtype="float32"),
             ]
-        

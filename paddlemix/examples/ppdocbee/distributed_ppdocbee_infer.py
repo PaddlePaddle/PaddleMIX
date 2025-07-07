@@ -15,6 +15,7 @@
 import argparse
 
 import paddle
+from paddle.distributed import fleet
 
 from paddlemix.models.qwen2_vl import MIXQwen2Tokenizer
 from paddlemix.models.qwen2_vl.modeling_qwen2_vl import Qwen2VLForConditionalGeneration
@@ -24,18 +25,16 @@ from paddlemix.processors.qwen2_vl_processing import (
     process_vision_info,
 )
 from paddlemix.utils.log import logger
-from paddle.distributed import fleet
-
 
 
 def main(args):
     strategy = fleet.DistributedStrategy()
     strategy.hybrid_configs = {
-                    "dp_degree": 1,
-                    "mp_degree": args.mp_degree,
-                    "pp_degree": 1,
-                    "sharding_degree": 1,
-                }
+        "dp_degree": 1,
+        "mp_degree": args.mp_degree,
+        "pp_degree": 1,
+        "sharding_degree": 1,
+    }
     fleet.init(is_collective=True, strategy=strategy)
     hcg = fleet.get_hybrid_communicate_group()
     tensor_parallel_rank = hcg.get_model_parallel_rank()
@@ -50,7 +49,13 @@ def main(args):
         logger.warning("bfloat16 is not supported on your device,change to float32")
         compute_dtype = "float32"
 
-    model = Qwen2VLForConditionalGeneration.from_pretrained(args.model_path, tensor_parallel_degree=args.mp_degree, tensor_parallel_rank=tensor_parallel_rank, dtype=compute_dtype, tensor_parallel_output=False)
+    model = Qwen2VLForConditionalGeneration.from_pretrained(
+        args.model_path,
+        tensor_parallel_degree=args.mp_degree,
+        tensor_parallel_rank=tensor_parallel_rank,
+        dtype=compute_dtype,
+        tensor_parallel_output=False,
+    )
 
     image_processor = Qwen2VLImageProcessor()
     tokenizer = MIXQwen2Tokenizer.from_pretrained(args.model_path)

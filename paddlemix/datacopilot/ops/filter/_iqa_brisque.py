@@ -19,8 +19,7 @@ import numpy as np
 from brisque import BRISQUE
 from PIL import Image
 
-from ...core import register, T
-
+from ...core import T, register
 from ._tagger import Tagger
 
 _brisque = BRISQUE(url=False)

@@ -97,9 +97,7 @@ class YOLOWorldDetector(BaseArch):
 
         self.bbox_head.num_classes = txt_feats[0].shape[0]
 
-        results_list = self.bbox_head.predict(
-            img_feats, txt_feats, self.inputs, rescale=True
-        )
+        results_list = self.bbox_head.predict(img_feats, txt_feats, self.inputs, rescale=True)
 
         return results_list
 

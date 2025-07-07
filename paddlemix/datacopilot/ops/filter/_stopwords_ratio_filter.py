@@ -16,20 +16,24 @@
 import os
 from functools import partial
 from typing import Optional
+
 import nltk
 from nltk.corpus import stopwords
+
 from ...core import MMDataset, register
 
 # Global variable to track stopwords set
 _stop_words = None
 
+
 def ensure_stopwords_downloaded():
     """
     Ensure NLTK stopwords are downloaded only once.
     """
-    nltk_data_path = os.path.expanduser('~') + '/nltk_data/corpora/stopwords'
+    nltk_data_path = os.path.expanduser("~") + "/nltk_data/corpora/stopwords"
     if not os.path.exists(nltk_data_path):
-        nltk.download('stopwords', quiet=True)
+        nltk.download("stopwords", quiet=True)
+
 
 def load_stopwords():
     """
@@ -38,8 +42,9 @@ def load_stopwords():
     global _stop_words
     if _stop_words is None:
         ensure_stopwords_downloaded()  # Ensure stopwords are downloaded
-        _stop_words = set(stopwords.words('english'))
+        _stop_words = set(stopwords.words("english"))
     return _stop_words
+
 
 def is_stopwords_ratio_valid(item, stop_words: set, min_ratio: float = 0.25) -> bool:
     """
@@ -54,9 +59,12 @@ def is_stopwords_ratio_valid(item, stop_words: set, min_ratio: float = 0.25) -> 
         bool: True if the stopword ratio is greater than or equal to min_ratio; otherwise, False.
     """
     # Concatenate conversation content
-    user_conv = '\n\n'.join(
-        ''.join(conversation) for conversation in item['conversations']
-    ).replace('<image>\n', '').replace('\n<image>', '').replace('<image>', '')
+    user_conv = (
+        "\n\n".join("".join(conversation) for conversation in item["conversations"])
+        .replace("<image>\n", "")
+        .replace("\n<image>", "")
+        .replace("<image>", "")
+    )
 
     # Split text into words
     words = user_conv.split()
@@ -70,11 +78,9 @@ def is_stopwords_ratio_valid(item, stop_words: set, min_ratio: float = 0.25) -> 
     # Check if the ratio meets the requirement
     return stopword_ratio >= min_ratio
 
+
 @register()
-def stopwords_ratio_filter(
-    dataset, 
-    min_ratio: Optional[float] = 0.25
-) -> MMDataset:
+def stopwords_ratio_filter(dataset, min_ratio: Optional[float] = 0.25) -> MMDataset:
     """
     Filter the dataset based on the stopword ratio of the samples.
 
@@ -86,18 +92,14 @@ def stopwords_ratio_filter(
         MMDataset: The filtered dataset.
     """
     print("Filtering samples that do not meet the stopword ratio requirement...")
-    
+
     # Load stopwords once
     stop_words = load_stopwords()
-    
+
     # Create the filter function
     filter_func = partial(is_stopwords_ratio_valid, stop_words=stop_words, min_ratio=min_ratio)
-    
+
     # Apply dataset.filter
-    filtered_dataset = dataset.filter(
-        func=filter_func, 
-        max_workers=8, 
-        progress=True
-    )
-    
+    filtered_dataset = dataset.filter(func=filter_func, max_workers=8, progress=True)
+
     return filtered_dataset

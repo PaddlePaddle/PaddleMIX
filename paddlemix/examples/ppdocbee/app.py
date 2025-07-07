@@ -15,6 +15,7 @@
 import hashlib
 import os
 import os.path
+import shutil
 import sys
 import tempfile
 import time
@@ -23,8 +24,6 @@ from datetime import datetime
 import gradio as gr
 import numpy as np
 import paddle
-from PIL import Image
-import shutil
 
 # 设置使用的GPU设备
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
@@ -37,7 +36,7 @@ dtype = "bfloat16"  # V100请改成float16
 model = None
 processor = None
 
-#显卡资源充足可以去掉这个
+# 显卡资源充足可以去掉这个
 min_pixels = 256 * 28 * 28  # 最小像素数
 max_pixels = 48 * 48 * 28 * 28  # 最大像素数
 
@@ -47,9 +46,9 @@ SERVER_PORR = 8080
 
 def check_and_install_paddlemix():
     try:
-        from paddlemix.models.qwen2_vl.modeling_qwen2_vl import (
-            Qwen2VLForConditionalGeneration,
-        )
+        # from paddlemix.models.qwen2_vl.modeling_qwen2_vl import (
+        #     Qwen2VLForConditionalGeneration,
+        # )
 
         print("Required Qwen2VL model successfully installed")
     except ImportError:

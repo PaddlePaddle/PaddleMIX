@@ -13,25 +13,25 @@
 # limitations under the License.
 
 
-import os
-import json
-import numpy as np
-from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.decomposition import LatentDirichletAllocation
-from sklearn.manifold import TSNE
+from typing import Optional
+
 import matplotlib.pyplot as plt
-from typing import List, Dict, Optional
-from ...core import T, MMDataset, register
+import numpy as np
+from sklearn.decomposition import LatentDirichletAllocation
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.manifold import TSNE
+
+from ...core import MMDataset, T, register
 
 
 @register()
 def extract_text_for_lda(item: T) -> Optional[str]:
     """
     Extract text from conversations for topic modeling.
-    
+
     Args:
         item (T): A single dataset item containing conversation data.
-    
+
     Returns:
         Optional[str]: A string combining all questions and answers from the conversation, or None if no text is available.
     """
@@ -53,11 +53,11 @@ def lda_topic_clustering(
     tsne_learning_rate: int = 200,
     tsne_n_iter: int = 1000,
     random_state: int = 42,
-    output_plot: str = "lda_tsne_plot.png"
+    output_plot: str = "lda_tsne_plot.png",
 ):
     """
     Perform LDA topic clustering on conversation text and visualize the results with T-SNE.
-    
+
     Args:
         dataset (MMDataset): The dataset containing conversation data.
         num_topics (int): The number of topics to identify using LDA.
@@ -66,7 +66,7 @@ def lda_topic_clustering(
         tsne_n_iter (int): Number of iterations for T-SNE optimization.
         random_state (int): Random seed for reproducibility.
         output_plot (str): Path to save the T-SNE visualization plot.
-    
+
     Returns:
         Dict: A dictionary containing the following keys:
             - "lda_result": The topic distribution for each document.
@@ -78,7 +78,7 @@ def lda_topic_clustering(
     texts = [text for text in texts if text.strip()]  # Remove empty texts
 
     # Text vectorization
-    vectorizer = CountVectorizer(max_df=0.95, min_df=2, stop_words='english')
+    vectorizer = CountVectorizer(max_df=0.95, min_df=2, stop_words="english")
     text_matrix = vectorizer.fit_transform(texts)
 
     # LDA topic modeling
@@ -91,14 +91,14 @@ def lda_topic_clustering(
         perplexity=tsne_perplexity,
         learning_rate=tsne_learning_rate,
         n_iter=tsne_n_iter,
-        random_state=random_state
+        random_state=random_state,
     )
     tsne_result = tsne.fit_transform(lda_result)
 
     # Visualize the results
     plt.figure(figsize=(12, 8))
     scatter = plt.scatter(
-        tsne_result[:, 0], tsne_result[:, 1], c=np.argmax(lda_result, axis=1), cmap='tab10', alpha=0.7
+        tsne_result[:, 0], tsne_result[:, 1], c=np.argmax(lda_result, axis=1), cmap="tab10", alpha=0.7
     )
     plt.colorbar(scatter, label="Topic Cluster")
     plt.title("LDA Topic Clustering with T-SNE Visualization")
@@ -107,8 +107,4 @@ def lda_topic_clustering(
     plt.savefig(output_plot)
 
     # Return results
-    return {
-        "lda_result": lda_result,
-        "tsne_result": tsne_result,
-        "topics": np.argmax(lda_result, axis=1).tolist()
-    }
+    return {"lda_result": lda_result, "tsne_result": tsne_result, "topics": np.argmax(lda_result, axis=1).tolist()}

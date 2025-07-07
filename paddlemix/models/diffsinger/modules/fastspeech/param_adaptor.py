@@ -14,8 +14,6 @@
 
 from __future__ import annotations
 
-import sys
-
 import paddle
 
 import paddlemix.models.diffsinger.modules.compat as compat

@@ -20,13 +20,13 @@ from ppdiffusers.schedulers import (
     DPMSolverSinglestepScheduler,
     EulerAncestralDiscreteScheduler,
     EulerDiscreteScheduler,
+    FlowMatchEulerDiscreteScheduler,
     HeunDiscreteScheduler,
     KDPM2AncestralDiscreteScheduler,
     KDPM2DiscreteScheduler,
     LMSDiscreteScheduler,
     PNDMScheduler,
     UniPCMultistepScheduler,
-    FlowMatchEulerDiscreteScheduler,
 )
 
 

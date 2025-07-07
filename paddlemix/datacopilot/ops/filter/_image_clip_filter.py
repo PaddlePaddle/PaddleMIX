@@ -15,22 +15,29 @@
 
 import os
 import re
-from tqdm import tqdm
-from typing import Optional, List
 from dataclasses import dataclass
+from typing import List, Optional
 
 import paddle
 from PIL import Image, ImageDraw, ImageFont
-from paddlemix.processors.clip_processing import CLIPImageProcessor, CLIPTextProcessor, CLIPProcessor
-from paddlemix.models.clip.clip_model import CLIP
-from paddlemix.processors.tokenizer import SimpleTokenizer
+from tqdm import tqdm
+
 from paddlemix.datacopilot.core import MMDataset, register
-from ...misc import parallel_map, ParallelMode
+from paddlemix.models.clip.clip_model import CLIP
+from paddlemix.processors.clip_processing import (
+    CLIPImageProcessor,
+    CLIPProcessor,
+    CLIPTextProcessor,
+)
+from paddlemix.processors.tokenizer import SimpleTokenizer
+
+from ...misc import ParallelMode, parallel_map
 
 
 @dataclass
 class CLIPFilterConfig:
     """Configuration for CLIP filtering."""
+
     model_name: str = "paddlemix/CLIP/CLIP-ViT-L-14-laion2B-s32B-b82K"
     threshold: float = 0.25
     batch_size: int = 8  # Batch size
@@ -120,10 +127,7 @@ def save_combined_image(image_path, text, similarity, save_dir, sample_index):
 
 
 @register()
-def image_clip_filter(
-    dataset: MMDataset,
-    config: Optional[CLIPFilterConfig] = None
-) -> MMDataset:
+def image_clip_filter(dataset: MMDataset, config: Optional[CLIPFilterConfig] = None) -> MMDataset:
     """Filters out low-confidence Q&A pairs using CLIP and optionally saves the images."""
     if config is None:
         config = CLIPFilterConfig()
@@ -141,7 +145,7 @@ def image_clip_filter(
 
     all_samples = []
     for item in dataset:
-        image_path = item.get('image')
+        image_path = item.get("image")
         if not image_path or not os.path.exists(image_path):
             continue
         conversations = []
@@ -157,7 +161,7 @@ def image_clip_filter(
     sample_index = 0
     low_confidence_samples = []
     for i in tqdm(range(0, len(all_samples), batch_size), desc="Filtering low-confidence Q&A pairs"):
-        batch = all_samples[i:i + batch_size]
+        batch = all_samples[i : i + batch_size]
         image_paths = [sample[0] for sample in batch]
         text_prompts = [sample[1] for sample in batch]
 
@@ -181,11 +185,12 @@ def image_clip_filter(
                 low_confidence_samples.append((image_path, conversation))
 
     def filter_high_confidence(item):
-        image_path = item.get('image')
+        image_path = item.get("image")
         if not image_path or not os.path.exists(image_path):
             return None
         new_conversations = [
-            conversation for conversation in item.get("conversations", [])
+            conversation
+            for conversation in item.get("conversations", [])
             if (image_path, conversation) not in low_confidence_samples
         ]
         if new_conversations:

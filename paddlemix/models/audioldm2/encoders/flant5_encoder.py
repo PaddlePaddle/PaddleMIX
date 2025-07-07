@@ -13,9 +13,11 @@
 # limitations under the License.
 
 import logging
+
 import paddle
 import paddle.nn as nn
-from paddlenlp.transformers import AutoTokenizer, T5EncoderModel, T5Config
+from paddlenlp.transformers import AutoTokenizer, T5Config, T5EncoderModel
+
 
 class FlanT5HiddenState(nn.Layer):
     """
@@ -26,7 +28,7 @@ class FlanT5HiddenState(nn.Layer):
     """
 
     def __init__(
-        self, text_encoder_name="t5-v1_1-large", freeze_text_encoder=True # t5-v1_1-large -> google/flan-t5-large
+        self, text_encoder_name="t5-v1_1-large", freeze_text_encoder=True  # t5-v1_1-large -> google/flan-t5-large
     ):
         super().__init__()
         self.freeze_text_encoder = freeze_text_encoder
@@ -46,22 +48,20 @@ class FlanT5HiddenState(nn.Layer):
     def get_unconditional_condition(self, batchsize):
         param = self.model.parameters()[0]
         if self.freeze_text_encoder:
-            assert param.stop_gradient == True
+            assert param.stop_gradient
 
         # device = param.device
         if self.empty_hidden_state_cfg is None:
             self.empty_hidden_state_cfg, _ = self([""])
 
         hidden_state = paddle.cast(paddle.concat([self.empty_hidden_state_cfg] * batchsize), dtype="float32")
-        attention_mask = (
-            paddle.ones((batchsize, hidden_state.shape[1]), dtype="float32")
-        )
+        attention_mask = paddle.ones((batchsize, hidden_state.shape[1]), dtype="float32")
         return [hidden_state, attention_mask]  # Need to return float type
 
     def forward(self, batch):
         param = self.model.parameters()[0]
         if self.freeze_text_encoder:
-            assert param.stop_gradient == True
+            assert param.stop_gradient
 
         try:
             return self.encode_text(batch)
@@ -82,15 +82,10 @@ class FlanT5HiddenState(nn.Layer):
         # Get text encoding
         if self.freeze_text_encoder:
             with paddle.no_grad():
-                encoder_hidden_states = self.model(
-                    input_ids=input_ids, attention_mask=attention_mask
-                )[0]
+                encoder_hidden_states = self.model(input_ids=input_ids, attention_mask=attention_mask)[0]
         else:
-            encoder_hidden_states = self.model(
-                input_ids=input_ids, attention_mask=attention_mask
-            )[0]
+            encoder_hidden_states = self.model(input_ids=input_ids, attention_mask=attention_mask)[0]
         return [
             encoder_hidden_states.detach(),
             paddle.cast(attention_mask, dtype="float32"),
         ]  # Attention mask == 1 means usable token
-    

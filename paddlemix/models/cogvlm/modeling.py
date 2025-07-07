@@ -564,7 +564,7 @@ class CogModel(CogPreTrainedModel):
             if position_ids is None:
                 position_ids = build_position_ids(token_type_ids, attention_mask)
             input_ids = None
-        
+
         return self.llm_forward(
             input_ids=input_ids,
             encoder_outputs=encoder_outputs,

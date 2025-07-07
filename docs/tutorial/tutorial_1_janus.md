@@ -107,19 +107,19 @@ class JanusMultiModalityCausalLM(JanusMultiModalityPreTrainedModel):
         vision_config = config.vision_config
         vision_cls = model_name_to_cls(vision_config.cls)
         self.vision_model = vision_cls(**vision_config.params)
-        
+
         aligner_config = config.aligner_config
         aligner_cls = model_name_to_cls(aligner_config.cls)
         self.aligner = aligner_cls(aligner_config.params)
-        
+
         gen_vision_config = config.gen_vision_config
         gen_vision_cls = model_name_to_cls(gen_vision_config.cls)
         self.gen_vision_model = gen_vision_cls()
-        
+
         gen_aligner_config = config.gen_aligner_config
         gen_aligner_cls = model_name_to_cls(gen_aligner_config.cls)
         self.gen_aligner = gen_aligner_cls(gen_aligner_config.params)
-        
+
         gen_head_config = config.gen_head_config
         gen_head_cls = model_name_to_cls(gen_head_config.cls)
         self.gen_head = gen_head_cls(gen_head_config.params)

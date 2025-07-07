@@ -45,7 +45,7 @@ python -m pip install paddlenlp==3.0.0b3
 sh build_env.sh
 ```
 
-> 
+>
 注：
 * 请确保安装了以上依赖，否则无法运行。
 * (默认开启flash_attn)使用flash_attn 要求A100/A800显卡或者H20显卡。V100请用float16推理。

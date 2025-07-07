@@ -23,10 +23,10 @@ from typing import Union
 import numpy as np
 import paddle
 from paddle.nn import functional as F
-
-from paddlemix.models.model_utils import MixPretrainedModel
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
 from paddlenlp.utils.log import logger
+
+from paddlemix.models.model_utils import MixPretrainedModel
 
 from .loss import CoCaLoss
 from .multi_modal_model import MultimodalTransformer, MultimodalTransformerConfig

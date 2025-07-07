@@ -15,28 +15,28 @@
 import argparse
 
 import paddle
-
+from paddle.distributed import fleet
 
 from paddlemix.models.qwen2_5_vl import MIXQwen2_5_Tokenizer
-from paddlemix.models.qwen2_5_vl.modeling_qwen2_5_vl import Qwen2_5_VLForConditionalGeneration
+from paddlemix.models.qwen2_5_vl.modeling_qwen2_5_vl import (
+    Qwen2_5_VLForConditionalGeneration,
+)
 from paddlemix.processors.qwen2_5_vl_processing import (
     Qwen2_5_VLImageProcessor,
     Qwen2_5_VLProcessor,
     process_vision_info,
 )
 from paddlemix.utils.log import logger
-from paddle.distributed import fleet
-
 
 
 def main(args):
     strategy = fleet.DistributedStrategy()
     strategy.hybrid_configs = {
-                    "dp_degree": 1,
-                    "mp_degree": args.mp_degree,
-                    "pp_degree": 1,
-                    "sharding_degree": 1,
-                }
+        "dp_degree": 1,
+        "mp_degree": args.mp_degree,
+        "pp_degree": 1,
+        "sharding_degree": 1,
+    }
     fleet.init(is_collective=True, strategy=strategy)
     hcg = fleet.get_hybrid_communicate_group()
     tensor_parallel_rank = hcg.get_model_parallel_rank()
@@ -51,7 +51,13 @@ def main(args):
         compute_dtype = "float32"
     print("compute_dtype", compute_dtype)
     paddle.set_default_dtype(compute_dtype)
-    model = Qwen2_5_VLForConditionalGeneration.from_pretrained(args.model_path, tensor_parallel_degree=args.mp_degree, tensor_parallel_rank=tensor_parallel_rank, dtype=compute_dtype, tensor_parallel_output=False)
+    model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+        args.model_path,
+        tensor_parallel_degree=args.mp_degree,
+        tensor_parallel_rank=tensor_parallel_rank,
+        dtype=compute_dtype,
+        tensor_parallel_output=False,
+    )
     model.eval()
     image_processor = Qwen2_5_VLImageProcessor()
     tokenizer = MIXQwen2_5_Tokenizer.from_pretrained(args.model_path)

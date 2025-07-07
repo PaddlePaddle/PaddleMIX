@@ -13,33 +13,31 @@
 # limitations under the License.
 
 
-import os
+import concurrent.futures as futures
 import math
-from tqdm import tqdm
 from enum import Enum
 from pathlib import Path
-import concurrent.futures as futures
+from typing import Any, Callable, List, Optional, Sequence
 
-from typing import Any, Sequence, Callable, Optional, List
+from tqdm import tqdm
 
 
 class ParallelMode(Enum):
-    THREAD = 'multithread'
-    PROCESS = 'multiprocess'
+    THREAD = "multithread"
+    PROCESS = "multiprocess"
 
 
 def parallel_map(
-    func: Callable, 
-    items: Sequence, 
+    func: Callable,
+    items: Sequence,
     *,
-    max_workers: int=8, 
-    chunk_size: int=50000,
-    mode: ParallelMode=ParallelMode.THREAD, 
-    progress: bool=True,
-    order: bool=True
+    max_workers: int = 8,
+    chunk_size: int = 50000,
+    mode: ParallelMode = ParallelMode.THREAD,
+    progress: bool = True,
+    order: bool = True
 ) -> List[Any]:
-    """parallel exec
-    """
+    """parallel exec"""
     if max_workers == 1:
         records = []
         for item in tqdm(items, disable=not progress):
@@ -52,11 +50,11 @@ def parallel_map(
         with tqdm(total=len(items), disable=not progress) as p:
             for i in range(0, len(items), k):
                 if order:
-                    for result in executor.map(func, items[i:i+k]):
+                    for result in executor.map(func, items[i : i + k]):
                         records.append(result)
                         p.update(1)
                 else:
-                    outputs = [executor.submit(func, x) for x in items[i:i+k]]
+                    outputs = [executor.submit(func, x) for x in items[i : i + k]]
                     for task in futures.as_completed(outputs):
                         result = task.result()
                         records.append(result)
@@ -72,31 +70,33 @@ def parallel_map(
             return _exec(executor)
 
     else:
-        raise RuntimeError('')
+        raise RuntimeError("")
 
 
 def enumerate_chunk(
-    items: Sequence, 
-    *, 
-    chunk_size: int=1, 
-    num_chunks: Optional[int]=None, 
-    start: int=0,
+    items: Sequence,
+    *,
+    chunk_size: int = 1,
+    num_chunks: Optional[int] = None,
+    start: int = 0,
 ):
     if num_chunks is None:
         num_chunks = math.ceil(len(items) / chunk_size)
-        indices = [i * chunk_size for i in range(num_chunks)] + [len(items), ]
+        indices = [i * chunk_size for i in range(num_chunks)] + [
+            len(items),
+        ]
     else:
         chunk_size = math.floor(len(items) / num_chunks)
-        indices = [i * chunk_size for i in range(num_chunks)] + [len(items), ]
+        indices = [i * chunk_size for i in range(num_chunks)] + [
+            len(items),
+        ]
 
     for i in range(start, num_chunks):
-        yield i, items[indices[i]:indices[i+1]]
+        yield i, items[indices[i] : indices[i + 1]]
 
 
-
-def list_dir(dir: str, *, pattern: str='*', recursive: bool=True):
+def list_dir(dir: str, *, pattern: str = "*", recursive: bool = True):
     if not recursive:
         return Path(dir).glob(pattern)
     else:
-        return Path(dir).rglob(pattern)        
-
+        return Path(dir).rglob(pattern)

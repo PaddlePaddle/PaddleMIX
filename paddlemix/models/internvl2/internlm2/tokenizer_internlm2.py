@@ -32,6 +32,8 @@ VOCAB_FILES_NAMES = {"vocab_file": "./tokenizer.model"}
 # VOCAB_FILES_NAMES = {"vocab_file": "sentencepiece.bpe.model"}
 
 # Modified from transformers.model.llama.tokenization_llama.LlamaTokenizer
+
+
 class InternLM2Tokenizer(PretrainedTokenizer):
     """
     Construct a InternLM2 tokenizer. Based on byte-level Byte-Pair-Encoding.

@@ -17,10 +17,10 @@ from typing import Union
 
 import paddle
 from paddle import nn
-
-from paddlemix.models.model_utils import MixPretrainedModel
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
 from paddlenlp.utils.log import logger
+
+from paddlemix.models.model_utils import MixPretrainedModel
 
 from .text_model import LayerNorm, LayerNormFp32, QuickGELU, ResidualAttentionBlock
 from .utils import params_normal_

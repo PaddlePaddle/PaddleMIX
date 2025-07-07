@@ -52,14 +52,14 @@ class FluxTransformer2DModel(nn.Layer):
         self.x_embedder = nn.Linear(in_channels, self.inner_dim)
         # 双流 Transformer 块列表
         self.transformer_blocks = nn.LayerList([
-            FluxTransformerBlock(dim=self.inner_dim, 
+            FluxTransformerBlock(dim=self.inner_dim,
                                   num_attention_heads=num_attention_heads,
                                   attention_head_dim=attention_head_dim)
             for _ in range(num_layers)
         ])
         # 单流 Transformer 块列表
         self.single_transformer_blocks = nn.LayerList([
-            FluxSingleTransformerBlock(dim=self.inner_dim, 
+            FluxSingleTransformerBlock(dim=self.inner_dim,
                                        num_attention_heads=num_attention_heads,
                                        attention_head_dim=attention_head_dim)
             for _ in range(num_single_layers)
@@ -92,16 +92,16 @@ class FluxTransformerBlock(nn.Layer):
         self.norm1_context = AdaLayerNormZero(dim)
         # 多头注意力层（图像-文本双流交互）
         self.attn = Attention(
-            query_dim=dim,         
-            cross_attention_dim=None, 
-            added_kv_proj_dim=dim, 
-            dim_head=attention_head_dim, 
+            query_dim=dim,
+            cross_attention_dim=None,
+            added_kv_proj_dim=dim,
+            dim_head=attention_head_dim,
             heads=num_attention_heads,
-            out_dim=dim, 
+            out_dim=dim,
             context_pre_only=False,
             bias=True,
-            processor=FluxAttnProcessor2_0(),  
-            qk_norm=qk_norm, 
+            processor=FluxAttnProcessor2_0(),
+            qk_norm=qk_norm,
             eps=eps,
         )
         # 图像流的LayerNorm + FeedForward
@@ -149,7 +149,7 @@ def forward(
     # 将注意力输出应用Gate并加入残差
     attn_output = gate_msa.unsqueeze(1) * attn_output
     hidden_states = hidden_states + attn_output
-    
+
     # 前馈层 (图像流)
     norm_hidden_states = self.norm2(hidden_states)
     norm_hidden_states = norm_hidden_states * (1 + scale_mlp[:, None]) + shift_mlp[:, None]
@@ -201,7 +201,7 @@ class FluxSingleTransformerBlock(nn.Layer):
         # 注意力层：不引入额外context，pre_only=True用于优化
         processor = FluxAttnProcessor2_0()
         self.attn = Attention(
-            query_dim=dim, cross_attention_dim=None, 
+            query_dim=dim, cross_attention_dim=None,
             dim_head=attention_head_dim, heads=num_attention_heads,
             out_dim=dim, bias=True,
             processor=processor, qk_norm="rms_norm", eps=1e-6,
@@ -317,7 +317,7 @@ FLUX 使用 FlowMatchEulerDiscreteScheduler 作为扩散采样器。这个调度
 不同于DDIM或PNDM这类按固定 $\alpha$ 衰减步长的调度器，FlowMatchEulerDiscreteScheduler采用了sigma序列（噪声标准差）来表示时间。其包含 set_timesteps 函数，主要生成一串从高噪声到低噪声的sigma列表。例如，默认训练扩散步数 num_train_timesteps=1000，sigma通常从接近1降到0。其主要代码如下：
 ```python
 def set_timesteps(
-    self, 
+    self,
     num_inference_steps: int = None,
     sigmas: Optional[List[float]] = None,
     mu: Optional[float] = None,
@@ -337,7 +337,7 @@ def set_timesteps(
         sigmas = self.time_shift(mu, 1.0, sigmas)
     else:
         sigmas = self.shift * sigmas / (1 + (self.shift - 1) * sigmas)
-    
+
     timesteps = np.linspace(
         self._sigma_to_t(self.sigma_max), self._sigma_to_t(self.sigma_min), num_inference_steps
     )
@@ -377,7 +377,7 @@ def step(
 
     # 将当前latent sample提升为float32计算以确保精度
     sample = sample.cast(paddle.float32)
-    
+
     # 取当前和下一步对应的 sigma 值
     sigma = self.sigmas[self.step_index]
     sigma_next = self.sigmas[self.step_index + 1]
@@ -485,4 +485,4 @@ images.save("text_to_image_generation-flux-dev-result_img2img.png")
 
 五、总结
 在跨模态生成技术领域，FLUX引入了全新架构，显著提升了图像生成的质量。百度飞桨团队推出的PaddleMIX套件现已完整实现推理全流程支持。通过深入分析其代码实现，研究人员和开发者能够更清晰地掌握模型的核心技术细节与创新要点。
-FLUX 是由 Black Forest Labs 开发的文本到图像生成模型，采用混合多模态和并行扩散 Transformer 架构，结合流匹配技术，旨在提升生成图像的质量和效率。 
+FLUX 是由 Black Forest Labs 开发的文本到图像生成模型，采用混合多模态和并行扩散 Transformer 架构，结合流匹配技术，旨在提升生成图像的质量和效率。

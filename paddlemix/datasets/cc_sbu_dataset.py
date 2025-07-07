@@ -26,8 +26,6 @@ from paddlemix.utils.log import logger
 # from dataset import DatasetBuilder
 from .dataset import DatasetBuilder
 
-
-
 __all__ = ["CCSBUAlignDataset"]
 
 
@@ -37,9 +35,7 @@ class CCSBUAlignDataset(DatasetBuilder):
     """
 
     URL = "https://paddlenlp.bj.bcebos.com/datasets/cc_sbu_align.zip"
-    META_INFO = collections.namedtuple(
-        "META_INFO", ("images", "annotations", "num_images", "annotations_md5")
-    )
+    META_INFO = collections.namedtuple("META_INFO", ("images", "annotations", "num_images", "annotations_md5"))
     MD5 = "d5fa38be915c8a2aee7ebf3a9c56a95c"
     SPLITS = {
         "train": META_INFO(
@@ -62,7 +58,12 @@ class CCSBUAlignDataset(DatasetBuilder):
         image_fullname = os.path.join(DATA_HOME, images)
         anno_fullname = os.path.join(DATA_HOME, annotations)
 
-        if (not os.path.exists(image_fullname)) or (not os.path.exists(anno_fullname)) or (not md5file(anno_fullname) == anno_hash) or num_images != self.count_files(image_fullname):
+        if (
+            (not os.path.exists(image_fullname))
+            or (not os.path.exists(anno_fullname))
+            or (not md5file(anno_fullname) == anno_hash)
+            or num_images != self.count_files(image_fullname)
+        ):
             get_path_from_url(self.URL, DATA_HOME, self.MD5)
 
         return image_fullname, anno_fullname, mode
@@ -85,7 +86,7 @@ class CCSBUAlignDataset(DatasetBuilder):
             image_ids = self._gen_image_id(annotations)
 
             for ann in annotations:
-                image_path = os.path.join(image_root, ann["image_id"]+".jpg")
+                image_path = os.path.join(image_root, ann["image_id"] + ".jpg")
                 yield_data = {"image": image_path, "image_id": image_ids[ann["image_id"]]}
                 if mode == "train":
                     # only train mode has text input

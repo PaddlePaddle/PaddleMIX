@@ -40,9 +40,7 @@ class ContrastiveHead(nn.Layer):
         )
         self.logit_scale = self.create_parameter(
             shape=[],
-            default_initializer=paddle.nn.initializer.Assign(
-                np.ones(1) * np.log(1 / 0.07)
-            ),
+            default_initializer=paddle.nn.initializer.Assign(np.ones(1) * np.log(1 / 0.07)),
         )
 
     def forward(self, x, w):
@@ -116,9 +114,7 @@ class YOLOWorldHeadModule(nn.Layer):
         use_bn_head (bool): use batch normalization head
     """
 
-    def __init__(
-        self, in_channels, num_classes, reg_max, embed_dims, use_bn_head=False
-    ):
+    def __init__(self, in_channels, num_classes, reg_max, embed_dims, use_bn_head=False):
         self.embed_dims = embed_dims
         self.use_bn_head = use_bn_head
         self.in_channels = in_channels
@@ -212,9 +208,7 @@ class YOLOWorldHeadModule(nn.Layer):
             )
 
             bbox_preds = paddle.squeeze(
-                paddle.matmul(
-                    F.softmax(bbox_dist_preds, axis=3), self.proj.reshape([-1, 1])
-                ),
+                paddle.matmul(F.softmax(bbox_dist_preds, axis=3), self.proj.reshape([-1, 1])),
                 axis=-1,
             )
 
@@ -279,9 +273,7 @@ class YOLOWorldHead(nn.Layer):
         self.max_per_img = None
         self.grid_cell_offset = grid_cell_offset
         self.num_classes = (num_classes,)
-        self.head_module = YOLOWorldHeadModule(
-            in_channels, num_classes, reg_max, embed_dims, use_bn_head
-        )
+        self.head_module = YOLOWorldHeadModule(in_channels, num_classes, reg_max, embed_dims, use_bn_head)
 
     @classmethod
     def from_config(cls, cfg, input_shape):
@@ -308,12 +300,8 @@ class YOLOWorldHead(nn.Layer):
         stride_tensor = []
         for i, stride in enumerate(self.fpn_strides):
             h, w = feats_size[i]
-            shift_x = (paddle.arange(end=w) + self.grid_cell_offset) * self.fpn_strides[
-                i
-            ]
-            shift_y = (paddle.arange(end=h) + self.grid_cell_offset) * self.fpn_strides[
-                i
-            ]
+            shift_x = (paddle.arange(end=w) + self.grid_cell_offset) * self.fpn_strides[i]
+            shift_y = (paddle.arange(end=h) + self.grid_cell_offset) * self.fpn_strides[i]
             shift_yy, shift_xx = paddle.meshgrid(shift_y.to(dtype), shift_x.to(dtype))
 
             shift_xx = shift_xx.reshape([-1])
@@ -357,9 +345,7 @@ class YOLOWorldHead(nn.Layer):
             batch_img_metas = batch_data_samples
 
         outs = self(img_feats, txt_feats)
-        predictions = self.predict_by_feat(
-            *outs, batch_img_metas=batch_img_metas, rescale=rescale
-        )
+        predictions = self.predict_by_feat(*outs, batch_img_metas=batch_img_metas, rescale=rescale)
         return predictions
 
     def predict_by_feat(
@@ -419,14 +405,11 @@ class YOLOWorldHead(nn.Layer):
 
         flatten_priors, flatten_stride = self._generate_anchors(featmap_sizes)
         flatten_cls_scores = [
-            paddle.transpose(cls_score, perm=[0, 2, 3, 1]).reshape(
-                [num_imgs, -1, self.num_classes]
-            )
+            paddle.transpose(cls_score, perm=[0, 2, 3, 1]).reshape([num_imgs, -1, self.num_classes])
             for cls_score in cls_scores
         ]
         flatten_bbox_preds = [
-            paddle.transpose(bbox_pred, perm=[0, 2, 3, 1]).reshape([num_imgs, -1, 4])
-            for bbox_pred in bbox_preds
+            paddle.transpose(bbox_pred, perm=[0, 2, 3, 1]).reshape([num_imgs, -1, 4]) for bbox_pred in bbox_preds
         ]
 
         flatten_cls_scores = F.sigmoid(paddle.concat(flatten_cls_scores, axis=1))
@@ -440,8 +423,7 @@ class YOLOWorldHead(nn.Layer):
 
         if with_objectnesses:
             flatten_objectness = [
-                paddle.transpose(objectness, perm=[0, 2, 3, 1]).reshape(num_imgs, -1)
-                for objectness in objectnesses
+                paddle.transpose(objectness, perm=[0, 2, 3, 1]).reshape(num_imgs, -1) for objectness in objectnesses
             ]
             flatten_objectness = F.sigmoid(paddle.concat(flatten_objectness, axis=1))
         else:
@@ -453,9 +435,7 @@ class YOLOWorldHead(nn.Layer):
             flatten_objectness,
             batch_img_metas,
         ):
-            ori_shape = (img_meta["im0_shape"] / img_meta["scale_factor"]).squeeze(
-                axis=0
-            )
+            ori_shape = (img_meta["im0_shape"] / img_meta["scale_factor"]).squeeze(axis=0)
             scale_factor = img_meta["scale_factor"].squeeze(axis=0)
             if "pad_param" in img_meta:
                 pad_param = img_meta["pad_param"].squeeze(axis=0)
@@ -491,9 +471,7 @@ class YOLOWorldHead(nn.Layer):
                 )
                 labels = results["labels"]
             else:
-                scores, labels, keep_idxs, _ = filter_scores_and_topk(
-                    scores, self.score_thr, self.nms_pre
-                )
+                scores, labels, keep_idxs, _ = filter_scores_and_topk(scores, self.score_thr, self.nms_pre)
 
             results = dict()
             results["scores"] = scores
@@ -502,9 +480,7 @@ class YOLOWorldHead(nn.Layer):
 
             if rescale:
                 if pad_param is not None:
-                    results["bboxes"] -= paddle.stack(
-                        [pad_param[2], pad_param[0], pad_param[2], pad_param[0]]
-                    )
+                    results["bboxes"] -= paddle.stack([pad_param[2], pad_param[0], pad_param[2], pad_param[0]])
                 results["bboxes"] /= paddle.tile(scale_factor, repeat_times=[1, 2])
 
             if self.yolox_style:
@@ -521,28 +497,17 @@ class YOLOWorldHead(nn.Layer):
             )
 
             nms_res = paddle.concat(
-                [
-                    paddle.to_tensor(c)
-                    for c in multiclass_nms(
-                        bbox_for_nms, self.num_classes, self.nms_thr
-                    )
-                ],
+                [paddle.to_tensor(c) for c in multiclass_nms(bbox_for_nms, self.num_classes, self.nms_thr)],
                 axis=0,
             )
 
-            results["labels"], results["scores"], results["bboxes"] = paddle.split(
-                nms_res, [1, 1, 4], axis=1
-            )
+            results["labels"], results["scores"], results["bboxes"] = paddle.split(nms_res, [1, 1, 4], axis=1)
             results["labels"] = results["labels"][: self.max_per_img, :]
             results["scores"] = results["scores"][: self.max_per_img, :]
             results["bboxes"] = results["bboxes"][: self.max_per_img, :]
 
-            results["bboxes"][:, 0::2] = paddle.clip(
-                results["bboxes"][:, 0::2], min=0, max=ori_shape[1]
-            )
-            results["bboxes"][:, 1::2] = paddle.clip(
-                results["bboxes"][:, 1::2], min=0, max=ori_shape[0]
-            )
+            results["bboxes"][:, 0::2] = paddle.clip(results["bboxes"][:, 0::2], min=0, max=ori_shape[1])
+            results["bboxes"][:, 1::2] = paddle.clip(results["bboxes"][:, 1::2], min=0, max=ori_shape[0])
 
             results_list.append(results)
         return results_list

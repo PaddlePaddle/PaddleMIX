@@ -14,12 +14,10 @@
 
 import json
 import pathlib
-import sys
 from collections import OrderedDict
 from typing import Dict
 
 import numpy as np
-
 import paddle
 import tqdm
 

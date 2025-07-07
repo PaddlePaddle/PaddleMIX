@@ -16,6 +16,7 @@ from __future__ import annotations
 import glob
 import os
 import struct
+
 import numpy as np
 
 
@@ -47,6 +48,7 @@ def deserialize_from_file(fp):
         print("type error")
     data_arr = np.array(data_list)
     return data_arr
+
 
 def load_real_time_tokens():
     tokens = []

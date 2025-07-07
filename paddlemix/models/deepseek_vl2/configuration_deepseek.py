@@ -95,7 +95,7 @@ class MlpProjectorConfig(PretrainedConfig):
         super().__init__(**kwargs)
 
 
-class DeepseekV2Config(PretrainedConfig): # use_mla # with multi-latent attention
+class DeepseekV2Config(PretrainedConfig):  # use_mla # with multi-latent attention
     """
     This is the configuration class to store the configuration of a [`DeepseekV2Model`]. It is used to instantiate an DeepSeek
     model according to the specified arguments, defining the model architecture. Instantiating a configuration with the

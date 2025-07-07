@@ -57,9 +57,7 @@ def parse_args():
         type=float,
         help="confidence score threshold for predictions.",
     )
-    parser.add_argument(
-        "--show", action="store_true", help="show the detection results."
-    )
+    parser.add_argument("--show", action="store_true", help="show the detection results.")
     parser.add_argument(
         "--offline",
         action="store_true",
@@ -69,18 +67,12 @@ def parse_args():
     return args
 
 
-def run_inference(
-    runner, data, images, texts, max_dets, score_thr, output_dir, show, annotation
-):
+def run_inference(runner, data, images, texts, max_dets, score_thr, output_dir, show, annotation):
     pred_instances = runner.model(data)[0]
     score_thr_mask = pred_instances["scores"] > score_thr
-    pred_instances["scores"] = pred_instances["scores"][
-        score_thr_mask.squeeze(-1), :
-    ].squeeze(-1)
+    pred_instances["scores"] = pred_instances["scores"][score_thr_mask.squeeze(-1), :].squeeze(-1)
     pred_instances["bboxes"] = pred_instances["bboxes"][score_thr_mask.squeeze(-1), :]
-    pred_instances["labels"] = (
-        pred_instances["labels"][score_thr_mask.squeeze(-1), :].squeeze(-1).astype(int)
-    )
+    pred_instances["labels"] = pred_instances["labels"][score_thr_mask.squeeze(-1), :].squeeze(-1).astype(int)
 
     if pred_instances["scores"].shape[0] > max_dets:
         indices = pred_instances["scores"].topk(max_dets)[1]
@@ -133,9 +125,7 @@ def run_inference(
         MAX_IMAGE_AREA_PERCENTAGE = 0.80
         APPROXIMATION_PERCENTAGE = 0.75
 
-        sv.DetectionDataset(
-            classes=texts, images=images_dict, annotations=annotations_dict
-        ).as_yolo(
+        sv.DetectionDataset(classes=texts, images=images_dict, annotations=annotations_dict).as_yolo(
             annotations_directory_path=ANNOTATIONS_DIRECTORY,
             min_image_area_percentage=MIN_IMAGE_AREA_PERCENTAGE,
             max_image_area_percentage=MAX_IMAGE_AREA_PERCENTAGE,
@@ -187,9 +177,7 @@ if __name__ == "__main__":
 
     if not osp.isfile(cfg.image):
         images = [
-            osp.join(cfg.image, img)
-            for img in os.listdir(cfg.image)
-            if img.endswith(".png") or img.endswith(".jpg")
+            osp.join(cfg.image, img) for img in os.listdir(cfg.image) if img.endswith(".png") or img.endswith(".jpg")
         ]
     else:
         images = [cfg.image]

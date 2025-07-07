@@ -12,8 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Dict, List, Optional
+
 import paddle
 import paddle.nn.functional as F
+from PIL import Image
+
 from paddlemix.models.qwen2_vl import MIXQwen2Tokenizer
 from paddlemix.models.qwen2_vl.modeling_qwen2_vl import Qwen2VLForConditionalGeneration
 from paddlemix.processors.qwen2_vl_processing import (
@@ -21,15 +25,13 @@ from paddlemix.processors.qwen2_vl_processing import (
     Qwen2VLProcessor,
     process_vision_info,
 )
-from PIL import Image
-import requests
-from typing import List, Dict, Optional
 
 
 class GmeQwen2VL:
     """
     GmeQwen2VL-Qwen2-VL provides computation of text, image, and multimodal embeddings.
     """
+
     def __init__(
         self,
         model_name: str = "GME-Qwen2-VL/gme-Qwen2-VL-2B-Instruct",
@@ -53,16 +55,15 @@ class GmeQwen2VL:
         self.processor = Qwen2VLProcessor(self.image_processor, self.tokenizer)
 
         self.device = device
-        
+
         self.normalize = normalize
         self.default_instruction = "You are a helpful assistant."  # Default instruction
 
-
     def embed(
-        self, 
-        texts: List[str], 
-        images: List[Image.Image] = None, 
-        instruction: Optional[str] = None, 
+        self,
+        texts: List[str],
+        images: List[Image.Image] = None,
+        instruction: Optional[str] = None,
         is_query: bool = True,
     ) -> paddle.Tensor:
         """
@@ -74,9 +75,9 @@ class GmeQwen2VL:
             instruction = self.default_instruction
 
         input_texts, input_images = [], []
-        
+
         # Process text & images
-        has_text = any(texts)  # Check if text is included
+        any(texts)  # Check if text is included
         has_image = images is not None and any(images)  # Check if images are included
 
         for text, image in zip(texts, images or [None] * len(texts)):
@@ -93,25 +94,21 @@ class GmeQwen2VL:
             if text is not None:
                 input_str += text  # Append text content
 
-            formatted_text = f'<|im_start|>system\n{instruction}<|im_end|>\n<|im_start|>user\n{input_str}<|im_end|>\n<|im_start|>assistant\n<|endoftext|>'
+            formatted_text = f"<|im_start|>system\n{instruction}<|im_end|>\n<|im_start|>user\n{input_str}<|im_end|>\n<|im_start|>assistant\n<|endoftext|>"
             input_texts.append(formatted_text)  # Store final formatted text
-        
 
         # Process image information
         if has_image:
             messages = [
                 {
                     "role": "user",
-                    "content": [
-                        {"type": "image", "image": img},
-                        {"type": "text", "text": ""}  
-                    ],
+                    "content": [{"type": "image", "image": img}, {"type": "text", "text": ""}],
                 }
                 for img in images
             ]
             image_inputs, _ = process_vision_info(messages)
         else:
-            image_inputs = None 
+            image_inputs = None
 
         # Process Tokenization
         inputs = self.processor(
@@ -130,8 +127,7 @@ class GmeQwen2VL:
         if self.normalize:
             embeddings = F.normalize(embeddings, p=2, axis=1)
 
-        return  embeddings
-
+        return embeddings
 
     def get_text_embeddings(self, texts: List[str], **kwargs) -> paddle.Tensor:
         """
@@ -145,7 +141,9 @@ class GmeQwen2VL:
         """
         return self.embed(texts=[""] * len(images), images=images, **kwargs)
 
-    def get_fused_embeddings(self, texts: List[str] = None, images: List[Image.Image] = None, **kwargs) -> paddle.Tensor:
+    def get_fused_embeddings(
+        self, texts: List[str] = None, images: List[Image.Image] = None, **kwargs
+    ) -> paddle.Tensor:
         """
         Compute fused embeddings for text+image
         Supports:
@@ -154,7 +152,6 @@ class GmeQwen2VL:
         - Text+image fusion
         """
         return self.embed(texts=texts, images=images, **kwargs)
-
 
     def encode_queries(self, queries: List[str], **kwargs) -> paddle.Tensor:
         """
@@ -169,13 +166,12 @@ class GmeQwen2VL:
         if type(corpus) is dict:
             sentences = [
                 (corpus["title"][i] + " " + corpus["text"][i]).strip()
-                if "title" in corpus else corpus["text"][i].strip()
+                if "title" in corpus
+                else corpus["text"][i].strip()
                 for i in range(len(corpus["text"]))
             ]
         else:
             sentences = [
-                (doc["title"] + " " + doc["text"]).strip() if "title" in doc else doc["text"].strip()
-                for doc in corpus
+                (doc["title"] + " " + doc["text"]).strip() if "title" in doc else doc["text"].strip() for doc in corpus
             ]
         return self.get_text_embeddings(texts=sentences, **kwargs)
-

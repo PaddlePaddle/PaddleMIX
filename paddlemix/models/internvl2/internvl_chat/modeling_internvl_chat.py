@@ -385,7 +385,7 @@ class InternVLChatModel(MixPretrainedModel):
         else:
             input_embeds = self.language_model.get_input_embeddings()(input_ids)
 
-        ###  must add position_ids, paddlenlp bug
+        # must add position_ids, paddlenlp bug
         if isinstance(self.language_model, Qwen2ForCausalLM):
             batch_size, seq_length = attention_mask.shape
             position_ids = paddle.arange(seq_length).expand((batch_size, seq_length))

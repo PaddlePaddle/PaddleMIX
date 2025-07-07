@@ -156,16 +156,16 @@ merged_features = patch_merger(patches)
 def apply_multimodal_rotary_pos_emb(q, k, cos, sin, mrope_section, unsqueeze_dim=1):
     # 将section尺寸翻倍(因为每个维度需要cos和sin两部分)
     mrope_section = mrope_section * 2
-    
+
     # 处理cos部分
     cos = paddle.concat(
-        x=[m[i % 3] for i, m in enumerate(cos.split(mrope_section, axis=-1))], 
+        x=[m[i % 3] for i, m in enumerate(cos.split(mrope_section, axis=-1))],
         axis=-1
     ).unsqueeze(axis=unsqueeze_dim)
-    
+
     # 处理sin部分
     sin = paddle.concat(
-        x=[m[i % 3] for i, m in enumerate(sin.split(mrope_section, axis=-1))], 
+        x=[m[i % 3] for i, m in enumerate(sin.split(mrope_section, axis=-1))],
         axis=-1
     ).unsqueeze(axis=unsqueeze_dim)
 
@@ -235,7 +235,7 @@ class Qwen2_5_VLAttention(paddle.nn.Layer):
         query_states = self.q_proj(hidden_states)
         key_states = self.k_proj(hidden_states)
         value_states = self.v_proj(hidden_states)
-        
+
         # 2. 重塑和转置
         # [batch, seq_len, num_heads, head_dim] -> [batch, num_heads, seq_len, head_dim]
         query_states = query_states.reshape([0, 0, self.num_heads, self.head_dim]).transpose([0, 2, 1, 3])
@@ -256,7 +256,7 @@ class Qwen2_5_VLAttention(paddle.nn.Layer):
 
         # 5. 计算注意力并输出
         # ... 注意力计算和输出处理 ...
-        
+
         return attn_output, attn_weights, past_key_value
 ```
 
@@ -274,7 +274,7 @@ class Qwen2_5_VLAttention(paddle.nn.Layer):
 1. **窗口注意力机制**:
 ```python
 def forward(self, hidden_states: paddle.Tensor, grid_thw: paddle.Tensor):
-    # ... 
+    # ...
     for layer_num, blk in enumerate(self.blocks):
         # 只有特定层使用全注意力，其他使用窗口注意力
         if layer_num in self.fullatt_block_indexes:
@@ -397,7 +397,7 @@ python paddlemix/examples/qwen2_5_vl/single_image_infer.py \
     --question="请描述这个动漫图片，需要1. 推测动漫是哪一部；2. 给出图片的整体风格；3.描述图像中的细节，并推测可能的背景故事。" \
     --dtype="bfloat16"
 ```
-输出结果： 
+输出结果：
 这张图片展示了一群穿着和服的角色，背景中有樱花树和蓝天白云，整体风格充满了日本传统元素和冒险气息。
 ```
 ### 1. 推测动漫是哪一部
