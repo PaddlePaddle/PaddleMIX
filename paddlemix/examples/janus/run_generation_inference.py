@@ -64,6 +64,7 @@ def generate(
     img_size: int = 384,
     patch_size: int = 16,
 ):
+    outputs = None
     input_ids = vl_chat_processor.tokenizer.encode(prompt)
     input_ids = paddle.to_tensor(data=input_ids.input_ids, dtype="int64")
     tokens = paddle.zeros(shape=(parallel_size * 2, len(input_ids)), dtype="int32")

@@ -13,15 +13,14 @@
 # limitations under the License.
 
 
-import yaml
 import importlib.metadata
 
-import jsonschema
+import yaml
 from jsonschema import Draft202012Validator
 from referencing import Registry, Resource
 from referencing.jsonschema import DRAFT202012
 
-version = importlib.metadata.version('jsonschema')
+version = importlib.metadata.version("jsonschema")
 
 
 class JsonSchemaValidator(object):
@@ -30,13 +29,13 @@ class JsonSchemaValidator(object):
         self._validator = None
 
     @classmethod
-    def from_string(cls, s: str) -> 'JsonSchemaValidator':
+    def from_string(cls, s: str) -> "JsonSchemaValidator":
         schema = yaml.safe_load(s)
         return cls(schema)
 
     @classmethod
-    def from_yaml(cls, path: str) -> 'JsonSchemaValidator':
-        with open(path, 'r') as f:
+    def from_yaml(cls, path: str) -> "JsonSchemaValidator":
+        with open(path, "r") as f:
             schema = yaml.load(f, Loader=yaml.Loader)
         return cls(schema)
 
@@ -46,7 +45,7 @@ class JsonSchemaValidator(object):
     @property
     def schema(self):
         return self._schema
-    
+
     @property
     def validator(self) -> Draft202012Validator:
         if self._validator is not None:
@@ -54,10 +53,11 @@ class JsonSchemaValidator(object):
 
         # resource = DRAFT202012.create_resource(content)
         resource = Resource(contents=self.schema, specification=DRAFT202012)
-        registry = Registry().with_resource(uri=self.schema['$id'], resource=resource)
+        registry = Registry().with_resource(uri=self.schema["$id"], resource=resource)
         # self._validator = Draft202012Validator(self.schema, registry=registry,)
-        self._validator = Draft202012Validator({"$ref": self.schema['$id']}, registry=registry,)
+        self._validator = Draft202012Validator(
+            {"$ref": self.schema["$id"]},
+            registry=registry,
+        )
 
         return self._validator
-
-

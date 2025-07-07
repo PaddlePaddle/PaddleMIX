@@ -15,9 +15,8 @@
 import sys
 
 import paddle
-from paddlemix.models.diffsinger.utils import paddle_aux
 
-from paddlemix.models.diffsinger.utils import filter_kwargs
+from paddlemix.models.diffsinger.utils import filter_kwargs, paddle_aux
 
 from .convnext import ConvNeXtDecoder
 

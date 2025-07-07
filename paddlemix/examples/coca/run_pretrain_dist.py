@@ -26,6 +26,7 @@ import socket
 from dataclasses import dataclass, field
 
 import paddle
+from paddlenlp.trainer import PdArgumentParser, TrainingArguments
 
 from paddlemix.datasets import load_dataset
 from paddlemix.datasets.dataset import ImageFolder
@@ -40,7 +41,6 @@ from paddlemix.processors.clip_processing import (
 from paddlemix.processors.tokenizer import SimpleTokenizer
 from paddlemix.trainer import CLIPTrainer
 from paddlemix.utils.env import setdistenv
-from paddlenlp.trainer import PdArgumentParser, TrainingArguments
 
 
 @dataclass

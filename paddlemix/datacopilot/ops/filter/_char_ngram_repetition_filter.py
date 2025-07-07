@@ -13,10 +13,12 @@
 # limitations under the License.
 
 
-from typing import Optional
-from ...core import MMDataset, register
 from functools import partial
+from typing import Optional
+
 import numpy as np
+
+from ...core import MMDataset, register
 
 
 def is_char_ngram_valid(item, rep_len: int = 10, min_ratio: float = 0.0, max_ratio: float = 0.5) -> bool:
@@ -33,19 +35,19 @@ def is_char_ngram_valid(item, rep_len: int = 10, min_ratio: float = 0.0, max_rat
         bool: True if the repetition ratio is within [min_ratio, max_ratio], False otherwise.
     """
     # Concatenate conversation content
-    user_conv = '\n\n'.join(
-        ''.join(conversation) for conversation in item['conversations']
-    ).replace('<image>\n', '').replace('\n<image>', '').replace('<image>', '')
+    user_conv = (
+        "\n\n".join("".join(conversation) for conversation in item["conversations"])
+        .replace("<image>\n", "")
+        .replace("\n<image>", "")
+        .replace("<image>", "")
+    )
 
     # Return False if the text length is smaller than n-gram length
     if len(user_conv) < rep_len:
         return False
 
     # Generate n-grams
-    char_ngrams = [
-        user_conv[i:i + rep_len]
-        for i in range(len(user_conv) - rep_len + 1)
-    ]
+    char_ngrams = [user_conv[i : i + rep_len] for i in range(len(user_conv) - rep_len + 1)]
 
     # Count the frequency of each n-gram
     freq_char_ngrams = {}
@@ -60,10 +62,7 @@ def is_char_ngram_valid(item, rep_len: int = 10, min_ratio: float = 0.0, max_rat
     freq_values = list(freq_char_ngrams.values())
     total_ngrams = sum(freq_values)
     num_no_rep_ngrams = len([freq for freq in freq_values if freq == 1])
-    num_rep_ngrams = min(
-        int(np.sqrt(len(freq_values))),
-        len(freq_values) - num_no_rep_ngrams
-    )
+    num_rep_ngrams = min(int(np.sqrt(len(freq_values))), len(freq_values) - num_no_rep_ngrams)
     rep_ratio = sum(sorted(freq_values, reverse=True)[:num_rep_ngrams]) / total_ngrams
 
     # Check if the repetition ratio is within the specified range
@@ -72,10 +71,7 @@ def is_char_ngram_valid(item, rep_len: int = 10, min_ratio: float = 0.0, max_rat
 
 @register()
 def char_ngram_repetition_filter(
-    dataset: MMDataset, 
-    rep_len: Optional[int] = 10, 
-    min_ratio: Optional[float] = 0.0, 
-    max_ratio: Optional[float] = 0.5
+    dataset: MMDataset, rep_len: Optional[int] = 10, min_ratio: Optional[float] = 0.0, max_ratio: Optional[float] = 0.5
 ) -> MMDataset:
     """
     Filters the dataset based on the character n-gram repetition ratio in conversations.
@@ -92,12 +88,8 @@ def char_ngram_repetition_filter(
     print("Filtering samples with invalid character n-gram repetition ratios...")
     # Create the filter function
     filter_func = partial(is_char_ngram_valid, rep_len=rep_len, min_ratio=min_ratio, max_ratio=max_ratio)
-    
+
     # Apply dataset.filter
-    filtered_dataset = dataset.filter(
-        func=filter_func, 
-        max_workers=8, 
-        progress=True
-    )
-    
+    filtered_dataset = dataset.filter(func=filter_func, max_workers=8, progress=True)
+
     return filtered_dataset

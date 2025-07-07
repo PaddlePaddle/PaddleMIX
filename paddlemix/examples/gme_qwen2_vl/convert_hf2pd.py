@@ -20,18 +20,20 @@
 # 3.运行该脚本
 
 
+import copy
 import json
+
+# from paddlenlp.utils.log import logger
+import logging as logger
 import os
 import shutil
-import copy
+
 import paddle
 import torch
-from safetensors.torch import load_file
 from safetensors.numpy import save_file
-#from paddlenlp.utils.log import logger
-import logging as logger
+from safetensors.torch import load_file
 
-#model_path = "/root/paddlejob/workspace/env_run/nifeng03/pretrain/Qwen2-VL-2B-Instruct"
+# model_path = "/root/paddlejob/workspace/env_run/nifeng03/pretrain/Qwen2-VL-2B-Instruct"
 model_path = "gme-Qwen2-VL-2B-Instruct"
 # dst_path = "/root/code/models"
 dst_path = model_path + "_pd"
@@ -47,20 +49,16 @@ need_transpose = {
     "up_proj.weight",
     "gate_proj.weight",
     "down_proj.weight",
-
     "self_attn.q_proj.weight",
     "self_attn.k_proj.weight",
     "self_attn.v_proj.weight",
     "self_attn.o_proj.weight",
-
     # "lm_head.weight", # 2b要注释这行，7b不需要注释
-
-
     "attn.proj.weight",
     "attn.qkv.weight",
     "mlp.fc1.weight",
     "mlp.fc2.weight",
-    #"merger.ln_q.weight",
+    # "merger.ln_q.weight",
     "merger.mlp.0.weight",
     "merger.mlp.2.weight",
 }
@@ -149,16 +147,12 @@ else:
 # execute_cmd(cmd="sed -i -e  's/Qwen2ForCausalLM/QWen2ForCausalLM/g' ",
 #             file_path=os.path.join(dst_path, "config.json"))
 
-execute_cmd(cmd="sed -i -e  's/torch_dtype/dtype/g' ",
-            file_path=os.path.join(dst_path, "config.json"))
+execute_cmd(cmd="sed -i -e  's/torch_dtype/dtype/g' ", file_path=os.path.join(dst_path, "config.json"))
 
-execute_cmd(cmd="sed -i /transformers_version/d ",
-            file_path=os.path.join(dst_path, "config.json"))
+execute_cmd(cmd="sed -i /transformers_version/d ", file_path=os.path.join(dst_path, "config.json"))
 
-execute_cmd(cmd="sed -i /transformers_version/d ",
-            file_path=os.path.join(dst_path, "generation_config.json"))
-execute_cmd(cmd="sed -i '/max_new_tokens/s/,//g' ",
-            file_path=os.path.join(dst_path, "generation_config.json"))
+execute_cmd(cmd="sed -i /transformers_version/d ", file_path=os.path.join(dst_path, "generation_config.json"))
+execute_cmd(cmd="sed -i '/max_new_tokens/s/,//g' ", file_path=os.path.join(dst_path, "generation_config.json"))
 
 
 logger.info(model_path)

@@ -14,6 +14,7 @@
 
 
 import numpy as np
+
 from paddlemix.datacopilot.core import MMDataset, register
 
 
@@ -26,7 +27,7 @@ def conversation_percentage_filter(dataset: MMDataset, min_percentile: float, ma
         dataset (MMDataset): The dataset to be filtered.
         min_percentile (float): The minimum percentile (e.g., 0 for the 0th percentile).
         max_percentile (float): The maximum percentile (e.g., 95 for the 95th percentile).
-        
+
     Returns:
         MMDataset: The filtered dataset.
     """
@@ -35,10 +36,8 @@ def conversation_percentage_filter(dataset: MMDataset, min_percentile: float, ma
         raise ValueError("Percentile values must be between 0 and 100.")
 
     # Count the number of conversations
-    conversation_counts = np.array([
-        len(item.get("conversations", [])) for item in dataset.items
-    ])
-    
+    conversation_counts = np.array([len(item.get("conversations", [])) for item in dataset.items])
+
     # Calculate the percentile thresholds
     min_threshold = np.percentile(conversation_counts, min_percentile)
     max_threshold = np.percentile(conversation_counts, max_percentile)
@@ -47,8 +46,7 @@ def conversation_percentage_filter(dataset: MMDataset, min_percentile: float, ma
 
     # Filter the dataset
     filtered_items = [
-        item for item, count in zip(dataset.items, conversation_counts)
-        if min_threshold <= count <= max_threshold
+        item for item, count in zip(dataset.items, conversation_counts) if min_threshold <= count <= max_threshold
     ]
 
     return MMDataset(filtered_items)

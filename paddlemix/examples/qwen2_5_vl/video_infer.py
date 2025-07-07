@@ -17,7 +17,9 @@ import argparse
 import paddle
 
 from paddlemix.models.qwen2_5_vl import MIXQwen2_5_Tokenizer
-from paddlemix.models.qwen2_5_vl.modeling_qwen2_5_vl import Qwen2_5_VLForConditionalGeneration
+from paddlemix.models.qwen2_5_vl.modeling_qwen2_5_vl import (
+    Qwen2_5_VLForConditionalGeneration,
+)
 from paddlemix.processors.qwen2_5_vl_processing import (
     Qwen2_5_VLImageProcessor,
     Qwen2_5_VLProcessor,
@@ -37,7 +39,9 @@ def main(args):
         logger.warning("bfloat16 is not supported on your device,change to float32")
         compute_dtype = "float32"
     paddle.set_default_dtype(compute_dtype)
-    model = Qwen2_5_VLForConditionalGeneration.from_pretrained(args.model_path, dtype=compute_dtype, attn_implementation="flash_attention_2")
+    model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+        args.model_path, dtype=compute_dtype, attn_implementation="flash_attention_2"
+    )
 
     image_processor = Qwen2_5_VLImageProcessor()
     tokenizer = MIXQwen2_5_Tokenizer.from_pretrained(args.model_path)
@@ -71,7 +75,6 @@ def main(args):
     # video_pad_token = "<|vision_start|><|video_pad|><|vision_end|>"
     # text = f"<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n{video_pad_token}{question}<|im_end|>\n<|im_start|>assistant\n"
     # text = [text]
-    
 
     inputs = processor(
         text=text,

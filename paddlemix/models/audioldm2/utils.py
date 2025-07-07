@@ -12,11 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import paddle
-import paddle.nn as nn
-from itertools import repeat
 import collections.abc
 from functools import partial
+from itertools import repeat
+
+import paddle
+import paddle.nn as nn
+
 
 def _ntuple(n):
     def parse(x):
@@ -26,15 +28,15 @@ def _ntuple(n):
 
     return parse
 
+
 to_2tuple = _ntuple(2)
+
 
 def drop_path(x, drop_prob: float = 0.0, training: bool = False):
     if drop_prob == 0.0 or not training:
         return x
     keep_prob = 1 - drop_prob
-    shape = (x.shape[0],) + (1,) * (
-        x.ndim - 1
-    )  # work with diff dim tensors, not just 2D ConvNets
+    shape = (x.shape[0],) + (1,) * (x.ndim - 1)  # work with diff dim tensors, not just 2D ConvNets
     random_tensor = keep_prob + paddle.rand(shape, dtype=x.dtype)
     random_tensor.floor_()  # binarize
     output = x.divide(keep_prob) * random_tensor
@@ -43,6 +45,7 @@ def drop_path(x, drop_prob: float = 0.0, training: bool = False):
 
 class DropPath(nn.Layer):
     """Drop paths (Stochastic Depth) per sample  (when applied in main path of residual blocks)."""
+
     def __init__(self, drop_prob=None):
         super(DropPath, self).__init__()
         self.drop_prob = drop_prob
@@ -50,18 +53,19 @@ class DropPath(nn.Layer):
     def forward(self, x):
         return drop_path(x, self.drop_prob, self.training)
 
+
 class Mlp(nn.Layer):
-    """ MLP as used in Vision Transformer, MLP-Mixer and related networks
-    """
+    """MLP as used in Vision Transformer, MLP-Mixer and related networks"""
+
     def __init__(
-            self,
-            in_features,
-            hidden_features=None,
-            out_features=None,
-            act_layer=nn.GELU,
-            bias=True,
-            drop=0.,
-            use_conv=False,
+        self,
+        in_features,
+        hidden_features=None,
+        out_features=None,
+        act_layer=nn.GELU,
+        bias=True,
+        drop=0.0,
+        use_conv=False,
     ):
         super().__init__()
         out_features = out_features or in_features
@@ -83,4 +87,3 @@ class Mlp(nn.Layer):
         x = self.fc2(x)
         x = self.drop2(x)
         return x
-    

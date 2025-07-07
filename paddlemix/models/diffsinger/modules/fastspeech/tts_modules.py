@@ -13,11 +13,9 @@
 # limitations under the License.
 
 import math
-import sys
 
 import paddle
 
-from paddlemix.models.diffsinger.utils import paddle_aux
 from paddlemix.models.diffsinger.modules.commons.common_layers import (
     EncSALayer,
     SinusoidalPositionalEmbedding,
@@ -25,6 +23,7 @@ from paddlemix.models.diffsinger.modules.commons.common_layers import (
 from paddlemix.models.diffsinger.modules.commons.espnet_positional_embedding import (
     RelPositionalEncoding,
 )
+from paddlemix.models.diffsinger.utils import paddle_aux
 
 DEFAULT_MAX_SOURCE_POSITIONS = 2000
 DEFAULT_MAX_TARGET_POSITIONS = 2000

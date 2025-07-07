@@ -15,11 +15,12 @@
 """ Paddle DeepSeek model and compatible with both DeepSeekV2 and DeepSeekV3"""
 import math
 from typing import List, Optional, Tuple, Union
+
 import numpy as np
 import paddle
+import paddle.distributed as dist
 import paddle.nn as nn
 import paddle.nn.functional as F
-import paddle.distributed as dist
 import paddlenlp
 from paddle.distributed.fleet.utils import recompute
 from paddlenlp.transformers import PretrainedModel
@@ -27,15 +28,20 @@ from paddlenlp.transformers.activations import ACT2FN
 from paddlenlp.transformers.llama.modeling import LlamaAttention
 from paddlenlp.utils.tools import get_env_device
 
-from .configuration_deepseek import DeepseekV2Config
-from paddlemix.models.qwen2_vl.bert_padding import index_first_axis, pad_input, unpad_input
-from paddlemix.models.flash_attn_utils import (
-    has_flash_attn_func,
+from paddlemix.models.flash_attn_utils import has_flash_attn_func
+from paddlemix.models.qwen2_vl.bert_padding import (
+    index_first_axis,
+    pad_input,
+    unpad_input,
 )
-flash_attn_func, flash_attn_varlen_func = has_flash_attn_func() # flash_attention, flash_attn_varlen_func
+
+from .configuration_deepseek import DeepseekV2Config
+
+flash_attn_func, flash_attn_varlen_func = has_flash_attn_func()  # flash_attention, flash_attn_varlen_func
 _IS_NPU = "npu" in paddle.get_device()
 
 from ppdiffusers.utils import logging
+
 logger = logging.get_logger(__name__)
 
 
@@ -359,7 +365,9 @@ class MoEGate(paddle.nn.Layer):
         elif self.topk_method == "noaux_tc":
             assert not self.training
             scores_for_choice = scores.reshape([bsz * seq_len, -1]) + self.e_score_correction_bias.unsqueeze(axis=0)
-            group_scores = scores_for_choice.reshape([bsz * seq_len, self.n_group, -1]).topk(k=2, axis=-1)[0].sum(axis=-1)
+            group_scores = (
+                scores_for_choice.reshape([bsz * seq_len, self.n_group, -1]).topk(k=2, axis=-1)[0].sum(axis=-1)
+            )
 
             group_idx = paddle.topk(k=self.topk_group, sorted=False, x=group_scores, axis=-1)[1]
             group_mask = paddle.zeros_like(x=group_scores)
@@ -446,11 +454,8 @@ class DeepseekV2MoE(paddle.nn.Layer):
             self.experts = nn.ModuleList(
                 [
                     (
-                        DeepseekV2MLP(
-                            config, intermediate_size=config.moe_intermediate_size
-                        )
-                        if i >= self.ep_rank * self.experts_per_rank
-                        and i < (self.ep_rank + 1) * self.experts_per_rank
+                        DeepseekV2MLP(config, intermediate_size=config.moe_intermediate_size)
+                        if i >= self.ep_rank * self.experts_per_rank and i < (self.ep_rank + 1) * self.experts_per_rank
                         else None
                     )
                     for i in range(config.n_routed_experts)
@@ -609,9 +614,15 @@ class DeepseekV2Attention(paddle.nn.Layer):
             self.q_a_layernorm = DeepseekV2RMSNorm(config=config, hidden_size=config.q_lora_rank)
             self.q_b_proj = nn.Linear(config.q_lora_rank, self.num_heads * self.q_head_dim, bias_attr=False)
 
-        self.kv_a_proj_with_mqa = nn.Linear(self.hidden_size, config.kv_lora_rank + config.qk_rope_head_dim, bias_attr=config.attention_bias)
+        self.kv_a_proj_with_mqa = nn.Linear(
+            self.hidden_size, config.kv_lora_rank + config.qk_rope_head_dim, bias_attr=config.attention_bias
+        )
         self.kv_a_layernorm = DeepseekV2RMSNorm(config=config, hidden_size=config.kv_lora_rank)
-        self.kv_b_proj = nn.Linear(config.kv_lora_rank, self.num_heads * (self.q_head_dim - self.qk_rope_head_dim + self.v_head_dim), bias_attr=False)
+        self.kv_b_proj = nn.Linear(
+            config.kv_lora_rank,
+            self.num_heads * (self.q_head_dim - self.qk_rope_head_dim + self.v_head_dim),
+            bias_attr=False,
+        )
 
         self.o_proj = nn.Linear(self.num_heads * self.v_head_dim, self.hidden_size, bias_attr=config.attention_bias)
 
@@ -703,7 +714,7 @@ class DeepseekV2Attention(paddle.nn.Layer):
 
         kv_seq_len = tuple(k_pe.shape)[-2]
         if past_key_value is not None:
-            kv_seq_len += past_key_value[0].shape[1] # [1, 1304, 1, 64]
+            kv_seq_len += past_key_value[0].shape[1]  # [1, 1304, 1, 64]
         cos, sin = self.rotary_emb(q_pe, seq_len=kv_seq_len)
         # [1, 16, 2035, 64] [1, 1, 2035, 64] [2035, 64] [2035, 64]  [1, 2035]
         q_pe, k_pe = apply_rotary_pos_emb(q_pe, k_pe, cos, sin, position_ids)
@@ -725,14 +736,18 @@ class DeepseekV2Attention(paddle.nn.Layer):
             past_key_value = None
 
         # shit tranpose liner weight
-        kv_b_proj = self.kv_b_proj.weight.T.reshape([self.num_heads, -1, self.kv_lora_rank]) # [512, 4096] -> [16, -1, 512]
-        q_absorb = kv_b_proj[:, :self.qk_nope_head_dim, :] # [16, 128, 512]
-        out_absorb = kv_b_proj[:, self.qk_nope_head_dim:, :] # [16, 128, 512]
+        kv_b_proj = self.kv_b_proj.weight.T.reshape(
+            [self.num_heads, -1, self.kv_lora_rank]
+        )  # [512, 4096] -> [16, -1, 512]
+        q_absorb = kv_b_proj[:, : self.qk_nope_head_dim, :]  # [16, 128, 512]
+        out_absorb = kv_b_proj[:, self.qk_nope_head_dim :, :]  # [16, 128, 512]
 
-        q_nope = paddle.matmul(q_nope, q_absorb) # [1, 16, 1304, 512]
+        q_nope = paddle.matmul(q_nope, q_absorb)  # [1, 16, 1304, 512]
         attn_weights = (
-            paddle.matmul(q_pe, k_pe.transpose([0, 1, 3, 2])) # [1, 16, 1304, 64] * [1, 1, 1304, 64]
-            + paddle.matmul(q_nope, compressed_kv.unsqueeze(axis=-3).transpose([0, 1, 3, 2])) #  [1, 16, 1304, 512] * [1, 1, 1304, 512]
+            paddle.matmul(q_pe, k_pe.transpose([0, 1, 3, 2]))  # [1, 16, 1304, 64] * [1, 1, 1304, 64]
+            + paddle.matmul(
+                q_nope, compressed_kv.unsqueeze(axis=-3).transpose([0, 1, 3, 2])
+            )  # [1, 16, 1304, 512] * [1, 1, 1304, 512]
         ) * self.softmax_scale
 
         if tuple(attn_weights.shape) != (bsz, self.num_heads, q_len, kv_seq_len):
@@ -780,7 +795,7 @@ class DeepseekV2FlashAttention2(DeepseekV2Attention):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def _get_unpad_data(self,attention_mask):
+    def _get_unpad_data(self, attention_mask):
         seqlens_in_batch = attention_mask.sum(axis=-1, dtype="int32")
         indices = paddle.nonzero(attention_mask.flatten(), as_tuple=False).flatten()
         max_seqlen_in_batch = seqlens_in_batch.max().item()  # [2, 1, 1323]
@@ -854,9 +869,7 @@ class DeepseekV2FlashAttention2(DeepseekV2Attention):
         q = q.reshape([bsz, q_len, self.num_heads, self.q_head_dim]).transpose(perm=[0, 2, 1, 3])
         q_nope, q_pe = paddle.split(q, [self.qk_nope_head_dim, self.qk_rope_head_dim], axis=-1)
         compressed_kv = self.kv_a_proj_with_mqa(hidden_states)
-        compressed_kv, k_pe = paddle.split(
-            compressed_kv, [self.kv_lora_rank, self.qk_rope_head_dim], axis=-1
-        )
+        compressed_kv, k_pe = paddle.split(compressed_kv, [self.kv_lora_rank, self.qk_rope_head_dim], axis=-1)
         k_pe = k_pe.reshape([bsz, q_len, 1, self.qk_rope_head_dim]).transpose(perm=[0, 2, 1, 3])  # b l 1 d
 
         # b h l (d_q+d_v)
@@ -906,7 +919,7 @@ class DeepseekV2FlashAttention2(DeepseekV2Attention):
             query_states,
             key_states,
             value_states,
-            None, # attention_mask, # TODO:强制设置为 None 可以跑通
+            None,  # attention_mask, # TODO:强制设置为 None 可以跑通
             q_len,
             dropout=dropout_rate,
             softmax_scale=self.softmax_scale,
@@ -922,7 +935,6 @@ class DeepseekV2FlashAttention2(DeepseekV2Attention):
             attn_weights = None
 
         return attn_output, attn_weights, past_key_value
-
 
     def _flash_attention_forward(
         self, query_states, key_states, value_states, attention_mask, query_length, dropout=0.0, softmax_scale=None
@@ -961,7 +973,7 @@ class DeepseekV2FlashAttention2(DeepseekV2Attention):
                 dtype = query_states.dtype
                 attn_output = paddle.nn.functional.flash_attention_npu(  # TODO: flash_attn_unpadded
                     query_states.astype("bfloat16"),
-                    key_states.astype("bfloat16"), 
+                    key_states.astype("bfloat16"),
                     value_states.astype("bfloat16"),
                     attn_mask=attention_mask,
                     dropout=dropout,
@@ -990,7 +1002,7 @@ class DeepseekV2FlashAttention2(DeepseekV2Attention):
                     cu_seqlens_k=cu_seqlens_k,
                     max_seqlen_q=max_seqlen_in_batch_q,
                     max_seqlen_k=max_seqlen_in_batch_k,
-                    dropout=dropout, # not dropout_p=
+                    dropout=dropout,  # not dropout_p=
                     scale=softmax_scale,  # not softmax_scale=
                     causal=causal,
                 )[0]
@@ -1012,10 +1024,8 @@ class DeepseekV2FlashAttention2(DeepseekV2Attention):
 ATTENTION_CLASSES = {
     "eager": DeepseekV2Attention,
     "flash_attention": DeepseekV2FlashAttention2,
-
     "mla_eager": DeepseekV2Attention,
     "mla_flash_attention": DeepseekV2FlashAttention2,
-
     "mha_eager": LlamaAttention,
     "mha_flash_attention": LlamaAttention,  # 没有LlamaFlashAttention2
 }

@@ -11,14 +11,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from dataclasses import dataclass, field
 import json
-from typing import List, Optional,Tuple,NewType,Any
+from dataclasses import dataclass, field
 from pathlib import Path
-from paddlenlp.trainer import TrainingArguments
-from paddlenlp.trainer import PdArgumentParser
+from typing import Any, List, NewType, Optional, Tuple
+
+from paddlenlp.trainer import PdArgumentParser, TrainingArguments
 
 DataClass = NewType("DataClass", Any)
+
 
 @dataclass
 class TrainingArguments(TrainingArguments):
@@ -115,6 +116,7 @@ class PdMIXArgumentParser(PdArgumentParser):
         dataclass types.
         """
         import dataclasses
+
         data = json.loads(Path(json_file).read_text())
         outputs = []
         for dtype in self.dataclass_types:

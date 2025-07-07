@@ -731,7 +731,7 @@ def fused_rotary_emb(
         return q_out, k_out, v_out
 
 
-########################### triton split ###############################
+# triton split #
 triton_split_template = (
     """
 std::vector<paddle::Tensor> ${op_name}_func(
@@ -746,14 +746,14 @@ std::vector<paddle::Tensor> ${op_name}_func(
 
   auto out0_tensor = paddle::empty({output_batch, output_seq0, output_hidden}, x.dtype(), x.place());
   auto out1_tensor = paddle::empty({output_batch, output_seq1, output_hidden}, x.dtype(), x.place());
-  
+
   auto out0 = get_tensor_ptr(out0_tensor);
   auto out1 = get_tensor_ptr(out1_tensor);
-  
+
   auto input = get_tensor_ptr(x);
-  
+
   auto  run_stream = out0_tensor.stream();
-  
+
 """
     + tune_and_invoke_part
     + """
@@ -762,10 +762,10 @@ std::vector<paddle::Tensor> ${op_name}_func(
 
 std::vector<std::vector<int64_t>> ${op_name}_InferShape(
         const std::vector<int64_t>& A_shape) {
-  
+
   std::vector<int64_t> out_shape0 = {A_shape[0], 1024, A_shape[2]};
   std::vector<int64_t> out_shape1 = {A_shape[0], 154, A_shape[2]};
-  
+
   return {out_shape0, out_shape1};
 }
 

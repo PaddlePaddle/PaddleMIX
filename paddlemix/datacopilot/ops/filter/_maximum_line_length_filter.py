@@ -13,12 +13,13 @@
 # limitations under the License.
 
 
-from typing import Optional
-from ...core import MMDataset, register
 from functools import partial
+from typing import Optional
+
+from ...core import MMDataset, register
 
 
-def is_max_line_length_valid(item, min_length: int = 10, max_length: float = float('inf')) -> bool:
+def is_max_line_length_valid(item, min_length: int = 10, max_length: float = float("inf")) -> bool:
     """
     Checks whether the maximum line length in the conversations is within the specified range.
 
@@ -32,9 +33,8 @@ def is_max_line_length_valid(item, min_length: int = 10, max_length: float = flo
     """
     # Clean the conversations by removing <image> placeholders
     cleaned_conversations = [
-        [q.replace('<image>\n', '').replace('\n<image>', '').replace('<image>', '').strip(), 
-        a.strip()]
-        for q, a in item['conversations']
+        [q.replace("<image>\n", "").replace("\n<image>", "").replace("<image>", "").strip(), a.strip()]
+        for q, a in item["conversations"]
     ]
 
     # Calculate the maximum line length in the conversations
@@ -49,9 +49,7 @@ def is_max_line_length_valid(item, min_length: int = 10, max_length: float = flo
 
 @register()
 def maximum_line_length_filter(
-    dataset, 
-    min_length: Optional[int] = 10, 
-    max_length: Optional[float] = float('inf')  # No upper limit by default
+    dataset, min_length: Optional[int] = 10, max_length: Optional[float] = float("inf")  # No upper limit by default
 ) -> MMDataset:
     """
     Filters the dataset based on the maximum line length in conversations.
@@ -67,12 +65,8 @@ def maximum_line_length_filter(
     print("Filtering samples with invalid maximum line lengths...")
     # Create the filter function
     filter_func = partial(is_max_line_length_valid, min_length=min_length, max_length=max_length)
-    
+
     # Apply dataset.filter
-    filtered_dataset = dataset.filter(
-        func=filter_func, 
-        max_workers=8, 
-        progress=True
-    )
-    
+    filtered_dataset = dataset.filter(func=filter_func, max_workers=8, progress=True)
+
     return filtered_dataset

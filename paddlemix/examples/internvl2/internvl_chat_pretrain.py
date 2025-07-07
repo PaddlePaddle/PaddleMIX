@@ -54,8 +54,6 @@ from paddlemix.models.internvl2.patch import concat_pad_data_collator
 from paddlemix.models.qwen2_vl.mix_qwen2_tokenizer import MIXQwen2Tokenizer
 
 try:
-    from petrel_client.client import Client
-    from petrel_client.common.config import Config
 
     has_tcs_loader = True
 except ImportError:

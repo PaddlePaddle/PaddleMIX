@@ -18,26 +18,30 @@ from typing import Optional
 
 from ..misc import download_url_to_file
 
-
 LID_MODEL_URL = {
-    'lid.176.bin': 'https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.bin',
-    'lid.176.ftz': 'https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.ftz'
+    "lid.176.bin": "https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.bin",
+    "lid.176.ftz": "https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.ftz",
 }
 
 
 class FastTextLIDModel(object):
-    def __init__(self, path: Optional[str]=None, name: str='lid.176.bin') -> None:
+    def __init__(self, path: Optional[str] = None, name: str = "lid.176.bin") -> None:
         self._name = name
         self._path = path
         self._model = None
 
     @property
-    def names(self, ):
+    def names(
+        self,
+    ):
         return list(LID_MODEL_URL.keys())
-        
+
     @property
-    def model(self, ):
+    def model(
+        self,
+    ):
         import fasttext
+
         if self._model is None:
             if self._path is None:
                 url = LID_MODEL_URL[self._name]
@@ -49,5 +53,5 @@ class FastTextLIDModel(object):
 
         return self._model
 
-    def predict(self, text: str, k: int=1, threshold: float=0):
+    def predict(self, text: str, k: int = 1, threshold: float = 0):
         return self.model.predict(text, k=k, threshold=threshold)

@@ -14,14 +14,15 @@
 
 from __future__ import annotations
 
-import sys
 from typing import List, Tuple
-import paddle
 
+import paddle
 from tqdm import tqdm
+
 from paddlemix.models.diffsinger.modules.backbones import build_backbone
-from paddlemix.models.diffsinger.utils.hparams import hparams
 from paddlemix.models.diffsinger.utils import paddle_aux
+from paddlemix.models.diffsinger.utils.hparams import hparams
+
 
 class RectifiedFlow(paddle.nn.Layer):
     def __init__(

@@ -24,16 +24,15 @@ from paddlenlp.trainer import PdArgumentParser
 from paddlenlp.transformers import AutoConfig, AutoInferenceModelForCausalLM
 from paddlenlp.trl import llm_utils
 
-from paddlemix.models.qwen2_5_vl import MIXQwen2_5_Tokenizer
 from paddlemix.models.ppdocbee2 import PPDocBee2ForConditionalGeneration
-from paddlemix.models.qwen2_5_vl.modeling_qwen2_5_vl import (
-    Qwen2_5_VLRotaryEmbedding,
-)
+from paddlemix.models.qwen2_5_vl import MIXQwen2_5_Tokenizer
+from paddlemix.models.qwen2_5_vl.modeling_qwen2_5_vl import Qwen2_5_VLRotaryEmbedding
 from paddlemix.processors.qwen2_5_vl_processing import (
     Qwen2_5_VLImageProcessor,
     Qwen2_5_VLProcessor,
     process_vision_info,
 )
+
 # NOTE: (huangkui) sys.path.append("path_to_your_PaddleNLP/llm/predict")
 sys.path.append("PaddleNLP/llm/predict")
 from predictor import ModelArgument, PredictorArgument

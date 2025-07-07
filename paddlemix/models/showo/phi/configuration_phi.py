@@ -131,8 +131,8 @@ class PhiConfig(PretrainedConfig):
     >>> configuration = model.config
     ```"""
 
-    model_type = 'phi'
-    keys_to_ignore_at_inference = ['past_key_values']
+    model_type = "phi"
+    keys_to_ignore_at_inference = ["past_key_values"]
 
     def __init__(
         self,
@@ -185,7 +185,7 @@ class PhiConfig(PretrainedConfig):
         # BC: if there is a 'type' field, move it to 'rope_type'.
         if self.rope_scaling is not None and "type" in self.rope_scaling:
             self.rope_scaling["rope_type"] = self.rope_scaling["type"]
-        #self._rope_scaling_validation()
+        # self._rope_scaling_validation()
 
         super().__init__(
             bos_token_id=bos_token_id,
@@ -194,7 +194,7 @@ class PhiConfig(PretrainedConfig):
             **kwargs,
         )
 
-    def _rope_scaling_validation(self): # TODO: check
+    def _rope_scaling_validation(self):  # TODO: check
         """
         Validate the `rope_scaling` configuration.
         """
@@ -203,13 +203,13 @@ class PhiConfig(PretrainedConfig):
 
         if not isinstance(self.rope_scaling, dict) or len(self.rope_scaling) != 3:
             raise ValueError(
-                '`rope_scaling` must be a dictionary with three fields, `type`, `short_factor` and `long_factor`, '
-                f'got {self.rope_scaling}'
+                "`rope_scaling` must be a dictionary with three fields, `type`, `short_factor` and `long_factor`, "
+                f"got {self.rope_scaling}"
             )
-        rope_scaling_type = self.rope_scaling.get('type', None)
-        rope_scaling_short_factor = self.rope_scaling.get('short_factor', None)
-        rope_scaling_long_factor = self.rope_scaling.get('long_factor', None)
-        if rope_scaling_type is None or rope_scaling_type not in ['su', 'yarn']:
+        rope_scaling_type = self.rope_scaling.get("type", None)
+        rope_scaling_short_factor = self.rope_scaling.get("short_factor", None)
+        rope_scaling_long_factor = self.rope_scaling.get("long_factor", None)
+        if rope_scaling_type is None or rope_scaling_type not in ["su", "yarn"]:
             raise ValueError(f"`rope_scaling`'s type field must be one of ['su', 'yarn'], got {rope_scaling_type}")
         if not (
             isinstance(rope_scaling_short_factor, list)

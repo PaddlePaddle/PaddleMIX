@@ -725,11 +725,11 @@ python paddlemix/examples/deepseek_vl2/multi_image_infer.py \
     --image_file_3="paddlemix/demo_images/twitter3.jpeg" \
     --question="Can you tell me what are in the images?" \
     --dtype="bfloat16"
-    
+
 ```
 
 ```
-输出结果： 
+输出结果：
 <|User|>: This is image_1: <image>
 This is image_2: <image>
 This is image_3: <image>

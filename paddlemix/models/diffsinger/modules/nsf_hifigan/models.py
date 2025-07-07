@@ -14,13 +14,13 @@
 
 import json
 import pathlib
-import sys
+
 import numpy as np
 import paddle
 import paddle.nn.functional as F
+from paddle.nn.utils import remove_weight_norm
 
 from paddlemix.models.diffsinger.utils import paddle_aux
-from paddle.nn.utils import remove_weight_norm, weight_norm
 
 from .env import AttrDict
 from .utils import get_padding, init_weights

@@ -1,25 +1,37 @@
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import copy
 import dataclasses
 from dataclasses import dataclass
-from typing import Dict, List,Union,Tuple,Any
-from PIL import Image
 from enum import IntEnum, auto
-from functools import partial,reduce
-import copy
+from functools import partial, reduce
+from typing import Any, Dict, List, Tuple, Union
 
+import numpy as np
 import paddle
 from paddlenlp.transformers import LlamaTokenizerFast
-import numpy as np
-from paddlenlp.transformers.image_transforms import (
-    normalize,
-    rescale,
-)
+from paddlenlp.transformers.image_transforms import normalize, rescale
 from paddlenlp.transformers.image_utils import to_numpy_array
+from PIL import Image
 
 from .base_processing import ProcessorMixin
-from .processing_utils import BaseImageProcessor
 from .image_processing_utils import BatchFeature
+from .processing_utils import BaseImageProcessor
 
-__all__ = ["JanusImageProcessor", "JanusVLChatProcessor","JanusFlowVLChatProcessor"]
+__all__ = ["JanusImageProcessor", "JanusVLChatProcessor", "JanusFlowVLChatProcessor"]
+
 
 def expand2square(pil_img, background_color):
     width, height = pil_img.size
@@ -34,14 +46,20 @@ def expand2square(pil_img, background_color):
         result.paste(pil_img, ((height - width) // 2, 0))
         return result
 
-class JanusImageProcessor(BaseImageProcessor):
-    model_input_names = ['pixel_values']
 
-    def __init__(self, image_size: int, min_size: int=14, image_mean: Union
-        [Tuple[float, float, float], List[float]]=(0.48145466, 0.4578275, 
-        0.40821073), image_std: Union[Tuple[float, float, float], List[
-        float]]=(0.26862954, 0.26130258, 0.27577711), rescale_factor: float
-        =1.0 / 255.0, do_normalize: bool=True, **kwargs):
+class JanusImageProcessor(BaseImageProcessor):
+    model_input_names = ["pixel_values"]
+
+    def __init__(
+        self,
+        image_size: int,
+        min_size: int = 14,
+        image_mean: Union[Tuple[float, float, float], List[float]] = (0.48145466, 0.4578275, 0.40821073),
+        image_std: Union[Tuple[float, float, float], List[float]] = (0.26862954, 0.26130258, 0.27577711),
+        rescale_factor: float = 1.0 / 255.0,
+        do_normalize: bool = True,
+        **kwargs
+    ):
         super().__init__(**kwargs)
         self.image_size = image_size
         self.rescale_factor = rescale_factor
@@ -56,9 +74,9 @@ class JanusImageProcessor(BaseImageProcessor):
         self.transform = [
             partial(rescale, scale=self.rescale_factor, data_format="channels_first"),
             partial(normalize, mean=self.image_mean, std=self.image_std, data_format="channels_first"),
-        ] 
+        ]
 
-    def resize(self, pil_img: Image) ->np.ndarray:
+    def resize(self, pil_img: Image) -> np.ndarray:
         """
 
         Args:
@@ -69,30 +87,29 @@ class JanusImageProcessor(BaseImageProcessor):
         """
         width, height = pil_img.size
         max_size = max(width, height)
-        size = [max(int(height / max_size * self.image_size), self.min_size
-            ), max(int(width / max_size * self.image_size), self.min_size)]
+        size = [
+            max(int(height / max_size * self.image_size), self.min_size),
+            max(int(width / max_size * self.image_size), self.min_size),
+        ]
         if width <= 0 or height <= 0 or size[0] <= 0 or size[1] <= 0:
-            print(f'orig size = {pil_img.size}, new size = {size}')
-            raise ValueError('Invalid size!')
-        pil_img = paddle.vision.transforms.resize(pil_img, size,
-            interpolation='bicubic')
+            print(f"orig size = {pil_img.size}, new size = {size}")
+            raise ValueError("Invalid size!")
+        pil_img = paddle.vision.transforms.resize(pil_img, size, interpolation="bicubic")
         pil_img = expand2square(pil_img, self.background_color)
         x = to_numpy_array(pil_img)
         x = np.transpose(x, (2, 0, 1))
         return x
 
-    def preprocess(self, images, return_tensors: str='pt', **kwargs
-        ) -> BatchFeature:
+    def preprocess(self, images, return_tensors: str = "pt", **kwargs) -> BatchFeature:
         images: List[np.ndarray] = [self.resize(image) for image in images]
         images = reduce(lambda x, f: [*map(f, x)], self.transform, images)
-        data = {'pixel_values': images}
-        return BatchFeature(data=data,
-            tensor_type=return_tensors)
+        data = {"pixel_values": images}
+        return BatchFeature(data=data, tensor_type=return_tensors)
 
     @property
     def default_shape(self):
         return [3, self.image_size, self.image_size]
-    
+
     def to_dict(self, saving_file=False) -> Dict[str, Any]:
         """
         Serializes this instance to a Python dictionary.
@@ -105,8 +122,8 @@ class JanusImageProcessor(BaseImageProcessor):
         output["processor_type"] = self.__class__.__name__
 
         return output
-    
-    
+
+
 class SeparatorStyle(IntEnum):
     """Separator styles."""
 
@@ -127,6 +144,7 @@ class SeparatorStyle(IntEnum):
     DeepSeek = auto()
     PLAIN = auto()
     ALIGNMENT = auto()
+
 
 @dataclasses.dataclass
 class Conversation:
@@ -223,9 +241,7 @@ class Conversation:
         if self.sep_style == SeparatorStyle.PLAIN:
             formatted_question = "<image>\n"
         elif self.sep_style == SeparatorStyle.DeepSeek:
-            formatted_question = (
-                f"{self.roles[0]}: " + content.strip() + self.sep + f"{self.roles[1]}:"
-            )
+            formatted_question = f"{self.roles[0]}: " + content.strip() + self.sep + f"{self.roles[1]}:"
         else:
             raise ValueError(f"Unsupported sep_style: {self.sep_style}")
         return formatted_question
@@ -299,7 +315,6 @@ class Conversation:
 
 
 class DictOutput(object):
-
     def keys(self):
         return self.__dict__.keys()
 
@@ -308,6 +323,7 @@ class DictOutput(object):
 
     def __setitem__(self, key, value):
         self.__dict__[key] = value
+
 
 @dataclass
 class JanusVLChatProcessorOutput(DictOutput):
@@ -329,7 +345,7 @@ class JanusBatchedVLChatProcessorOutput(DictOutput):
     images_seq_mask: paddle.bool
     images_emb_mask: paddle.bool
 
-    def to(self, device, dtype='bfloat16'):
+    def to(self, device, dtype="bfloat16"):
         self.input_ids = self.input_ids.to(device)
         self.attention_mask = self.attention_mask.to(device)
         self.images_seq_mask = self.images_seq_mask.to(device)
@@ -339,27 +355,33 @@ class JanusBatchedVLChatProcessorOutput(DictOutput):
 
 
 class JanusVLChatProcessor(ProcessorMixin):
-    image_processor_class = 'AutoImageProcessor'
-    tokenizer_class = 'LlamaTokenizer', 'LlamaTokenizerFast'
-    attributes = ['image_processor', 'tokenizer']
-    system_prompt = (
-        'You are a helpful language and vision assistant. You are able to understand the visual content that the user provides, and assist the user with a variety of tasks using natural language.'
-    )
+    image_processor_class = "AutoImageProcessor"
+    tokenizer_class = "LlamaTokenizer", "LlamaTokenizerFast"
+    attributes = ["image_processor", "tokenizer"]
+    system_prompt = "You are a helpful language and vision assistant. You are able to understand the visual content that the user provides, and assist the user with a variety of tasks using natural language."
 
-    def __init__(self, image_processor: JanusImageProcessor, tokenizer:
-        LlamaTokenizerFast, image_tag: str=
-        '<image_placeholder>', image_start_tag: str='<begin_of_image>',
-        image_end_tag: str='<end_of_image>', num_image_tokens: int=576,
-        add_special_token: bool=False, sft_format: str='deepseek',
-        mask_prompt: bool=True, ignore_id: int=-100, **kwargs):
+    def __init__(
+        self,
+        image_processor: JanusImageProcessor,
+        tokenizer: LlamaTokenizerFast,
+        image_tag: str = "<image_placeholder>",
+        image_start_tag: str = "<begin_of_image>",
+        image_end_tag: str = "<end_of_image>",
+        num_image_tokens: int = 576,
+        add_special_token: bool = False,
+        sft_format: str = "deepseek",
+        mask_prompt: bool = True,
+        ignore_id: int = -100,
+        **kwargs
+    ):
         self.image_processor = image_processor
         self.tokenizer = tokenizer
         image_id = self.tokenizer.vocab.get(image_tag)
         if image_id is None:
             special_tokens = [image_tag]
-            special_tokens_dict = {'additional_special_tokens': special_tokens}
+            special_tokens_dict = {"additional_special_tokens": special_tokens}
             self.tokenizer.add_special_tokens(special_tokens_dict)
-            print(f'Add image tag = {image_tag} to the tokenizer')
+            print(f"Add image tag = {image_tag} to the tokenizer")
         self.image_tag = image_tag
         self.image_start_tag = image_start_tag
         self.image_end_tag = image_end_tag
@@ -369,7 +391,7 @@ class JanusVLChatProcessor(ProcessorMixin):
         self.mask_prompt = mask_prompt
         self.ignore_id = ignore_id
         self.conv_templates: Dict[str, Conversation] = {}
-        
+
         # llava_llama2 template
         self.register_conv_template(
             Conversation(
@@ -401,7 +423,7 @@ class JanusVLChatProcessor(ProcessorMixin):
                 sep2=" </s><s>",
                 stop_token_ids=[2],
             )
-        )        
+        )
         # deepseek template
         self.register_conv_template(
             Conversation(
@@ -450,30 +472,37 @@ class JanusVLChatProcessor(ProcessorMixin):
                 stop_str=["</s>"],
             )
         )
-        super().__init__(image_processor, tokenizer, image_tag,
-            num_image_tokens, add_special_token, sft_format, mask_prompt,
-            ignore_id, **kwargs)
-        
-    def register_conv_template(self,template: Conversation, override: bool = False):
+        super().__init__(
+            image_processor,
+            tokenizer,
+            image_tag,
+            num_image_tokens,
+            add_special_token,
+            sft_format,
+            mask_prompt,
+            ignore_id,
+            **kwargs,
+        )
+
+    def register_conv_template(self, template: Conversation, override: bool = False):
         """Register a new conversation template."""
         if not override:
-            assert (
-                template.name not in self.conv_templates
-            ), f"{template.name} has been registered."
+            assert template.name not in self.conv_templates, f"{template.name} has been registered."
 
         self.conv_templates[template.name] = template
 
-    def get_conv_template(self,name: str) -> Conversation:
+    def get_conv_template(self, name: str) -> Conversation:
         """Get a conversation template."""
         return self.conv_templates[name].copy()
-    
+
     def new_chat_template(self):
         conv = self.get_conv_template(self.sft_format)
         conv.set_system_message(self.system_prompt)
         return conv
 
-    def apply_sft_template_for_multi_turn_prompts(self, conversations: List
-        [Dict[str, str]], sft_format: str='deepseek', system_prompt: str=''):
+    def apply_sft_template_for_multi_turn_prompts(
+        self, conversations: List[Dict[str, str]], sft_format: str = "deepseek", system_prompt: str = ""
+    ):
         """
         Applies the SFT template to conversation.
 
@@ -506,7 +535,7 @@ class JanusVLChatProcessor(ProcessorMixin):
         conv = self.get_conv_template(sft_format)
         conv.set_system_message(system_prompt)
         for message in conversations:
-            conv.append_message(message['role'], message['content'].strip())
+            conv.append_message(message["role"], message["content"].strip())
         sft_prompt = conv.get_prompt().strip()
         return sft_prompt
 
@@ -544,8 +573,7 @@ class JanusVLChatProcessor(ProcessorMixin):
             pad_id = self.tokenizer.eos_token_id
         return pad_id
 
-    def add_image_token(self, image_indices: List[int], input_ids: paddle.
-        Tensor):
+    def add_image_token(self, image_indices: List[int], input_ids: paddle.Tensor):
         """
 
         Args:
@@ -564,21 +592,22 @@ class JanusVLChatProcessor(ProcessorMixin):
             else:
                 end = index
             input_slices.append(input_ids[start:end])
-            input_slices.append(self.image_start_id * paddle.ones(shape=[1],
-                dtype='int64'))
-            input_slices.append(self.image_id * paddle.ones(shape=(self.
-                num_image_tokens,), dtype='int64'))
-            input_slices.append(self.image_end_id * paddle.ones(shape=[1],
-                dtype='int64'))
+            input_slices.append(self.image_start_id * paddle.ones(shape=[1], dtype="int64"))
+            input_slices.append(self.image_id * paddle.ones(shape=(self.num_image_tokens,), dtype="int64"))
+            input_slices.append(self.image_end_id * paddle.ones(shape=[1], dtype="int64"))
             start = index + 1
         input_slices.append(input_ids[start:])
         input_ids = paddle.concat(x=input_slices, axis=0)
-        num_image_tokens = paddle.to_tensor(data=[self.num_image_tokens] *
-            len(image_indices), dtype='int32')
+        num_image_tokens = paddle.to_tensor(data=[self.num_image_tokens] * len(image_indices), dtype="int32")
         return input_ids, num_image_tokens
 
-    def process_one(self, prompt: str=None, conversations: List[Dict[str,
-        str]]=None, images: List[Image.Image]=None, **kwargs):
+    def process_one(
+        self,
+        prompt: str = None,
+        conversations: List[Dict[str, str]] = None,
+        images: List[Image.Image] = None,
+        **kwargs
+    ):
         """
 
         Args:
@@ -595,27 +624,38 @@ class JanusVLChatProcessor(ProcessorMixin):
                 - image_id (int): the id of the image token
                 - num_image_tokens (List[int]): the number of image tokens
         """
-        assert prompt is None or conversations is None, 'prompt and conversations cannot be used at the same time.'
+        assert prompt is None or conversations is None, "prompt and conversations cannot be used at the same time."
         if prompt is None:
             sft_format = self.apply_sft_template_for_multi_turn_prompts(
-                conversations=conversations, sft_format=self.sft_format,
-                system_prompt=self.system_prompt)
+                conversations=conversations, sft_format=self.sft_format, system_prompt=self.system_prompt
+            )
         else:
             sft_format = prompt
         input_ids = self.tokenizer.encode(sft_format)
-        input_ids['input_ids'] = paddle.cast(paddle.to_tensor(input_ids['input_ids']), dtype='int64')
-        image_token_mask: paddle.bool = input_ids['input_ids'] == self.image_id
+        input_ids["input_ids"] = paddle.cast(paddle.to_tensor(input_ids["input_ids"]), dtype="int64")
+        image_token_mask: paddle.bool = input_ids["input_ids"] == self.image_id
         image_indices = image_token_mask.nonzero()
-        input_ids, num_image_tokens = self.add_image_token(image_indices=image_indices, input_ids=input_ids['input_ids'])
-        images_outputs = self.image_processor(images, return_tensors='pd')
-        prepare = JanusVLChatProcessorOutput(sft_format=sft_format, input_ids=
-            input_ids, pixel_values=images_outputs.pixel_values,
-            num_image_tokens=num_image_tokens)
+        input_ids, num_image_tokens = self.add_image_token(
+            image_indices=image_indices, input_ids=input_ids["input_ids"]
+        )
+        images_outputs = self.image_processor(images, return_tensors="pd")
+        prepare = JanusVLChatProcessorOutput(
+            sft_format=sft_format,
+            input_ids=input_ids,
+            pixel_values=images_outputs.pixel_values,
+            num_image_tokens=num_image_tokens,
+        )
         return prepare
 
-    def __call__(self, *, prompt: str=None, conversations: List[Dict[str,
-        str]]=None, images: List[Image.Image]=None, force_batchify: bool=True, **
-        kwargs):
+    def __call__(
+        self,
+        *,
+        prompt: str = None,
+        conversations: List[Dict[str, str]] = None,
+        images: List[Image.Image] = None,
+        force_batchify: bool = True,
+        **kwargs
+    ):
         """
 
         Args:
@@ -632,14 +672,12 @@ class JanusVLChatProcessor(ProcessorMixin):
                 - image_id (int): the id of the image token
                 - num_image_tokens (List[int]): the number of image tokens
         """
-        prepare = self.process_one(prompt=prompt, conversations=
-            conversations, images=images)
+        prepare = self.process_one(prompt=prompt, conversations=conversations, images=images)
         if force_batchify:
             prepare = self.batchify([prepare])
         return prepare
 
-    def batchify(self, prepare_list: List[JanusVLChatProcessorOutput]
-        ) ->JanusBatchedVLChatProcessorOutput:
+    def batchify(self, prepare_list: List[JanusVLChatProcessorOutput]) -> JanusBatchedVLChatProcessorOutput:
         """
         Preprocesses the inputs for multimodal inference.
 
@@ -658,34 +696,37 @@ class JanusVLChatProcessor(ProcessorMixin):
             seq_lens.append(len(prepare))
         input_token_max_len = max(seq_lens)
         max_n_images = max(1, max(n_images))
-        batched_input_ids = paddle.full(shape=(batch_size,
-            input_token_max_len), fill_value=self.pad_id).astype(dtype='int64')
-        batched_attention_mask = paddle.zeros(shape=(batch_size,
-            input_token_max_len)).astype(dtype='int64')
-        batched_pixel_values = paddle.zeros(shape=(batch_size, max_n_images,
-            *self.image_processor.default_shape)).astype(dtype='float32')
-        batched_images_seq_mask = paddle.zeros(shape=(batch_size,
-            input_token_max_len)).astype(dtype='bool')
-        batched_images_emb_mask = paddle.zeros(shape=(batch_size,
-            max_n_images, self.num_image_tokens)).astype(dtype='bool')
+        batched_input_ids = paddle.full(shape=(batch_size, input_token_max_len), fill_value=self.pad_id).astype(
+            dtype="int64"
+        )
+        batched_attention_mask = paddle.zeros(shape=(batch_size, input_token_max_len)).astype(dtype="int64")
+        batched_pixel_values = paddle.zeros(
+            shape=(batch_size, max_n_images, *self.image_processor.default_shape)
+        ).astype(dtype="float32")
+        batched_images_seq_mask = paddle.zeros(shape=(batch_size, input_token_max_len)).astype(dtype="bool")
+        batched_images_emb_mask = paddle.zeros(shape=(batch_size, max_n_images, self.num_image_tokens)).astype(
+            dtype="bool"
+        )
         for i, prepare in enumerate(prepare_list):
             input_ids = prepare.input_ids
             seq_len = len(prepare)
             n_image = len(prepare.num_image_tokens)
             batched_attention_mask[i, -seq_len:] = 1
-            batched_input_ids[i, -seq_len:] = paddle.to_tensor(data=
-                input_ids, dtype='int64')
+            batched_input_ids[i, -seq_len:] = paddle.to_tensor(data=input_ids, dtype="int64")
             batched_images_seq_mask[i, -seq_len:] = input_ids == self.image_id
             if n_image > 0:
                 batched_pixel_values[i, :n_image] = prepare.pixel_values
                 for j, n_image_tokens in enumerate(prepare.num_image_tokens):
                     batched_images_emb_mask[i, j, :n_image_tokens] = True
             sft_format.append(prepare.sft_format)
-        batched_prepares = JanusBatchedVLChatProcessorOutput(input_ids=
-            batched_input_ids, attention_mask=batched_attention_mask,
-            pixel_values=batched_pixel_values, images_seq_mask=
-            batched_images_seq_mask, images_emb_mask=
-            batched_images_emb_mask, sft_format=sft_format)
+        batched_prepares = JanusBatchedVLChatProcessorOutput(
+            input_ids=batched_input_ids,
+            attention_mask=batched_attention_mask,
+            pixel_values=batched_pixel_values,
+            images_seq_mask=batched_images_seq_mask,
+            images_emb_mask=batched_images_emb_mask,
+            sft_format=sft_format,
+        )
         return batched_prepares
 
 
@@ -716,7 +757,8 @@ class JanusFlowVLChatProcessor(JanusVLChatProcessor):
             sft_format=sft_format,
             mask_prompt=mask_prompt,
             ignore_id=ignore_id,
-            **kwargs,)
+            **kwargs,
+        )
         image_gen_id = self.tokenizer.vocab.get(image_gen_tag)
         if image_gen_id is None:
             special_tokens = [image_gen_tag]
@@ -739,7 +781,7 @@ class JanusFlowVLChatProcessor(JanusVLChatProcessor):
             print(f"Add eoi tag = {image_end_tag} to the tokenizer")
         self.image_gen_tag = image_gen_tag
         self.tokenizer.pad_token_id = self.tokenizer.vocab.get("<｜▁pad▁｜>")
-        
+
     @property
     def image_gen_id(self):
         image_gen_id = self.tokenizer.vocab.get(self.image_gen_tag)
@@ -769,22 +811,16 @@ class JanusFlowVLChatProcessor(JanusVLChatProcessor):
             else:
                 end = index
             input_slices.append(input_ids[start:end])
-            input_slices.append(self.image_start_id * paddle.ones(shape=[1],
-                dtype='int64'))
-            input_slices.append(self.image_id * paddle.ones(shape=(self.
-                num_image_tokens,), dtype='int64'))
-            input_slices.append(self.image_end_id * paddle.ones(shape=[1],
-                dtype='int64'))
+            input_slices.append(self.image_start_id * paddle.ones(shape=[1], dtype="int64"))
+            input_slices.append(self.image_id * paddle.ones(shape=(self.num_image_tokens,), dtype="int64"))
+            input_slices.append(self.image_end_id * paddle.ones(shape=[1], dtype="int64"))
             start = index + 1
         input_slices.append(input_ids[start:])
         input_ids = paddle.concat(x=input_slices, axis=0)
-        num_image_tokens = paddle.to_tensor(data=[self.num_image_tokens] *
-            len(image_indices), dtype='int32')
+        num_image_tokens = paddle.to_tensor(data=[self.num_image_tokens] * len(image_indices), dtype="int32")
         return input_ids, num_image_tokens
-    
-    def batchify(
-        self, prepare_list: List[JanusVLChatProcessorOutput]
-    ) -> JanusBatchedVLChatProcessorOutput:
+
+    def batchify(self, prepare_list: List[JanusVLChatProcessorOutput]) -> JanusBatchedVLChatProcessorOutput:
         """
         Preprocesses the inputs for multimodal inference.
 
@@ -804,23 +840,23 @@ class JanusFlowVLChatProcessor(JanusVLChatProcessor):
             seq_lens.append(len(prepare))
         input_token_max_len = max(seq_lens)
         max_n_images = max(1, max(n_images))
-        batched_input_ids = paddle.full(shape=(batch_size,
-            input_token_max_len), fill_value=self.pad_id).astype(dtype='int64')
-        batched_attention_mask = paddle.zeros(shape=(batch_size,
-            input_token_max_len)).astype(dtype='int64')
-        batched_pixel_values = paddle.zeros(shape=(batch_size, max_n_images,
-            *self.image_processor.default_shape)).astype(dtype='float32')
-        batched_images_seq_mask = paddle.zeros(shape=(batch_size,
-            input_token_max_len)).astype(dtype='bool')
-        batched_images_emb_mask = paddle.zeros(shape=(batch_size,
-            max_n_images, self.num_image_tokens)).astype(dtype='bool')
+        batched_input_ids = paddle.full(shape=(batch_size, input_token_max_len), fill_value=self.pad_id).astype(
+            dtype="int64"
+        )
+        batched_attention_mask = paddle.zeros(shape=(batch_size, input_token_max_len)).astype(dtype="int64")
+        batched_pixel_values = paddle.zeros(
+            shape=(batch_size, max_n_images, *self.image_processor.default_shape)
+        ).astype(dtype="float32")
+        batched_images_seq_mask = paddle.zeros(shape=(batch_size, input_token_max_len)).astype(dtype="bool")
+        batched_images_emb_mask = paddle.zeros(shape=(batch_size, max_n_images, self.num_image_tokens)).astype(
+            dtype="bool"
+        )
         for i, prepare in enumerate(prepare_list):
             input_ids = prepare.input_ids
             seq_len = len(prepare)
             n_image = len(prepare.num_image_tokens)
             batched_attention_mask[i, -seq_len:] = 1
-            batched_input_ids[i, -seq_len:] = paddle.to_tensor(data=
-                input_ids, dtype='int64')
+            batched_input_ids[i, -seq_len:] = paddle.to_tensor(data=input_ids, dtype="int64")
             batched_images_seq_mask[i, -seq_len:] = input_ids == self.image_id
             if n_image > 0:
                 batched_pixel_values[i, :n_image] = prepare.pixel_values

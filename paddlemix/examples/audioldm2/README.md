@@ -9,7 +9,7 @@
 
 ### 2.1 依赖安装(如符合则跳过)
 
-- 请确保已安装 ppdiffusers 
+- 请确保已安装 ppdiffusers
 ```bash
 cd ppdiffusers
 pip install -e .

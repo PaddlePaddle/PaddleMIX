@@ -118,7 +118,7 @@ Proportion of speaker '{name}' is negative."""
             spk_mix_value_sum = paddle.sum(x=spk_mix_value, axis=2, keepdim=True)
             assert paddle.all(
                 x=spk_mix_value_sum > 0.0
-            ), f"""Speaker mix checks failed.
+            ), """Speaker mix checks failed.
 Proportions of speaker mix on some frames sum to zero."""
             spk_mix_value /= spk_mix_value_sum
         else:
@@ -126,7 +126,7 @@ Proportions of speaker mix on some frames sum to zero."""
                 spk_mix_id_list.append(self.spk_map[name])
                 assert (
                     value >= 0.0
-                ), f"""Speaker mix checks failed.
+                ), """Speaker mix checks failed.
 Proportion of speaker '{name}' is negative."""
                 spk_mix_value_list.append(value)
             spk_mix_id = paddle.to_tensor(data=spk_mix_id_list, dtype="int64").to(self.device)[None, None]
@@ -134,7 +134,7 @@ Proportion of speaker '{name}' is negative."""
             spk_mix_value_sum = spk_mix_value.sum()
             assert (
                 spk_mix_value_sum > 0.0
-            ), f"""Speaker mix checks failed.
+            ), """Speaker mix checks failed.
 Proportions of speaker mix sum to zero."""
             spk_mix_value /= spk_mix_value_sum
         return spk_mix_id, spk_mix_value

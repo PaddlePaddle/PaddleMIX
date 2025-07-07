@@ -24,8 +24,8 @@ from paddlenlp.trl import llm_utils
 
 from paddlemix.models.qwen2_vl import MIXQwen2Tokenizer
 from paddlemix.models.qwen2_vl.modeling_qwen2_vl import (
-    Qwen2VLRotaryEmbedding,
     Qwen2VLForConditionalGeneration,
+    Qwen2VLRotaryEmbedding,
 )
 from paddlemix.processors.qwen2_vl_processing import (
     Qwen2VLImageProcessor,

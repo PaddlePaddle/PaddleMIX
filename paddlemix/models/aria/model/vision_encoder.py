@@ -13,13 +13,17 @@
 # limitations under the License.
 
 import paddle
-import paddlenlp
 
 """PyTorch Aria vision transformer."""
 from typing import Optional, Tuple, Union
 
-from .siglip_encoder import SigLipVisionConfig, SigLipVisionModel, SigLipVisionTransformer
 from paddlenlp.transformers.model_outputs import BaseModelOutputWithPooling
+
+from .siglip_encoder import (
+    SigLipVisionConfig,
+    SigLipVisionModel,
+    SigLipVisionTransformer,
+)
 
 
 class AriaVisionConfig(SigLipVisionConfig):
@@ -46,9 +50,7 @@ class IdentityOp(paddle.nn.Layer):
         return x
 
 
-class AriaVisionTransformer(
-    SigLipVisionTransformer
-):
+class AriaVisionTransformer(SigLipVisionTransformer):
     """
     Aria Vision Transformer model based on Idefics2VisionTransformer.
 
@@ -103,9 +105,7 @@ class AriaVisionModel(SigLipVisionModel):
         Returns:
             Union[Tuple, BaseModelOutputWithPooling]: The model's output.
         """
-        return_dict = (
-            return_dict if return_dict is not None else self.config.use_return_dict
-        )
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
         patch_attention_mask = self._create_patch_attention_mask(pixel_mask)
         vit_oup = self.vision_model(
             pixel_values=pixel_values,

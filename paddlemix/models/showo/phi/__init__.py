@@ -15,4 +15,4 @@
 from .configuration_phi import PhiConfig
 from .modeling_phi import PhiForCausalLM
 
-__all__ = ['PhiConfig', 'PhiForCausalLM']
+__all__ = ["PhiConfig", "PhiForCausalLM"]

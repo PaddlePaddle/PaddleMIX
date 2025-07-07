@@ -21,7 +21,7 @@
 ### 推理
 ```bash
 # 单图推理
-python paddlemix/examples/minicpm-v-2_6/single_image_infer.py 
+python paddlemix/examples/minicpm-v-2_6/single_image_infer.py
 
 # 视频推理
 python paddlemix/examples/minicpm-v-2_6/video_infer.py

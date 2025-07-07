@@ -12,12 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import sys
-
 import paddle
 import paddle_aux
 
-from .constants import *
+from .constants import N_CLASS, N_MELS
 from .deepunet import DeepUnet0
 from .seq import BiGRU
 

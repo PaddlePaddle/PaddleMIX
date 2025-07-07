@@ -14,14 +14,9 @@
 
 
 import folder_paths
-import numpy as np
 import paddle
-import torch  # for convert data
-from comfy.utils import ProgressBar
-from ppdiffusers import ( 
-    FluxPipeline,
-    
-)
+
+from ppdiffusers import FluxPipeline
 
 from .utils.schedulers import get_scheduler
 
@@ -90,7 +85,7 @@ class PaddleFLUXText2ImagePipe:
         pipe.scheduler = get_scheduler(scheduler_type)
         paddle.seed(seed)
 
-        progress_bar = ProgressBar(steps)
+        # progress_bar = ProgressBar(steps)
         latent = pipe(
             prompt=prompt,
             negative_prompt=negative_prompt,
@@ -104,10 +99,11 @@ class PaddleFLUXText2ImagePipe:
 
         return (latent,)
 
+
 NODE_CLASS_MAPPINGS = {
     "PaddleFLUXCheckpointLoader": PaddleFLUXCheckpointLoader,
     "PaddleFLUXText2ImagePipe": PaddleFLUXText2ImagePipe,
- }
+}
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "PaddleFLUXCheckpointLoader": "Paddle FLUX Checkpoint Loader",

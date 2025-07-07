@@ -15,6 +15,7 @@
 import hashlib
 import os
 import os.path
+import shutil
 import sys
 import tempfile
 import time
@@ -23,8 +24,6 @@ from datetime import datetime
 import gradio as gr
 import numpy as np
 import paddle
-from PIL import Image
-import shutil
 
 # 设置使用的GPU设备
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
@@ -32,13 +31,13 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 # 模型配置
 model_path = "PaddleMIX/PPDocBee2-3B"
 dtype = "bfloat16"  # V100请改成float16
-attn_implementation = "flash_attention_2" # V100请改成'eager'
+attn_implementation = "flash_attention_2"  # V100请改成'eager'
 
 # 全局变量定义
 model = None
 processor = None
 
-#显卡资源充足可以去掉这个
+# 显卡资源充足可以去掉这个
 min_pixels = 256 * 28 * 28  # 最小像素数
 max_pixels = 48 * 48 * 28 * 28  # 最大像素数
 
@@ -50,6 +49,7 @@ def check_and_install_paddlemix():
     try:
         from paddlemix.models.ppdocbee2 import PPDocBee2ForConditionalGeneration
 
+        _ = PPDocBee2ForConditionalGeneration
         print("Required PPDocBee2 model successfully installed")
     except ImportError:
         print("Failed to install required PPDocBee2 model even after running the script")
@@ -59,8 +59,8 @@ def check_and_install_paddlemix():
 # 在继续之前检查所需模型
 check_and_install_paddlemix()
 
-from paddlemix.models.qwen2_5_vl import MIXQwen2_5_Tokenizer
 from paddlemix.models.ppdocbee2 import PPDocBee2ForConditionalGeneration
+from paddlemix.models.qwen2_5_vl import MIXQwen2_5_Tokenizer
 from paddlemix.processors.qwen2_5_vl_processing import (
     Qwen2_5_VLImageProcessor,
     Qwen2_5_VLProcessor,
@@ -155,9 +155,8 @@ def load_model():
 
         paddle.set_default_dtype(dtype)
         model = PPDocBee2ForConditionalGeneration.from_pretrained(
-            model_path, 
-            dtype=dtype, 
-            attn_implementation=attn_implementation)
+            model_path, dtype=dtype, attn_implementation=attn_implementation
+        )
 
         image_processor = Qwen2_5_VLImageProcessor()
         tokenizer = MIXQwen2_5_Tokenizer.from_pretrained(model_path)

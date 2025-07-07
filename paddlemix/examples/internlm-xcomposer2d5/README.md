@@ -1,4 +1,4 @@
-# InternLM-XComposer2.5  
+# InternLM-XComposer2.5
 
 ## 1. 模型介绍
 
@@ -44,7 +44,7 @@ pip install --no-index  /home/aistudio/PaddleMIX/ppdiffusers/flash-attention/fla
 
 ```bash
 
-python torch2paddle.py 
+python torch2paddle.py
 
 ```
 

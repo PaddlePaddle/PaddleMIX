@@ -37,9 +37,7 @@ class HuggingCLIPLanguageBackbone(nn.Layer):
         self.frozen_modules = frozen_modules
         self.training_use_cache = training_use_cache
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        clip_config = CLIPTextConfig.from_pretrained(
-            model_name, attention_dropout=dropout
-        )
+        clip_config = CLIPTextConfig.from_pretrained(model_name, attention_dropout=dropout)
         self.model = CLIPTP.from_pretrained(model_name, config=clip_config)
         self._freeze_modules()
 
@@ -51,9 +49,7 @@ class HuggingCLIPLanguageBackbone(nn.Layer):
 
     def forward(self, text):
         num_per_batch = [len(t) for t in text]
-        assert max(num_per_batch) == min(
-            num_per_batch
-        ), "number of sequences not equal in batch"
+        assert max(num_per_batch) == min(num_per_batch), "number of sequences not equal in batch"
         text = list(itertools.chain(*text))
         text = self.tokenizer(text=text, return_tensors="pd", padding=True)
         print(self.model.device)
@@ -129,6 +125,5 @@ class MultiModalYOLOBackbone(nn.Layer):
     @property
     def out_shape(self):
         return [
-            ShapeSpec(channels=c, stride=s)
-            for c, s in zip(self.image_model._out_channels, self.image_model.strides)
+            ShapeSpec(channels=c, stride=s) for c, s in zip(self.image_model._out_channels, self.image_model.strides)
         ]

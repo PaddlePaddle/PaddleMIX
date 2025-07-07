@@ -292,7 +292,7 @@ class BaseBinarizer:
                     item = self.process_item(*a)
                     postprocess(item)
             for k in extra_info:
-                assert set(extra_info[k]) == set(range(max_no + 1)), f"Item numbering is not consecutive."
+                assert set(extra_info[k]) == set(range(max_no + 1)), "Item numbering is not consecutive."
                 extra_info[k] = list(map(lambda x: x[1], sorted(extra_info[k].items(), key=lambda x: x[0])))
         except KeyboardInterrupt:
             builder.finalize()

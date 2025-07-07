@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import paddle
-import triton
 import triton.language as tl
 from paddle import _C_ops
 from paddle.base.framework import OpProtoHolder
@@ -104,7 +103,7 @@ def wint8_kernel(
     pid_sp_k = tl.program_id(axis=1)
     num_pid_m = tl.cdiv(M, BLOCK_SIZE_M)
     num_pid_n = tl.cdiv(N, BLOCK_SIZE_N)
-    num_pid_k = tl.cdiv(K, BLOCK_SIZE_K)
+    # num_pid_k = tl.cdiv(K, BLOCK_SIZE_K)
     num_pid_in_group = GROUP_SIZE_M * num_pid_n
     group_id = pid // num_pid_in_group
     first_pid_m = group_id * GROUP_SIZE_M
@@ -298,7 +297,7 @@ def weight_only_int8(x, qweight, scales, bias=None, bool_trans_w=True):
     int N = -1;
     int stride_bk = -1;
     int stride_bn = -1;
-    
+
     if (bool_trans_w) {
         N = qweight.dims()[0];
         stride_bk = 1;

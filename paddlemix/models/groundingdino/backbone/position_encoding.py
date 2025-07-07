@@ -84,8 +84,8 @@ def build_position_encoding(args):
             temperatureW=args.pe_temperatureW,
             normalize=True,
         )
-    elif args.position_embedding in ("v3", "learned"):
-        position_embedding = PositionEmbeddingLearned(N_steps)
+    # elif args.position_embedding in ("v3", "learned"):
+    # position_embedding = PositionEmbeddingLearned(N_steps)
     else:
         raise ValueError(f"not supported {args.position_embedding}")
 

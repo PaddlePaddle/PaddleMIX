@@ -132,11 +132,11 @@ def chat_with_texts(message, history, text_content, history_flag=True):
         system_prompt = f"""你是一个专业的文献解读专家。
         ## 文档内容
         {text_content}
-        
+
         请基于以上文档内容和历史聊天记录回答用户问题。如果问题超出范围，请明确指出。
         """
 
-        
+
         # 构建消息历史
         messages = [{"role": "system", "content": system_prompt}]
 
@@ -148,7 +148,7 @@ def chat_with_texts(message, history, text_content, history_flag=True):
 
         # 添加当前问题
         messages.append({"role": "user", "content": message})
-        
+
         completion = client.chat.completions.create(
             model="deepseek-r1",
             temperature=0.6,
@@ -261,7 +261,7 @@ def create_anime_creation_tab():
     """创建动漫二创标签页"""
     with gr.Tab("动漫二创"):
         gr.Markdown("# 🎨 高能回忆杀！为你喜欢的动漫画面二创🚀")
-         
+
         with gr.Row():
             with gr.Column():
                 image_input = gr.Image(type="pil", label="🖼️ Step 1: 上传动漫海报")
@@ -506,13 +506,13 @@ def analyze_fortune(
     - MBTI：{mbti_type}
     - 分析类型：{analysis_type}
     - 特定问题：{custom_question if custom_question else "无"}
-    
+
     请根据以上信息进行分析：
     1. 结合性别、面相特征和MBTI给出性格解读
     2. 基于生日和当前时间给出运势预测
     3. 针对用户选择的分析类型给出具体建议
     4. 如果有特定问题，请特别关注相关方面
-    
+
     注意：保持专业性的同时要适当融入趣味性，最后注明"本结果仅供娱乐"。
     """
 
@@ -664,8 +664,8 @@ print(anime_creation(image_analysis, "诗歌类", "现代诗", "", "", ""))
 下面展示部署Gradio应用环节，进行fork，“启动环境”进入运行操作，请注意选择V100 32G或A100 40G。
 #### 1. 运行代码
 ```bash
-cd work  
-tar -xvf serve.tar  
+cd work
+tar -xvf serve.tar
 ```
 #### 2. 在serve/app_deploy中填写你的key
 
@@ -741,6 +741,3 @@ Qwen2.5-VL:https://github.com/PaddlePaddle/PaddleMIX/tree/develop/paddlemix/exam
 Qwen2.5-VL: https://arxiv.org/pdf/2502.13923
 
 DeepSeek-R1: https://arxiv.org/pdf/2501.12948
-
-
-

@@ -75,7 +75,7 @@ def to(self, *args, **kwargs):
             if isinstance(kwargs["x"], paddle.dtype):
                 dtype = kwargs["x"]
             elif isinstance(kwargs["x"], str):
-                if x not in ["cpu", "cuda", "ipu", "xpu"]:
+                if kwargs["x"] not in ["cpu", "cuda", "ipu", "xpu"]:
                     dtype = kwargs["x"]
                 else:
                     dtype = kwargs["y"] if isinstance(kwargs["y"], str) else self.dtype
