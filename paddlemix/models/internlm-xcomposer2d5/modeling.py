@@ -12,12 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import math
+
 # @Time    : 2025/5/16 下午18:33
 # @Author  : Ismoothly(1844252306@qq.com)
-import queue
-import math
-import copy
-import threading
 import warnings
 from typing import List, Optional, Tuple, Union
 
@@ -25,7 +23,7 @@ import paddle
 import paddle.nn.functional as F
 from einops import rearrange
 from paddle import nn
-from paddle.nn import BCEWithLogitsLoss, CrossEntropyLoss, MSELoss
+from paddle.nn import CrossEntropyLoss
 from paddlenlp.transformers.activations import ACT2FN
 from paddlenlp.transformers.model_outputs import (
     BaseModelOutputWithPast,
@@ -459,11 +457,11 @@ class InternLM2FlashAttention2(InternLM2Attention):
         key_states = qkv_states[..., -2, :]
         value_states = qkv_states[..., -1, :]
 
-        ### new added
+        # new added
         query_states = query_states.transpose([0, 2, 1, 3])
         key_states = key_states.transpose([0, 2, 1, 3])
         value_states = value_states.transpose([0, 2, 1, 3])
-        ###
+        #
 
         kv_seq_len = key_states.shape[-2]
         if past_key_value is not None:

@@ -1,11 +1,24 @@
-from typing import Optional
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import copy
-import logging
-import os
+from typing import Optional
 
 from paddlenlp.utils.import_utils import import_module
 
-from .constant import SUPPORTED_MODELS,MODEL_MAPPING
+from .constant import MODEL_MAPPING, SUPPORTED_MODELS
+
 
 def is_supported_model(model_name):
     if model_name in SUPPORTED_MODELS.keys():
@@ -13,38 +26,39 @@ def is_supported_model(model_name):
     else:
         return False
 
-def get_model(model_name,model_path:str = None,**kwargs):
+
+def get_model(model_name, model_path: str = None, **kwargs):
     if is_supported_model(model_name):
         model_module = import_module(f"paddlemix.models.{MODEL_MAPPING[model_name]}")
     else:
         raise ValueError(
-            f"The input model {model_id} is currently not available, please try {SUPPORTED_MODELS.keys()}"
+            f"The input model {model_name} is currently not available, please try {SUPPORTED_MODELS.keys()}"
         )
     if model_path is None:
         model_path = SUPPORTED_MODELS[model_name]
-    return model_module.from_pretrained(model_path,**kwargs)
+    return model_module.from_pretrained(model_path, **kwargs)
+
 
 def freeze_params(module):
     for param in module.parameters():
         param.stop_gradient = not False
+
     def fn(layer):
-        if hasattr(layer, "enable_recompute") and (
-            layer.enable_recompute is True or layer.enable_recompute == 1
-        ):
+        if hasattr(layer, "enable_recompute") and (layer.enable_recompute is True or layer.enable_recompute == 1):
             layer.enable_recompute = False
+
     module.apply(fn)
 
-def create_reference_model(
-    model, num_shared_layers: Optional[int] = None, pattern: Optional[str] = None
-):
+
+def create_reference_model(model, num_shared_layers: Optional[int] = None, pattern: Optional[str] = None):
     """
     Creates a static reference copy of a model. Note that model will be in `.eval()` mode.
     """
 
     ref_model = copy.deepcopy(model)
-    parameter_names = [n for n, _ in ref_model.named_parameters()]
+    # parameter_names = [n for n, _ in ref_model.named_parameters()]
 
-    for param_name,param in ref_model.named_parameters():
+    for param_name, param in ref_model.named_parameters():
         param.stop_gradient = True
     return ref_model.eval()
 

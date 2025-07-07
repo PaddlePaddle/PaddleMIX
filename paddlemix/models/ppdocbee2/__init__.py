@@ -12,4 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .modeling_ppdocbee2 import PPDocBee2ForConditionalGeneration, PPDocBee2TransformerPretrainedModel
+from .modeling_ppdocbee2 import (
+    PPDocBee2ForConditionalGeneration,
+    PPDocBee2TransformerPretrainedModel,
+)

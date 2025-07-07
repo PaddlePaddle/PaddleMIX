@@ -150,12 +150,20 @@ grid_dict = {
 
 
 cut_prompt_template_dict = {
-    'v0': lambda img_token, h, w: f''.join([f"{img_token}" for i in range(h) for j in range(w)]),
-    'v1': lambda img_token, h, w: f'Cut to {h} rows {w} columns, '+ ' '.join([f"subimg({i},{j}){img_token}"for i in range(h) for j in range(w)]),
-    'v1_global': lambda img_token, h, w: f'Cut to {h} rows {w} columns with a global view, '+ ' '.join([f"subimg({i},{j}){img_token}"for i in range(h) for j in range(w)]+[f"global_view{img_token}"]),
-    'v2_global': lambda img_token, h, w: f'Cut to {h} rows {w} columns with a global view\n'+ '\n'.join([' '.join([f"subimg({i},{j}){img_token}" for j in range(w)]) for i in range(h)])+f"\nglobal_view{img_token}",
-    'v3': lambda img_token, h, w: f'<|start_cut|>{h}*{w}'+ ' '.join([f"{img_token}"for i in range(h) for j in range(w)])+'<|end_cut|>',
-    'v3_global': lambda img_token, h, w: f'<|start_cut|>{h}*{w}\n'+ '\n'.join([' '.join([f"{img_token}" for j in range(w)]) for i in range(h)])+f'\n{img_token}<|end_cut|>',
+    "v0": lambda img_token, h, w: "".join([f"{img_token}" for i in range(h) for j in range(w)]),
+    "v1": lambda img_token, h, w: f"Cut to {h} rows {w} columns, "
+    + " ".join([f"subimg({i},{j}){img_token}" for i in range(h) for j in range(w)]),
+    "v1_global": lambda img_token, h, w: f"Cut to {h} rows {w} columns with a global view, "
+    + " ".join([f"subimg({i},{j}){img_token}" for i in range(h) for j in range(w)] + [f"global_view{img_token}"]),
+    "v2_global": lambda img_token, h, w: f"Cut to {h} rows {w} columns with a global view\n"
+    + "\n".join([" ".join([f"subimg({i},{j}){img_token}" for j in range(w)]) for i in range(h)])
+    + f"\nglobal_view{img_token}",
+    "v3": lambda img_token, h, w: f"<|start_cut|>{h}*{w}"
+    + " ".join([f"{img_token}" for i in range(h) for j in range(w)])
+    + "<|end_cut|>",
+    "v3_global": lambda img_token, h, w: f"<|start_cut|>{h}*{w}\n"
+    + "\n".join([" ".join([f"{img_token}" for j in range(w)]) for i in range(h)])
+    + f"\n{img_token}<|end_cut|>",
 }
 
 

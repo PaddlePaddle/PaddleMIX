@@ -12,10 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import sys
 
 import paddle
-import paddle_aux
 import torchmetrics
 from modules.fastspeech.tts_modules import RhythmRegulator
 
@@ -33,8 +31,8 @@ def linguistic_checks(pred, target, ph2word, mask=None):
     assert paddle.any(x=ph2word > 0), "empty word sequence"
     assert paddle.all(x=ph2word >= 0), "unexpected negative word index"
     assert ph2word.max() <= tuple(pred.shape)[1], f"word index out of range: {ph2word.max()} > {tuple(pred.shape)[1]}"
-    assert paddle.all(x=pred >= 0.0), f"unexpected negative ph_dur prediction"
-    assert paddle.all(x=target >= 0.0), f"unexpected negative ph_dur target"
+    assert paddle.all(x=pred >= 0.0), "unexpected negative ph_dur prediction"
+    assert paddle.all(x=target >= 0.0), "unexpected negative ph_dur target"
 
 
 class RhythmCorrectness(torchmetrics.Metric):

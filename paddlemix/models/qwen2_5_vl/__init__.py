@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from paddlemix.models.qwen2_5_vl.template import *
+
 from .configuration_qwen2_5_vl import Qwen2_5_VLConfig
 from .mix_qwen2_5_tokenizer import MIXQwen2_5_Tokenizer
 from .modeling_qwen2_5_vl import (
@@ -19,8 +21,6 @@ from .modeling_qwen2_5_vl import (
     Qwen2_5_VLModel,
     Qwen2_5_VLPreTrainedModel,
 )
-
-from paddlemix.models.qwen2_5_vl.template import *
 
 __all__ = [
     "Qwen2_5_VLConfig",

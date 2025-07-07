@@ -78,6 +78,7 @@ def generate(
     attention_mask = paddle.ones(shape=(2 * batch_size, tuple(inputs_embeds.shape)[1] + 577))
     attention_mask[batch_size:, 1 : tuple(inputs_embeds.shape)[1]] = 0
     attention_mask = attention_mask.astype(dtype="int32")
+    past_key_values = None
 
     for step in tqdm(range(num_inference_steps)):
         z_input = paddle.concat(x=[z, z], axis=0)

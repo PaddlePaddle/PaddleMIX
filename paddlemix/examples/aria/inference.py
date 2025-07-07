@@ -13,26 +13,31 @@
 # limitations under the License.
 
 import argparse
+from typing import List, Union
 
 import paddle
+from paddlenlp.generation.stopping_criteria import (
+    StoppingCriteria,
+    StoppingCriteriaList,
+)
+from PIL import Image
+
 from paddlemix.models.aria.model import AriaForConditionalGeneration
 from paddlemix.processors import AriaProcessor
-from PIL import Image
-from typing import Union, List
-
-from paddlenlp.generation.stopping_criteria import StoppingCriteriaList, StoppingCriteria
 
 set_dtype = "bfloat16"
 paddle.set_default_dtype(set_dtype)
 
+
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Aria Inference Script")
     parser.add_argument(
-        "--dtype", choices=["float32", "bfloat16"], default="bfloat16", help="DType to use in inference.",
+        "--dtype",
+        choices=["float32", "bfloat16"],
+        default="bfloat16",
+        help="DType to use in inference.",
     )
-    parser.add_argument(
-        "--base_model_path", required=True, help="Path to the base model"
-    )
+    parser.add_argument("--base_model_path", required=True, help="Path to the base model")
     parser.add_argument("--tokenizer_path", required=True, help="Path to the tokenizer")
     parser.add_argument("--image_path", required=True, help="Path to the input image")
     parser.add_argument("--prompt", required=True, help="Text prompt for the model")
@@ -60,9 +65,7 @@ def load_model(base_model_path, args):
     return model
 
 
-def prepare_input(
-    image_path, prompt, processor: AriaProcessor, max_image_size, split_image
-):
+def prepare_input(image_path, prompt, processor: AriaProcessor, max_image_size, split_image):
     image = Image.open(image_path)
 
     text = "<|im_start|>user\n<fim_prefix><|img|><fim_suffix>" + prompt + "<|im_end|>\n<|im_start|>assistant\n"
@@ -75,6 +78,7 @@ def prepare_input(
         split_image=split_image,
     )
     return inputs
+
 
 class KeywordsStoppingCriteria(StoppingCriteria):
     def __init__(self, stop_token_ids):
@@ -91,8 +95,9 @@ class KeywordsStoppingCriteria(StoppingCriteria):
         last_token = output_ids[0, -1].item()
         if last_token in self.stop_token_ids:
             return True
-            
+
         return False
+
 
 class EosTokenCriteria(StoppingCriteria):
     """
@@ -117,6 +122,7 @@ class EosTokenCriteria(StoppingCriteria):
         is_done = paddle.isin(input_ids[:, -1], self.eos_token_id)
         return is_done
 
+
 def inference(
     image_path,
     prompt,
@@ -124,41 +130,37 @@ def inference(
     processor: AriaProcessor,
     max_image_size,
     split_image,
-    dtype_
+    dtype_,
 ):
     inputs = prepare_input(image_path, prompt, processor, max_image_size, split_image)
     inputs["pixel_values"] = inputs["pixel_values"].to(model._dtype)
-    print('dtype', model._dtype)
+    print("dtype", model._dtype)
     inputs = {k: v.to(model.parameters()[0].place) for k, v in inputs.items()}
 
     stopping_criteria = StoppingCriteriaList(
-    [
-        EosTokenCriteria(2),
-        KeywordsStoppingCriteria([93519]),
-    ]
-)
+        [
+            EosTokenCriteria(2),
+            KeywordsStoppingCriteria([93519]),
+        ]
+    )
     with paddle.no_grad(), paddle.amp.auto_cast(dtype=dtype_):
         output = model.generate(
             **inputs,
             max_new_tokens=500,
-            stopping_criteria=stopping_criteria, 
+            stopping_criteria=stopping_criteria,
             tokenizer=processor.tokenizer,
             do_sample=True,
-            temperature=0.9
+            temperature=0.9,
         )
     for i in range(tuple(inputs["input_ids"].shape)[0]):
-        output_text = processor.tokenizer.decode(
-            output[i][0], skip_special_tokens=True
-        ).replace("<|im_end|>", "")
+        output_text = processor.tokenizer.decode(output[i][0], skip_special_tokens=True).replace("<|im_end|>", "")
 
     return output_text
 
 
 def main():
     args = parse_arguments()
-    processor = AriaProcessor.from_pretrained(
-        args.base_model_path, tokenizer_path=args.tokenizer_path
-    )
+    processor = AriaProcessor.from_pretrained(args.base_model_path, tokenizer_path=args.tokenizer_path)
     model = load_model(args.base_model_path, args)
     result = inference(
         args.image_path,

@@ -19,8 +19,8 @@
 # --------------------------------------------------------
 
 from typing import Optional, Tuple, Union
-import numpy as np
 
+import numpy as np
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
@@ -30,22 +30,24 @@ from paddlenlp.transformers.model_outputs import (
     BaseModelOutput,
     BaseModelOutputWithPooling,
 )
-from paddlemix.models.model_utils import MixPretrainedModel
-from paddlenlp.transformers.model_utils import PretrainedModel
-from .configuration_intern_vit import InternVisionConfig
-from ..bert_padding import pad_input, unpad_input
 
+from paddlemix.models.model_utils import MixPretrainedModel
 from ppdiffusers.utils import logging
+
+from ..bert_padding import pad_input, unpad_input
+from .configuration_intern_vit import InternVisionConfig
+
 logger = logging.get_logger(__name__)
 
 try:
     from paddle.nn.functional.flash_attention import flash_attn_varlen_qkvpacked
+
     print("modeling_intern_vit has_flash_attn is True.")
     has_flash_attn = True
 except:
     print("modeling_intern_vit has_flash_attn is False.")
     has_flash_attn = False
-has_flash_attn = False # TODO
+has_flash_attn = False  # TODO
 
 __all__ = ["InternVisionModel"]
 
@@ -64,7 +66,7 @@ def drop_path(x, drop_prob: float = 0.0, training: bool = False, scale_by_keep: 
         return x
     keep_prob = 1 - drop_prob
     shape = (x.shape[0],) + (1,) * (x.ndim - 1)  # work with diff dim tensors, not just 2D ConvNets
-    random_tensor = paddle.bernoulli(paddle.full(shape, keep_prob, dtype='float32')).cast(x.dtype)
+    random_tensor = paddle.bernoulli(paddle.full(shape, keep_prob, dtype="float32")).cast(x.dtype)
     if keep_prob > 0.0 and scale_by_keep:
         random_tensor = paddle.divide(random_tensor, paddle.to_tensor(keep_prob))
     return x * random_tensor
@@ -113,7 +115,7 @@ class FlashAttention(nn.Layer):
         assert qkv.dtype in [paddle.float16, paddle.bfloat16]
 
         head_dim = qkv.shape[-1]
-        self.softmax_scale = head_dim**-0.5 # TODO: 需要手动加上
+        self.softmax_scale = head_dim**-0.5  # TODO: 需要手动加上
 
         if cu_seqlens is None:
             batch_size = qkv.shape[0]
@@ -121,9 +123,7 @@ class FlashAttention(nn.Layer):
             if key_padding_mask is None:
                 qkv = rearrange(qkv, "b s ... -> (b s) ...")
                 max_s = seqlen
-                cu_seqlens = paddle.arange(
-                    0, (batch_size + 1) * seqlen, step=seqlen, dtype=paddle.int32
-                )
+                cu_seqlens = paddle.arange(0, (batch_size + 1) * seqlen, step=seqlen, dtype=paddle.int32)
                 output, _ = flash_attn_varlen_qkvpacked(
                     qkv=qkv,
                     cu_seqlens_q=cu_seqlens,
@@ -188,8 +188,8 @@ class InternRMSNorm(nn.Layer):
 
 
 NORM2FN = {
-    'rms_norm': InternRMSNorm,
-    'layer_norm': nn.LayerNorm,
+    "rms_norm": InternRMSNorm,
+    "layer_norm": nn.LayerNorm,
 }
 
 
@@ -203,7 +203,7 @@ class InternVisionEmbeddings(nn.Layer):
 
         self.class_embedding = paddle.create_parameter(
             shape=[1, 1, self.embed_dim], default_initializer=paddle.nn.initializer.Normal(0.0, 1.0), dtype="float32"
-        ) # torch.rand
+        )  # torch.rand
 
         self.patch_embedding = nn.Conv2D(
             in_channels=3, out_channels=self.embed_dim, kernel_size=self.patch_size, stride=self.patch_size
@@ -220,10 +220,17 @@ class InternVisionEmbeddings(nn.Layer):
 
     def _get_pos_embed(self, pos_embed, H, W):
         target_dtype = pos_embed.dtype
-        pos_embed = pos_embed.astype('float32').reshape(
-            [1, self.image_size // self.patch_size, self.image_size // self.patch_size, -1]).transpose([0, 3, 1, 2])
-        pos_embed = F.interpolate(pos_embed, size=(H, W), mode='BICUBIC', align_corners=False). \
-            reshape([1, -1, H * W]).transpose([0, 2, 1]).astype(target_dtype)
+        pos_embed = (
+            pos_embed.astype("float32")
+            .reshape([1, self.image_size // self.patch_size, self.image_size // self.patch_size, -1])
+            .transpose([0, 3, 1, 2])
+        )
+        pos_embed = (
+            F.interpolate(pos_embed, size=(H, W), mode="BICUBIC", align_corners=False)
+            .reshape([1, -1, H * W])
+            .transpose([0, 2, 1])
+            .astype(target_dtype)
+        )
         return pos_embed
 
     def forward(self, pixel_values) -> paddle.Tensor:
@@ -231,15 +238,17 @@ class InternVisionEmbeddings(nn.Layer):
         try:
             patch_embeds = self.patch_embedding(pixel_values)  # shape = [*, channel, width, height]
         except:
-            patch_embeds = self.patch_embedding(pixel_values.astype(target_dtype))  # shape = [*, channel, width, height]
+            patch_embeds = self.patch_embedding(
+                pixel_values.astype(target_dtype)
+            )  # shape = [*, channel, width, height]
         batch_size, _, height, width = patch_embeds.shape
-        patch_embeds = patch_embeds.flatten(2).transpose([0, 2, 1])  #.transpose(1, 2)
+        patch_embeds = patch_embeds.flatten(2).transpose([0, 2, 1])  # .transpose(1, 2)
         class_embeds = self.class_embedding.expand([batch_size, 1, -1]).astype(target_dtype)
         embeddings = paddle.concat([class_embeds, patch_embeds], axis=1)
-        position_embedding = paddle.concat([
-            self.position_embedding[:, :1, :],
-            self._get_pos_embed(self.position_embedding[:, 1:, :], height, width)
-        ], axis=1)
+        position_embedding = paddle.concat(
+            [self.position_embedding[:, :1, :], self._get_pos_embed(self.position_embedding[:, 1:, :], height, width)],
+            axis=1,
+        )
         embeddings = embeddings + position_embedding.astype(target_dtype)
         return embeddings
 
@@ -254,16 +263,16 @@ class InternAttention(nn.Layer):
         self.num_heads = config.num_attention_heads
         self.use_flash_attn = config.use_flash_attn and has_flash_attn
         if config.use_flash_attn and not has_flash_attn:
-            logger.warning_once('Warning: Flash Attention is not available, use_flash_attn is set to False.')
+            logger.warning_once("Warning: Flash Attention is not available, use_flash_attn is set to False.")
 
         self.head_dim = self.embed_dim // self.num_heads
         if self.head_dim * self.num_heads != self.embed_dim:
             raise ValueError(
-                f'embed_dim must be divisible by num_heads (got `embed_dim`: {self.embed_dim} and `num_heads`:'
-                f' {self.num_heads}).'
+                f"embed_dim must be divisible by num_heads (got `embed_dim`: {self.embed_dim} and `num_heads`:"
+                f" {self.num_heads})."
             )
 
-        self.scale = self.head_dim ** -0.5
+        self.scale = self.head_dim**-0.5
         self.qkv = nn.Linear(self.embed_dim, 3 * self.embed_dim, bias_attr=config.qkv_bias)
         self.attn_drop = nn.Dropout(config.attention_dropout)
         self.proj_drop = nn.Dropout(config.dropout)
@@ -284,18 +293,18 @@ class InternAttention(nn.Layer):
         qkv = self.qkv(x).reshape([B, N, 3, self.num_heads, C // self.num_heads]).transpose([2, 0, 3, 1, 4])
         q, k, v = qkv.unbind(0)  # make torchscript happy (cannot use tensor as tuple)
 
-        if self.qk_normalization: # False in 2B/8B, True in 26B
-            B_, H_, N_, D_ = q.shape # (7, 25, 1025, 128)
+        if self.qk_normalization:  # False in 2B/8B, True in 26B
+            B_, H_, N_, D_ = q.shape  # (7, 25, 1025, 128)
             q = self.q_norm(q.transpose([0, 2, 1, 3]).flatten(2, 3)).reshape([B_, N_, H_, D_]).transpose([0, 2, 1, 3])
             k = self.k_norm(k.transpose([0, 2, 1, 3]).flatten(2, 3)).reshape([B_, N_, H_, D_]).transpose([0, 2, 1, 3])
 
         # [7, 16, 1025, 64]
-        #attn = ((q * self.scale) @ k.transpose(-2, -1))
+        # attn = ((q * self.scale) @ k.transpose(-2, -1))
         attn = (q * self.scale) @ k.transpose([0, 1, 3, 2])
         attn = F.softmax(attn, axis=-1)
         attn = self.attn_drop(attn)
 
-        #x = (attn @ v).transpose(1, 2).reshape(B, N, C)
+        # x = (attn @ v).transpose(1, 2).reshape(B, N, C)
         x = (attn @ v).transpose([0, 2, 1, 3]).reshape([B, N, C])
         x = self.proj(x)
         x = self.proj_drop(x)
@@ -304,7 +313,7 @@ class InternAttention(nn.Layer):
 
     def _flash_attn(self, x, key_padding_mask=None, need_weights=False):
         qkv = self.qkv(x)
-        qkv = rearrange(qkv, 'b s (three h d) -> b s three h d', three=3, h=self.num_heads)
+        qkv = rearrange(qkv, "b s (three h d) -> b s three h d", three=3, h=self.num_heads)
 
         if self.qk_normalization:
             q, k, v = paddle.unbind(qkv, axis=2)
@@ -313,12 +322,10 @@ class InternAttention(nn.Layer):
             qkv = paddle.stack([q, k, v], axis=2)
 
         original_dtype = qkv.dtype
-        qkv = qkv.astype('bfloat16')
-        context, _ = self.inner_attn(
-            qkv, key_padding_mask=key_padding_mask, need_weights=need_weights, causal=False
-        )
+        qkv = qkv.astype("bfloat16")
+        context, _ = self.inner_attn(qkv, key_padding_mask=key_padding_mask, need_weights=need_weights, causal=False)
         context = context.astype(original_dtype)
-        outs = self.proj(rearrange(context, 'b s h d -> b s (h d)'))
+        outs = self.proj(rearrange(context, "b s h d -> b s (h d)"))
         outs = self.proj_drop(outs)
         return outs
 
@@ -407,8 +414,9 @@ class InternVisionEncoder(nn.Layer):
         self.config = config
         # stochastic depth decay rule
         dpr = [x.item() for x in np.linspace(0, config.drop_path_rate, config.num_hidden_layers)]
-        self.layers = nn.LayerList([
-            InternVisionEncoderLayer(config, dpr[idx]) for idx in range(config.num_hidden_layers)])
+        self.layers = nn.LayerList(
+            [InternVisionEncoderLayer(config, dpr[idx]) for idx in range(config.num_hidden_layers)]
+        )
         self.enable_recompute = True
 
     def forward(
@@ -455,15 +463,13 @@ class InternVisionEncoder(nn.Layer):
         if not return_dict:
             return tuple(v for v in [hidden_states, encoder_states] if v is not None)
 
-        return BaseModelOutput(
-            last_hidden_state=hidden_states, hidden_states=encoder_states
-        )
+        return BaseModelOutput(last_hidden_state=hidden_states, hidden_states=encoder_states)
 
 
 class InternVisionModel(MixPretrainedModel):
-    main_input_name = 'pixel_values'
+    main_input_name = "pixel_values"
     config_class = InternVisionConfig
-    _no_split_modules = ['InternVisionEncoderLayer']
+    _no_split_modules = ["InternVisionEncoderLayer"]
 
     def __init__(self, config: InternVisionConfig):
         super().__init__(config)
@@ -475,8 +481,10 @@ class InternVisionModel(MixPretrainedModel):
         pos_emb = self.embeddings.position_embedding
         _, num_positions, embed_dim = pos_emb.shape
         cls_emb = pos_emb[:, :1, :]
-        pos_emb = pos_emb[:, 1:, :].reshape([1, old_size // patch_size, old_size // patch_size, -1]).transpose([0, 3, 1, 2])
-        pos_emb = F.interpolate(pos_emb.float(), size=new_size // patch_size, mode='bicubic', align_corners=False)
+        pos_emb = (
+            pos_emb[:, 1:, :].reshape([1, old_size // patch_size, old_size // patch_size, -1]).transpose([0, 3, 1, 2])
+        )
+        pos_emb = F.interpolate(pos_emb.float(), size=new_size // patch_size, mode="bicubic", align_corners=False)
         pos_emb = pos_emb.astype(cls_emb.dtype).reshape([1, embed_dim, -1]).transpose([0, 2, 1])
         pos_emb = paddle.concat([cls_emb, pos_emb], axis=1)
 
@@ -484,7 +492,7 @@ class InternVisionModel(MixPretrainedModel):
             shape=pos_emb.shape, attr=paddle.ParamAttr(initializer=paddle.nn.initializer.Assign(pos_emb))
         )
         self.embeddings.image_size = new_size
-        logger.info('Resized position embeddings from {} to {}'.format(old_size, new_size))
+        logger.info("Resized position embeddings from {} to {}".format(old_size, new_size))
 
     def get_input_embeddings(self):
         return self.embeddings
@@ -493,7 +501,7 @@ class InternVisionModel(MixPretrainedModel):
         self,
         pixel_values=None,
         output_hidden_states=None,
-        return_dict=True, # 默认True
+        return_dict=True,  # 默认True
         pixel_embeds=None,
     ) -> Union[Tuple, BaseModelOutputWithPooling]:
         output_hidden_states = (
@@ -502,7 +510,7 @@ class InternVisionModel(MixPretrainedModel):
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         if pixel_values is None and pixel_embeds is None:
-            raise ValueError('You have to specify pixel_values or pixel_embeds')
+            raise ValueError("You have to specify pixel_values or pixel_embeds")
 
         if pixel_embeds is not None:
             hidden_states = pixel_embeds
@@ -510,7 +518,7 @@ class InternVisionModel(MixPretrainedModel):
             if len(pixel_values.shape) == 4:
                 hidden_states = self.embeddings(pixel_values)
             else:
-                raise ValueError(f'wrong pixel_values size: {pixel_values.shape}')
+                raise ValueError(f"wrong pixel_values size: {pixel_values.shape}")
         encoder_outputs = self.encoder(
             inputs_embeds=hidden_states,
             output_hidden_states=output_hidden_states,

@@ -12,19 +12,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import paddle
+
 from paddlemix.models.qwen2_5_vl import MIXQwen2_5_Tokenizer
-from paddlemix.models.qwen2_5_vl.modeling_qwen2_5_vl import Qwen2_5_VLForConditionalGeneration
+from paddlemix.models.qwen2_5_vl.modeling_qwen2_5_vl import (
+    Qwen2_5_VLForConditionalGeneration,
+)
 from paddlemix.processors.qwen2_5_vl_processing import (
     Qwen2_5_VLImageProcessor,
     Qwen2_5_VLProcessor,
     process_vision_info,
 )
-import paddle
 
 MODEL_NAME = "Qwen/Qwen2.5-VL-3B-Instruct"
 compute_dtype = "bfloat16"
 paddle.set_default_dtype(compute_dtype)
-model = Qwen2_5_VLForConditionalGeneration.from_pretrained(MODEL_NAME, dtype=compute_dtype, attn_implementation="flash_attention_2")
+model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+    MODEL_NAME, dtype=compute_dtype, attn_implementation="flash_attention_2"
+)
 
 image_processor = Qwen2_5_VLImageProcessor()
 tokenizer = MIXQwen2_5_Tokenizer.from_pretrained(MODEL_NAME)

@@ -1,12 +1,28 @@
-import json
-import copy
-import os
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import argparse
+import copy
+import json
+import os
+
 
 def convert_question(caption):
     """将问题转换为模板格式"""
     QUESTION_TEMPLATE = f"<image>Locate {caption}, output its bbox coordinates using JSON format."
     return QUESTION_TEMPLATE
+
 
 def process_data(json_path, image_dir, output_path):
     """处理数据并保存到指定路径"""
@@ -16,19 +32,20 @@ def process_data(json_path, image_dir, output_path):
     new_data = []
     for i in range(len(data)):
         # 提取原始描述并清理
-        raw_caption = data[i]['messages'][0]['content'].split(':')[1].strip()
-        if raw_caption[-1] == '.':
+        raw_caption = data[i]["messages"][0]["content"].split(":")[1].strip()
+        if raw_caption[-1] == ".":
             raw_caption = raw_caption[:-1]
 
         # 深拷贝数据并修改内容
         data_i = copy.deepcopy(data[i])
-        data_i['messages'][0]['content'] = convert_question(raw_caption)
-        data_i['images'][0] = os.path.join(image_dir, os.path.basename(data_i['images'][0]))
+        data_i["messages"][0]["content"] = convert_question(raw_caption)
+        data_i["images"][0] = os.path.join(image_dir, os.path.basename(data_i["images"][0]))
         new_data.append(data_i)
 
     # 保存处理后的数据
-    json.dump(new_data, open(output_path, 'w'), indent=4)
+    json.dump(new_data, open(output_path, "w"), indent=4)
     print(f"处理后的数据已保存到: {output_path}")
+
 
 if __name__ == "__main__":
     # 设置命令行参数

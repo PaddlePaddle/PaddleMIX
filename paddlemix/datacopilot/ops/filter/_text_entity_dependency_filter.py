@@ -13,14 +13,18 @@
 # limitations under the License.
 
 
-from typing import Optional
 from functools import partial
-from ...core import MMDataset, register
+from typing import Optional
+
 import spacy
+
+from ...core import MMDataset, register
 
 # python -m spacy download en_core_web_sm
 
 # Load spaCy model
+
+
 def load_spacy_model(lang: str):
     """
     Load the spaCy model based on the specified language.
@@ -31,13 +35,13 @@ def load_spacy_model(lang: str):
     Returns:
         spacy.Language: An instance of the spaCy language model.
     """
-    if lang == 'en':
+    if lang == "en":
         return spacy.load("en_core_web_sm")  # English
     else:
         raise ValueError(f"Unsupported language: {lang}")
 
 
-def is_entity_dependency_valid(item, nlp, min_dependency_num: int = 1, any_or_all: str = 'any') -> bool:
+def is_entity_dependency_valid(item, nlp, min_dependency_num: int = 1, any_or_all: str = "any") -> bool:
     """
     Check if the entity dependency relationships in the sample meet the specified conditions.
 
@@ -52,16 +56,19 @@ def is_entity_dependency_valid(item, nlp, min_dependency_num: int = 1, any_or_al
         bool: True if the entity dependencies meet the requirements, otherwise False.
     """
     # Get the text content and clean special characters
-    user_conv = '\n\n'.join(
-        ''.join(conversation) for conversation in item['conversations']
-    ).replace('<image>\n', '').replace('\n<image>', '').replace('<image>', '')
+    user_conv = (
+        "\n\n".join("".join(conversation) for conversation in item["conversations"])
+        .replace("<image>\n", "")
+        .replace("\n<image>", "")
+        .replace("<image>", "")
+    )
 
     # Process the text using the spaCy model
     doc = nlp(user_conv)
 
     # Define rules for identifying entities
-    entity_poss = ['NOUN', 'PROPN', 'PRON']  # Nouns, proper nouns, pronouns
-    entity_tags = ['NN', 'NR', 'PN', 'NNS', 'NNP', 'NNPS', 'PRP']
+    entity_poss = ["NOUN", "PROPN", "PRON"]  # Nouns, proper nouns, pronouns
+    entity_tags = ["NN", "NR", "PN", "NNS", "NNP", "NNPS", "PRP"]
 
     # Identify entities and initialize dependency counts
     entity_to_dependency_nums = {}
@@ -71,26 +78,26 @@ def is_entity_dependency_valid(item, nlp, min_dependency_num: int = 1, any_or_al
 
     # Count dependency edges for each entity
     for obj in entity_to_dependency_nums:
-        if obj.dep_ != 'ROOT':  # Exclude root nodes
+        if obj.dep_ != "ROOT":  # Exclude root nodes
             entity_to_dependency_nums[obj] += 1
 
     for token in doc:
         # Skip punctuation
-        if token.pos_ == 'PUNCT':
+        if token.pos_ == "PUNCT":
             continue
 
         # If the token's head is an entity, increment the dependency count
-        if token.head in entity_to_dependency_nums.keys() and token.dep_ != 'ROOT':
+        if token.head in entity_to_dependency_nums.keys() and token.dep_ != "ROOT":
             entity_to_dependency_nums[token.head] += 1
 
     # Get dependency counts for all entities
     dependency_counts = [n for _, n in entity_to_dependency_nums.items()]
 
     # Filtering logic
-    if any_or_all == 'any':
+    if any_or_all == "any":
         # At least one entity must meet the dependency condition
         return any(count >= min_dependency_num for count in dependency_counts)
-    elif any_or_all == 'all':
+    elif any_or_all == "all":
         # All entities must meet the dependency condition
         return all(count >= min_dependency_num for count in dependency_counts)
     else:
@@ -99,10 +106,7 @@ def is_entity_dependency_valid(item, nlp, min_dependency_num: int = 1, any_or_al
 
 @register()
 def text_entity_dependency_filter(
-    dataset: MMDataset, 
-    lang: str = 'en', 
-    min_dependency_num: Optional[int] = 2, 
-    any_or_all: str = 'any'
+    dataset: MMDataset, lang: str = "en", min_dependency_num: Optional[int] = 2, any_or_all: str = "any"
 ) -> MMDataset:
     """
     Filter the dataset based on entity dependency relationships in the samples.
@@ -117,19 +121,19 @@ def text_entity_dependency_filter(
     Returns:
         MMDataset: The filtered dataset.
     """
-    print(f"Filtering samples based on language {lang} and entity dependency condition ({any_or_all}), minimum dependency edges: {min_dependency_num}...")
-    
+    print(
+        f"Filtering samples based on language {lang} and entity dependency condition ({any_or_all}), minimum dependency edges: {min_dependency_num}..."
+    )
+
     # Load the spaCy model (load once)
     nlp = load_spacy_model(lang)
 
     # Create the filter function
-    filter_func = partial(is_entity_dependency_valid, nlp=nlp, min_dependency_num=min_dependency_num, any_or_all=any_or_all)
-    
-    # Apply dataset.filter
-    filtered_dataset = dataset.filter(
-        func=filter_func, 
-        max_workers=8, 
-        progress=True
+    filter_func = partial(
+        is_entity_dependency_valid, nlp=nlp, min_dependency_num=min_dependency_num, any_or_all=any_or_all
     )
-    
+
+    # Apply dataset.filter
+    filtered_dataset = dataset.filter(func=filter_func, max_workers=8, progress=True)
+
     return filtered_dataset

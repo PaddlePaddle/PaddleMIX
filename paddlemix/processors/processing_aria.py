@@ -16,14 +16,14 @@ import inspect
 import logging
 from typing import List, Optional, Union
 
-from paddlenlp.transformers import LlamaTokenizer 
+from paddlenlp.transformers import LlamaTokenizer
 from paddlenlp.transformers.feature_extraction_utils import BatchFeature
 from paddlenlp.transformers.image_utils import ImageInput
 from paddlenlp.transformers.processing_utils import ProcessorMixin
 from paddlenlp.transformers.tokenizer_utils_base import (
     PaddingStrategy,
     PreTokenizedInput,
-    TensorType,       
+    TensorType,
     TextInput,
     TruncationStrategy,
 )
@@ -32,10 +32,12 @@ from ..models.aria.model.vision_processor import AriaVisionProcessor
 
 logger = logging.getLogger(__name__)
 
+
 class AriaLlamaTokenizer(LlamaTokenizer):
     resource_files_names = {
         "vocab_file": "tokenizer.model",
     }
+
 
 class AriaProcessor(ProcessorMixin):
     """
@@ -52,7 +54,6 @@ class AriaProcessor(ProcessorMixin):
     valid_kwargs = ["chat_template", "patch_size", "image_token"]
     image_processor_class = None
     tokenizer_class = "LlamaTokenizer"
-    
 
     def __init__(
         self,
@@ -63,15 +64,13 @@ class AriaProcessor(ProcessorMixin):
         image_token: str = "<|img|>",
     ):
         super().__init__()
-        self.chat_template = chat_template 
+        self.chat_template = chat_template
         if image_processor is None:
             self.image_processor = AriaVisionProcessor(max_image_size=patch_size)
         else:
             self.image_processor = image_processor
         if isinstance(tokenizer, str):
-            self.tokenizer = AriaLlamaTokenizer.from_pretrained(
-                tokenizer, trust_remote_code=True, use_fast=False
-            )
+            self.tokenizer = AriaLlamaTokenizer.from_pretrained(tokenizer, trust_remote_code=True, use_fast=False)
         else:
             self.tokenizer = tokenizer
         if self.tokenizer is not None and self.tokenizer.pad_token is None:
@@ -87,18 +86,12 @@ class AriaProcessor(ProcessorMixin):
             List[PreTokenizedInput],
         ],
         images: ImageInput = None,
-        padding: Union[
-            bool, str, PaddingStrategy
-        ] = False,
-        truncation: Union[
-            bool, str, TruncationStrategy
-        ] = None,
+        padding: Union[bool, str, PaddingStrategy] = False,
+        truncation: Union[bool, str, TruncationStrategy] = None,
         max_length: Optional[int] = None,
         max_image_size: Optional[int] = 980,
         split_image: Optional[bool] = False,
-        return_tensors: Optional[
-            Union[str, TensorType]
-        ] = TensorType.PADDLE,  #PYTORCH,
+        return_tensors: Optional[Union[str, TensorType]] = TensorType.PADDLE,  # PYTORCH,
         return_final_prompts: Optional[bool] = False,
     ) -> BatchFeature:
         """
@@ -151,9 +144,7 @@ class AriaProcessor(ProcessorMixin):
         if isinstance(text, str):
             text = [text]
         elif not isinstance(text, list) and not isinstance(text[0], str):
-            raise ValueError(
-                "Invalid input text. Please provide a string, or a list of strings"
-            )
+            raise ValueError("Invalid input text. Please provide a string, or a list of strings")
         if images is not None:
             image_inputs = self.image_processor(
                 images,
@@ -165,25 +156,16 @@ class AriaProcessor(ProcessorMixin):
 
             num_crops = int(image_inputs.pop("num_crops").numpy()[0])  # 转换为整数
             for prompt in text:
-                prompt_strings.append(
-                    prompt.replace(self.image_token, self.image_token * num_crops)
-                )
-            max_image_size = (
-                max_image_size
-                if max_image_size is not None
-                else self.image_processor.max_image_size
-            )
+                prompt_strings.append(prompt.replace(self.image_token, self.image_token * num_crops))
+            max_image_size = max_image_size if max_image_size is not None else self.image_processor.max_image_size
             if max_image_size == 490:
                 num_image_tokens = 128
             elif max_image_size == 980:
                 num_image_tokens = 256
             else:
-                raise ValueError(
-                    f"max_image_size must be either 490 or 980, got {max_image_size}"
-                )
+                raise ValueError(f"max_image_size must be either 490 or 980, got {max_image_size}")
             prompt_strings = [
-                sample.replace(self.image_token, self.image_token * num_image_tokens)
-                for sample in prompt_strings
+                sample.replace(self.image_token, self.image_token * num_image_tokens) for sample in prompt_strings
             ]
         else:
             image_inputs = {}
@@ -202,15 +184,13 @@ class AriaProcessor(ProcessorMixin):
             )
         else:
             return BatchFeature(data={**text_inputs, **image_inputs})
-    
+
     @staticmethod
     def _extract_kwargs(func: callable, **kwargs) -> dict:
         """
         Extract the kwargs that are valid for the given function.
         """
-        return {
-            k: v for k, v in kwargs.items() if k in inspect.signature(func).parameters
-        }
+        return {k: v for k, v in kwargs.items() if k in inspect.signature(func).parameters}
 
     def save_pretrained(self, save_directory, **kwargs):
         """
@@ -238,15 +218,9 @@ class AriaProcessor(ProcessorMixin):
         """
         Load both the image processor and tokenizer from a pretrained model path.
         """
-        tokenizer_path = (
-            tokenizer_path
-            if tokenizer_path is not None
-            else pretrained_model_name_or_path
-        )
+        tokenizer_path = tokenizer_path if tokenizer_path is not None else pretrained_model_name_or_path
         image_processor_path = (
-            image_processor_path
-            if image_processor_path is not None
-            else pretrained_model_name_or_path
+            image_processor_path if image_processor_path is not None else pretrained_model_name_or_path
         )
         image_processor = AriaVisionProcessor.from_pretrained(
             image_processor_path,
@@ -259,9 +233,7 @@ class AriaProcessor(ProcessorMixin):
             tokenizer = AriaLlamaTokenizer.from_pretrained(
                 tokenizer_path,
                 use_fast=False,
-                **cls._extract_kwargs(
-                    AriaLlamaTokenizer.from_pretrained, **kwargs
-                ),
+                **cls._extract_kwargs(AriaLlamaTokenizer.from_pretrained, **kwargs),
             )
             chat_template = tokenizer.chat_template
         except Exception as e:
@@ -280,9 +252,7 @@ class AriaProcessor(ProcessorMixin):
         refer to the docstring of this method for more information.
         """
         if self.tokenizer is None:
-            raise ValueError(
-                "Tokenizer is not initialized. Please provide a valid tokenizer."
-            )
+            raise ValueError("Tokenizer is not initialized. Please provide a valid tokenizer.")
         return self.tokenizer.batch_decode(*args, **kwargs)
 
     def decode(self, *args, **kwargs):
@@ -291,9 +261,7 @@ class AriaProcessor(ProcessorMixin):
         the docstring of this method for more information.
         """
         if self.tokenizer is None:
-            raise ValueError(
-                "Tokenizer is not initialized. Please provide a valid tokenizer."
-            )
+            raise ValueError("Tokenizer is not initialized. Please provide a valid tokenizer.")
         return self.tokenizer.decode(*args, **kwargs)
 
     @property

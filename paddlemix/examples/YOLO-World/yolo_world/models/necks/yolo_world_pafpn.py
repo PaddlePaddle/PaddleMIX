@@ -55,9 +55,7 @@ class MaxSigmoidAttnBlock(nn.Layer):
                     kernel_size=kernel_size,
                     padding=padding,
                 ),
-                nn.BatchNorm2D(
-                    num_features=embed_channels, momentum=0.03, epsilon=0.001
-                ),
+                nn.BatchNorm2D(num_features=embed_channels, momentum=0.03, epsilon=0.001),
             )
             if embed_channels != in_channels
             else None
@@ -101,9 +99,7 @@ class MaxSigmoidAttnBlock(nn.Layer):
         embed = embed.reshape([B, num_heads, -1, head_channels])
         guide = paddle.transpose(guide, perm=[0, 2, 3, 1])
         attn_weight = paddle.matmul(embed, guide)
-        attn_weight = attn_weight.reshape(
-            [batch, num_heads, height, width, num_embeddings]
-        )
+        attn_weight = attn_weight.reshape([batch, num_heads, height, width, num_embeddings])
 
         attn_weight = attn_weight.max(axis=-1)[0]
         attn_weight = attn_weight / (self.head_channels**0.5)
@@ -144,9 +140,7 @@ class MaxSigmoidCSPLayerWithTwoConv(C2fLayer):
             act=act,
         )
 
-        self.conv1 = BaseConv(
-            in_channels=in_channels, out_channels=2 * self.c, ksize=1, stride=1, act=act
-        )
+        self.conv1 = BaseConv(in_channels=in_channels, out_channels=2 * self.c, ksize=1, stride=1, act=act)
 
         self.conv2 = BaseConv(
             in_channels=(3 + num_blocks) * self.c,
@@ -196,9 +190,7 @@ class ImagePoolingAttentionModule(nn.Layer):
         self.head_channels = embed_channels // num_heads
         self.pool_size = pool_size
         if with_scale:
-            self.scale = self.create_parameter(
-                shape=[1], default_initializer=paddle.nn.initializer.Constant(0.0)
-            )
+            self.scale = self.create_parameter(shape=[1], default_initializer=paddle.nn.initializer.Constant(0.0))
         else:
             self.scale = 1.0
 
@@ -214,20 +206,12 @@ class ImagePoolingAttentionModule(nn.Layer):
                 for in_channels in image_channels
             ]
         )
-        self.query = nn.Sequential(
-            nn.LayerNorm(text_channels), nn.Linear(text_channels, embed_channels)
-        )
-        self.key = nn.Sequential(
-            nn.LayerNorm(embed_channels), nn.Linear(embed_channels, embed_channels)
-        )
-        self.value = nn.Sequential(
-            nn.LayerNorm(embed_channels), nn.Linear(embed_channels, embed_channels)
-        )
+        self.query = nn.Sequential(nn.LayerNorm(text_channels), nn.Linear(text_channels, embed_channels))
+        self.key = nn.Sequential(nn.LayerNorm(embed_channels), nn.Linear(embed_channels, embed_channels))
+        self.value = nn.Sequential(nn.LayerNorm(embed_channels), nn.Linear(embed_channels, embed_channels))
         self.proj = nn.Linear(embed_channels, text_channels)
 
-        self.image_pools = nn.LayerList(
-            [nn.AdaptiveMaxPool2D((pool_size, pool_size)) for _ in range(num_feats)]
-        )
+        self.image_pools = nn.LayerList([nn.AdaptiveMaxPool2D((pool_size, pool_size)) for _ in range(num_feats)])
 
     def forward(self, text_features, image_features):
         B = image_features[0].shape[0]
@@ -235,13 +219,9 @@ class ImagePoolingAttentionModule(nn.Layer):
         num_patches = self.pool_size**2
         mlvl_image_features = [
             pool(proj(x)).view(B, -1, num_patches)
-            for (x, proj, pool) in zip(
-                image_features, self.projections, self.image_pools
-            )
+            for (x, proj, pool) in zip(image_features, self.projections, self.image_pools)
         ]
-        mlvl_image_features = paddle.transpose(
-            paddle.concat(mlvl_image_features, axis=-1), perm=[0, 2, 1]
-        )
+        mlvl_image_features = paddle.transpose(paddle.concat(mlvl_image_features, axis=-1), perm=[0, 2, 1])
         q = self.query(text_features)
         k = self.key(mlvl_image_features)
         v = self.value(mlvl_image_features)
@@ -310,9 +290,7 @@ class YOLOWorldPAFPN(nn.Layer):
         )
 
         # bottom-up
-        self.downsample_layers_0 = BaseConv(
-            in_channels[0], in_channels[0], 3, stride=2, act=act
-        )
+        self.downsample_layers_0 = BaseConv(in_channels[0], in_channels[0], 3, stride=2, act=act)
 
         self.bottom_up_layers_0 = MaxSigmoidCSPLayerWithTwoConv(
             in_channels=self._out_channels[0] + in_channels[1],
@@ -324,9 +302,7 @@ class YOLOWorldPAFPN(nn.Layer):
             shortcut=False,
         )
 
-        self.downsample_layers_1 = BaseConv(
-            in_channels[1], in_channels[1], 3, stride=2, act=act
-        )
+        self.downsample_layers_1 = BaseConv(in_channels[1], in_channels[1], 3, stride=2, act=act)
 
         self.bottom_up_layers_1 = MaxSigmoidCSPLayerWithTwoConv(
             in_channels=self._out_channels[1] + in_channels[2],

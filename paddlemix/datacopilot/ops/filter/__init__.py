@@ -31,4 +31,3 @@ from ._word_ngram_repetition_filter import is_word_ngram_valid
 # from ._ensemble import ensemble
 # from ._iqa_arniqa import iqa_arniqa, tag_arniqa
 # from ._iqa_brisque import iqa_brisque, tag_brisque
-

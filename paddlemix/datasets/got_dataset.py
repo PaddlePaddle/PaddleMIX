@@ -17,21 +17,21 @@ import json
 import logging
 import random
 from typing import Dict
+
 import paddle
-from paddle import Tensor
 import paddlenlp
+from paddle import Tensor
 from PIL import Image, ImageFile
+
 ImageFile.LOAD_TRUNCATED_IMAGES = True
-from ..models.GOT.utils.conversation import (
-    SeparatorStyle,
-    conv_mpt,
-)
 from dataclasses import dataclass
 from functools import partial
 from typing import List, Union
+
 from megfile import smart_glob
 from natsort import natsorted
 
+from ..models.GOT.utils.conversation import SeparatorStyle, conv_mpt
 
 IGNORE_INDEX = -100
 CONTROLLER_HEART_BEAT_EXPIRATION = 30
@@ -101,13 +101,13 @@ class ConversationDataset(BaseDataset):
         # for name_all in datasets.split("+"):
         #    for name in got_data_dict[name_all]:
         ds_collections = json.loads(open(meta_path).read())
-        #ds_collections = json.load(open(meta_path, 'r'))
+        # ds_collections = json.load(open(meta_path, 'r'))
         for ds_idx, ds_name in enumerate(ds_collections.keys()):
             # dataset = CONVERSATION_DATA[ds_name]
             dataset = ds_collections[ds_name]
 
             data_path = dataset["annotations"]
-            #image_root = dataset["images"]
+            # image_root = dataset["images"]
             if data_path.endswith(".json"):
                 data = json.load(open(data_path, "r"))
             elif data_path.endswith(".jsonl"):

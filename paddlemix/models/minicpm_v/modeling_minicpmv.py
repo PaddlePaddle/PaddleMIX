@@ -14,9 +14,7 @@
 
 import json
 import math
-import sys
 from copy import deepcopy
-from datetime import datetime
 from threading import Thread
 
 import numpy as np
@@ -25,13 +23,13 @@ from paddlenlp.generation import TextIteratorStreamer
 from paddlenlp.transformers import Qwen2ForCausalLM, Qwen2PretrainedModel
 from PIL import Image
 
+from paddlemix.models.flash_attn_utils import is_flash_attn_available
 from paddlemix.processors.image_processing_minicpmv import MiniCPMVImageProcessor
 from paddlemix.processors.processing_minicpmv import MiniCPMVProcessor
 
 from .configuration_minicpm import MiniCPMVConfig
 from .modeling_navit_siglip import SigLipVisionTransformer
 from .resampler import Resampler
-from paddlemix.models.flash_attn_utils import is_flash_attn_available
 
 
 class MiniCPMVPreTrainedModel(Qwen2PretrainedModel):
@@ -72,8 +70,7 @@ class MiniCPMV(MiniCPMVPreTrainedModel):
     def init_vision_module(self):
 
         if is_flash_attn_available():
-            self.config.vision_config._attn_implementation = (
-                    'flash_attention_2')
+            self.config.vision_config._attn_implementation = "flash_attention_2"
         else:
             self.config.vision_config._attn_implementation = "eager"
         model = SigLipVisionTransformer(self.config.vision_config)
@@ -138,7 +135,7 @@ class MiniCPMV(MiniCPMVPreTrainedModel):
                     patch_attn_mask = paddle.zeros([B, 1, max_patches], dtype="bool")
                     for i in range(B):
                         patch_attn_mask[i, 0, : tgt_sizes[i][0] * tgt_sizes[i][1]] = True
-            
+
                     vision_embedding = self.vpm(
                         paddle.to_tensor(all_pixel_values).cast(dtype),
                         patch_attention_mask=patch_attn_mask,
@@ -225,13 +222,13 @@ class MiniCPMV(MiniCPMVPreTrainedModel):
     def _decode(self, inputs_embeds, tokenizer, attention_mask, decode_text=False, **kwargs):
         terminators = [tokenizer.convert_tokens_to_ids(i) for i in self.terminators]
 
-        ###  must add position_ids, paddlenlp bug
+        #  must add position_ids, paddlenlp bug
         batch_size, seq_length = attention_mask.shape
         position_ids = paddle.arange(seq_length).expand((batch_size, seq_length))
-        ###
+        #
 
         output = self.llm.generate(
-            position_ids=position_ids,  ####
+            position_ids=position_ids,
             inputs_embeds=inputs_embeds,  # [1, 359, 3584] sum -7040  mean -0.00546265
             pad_token_id=0,
             eos_token_id=terminators,  # [151645, 151643]

@@ -400,7 +400,7 @@ class MiniMonkeyChatModel(MixPretrainedModel):
             input_embeds = self.language_model.get_input_embeddings()(input_ids)
 
         if use_scm:
-            self.language_model.model.img_idx = paddle.where(selected == True)
+            self.language_model.model.img_idx = paddle.where(selected)
             self.language_model.model.high_token = (
                 target_aspect_ratio[0] * target_aspect_ratio[1] * self.num_image_token
             )

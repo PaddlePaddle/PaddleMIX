@@ -13,38 +13,42 @@
 # limitations under the License.
 
 
+import functools
 import time
 import warnings
-import functools
 
-__all__ = ['deprecated', 'retry']
+__all__ = ["deprecated", "retry"]
 
 
-def deprecated(message=''):
+def deprecated(message=""):
     def decorator(func):
         """
-        This is a decorator which can be used to mark functions as deprecated. 
+        This is a decorator which can be used to mark functions as deprecated.
         It will result in a warning being emitted when the function is used.
 
         :param message: extra message to submit.
         """
+
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            warnings.simplefilter('always', DeprecationWarning) # turn off filter
+            warnings.simplefilter("always", DeprecationWarning)  # turn off filter
             warnings.warn(
-                f"Call to deprecated function `{func.__name__}`. {message}",
-                category=DeprecationWarning,
-                stacklevel=2
+                f"Call to deprecated function `{func.__name__}`. {message}", category=DeprecationWarning, stacklevel=2
             )
-            warnings.simplefilter('default', DeprecationWarning) # reset filter
+            warnings.simplefilter("default", DeprecationWarning)  # reset filter
             return func(*args, **kwargs)
-        
+
         return wrapper
+
     return decorator
 
 
-
-def retry(max_trials: int=3, delay: float=0.1, verbose: bool=True, suppress_exceptions: bool=True,):
+def retry(
+    max_trials: int = 3,
+    delay: float = 0.1,
+    verbose: bool = True,
+    suppress_exceptions: bool = True,
+):
     """
     A decorator for retrying a function call with a specified delay in case of an exception.
     If the maximum number of attempts is reached, it will return None or the default return value if specified.
@@ -55,6 +59,7 @@ def retry(max_trials: int=3, delay: float=0.1, verbose: bool=True, suppress_exce
     :param verbose: If True, print the details of each attempt.
     :param suppress_exceptions: If True, suppress all exceptions and return None instead of raising.
     """
+
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
@@ -76,5 +81,7 @@ def retry(max_trials: int=3, delay: float=0.1, verbose: bool=True, suppress_exce
                 return None
             else:
                 raise Exception(f"Function {func.__name__} failed after {max_trials} attempts with {exceptions}.")
+
         return wrapper
+
     return decorator

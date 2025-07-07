@@ -13,17 +13,18 @@
 # limitations under the License.
 
 import pathlib
-import sys
-import numpy as np
+
 import paddle
 import yaml
 
-from librosa.filters import mel as librosa_mel_fn
-
 from paddlemix.models.diffsinger.basics.base_vocoder import BaseVocoder
 from paddlemix.models.diffsinger.modules.vocoders.registry import register_vocoder
+
+# from paddlemix.models.diffsinger.utils import paddle_aux
 from paddlemix.models.diffsinger.utils.hparams import hparams
-from paddlemix.models.diffsinger.utils import paddle_aux
+
+# from librosa.filters import mel as librosa_mel_fn
+
 
 class DotDict(dict):
     def __getattr__(*args):

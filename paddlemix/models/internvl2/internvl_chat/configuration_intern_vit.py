@@ -14,8 +14,11 @@
 
 import os
 from typing import Union
+
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
+
 from paddlemix.utils.log import logger
+
 
 class InternVisionConfig(PretrainedConfig):
     r"""
@@ -63,7 +66,7 @@ class InternVisionConfig(PretrainedConfig):
             A factor for layer scale.
     """
 
-    model_type = 'intern_vit_6b'
+    model_type = "intern_vit_6b"
 
     def __init__(
         self,
@@ -77,8 +80,8 @@ class InternVisionConfig(PretrainedConfig):
         qk_normalization=True,
         num_hidden_layers=48,
         use_flash_attn=True,
-        hidden_act='gelu',
-        norm_type='rms_norm',
+        hidden_act="gelu",
+        norm_type="rms_norm",
         layer_norm_eps=1e-6,
         dropout=0.0,
         drop_path_rate=0.0,
@@ -109,16 +112,16 @@ class InternVisionConfig(PretrainedConfig):
         self.use_flash_attn = use_flash_attn
 
     @classmethod
-    def from_pretrained(cls, pretrained_model_name_or_path: Union[str, os.PathLike], **kwargs) -> 'PretrainedConfig':
+    def from_pretrained(cls, pretrained_model_name_or_path: Union[str, os.PathLike], **kwargs) -> "PretrainedConfig":
         config_dict, kwargs = cls.get_config_dict(pretrained_model_name_or_path, **kwargs)
 
-        if 'vision_config' in config_dict:
-            config_dict = config_dict['vision_config']
+        if "vision_config" in config_dict:
+            config_dict = config_dict["vision_config"]
 
-        if 'model_type' in config_dict and hasattr(cls, 'model_type') and config_dict['model_type'] != cls.model_type:
+        if "model_type" in config_dict and hasattr(cls, "model_type") and config_dict["model_type"] != cls.model_type:
             logger.warning(
                 f"You are using a model of type {config_dict['model_type']} to instantiate a model of type "
-                f'{cls.model_type}. This is not supported for all configurations of models and can yield errors.'
+                f"{cls.model_type}. This is not supported for all configurations of models and can yield errors."
             )
 
         return cls.from_dict(config_dict, **kwargs)

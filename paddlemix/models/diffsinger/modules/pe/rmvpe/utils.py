@@ -12,14 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import sys
 
 import librosa
 import numpy as np
 import paddle
-import paddle_aux
 
-from .constants import *
+from .constants import CONST, N_CLASS
 
 
 def to_local_average_f0(hidden, center=None, thred=0.03):

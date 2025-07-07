@@ -20,29 +20,31 @@ class PaddleXLayoutParser(object):
     def __init__(self, gpu_id=0):
         self.gpu_id = gpu_id
         self._pipeline = None
-        
+
     @property
-    def default_pipeline(self, ):
+    def default_pipeline(
+        self,
+    ):
         if self._pipeline is None:
             self._pipeline = self.new_pipeline(self.gpu_id)
         return self._pipeline
 
     def new_pipeline(self, gpu_id):
         from paddlex import create_pipeline
+
         pipeline = create_pipeline(pipeline="layout_parsing", device=f"gpu:{gpu_id}")
         return pipeline
-    
+
     def process_image(self, image_path, pipeline=None):
         if pipeline is None:
             pipeline = self.default_pipeline
 
         output = pipeline.predict(image_path)
         try:
-            n = 0
             for res in output:
                 # res.print()  # 打印预测的结构化输出
                 res_json = res.json
-                set_img_to_empty(res_json) #不包含图片的OCR版面信息
+                set_img_to_empty(res_json)  # 不包含图片的OCR版面信息
                 return res_json
         except Exception as e:
             print(f"{e}")
@@ -53,9 +55,9 @@ class PaddleXLayoutParser(object):
 
     def process_images(self, image_paths, num_gpus=1, processes_per_gpu=1):
         # 将图片文件分配到每个GPU和进程
-        q=multiprocessing.Queue()
+        q = multiprocessing.Queue()
         chunk_size = len(image_paths) // (num_gpus * processes_per_gpu)
-        chunks = [image_paths[i:i + chunk_size] for i in range(0, len(image_paths), chunk_size)]
+        chunks = [image_paths[i : i + chunk_size] for i in range(0, len(image_paths), chunk_size)]
 
         # 创建多进程
         processes = []
@@ -76,7 +78,7 @@ class PaddleXLayoutParser(object):
 
         return results
 
-    
+
 def set_img_to_empty(d):
     for k, v in d.items():
         if isinstance(v, dict):
@@ -86,15 +88,13 @@ def set_img_to_empty(d):
                 if isinstance(item, dict):
                     set_img_to_empty(item)
                 else:
-                    if k == 'img':
+                    if k == "img":
                         d[k] = None
         else:
-            if k == 'img':
+            if k == "img":
                 d[k] = None
 
 
-
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     pass
-

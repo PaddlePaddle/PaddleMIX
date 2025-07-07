@@ -36,8 +36,8 @@ res = model.chat(
 )
 print(res)
 
-## if you want to use streaming, please make sure sampling=True and stream=True
-## the model.chat will return a generator
+# if you want to use streaming, please make sure sampling=True and stream=True
+# the model.chat will return a generator
 res = model.chat(
     image=None,
     msgs=msgs,

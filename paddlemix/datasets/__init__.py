@@ -14,6 +14,8 @@
 
 # Standard imports
 
+import pkg_resources
+
 # Local imports
 from .caption_dataset import *
 from .chatml_dataset import *
@@ -24,11 +26,9 @@ from .dataset import *
 from .mixtoken_dataset import *
 from .vg_caption import *
 
-import pkg_resources
-
-version = pkg_resources.get_distribution("paddlenlp").version   
+version = pkg_resources.get_distribution("paddlenlp").version
 try:
-    if version.startswith('3'):
+    if version.startswith("3"):
         from .internvl_dataset import *
     else:
         print(f"paddlenlp version {version} is not 3.x, skipping import internvl2 datasets.")

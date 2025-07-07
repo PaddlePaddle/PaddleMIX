@@ -38,7 +38,7 @@ wget https://paddlenlp.bj.bcebos.com/wheels/paddlenlp_ops-ci-py3-none-any.whl -O
 pip install paddlenlp_ops-0.0.0-py3-none-any.whl
 ```
 
-3） paddlenlp_ops预编译包安装表格，根据paddlenlp、CUDA版本选择配套paddlenlp_ops 
+3） paddlenlp_ops预编译包安装表格，根据paddlenlp、CUDA版本选择配套paddlenlp_ops
 
 <table class="docutils">
     <thead>
@@ -130,5 +130,5 @@ python -m paddle.distributed.launch --gpus "0,1" deploy/ppdocbee2/ppdocbee2_infe
     --llm_mode static \
     --dtype bfloat16 \
     --output_via_mq False \
-    --benchmark True 
+    --benchmark True
 ```

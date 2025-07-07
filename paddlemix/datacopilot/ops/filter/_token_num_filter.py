@@ -13,10 +13,9 @@
 # limitations under the License.
 
 
-import os
 import sys
 from typing import Optional
-from functools import partial
+
 from ...core import MMDataset, register
 
 
@@ -38,10 +37,10 @@ def compute_token_count(user_conv: str, tokenizer) -> int:
 
 @register()
 def token_num_filter(
-    dataset: MMDataset, 
-    tokenizer_model: str = "Qwen/Qwen2.5-7B", 
-    min_tokens: Optional[int] = 10, 
-    max_tokens: Optional[int] = sys.maxsize
+    dataset: MMDataset,
+    tokenizer_model: str = "Qwen/Qwen2.5-7B",
+    min_tokens: Optional[int] = 10,
+    max_tokens: Optional[int] = sys.maxsize,
 ) -> MMDataset:
     """
     Filter the dataset based on the number of tokens in each sample.
@@ -59,13 +58,16 @@ def token_num_filter(
 
     # Initialize the tokenizer
     from paddlenlp.transformers import AutoTokenizer
+
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_model)
 
     def filter_func(item):
         # Get and clean conversation text
-        user_conv = '\n\n'.join(
-            ''.join(conversation) for conversation in item['conversations']
-        ).replace('<image>', '').replace('\n', '')  # Clean `<image>` tags and newlines
+        user_conv = (
+            "\n\n".join("".join(conversation) for conversation in item["conversations"])
+            .replace("<image>", "")
+            .replace("\n", "")
+        )  # Clean `<image>` tags and newlines
 
         # Compute the number of tokens
         num_tokens = compute_token_count(user_conv, tokenizer)
@@ -74,10 +76,6 @@ def token_num_filter(
         return min_tokens <= num_tokens <= max_tokens
 
     # Apply dataset.filter
-    filtered_dataset = dataset.filter(
-        func=filter_func, 
-        max_workers=8, 
-        progress=True
-    )
-    
+    filtered_dataset = dataset.filter(func=filter_func, max_workers=8, progress=True)
+
     return filtered_dataset

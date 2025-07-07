@@ -491,7 +491,7 @@ def create_attention_mask_predict_next(
                 pad_end_idx = pad_end_idx[0][-1]
                 # tokens after start of image(soi) token can not see any tokens before soi
                 mask_text[i][pad_end_idx + 1 :, : pad_end_idx + 1] = 0
-            id_padding = paddle.where(is_padding[i] == True)
+            id_padding = paddle.where(is_padding[i])
             if not id_padding[0].shape[0] == 0:
                 mask_text_image_bi[i][sid_img[i] :, id_padding[0]] = 0
                 # text image mask, tokens after pad token can't not see text pad tokens
@@ -518,7 +518,7 @@ def create_attention_mask_lvg(sequence, pad_id=128256, soi_id=128257, eoi_id=128
     sid_img_for_bi = paddle.where(sequence == soi_id)[1].reshape(tuple(mask_text_image_bi.shape)[0], -1)
     eid_img_for_bi = paddle.where(sequence == eoi_id)[1].reshape(tuple(mask_text_image_bi.shape)[0], -1)
     for i in range(N):
-        id_padding = paddle.where(is_padding[i] == True)
+        id_padding = paddle.where(is_padding[i])
         mask_text_image_bi[i][sid_img[i] :, id_padding[0]] = 0
         for j in range(tuple(sid_img_for_bi.shape)[-1]):
             mask_text_image_bi[i][
@@ -566,7 +566,7 @@ def create_attention_mask_lvg_v2(
     mask_text_image_bi = mask_text_image_bi * all_zeros
     sid_img = paddle.where(sequence == soi_id)[1].reshape(tuple(mask_text_image_bi.shape)[0], -1)[:, 0]
     for i in range(N):
-        id_padding = paddle.where(is_padding[i] == True)
+        id_padding = paddle.where(is_padding[i])
         mask_text_image_bi[i][sid_img[i] :, id_padding[0]] = 0
         for j in range(tuple(sid_img_for_bi.shape)[-1]):
             mask_text_image_bi[i][

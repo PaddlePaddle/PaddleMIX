@@ -89,11 +89,9 @@ class VQADataset(DatasetBuilder):
         annotations = []
         if mode == "val" or mode == "test":
             annotations = json.load(open(anno_path[0]))
-            image_ids = self._gen_image_id_eval(annotations)
         else:
             for ann_p in anno_path:
                 annotations.extend(json.load(open(ann_p, "r")))
-            image_ids = self._gen_image_id(annotations)
         for ann in annotations:
             image_path = os.path.join(image_root, ann["image"])
             if mode == "train":

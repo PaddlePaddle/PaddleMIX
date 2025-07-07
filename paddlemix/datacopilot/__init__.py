@@ -13,13 +13,5 @@
 # limitations under the License.
 
 
-from .core import (
-    SCHEMA,
-    MMDataset, 
-    ParallelMode,
-    is_valid_schema,
-)
-
-from . import core
-from . import ops
-from . import nn
+from . import core, nn, ops
+from .core import SCHEMA, MMDataset, ParallelMode, is_valid_schema

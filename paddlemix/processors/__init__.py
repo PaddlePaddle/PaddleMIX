@@ -31,13 +31,13 @@ from .llava_processing import *
 from .minigpt4_image_processing import *
 from .minigpt4_processing import *
 from .mplugowl3_processing import *
+from .processing_aria import AriaProcessor
 from .processing_minicpmv import *
+from .qwen2_5_omni_processing import *
+from .qwen2_5_vl_processing import *
 from .qwen2_vl_processing import *
 from .qwen_vl_processing import *
-from .qwen2_5_vl_processing import *
-from .qwen2_5_omni_processing import *
 from .sam_processing import *
 from .tokenizer import SimpleTokenizer, tokenize
 from .visualglm_image_processing import *
 from .visualglm_processing import *
-from .processing_aria import AriaProcessor
