@@ -61,24 +61,16 @@ class GroupedGemmLoraLayer(paddle.nn.Layer, LoraLayer):
         use_dora: bool = False,
     ):
         if r <= 0:
-            raise ValueError(
-                f"`r` should be a positive integer value but the value passed is {r}"
-            )
+            raise ValueError(f"`r` should be a positive integer value but the value passed is {r}")
         self.r[adapter_name] = r
         self.lora_alpha[adapter_name] = lora_alpha
         if lora_dropout > 0.0:
             lora_dropout_layer = paddle.nn.Dropout(p=lora_dropout)
         else:
             lora_dropout_layer = paddle.nn.Identity()
-        self.lora_dropout.update(
-            paddle.nn.LayerDict(sublayers={adapter_name: lora_dropout_layer})
-        )
-        self.lora_A[adapter_name] = GroupedGEMM(
-            self.in_features, r, self.base_layer.groups
-        )
-        self.lora_B[adapter_name] = GroupedGEMM(
-            r, self.out_features, self.base_layer.groups
-        )
+        self.lora_dropout.update(paddle.nn.LayerDict(sublayers={adapter_name: lora_dropout_layer}))
+        self.lora_A[adapter_name] = GroupedGEMM(self.in_features, r, self.base_layer.groups)
+        self.lora_B[adapter_name] = GroupedGEMM(r, self.out_features, self.base_layer.groups)
         self.scaling[adapter_name] = lora_alpha / r
         if init_lora_weights:
             self.reset_lora_parameters(adapter_name, init_lora_weights)
@@ -98,9 +90,7 @@ class GroupedGemmLoraLayer(paddle.nn.Layer, LoraLayer):
                 self.unmerge()
             result = self.base_layer(x, *args, **kwargs)
         elif adapter_names is not None:
-            result = self._mixed_batch_forward(
-                x, *args, adapter_names=adapter_names, **kwargs
-            )
+            result = self._mixed_batch_forward(x, *args, adapter_names=adapter_names, **kwargs)
         elif self.merged:
             result = self.base_layer(x, *args, **kwargs)
         else:
@@ -115,11 +105,7 @@ class GroupedGemmLoraLayer(paddle.nn.Layer, LoraLayer):
                 scaling = self.scaling[active_adapter]
                 x = x.to(lora_A.weight.dtype)
                 if not self.use_dora[active_adapter]:
-                    result = (
-                        result
-                        + lora_B(lora_A(dropout(x), *args, **kwargs), *args, **kwargs)
-                        * scaling
-                    )
+                    result = result + lora_B(lora_A(dropout(x), *args, **kwargs), *args, **kwargs) * scaling
                 else:
                     x = dropout(x)
                     result = result + self.lora_magnitude_vector[active_adapter](
@@ -132,9 +118,7 @@ class GroupedGemmLoraLayer(paddle.nn.Layer, LoraLayer):
             result = result.to(torch_result_dtype)
         return result
 
-    def merge(
-        self, safe_merge: bool = False, adapter_names: Optional[list[str]] = None
-    ) -> None:
+    def merge(self, safe_merge: bool = False, adapter_names: Optional[list[str]] = None) -> None:
         """
         Merge the active adapter weights into the base weights
 

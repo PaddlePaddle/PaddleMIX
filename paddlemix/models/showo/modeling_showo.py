@@ -43,10 +43,10 @@ class Showo(ModelMixin, ConfigMixin):
         if load_from_showo:
             from .phi import PhiConfig
 
-            config = PhiConfig.from_pretrained(llm_model_path,**kwargs)
-            self.showo = PhiForCausalLM(config).to(dtype=kwargs['dtype'])
+            config = PhiConfig.from_pretrained(llm_model_path, **kwargs)
+            self.showo = PhiForCausalLM(config).to(dtype=kwargs["dtype"])
         else:
-            self.showo = PhiForCausalLM.from_pretrained(llm_model_path,**kwargs)
+            self.showo = PhiForCausalLM.from_pretrained(llm_model_path, **kwargs)
 
         self.showo.resize_token_embeddings(self.vocab_size)
         self.output_size = self.vocab_size

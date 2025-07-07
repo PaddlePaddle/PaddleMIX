@@ -49,7 +49,7 @@ CUDA_VISIBLE_DEVICES=0 python inference.py \
 ### 参考文献
 ```BibTeX
 @article{aria,
-  title={Aria: An Open Multimodal Native Mixture-of-Experts Model}, 
+  title={Aria: An Open Multimodal Native Mixture-of-Experts Model},
   author={Dongxu Li and Yudong Liu and Haoning Wu and Yue Wang and Zhiqi Shen and Bowen Qu and Xinyao Niu and Guoyin Wang and Bei Chen and Junnan Li},
   year={2024},
   journal={arXiv preprint arXiv:2410.05993},

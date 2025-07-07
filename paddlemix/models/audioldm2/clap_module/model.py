@@ -12,18 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import logging
+from dataclasses import dataclass
 from typing import Callable, Optional
 
 import numpy as np
 import paddle
-import paddle.nn.functional as F
 import paddle.nn as nn
-from dataclasses import dataclass
-
-import logging
+import paddle.nn.functional as F
+from paddlenlp.transformers import BartModel, BertModel, RobertaModel
 
 from .htsat_model import create_htsat_model
-from paddlenlp.transformers import RobertaModel, BertModel, BartModel
 
 
 class MLPLayers(nn.Layer):
@@ -44,6 +43,7 @@ class MLPLayers(nn.Layer):
     def forward(self, X):
         X = self.sequential(X)
         return X
+
 
 class ResidualAttentionBlock(nn.Layer):
     def __init__(self, d_model: int, n_head: int, act_layer: Callable = nn.GELU):
@@ -68,23 +68,19 @@ class ResidualAttentionBlock(nn.Layer):
 
 
 class Transformer(nn.Layer):
-    def __init__(
-        self, width: int, layers: int, heads: int, act_layer: Callable = nn.GELU
-    ):
+    def __init__(self, width: int, layers: int, heads: int, act_layer: Callable = nn.GELU):
         super().__init__()
         self.width = width
         self.layers = layers
         self.resblocks = nn.LayerList(
-            [
-                ResidualAttentionBlock(width, heads, act_layer=act_layer)
-                for _ in range(layers)
-            ]
+            [ResidualAttentionBlock(width, heads, act_layer=act_layer) for _ in range(layers)]
         )
 
     def forward(self, x: paddle.Tensor, attn_mask: Optional[paddle.Tensor] = None):
         for r in self.resblocks:
             x = r(x, attn_mask=attn_mask)
         return x
+
 
 # Audio Config Class
 @dataclass
@@ -101,6 +97,7 @@ class CLAPAudioCfg:
     mel_bins: int = 64
     clip_samples: int = 480000
 
+
 @dataclass
 class CLAPTextCfg:
     context_length: int = 77
@@ -109,6 +106,7 @@ class CLAPTextCfg:
     heads: int = 8
     layers: int = 12
     model_type: str = "roberta"
+
 
 class CLAP(nn.Layer):
     def __init__(
@@ -151,9 +149,7 @@ class CLAP(nn.Layer):
         if audio_cfg.model_type == "PANN":
             raise ValueError("PANN has not been implemented.")
         elif audio_cfg.model_type == "HTSAT":
-            self.audio_branch = create_htsat_model(
-                audio_cfg, enable_fusion, fusion_type
-            )
+            self.audio_branch = create_htsat_model(audio_cfg, enable_fusion, fusion_type)
         else:
             logging.error(f"Model config for {audio_cfg.model_type} not found")
             raise RuntimeError(f"Model config for {audio_cfg.model_type} not found.")
@@ -173,7 +169,7 @@ class CLAP(nn.Layer):
             self.positional_embedding = paddle.create_parameter(
                 shape=positional_embedding.shape,
                 dtype=str(positional_embedding.numpy().dtype),
-                default_initializer=nn.initializer.Assign(positional_embedding)
+                default_initializer=nn.initializer.Assign(positional_embedding),
             )
             # self.ln_final = LayerNorm(text_cfg.width)
             self.ln_final = nn.LayerNorm(text_cfg.width)
@@ -259,23 +255,24 @@ class CLAP(nn.Layer):
             nn.Linear(self.joint_embed_shape, self.joint_embed_shape),
         )
 
-        self.logit_scale_a = paddle.create_parameter([],"float32",default_initializer=nn.initializer.Assign(paddle.ones([])*np.log(1 / 0.07)))
-        self.logit_scale_t = paddle.create_parameter([],"float32",default_initializer=nn.initializer.Assign(paddle.ones([])*np.log(1 / 0.07)))
+        self.logit_scale_a = paddle.create_parameter(
+            [], "float32", default_initializer=nn.initializer.Assign(paddle.ones([]) * np.log(1 / 0.07))
+        )
+        self.logit_scale_t = paddle.create_parameter(
+            [], "float32", default_initializer=nn.initializer.Assign(paddle.ones([]) * np.log(1 / 0.07))
+        )
         self.register_buffer("attn_mask", self.build_attention_mask(), persistable=False)
 
     def build_attention_mask(self):
 
         mask = paddle.empty([self.context_length, self.context_length]) * float("-inf")
         # mask.fill_(float("-inf"))
-        mask = paddle.triu(mask, 1)   # zero out the lower diagonal
+        mask = paddle.triu(mask, 1)  # zero out the lower diagonal
         # mask.triu_(1)  # zero out the lower diagonal
         return mask
 
     def encode_audio(self, audio):
-        return self.audio_branch(
-            audio, mixup_lambda=None
-        )  # mix lambda needs to add
-
+        return self.audio_branch(audio, mixup_lambda=None)  # mix lambda needs to add
 
     def encode_text(self, text):
         if self.text_branch_type == "transformer":
@@ -336,12 +333,8 @@ class CLAP(nn.Layer):
         elif audio is None:
             return self.encode_text(text)
         elif text is None:
-            return self.audio_projection(
-                self.encode_audio(audio)["embedding"]
-            )
-        audio_features = self.audio_projection(
-            self.encode_audio(audio)["embedding"]
-        )
+            return self.audio_projection(self.encode_audio(audio)["embedding"])
+        audio_features = self.audio_projection(self.encode_audio(audio)["embedding"])
         audio_features = F.normalize(audio_features, axis=-1)
 
         text_features = self.encode_text(text)
@@ -395,9 +388,7 @@ class CLAP(nn.Layer):
             a tensor of audio_embeds (N, D)
 
         """
-        audio_embeds = self.audio_projection(
-            self.encode_audio(data)["embedding"]
-        )
+        audio_embeds = self.audio_projection(self.encode_audio(data)["embedding"])
         audio_embeds = F.normalize(audio_embeds, axis=-1)
 
         return audio_embeds

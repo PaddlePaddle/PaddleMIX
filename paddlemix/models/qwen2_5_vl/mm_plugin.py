@@ -26,6 +26,7 @@ from paddlenlp.transformers.tokenizer_utils import PretrainedTokenizer
 from PIL import Image
 from PIL.Image import Image as ImageObject
 from typing_extensions import override
+
 from paddlemix.processors.processing_utils import BaseImageProcessor
 
 IGNORE_INDEX = -100
@@ -336,6 +337,7 @@ PLUGINS = {
     "base": BasePlugin,
     "qwen2_5_vl": Qwen2_5_vlPlugin,
 }
+
 
 def get_mm_plugin(
     name: str,

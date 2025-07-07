@@ -12,13 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import paddle
 import math
 import warnings
 from typing import List, Optional, Tuple
+
+import paddle
 from paddle import nn
+from paddle.nn.functional import linear, pad
 from paddlenlp.transformers.activations import ACT2FN
-from paddle.nn.functional import pad, linear
 
 
 class FFN(paddle.nn.Layer):
@@ -33,18 +34,15 @@ class FFN(paddle.nn.Layer):
 
     def __init__(self, embed_dim, ff_dim, output_dim):
         super().__init__()
-        self.linear_in = paddle.nn.Linear(
-            in_features=embed_dim, out_features=ff_dim, bias_attr=False
-        )
-        self.linear_out = paddle.nn.Linear(
-            in_features=ff_dim, out_features=output_dim, bias_attr=False
-        )
+        self.linear_in = paddle.nn.Linear(in_features=embed_dim, out_features=ff_dim, bias_attr=False)
+        self.linear_out = paddle.nn.Linear(in_features=ff_dim, out_features=output_dim, bias_attr=False)
         self.act = ACT2FN["gelu_new"]
 
     def forward(self, hidden_states):
         hidden_states = self.act(self.linear_in(hidden_states))
         hidden_states = self.linear_out(hidden_states)
         return hidden_states
+
 
 def _canonical_mask(
     mask: Optional[paddle.Tensor],
@@ -79,12 +77,14 @@ def _canonical_mask(
 
     return mask
 
+
 def _none_or_dtype(input: Optional[paddle.Tensor]) -> Optional[str]:
     if input is None:
         return None
     elif isinstance(input, paddle.Tensor):
         return input.dtype
     raise RuntimeError("input to _none_or_dtype() must be None or torch.Tensor")
+
 
 def _mha_shape_check(
     query: paddle.Tensor,
@@ -132,6 +132,7 @@ def _mha_shape_check(
             f"query should be unbatched 2D or batched 3D tensor but received {query.dim()}-D query tensor"
         )
     return is_batched
+
 
 def _in_projection_packed(
     q: paddle.Tensor, k: paddle.Tensor, v: paddle.Tensor, w: paddle.Tensor, b: Optional[paddle.Tensor] = None
@@ -203,6 +204,7 @@ def _in_projection_packed(
         else:
             b_q, b_k, b_v = b.chunk(chunks=3, axis=-1)
         return linear(q, w_q, b_q), linear(k, w_k, b_k), linear(v, w_v, b_v)
+
 
 def _in_projection(
     q: paddle.Tensor,
@@ -322,8 +324,6 @@ class MultiheadAttention(nn.MultiHeadAttention):
         self.q_proj = None
         self.v_proj = None
         self.k_proj = None
-
-        
 
     def forward(
         self,
@@ -788,6 +788,7 @@ class MultiheadAttention(nn.MultiHeadAttention):
                 attn_output = attn_output.squeeze(axis=1)
             return attn_output, None
 
+
 class CrossAttention(paddle.nn.Layer):
     """
     Cross-Attention module.
@@ -802,22 +803,15 @@ class CrossAttention(paddle.nn.Layer):
     def __init__(self, kv_dim, embed_dim, num_heads, drop_out_rate=0):
         super().__init__()
         self.num_heads = num_heads
-        self.q_proj = paddle.nn.Linear(
-            in_features=embed_dim, out_features=embed_dim, bias_attr=False
-        )
-        self.k_proj = paddle.nn.Linear(
-            in_features=kv_dim, out_features=embed_dim, bias_attr=False
-        )
-        self.v_proj = paddle.nn.Linear(
-            in_features=kv_dim, out_features=embed_dim, bias_attr=False
-        )
+        self.q_proj = paddle.nn.Linear(in_features=embed_dim, out_features=embed_dim, bias_attr=False)
+        self.k_proj = paddle.nn.Linear(in_features=kv_dim, out_features=embed_dim, bias_attr=False)
+        self.v_proj = paddle.nn.Linear(in_features=kv_dim, out_features=embed_dim, bias_attr=False)
         # self.multihead_attn = paddle.nn.MultiHeadAttention(embed_dim, num_heads)
         self.multihead_attn = MultiheadAttention(embed_dim, num_heads)
         self.linear = paddle.nn.Linear(in_features=embed_dim, out_features=embed_dim)
         self.dropout = paddle.nn.Dropout(p=drop_out_rate)
         self.layer_norm = paddle.nn.LayerNorm(normalized_shape=embed_dim)
         self.ln_kv = paddle.nn.LayerNorm(normalized_shape=kv_dim)
-       
 
     def forward(self, x, hidden_states, attn_mask=None, add_residual=False):
         """
@@ -844,6 +838,7 @@ class CrossAttention(paddle.nn.Layer):
         else:
             attn_output = self.dropout(self.linear(attn_output))
         return attn_output
+
 
 class AriaProjector(paddle.nn.Layer):
     """
@@ -878,9 +873,7 @@ class AriaProjector(paddle.nn.Layer):
         self.embed_dim = embed_dim
         self.num_heads = num_heads
         self.query = paddle.base.framework.EagerParamBase.from_tensor(
-            tensor=paddle.zeros(
-                shape=[max(patch_to_query_dict.values()), self.embed_dim]
-            )
+            tensor=paddle.zeros(shape=[max(patch_to_query_dict.values()), self.embed_dim])
         )
         self.cross_attn = CrossAttention(kv_dim, embed_dim, num_heads)
         self.ln_ffn = norm_layer(embed_dim)
@@ -913,17 +906,12 @@ class AriaProjector(paddle.nn.Layer):
         bs = tuple(x.shape)[0]
         queries = self.query.unsqueeze(axis=0).tile(repeat_times=[bs, 1, 1])
         query_num = self.patch_to_query_dict.get(tuple(x.shape)[1], None)
-        assert (
-            query_num is not None
-        ), f"Query number for {tuple(x.shape)[1]} patches is not provided"
+        assert query_num is not None, f"Query number for {tuple(x.shape)[1]} patches is not provided"
         queries = queries[:, :query_num, :]
         if attn_mask is not None:
-            attn_mask = paddle.cast(attn_mask, dtype='bfloat16') # Fix
+            attn_mask = paddle.cast(attn_mask, dtype="bfloat16")  # Fix
             attn_mask = attn_mask.repeat_interleave(repeats=self.num_heads, axis=0)
-            attn_mask = attn_mask.unsqueeze(axis=1).expand(
-                shape=[-1, queries.shape[1], -1]
-            ) 
-
+            attn_mask = attn_mask.unsqueeze(axis=1).expand(shape=[-1, queries.shape[1], -1])
 
         attention_out = self.cross_attn(x, queries, attn_mask=attn_mask)
         out = self.ffn(self.ln_ffn(attention_out))

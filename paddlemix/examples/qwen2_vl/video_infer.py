@@ -37,7 +37,6 @@ def main(args):
         logger.warning("bfloat16 is not supported on your device,change to float32")
         compute_dtype = "float32"
 
-
     model = Qwen2VLForConditionalGeneration.from_pretrained(args.model_path, dtype="bfloat16")
 
     image_processor = Qwen2VLImageProcessor()

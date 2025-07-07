@@ -52,7 +52,7 @@
   - [5.1 多模态生成算子](#51-多模态生成算子)
     - [5.1.1 generate_qna_for_images](#511-generate_qna_for_images)
 
- 
+
 
 ## 1. 转换算子
 
@@ -60,7 +60,7 @@
 
 #### 1.1.1 llava_convert
 
-**功能介绍**:  
+**功能介绍**:
 将 llava 数据集转换为 paddlemix 标准格式，处理图像路径、对话配对，并过滤无效数据。
 
 **参数说明**:
@@ -134,7 +134,7 @@ dataset = dataset.valid_data_filter()
 
 ##### 2.1.1.1 image_compliance_operator
 
-**功能介绍**:  
+**功能介绍**:
 过滤数据集中无效的图像数据，确保数据符合使用要求。
 
 **功能详情**:
@@ -143,7 +143,7 @@ dataset = dataset.valid_data_filter()
 
 ##### 2.1.1.2 conversation_compliance_operator
 
-**功能介绍**:  
+**功能介绍**:
 过滤数据集中无效的对话数据，确保数据符合使用要求。
 
 **功能详情**:
@@ -159,7 +159,7 @@ dataset = dataset.valid_data_filter()
 
 #### 2.2.1 conversation_length_filter
 
-**功能介绍**:  
+**功能介绍**:
 过滤数据集中会话内容过长的条目。
 
 **功能详情**:
@@ -181,7 +181,7 @@ dataset = dataset.conversation_length_filter(
 
 #### 2.2.2 average_line_length_filter
 
-**功能介绍**:  
+**功能介绍**:
 根据会话的平均行长度过滤数据集中的样本。
 
 **参数说明**:
@@ -191,8 +191,8 @@ dataset = dataset.conversation_length_filter(
 **使用示例**:
 ```python
 dataset = dataset.average_line_length_filter(
-    min_length=15,  
-    max_length=50  
+    min_length=15,
+    max_length=50
 )
 ```
 
@@ -200,7 +200,7 @@ dataset = dataset.average_line_length_filter(
 
 #### 2.2.3 maximum_line_length_filter
 
-**功能介绍**:  
+**功能介绍**:
 根据会话的最大行长度过滤数据集中的样本。
 
 **参数说明**:
@@ -210,16 +210,16 @@ dataset = dataset.average_line_length_filter(
 **使用示例**:
 ```python
 dataset = dataset.maximum_line_length_filter(
-    min_length=10, 
-    max_length=128  
+    min_length=10,
+    max_length=128
 )
 ```
 
 ---
 
-#### 2.2.4 conversation_percentage_filter 
+#### 2.2.4 conversation_percentage_filter
 
-**功能介绍**:  
+**功能介绍**:
 根据对话数量的百分位数范围，过滤数据集中对话数量过少或过多的条目。
 
 **参数说明**:
@@ -229,8 +229,8 @@ dataset = dataset.maximum_line_length_filter(
 **使用示例**:
 ```python
 dataset = dataset.conversation_percentage_filter(
-    min_percentile=5, 
-    max_percentile=95 
+    min_percentile=5,
+    max_percentile=95
 )
 ```
 
@@ -238,7 +238,7 @@ dataset = dataset.conversation_percentage_filter(
 
 #### 2.2.5 token_num_filter
 
-**功能介绍**:  
+**功能介绍**:
 用于根据会话的 token 数量过滤数据集。
 
 **功能详情**:
@@ -254,9 +254,9 @@ dataset = dataset.conversation_percentage_filter(
 **使用示例**:
 ```python
 dataset = dataset.token_num_filter(
-    tokenizer_model="Qwen/Qwen2.5-7B",  
-    min_tokens=10,                   
-    max_tokens=512                      
+    tokenizer_model="Qwen/Qwen2.5-7B",
+    min_tokens=10,
+    max_tokens=512
 )
 ```
 
@@ -264,7 +264,7 @@ dataset = dataset.token_num_filter(
 
 #### 2.2.6 alphanumeric_ratio_filter
 
-**功能介绍**:  
+**功能介绍**:
 根据文本中字母或数字字符占总字符数的比例过滤数据集中的样本。
 
 **参数说明**:
@@ -274,8 +274,8 @@ dataset = dataset.token_num_filter(
 **使用示例**:
 ```python
 dataset = dataset.alphanumeric_ratio_filter(
-    min_ratio=0.25,  
-    max_ratio=0.75  
+    min_ratio=0.25,
+    max_ratio=0.75
 )
 ```
 
@@ -283,7 +283,7 @@ dataset = dataset.alphanumeric_ratio_filter(
 
 #### 2.2.7 stopwords_ratio_filter
 
-**功能介绍**:  
+**功能介绍**:
 根据样本中的停用词比例对数据集进行过滤，通过设置最小停用词比例，筛选出停用词比例大于或等于指定值的样本。
 
 **功能详情**:
@@ -297,7 +297,7 @@ dataset = dataset.alphanumeric_ratio_filter(
 **使用示例**:
 ```python
 dataset = dataset.stopwords_ratio_filter(
-    min_ratio=0.25 
+    min_ratio=0.25
 )
 ```
 
@@ -305,7 +305,7 @@ dataset = dataset.stopwords_ratio_filter(
 
 #### 2.2.8 special_characters_filter
 
-**功能介绍**:  
+**功能介绍**:
 通过计算每个样本中特殊字符占总字符的比例，并根据指定的上下限范围筛选出符合条件的样本。
 
 **功能详情**:
@@ -320,8 +320,8 @@ dataset = dataset.stopwords_ratio_filter(
 **使用示例**:
 ```python
 dataset = dataset.special_characters_filter(
-    min_ratio=0.25,  
-    max_ratio=0.75  
+    min_ratio=0.25,
+    max_ratio=0.75
 )
 ```
 
@@ -329,7 +329,7 @@ dataset = dataset.special_characters_filter(
 
 #### 2.2.9 language_id_filter
 
-**功能介绍**:  
+**功能介绍**:
 通过 FastText 模型检测每个样本的语言，并根据用户指定的语言代码和最小置信度阈值筛选出符合条件的样本。
 
 **功能详情**:
@@ -346,8 +346,8 @@ dataset = dataset.special_characters_filter(
 **使用示例**:
 ```python
 dataset = dataset.language_id_filter(
-    lang=["en", "fr"],  
-    min_score=0.9     
+    lang=["en", "fr"],
+    min_score=0.9
 )
 ```
 
@@ -356,7 +356,7 @@ dataset = dataset.language_id_filter(
 
 #### 2.2.10 text_action_filter
 
-**功能介绍**:  
+**功能介绍**:
 通过检测样本中的动词数量，根据指定的最小动词数量过滤数据集。使用 spaCy 模型进行语言处理，支持基于英语的动词检测规则。
 
 **功能详情**:
@@ -371,8 +371,8 @@ dataset = dataset.language_id_filter(
 **使用示例**:
 ```python
 dataset = dataset.text_action_filter(
-    lang="en",  
-    min_action_num=2  
+    lang="en",
+    min_action_num=2
 )
 ```
 
@@ -380,10 +380,10 @@ dataset = dataset.text_action_filter(
 
 #### 2.2.11 text_entity_dependency_filter
 
-**功能介绍**:  
+**功能介绍**:
 通过检测样本中的实体依赖关系，根据每个实体的依赖边数量对数据集进行过滤。用户可以选择不同的筛选策略（any 或 all），并设置依赖边的最小数量。
 
-**功能详情**:  
+**功能详情**:
 - 使用 spaCy 模型处理样本中的文本内容。
 - 通过 POS 和 Tag 的规则识别实体，例如名词、专有名词和代词。
 - 统计每个实体的依赖边数量，包括实体本身的依赖关系和其他词对实体的依赖关系。
@@ -397,9 +397,9 @@ dataset = dataset.text_action_filter(
 **使用示例**:
 ```python
 dataset = dataset.text_entity_dependency_filter(
-    lang="en",              
-    min_dependency_num=2,   
-    any_or_all="any"      
+    lang="en",
+    min_dependency_num=2,
+    any_or_all="any"
 )
 ```
 
@@ -424,8 +424,8 @@ dataset = dataset.text_entity_dependency_filter(
 使用示例:
 ```python
 dataset = dataset.char_ngram_repetition_filter(
-    rep_len=10, 
-    min_ratio=0.1, 
+    rep_len=10,
+    min_ratio=0.1,
     max_ratio=0.4
 )
 ```
@@ -434,10 +434,10 @@ dataset = dataset.char_ngram_repetition_filter(
 
 #### 2.2.13 word_ngram_repetition_filter
 
-**功能介绍**:  
+**功能介绍**:
 通过计算样本中的词 n-gram 重复比例，根据指定的重复比例范围过滤数据集。
 
-**功能详情**:  
+**功能详情**:
 - 将样本中的文本按空格分词，并生成长度为 rep_len 的词 n-gram。
 - 统计每个 n-gram 的出现频率。
 - 计算重复 n-gram 的比例。
@@ -451,8 +451,8 @@ dataset = dataset.char_ngram_repetition_filter(
 **使用示例**:
 ```python
 dataset = dataset.word_ngram_repetition_filter(
-    rep_len=10, 
-    min_ratio=0.1, 
+    rep_len=10,
+    min_ratio=0.1,
     max_ratio=0.4
 )
 ```
@@ -461,7 +461,7 @@ dataset = dataset.word_ngram_repetition_filter(
 
 #### 2.2.14 conversation_hash_filter
 
-**功能介绍**:  
+**功能介绍**:
 `conversation_hash_filter` 是一个用于去除重复问答对的算子，它统一调用 `simhash_duplicate_operator` 或 `minhash_duplicate_operator` 算子进行处理。
 
 **参数说明**:
@@ -484,7 +484,7 @@ dataset = dataset.conversation_hash_filter(
 
 #### 2.2.14.1 simhash_duplicate_operator
 
-**功能介绍**:  
+**功能介绍**:
 使用simhash算法对问答对进行去重。
 
 **功能详情**:
@@ -495,7 +495,7 @@ dataset = dataset.conversation_hash_filter(
 
 #### 2.2.14.2 minhash_duplicate_operator
 
-**功能介绍**:  
+**功能介绍**:
 使用minhash算法对问答对进行去重。
 
 **功能详情**:
@@ -508,7 +508,7 @@ dataset = dataset.conversation_hash_filter(
 
 #### 2.2.15 llm_judge_filter
 
-**功能介绍**:  
+**功能介绍**:
 利用 LLM 模型分析数据集中的问答对，根据模型的评分过滤掉质量较差的问答对。
 
 **参数说明**:
@@ -533,7 +533,7 @@ dataset = dataset.llm_judge_filter(
 
 #### 2.3.1 image_filesize_filter
 
-**功能介绍**:  
+**功能介绍**:
 过滤数据集中图像文件大小不符合要求的样本。
 
 **参数说明**:
@@ -552,7 +552,7 @@ dataset = dataset.image_filesize_filter(
 
 #### 2.3.2 image_ration_filter
 
-**功能介绍**:  
+**功能介绍**:
 过滤数据集中宽高比不符合指定范围的图像。
 
 **参数说明**:
@@ -571,7 +571,7 @@ dataset = dataset.image_ration_filter(
 
 #### 2.3.3 image_resolution_filter
 
-**功能介绍**:  
+**功能介绍**:
 过滤数据集中分辨率不符合指定范围的图像样本。
 
 **参数说明**:
@@ -594,7 +594,7 @@ dataset = dataset.image_resolution_filter(
 
 #### 2.3.4 image_hash_filter
 
-**功能介绍**:  
+**功能介绍**:
 通过图像哈希值对数据集中的图像去重。
 
 **参数说明**:
@@ -619,7 +619,7 @@ dataset = dataset.image_hash_filter(
 
 #### 2.4.1 image_clip_filter
 
-**功能介绍**:  
+**功能介绍**:
 使用 CLIP 模型对数据集中的问答对进行过滤，根据图像与文本的相似度移除低置信度的问答对。
 
 **功能详情**:
@@ -709,7 +709,7 @@ results = dataset.base_analysis_pipeline(analysis_flags=analysis_flags, output_d
 - 统计有效和无效记录。
 
 **输入输出**:
-- 输入: 
+- 输入:
   - dataset (MMDataset): 待分析的多模态数据集。
 
 - 输出: Dict[str, Any]: 包含数据集统计信息的字典，包括：
@@ -825,7 +825,7 @@ results = dataset.base_analysis_pipeline(analysis_flags=analysis_flags, output_d
 **使用示例**:
 ```python
 dataset = dataset.description_analysis(
-  model_name= "Qwen/Qwen2.5-7B", 
+  model_name= "Qwen/Qwen2.5-7B",
   batch_size=1
 )
 ```
@@ -868,8 +868,8 @@ quality_analysis_flags = {
     "semantic_understanding": False,
 }
 dataset_results = dataset.quality_analysis(
-    model_name="Qwen/Qwen2-VL-7B-Instruct", 
-    quality_analysis_flags=quality_analysis_flags  
+    model_name="Qwen/Qwen2-VL-7B-Instruct",
+    quality_analysis_flags=quality_analysis_flags
 )
 ```
 
@@ -911,12 +911,12 @@ dataset_results = dataset.quality_analysis(
 ```python
 results = lda_topic_clustering(
     dataset=dataset,
-    num_topics=5,                
-    tsne_perplexity=30,          
-    tsne_learning_rate=200,      
-    tsne_n_iter=1000,            
-    random_state=42,          
-    output_plot="lda_tsne_plot.png" 
+    num_topics=5,
+    tsne_perplexity=30,
+    tsne_learning_rate=200,
+    tsne_n_iter=1000,
+    random_state=42,
+    output_plot="lda_tsne_plot.png"
 )
 ```
 
@@ -951,7 +951,7 @@ results = lda_topic_clustering(
 **使用示例**:
 ```python
 dataset = generate_qna_for_images(
-  image_folder_path="paddlemix/demo_images", 
+  image_folder_path="paddlemix/demo_images",
   model_name="Qwen/Qwen2-VL-7B-Instruct"
 )
 ```

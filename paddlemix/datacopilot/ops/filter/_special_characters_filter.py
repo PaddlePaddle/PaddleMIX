@@ -13,9 +13,10 @@
 # limitations under the License.
 
 
-from typing import Optional
-from ...core import MMDataset, register
 from functools import partial
+from typing import Optional
+
+from ...core import MMDataset, register
 
 
 def is_special_char_ratio_valid(item, min_ratio: float = 0.0, max_ratio: float = 0.25) -> bool:
@@ -31,14 +32,40 @@ def is_special_char_ratio_valid(item, min_ratio: float = 0.0, max_ratio: float =
         bool: True if the special character ratio is within [min_ratio, max_ratio], False otherwise.
     """
     # Concatenate conversation content
-    user_conv = '\n\n'.join(
-        ''.join(conversation) for conversation in item['conversations']
-    ).replace('<image>\n', '').replace('\n<image>', '').replace('<image>', '')
+    user_conv = (
+        "\n\n".join("".join(conversation) for conversation in item["conversations"])
+        .replace("<image>\n", "")
+        .replace("\n<image>", "")
+        .replace("<image>", "")
+    )
 
     # Count the number of special characters
     special_characters = [
-        '|', ':', ';', '@', '(', ')', '[', ']', '{', '}', '^', '\'', '\"', '’',
-        '`', '?', '$', '%', '#', '!', '&', '*', '+', ',', '.'
+        "|",
+        ":",
+        ";",
+        "@",
+        "(",
+        ")",
+        "[",
+        "]",
+        "{",
+        "}",
+        "^",
+        "'",
+        '"',
+        "’",
+        "`",
+        "?",
+        "$",
+        "%",
+        "#",
+        "!",
+        "&",
+        "*",
+        "+",
+        ",",
+        ".",
     ]
     special_char_count = sum(1 for char in user_conv if char in special_characters)
 
@@ -52,9 +79,7 @@ def is_special_char_ratio_valid(item, min_ratio: float = 0.0, max_ratio: float =
 
 @register()
 def special_characters_filter(
-    dataset: MMDataset, 
-    min_ratio: Optional[float] = 0.0, 
-    max_ratio: Optional[float] = 0.25
+    dataset: MMDataset, min_ratio: Optional[float] = 0.0, max_ratio: Optional[float] = 0.25
 ) -> MMDataset:
     """
     Filters the dataset based on the ratio of special characters in the samples.
@@ -70,12 +95,8 @@ def special_characters_filter(
     print("Filtering samples with invalid special character ratios...")
     # Create the filter function
     filter_func = partial(is_special_char_ratio_valid, min_ratio=min_ratio, max_ratio=max_ratio)
-    
+
     # Apply dataset.filter
-    filtered_dataset = dataset.filter(
-        func=filter_func, 
-        max_workers=8, 
-        progress=True
-    )
-    
+    filtered_dataset = dataset.filter(func=filter_func, max_workers=8, progress=True)
+
     return filtered_dataset

@@ -12,13 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import sys
 from dataclasses import dataclass
 from typing import List, Optional, Tuple, Union
-import paddle
 
-from paddlenlp.transformers.model_utils import PretrainedModel
+import paddle
 from paddlenlp.transformers.model_outputs import ModelOutput
+from paddlenlp.transformers.model_utils import PretrainedModel
 
 from .configuration_aria import AriaConfig
 from .moe_lm import AriaMoELMForCausalLM
@@ -127,9 +126,7 @@ class AriaForConditionalGeneration(AriaPretrainedModel):
         self.multi_modal_projector = build_mm_projector(config)
         self.vocab_size = config.text_config.vocab_size
         self.language_model = AriaMoELMForCausalLM(config.text_config)
-        self.pad_token_id = (
-            self.config.pad_token_id if self.config.pad_token_id is not None else -1
-        )
+        self.pad_token_id = self.config.pad_token_id if self.config.pad_token_id is not None else -1
         # self.post_init()
         self.use_pixel_values = False
 
@@ -223,35 +220,21 @@ class AriaForConditionalGeneration(AriaPretrainedModel):
             Union[Tuple, AriaCausalLMOutputWithPast]: Model outputs.
         """
         return_dict = True if return_dict is None else return_dict
-        output_attentions = (
-            output_attentions
-            if output_attentions is not None
-            else self.config.output_attentions
-        )
+        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
-            output_hidden_states
-            if output_hidden_states is not None
-            else self.config.output_hidden_states
+            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
         )
-        return_dict = (
-            return_dict if return_dict is not None else self.config.use_return_dict
-        )
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
         if inputs_embeds is None:
             inputs_embeds = self.get_input_embeddings()(input_ids)
         image_features = None
         if pixel_values is not None:
-            image_outputs, image_attn_mask = self.vision_tower(
-                pixel_values, pixel_mask=pixel_mask, return_dict=True
-            )
+            image_outputs, image_attn_mask = self.vision_tower(pixel_values, pixel_mask=pixel_mask, return_dict=True)
             selected_image_feature = image_outputs.last_hidden_state
-            image_features = self.multi_modal_projector(
-                selected_image_feature, attn_mask=image_attn_mask
-            )
+            image_features = self.multi_modal_projector(selected_image_feature, attn_mask=image_attn_mask)
         if image_features is not None:
             n_image_tokens = (input_ids == self.config.image_token_index).sum().item()
-            n_image_features = (
-                tuple(image_features.shape)[0] * tuple(image_features.shape)[1]
-            )
+            n_image_features = tuple(image_features.shape)[0] * tuple(image_features.shape)[1]
             if n_image_tokens != n_image_features:
                 raise ValueError(
                     f"Image features and image tokens do not match: tokens: {n_image_tokens}, features {n_image_features}"
@@ -263,28 +246,23 @@ class AriaForConditionalGeneration(AriaPretrainedModel):
                 .to(inputs_embeds.place)
             )
             image_features = image_features.to(inputs_embeds.place, inputs_embeds.dtype)
-#             """Class Method: *.masked_scatter, can not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*/torch.distributions.Distribution.*/torch.autograd.function.FunctionCtx.*/torch.profiler.profile.*/torch.autograd.profiler.profile.*, and convert manually"""
-# >>>>>>            inputs_embeds = inputs_embeds.masked_scatter(
-#                 special_image_mask, image_features
-#             )
+            #             """Class Method: *.masked_scatter, can not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*/torch.distributions.Distribution.*/torch.autograd.function.FunctionCtx.*/torch.profiler.profile.*/torch.autograd.profiler.profile.*, and convert manually"""
+            # >>>>>>            inputs_embeds = inputs_embeds.masked_scatter(
+            #                 special_image_mask, image_features
+            #             )
 
             # 将PyTorch的masked_scatter转换为Paddle实现
             # 创建一个填充后的 image_features
             padded_image_features = paddle.zeros_like(inputs_embeds)  # [1, 287, 2560]
             padded_image_features[:, :256, :] = image_features
 
-            masked_inputs = paddle.where(
-                special_image_mask,
-                padded_image_features,
-                inputs_embeds
-            )
+            masked_inputs = paddle.where(special_image_mask, padded_image_features, inputs_embeds)
 
             inputs_embeds = masked_inputs
-        
+
         # dtype
 
-
-        # Fix 
+        # Fix
         outputs = self.language_model(
             attention_mask=attention_mask,
             position_ids=position_ids,
@@ -301,15 +279,9 @@ class AriaForConditionalGeneration(AriaPretrainedModel):
         loss = None
         if labels is not None:
             if attention_mask is not None:
-                shift_attention_mask = attention_mask[
-                    :, -(tuple(logits.shape)[1] - 1) :
-                ].to(logits.place)
-                shift_logits = logits[..., :-1, :][
-                    shift_attention_mask.to(logits.place) != 0
-                ].contiguous()
-                shift_labels = labels[..., 1:][
-                    shift_attention_mask.to(labels.place) != 0
-                ].contiguous()
+                shift_attention_mask = attention_mask[:, -(tuple(logits.shape)[1] - 1) :].to(logits.place)
+                shift_logits = logits[..., :-1, :][shift_attention_mask.to(logits.place) != 0].contiguous()
+                shift_labels = labels[..., 1:][shift_attention_mask.to(labels.place) != 0].contiguous()
             else:
                 shift_logits = logits[..., :-1, :].contiguous()
                 shift_labels = labels[..., 1:].contiguous()

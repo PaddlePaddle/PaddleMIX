@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import paddle
+
 from paddlemix.models.diffsinger.modules.backbones.lynxnet import LYNXNet
 from paddlemix.models.diffsinger.modules.backbones.wavenet import WaveNet
 from paddlemix.models.diffsinger.utils import filter_kwargs

@@ -15,16 +15,6 @@
 
 from ._contextor import freeze_rng_state, open_tmp_dir
 from ._decorator import deprecated, retry
+from ._download import download_image, download_url_to_file, open_image_from_url
 from ._jsonschema import JsonSchemaValidator
-
-from ._parallelmap import (
-    parallel_map, ParallelMode, 
-    list_dir,
-    enumerate_chunk,
-)
-
-from ._download import (
-    download_image, 
-    open_image_from_url,
-    download_url_to_file, 
-)
+from ._parallelmap import ParallelMode, enumerate_chunk, list_dir, parallel_map

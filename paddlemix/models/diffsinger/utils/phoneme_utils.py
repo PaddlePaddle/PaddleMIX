@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import pathlib
+
 from paddlemix.models.diffsinger.utils.hparams import hparams
 
 _initialized = False
@@ -98,5 +99,6 @@ def build_dictionary() -> dict:
 
 
 def build_phoneme_list() -> list:
+    global _phoneme_list
     _initialize()
     return _phoneme_list

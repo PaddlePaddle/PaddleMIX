@@ -13,34 +13,30 @@
 # limitations under the License.
 
 import paddle
-from paddle import nn
-from ppdiffusers.models.attention import GEGLU
 from einops import rearrange, repeat
+from paddle import nn
+
+from ppdiffusers.models.attention import GEGLU
+
 from ..diffusionwrapper import default
 
+
 def Normalize(in_channels):
-    return nn.GroupNorm(
-        num_groups=32, num_channels=in_channels, epsilon=1e-6
-    )
+    return nn.GroupNorm(num_groups=32, num_channels=in_channels, epsilon=1e-6)
+
 
 class FeedForward(nn.Layer):
     def __init__(self, dim, dim_out=None, mult=4, glu=False, dropout=0.0):
         super().__init__()
         inner_dim = int(dim * mult)
         dim_out = default(dim_out, dim)
-        project_in = (
-            nn.Sequential(nn.Linear(dim, inner_dim), nn.GELU())
-            if not glu
-            else GEGLU(dim, inner_dim)
-        )
+        project_in = nn.Sequential(nn.Linear(dim, inner_dim), nn.GELU()) if not glu else GEGLU(dim, inner_dim)
 
-        self.net = nn.Sequential(
-            project_in, nn.Dropout(dropout), nn.Linear(inner_dim, dim_out)
-        )
+        self.net = nn.Sequential(project_in, nn.Dropout(dropout), nn.Linear(inner_dim, dim_out))
 
     def forward(self, x):
         return self.net(x)
-    
+
 
 class CrossAttention(nn.Layer):
     def __init__(self, query_dim, context_dim=None, heads=8, dim_head=64, dropout=0.0):
@@ -55,9 +51,7 @@ class CrossAttention(nn.Layer):
         self.to_k = nn.Linear(context_dim, inner_dim, bias_attr=False)
         self.to_v = nn.Linear(context_dim, inner_dim, bias_attr=False)
 
-        self.to_out = nn.Sequential(
-            nn.Linear(inner_dim, query_dim), nn.Dropout(dropout)
-        )
+        self.to_out = nn.Sequential(nn.Linear(inner_dim, query_dim), nn.Dropout(dropout))
 
     def forward(self, x, context=None, mask=None):
         h = self.heads
@@ -71,7 +65,7 @@ class CrossAttention(nn.Layer):
         q, k, v = map(lambda t: rearrange(t, "b n (h d) -> (b h) n d", h=h), (q, k, v))
 
         sim = paddle.einsum("b i d, b j d -> b i j", q, k) * self.scale
-        
+
         if mask is not None:
             mask = rearrange(mask, "b ... -> b (...)")
             max_neg_value = -paddle.finfo(sim.dtype).max
@@ -97,17 +91,14 @@ class LinearAttention(nn.Layer):
     def forward(self, x):
         b, c, h, w = x.shape
         qkv = self.to_qkv(x)
-        q, k, v = rearrange(
-            qkv, "b (qkv heads c) h w -> qkv b heads c (h w)", heads=self.heads, qkv=3
-        )
+        q, k, v = rearrange(qkv, "b (qkv heads c) h w -> qkv b heads c (h w)", heads=self.heads, qkv=3)
         k = nn.functional.softmax(k, axis=-1)
         context = paddle.einsum("bhdn,bhen->bhde", k, v)
         out = paddle.einsum("bhde,bhdn->bhen", context, q)
-        out = rearrange(
-            out, "b heads c (h w) -> b (heads c) h w", heads=self.heads, h=h, w=w
-        )
+        out = rearrange(out, "b heads c (h w) -> b (heads c) h w", heads=self.heads, h=h, w=w)
         return self.to_out(out)
-    
+
+
 class BasicTransformerBlock(nn.Layer):
     def __init__(
         self,
@@ -142,6 +133,7 @@ class BasicTransformerBlock(nn.Layer):
         x = self.ff(self.norm3(x)) + x
         return x
 
+
 class SpatialTransformer(nn.Layer):
     """
     Transformer block for image-like data.
@@ -168,21 +160,15 @@ class SpatialTransformer(nn.Layer):
         inner_dim = n_heads * d_head
         self.norm = Normalize(in_channels)
 
-        self.proj_in = nn.Conv2D(
-            in_channels, inner_dim, kernel_size=1, stride=1, padding=0
-        )
+        self.proj_in = nn.Conv2D(in_channels, inner_dim, kernel_size=1, stride=1, padding=0)
 
         self.transformer_blocks = nn.LayerList(
             [
-                BasicTransformerBlock(
-                    inner_dim, n_heads, d_head, dropout=dropout, context_dim=context_dim
-                )
+                BasicTransformerBlock(inner_dim, n_heads, d_head, dropout=dropout, context_dim=context_dim)
                 for d in range(depth)
             ]
         )
-        weight_attr = paddle.ParamAttr(
-            initializer=nn.initializer.Constant(value=0.0)
-        )
+        weight_attr = paddle.ParamAttr(initializer=nn.initializer.Constant(value=0.0))
         self.proj_out = nn.Conv2D(inner_dim, in_channels, kernel_size=1, stride=1, padding=0, weight_attr=weight_attr)
 
     def forward(self, x, context=None, mask=None):

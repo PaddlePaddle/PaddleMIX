@@ -15,16 +15,12 @@
 from __future__ import annotations
 
 import math
-import sys
 
 import paddle
-from paddlemix.models.diffsinger.utils import paddle_aux
-from paddle.nn import GELU, LayerNorm
 from paddle.nn import MultiHeadAttention as MultiheadAttention
-from paddle.nn import ReLU
-from paddle.nn import Silu as SiLU
 
 import paddlemix.models.diffsinger.utils as utils
+from paddlemix.models.diffsinger.utils import paddle_aux
 
 
 class NormalInitEmbedding(paddle.nn.Embedding):
@@ -178,7 +174,6 @@ class SinusoidalPosEmb(paddle.nn.Layer):
         self.dim = dim
 
     def forward(self, x):
-        device = x.place
         half_dim = self.dim // 2
         emb = math.log(10000) / (half_dim - 1)
         emb = paddle.exp(x=paddle.arange(end=half_dim) * -emb)

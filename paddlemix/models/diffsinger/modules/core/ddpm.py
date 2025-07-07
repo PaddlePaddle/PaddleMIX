@@ -14,14 +14,13 @@
 
 from __future__ import annotations
 
-import sys, os
 from collections import deque
 from functools import partial
 from typing import List, Tuple
 
 import numpy as np
-
 import paddle
+import paddle_aux
 from tqdm import tqdm
 
 from paddlemix.models.diffsinger.modules.backbones import build_backbone

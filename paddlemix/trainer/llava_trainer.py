@@ -22,11 +22,12 @@ from paddle.distributed import fleet
 from paddle.distributed.fleet.meta_optimizers.dygraph_optimizer.dygraph_sharding_optimizer import (
     DygraphShardingOptimizer,
 )
+from paddlenlp.trainer import PrinterCallback, ProgressCallback
+from paddlenlp.trainer.integrations import TrainerCallback
 from paddlenlp.trainer.trainer import Trainer, has_length
 from paddlenlp.trainer.trainer_utils import ShardingOption
-from paddlenlp.trainer.integrations import TrainerCallback
-from paddlenlp.trainer import PrinterCallback, ProgressCallback
 from paddlenlp.utils.log import logger
+
 
 class BenchmarkCallback(TrainerCallback):
     def __init__(self, benchmark=False):
@@ -48,6 +49,7 @@ class BenchmarkCallback(TrainerCallback):
     def on_step_end(self, args, state, control, **kwargs):
         if self.benchmark:
             pass
+
     def on_log(self, args, state, control, logs=None, **kwargs):
         if self.benchmark:
             if logs is not None and "interval_samples_per_second" in logs:
@@ -171,19 +173,16 @@ class LengthGroupedSampler(paddle.io.Sampler):
 
 
 class LLaVATrainer(Trainer):
-    def __init__(self,**kwargs):
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
         if self.args.benchmark:
-            self.add_callback(
-                BenchmarkCallback(
-                    benchmark=self.args.benchmark
-                )
-            )
+            self.add_callback(BenchmarkCallback(benchmark=self.args.benchmark))
             if self.args.benchmark:
                 if self.args.disable_tqdm:
                     self.pop_callback(PrinterCallback)
                 else:
                     self.pop_callback(ProgressCallback)
+
     def _get_train_sampler(self) -> Optional[paddle.io.Sampler]:
         if self.train_dataset is None or not has_length(self.train_dataset):
             return None

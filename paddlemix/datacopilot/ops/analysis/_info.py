@@ -15,9 +15,8 @@
 
 from rich.console import Console
 from rich.table import Table
-from rich.columns import Columns
 
-from ...core import register, MMDataset
+from ...core import MMDataset, register
 
 
 @register(force=True)
@@ -28,7 +27,7 @@ def info(dataset: MMDataset) -> None:
     table.add_column("Attr", justify="left")
     table.add_column("Value", justify="left")
 
-    table.add_row('Length', str(len(dataset)))
+    table.add_row("Length", str(len(dataset)))
 
     console.print(dataset[0])
     console.print(table)
@@ -44,11 +43,6 @@ def head(dataset: MMDataset, n=10) -> None:
     table.add_column("conversations", justify="right")
 
     for i, item in enumerate(dataset[:n]):
-        table.add_row(
-            item['id'], 
-            item['image'], 
-            str(item['conversations'])
-        )
+        table.add_row(item["id"], item["image"], str(item["conversations"]))
 
     console.print(table)
-

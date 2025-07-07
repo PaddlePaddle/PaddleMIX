@@ -12,13 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import sys
 import logging
 import os
 from typing import Tuple
 
 import paddle
-from paddlenlp.transformers import LlamaConfig 
+from paddlenlp.transformers import LlamaConfig
 from paddlenlp.transformers.activations import ACT2FN
 from paddlenlp.transformers.llama.modeling import (
     LlamaAttention,
@@ -29,7 +28,6 @@ from paddlenlp.transformers.llama.modeling import (
     LlamaRMSNorm,
     LlamaRotaryEmbedding,
 )
-
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +74,7 @@ class AriaMoELMConfig(LlamaConfig):
         # new added
         self.mlp_bias = False
         self.hidden_act = "silu"
+
 
 class MoEAuxLossAutoScaler(paddle.autograd.PyLayer):
     """An AutoScaler that compute and scales the grad for auxiliary loss."""
@@ -132,10 +131,7 @@ def z_loss_func(logits, z_loss_coeff):
     Returns:
         torch.Tensor: The logits after applying the z-loss.
     """
-    z_loss = (
-        paddle.mean(x=paddle.square(x=paddle.logsumexp(x=logits, axis=-1)))
-        * z_loss_coeff
-    )
+    z_loss = paddle.mean(x=paddle.square(x=paddle.logsumexp(x=logits, axis=-1))) * z_loss_coeff
     return z_loss
 
 
@@ -158,7 +154,9 @@ def switch_load_balancing_loss_func(
     num_tokens = tuple(probs.shape)[0] * topk
     num_experts = tuple(probs.shape)[1]
     probs_mean_per_expert = probs.mean(axis=0)
-    tokens_per_expert.to(dtype=probs_mean_per_expert.dtype) # Fix the dtype of tokens_per_expert to match the dtype of probs_mean_per_expert
+    tokens_per_expert.to(
+        dtype=probs_mean_per_expert.dtype
+    )  # Fix the dtype of tokens_per_expert to match the dtype of probs_mean_per_expert
     aux_loss = paddle.sum(x=probs_mean_per_expert * tokens_per_expert) * (
         num_experts / num_tokens * moe_aux_loss_coeff
     )
@@ -180,9 +178,7 @@ class TopKRouter(paddle.nn.Layer):
         super().__init__()
         self.config = config
         self.weight = paddle.base.framework.EagerParamBase.from_tensor(
-            tensor=paddle.empty(
-                shape=(self.config.moe_num_experts, self.config.hidden_size)
-            )
+            tensor=paddle.empty(shape=(self.config.moe_num_experts, self.config.hidden_size))
         )
 
     def gating(self, input: paddle.Tensor) -> paddle.Tensor:
@@ -238,9 +234,7 @@ class TopKRouter(paddle.nn.Layer):
         )
         return MoEAuxLossAutoScaler.apply(activation, aux_loss)
 
-    def routing(
-        self, logits: paddle.Tensor
-    ) -> Tuple[paddle.Tensor, paddle.Tensor, paddle.Tensor]:
+    def routing(self, logits: paddle.Tensor) -> Tuple[paddle.Tensor, paddle.Tensor, paddle.Tensor]:
         """
         Perform the routing operation to determine expert assignments.
 
@@ -256,23 +250,19 @@ class TopKRouter(paddle.nn.Layer):
         if self.training:
             logits = self.apply_z_loss(logits)
         top_logits, top_indices = paddle.topk(k=self.config.moe_topk, x=logits, axis=1)
-        scores = paddle.nn.functional.softmax(
-            x=top_logits, axis=-1, dtype="float32"
-        ).astype(dtype=logits.dtype)
+        scores = paddle.nn.functional.softmax(x=top_logits, axis=-1, dtype="float32").astype(dtype=logits.dtype)
 
         # Fix 修改这里的histogram计算方式
         flattened_indices = top_indices.flatten()
         tokens_per_expert = paddle.zeros([self.config.moe_num_experts], dtype=flattened_indices.dtype)
         for idx in range(self.config.moe_num_experts):
-            tokens_per_expert[idx] = paddle.sum(paddle.cast(flattened_indices == idx, dtype='int64'))
-    
+            tokens_per_expert[idx] = paddle.sum(paddle.cast(flattened_indices == idx, dtype="int64"))
+
         if self.training:
             scores = self.apply_aux_loss(logits, tokens_per_expert, scores)
         return scores, top_indices, tokens_per_expert
 
-    def forward(
-        self, input: paddle.Tensor
-    ) -> Tuple[paddle.Tensor, paddle.Tensor, paddle.Tensor]:
+    def forward(self, input: paddle.Tensor) -> Tuple[paddle.Tensor, paddle.Tensor, paddle.Tensor]:
         """
         Forward pass of the TopKRouter.
 
@@ -312,9 +302,7 @@ class TokenDispatcher:
         self.hidden_states_shape = None
         self.reversed_input_permutation_mapping = None
 
-    def token_permutation(
-        self, hidden_states: paddle.Tensor, indices: paddle.Tensor
-    ) -> paddle.Tensor:
+    def token_permutation(self, hidden_states: paddle.Tensor, indices: paddle.Tensor) -> paddle.Tensor:
         """
         Permute tokens based on expert assignments.
 
@@ -334,15 +322,11 @@ class TokenDispatcher:
         )
         flatten_indices = indices.flatten()
         sorted_indices = paddle.argsort(x=flatten_indices, stable=True)
-        permuted_tokens = hidden_states.index_select(
-            axis=0, index=sorted_indices // self.config.moe_topk
-        )
+        permuted_tokens = hidden_states.index_select(axis=0, index=sorted_indices // self.config.moe_topk)
         self.reversed_input_permutation_mapping = sorted_indices
         return permuted_tokens
 
-    def token_unpermutation(
-        self, permuted_tokens: paddle.Tensor, scores: paddle.Tensor
-    ) -> paddle.Tensor:
+    def token_unpermutation(self, permuted_tokens: paddle.Tensor, scores: paddle.Tensor) -> paddle.Tensor:
         """
         Unpermute tokens and combine expert outputs.
 
@@ -358,19 +342,11 @@ class TokenDispatcher:
             shape=(num_unpermuted_tokens, permuted_tokens.shape[1]),
             dtype=permuted_tokens.dtype,
         )
-        unpermuted_tokens.scatter_(
-            self.reversed_input_permutation_mapping, permuted_tokens
-        )
-        unpermuted_tokens = unpermuted_tokens.reshape(
-            shape=(-1, self.config.moe_topk, permuted_tokens.shape[1])
-        ) 
+        unpermuted_tokens.scatter_(self.reversed_input_permutation_mapping, permuted_tokens)
+        unpermuted_tokens = unpermuted_tokens.reshape(shape=(-1, self.config.moe_topk, permuted_tokens.shape[1]))
         unpermuted_tokens = unpermuted_tokens * scores.unsqueeze(axis=-1)
-        unpermuted_tokens = unpermuted_tokens.sum(axis=1).astype(
-            dtype=permuted_tokens.dtype
-        )
-        output = unpermuted_tokens.reshape(
-            shape=self.hidden_states_shape
-        )
+        unpermuted_tokens = unpermuted_tokens.sum(axis=1).astype(dtype=permuted_tokens.dtype)
+        output = unpermuted_tokens.reshape(shape=self.hidden_states_shape)
         return output
 
 
@@ -386,12 +362,10 @@ class SharedExpertMLP(LlamaMLP):
     """
 
     def __init__(self, config: AriaMoELMConfig):
-        paddle.nn.Layer.__init__(self) # TODO: 需要检查是否正确
+        paddle.nn.Layer.__init__(self)  # TODO: 需要检查是否正确
         self.config = config
         self.hidden_size = config.hidden_size
-        self.intermediate_size = (
-            config.moe_intermediate_size * config.moe_num_shared_experts
-        )
+        self.intermediate_size = config.moe_intermediate_size * config.moe_num_shared_experts
         self.gate_proj = paddle.nn.Linear(
             in_features=self.hidden_size,
             out_features=self.intermediate_size,
@@ -409,8 +383,8 @@ class SharedExpertMLP(LlamaMLP):
         )
         self.act_fn = ACT2FN[config.hidden_act]
 
-        self.fuse_attention_ffn = config.fuse_attention_ffn # Fix 
- 
+        self.fuse_attention_ffn = config.fuse_attention_ffn  # Fix
+
 
 def sequential_gemm(input, weight, tokens_per_expert):
     """
@@ -436,24 +410,22 @@ def sequential_gemm(input, weight, tokens_per_expert):
         # Fix Skip if no tokens are assigned to this expert
         if start == end:
             continue
-        tokens = input[int(start):int(end)]
+        tokens = input[int(start) : int(end)]
         out = paddle.matmul(x=tokens, y=weight[expert_num])
-        output[int(start):int(end)] = out
+        output[int(start) : int(end)] = out
     return output
 
 
 try:
-    from grouped_gemm.ops import gmm as experts_gemm
+    from grouped_gemm.ops import gmm
 
     if os.environ.get("USE_GROUPED_GEMM", "1") == "0":
-        logger.warning(
-            "environment variable USE_GROUPED_GEMM is set to 0, using sequential GEMM instead."
-        )
+        logger.warning("USE_GROUPED_GEMM is set to 0, using sequential GEMM.")
         experts_gemm = sequential_gemm
+    else:
+        experts_gemm = gmm
 except ImportError:
-    logger.warning(
-        "`grouped_gemm` is not installed, using sequential GEMM, which is slower."
-    )
+    logger.warning("`grouped_gemm` is not installed, using sequential GEMM.")
     experts_gemm = sequential_gemm
 
 
@@ -492,9 +464,7 @@ class GroupedGEMM(paddle.nn.Layer):
             torch.Tensor: Output tensor of shape (num_tokens, out_features).
         """
         tokens_per_expert = tokens_per_expert.cpu()
-        paddle.device.set_device(
-            paddle.device.get_device()
-        )
+        paddle.device.set_device(paddle.device.get_device())
         return experts_gemm(input, self.weight, tokens_per_expert)
 
 
@@ -509,12 +479,8 @@ class GroupedMLP(paddle.nn.Layer):
     def __init__(self, config: AriaMoELMConfig) -> None:
         super().__init__()
         self.config = config
-        self.fc1 = GroupedGEMM(
-            config.hidden_size, config.moe_intermediate_size * 2, config.moe_num_experts
-        )
-        self.fc2 = GroupedGEMM(
-            config.moe_intermediate_size, config.hidden_size, config.moe_num_experts
-        )
+        self.fc1 = GroupedGEMM(config.hidden_size, config.moe_intermediate_size * 2, config.moe_num_experts)
+        self.fc2 = GroupedGEMM(config.moe_intermediate_size, config.hidden_size, config.moe_num_experts)
 
         def glu(x):
             x = paddle.chunk(x=x, chunks=2, axis=-1)
@@ -576,9 +542,7 @@ class MoELayer(paddle.nn.Layer):
         5. Add shared expert output to the final result.
         """
         scores, indices, tokens_per_expert = self.router(hidden_states)
-        permuted_tokens = self.token_dispatcher.token_permutation(
-            hidden_states, indices
-        )
+        permuted_tokens = self.token_dispatcher.token_permutation(hidden_states, indices)
         expert_output = self.experts(permuted_tokens, tokens_per_expert)
         output = self.token_dispatcher.token_unpermutation(expert_output, scores)
         shared_expert_output = self.shared_experts(hidden_states)
@@ -597,18 +561,12 @@ class MoEDecoderLayer(LlamaDecoderLayer):
     """
 
     def __init__(self, config: LlamaConfig, layer_idx: int):
-        paddle.nn.Layer.__init__(self) 
+        paddle.nn.Layer.__init__(self)
         self.hidden_size = config.hidden_size
         self.self_attn = LlamaAttention(config=config)
         self.mlp = MoELayer(config)
-        self.input_layernorm = LlamaRMSNorm(
-            config
-        )
-        self.post_attention_layernorm = (
-            LlamaRMSNorm(
-                config
-            )
-        )
+        self.input_layernorm = LlamaRMSNorm(config)
+        self.post_attention_layernorm = LlamaRMSNorm(config)
         self.enable_recompute = False
 
 
@@ -634,14 +592,9 @@ class AriaMoELMModel(LlamaModel):
             padding_idx=self.padding_idx,
         )
         self.layers = paddle.nn.LayerList(
-            sublayers=[
-                MoEDecoderLayer(config, layer_idx)
-                for layer_idx in range(config.num_hidden_layers)
-            ]
+            sublayers=[MoEDecoderLayer(config, layer_idx) for layer_idx in range(config.num_hidden_layers)]
         )
-        self.norm = LlamaRMSNorm(
-            config
-        )
+        self.norm = LlamaRMSNorm(config)
         self.rotary_emb = LlamaRotaryEmbedding(
             dim=config.hidden_size, max_position_embeddings=config.max_position_embeddings
         )
@@ -672,7 +625,6 @@ class AriaMoELMForCausalLM(LlamaForCausalLM):
             out_features=config.vocab_size,
             bias_attr=False,
         )
-    
 
     def set_z_loss_coeff(self, z_loss_coeff: float):
         """

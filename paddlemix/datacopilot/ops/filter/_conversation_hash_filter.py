@@ -13,11 +13,13 @@
 # limitations under the License.
 
 
+from typing import Dict
+
 from datasketch import MinHash, MinHashLSH
 from simhash import Simhash
-from typing import Dict
+
 from ...core import MMDataset, register
-from ...misc import parallel_map, ParallelMode
+from ...misc import ParallelMode, parallel_map
 
 
 def preprocess_text(text: str) -> str:
@@ -33,11 +35,7 @@ def preprocess_text(text: str) -> str:
     return text.replace("<image>", "").replace("\n<image>", " ").replace("<image>\n", " ").strip()
 
 
-def simhash_duplicate_operator(
-    text: str,
-    seen_hashes: set,
-    threshold: float = 0.8
-) -> bool:
+def simhash_duplicate_operator(text: str, seen_hashes: set, threshold: float = 0.8) -> bool:
     """
     Checks for duplicate text using the SimHash algorithm.
 
@@ -63,7 +61,7 @@ def minhash_duplicate_operator(
     text: str,
     lsh: MinHashLSH,
     num_perm: int = 128,
-    counter: list = [0], 
+    counter: list = [0],
 ) -> bool:
     """
     Checks for duplicate text using the MinHashLSH algorithm.
@@ -79,7 +77,7 @@ def minhash_duplicate_operator(
     """
     minhash = MinHash(num_perm=num_perm)
     for word in text.split():
-        minhash.update(word.encode('utf8'))
+        minhash.update(word.encode("utf8"))
 
     # Query the LSH for similar entries
     if list(lsh.query(minhash)):

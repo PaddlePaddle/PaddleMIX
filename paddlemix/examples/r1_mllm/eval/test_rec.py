@@ -1,41 +1,67 @@
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import argparse
-import json
 import json
 import os
 import random
 import re
 import sys
-from pprint import pprint
 
 import paddle
 from paddlenlp.generation import GenerationConfig
 from paddlenlp.utils.import_utils import import_module
 from tqdm import tqdm
 
-sys.path.append('paddlemix/examples/r1_mllm')
+sys.path.append("paddlemix/examples/r1_mllm")
+from r1_mllm.utils.constant import MODEL_MAPPING, SUPPORTED_MODELS, TEMPLATE_MAPPING
 from r1_mllm.utils.tokenizer import get_processor
-from r1_mllm.utils.constant import TEMPLATE_MAPPING, MODEL_MAPPING, SUPPORTED_MODELS
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run VLM-R1 evaluation.")
-    parser.add_argument("--model_name", type=str,default="Qwen2.5-VL-3B-Instruct", required=True, help="Name of the model.")
-    parser.add_argument("--model_path", type=str,default="Qwen/Qwen2.5-VL-3B-Instruct", required=True, help="Path to the model checkpoint.")
+    parser.add_argument(
+        "--model_name", type=str, default="Qwen2.5-VL-3B-Instruct", required=True, help="Name of the model."
+    )
+    parser.add_argument(
+        "--model_path",
+        type=str,
+        default="Qwen/Qwen2.5-VL-3B-Instruct",
+        required=True,
+        help="Path to the model checkpoint.",
+    )
     parser.add_argument("--data_root", type=str, required=True, help="Root directory of the dataset.")
     parser.add_argument("--image_root", type=str, required=True, help="Root directory of the images.")
-    parser.add_argument("--test_datasets", type=str, nargs="+", default=["refgta_subsample"], help="List of datasets to evaluate.")
+    parser.add_argument(
+        "--test_datasets", type=str, nargs="+", default=["refgta_subsample"], help="List of datasets to evaluate."
+    )
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size for inference.")
     parser.add_argument("--sample_num", type=int, default=500, help="Number of samples to evaluate.")
     parser.add_argument("--steps", type=int, default=100, help="Checkpoint steps for logging.")
     parser.add_argument("--method", type=str, default="r1", help="Choose test r1 or baseline")
     parser.add_argument("--seed", type=int, default=42, help="Seed for inference.")
     parser.add_argument("--dtype", type=str, default="bfloat16", help="Data type for inference.")
-    parser.add_argument("--attn_implementation", type=str, default="flash_attention_2", help="Attention type for inference.")
+    parser.add_argument(
+        "--attn_implementation", type=str, default="flash_attention_2", help="Attention type for inference."
+    )
     return parser.parse_args()
 
-def extract_bbox_answer(method,content):
+
+def extract_bbox_answer(method, content):
     bbox_match = False
     if method == "baseline":
-        bbox_pattern = r'(-?\d*\.?\d+),\s*(-?\d*\.?\d+),\s*(-?\d*\.?\d+),\s*(-?\d*\.?\d+)'
+        bbox_pattern = r"(-?\d*\.?\d+),\s*(-?\d*\.?\d+),\s*(-?\d*\.?\d+),\s*(-?\d*\.?\d+)"
         bbox_match = re.search(bbox_pattern, content)
     else:
         answer_tag_pattern = "\s*<answer>(.*?)</answer>"
@@ -66,27 +92,25 @@ def iou(box1, box2):
         inter = (inter_x2 - inter_x1 + 1) * (inter_y2 - inter_y1 + 1)
     else:
         inter = 0
-    union = (
-        (box1[2] - box1[0]) * (box1[3] - box1[1])
-        + (box2[2] - box2[0]) * (box2[3] - box2[1])
-        - inter
-    )
+    union = (box1[2] - box1[0]) * (box1[3] - box1[1]) + (box2[2] - box2[0]) * (box2[3] - box2[1]) - inter
     return float(inter) / union
+
 
 def get_test_template(method):
     # TODO: Support other prompt
-    if method =="r1":
+    if method == "r1":
         QUESTION_TEMPLATE = "{Question} First output the thinking process in <think> </think> tags and then output the final answer in <answer> </answer> tags. Output the final answer in JSON format."
     else:
         QUESTION_TEMPLATE = "Locate {Question}, output its bbox coordinates using JSON format."
-    
+
     return QUESTION_TEMPLATE
+
 
 def main(args):
     steps = args.steps
     print("Steps: ", steps)
     MODEL_PATH = args.model_path
-    os.makedirs("logs",exist_ok=True)
+    os.makedirs("logs", exist_ok=True)
     OUTPUT_PATH = "./logs/rec_results_{DATASET}_{MODEL}_{METHOD}_{STEPS}.json"
     BSZ = args.batch_size
     DATA_ROOT = args.data_root
@@ -96,14 +120,14 @@ def main(args):
 
     template_name = TEMPLATE_MAPPING[args.model_name]
     process_vision_info = import_module(f"paddlemix.processors.{template_name}_processing.process_vision_info")
-    
+
     # register model
     model_cls = import_module(f"paddlemix.models.{MODEL_MAPPING[args.model_name]}")
     model = model_cls.from_pretrained(
         MODEL_PATH,
         dtype=args.dtype,
     )
-    processor, tokenizer = get_processor(args.model_name,SUPPORTED_MODELS[args.model_name])
+    processor, tokenizer = get_processor(args.model_name, SUPPORTED_MODELS[args.model_name])
 
     sample_num = args.sample_num
     for ds in TEST_DATASETS:
@@ -116,7 +140,7 @@ def main(args):
         messages = []
         for x in data:
             image_path = os.path.join(IMAGE_ROOT, x["image"])
-            question = x['normal_caption'] if args.method=="baseline" else x['problem'] 
+            question = x["normal_caption"] if args.method == "baseline" else x["problem"]
             message = [
                 {
                     "role": "user",
@@ -130,14 +154,12 @@ def main(args):
                 }
             ]
             messages.append(message)
-        
+
         all_outputs = []
         for i in tqdm(range(0, len(messages), BSZ)):
             batch_messages = messages[i : i + BSZ]
             text = [
-                processor.tokenizer.apply_chat_template(
-                    msg, tokenize=False, add_generation_prompt=True
-                )
+                processor.tokenizer.apply_chat_template(msg, tokenize=False, add_generation_prompt=True)
                 for msg in batch_messages
             ]
             image_inputs, video_inputs = process_vision_info(batch_messages)
@@ -155,7 +177,7 @@ def main(args):
                 return_tensors="pd",
             )
             # TODO
-            # padding side bug 
+            # padding side bug
             inputs.update(text_inputs)
             generation_config = GenerationConfig(
                 use_cache=True,
@@ -165,13 +187,8 @@ def main(args):
                 pad_token_id=model.config.pad_token_id,
             )
             with paddle.no_grad():
-                generated_ids = model.generate(
-                    **inputs,generation_config=generation_config
-                )[0]
-            generated_ids_trimmed = [
-                out_ids
-                for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
-            ]
+                generated_ids = model.generate(**inputs, generation_config=generation_config)[0]
+            generated_ids_trimmed = [out_ids for in_ids, out_ids in zip(inputs.input_ids, generated_ids)]
             batch_output_text = processor.batch_decode(
                 generated_ids_trimmed,
                 skip_special_tokens=True,
@@ -185,7 +202,7 @@ def main(args):
             original_output = model_output
             ground_truth = input_example["solution"]
             ground_truth_normalized = input_example["normalized_solution"]
-            model_answer, normalized = extract_bbox_answer(args.method,original_output)
+            model_answer, normalized = extract_bbox_answer(args.method, original_output)
             correct = 0
             if model_answer is not None:
                 if not normalized and iou(model_answer, ground_truth) > 0.5:
@@ -203,12 +220,13 @@ def main(args):
             final_output.append(result)
         accuracy = correct_number / len(data) * 100
         print(f"\nAccuracy of {ds}: {accuracy:.2f}%")
-        output_path = OUTPUT_PATH.format(DATASET=ds,MODEL=args.model_name.lower(), METHOD=args.method, STEPS=steps)
+        output_path = OUTPUT_PATH.format(DATASET=ds, MODEL=args.model_name.lower(), METHOD=args.method, STEPS=steps)
         with open(output_path, "w") as f:
             json.dump({"accuracy": accuracy, "results": final_output}, f, indent=2)
         print(f"Results saved to {output_path}")
         print("-" * 100)
 
-if __name__=="__main__":
+
+if __name__ == "__main__":
     args = parse_args()
     main(args)

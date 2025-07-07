@@ -16,13 +16,19 @@
 import os
 import re
 from typing import Dict
-from paddlenlp.transformers import Qwen2Tokenizer
-from paddlemix.models.qwen2_vl.modeling_qwen2_vl import Qwen2VLForConditionalGeneration
-from paddlemix.processors.qwen2_vl_processing import Qwen2VLImageProcessor, Qwen2VLProcessor, process_vision_info
-from ...core import T, MMDataset, register
+
 import paddle
+from paddlenlp.transformers import Qwen2Tokenizer
 from tqdm import tqdm
 
+from paddlemix.models.qwen2_vl.modeling_qwen2_vl import Qwen2VLForConditionalGeneration
+from paddlemix.processors.qwen2_vl_processing import (
+    Qwen2VLImageProcessor,
+    Qwen2VLProcessor,
+    process_vision_info,
+)
+
+from ...core import MMDataset, register
 
 
 class QNAProcessor:
@@ -38,18 +44,20 @@ class QNAProcessor:
         Generate question-and-answer pairs for a single image.
         """
         # Prepare model inputs
-        image_inputs, video_inputs = process_vision_info([
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "image": image_path,
-                    },
-                    {"type": "text", "text": "Describe this image."},
-                ],
-            }
-        ])
+        image_inputs, video_inputs = process_vision_info(
+            [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image",
+                            "image": image_path,
+                        },
+                        {"type": "text", "text": "Describe this image."},
+                    ],
+                }
+            ]
+        )
 
         # Instruction content
         instruction = """
@@ -93,8 +101,10 @@ class QNAProcessor:
         with paddle.no_grad():
             # Inference to generate output
             generated_ids = self.model.generate(**inputs, max_new_tokens=1280)
-            output_text = self.processor.batch_decode(generated_ids[0], skip_special_tokens=True, clean_up_tokenization_spaces=False)
-            
+            output_text = self.processor.batch_decode(
+                generated_ids[0], skip_special_tokens=True, clean_up_tokenization_spaces=False
+            )
+
         # Use regular expression to parse the output and extract Q&A pairs
         qna_pairs = []
         output_text = output_text[0]
@@ -119,22 +129,18 @@ class QNAProcessor:
             qna_pairs.append([question, answer])
 
         # Return the image path and corresponding Q&A pairs
-        return {
-            "image": image_path,
-            "conversations": qna_pairs
-        }
-
+        return {"image": image_path, "conversations": qna_pairs}
 
 
 @register()
 def generate_qna_for_images(image_folder_path: str, model_name: str = "Qwen/Qwen2-VL-7B-Instruct") -> MMDataset:
     """
     Generate question-and-answer pairs for each image in the given folder path and return a dataset containing image paths and Q&A pairs.
-    
+
     Parameters:
         image_folder_path (str): Folder path containing images to process.
         model_name (str): Model name to use.
-        
+
     Returns:
         MMDataset: Generated dataset containing image paths and their corresponding Q&A pairs.
     """
@@ -144,7 +150,11 @@ def generate_qna_for_images(image_folder_path: str, model_name: str = "Qwen/Qwen
     qna_processor = QNAProcessor(model_name=model_name)
 
     # Get all image files in the folder
-    image_paths = [os.path.join(image_folder_path, filename) for filename in os.listdir(image_folder_path) if filename.lower().endswith(('.png', '.jpg', '.jpeg'))]
+    image_paths = [
+        os.path.join(image_folder_path, filename)
+        for filename in os.listdir(image_folder_path)
+        if filename.lower().endswith((".png", ".jpg", ".jpeg"))
+    ]
 
     # Generate Q&A pairs for each image
     qna_data = []

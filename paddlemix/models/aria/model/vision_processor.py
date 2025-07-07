@@ -13,17 +13,18 @@
 # limitations under the License.
 
 from typing import List, Optional, Union
+
 import numpy as np
+import paddle
+from paddlenlp.transformers.image_processing_utils import (
+    BaseImageProcessor,
+    BatchFeature,
+)
+from paddlenlp.transformers.tokenizer_utils_base import TensorType
 from PIL import Image, ImageOps
 
-import paddle
-from paddlenlp.transformers.image_processing_utils import BaseImageProcessor, BatchFeature
-from paddlenlp.transformers.tokenizer_utils_base import TensorType
 
-
-def _select_best_resolution(
-    img_width: int, img_height: int, target_ratios: List[List[int]], patch_size: int
-):
+def _select_best_resolution(img_width: int, img_height: int, target_ratios: List[List[int]], patch_size: int):
     """
     Selects the best resolution from a list of possible resolutions based on the original size.
 
@@ -46,10 +47,7 @@ def _select_best_resolution(
         if ratio_diff < best_ratio_diff:
             best_ratio_diff = ratio_diff
             best_ratio_w, best_ratio_h = ratio[0], ratio[1]
-        elif (
-            ratio_diff == best_ratio_diff
-            and area > 0.5 * patch_size * patch_size * ratio[0] * ratio[1]
-        ):
+        elif ratio_diff == best_ratio_diff and area > 0.5 * patch_size * patch_size * ratio[0] * ratio[1]:
             best_ratio_w, best_ratio_h = ratio[0], ratio[1]
     return best_ratio_w, best_ratio_h
 
@@ -70,9 +68,7 @@ def _split_image(
         List[PIL.Image]: List of split images.
     """
     if split_image:
-        ratio_width, ratio_height = _select_best_resolution(
-            image.width, image.height, split_ratio, patch_size
-        )
+        ratio_width, ratio_height = _select_best_resolution(image.width, image.height, split_ratio, patch_size)
         resize_width = patch_size * ratio_width
         resize_height = patch_size * ratio_height
         blocks = ratio_width * ratio_height
@@ -95,9 +91,7 @@ def _split_image(
         return [image]
 
 
-def keep_ratio_resize_and_pixel_mask(
-    img: Image.Image, max_size, min_size=336, padding_value=0
-):
+def keep_ratio_resize_and_pixel_mask(img: Image.Image, max_size, min_size=336, padding_value=0):
     """
     Resize an image while maintaining aspect ratio and create a pixel mask.
 
@@ -124,9 +118,7 @@ def keep_ratio_resize_and_pixel_mask(
         new_size = max(int(w * scale), min_size), max_size
     img_resized = img.resize(new_size, resample=Image.Resampling.BICUBIC)
     padding_right, padding_bottom = max_size - new_size[0], max_size - new_size[1]
-    img_padded = ImageOps.expand(
-        img_resized, (0, 0, padding_right, padding_bottom), fill=padding_value
-    )
+    img_padded = ImageOps.expand(img_resized, (0, 0, padding_right, padding_bottom), fill=padding_value)
     pixel_mask = paddle.zeros(shape=[max_size, max_size])
     pixel_mask[: new_size[1], : new_size[0]] = 1
     pixel_mask = pixel_mask.astype(dtype="bool")
@@ -139,12 +131,7 @@ class AriaVisionProcessor(BaseImageProcessor):
     """
 
     def __init__(
-        self,
-        max_image_size=980,
-        min_image_size=336,
-        image_mean=[0.5, 0.5, 0.5],
-        image_std=[0.5, 0.5, 0.5],
-        **kwargs
+        self, max_image_size=980, min_image_size=336, image_mean=[0.5, 0.5, 0.5], image_std=[0.5, 0.5, 0.5], **kwargs
     ):
         """
         Initialize the AriaVisionProcessor.
@@ -173,9 +160,7 @@ class AriaVisionProcessor(BaseImageProcessor):
             self._transform = paddle.vision.transforms.Compose(
                 transforms=[
                     paddle.vision.transforms.ToTensor(),
-                    paddle.vision.transforms.Normalize(
-                        mean=self.image_mean, std=self.image_std
-                    ),
+                    paddle.vision.transforms.Normalize(mean=self.image_mean, std=self.image_std),
                 ]
             )
         return self._transform
@@ -240,9 +225,7 @@ class AriaVisionProcessor(BaseImageProcessor):
             crop_images = _split_image(image, split_image, split_ratio, max_size)
             num_crops.append(paddle.to_tensor(data=len(crop_images)))
             for crop_image in crop_images:
-                img_padded, pixel_mask = keep_ratio_resize_and_pixel_mask(
-                    crop_image, max_size, min_size
-                )
+                img_padded, pixel_mask = keep_ratio_resize_and_pixel_mask(crop_image, max_size, min_size)
                 img_padded = self.transform(img_padded)
                 pixel_values.append(img_padded)
                 pixel_masks.append(pixel_mask)

@@ -29,6 +29,7 @@ from paddlemix.models.llava.multimodal_encoder.siglip_encoder import (
 from paddlemix.models.llava.train_utils import tokenizer_image_token
 from paddlemix.utils.log import logger
 
+
 def main(args):
     compute_dtype = "float16" if args.fp16 else "bfloat16"
     if "npu" in paddle.get_device():
@@ -73,7 +74,9 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model_path", type=str, default="lmms-lab/llava-onevision-qwen2-0.5b-si") # "lmms-lab/llava-onevision-qwen2-0.5b-ov", "lmms-lab/llava-onevision-qwen2-7b-si", "lmms-lab/llava-onevision-qwen2-7b-ov", "BAAI/Aquila-VL-2B-llava-qwen"
+    parser.add_argument(
+        "--model_path", type=str, default="lmms-lab/llava-onevision-qwen2-0.5b-si"
+    )  # "lmms-lab/llava-onevision-qwen2-0.5b-ov", "lmms-lab/llava-onevision-qwen2-7b-si", "lmms-lab/llava-onevision-qwen2-7b-ov", "BAAI/Aquila-VL-2B-llava-qwen"
     parser.add_argument("--prompt", type=str, default="What is shown in this image?")
     parser.add_argument("--image_file", type=str, default="paddlemix/demo_images/llava_v1_5_radar.jpg")
     parser.add_argument("--conv_mode", type=str, default="qwen_1_5")

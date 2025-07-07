@@ -19,7 +19,7 @@ from torchaudio.transforms import Resample
 from utils.infer_utils import resample_align_curve
 from utils.pitch_utils import interp_f0
 
-from .constants import *
+from .constants import MEL_FMAX, MEL_FMIN, N_MELS, SAMPLE_RATE, WINDOW_LENGTH
 from .model import E2E0
 from .spec import MelSpectrogram
 from .utils import to_local_average_f0, to_viterbi_f0

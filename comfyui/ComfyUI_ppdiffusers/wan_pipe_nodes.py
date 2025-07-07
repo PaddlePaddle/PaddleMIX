@@ -13,34 +13,25 @@
 # limitations under the License.
 
 
-from distutils.command.config import config
-from re import I
+import json
+import os
+
 import folder_paths
-import importlib
 import numpy as np
 import paddle
-import json
-from PIL import Image
 import torch  # for convert data
-from comfy.utils import ProgressBar
-from ppdiffusers.utils import export_to_video_2
-from ppdiffusers.transformers import AutoTokenizer, UMT5EncoderModel,T5Tokenizer,AutoConfig
-from ppdiffusers.transformers.umt5.configuration import UMT5WANConfig
-from safetensors.torch import load_file
-from ppdiffusers.models.autoencoder_kl_wan import AutoencoderKLWan
-from ppdiffusers.models.transformer_wan import WanTransformer3DModel
-from ppdiffusers.schedulers.scheduling_unipc_multistep import UniPCMultistepScheduler
-from ppdiffusers.models.transformer_wan import WanTransformer3DModel
-from ppdiffusers import (
-    WanImageToVideoPipeline,
-    WanPipeline,
-
-)
-import os
 from comfy.cli_args import args
 from comfy.comfy_types import FileLocator
-from .utils.schedulers import get_scheduler
+from PIL import Image
+from safetensors.torch import load_file
+
+from ppdiffusers import WanPipeline
+from ppdiffusers.models.autoencoder_kl_wan import AutoencoderKLWan
 from ppdiffusers.models.modeling_utils import faster_set_state_dict
+from ppdiffusers.models.transformer_wan import WanTransformer3DModel
+from ppdiffusers.schedulers.scheduling_unipc_multistep import UniPCMultistepScheduler
+from ppdiffusers.transformers import T5Tokenizer, UMT5EncoderModel
+from ppdiffusers.transformers.umt5.configuration import UMT5WANConfig
 
 
 def convert_wan_transformer_to_diffusers(checkpoint, **kwargs):
@@ -92,6 +83,7 @@ def convert_wan_transformer_to_diffusers(checkpoint, **kwargs):
         converted_state_dict[new_key] = checkpoint.pop(key)
 
     return converted_state_dict
+
 
 def convert_wan_vae_to_diffusers(checkpoint, **kwargs):
 
@@ -291,25 +283,29 @@ def convert_wan_vae_to_diffusers(checkpoint, **kwargs):
 
     return converted_state_dict
 
+
 def extract_2d_keys(state_dict):
 
     # 筛选二维张量的键名
     two_d_keys = [
-        key for key, tensor in state_dict.items() 
+        key
+        for key, tensor in state_dict.items()
         if isinstance(tensor, torch.Tensor) and tensor.ndim == 2 and "bias" not in key and "shared" not in key
     ]
 
     return two_d_keys
 
+
 def safe_param_extract(model):
     state_dict = model.state_dict()
     safe_dict = {}
-    
+
     for k, v in state_dict.items():
         # 转换为纯张量 + 断开计算图
-        safe_dict[k] = v.detach().clone().cpu()  
-        
+        safe_dict[k] = v.detach().clone().cpu()
+
     return safe_dict
+
 
 def torch2paddle(torch_state_dict):
     # torch_state_dict = load_file(torch_path)
@@ -321,7 +317,7 @@ def torch2paddle(torch_state_dict):
             continue
         v = torch_state_dict[k].detach().cpu().to(torch.float32).numpy()
         flag = [i in k for i in fc_names]
-        if any(flag) and "weight" in k: # ignore bias
+        if any(flag) and "weight" in k:  # ignore bias
             new_shape = [1, 0] + list(range(2, v.ndim))
             print(f"name: {k}, ori shape: {v.shape}, new shape: {v.transpose(new_shape).shape}")
             v = v.transpose(new_shape)
@@ -346,7 +342,7 @@ class PaddleWanVaeLoader:
     CATEGORY = "🚢 paddlemix/ppdiffusers/input"
 
     def load_vae(self, vae_name):
-        vae_config = AutoencoderKLWan.load_config("Wan-AI/Wan2.1-T2V-1.3B-Diffusers",subfolder="vae")
+        vae_config = AutoencoderKLWan.load_config("Wan-AI/Wan2.1-T2V-1.3B-Diffusers", subfolder="vae")
         vae_path = folder_paths.get_full_path("vae", vae_name)
         torch_comfyui_dict = load_file(vae_path)
         torch_dict = convert_wan_vae_to_diffusers(torch_comfyui_dict)
@@ -355,6 +351,7 @@ class PaddleWanVaeLoader:
         vae.set_dict(paddle_state_dict)
         # faster_set_state_dict(vae, paddle_state_dict)
         return (vae,)
+
 
 class PaddleTextEncodersLoader:
     @classmethod
@@ -375,6 +372,7 @@ class PaddleTextEncodersLoader:
         faster_set_state_dict(text_encoders, paddle_state_dict)
         return (text_encoders,)
 
+
 class PaddleWanT2VDiffusionLoader:
     @classmethod
     def INPUT_TYPES(cls):
@@ -386,7 +384,7 @@ class PaddleWanT2VDiffusionLoader:
     CATEGORY = "🚢 paddlemix/ppdiffusers/input"
 
     def load_diffusion_models(self, diffusion_models_name):
-        wan_config = WanTransformer3DModel.load_config("Wan-AI/Wan2.1-T2V-1.3B-Diffusers",subfolder="transformer")
+        wan_config = WanTransformer3DModel.load_config("Wan-AI/Wan2.1-T2V-1.3B-Diffusers", subfolder="transformer")
         diffusion_models_path = folder_paths.get_full_path("diffusion_models", diffusion_models_name)
         torch_comfyui_dict = load_file(diffusion_models_path)
         torch_dict = convert_wan_transformer_to_diffusers(torch_comfyui_dict)
@@ -425,22 +423,33 @@ class PaddleWanText2VideoPipe:
     FUNCTION = "sample"
     CATEGORY = "🚢 paddlemix/ppdiffusers/pipelines"
 
-    def sample(self, wan_model, text_encoders, vae, prompt, negative_prompt, seed,flow_shift,):
+    def sample(
+        self,
+        wan_model,
+        text_encoders,
+        vae,
+        prompt,
+        negative_prompt,
+        seed,
+        flow_shift,
+    ):
         paddle.seed(seed)
         scheduler = UniPCMultistepScheduler(
-            prediction_type="flow_prediction", use_flow_sigmas=True, num_train_timesteps=1000, flow_shift=flow_shift)
-        tokenizer = T5Tokenizer.from_pretrained("Wan-AI/Wan2.1-T2V-1.3B-Diffusers",subfolder="tokenizer")
-        pipe = WanPipeline(vae=vae,text_encoder=text_encoders, tokenizer=tokenizer, transformer=wan_model, scheduler=scheduler)
+            prediction_type="flow_prediction", use_flow_sigmas=True, num_train_timesteps=1000, flow_shift=flow_shift
+        )
+        tokenizer = T5Tokenizer.from_pretrained("Wan-AI/Wan2.1-T2V-1.3B-Diffusers", subfolder="tokenizer")
+        pipe = WanPipeline(
+            vae=vae, text_encoder=text_encoders, tokenizer=tokenizer, transformer=wan_model, scheduler=scheduler
+        )
 
         output = pipe(
-                prompt=prompt,
-                negative_prompt=negative_prompt,
-                height=480,
-                width=832,
-                num_frames=81,
-                guidance_scale=5.0,
-            ).frames[0]
-        
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            height=480,
+            width=832,
+            num_frames=81,
+            guidance_scale=5.0,
+        ).frames[0]
 
         return (output,)
 
@@ -452,19 +461,21 @@ class PddleSaveWAN:
         self.prefix_append = ""
 
     methods = {"default": 4, "fastest": 0, "slowest": 6}
+
     @classmethod
     def INPUT_TYPES(s):
-        return {"required":
-                    {"images": ("IMAGE", ),
-                     "filename_prefix": ("STRING", {"default": "ComfyUI"}),
-                     "fps": ("FLOAT", {"default": 6.0, "min": 0.01, "max": 1000.0, "step": 0.01}),
-                     "lossless": ("BOOLEAN", {"default": True}),
-                     "quality": ("INT", {"default": 80, "min": 0, "max": 100}),
-                     "method": (list(s.methods.keys()),),
-                     # "num_frames": ("INT", {"default": 0, "min": 0, "max": 8192}),
-                     },
-                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
-                }
+        return {
+            "required": {
+                "images": ("IMAGE",),
+                "filename_prefix": ("STRING", {"default": "ComfyUI"}),
+                "fps": ("FLOAT", {"default": 6.0, "min": 0.01, "max": 1000.0, "step": 0.01}),
+                "lossless": ("BOOLEAN", {"default": True}),
+                "quality": ("INT", {"default": 80, "min": 0, "max": 100}),
+                "method": (list(s.methods.keys()),),
+                # "num_frames": ("INT", {"default": 0, "min": 0, "max": 8192}),
+            },
+            "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
+        }
 
     RETURN_TYPES = ()
     FUNCTION = "save_images"
@@ -473,14 +484,18 @@ class PddleSaveWAN:
 
     CATEGORY = "🚢 paddlemix/ppdiffusers/output"
 
-    def save_images(self, images, fps, filename_prefix, lossless, quality, method, num_frames=0, prompt=None, extra_pnginfo=None):
+    def save_images(
+        self, images, fps, filename_prefix, lossless, quality, method, num_frames=0, prompt=None, extra_pnginfo=None
+    ):
         method = self.methods.get(method)
         filename_prefix += self.prefix_append
-        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, self.output_dir, images[0].shape[1], images[0].shape[0])
+        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(
+            filename_prefix, self.output_dir, images[0].shape[1], images[0].shape[0]
+        )
         results: list[FileLocator] = []
         pil_images = []
         for image in images:
-            i = 255. * image
+            i = 255.0 * image
             img = Image.fromarray(np.clip(i, 0, 255).astype(np.uint8))
             pil_images.append(img)
 
@@ -489,7 +504,7 @@ class PddleSaveWAN:
             if prompt is not None:
                 metadata[0x0110] = "prompt:{}".format(json.dumps(prompt))
             if extra_pnginfo is not None:
-                inital_exif = 0x010f
+                inital_exif = 0x010F
                 for x in extra_pnginfo:
                     metadata[inital_exif] = "{}:{}".format(x, json.dumps(extra_pnginfo[x]))
                     inital_exif -= 1
@@ -500,16 +515,21 @@ class PddleSaveWAN:
         c = len(pil_images)
         for i in range(0, c, num_frames):
             file = f"{filename}_{counter:05}_.webp"
-            pil_images[i].save(os.path.join(full_output_folder, file), save_all=True, duration=int(1000.0/fps), append_images=pil_images[i + 1:i + num_frames], exif=metadata, lossless=lossless, quality=quality, method=method)
-            results.append({
-                "filename": file,
-                "subfolder": subfolder,
-                "type": self.type
-            })
+            pil_images[i].save(
+                os.path.join(full_output_folder, file),
+                save_all=True,
+                duration=int(1000.0 / fps),
+                append_images=pil_images[i + 1 : i + num_frames],
+                exif=metadata,
+                lossless=lossless,
+                quality=quality,
+                method=method,
+            )
+            results.append({"filename": file, "subfolder": subfolder, "type": self.type})
             counter += 1
 
         animated = num_frames != 1
-        return { "ui": { "images": results, "animated": (animated,) } }
+        return {"ui": {"images": results, "animated": (animated,)}}
 
 
 NODE_CLASS_MAPPINGS = {
@@ -518,7 +538,6 @@ NODE_CLASS_MAPPINGS = {
     "PaddleWanT2VDiffusionLoader": PaddleWanT2VDiffusionLoader,
     "PaddleWanText2VideoPipe": PaddleWanText2VideoPipe,
     "PddleSaveWAN": PddleSaveWAN,
-
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -527,5 +546,4 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "PaddleWanT2VDiffusionLoader": "Paddle Wan T2V Diffusion Loader",
     "PaddleWanText2VideoPipe": "Paddle Wan Text2Video Pipe",
     "PddleSaveWAN": "Paddle Save WAN",
-
 }

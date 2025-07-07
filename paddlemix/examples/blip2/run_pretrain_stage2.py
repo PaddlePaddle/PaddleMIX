@@ -258,7 +258,7 @@ def main():
         trainer.save_state()
 
 
-def setdistenv(args):    
+def setdistenv(args):
     args.sharding_degree = 1 if args.sharding_degree == -1 else args.sharding_degree
     args.tensor_parallel_degree = 1 if args.tensor_parallel_degree == -1 else args.tensor_parallel_degree
     args.pipeline_parallel_degree = 1 if args.pipeline_parallel_degree == -1 else args.pipeline_parallel_degree

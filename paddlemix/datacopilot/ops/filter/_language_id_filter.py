@@ -13,29 +13,39 @@
 # limitations under the License.
 
 import os
+from functools import partial
+from typing import List, Optional, Union
+
 import fasttext
 import requests
-from typing import Optional, List, Union
-from functools import partial
+
 from ...core import MMDataset, register
 
 FASTTEXT_MODEL_PATH = "lid.176.bin"
 FASTTEXT_MODEL_URL = "https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.bin"
 
 # Check and load the FastText model
+
+
 def load_fasttext_model(model_path: str, model_url: str) -> fasttext.FastText._FastText:
     if not os.path.exists(model_path):
         print(f"FastText model file {model_path} not found. Downloading...")
         os.makedirs(os.path.dirname(model_path), exist_ok=True)
         response = requests.get(model_url, stream=True)
-        with open(model_path, 'wb') as f:
+        with open(model_path, "wb") as f:
             f.write(response.content)
         print(f"FastText model downloaded to {model_path}")
     print(f"Loading FastText model from {model_path}...")
     return fasttext.load_model(model_path)
 
+
 # Check if the sample's language meets the requirements
-def is_language_valid(item, lang: Optional[Union[str, List[str]]] = None, min_score: float = 0.8, lang_model: fasttext.FastText._FastText = None) -> bool:
+def is_language_valid(
+    item,
+    lang: Optional[Union[str, List[str]]] = None,
+    min_score: float = 0.8,
+    lang_model: fasttext.FastText._FastText = None,
+) -> bool:
     """
     Check if the sample's language matches the specified language(s) and has a confidence score above the minimum threshold.
 
@@ -50,9 +60,11 @@ def is_language_valid(item, lang: Optional[Union[str, List[str]]] = None, min_sc
     """
 
     # Concatenate conversations into a single string for language detection
-    user_conv = '\n\n'.join(
-        ''.join(conversation) for conversation in item['conversations']
-    ).replace('<image>', '').replace('\n', '')
+    user_conv = (
+        "\n\n".join("".join(conversation) for conversation in item["conversations"])
+        .replace("<image>", "")
+        .replace("\n", "")
+    )
 
     try:
         prediction = lang_model.predict(user_conv, k=1)
@@ -71,10 +83,11 @@ def is_language_valid(item, lang: Optional[Union[str, List[str]]] = None, min_sc
         # If no language is specified, only check confidence score
         return lang_score >= min_score
 
+
 @register()
 def language_id_filter(
-    dataset: MMDataset, 
-    lang: Optional[Union[str, List[str]]] = None, 
+    dataset: MMDataset,
+    lang: Optional[Union[str, List[str]]] = None,
     min_score: float = 0.8,
 ) -> MMDataset:
     """
@@ -97,10 +110,6 @@ def language_id_filter(
     filter_func = partial(is_language_valid, lang=lang, min_score=min_score, lang_model=lang_model)
 
     # Apply dataset.filter
-    filtered_dataset = dataset.filter(
-        func=filter_func, 
-        max_workers=8, 
-        progress=True
-    )
+    filtered_dataset = dataset.filter(func=filter_func, max_workers=8, progress=True)
 
     return filtered_dataset

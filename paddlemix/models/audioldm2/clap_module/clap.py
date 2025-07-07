@@ -12,15 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .model import CLAP, CLAPAudioCfg, CLAPTextCfg
 import dataclasses
 from dataclasses import dataclass, field
+
+from .model import CLAP, CLAPAudioCfg, CLAPTextCfg
+
 
 @dataclass
 class CLAPConfig:
     embed_dim: int = 1024
     audio_cfg: CLAPAudioCfg = field(default_factory=CLAPAudioCfg())
     text_cfg: CLAPTextCfg = field(default_factory=CLAPTextCfg())
+
 
 def create_clap_model(
     amodel_name: str,
@@ -29,7 +32,7 @@ def create_clap_model(
     precision: str = "fp32",
     force_quick_gelu: bool = False,
     enable_fusion: bool = False,
-    fusion_type: str = "None"
+    fusion_type: str = "None",
 ):
     pretrained = pretrained.lower()
 

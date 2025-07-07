@@ -1,3 +1,17 @@
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from paddlemix.datacopilot.core import MMDataset
 from paddlemix.datacopilot.ops.visualize._lda_t_sne import lda_topic_clustering
 
@@ -12,12 +26,12 @@ print(f"Dataset size: {len(dataset)} samples")
 # Perform LDA topic clustering
 results = lda_topic_clustering(
     dataset=dataset,
-    num_topics=5,                 # Number of topics to identify
-    tsne_perplexity=30,           # Perplexity parameter for T-SNE
-    tsne_learning_rate=200,       # Learning rate for T-SNE
-    tsne_n_iter=1000,             # Number of T-SNE optimization iterations
-    random_state=42,              # Random seed for reproducibility
-    output_plot="lda_tsne_plot.png"  # Path to save the visualization
+    num_topics=5,  # Number of topics to identify
+    tsne_perplexity=30,  # Perplexity parameter for T-SNE
+    tsne_learning_rate=200,  # Learning rate for T-SNE
+    tsne_n_iter=1000,  # Number of T-SNE optimization iterations
+    random_state=42,  # Random seed for reproducibility
+    output_plot="lda_tsne_plot.png",  # Path to save the visualization
 )
 
 # Print results

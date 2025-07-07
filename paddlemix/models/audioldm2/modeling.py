@@ -12,32 +12,37 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+
+import numpy as np
 import paddle
 import paddle.nn as nn
-import os
-import numpy as np
-from paddlemix.models.model_utils import MixPretrainedModel
+
 # from ppdiffusers.models import LitEma
 import soundfile as sf
 import tqdm
-from .encoders.clap_encoder import CLAPAudioEmbeddingClassifierFreev2
-from .latentdiffusion_samplers import DDIMSampler, PLMSSampler
-from .latent_encoder.autoencoder import DiagonalGaussianDistribution
+
+from paddlemix.models.model_utils import MixPretrainedModel
+
+from .configuration import AudioLDM2Config
 from .diffusionwrapper import (
     DiffusionWrapper,
-    make_beta_schedule,
-    extract_into_tensor,
-    noise_like,
     default,
+    disabled_train,
+    extract_into_tensor,
     instantiate_from_config,
-    disabled_train
+    make_beta_schedule,
+    noise_like,
 )
-from .configuration import AudioLDM2Config
+from .encoders.clap_encoder import CLAPAudioEmbeddingClassifierFreev2
+from .latent_encoder.autoencoder import DiagonalGaussianDistribution
+from .latentdiffusion_samplers import DDIMSampler, PLMSSampler
 
 __all__ = [
     "AudioLDM2Model",
     "AudioLDM2PretrainedModel",
 ]
+
 
 class AudioLDM2PretrainedModel(MixPretrainedModel):
     """
@@ -48,6 +53,7 @@ class AudioLDM2PretrainedModel(MixPretrainedModel):
     config_class = AudioLDM2Config
     resource_files_names = {"model_state": "model_state.pdparams"}
     base_model_prefix = "audioldm2"
+
 
 class AudioLDM2Model(AudioLDM2PretrainedModel):
     """
@@ -75,7 +81,7 @@ class AudioLDM2Model(AudioLDM2PretrainedModel):
 
         self.clap = CLAPAudioEmbeddingClassifierFreev2(
             pretrained_path="",
-            enable_cuda=self.device_name=="gpu",
+            enable_cuda=self.device_name == "gpu",
             sampling_rate=self.sampling_rate,
             embed_mode="audio",
             amodel="HTSAT-base",
@@ -103,7 +109,7 @@ class AudioLDM2Model(AudioLDM2PretrainedModel):
         self.logvar = paddle.create_parameter(
             shape=self.logvar.shape,
             dtype=str(self.logvar.numpy().dtype),
-            default_initializer=nn.initializer.Assign(self.logvar)
+            default_initializer=nn.initializer.Assign(self.logvar),
         )
         self.logvar.stop_gradient = True
 
@@ -134,7 +140,7 @@ class AudioLDM2Model(AudioLDM2PretrainedModel):
                 "cond_stage_key": config[cond_model_key]["cond_stage_key"],
                 "conditioning_key": config[cond_model_key]["conditioning_key"],
             }
-    
+
     def make_cond_schedule(
         self,
     ):
@@ -144,13 +150,9 @@ class AudioLDM2Model(AudioLDM2PretrainedModel):
             dtype="int64",
         )
         ids = paddle.cast(
-            paddle.round(
-                paddle.linspace(0, self.num_timesteps - 1, self.num_timesteps_cond)
-            ),
-            dtype="int64"
+            paddle.round(paddle.linspace(0, self.num_timesteps - 1, self.num_timesteps_cond)), dtype="int64"
         )
         self.cond_ids[: self.num_timesteps_cond] = ids
-
 
     def register_schedule(
         self,
@@ -175,9 +177,7 @@ class AudioLDM2Model(AudioLDM2PretrainedModel):
         self.num_timesteps = int(timesteps)
         self.linear_start = linear_start
         self.linear_end = linear_end
-        assert (
-            alphas_cumprod.shape[0] == self.num_timesteps
-        ), "alphas have to be defined for each timestep"
+        assert alphas_cumprod.shape[0] == self.num_timesteps, "alphas have to be defined for each timestep"
 
         self.register_buffer("betas", paddle.to_tensor(betas, dtype="float32"))
         self.register_buffer("alphas_cumprod", paddle.to_tensor(alphas_cumprod, dtype="float32"))
@@ -199,9 +199,9 @@ class AudioLDM2Model(AudioLDM2PretrainedModel):
         )
 
         # calculations for posterior q(x_{t-1} | x_t, x_0)
-        posterior_variance = (1 - self.v_posterior) * betas * (
-            1.0 - alphas_cumprod_prev
-        ) / (1.0 - alphas_cumprod) + self.v_posterior * betas
+        posterior_variance = (1 - self.v_posterior) * betas * (1.0 - alphas_cumprod_prev) / (
+            1.0 - alphas_cumprod
+        ) + self.v_posterior * betas
         # above: equal to 1. / (1. / (1. - alpha_cumprod_tm1) + alpha_t / beta_t)
         self.register_buffer("posterior_variance", paddle.to_tensor(posterior_variance, dtype="float32"))
         # below: log calculation clipped because the posterior variance is 0 at the beginning of the diffusion chain
@@ -215,18 +215,12 @@ class AudioLDM2Model(AudioLDM2PretrainedModel):
         )
         self.register_buffer(
             "posterior_mean_coef2",
-            paddle.to_tensor(
-                (1.0 - alphas_cumprod_prev) * np.sqrt(alphas) / (1.0 - alphas_cumprod),
-                dtype="float32"
-            ),
+            paddle.to_tensor((1.0 - alphas_cumprod_prev) * np.sqrt(alphas) / (1.0 - alphas_cumprod), dtype="float32"),
         )
 
         if self.parameterization == "eps":
             lvlb_weights = self.betas**2 / (
-                2
-                * self.posterior_variance
-                * paddle.to_tensor(alphas, dtype="float32")
-                * (1 - self.alphas_cumprod)
+                2 * self.posterior_variance * paddle.to_tensor(alphas, dtype="float32") * (1 - self.alphas_cumprod)
             )
         elif self.parameterization == "x0":
             lvlb_weights = (
@@ -237,12 +231,7 @@ class AudioLDM2Model(AudioLDM2PretrainedModel):
         elif self.parameterization == "v":
             lvlb_weights = paddle.ones_like(
                 self.betas**2
-                / (
-                    2
-                    * self.posterior_variance
-                    * paddle.to_tensor(alphas, dtype="float32")
-                    * (1 - self.alphas_cumprod)
-                )
+                / (2 * self.posterior_variance * paddle.to_tensor(alphas, dtype="float32") * (1 - self.alphas_cumprod))
             )
         else:
             raise NotImplementedError("mu not supported")
@@ -270,16 +259,13 @@ class AudioLDM2Model(AudioLDM2PretrainedModel):
         """
         mean = extract_into_tensor(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start
         variance = extract_into_tensor(1.0 - self.alphas_cumprod, t, x_start.shape)
-        log_variance = extract_into_tensor(
-            self.log_one_minus_alphas_cumprod, t, x_start.shape
-        )
+        log_variance = extract_into_tensor(self.log_one_minus_alphas_cumprod, t, x_start.shape)
         return mean, variance, log_variance
 
     def predict_start_from_noise(self, x_t, t, noise):
         return (
             extract_into_tensor(self.sqrt_recip_alphas_cumprod, t, x_t.shape) * x_t
-            - extract_into_tensor(self.sqrt_recipm1_alphas_cumprod, t, x_t.shape)
-            * noise
+            - extract_into_tensor(self.sqrt_recipm1_alphas_cumprod, t, x_t.shape) * noise
         )
 
     def q_posterior(self, x_start, x_t, t):
@@ -288,9 +274,7 @@ class AudioLDM2Model(AudioLDM2PretrainedModel):
             + extract_into_tensor(self.posterior_mean_coef2, t, x_t.shape) * x_t
         )
         posterior_variance = extract_into_tensor(self.posterior_variance, t, x_t.shape)
-        posterior_log_variance_clipped = extract_into_tensor(
-            self.posterior_log_variance_clipped, t, x_t.shape
-        )
+        posterior_log_variance_clipped = extract_into_tensor(self.posterior_log_variance_clipped, t, x_t.shape)
         return posterior_mean, posterior_variance, posterior_log_variance_clipped
 
     def p_mean_variance(
@@ -310,9 +294,7 @@ class AudioLDM2Model(AudioLDM2PretrainedModel):
 
         if score_corrector is not None:
             assert self.parameterization == "eps"
-            model_out = score_corrector.modify_score(
-                self, model_out, x, t, c, **corrector_kwargs
-            )
+            model_out = score_corrector.modify_score(self, model_out, x, t, c, **corrector_kwargs)
 
         if return_codebook_ids:
             model_out, logits = model_out
@@ -328,9 +310,7 @@ class AudioLDM2Model(AudioLDM2PretrainedModel):
             x_recon.clip_(-1.0, 1.0)
         if quantize_denoised:
             x_recon, _, [_, _, indices] = self.first_stage_model.quantize(x_recon)
-        model_mean, posterior_variance, posterior_log_variance = self.q_posterior(
-            x_start=x_recon, x_t=x, t=t
-        )
+        model_mean, posterior_variance, posterior_log_variance = self.q_posterior(x_start=x_recon, x_t=x, t=t)
         if return_codebook_ids:
             return model_mean, posterior_variance, posterior_log_variance, logits
         elif return_x0:
@@ -377,9 +357,7 @@ class AudioLDM2Model(AudioLDM2PretrainedModel):
         if noise_dropout > 0.0:
             noise = nn.functional.dropout(noise, p=noise_dropout)
         # no noise when t == 0
-        nonzero_mask = (
-            (1 - paddle.cast(t == 0, "float32")).reshape((b, *((1,) * (len(x.shape) - 1))))
-        )
+        nonzero_mask = (1 - paddle.cast(t == 0, "float32")).reshape((b, *((1,) * (len(x.shape) - 1))))
 
         if return_x0:
             return (
@@ -487,11 +465,7 @@ class AudioLDM2Model(AudioLDM2PretrainedModel):
                     for key in cond
                 }
             else:
-                cond = (
-                    [c[:batch_size] for c in cond]
-                    if isinstance(cond, list)
-                    else cond[:batch_size]
-                )
+                cond = [c[:batch_size] for c in cond] if isinstance(cond, list) else cond[:batch_size]
         return self.p_sample_loop(
             cond,
             shape,
@@ -504,7 +478,7 @@ class AudioLDM2Model(AudioLDM2PretrainedModel):
             x0=x0,
             **kwargs,
         )
-    
+
     @paddle.no_grad()
     def sample_log(
         self,
@@ -568,8 +542,7 @@ class AudioLDM2Model(AudioLDM2PretrainedModel):
         noise = default(noise, lambda: paddle.randn(x_start.shape))
         return (
             extract_into_tensor(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start
-            + extract_into_tensor(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape)
-            * noise
+            + extract_into_tensor(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape) * noise
         )
 
     def predict_start_from_z_and_v(self, x_t, t, v):
@@ -581,8 +554,7 @@ class AudioLDM2Model(AudioLDM2PretrainedModel):
     def predict_eps_from_z_and_v(self, x_t, t, v):
         return (
             extract_into_tensor(self.sqrt_alphas_cumprod, t, x_t.shape) * v
-            + extract_into_tensor(self.sqrt_one_minus_alphas_cumprod, t, x_t.shape)
-            * x_t
+            + extract_into_tensor(self.sqrt_one_minus_alphas_cumprod, t, x_t.shape) * x_t
         )
 
     def get_v(self, x, noise, t):
@@ -590,7 +562,7 @@ class AudioLDM2Model(AudioLDM2PretrainedModel):
             extract_into_tensor(self.sqrt_alphas_cumprod, t, x.shape) * noise
             - extract_into_tensor(self.sqrt_one_minus_alphas_cumprod, t, x.shape) * x
         )
-    
+
     def _get_input(self, batch, k):
         fname, text, waveform, stft, fbank, phoneme_idx = (
             batch["fname"],
@@ -598,13 +570,11 @@ class AudioLDM2Model(AudioLDM2PretrainedModel):
             batch["waveform"],
             batch["stft"],
             batch["log_mel_spec"],
-            batch["phoneme_idx"]
+            batch["phoneme_idx"],
         )
         ret = {}
 
-        ret["fbank"] = (
-            paddle.cast(fbank.unsqueeze(1), dtype="float32")
-        )
+        ret["fbank"] = paddle.cast(fbank.unsqueeze(1), dtype="float32")
         ret["stft"] = paddle.cast(stft, dtype="float32")
         ret["waveform"] = paddle.cast(waveform, dtype="float32")
         ret["phoneme_idx"] = paddle.cast(phoneme_idx, dtype="int64")
@@ -624,19 +594,15 @@ class AudioLDM2Model(AudioLDM2PretrainedModel):
         elif isinstance(encoder_posterior, paddle.Tensor):
             z = encoder_posterior
         else:
-            raise NotImplementedError(
-                f"encoder_posterior of type '{type(encoder_posterior)}' not yet implemented"
-            )
+            raise NotImplementedError(f"encoder_posterior of type '{type(encoder_posterior)}' not yet implemented")
         return self.scale_factor * z
-    
+
     def get_learned_conditioning(self, c, key, unconditional_cfg):
         assert key in self.cond_stage_model_metadata.keys()
 
         # Classifier-free guidance
         if not unconditional_cfg:
-            c = self.cond_stage_models[
-                self.cond_stage_model_metadata[key]["model_idx"]
-            ](c)
+            c = self.cond_stage_models[self.cond_stage_model_metadata[key]["model_idx"]](c)
         else:
             # when the cond_stage_key is "all", pick one random element out
             if isinstance(c, dict):
@@ -649,12 +615,12 @@ class AudioLDM2Model(AudioLDM2PretrainedModel):
             else:
                 raise NotImplementedError()
 
-            c = self.cond_stage_models[
-                self.cond_stage_model_metadata[key]["model_idx"]
-            ].get_unconditional_condition(batchsize)
+            c = self.cond_stage_models[self.cond_stage_model_metadata[key]["model_idx"]].get_unconditional_condition(
+                batchsize
+            )
 
         return c
-    
+
     def get_input(
         self,
         batch,
@@ -675,14 +641,10 @@ class AudioLDM2Model(AudioLDM2PretrainedModel):
         cond_dict = {}
         if len(self.cond_stage_model_metadata.keys()) > 0:
             unconditional_cfg = False
-            if self.conditional_dry_run_finished and self.make_decision(
-                unconditional_prob_cfg
-            ):
+            if self.conditional_dry_run_finished and self.make_decision(unconditional_prob_cfg):
                 unconditional_cfg = True
             for cond_model_key in self.cond_stage_model_metadata.keys():
-                cond_stage_key = self.cond_stage_model_metadata[cond_model_key][
-                    "cond_stage_key"
-                ]
+                cond_stage_key = self.cond_stage_model_metadata[cond_model_key]["cond_stage_key"]
 
                 if cond_model_key in cond_dict.keys():
                     continue
@@ -695,9 +657,7 @@ class AudioLDM2Model(AudioLDM2PretrainedModel):
                     xc = batch
                 # if cond_stage_key is "all", xc will be a dictionary containing all keys
                 # Otherwise xc will be an entry of the dictionary
-                c = self.get_learned_conditioning(
-                    xc, key=cond_model_key, unconditional_cfg=unconditional_cfg
-                )
+                c = self.get_learned_conditioning(xc, key=cond_model_key, unconditional_cfg=unconditional_cfg)
                 # cond_dict will be used to condition the diffusion model
                 # If one conditional model return multiple conditioning signal
                 if isinstance(c, dict):
@@ -705,7 +665,7 @@ class AudioLDM2Model(AudioLDM2PretrainedModel):
                         cond_dict[k] = c[k]
                 else:
                     cond_dict[cond_model_key] = c
-                
+
         out = [z, cond_dict]
 
         if return_decoding_output:
@@ -727,16 +687,14 @@ class AudioLDM2Model(AudioLDM2PretrainedModel):
     def encode_first_stage(self, x):
         with paddle.no_grad():
             return self.first_stage_model.encode(x)
-        
+
     def decode_first_stage(self, z):
         with paddle.no_grad():
             z = 1.0 / self.scale_factor * z
             decoding = self.first_stage_model.decode(z)
         return decoding
-    
-    def mel_spectrogram_to_waveform(
-        self, mel, savepath=".", bs=None, name="outwav", save=True
-    ):
+
+    def mel_spectrogram_to_waveform(self, mel, savepath=".", bs=None, name="outwav", save=True):
         # Mel: [bs, 1, t-steps, fbins]
         if len(mel.shape) == 4:
             mel = mel.squeeze(1)
@@ -746,20 +704,18 @@ class AudioLDM2Model(AudioLDM2PretrainedModel):
         if save:
             self.save_waveform(waveform, savepath, name)
         return waveform
-    
+
     def save_waveform(self, waveform, savepath, name="outwav"):
         for i in range(waveform.shape[0]):
             if type(name) is str:
-                path = os.path.join(
-                    savepath, "%s_%s_%s.wav" % (self.global_step, i, name)
-                )
+                path = os.path.join(savepath, "%s_%s_%s.wav" % (self.global_step, i, name))
             elif type(name) is list:
                 path = os.path.join(
                     savepath,
                     "%s.wav"
                     % (
                         os.path.basename(name[i])
-                        if (not ".wav" in name[i])
+                        if (".wav" not in name[i])
                         else os.path.basename(name[i]).split(".")[0]
                     ),
                 )
@@ -785,7 +741,7 @@ class AudioLDM2Model(AudioLDM2PretrainedModel):
             )
 
         return new_cond_dict
-    
+
     def reorder_cond_dict(self, cond_dict):
         # To make sure the order is correct
         new_cond_dict = {}
@@ -802,7 +758,7 @@ class AudioLDM2Model(AudioLDM2PretrainedModel):
             return x_recon[0]
         else:
             return x_recon
-    
+
     def forward(
         self,
         batch,
@@ -857,9 +813,9 @@ class AudioLDM2Model(AudioLDM2PretrainedModel):
                 unconditional_conditioning = {}
                 for key in self.cond_stage_model_metadata:
                     model_idx = self.cond_stage_model_metadata[key]["model_idx"]
-                    unconditional_conditioning[key] = self.cond_stage_models[
-                        model_idx
-                    ].get_unconditional_condition(batch_size)
+                    unconditional_conditioning[key] = self.cond_stage_models[model_idx].get_unconditional_condition(
+                        batch_size
+                    )
 
             fnames = list(self._get_input(batch, "fname"))
             samples, _ = self.sample_log(
@@ -876,15 +832,11 @@ class AudioLDM2Model(AudioLDM2PretrainedModel):
 
             mel = self.decode_first_stage(samples)
 
-            waveform = self.mel_spectrogram_to_waveform(
-                mel, savepath="", bs=None, name=fnames, save=False
-            )
+            waveform = self.mel_spectrogram_to_waveform(mel, savepath="", bs=None, name=fnames, save=False)
 
             if n_gen > 1:
                 best_index = []
-                similarity = self.clap.cos_similarity(
-                    paddle.to_tensor(waveform, dtype="float32").squeeze(1), text
-                )
+                similarity = self.clap.cos_similarity(paddle.to_tensor(waveform, dtype="float32").squeeze(1), text)
                 for i in range(z.shape[0]):
                     candidates = similarity[i :: z.shape[0]]
                     max_index = paddle.argmax(candidates).item()
@@ -893,7 +845,7 @@ class AudioLDM2Model(AudioLDM2PretrainedModel):
                 waveform = waveform[best_index]
 
                 print("Similarity between generated audio and text:")
-                print(' '.join('{:.2f}'.format(num) for num in similarity.detach().numpy().tolist()))
+                print(" ".join("{:.2f}".format(num) for num in similarity.detach().numpy().tolist()))
                 print("Choose the following indexes as the output:", best_index)
 
             return waveform

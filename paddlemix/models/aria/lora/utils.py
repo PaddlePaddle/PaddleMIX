@@ -14,15 +14,13 @@
 
 from typing import List
 
-import paddlenlp
+import paddle
 from aria.config import AriaModelConfig
 
 logger = paddle.utils.try_import("logging").getLogger(name=__name__)
 
 
-def get_lora_target_modules(
-    model_named_modules: List[str], config: AriaModelConfig
-) -> List[str]:
+def get_lora_target_modules(model_named_modules: List[str], config: AriaModelConfig) -> List[str]:
     """
     This function identifies and return the target modules for LoRA based on the config.
     """
@@ -47,9 +45,7 @@ def get_lora_target_modules(
             continue
         for module in config.lora_target_modules:
             if module in key:
-                logger.info(
-                    f"Adding {key} to lora target modules, as it contains {module}"
-                )
+                logger.info(f"Adding {key} to lora target modules, as it contains {module}")
                 lora_target_modules.append(key)
                 break
     return lora_target_modules

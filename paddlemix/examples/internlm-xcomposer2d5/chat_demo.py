@@ -15,13 +15,14 @@
 # @Time    : 2025/5/14 下午1:33
 # @Author  : Ismoothly(1844252306@qq.com)
 
+import argparse
 import os
-import argparse 
+
 import cv2
 import paddle
-import numpy as np
-from paddlenlp.transformers import AutoTokenizer, AutoModelForCausalLM
 from paddle.vision import transforms
+from paddlenlp.transformers import AutoModelForCausalLM, AutoTokenizer
+
 
 def main(args):
     # 检查图像路径并修改文本
@@ -33,9 +34,7 @@ def main(args):
     # 加载 tokenizer 和模型
     tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=True)
     model = AutoModelForCausalLM.from_pretrained(
-        model_name_or_path,
-        dtype=paddle.float16,  # 确保模型以 float16 加载
-        trust_remote_code=True
+        model_name_or_path, dtype=paddle.float16, trust_remote_code=True  # 确保模型以 float16 加载
     )
     model.eval()
 
@@ -51,11 +50,13 @@ def main(args):
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
         # 图像转换
-        transform = transforms.Compose([
-            transforms.ToPILImage(),  # 将 NumPy 数组转换为 PIL 图像
-            transforms.Resize((560, 560)),  # 根据模型要求调整大小
-            transforms.ToTensor(),           # 转换为张量
-        ])
+        transform = transforms.Compose(
+            [
+                transforms.ToPILImage(),  # 将 NumPy 数组转换为 PIL 图像
+                transforms.Resize((560, 560)),  # 根据模型要求调整大小
+                transforms.ToTensor(),  # 转换为张量
+            ]
+        )
 
         # 转换为张量并添加批次维度
         image_tensor = transform(image).unsqueeze(0)  # 现在形状为 (1, 3, 560, 560)
@@ -89,6 +90,7 @@ def main(args):
         # 添加更多调试信息
         print(f"Model dtype: {next(model.parameters()).dtype}")
         print(f"Image tensor dtype in chat: {image_tensor.dtype}")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="请详细描述这张图片。")

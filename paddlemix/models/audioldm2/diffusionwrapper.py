@@ -12,11 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import importlib
+from inspect import isfunction
+
+import numpy as np
 import paddle
 import paddle.nn as nn
-from inspect import isfunction
-import importlib
-import numpy as np
+
 
 class DiffusionWrapper(nn.Layer):
     def __init__(self, diff_model_config, conditioning_key):
@@ -26,13 +28,7 @@ class DiffusionWrapper(nn.Layer):
         self.conditioning_key = conditioning_key
 
         for key in self.conditioning_key:
-            if (
-                "concat" in key
-                or "crossattn" in key
-                or "hybrid" in key
-                or "film" in key
-                or "noncond" in key
-            ):
+            if "concat" in key or "crossattn" in key or "hybrid" in key or "film" in key or "noncond" in key:
                 continue
             else:
                 raise ValueError("The conditioning key %s is illegal" % key)
@@ -65,9 +61,10 @@ class DiffusionWrapper(nn.Layer):
                                 k
                             ]  # crossattn_audiomae_pooled: paddle.Size([12, 128, 768])
                 else:
-                    assert len(cond_dict[key]) == 2, (
-                        "The context condition for %s you returned should have two element, one context one mask"
-                        % (key)
+                    assert (
+                        len(cond_dict[key]) == 2
+                    ), "The context condition for %s you returned should have two element, one context one mask" % (
+                        key
                     )
                     context, attn_mask = cond_dict[key]
 
@@ -82,20 +79,20 @@ class DiffusionWrapper(nn.Layer):
             else:
                 raise NotImplementedError()
 
-        out = self.diffusion_model(
-            xc, t, context_list=context_list, y=y, context_attn_mask_list=attn_mask_list
-        )
+        out = self.diffusion_model(xc, t, context_list=context_list, y=y, context_attn_mask_list=attn_mask_list)
 
         return out
 
+
 def instantiate_from_config(config):
-    if not "target" in config:
+    if "target" not in config:
         if config == "__is_first_stage__":
             return None
         elif config == "__is_unconditional__":
             return None
         raise KeyError("Expected key `target` to instantiate.")
     return get_obj_from_str(config["target"])(**config.get("params", dict()))
+
 
 def get_obj_from_str(string, reload=False):
     module, cls = string.rsplit(".", 1)
@@ -104,28 +101,21 @@ def get_obj_from_str(string, reload=False):
         importlib.reload(module_imp)
     return getattr(importlib.import_module(module, package="paddlemix.models.audioldm2"), cls)
 
+
 def count_params(model, verbose=False):
     total_params = sum(p.numel() for p in model.parameters())
     if verbose:
-        tmp = float(total_params * 1.e-6)
+        tmp = float(total_params * 1.0e-6)
         print(f"{model.__class__.__name__} has {tmp:.2f} M params.")
     return total_params
 
-def make_beta_schedule(
-    schedule, n_timestep, linear_start=1e-4, linear_end=2e-2, cosine_s=8e-3
-):
+
+def make_beta_schedule(schedule, n_timestep, linear_start=1e-4, linear_end=2e-2, cosine_s=8e-3):
     if schedule == "linear":
-        betas = (
-            paddle.linspace(
-                linear_start**0.5, linear_end**0.5, n_timestep, dtype="float64"
-            )
-            ** 2
-        )
+        betas = paddle.linspace(linear_start**0.5, linear_end**0.5, n_timestep, dtype="float64") ** 2
 
     elif schedule == "cosine":
-        timesteps = (
-            paddle.arange(n_timestep + 1, dtype="float64") / n_timestep + cosine_s
-        )
+        timesteps = paddle.arange(n_timestep + 1, dtype="float64") / n_timestep + cosine_s
         alphas = timesteps / (1 + cosine_s) * np.pi / 2
         alphas = paddle.cos(alphas).pow(2)
         alphas = alphas / alphas[0]
@@ -133,32 +123,31 @@ def make_beta_schedule(
         betas = np.clip(betas, a_min=0, a_max=0.999)
 
     elif schedule == "sqrt_linear":
-        betas = paddle.linspace(
-            linear_start, linear_end, n_timestep, dtype="float64"
-        )
+        betas = paddle.linspace(linear_start, linear_end, n_timestep, dtype="float64")
     elif schedule == "sqrt":
-        betas = (
-            paddle.linspace(linear_start, linear_end, n_timestep, dtype="float64")
-            ** 0.5
-        )
+        betas = paddle.linspace(linear_start, linear_end, n_timestep, dtype="float64") ** 0.5
     else:
         raise ValueError(f"schedule '{schedule}' unknown.")
     return betas.numpy()
+
 
 def extract_into_tensor(a, t, x_shape):
     b, *_ = t.shape
     out = a.gather(t, -1)
     return out.reshape((b,) + ((1,) * (len(x_shape) - 1)))
 
+
 def noise_like(shape, repeat=False):
     repeat_noise = lambda: paddle.randn((1, *shape[1:])).repeat_interleave(repeats=shape[0], axis=0)
     noise = lambda: paddle.randn(shape)
     return repeat_noise() if repeat else noise()
 
+
 def default(val, d):
     if val is not None:
         return val
     return d() if isfunction(d) else d
+
 
 def disabled_train(self, mode=True):
     """Overwrite model.train with this function to make sure train/eval mode

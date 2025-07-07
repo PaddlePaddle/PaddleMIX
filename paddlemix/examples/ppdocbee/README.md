@@ -50,7 +50,7 @@ python -m pip install paddlenlp==3.0.0b3 --user
 sh build_env.sh
 ```
 
-> 
+>
 注：
 * 请确保安装了以上依赖，否则无法运行。同时，需要安装 paddlemix/external_ops 下的自定义OP, `python setup.py install`。如果安装后仍然找不到算子，需要额外设置PYTHONPATH
 * (默认开启flash_attn)使用flash_attn 要求A100/A800显卡或者H20显卡。V100请用float16推理。
@@ -183,17 +183,17 @@ python paddlemix/examples/ppdocbee/ppdocbee_infer.py \
 
 ### 5.1 英文公开评估集指标
 
-API/Model         | DocVQA-test | ChartQA-test | InfoVQA-test | TextVQA-val | OCRBench 
------------------ | ----------- | ------------ | ------------ | ----------- | -------- 
-GPT-4o API        | 92.8        | 85.7         | 79.2       | 77.4       | 73.6    
-Gemini-1.5-Pro API| 93.1        | 87.2         | 80.1       | 78.7       | 75.4    
-MiniCPM-V-2-2B    | 71.9        | -            |       -      | 74.1       | 60.5    
-SmolVLM-Instruct-2B| 81.6       | -            |       -      | 72.7       | -        
-Aquila-VL-2B      | 85.0        | 76.5         | 58.3         | 76.4       | 77.2   
-Mini-Monkey-2B    | 87.4        | 76.5         | 60.1         | 76.0       | 79.4  
-InternVL2-2B      | 86.9        | 76.2         | 58.9         | 73.4       | 78.1  
-InternVL2.5-2B    | 88.7        | **79.2**     | 60.9        | 74.3        | 80.4     
-Qwen2-VL-2B       | 90.1        | 73.5        | 65.5        | 79.7        | 79.4    
+API/Model         | DocVQA-test | ChartQA-test | InfoVQA-test | TextVQA-val | OCRBench
+----------------- | ----------- | ------------ | ------------ | ----------- | --------
+GPT-4o API        | 92.8        | 85.7         | 79.2       | 77.4       | 73.6
+Gemini-1.5-Pro API| 93.1        | 87.2         | 80.1       | 78.7       | 75.4
+MiniCPM-V-2-2B    | 71.9        | -            |       -      | 74.1       | 60.5
+SmolVLM-Instruct-2B| 81.6       | -            |       -      | 72.7       | -
+Aquila-VL-2B      | 85.0        | 76.5         | 58.3         | 76.4       | 77.2
+Mini-Monkey-2B    | 87.4        | 76.5         | 60.1         | 76.0       | 79.4
+InternVL2-2B      | 86.9        | 76.2         | 58.9         | 73.4       | 78.1
+InternVL2.5-2B    | 88.7        | **79.2**     | 60.9        | 74.3        | 80.4
+Qwen2-VL-2B       | 90.1        | 73.5        | 65.5        | 79.7        | 79.4
 **PPDocBee-2B**   | **90.6**    | 74.6        | **66.2**    | **81.2**  | **82.8**(**83.5**)
 
 > ⚠️注意：

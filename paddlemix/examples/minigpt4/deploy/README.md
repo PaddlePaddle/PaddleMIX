@@ -42,7 +42,7 @@ export PYTHONPATH= yourpath/PaddleNLP:yourpath/PaddleMIX
 
 ### 1.3 特别说明
 目前需要修复PaddleNLP和Paddle的部分代码，从而进行MiniGPT4推理加速。这部分功能后续逐步会逐步完善到PaddleNLP和Paddle，但目前如果想使用的话需要手动修改一下。
-1. 修改PaddleNLP代码: 
+1. 修改PaddleNLP代码:
 参考该[分支代码](https://github.com/1649759610/PaddleNLP/tree/bugfix_minigpt4)，依次替换以下文件：
 - PaddleNLP/paddlenlp/experimental/transformers/generation_utils.py
 - PaddleNLP/paddlenlp/experimental/transformers/llama/modeling.py
@@ -64,7 +64,7 @@ if not skip_prune_program:
 ```
 python export_image_encoder.py \
     --minigpt4_13b_path "you minigpt4 dir path" \
-    --save_path "./checkpoints/encode_image/encode_image" 
+    --save_path "./checkpoints/encode_image/encode_image"
 ```
 
 **参数说明**:
@@ -82,7 +82,7 @@ python export_model.py \
     --inference_model \
     --model_prefix llama \
     --model_type llama-img2txt
-    
+
 ```
 
 **参数说明**:

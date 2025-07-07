@@ -39,7 +39,6 @@ def merge():
 
     model = Qwen2VLForConditionalGeneration.from_pretrained(args.model_name_or_path, dtype=dtype)
 
-
     model = LoRAModel.from_pretrained(model=model, lora_path=args.lora_path, lora_config=lora_config)
     model.eval()
     if args.merge_model_path is None:

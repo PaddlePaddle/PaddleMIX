@@ -37,9 +37,9 @@ class PaddleSaveImage:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "images": ("IMAGE",), 
+                "images": ("IMAGE",),
                 "filename_prefix": ("STRING", {"default": "ComfyUI"}),
-                "censor": ("BOOLEAN", {"default": True})
+                "censor": ("BOOLEAN", {"default": True}),
             },
             "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
         }

@@ -27,7 +27,7 @@ class AudioASRTask(AppTask):
         self._static_mode = False
 
         self._construct_model()
-        
+
         self.model = model
 
     def _construct_model(self):
@@ -36,7 +36,7 @@ class AudioASRTask(AppTask):
         """
 
         # build model
-        s2t_executor = ASRExecutor()    
+        s2t_executor = ASRExecutor()
         self._model = s2t_executor
 
     def _preprocess(self, inputs):

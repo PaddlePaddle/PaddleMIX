@@ -16,8 +16,8 @@ import argparse
 
 import paddle
 
-from paddlemix.models.qwen2_5_vl import MIXQwen2_5_Tokenizer
 from paddlemix.models.ppdocbee2 import PPDocBee2ForConditionalGeneration
+from paddlemix.models.qwen2_5_vl import MIXQwen2_5_Tokenizer
 from paddlemix.processors.qwen2_5_vl_processing import (
     Qwen2_5_VLImageProcessor,
     Qwen2_5_VLProcessor,
@@ -39,7 +39,9 @@ def main(args):
     print("compute_dtype", compute_dtype)
 
     paddle.set_default_dtype(compute_dtype)
-    model = PPDocBee2ForConditionalGeneration.from_pretrained(args.model_path, dtype=compute_dtype, attn_implementation=args.attn_implementation)
+    model = PPDocBee2ForConditionalGeneration.from_pretrained(
+        args.model_path, dtype=compute_dtype, attn_implementation=args.attn_implementation
+    )
 
     image_processor = Qwen2_5_VLImageProcessor()
     tokenizer = MIXQwen2_5_Tokenizer.from_pretrained(args.model_path)

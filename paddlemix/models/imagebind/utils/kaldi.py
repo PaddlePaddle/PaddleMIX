@@ -621,6 +621,43 @@ def fbank(
     return mel_energies
 
 
+def create_dct(n_mfcc: int, n_mels: int, norm) -> paddle.Tensor:
+    r"""Create a DCT transformation matrix with shape (``n_mels``, ``n_mfcc``),
+    normalized depending on norm.
+
+    Args:
+        n_mfcc (int): Number of mfc coefficients to retain
+        n_mels (int): Number of mel filterbanks
+        norm (str or None): Norm to use (either "ortho" or None)
+
+    Returns:
+        paddle.Tensor: The transformation matrix, to be right-multiplied to
+        row-wise data of size (``n_mels``, ``n_mfcc``).
+    """
+
+    if norm is not None and norm != "ortho":
+        raise ValueError('norm must be either "ortho" or None')
+
+    # http://en.wikipedia.org/wiki/Discrete_cosine_transform#DCT-II
+    n = paddle.arange(float(n_mels))
+    k = paddle.arange(float(n_mfcc)).unsqueeze([1])
+    dct = paddle.cos(math.pi / float(n_mels) * (n + 0.5) * k)  # size (n_mfcc, n_mels)
+
+    if norm is None:
+        dct *= 2.0
+    else:
+        dct[0] *= 1.0 / math.sqrt(2.0)
+        dct *= math.sqrt(2.0 / float(n_mels))
+    return dct.transpose([1, 0])
+
+
+def _get_dct_matrix(n_mfcc: int, n_mels: int) -> paddle.Tensor:
+    dct_matrix = create_dct(n_mels, n_mels, "ortho")
+    dct_matrix[:, 0] = math.sqrt(1 / float(n_mels))
+    dct_matrix = dct_matrix[:, :n_mfcc]  # (n_mels, n_mfcc)
+    return dct_matrix
+
+
 def _get_lifter_coeffs(num_ceps: int, cepstral_lifter: float) -> paddle.Tensor:
     i = paddle.arange(end=num_ceps)
     return 1.0 + 0.5 * cepstral_lifter * paddle.sin(x=math.pi * i / cepstral_lifter)

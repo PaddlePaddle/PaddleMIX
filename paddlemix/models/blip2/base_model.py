@@ -418,7 +418,7 @@ class Blip2PretrainedModel(MixPretrainedModel):
                         model_name_or_path = BRIDGE_WEIGHTS[model_name_or_path]
                     else:
                         model_name_or_path = model_name_or_path
-            
+
             # resolve model_weight file
             resolved_archive_file, *_ = self._resolve_model_file_path(
                 pretrained_model_name_or_path=model_name_or_path,

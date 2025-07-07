@@ -1152,6 +1152,7 @@ class Qwen2_5OmniVisionEncoder(Qwen2_5OmniPreTrainedModel):
     config_class = Qwen2_5OmniVisionEncoderConfig
     _no_split_modules = ["Qwen2_5OmniVisionBlock"]
     # TODO vision
+
     def __init__(self, config: Qwen2_5OmniVisionEncoderConfig, **kwargs) -> None:
         super().__init__(config, **kwargs)
         self.spatial_merge_size = config.spatial_merge_size
@@ -1577,7 +1578,7 @@ class Qwen2_5OmniFlashAttention2(Qwen2_5OmniAttention):
 
         key_states = repeat_kv(key_states, self.num_key_value_groups)
         value_states = repeat_kv(value_states, self.num_key_value_groups)
-        dropout_rate = 0.0 if not self.training else self.attention_dropout
+        # dropout_rate = 0.0 if not self.training else self.attention_dropout
         input_dtype = query_states.dtype
         if input_dtype == "float32":
             # TODO

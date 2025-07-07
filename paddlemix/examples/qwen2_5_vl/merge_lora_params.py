@@ -16,7 +16,9 @@ import argparse
 import paddle
 from paddlenlp.peft import LoRAConfig, LoRAModel
 
-from paddlemix.models.qwen2_5_vl.modeling_qwen2_5_vl import Qwen2_5_VLForConditionalGeneration
+from paddlemix.models.qwen2_5_vl.modeling_qwen2_5_vl import (
+    Qwen2_5_VLForConditionalGeneration,
+)
 
 
 def parse_arguments():

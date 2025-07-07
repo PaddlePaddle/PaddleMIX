@@ -14,10 +14,12 @@
 
 
 import os
-from PIL import Image
-from typing import Optional, List
-from ...core import MMDataset, register
 from functools import partial
+from typing import Optional
+
+from PIL import Image
+
+from ...core import MMDataset, register
 
 
 # Define the resolution filter function
@@ -26,7 +28,7 @@ def is_valid_image_resolution(
     min_width: float = 112,
     min_height: float = 112,
     max_width: Optional[float] = None,
-    max_height: Optional[float] = None
+    max_height: Optional[float] = None,
 ) -> bool:
     """
     Checks whether the image resolution is within the specified minimum and maximum width/height range.
@@ -41,7 +43,7 @@ def is_valid_image_resolution(
     Returns:
         bool: True if the image resolution meets the criteria; otherwise, False.
     """
-    image_path = item.get('image')
+    image_path = item.get("image")
     if not image_path or not os.path.exists(image_path):
         return False
 
@@ -71,7 +73,7 @@ def image_resolution_filter(
     min_width: Optional[float] = 112,
     min_height: Optional[float] = 112,
     max_width: Optional[float] = None,
-    max_height: Optional[float] = None
+    max_height: Optional[float] = None,
 ) -> MMDataset:
     print("Filtering images with invalid resolutions...")
     # Create the filter function
@@ -80,14 +82,10 @@ def image_resolution_filter(
         min_width=min_width,
         min_height=min_height,
         max_width=max_width,
-        max_height=max_height
+        max_height=max_height,
     )
-    
+
     # Apply dataset.filter
-    filtered_dataset = dataset.filter(
-        func=filter_func,
-        max_workers=8,
-        progress=True
-    )
-    
+    filtered_dataset = dataset.filter(func=filter_func, max_workers=8, progress=True)
+
     return filtered_dataset

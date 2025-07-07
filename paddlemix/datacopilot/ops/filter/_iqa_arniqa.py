@@ -14,9 +14,8 @@
 from __future__ import annotations
 
 import numpy as np
-from PIL import Image
-
 import paddle
+from PIL import Image
 
 from ...core.schema import T, register
 from ...nn import ARNIQA

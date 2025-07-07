@@ -15,6 +15,6 @@
 # @Time    : 2025/5/16 下午18:33
 # @Author  : Ismoothly(1844252306@qq.com)
 
+from .configuration import *
 from .modeling import *
 from .tokenizer import *
-from .configuration import *

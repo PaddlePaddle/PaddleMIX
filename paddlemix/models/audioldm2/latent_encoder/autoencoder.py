@@ -12,11 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import paddle
 import numpy as np
+import paddle
 
 from ppdiffusers import AutoencoderKL
+
 from ..hifigan.model import get_vocoder
+
 
 class DiagonalGaussianDistribution(object):
     def __init__(self, parameters, deterministic=False):
@@ -83,18 +85,16 @@ class AudioLDMAutoencoderKL(AutoencoderKL):
         base_learning_rate=1e-5,
     ):
         super().__init__(
-            in_channels = ddconfig["in_channels"],
-            out_channels = ddconfig["out_ch"],
-            down_block_types = ("DownEncoderBlock2D",) * len(ddconfig["ch_mult"]),
-            up_block_types = ("UpDecoderBlock2D",) * len(ddconfig["ch_mult"]),
-            block_out_channels = tuple([ddconfig["ch"]*i for i in ddconfig["ch_mult"]]),
-            layers_per_block = ddconfig["num_res_blocks"],
-            latent_channels = ddconfig["z_channels"],
+            in_channels=ddconfig["in_channels"],
+            out_channels=ddconfig["out_ch"],
+            down_block_types=("DownEncoderBlock2D",) * len(ddconfig["ch_mult"]),
+            up_block_types=("UpDecoderBlock2D",) * len(ddconfig["ch_mult"]),
+            block_out_channels=tuple([ddconfig["ch"] * i for i in ddconfig["ch_mult"]]),
+            layers_per_block=ddconfig["num_res_blocks"],
+            latent_channels=ddconfig["z_channels"],
         )
         self.automatic_optimization = False
-        assert (
-            "mel_bins" in ddconfig.keys()
-        ), "mel_bins is not specified in the Autoencoder config"
+        assert "mel_bins" in ddconfig.keys(), "mel_bins is not specified in the Autoencoder config"
         num_mel = ddconfig["mel_bins"]
         self.image_key = image_key
         self.sampling_rate = sampling_rate
