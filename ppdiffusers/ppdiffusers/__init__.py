@@ -112,6 +112,10 @@ else:
             "HookRegistry",
             "PyramidAttentionBroadcastConfig",
             "apply_pyramid_attention_broadcast",
+            "SortBlockConfig",
+            "apply_sort_block",
+            "TeaBlockCacheTaylorConfig",
+            "apply_teablockcache_taylor",
         ]
     )
     _import_structure["models"].extend(
@@ -527,6 +531,15 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
     except OptionalDependencyNotAvailable:
         from .utils.dummy_paddle_objects import *  # noqa F403
     else:
+        from .hooks import (
+            HookRegistry,
+            PyramidAttentionBroadcastConfig,
+            SortBlockConfig,
+            TeaBlockCacheTaylorConfig,
+            apply_pyramid_attention_broadcast,
+            apply_sort_block,
+            apply_teablockcache_taylor,
+        )
         from .models import (  # new add
             AsymmetricAutoencoderKL,
             AutoencoderKL,

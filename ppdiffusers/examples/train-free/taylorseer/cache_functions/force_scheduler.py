@@ -12,17 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ..utils import is_paddle_available
+import torch
 
-if is_paddle_available():
-    from .hooks import HookRegistry, ModelHook
-    from .layerwise_casting import apply_layerwise_casting, apply_layerwise_casting_hook
-    from .pyramid_attention_broadcast import (
-        PyramidAttentionBroadcastConfig,
-        apply_pyramid_attention_broadcast,
+
+def force_scheduler(cache_dic, current):
+    if cache_dic["fresh_ratio"] == 0:
+        # FORA
+        linear_step_weight = 0.0
+    else:
+        # TokenCache
+        linear_step_weight = 0.0
+    step_factor = torch.tensor(
+        1 - linear_step_weight + 2 * linear_step_weight * current["step"] / current["num_steps"]
     )
-    from .sortblock import SortBlockConfig, apply_sort_block
-    from .teablockcache_taylor import (
-        TeaBlockCacheTaylorConfig,
-        apply_teablockcache_taylor,
-    )
+    threshold = torch.round(cache_dic["fresh_threshold"] / step_factor)
+
+    # no force constrain for sensitive steps, cause the performance is good enough.
+    # you may have a try.
+
+    cache_dic["cal_threshold"] = threshold
+    # return threshold
