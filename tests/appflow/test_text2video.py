@@ -33,8 +33,8 @@ if __name__ == "__main__":
 
             prompt = "An astronaut riding a horse."
 
-            app = Appflow(app='text_to_video_generation',models=['damo-vilab/text-to-video-ms-1.7b'])
-            video_frames = app(prompt=prompt,num_inference_steps=25)['result']
+            app = Appflow(app="text_to_video_generation", models=["damo-vilab/text-to-video-ms-1.7b"])
+            video_frames = app(prompt=prompt, num_inference_steps=25)["result"]
 
             self.assertIsNotNone(video_frames)
 

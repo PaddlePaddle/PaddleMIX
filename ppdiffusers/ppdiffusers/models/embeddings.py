@@ -17,8 +17,8 @@ from typing import List, Optional, Tuple, Union
 
 import numpy as np
 import paddle
-from paddle import nn
 import paddle.nn.functional as F
+from paddle import nn
 
 from ..utils import USE_PEFT_BACKEND
 from .activations import FP32SiLU, get_activation
@@ -1155,70 +1155,6 @@ def get_3d_rotary_pos_embed(
         return freqs_cis
 
 
-def get_1d_rotary_pos_embed(
-    dim: int,
-    pos: Union[np.ndarray, int],
-    theta: float = 10000.0,
-    use_real=False,
-    linear_factor=1.0,
-    ntk_factor=1.0,
-    repeat_interleave_real=True,
-    freqs_dtype=paddle.float32,  # paddle.float32, paddle.float64 (flux)
-):
-    """
-    Precompute the frequency tensor for complex exponentials (cis) with given dimensions.
-
-    This function calculates a frequency tensor with complex exponentials using the given dimension 'dim' and the end
-    index 'end'. The 'theta' parameter scales the frequencies. The returned tensor contains complex values in complex64
-    data type.
-
-    Args:
-        dim (`int`): Dimension of the frequency tensor.
-        pos (`np.ndarray` or `int`): Position indices for the frequency tensor. [S] or scalar
-        theta (`float`, *optional*, defaults to 10000.0):
-            Scaling factor for frequency computation. Defaults to 10000.0.
-        use_real (`bool`, *optional*):
-            If True, return real part and imaginary part separately. Otherwise, return complex numbers.
-        linear_factor (`float`, *optional*, defaults to 1.0):
-            Scaling factor for the context extrapolation. Defaults to 1.0.
-        ntk_factor (`float`, *optional*, defaults to 1.0):
-            Scaling factor for the NTK-Aware RoPE. Defaults to 1.0.
-        repeat_interleave_real (`bool`, *optional*, defaults to `True`):
-            If `True` and `use_real`, real part and imaginary part are each interleaved with themselves to reach `dim`.
-            Otherwise, they are concateanted with themselves.
-        freqs_dtype (`paddle.float32` or `paddle.float64`, *optional*, defaults to `paddle.float32`):
-            the dtype of the frequency tensor.
-    Returns:
-        `paddle.Tensor`: Precomputed frequency tensor with complex exponentials. [S, D/2]
-    """
-    assert dim % 2 == 0
-
-    if isinstance(pos, int):
-        pos = paddle.arange(pos)
-    if isinstance(pos, np.ndarray):
-        pos = paddle.to_tensor(pos)  # type: ignore  # [S]
-
-    theta = theta * ntk_factor
-    freqs = 1.0 / (theta ** (paddle.arange(0, dim, 2, dtype=freqs_dtype)[: (dim // 2)] / dim)) / linear_factor  # [D/2]
-    pos = pos.astype(freqs_dtype)
-    freqs = paddle.outer(pos, freqs)  # type: ignore   # [S, D/2]
-    if use_real and repeat_interleave_real:
-        # flux, hunyuan-dit, cogvideox
-        freqs_cos = freqs.cos().repeat_interleave(2, axis=1).astype(dtype="float32")  # [S, D]
-        freqs_sin = freqs.sin().repeat_interleave(2, axis=1).astype(dtype="float32")  # [S, D]
-        return freqs_cos, freqs_sin
-    elif use_real:
-        # stable audio, allegro
-        freqs_cos = paddle.concat([freqs.cos(), freqs.cos()], axis=-1).astype(dtype="float32")  # [S, D]
-        freqs_sin = paddle.concat([freqs.sin(), freqs.sin()], axis=-1).astype(dtype="float32")  # [S, D]
-        return freqs_cos, freqs_sin
-    else:
-        # lumina
-        # paddle.complex(abs * paddle.cos(angle), abs * paddle.sin(angle))
-        freqs_cis = paddle.polar(paddle.ones_like(freqs), freqs)  # complex64     # [S, D/2]
-        return freqs_cis
-
-
 def apply_rotary_emb(
     x: paddle.Tensor,
     freqs_cis: Union[paddle.Tensor, Tuple[paddle.Tensor]],
@@ -1259,7 +1195,7 @@ def apply_rotary_emb(
         x_out = paddle.as_real(x=x_rotated * freqs_cis).flatten(start_axis=3)
         return x_out.astype(dtype=x.dtype)
 
-        
+
 class FluxPosEmbed(nn.Layer):
     # modified from https://github.com/black-forest-labs/flux/blob/c00d7c60b085fce8058b9df845e036090873f2ce/src/flux/modules/layers.py#L11
     def __init__(self, theta: int, axes_dim: List[int]):
@@ -1290,6 +1226,7 @@ class FluxPosEmbed(nn.Layer):
         freqs_cos = paddle.concat(cos_out, axis=-1)
         freqs_sin = paddle.concat(sin_out, axis=-1)
         return freqs_cos, freqs_sin
+
 
 def get_1d_rotary_pos_embed(
     dim: int,
@@ -1356,8 +1293,6 @@ def get_1d_rotary_pos_embed(
             paddle.ones_like(x=freqs) * paddle.sin(freqs),
         )  # complex64     # [S, D/2]
         return freqs_cis
-    
-
 
 
 class MochiAttentionPool(nn.Layer):
@@ -1399,18 +1334,18 @@ class MochiAttentionPool(nn.Layer):
         D = x.shape[2]
 
         # Mask part remains unchanged
-        attn_mask = mask[:, None, None, :].astype('bool')
-        attn_mask = F.pad(attn_mask.astype('int32'), (1, 0), value=1)
-        attn_mask = attn_mask.astype('bool')
+        attn_mask = mask[:, None, None, :].astype("bool")
+        attn_mask = F.pad(attn_mask.astype("int32"), (1, 0), value=1)
+        attn_mask = attn_mask.astype("bool")
 
         # Average non-padding token features
         x_pool = self.pool_tokens(x, mask, keepdim=True)
         x = paddle.concat([x_pool, x], axis=1)
-        
+
         # Compute query, key, value
         kv = self.to_kv(x)
         q = self.to_q(x[:, 0])
-        
+
         # Extract head information - this part mostly remains unchanged
         head_dim = D // self.num_attention_heads
         # kv = kv.reshape([0, 0, 2, self.num_attention_heads, head_dim])
@@ -1420,19 +1355,19 @@ class MochiAttentionPool(nn.Layer):
         # q = q.reshape([0, self.num_attention_heads, head_dim])
         q = paddle.unflatten(q, 1, (self.num_attention_heads, head_dim))
         q = q.unsqueeze(axis=2)
-        
+
         # Call attention function using Paddle format
         x = F.scaled_dot_product_attention_(
-            q.transpose([0, 2, 1, 3]), 
-            k.transpose([0, 2, 1, 3]), 
-            v.transpose([0, 2, 1, 3]), 
+            q.transpose([0, 2, 1, 3]),
+            k.transpose([0, 2, 1, 3]),
+            v.transpose([0, 2, 1, 3]),
             attn_mask=attn_mask,
-            dropout_p=0.0
+            dropout_p=0.0,
         )  # Output should be [B,1,H,D]
-        
+
         # Convert result back to original order
         x = x.transpose([0, 2, 1, 3])  # [B,1,H,D] -> [B,H,1,D]
-        
+
         # Subsequent processing remains unchanged
         x = x.squeeze(axis=2).flatten(start_axis=1, stop_axis=2)
         x = self.to_out(x)
@@ -1445,46 +1380,47 @@ class MochiCombinedTimestepCaptionEmbedding(nn.Layer):
     This is typically used in diffusion models where both time and textual conditioning are required.
     The class processes timestep information and text embeddings separately, then combines them.
     """
+
     def __init__(
         self,
-        embedding_dim: int,         # Dimension of the output embedding
-        pooled_projection_dim: int, # Dimension for the caption projection
-        text_embed_dim: int,        # Dimension of the input text embeddings
+        embedding_dim: int,  # Dimension of the output embedding
+        pooled_projection_dim: int,  # Dimension for the caption projection
+        text_embed_dim: int,  # Dimension of the input text embeddings
         time_embed_dim: int = 256,  # Dimension for the time embeddings
-        num_attention_heads: int = 8, # Number of attention heads for pooling
+        num_attention_heads: int = 8,  # Number of attention heads for pooling
     ) -> None:
         super().__init__()
 
         # Process timesteps into sinusoidal embeddings
         self.time_proj = Timesteps(num_channels=time_embed_dim, flip_sin_to_cos=True, downscale_freq_shift=0.0)
-        
+
         # Embed timesteps into the model dimension
         self.timestep_embedder = TimestepEmbedding(in_channels=time_embed_dim, time_embed_dim=embedding_dim)
-        
+
         # Attention pooling mechanism for text embeddings
         self.pooler = MochiAttentionPool(
             num_attention_heads=num_attention_heads, embed_dim=text_embed_dim, output_dim=embedding_dim
         )
-        
+
         # Projection layer for caption embeddings
         self.caption_proj = nn.Linear(text_embed_dim, pooled_projection_dim)
 
     def forward(
         self,
-        timestep: paddle.Tensor,              # Timestep values to embed
-        encoder_hidden_states: paddle.Tensor, # Text encoder output/embeddings
-        encoder_attention_mask: paddle.Tensor, # Attention mask for text encoder outputs
-        hidden_dtype: Optional[str] = None,    # Optional dtype for internal calculations
+        timestep: paddle.Tensor,  # Timestep values to embed
+        encoder_hidden_states: paddle.Tensor,  # Text encoder output/embeddings
+        encoder_attention_mask: paddle.Tensor,  # Attention mask for text encoder outputs
+        hidden_dtype: Optional[str] = None,  # Optional dtype for internal calculations
     ):
         """
         Combines timestep embeddings with text embeddings for conditioning.
-        
+
         Args:
             timestep: Tensor containing timestep values
             encoder_hidden_states: Text embeddings from an encoder
             encoder_attention_mask: Attention mask for the encoder states
             hidden_dtype: Optional data type for intermediate calculations
-            
+
         Returns:
             tuple: (combined embedding for conditioning, caption projection)
         """
@@ -1501,4 +1437,3 @@ class MochiCombinedTimestepCaptionEmbedding(nn.Layer):
         # Combine time embeddings with pooled text embeddings for final conditioning
         conditioning = time_emb + pooled_projections
         return conditioning, caption_proj
-

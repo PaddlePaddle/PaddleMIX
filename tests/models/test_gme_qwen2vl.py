@@ -13,9 +13,10 @@
 # limitations under the License.
 
 import unittest
+
 import paddle
-import numpy as np
 from PIL import Image
+
 from paddlemix.models.gme_qwen2_vl.modeling_gme_qwen2_vl import GmeQwen2VL
 
 
@@ -24,12 +25,12 @@ class TestGmeQwen2VL(unittest.TestCase):
     def setUpClass(cls):
         """Initialize the model before running tests to avoid redundant loading."""
         cls.model = GmeQwen2VL(model_name="GME-Qwen2-VL/gme-Qwen2-VL-2B-Instruct")
-    
+
     def test_text_embedding(self):
         """Test text embedding computation."""
         texts = ["What kind of car is this?", "The Tesla Cybertruck is a battery electric pickup truck."]
         embeddings = self.model.get_text_embeddings(texts=texts)
-        
+
         self.assertIsNotNone(embeddings)
         self.assertEqual(embeddings.shape[0], len(texts))  # Ensure output matches input text count
 
@@ -37,7 +38,7 @@ class TestGmeQwen2VL(unittest.TestCase):
         """Test image embedding computation."""
         images = [Image.new("RGB", (224, 224)), Image.new("RGB", (224, 224))]
         embeddings = self.model.get_image_embeddings(images=images)
-        
+
         self.assertIsNotNone(embeddings)
         self.assertEqual(embeddings.shape[0], len(images))  # Ensure output matches input image count
 
@@ -45,12 +46,12 @@ class TestGmeQwen2VL(unittest.TestCase):
         """Test similarity calculation between text and image embeddings."""
         texts = ["What kind of car is this?"]
         images = [Image.new("RGB", (224, 224))]
-        
+
         text_embeddings = self.model.get_text_embeddings(texts=texts)
         image_embeddings = self.model.get_image_embeddings(images=images)
-        
+
         similarity = paddle.sum(text_embeddings * image_embeddings, axis=-1)
-        
+
         self.assertIsNotNone(similarity)
         self.assertEqual(similarity.shape, [len(texts)])  # One-to-one similarity, output should match text count
 
@@ -58,9 +59,9 @@ class TestGmeQwen2VL(unittest.TestCase):
         """Test text embedding computation with a custom instruction."""
         texts = ["Find an image of a Tesla Cybertruck."]
         instruction = "Find an image that matches the given text."
-        
+
         embeddings = self.model.get_text_embeddings(texts=texts, instruction=instruction)
-        
+
         self.assertIsNotNone(embeddings)
         self.assertEqual(embeddings.shape[0], len(texts))
 
@@ -68,7 +69,7 @@ class TestGmeQwen2VL(unittest.TestCase):
         """Test fused embedding computation for text and image."""
         texts = ["What kind of car is this?"]
         images = [Image.new("RGB", (224, 224))]
-        
+
         fused_embeddings = self.model.get_fused_embeddings(texts=texts, images=images)
 
         self.assertIsNotNone(fused_embeddings)
@@ -78,7 +79,7 @@ class TestGmeQwen2VL(unittest.TestCase):
         """Test query text embedding computation."""
         queries = ["Find an image of a Tesla Cybertruck."]
         query_embeddings = self.model.encode_queries(queries)
-        
+
         self.assertIsNotNone(query_embeddings)
         self.assertEqual(query_embeddings.shape[0], len(queries))
 
@@ -86,10 +87,10 @@ class TestGmeQwen2VL(unittest.TestCase):
         """Test corpus text embedding computation."""
         corpus = [
             {"title": "Tesla Cybertruck", "text": "A battery electric pickup truck by Tesla."},
-            {"title": "Ford F-150", "text": "A popular American pickup truck."}
+            {"title": "Ford F-150", "text": "A popular American pickup truck."},
         ]
         corpus_embeddings = self.model.encode_corpus(corpus)
-        
+
         self.assertIsNotNone(corpus_embeddings)
         self.assertEqual(corpus_embeddings.shape[0], len(corpus))
 
@@ -98,9 +99,9 @@ class TestGmeQwen2VL(unittest.TestCase):
         queries = ["Find an image of a Tesla Cybertruck."]
         corpus = [
             {"title": "Tesla Cybertruck", "text": "A battery electric pickup truck by Tesla."},
-            {"title": "Ford F-150", "text": "A popular American pickup truck."}
+            {"title": "Ford F-150", "text": "A popular American pickup truck."},
         ]
-        
+
         e_query = self.model.encode_queries(queries)  # Shape: [1, 1536]
         e_corpus = self.model.encode_corpus(corpus)  # Shape: [2, 1536]
         similarity = paddle.sum(e_query * e_corpus, axis=-1)  # Shape: [2]

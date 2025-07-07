@@ -35,21 +35,21 @@ SD3 的模块保留了 DiT 的设计，用自适应 LayerNorm (Adaptive LayerNor
 ### **1.2 模型架构组成**
 
 #### （1）输入编码
-- **图像编码**：  
+- **图像编码**：
   使用预训练的自动编码器将输入图像编码到一个低维的潜在空间（latent space）。具体而言，将原始RGB图像。其中 是潜在空间的通道维度。图像特征随后被分割成小块并嵌入为特征序列。
 
-- **文本编码**：  
+- **文本编码**：
   使用预训练的文本模型（CLIP、T5）对文本进行编码，生成句子级（pooled）和序列级（contextual）嵌入。这些嵌入被进一步投影到与图像特征相同的维度，以便进行后续融合。
 
 #### （2）模态内处理
-- **分离的模态权重**：  
+- **分离的模态权重**：
   图像和文本模态分别由独立的注意力块和 MLP 层处理，确保每种模态在其特定空间内进行专门建模。这种分离减少了模态间不必要的干扰，同时允许不同模态在融合前充分提取自身特征。
 
 #### （3）模态间交互
-- **注意力机制**：  
+- **注意力机制**：
   文本和图像的特征序列在交互阶段通过统一的多头自注意力机制进行融合。在注意力计算中，两个模态的特征序列被拼接在一起，使得注意力机制能够捕获跨模态的全局依赖关系。
 
-- **位置编码**：  
+- **位置编码**：
   使用位置编码为图像特征添加空间位置信息，为文本特征添加序列位置信息，确保注意力机制能够正确捕获空间和序列结构。
 
 #### （4）输出生成
@@ -209,7 +209,7 @@ https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/deploy/sd3
 `train_dreambooth_sd3.py` 脚本展示了如何进行DreamBooth全参数微调[Stable Diffusion 3](https://huggingface.co/papers/2403.03206)， `train_dreambooth_lora_sd3.py` 脚本中展示了如何进行DreamBooth LoRA微调。
 
 
-> [!NOTE]  
+> [!NOTE]
 > Stable Diffusion 3遵循 [Stability Community 开源协议](https://stability.ai/license)。
 > Community License: Free for research, non-commercial, and commercial use for organisations or individuals with less than $1M annual revenue. You only need a paid Enterprise license if your yearly revenues exceed USD$1M and you use Stability AI models in commercial products or services. Read more: https://stability.ai/license
 

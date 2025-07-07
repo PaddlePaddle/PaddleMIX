@@ -1,30 +1,34 @@
-from ppdiffusers import PixArtAlphaPipeline
-from .tgate_utils import register_forward,tgate_scheduler
-import html
-import inspect
-import re
-import urllib.parse as ul
-from typing import Callable, List, Optional, Tuple, Union
-from ppdiffusers.pipelines.pipeline_utils import ImagePipelineOutput
-import paddle
-import paddle.nn.functional as F
-from ppdiffusers.utils import (
-    BACKENDS_MAPPING,
-    deprecate,
-    is_bs4_available,
-    is_ftfy_available,
-    logging,
-    replace_example_docstring,
-)
-from ppdiffusers.pipelines.pixart_alpha.pipeline_pixart_alpha import (
-    ASPECT_RATIO_1024_BIN,
-    ASPECT_RATIO_512_BIN,
-    ASPECT_RATIO_256_BIN,
-    EXAMPLE_DOC_STRING,
-    retrieve_timesteps
-    )
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 
 from types import MethodType
+from typing import Callable, List, Optional, Tuple, Union
+
+import paddle
+
+from ppdiffusers.pipelines.pipeline_utils import ImagePipelineOutput
+from ppdiffusers.pipelines.pixart_alpha.pipeline_pixart_alpha import (
+    ASPECT_RATIO_256_BIN,
+    ASPECT_RATIO_512_BIN,
+    ASPECT_RATIO_1024_BIN,
+    EXAMPLE_DOC_STRING,
+    retrieve_timesteps,
+)
+from ppdiffusers.utils import deprecate, replace_example_docstring
+
+from .tgate_utils import register_forward, tgate_scheduler
 
 
 @paddle.no_grad()
@@ -212,9 +216,7 @@ def tgate(
         cfg_prompt_attention_mask = paddle.concat([negative_prompt_attention_mask, prompt_attention_mask], axis=0)
 
     # 4. Prepare timesteps
-    timesteps, num_inference_steps = retrieve_timesteps(
-        self.scheduler, num_inference_steps, timesteps, sigmas
-    )
+    timesteps, num_inference_steps = retrieve_timesteps(self.scheduler, num_inference_steps, timesteps, sigmas)
 
     # 5. Prepare latents.
     latent_channels = self.transformer.config.in_channels
@@ -224,7 +226,6 @@ def tgate(
         height,
         width,
         prompt_embeds.dtype,
-        device,
         generator,
         latents,
     )
@@ -238,8 +239,8 @@ def tgate(
     if self.transformer.config.sample_size == 128:
         resolution = paddle.to_tensor([height, width]).tile([batch_size * num_images_per_prompt, 1])
         aspect_ratio = paddle.to_tensor([float(height / width)]).tile([batch_size * num_images_per_prompt, 1])
-        resolution = resolution.to(dtype=prompt_embeds.dtype, device=device)
-        aspect_ratio = aspect_ratio.to(dtype=prompt_embeds.dtype, device=device)
+        resolution = resolution.cast(dtype=prompt_embeds.dtype)
+        aspect_ratio = aspect_ratio.cast(dtype=prompt_embeds.dtype)
 
         negative_cond_kwargs = {"resolution": resolution, "aspect_ratio": aspect_ratio}
         if do_classifier_free_guidance:
@@ -250,18 +251,19 @@ def tgate(
 
     # 7. Denoising loop
     num_warmup_steps = max(len(timesteps) - num_inference_steps * self.scheduler.order, 0)
-    register_forward(self.transformer, 
-        'Attention',
-        ca_kward = {
-            'cache': False,
-            'reuse': False,
+    register_forward(
+        self.transformer,
+        "Attention",
+        ca_kward={
+            "cache": False,
+            "reuse": False,
         },
-        sa_kward = {
-            'cache': False,
-            'reuse': False,
+        sa_kward={
+            "cache": False,
+            "reuse": False,
         },
-        keep_shape=True
-        )
+        keep_shape=True,
+    )
     with self.progress_bar(total=num_inference_steps) as progress_bar:
         for i, t in enumerate(timesteps):
             if do_classifier_free_guidance and i < gate_step:
@@ -271,7 +273,9 @@ def tgate(
             else:
                 latent_model_input = latents
                 prompt_embeds = negative_prompt_embeds if do_classifier_free_guidance else prompt_embeds
-                prompt_attention_mask = negative_prompt_attention_mask if do_classifier_free_guidance else prompt_attention_mask
+                prompt_attention_mask = (
+                    negative_prompt_attention_mask if do_classifier_free_guidance else prompt_attention_mask
+                )
                 added_cond_kwargs = negative_cond_kwargs
 
             latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
@@ -289,20 +293,17 @@ def tgate(
             current_timestep = current_timestep.expand(latent_model_input.shape[0])
 
             if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
-                ca_kwards,sa_kwards,keep_shape=tgate_scheduler(
-                    cur_step=i-num_warmup_steps, 
+                ca_kwards, sa_kwards, keep_shape = tgate_scheduler(
+                    cur_step=i - num_warmup_steps,
                     gate_step=gate_step,
                     sp_interval=sp_interval,
                     fi_interval=fi_interval,
-                    warm_up=warm_up
+                    warm_up=warm_up,
                 )
                 keep_shape = keep_shape if not lcm else lcm
-                register_forward(self.transformer, 
-                    'Attention',
-                    ca_kward=ca_kwards,
-                    sa_kward=sa_kwards,
-                    keep_shape=keep_shape
-                    )
+                register_forward(
+                    self.transformer, "Attention", ca_kward=ca_kwards, sa_kward=sa_kwards, keep_shape=keep_shape
+                )
             # predict noise model_output
             noise_pred = self.transformer(
                 latent_model_input,
@@ -314,7 +315,7 @@ def tgate(
             )[0]
 
             # perform guidance
-            if do_classifier_free_guidance and (i-num_warmup_steps) < gate_step:
+            if do_classifier_free_guidance and (i - num_warmup_steps) < gate_step:
                 noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
                 noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
 
@@ -358,5 +359,5 @@ def tgate(
 
 
 def TgatePixArtAlphaLoader(pipe, **kwargs):
-    pipe.tgate = MethodType(tgate,pipe)
+    pipe.tgate = MethodType(tgate, pipe)
     return pipe

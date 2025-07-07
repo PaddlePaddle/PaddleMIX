@@ -14,11 +14,10 @@
 
 
 import inspect
-from typing import Any, Callable, Dict, List, Optional, Union
-
-import paddle
+from typing import Callable, Dict, List, Optional, Union
 
 import numpy as np
+import paddle
 
 from ppdiffusers.transformers import T5EncoderModel, T5Tokenizer
 
@@ -26,17 +25,13 @@ from ...callbacks import MultiPipelineCallbacks, PipelineCallback
 from ...loaders import Mochi1LoraLoaderMixin
 from ...models import AutoencoderKLMochi, MochiTransformer3DModel
 from ...schedulers import FlowMatchEulerDiscreteScheduler
-from ...utils import (
-    logging,
-    replace_example_docstring,
-)
+from ...utils import logging, replace_example_docstring
 from ...utils.paddle_utils import randn_tensor
 from ...video_processor import VideoProcessor
 from ..pipeline_utils import DiffusionPipeline
 from .pipeline_output import MochiPipelineOutput
 
-
-logger = logging.get_logger(__name__) 
+logger = logging.get_logger(__name__)
 
 EXAMPLE_DOC_STRING = """
     Examples:
@@ -49,7 +44,7 @@ EXAMPLE_DOC_STRING = """
         >>> pipe.enable_vae_tiling()
         >>> prompt = "Close-up of a chameleon's eye, with its scaly skin changing color. Ultra high resolution 4k."
         >>> frames = pipe(prompt, num_frames=30).frames[0]
-        
+
         >>> export_to_video(frames, "mochi.mp4", fps=30)
         ```
 """
@@ -196,9 +191,8 @@ class MochiPipeline(DiffusionPipeline, Mochi1LoraLoaderMixin):
 
         untruncated_ids = self.tokenizer(prompt, padding="longest", return_tensors="pd").input_ids
 
-        if (
-            untruncated_ids.shape[-1] >= text_input_ids.shape[-1]
-            and not paddle.equal_all(text_input_ids, untruncated_ids)
+        if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(
+            text_input_ids, untruncated_ids
         ):
             removed_text = self.tokenizer.batch_decode(untruncated_ids[:, max_sequence_length - 1 : -1])
             logger.warning(
@@ -393,7 +387,7 @@ class MochiPipeline(DiffusionPipeline, Mochi1LoraLoaderMixin):
     @property
     def num_timesteps(self):
         return self._num_timesteps
-    
+
     @property
     def current_timestep(self):
         return self._current_timestep
@@ -401,8 +395,7 @@ class MochiPipeline(DiffusionPipeline, Mochi1LoraLoaderMixin):
     @property
     def interrupt(self):
         return self._interrupt
-    
-    
+
     @paddle.no_grad()
     @replace_example_docstring(EXAMPLE_DOC_STRING)
     def __call__(
@@ -430,7 +423,7 @@ class MochiPipeline(DiffusionPipeline, Mochi1LoraLoaderMixin):
     ):
         """
         Generate video frames based on text prompts using the Mochi pipeline.
-        
+
         Args:
             prompt (`str` or `List[str]`, *optional*):
                 The prompt or prompts to guide video generation. If not provided, prompt embeddings must be passed.
@@ -464,12 +457,12 @@ class MochiPipeline(DiffusionPipeline, Mochi1LoraLoaderMixin):
             prompt_attention_mask (`paddle.Tensor`, *optional*):
                 Attention mask for prompt embeddings.
             negative_prompt_embeds (`paddle.Tensor`, *optional*):
-                Pre-computed embeddings for negative prompt. If not provided and negative_prompt is given, 
+                Pre-computed embeddings for negative prompt. If not provided and negative_prompt is given,
                 embeddings will be computed from negative_prompt.
             negative_prompt_attention_mask (`paddle.Tensor`, *optional*):
                 Attention mask for negative prompt embeddings.
             output_type (`str`, *optional*, defaults to `"pil"`):
-                The output format of the generated video. Choose between "pil" (PIL.Image.Image), "np" (numpy.ndarray), 
+                The output format of the generated video. Choose between "pil" (PIL.Image.Image), "np" (numpy.ndarray),
                 "pt" (paddle.Tensor) or "latent" (latent space output).
             return_dict (`bool`, *optional*, defaults to `True`):
                 Whether or not to return a [`~pipelines.mochi.MochiPipelineOutput`] instead of a tuple.
@@ -486,7 +479,7 @@ class MochiPipeline(DiffusionPipeline, Mochi1LoraLoaderMixin):
             [`~pipelines.mochi.MochiPipelineOutput`] or `tuple`:
             If return_dict is True, a [`~pipelines.mochi.MochiPipelineOutput`] is returned, otherwise a
             tuple is returned containing the generated video frames.
-            
+
         Examples:
         """
         if isinstance(callback_on_step_end, (PipelineCallback, MultiPipelineCallbacks)):
@@ -506,7 +499,7 @@ class MochiPipeline(DiffusionPipeline, Mochi1LoraLoaderMixin):
             prompt_attention_mask=prompt_attention_mask,
             negative_prompt_attention_mask=negative_prompt_attention_mask,
         )
-        
+
         self._guidance_scale = guidance_scale
         self._current_timestep = None
         self._interrupt = False
@@ -536,7 +529,7 @@ class MochiPipeline(DiffusionPipeline, Mochi1LoraLoaderMixin):
             negative_prompt_attention_mask=negative_prompt_attention_mask,
             max_sequence_length=max_sequence_length,
         )
-        
+
         # 4. Prepare latent variables
         num_channels_latents = self.transformer.config.in_channels
         latents = self.prepare_latents(
@@ -549,11 +542,11 @@ class MochiPipeline(DiffusionPipeline, Mochi1LoraLoaderMixin):
             generator,
             latents,
         )
-        
+
         if self.do_classifier_free_guidance:
             prompt_embeds = paddle.concat([negative_prompt_embeds, prompt_embeds], axis=0)
             prompt_attention_mask = paddle.concat([negative_prompt_attention_mask, prompt_attention_mask], axis=0)
-        
+
         # 5. Prepare timestep
         threshold_noise = 0.025
         sigmas = linear_quadratic_schedule(num_inference_steps, threshold_noise)
@@ -573,11 +566,11 @@ class MochiPipeline(DiffusionPipeline, Mochi1LoraLoaderMixin):
             for i, t in enumerate(timesteps):
                 if self.interrupt:
                     continue
-            
+
                 self._current_timestep = 1000 - t
                 latent_model_input = paddle.concat([latents] * 2) if self.do_classifier_free_guidance else latents
                 timestep = paddle.full((latent_model_input.shape[0],), t, dtype=latents.dtype)
-                
+
                 noise_pred = self.transformer(
                     hidden_states=latent_model_input,
                     encoder_hidden_states=prompt_embeds,
@@ -585,21 +578,20 @@ class MochiPipeline(DiffusionPipeline, Mochi1LoraLoaderMixin):
                     encoder_attention_mask=prompt_attention_mask,
                     return_dict=False,
                 )[0]
-                
+
                 # Type conversion
-                noise_pred = noise_pred.cast('float32')
+                noise_pred = noise_pred.cast("float32")
 
                 if self.do_classifier_free_guidance:
                     noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
-                    
+
                     # Perform CFG
                     noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_text - noise_pred_uncond)
-                    
+
                 # Scheduler step
                 latents_dtype = latents.dtype
-                latents = self.scheduler.step(noise_pred, t, latents.cast('float32'), return_dict=False)[0]
+                latents = self.scheduler.step(noise_pred, t, latents.cast("float32"), return_dict=False)[0]
                 latents = latents.cast(latents_dtype)
-                
 
                 if callback_on_step_end is not None:
                     callback_kwargs = {}
@@ -621,15 +613,19 @@ class MochiPipeline(DiffusionPipeline, Mochi1LoraLoaderMixin):
             has_latents_mean = hasattr(self.vae.config, "latents_mean") and self.vae.config.latents_mean is not None
             has_latents_std = hasattr(self.vae.config, "latents_std") and self.vae.config.latents_std is not None
             if has_latents_mean and has_latents_std:
-                latents_mean = paddle.to_tensor(self.vae.config.latents_mean).reshape([1, 12, 1, 1, 1]).astype(latents.dtype)
-                latents_std = paddle.to_tensor(self.vae.config.latents_std).reshape([1, 12, 1, 1, 1]).astype(latents.dtype)
+                latents_mean = (
+                    paddle.to_tensor(self.vae.config.latents_mean).reshape([1, 12, 1, 1, 1]).astype(latents.dtype)
+                )
+                latents_std = (
+                    paddle.to_tensor(self.vae.config.latents_std).reshape([1, 12, 1, 1, 1]).astype(latents.dtype)
+                )
                 latents = latents * latents_std / self.vae.config.scaling_factor + latents_mean
             else:
                 latents = latents / self.vae.config.scaling_factor
-                
+
             # VAE decode
             video = self.vae.decode(latents, return_dict=False)[0]
-            
+
             video = self.video_processor.postprocess_video(video, output_type=output_type)
 
         # Offload all models

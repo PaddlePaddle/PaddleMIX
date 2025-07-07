@@ -13,10 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import numbers
 import os
 from typing import Dict, Optional, Tuple
-
-import numbers
 
 import paddle
 import paddle.nn as nn
@@ -24,6 +23,7 @@ import paddle.nn.functional as F
 
 from .activations import get_activation
 from .embeddings import CombinedTimestepLabelEmbeddings, CombinedTimestepSizeEmbeddings
+
 
 def str2bool(v):
     if isinstance(v, bool):
@@ -36,7 +36,8 @@ def str2bool(v):
         return False
     else:
         raise ValueError("Not supported value: {}".format(v))
-        
+
+
 class AdaLayerNorm(nn.Layer):
     r"""
     Norm layer modified to incorporate timestep embeddings.
@@ -48,7 +49,7 @@ class AdaLayerNorm(nn.Layer):
 
     def __init__(
         self,
-        embedding_dim: int, 
+        embedding_dim: int,
         num_embeddings: Optional[int] = None,
         output_dim: Optional[int] = None,
         norm_elementwise_affine: bool = False,
@@ -56,7 +57,7 @@ class AdaLayerNorm(nn.Layer):
         chunk_dim: int = 0,
     ):
         super().__init__()
-        
+
         self.chunk_dim = chunk_dim
         output_dim = output_dim or embedding_dim * 2
 
@@ -73,7 +74,9 @@ class AdaLayerNorm(nn.Layer):
             norm_elementwise_affine_kwargs = dict(weight_attr=False, bias_attr=False)
         self.norm = nn.LayerNorm(output_dim // 2, epsilon=norm_eps, **norm_elementwise_affine_kwargs)
 
-    def forward(self, x: paddle.Tensor, timestep: Optional[paddle.Tensor] = None, temb: Optional[paddle.Tensor] = None) -> paddle.Tensor:
+    def forward(
+        self, x: paddle.Tensor, timestep: Optional[paddle.Tensor] = None, temb: Optional[paddle.Tensor] = None
+    ) -> paddle.Tensor:
         if self.emb is not None:
             temb = self.emb(timestep)
         temb = self.linear(self.silu(temb))
@@ -93,10 +96,10 @@ class FP32LayerNorm(nn.LayerNorm):
     def forward(self, inputs: paddle.Tensor) -> paddle.Tensor:
         origin_dtype = inputs.dtype
         return F.layer_norm(
-            inputs.astype('float32'),
+            inputs.astype("float32"),
             normalized_shape=self._normalized_shape,
-            weight=self.weight.astype('float32') if self.weight is not None else None,
-            bias=self.bias.astype('float32') if self.bias is not None else None,
+            weight=self.weight.astype("float32") if self.weight is not None else None,
+            bias=self.bias.astype("float32") if self.bias is not None else None,
             epsilon=self._epsilon,
         ).astype(origin_dtype)
 
@@ -120,7 +123,7 @@ class SD35AdaLayerNormZeroX(nn.Layer):
             self.norm = nn.LayerNorm(embedding_dim, epsilon=1e-6, **norm_elementwise_affine_kwargs)
         else:
             raise ValueError(f"Unsupported `norm_type` ({norm_type}) provided. Supported ones are: 'layer_norm'.")
-    
+
     def forward(
         self,
         hidden_states: paddle.Tensor,
@@ -133,7 +136,7 @@ class SD35AdaLayerNormZeroX(nn.Layer):
         norm_hidden_states = self.norm(hidden_states)
         hidden_states = norm_hidden_states * (1 + scale_msa[:, None]) + shift_msa[:, None]
         norm_hidden_states2 = norm_hidden_states * (1 + scale_msa2[:, None]) + shift_msa2[:, None]
-        return hidden_states, gate_msa, shift_mlp, scale_mlp, gate_mlp, norm_hidden_states2, gate_msa2    
+        return hidden_states, gate_msa, shift_mlp, scale_mlp, gate_mlp, norm_hidden_states2, gate_msa2
 
 
 class AdaLayerNormZero(nn.Layer):
@@ -305,7 +308,9 @@ class AdaLayerNormContinuous(nn.Layer):
         self.silu = nn.Silu()
         self.linear = nn.Linear(conditioning_embedding_dim, embedding_dim * 2, bias_attr=bias)
         if norm_type == "layer_norm":
-            self.norm = nn.LayerNorm(embedding_dim, eps, weight_attr=elementwise_affine, bias_attr=bias if elementwise_affine else False)
+            self.norm = nn.LayerNorm(
+                embedding_dim, eps, weight_attr=elementwise_affine, bias_attr=bias if elementwise_affine else False
+            )
         elif norm_type == "rms_norm":
             self.norm = RMSNorm(embedding_dim, eps, elementwise_affine)
         else:
@@ -325,6 +330,7 @@ class AdaLayerNormContinuous(nn.Layer):
             x = self.norm(x) * (1 + scale)[:, None, :] + shift[:, None, :]
         return x
 
+
 class RMSNorm(nn.Layer):
     def __init__(self, dim, epsilon: float, elementwise_affine: bool = True, bias: bool = False):
         super().__init__()
@@ -334,13 +340,9 @@ class RMSNorm(nn.Layer):
         self.dim = dim
 
         if elementwise_affine:
-            self.weight = self.create_parameter(
-                shape=[dim], default_initializer=nn.initializer.Constant(1.0)
-            )
+            self.weight = self.create_parameter(shape=[dim], default_initializer=nn.initializer.Constant(1.0))
             if bias:
-                self.bias = self.create_parameter(
-                    shape=[dim], default_initializer=nn.initializer.Constant(0.0)
-                )
+                self.bias = self.create_parameter(shape=[dim], default_initializer=nn.initializer.Constant(0.0))
             else:
                 self.bias = None
         else:
@@ -366,20 +368,21 @@ class RMSNorm(nn.Layer):
         else:
             if self.weight is not None:
                 return paddle.incubate.nn.functional.fused_rms_norm(
-                        x=hidden_states,
-                        norm_weight=self.weight,
-                        norm_bias=None,
-                        epsilon=self.epsilon,
-                        begin_norm_axis=len(hidden_states.shape)-1 if begin_norm_axis is None else begin_norm_axis,
-                    )[0]
+                    x=hidden_states,
+                    norm_weight=self.weight,
+                    norm_bias=None,
+                    epsilon=self.epsilon,
+                    begin_norm_axis=len(hidden_states.shape) - 1 if begin_norm_axis is None else begin_norm_axis,
+                )[0]
             else:
                 input_dtype = hidden_states.dtype
-                variance = paddle.pow(hidden_states.astype('float32'), 2).mean(axis=-1, keepdim=True)
+                variance = paddle.pow(hidden_states.astype("float32"), 2).mean(axis=-1, keepdim=True)
                 hidden_states = hidden_states * paddle.rsqrt(variance + self.epsilon)
 
                 hidden_states = hidden_states.astype(input_dtype)
 
                 return hidden_states
+
 
 class LpNorm(nn.Layer):
     def __init__(self, p: int = 2, axis: int = -1, epsilon: float = 1e-12):
@@ -394,29 +397,28 @@ class LpNorm(nn.Layer):
 
 
 class CogVideoXLayerNormZero(paddle.nn.Layer):
-
-    def __init__(self, conditioning_dim: int, embedding_dim: int,
-        elementwise_affine: bool=True, eps: float=1e-05, bias: bool=True
-        ) ->None:
+    def __init__(
+        self,
+        conditioning_dim: int,
+        embedding_dim: int,
+        elementwise_affine: bool = True,
+        eps: float = 1e-05,
+        bias: bool = True,
+    ) -> None:
         super().__init__()
         self.silu = paddle.nn.Silu()
-        self.linear = paddle.nn.Linear(in_features=conditioning_dim,
-            out_features=6 * embedding_dim, bias_attr=bias)
-        self.norm = paddle.nn.LayerNorm(normalized_shape=embedding_dim,
-            epsilon=eps, weight_attr=elementwise_affine, bias_attr=
-            elementwise_affine)
+        self.linear = paddle.nn.Linear(in_features=conditioning_dim, out_features=6 * embedding_dim, bias_attr=bias)
+        self.norm = paddle.nn.LayerNorm(
+            normalized_shape=embedding_dim, epsilon=eps, weight_attr=elementwise_affine, bias_attr=elementwise_affine
+        )
 
-    def forward(self, hidden_states: paddle.Tensor, encoder_hidden_states:
-        paddle.Tensor, temb: paddle.Tensor) ->Tuple[paddle.Tensor, paddle.
-        Tensor]:
-        shift, scale, gate, enc_shift, enc_scale, enc_gate = self.linear(self
-            .silu(temb)).chunk(chunks=6, axis=1)
-        hidden_states = self.norm(hidden_states) * (1 + scale)[:, None, :
-            ] + shift[:, None, :]
-        encoder_hidden_states = self.norm(encoder_hidden_states) * (1 +
-            enc_scale)[:, None, :] + enc_shift[:, None, :]
-        return hidden_states, encoder_hidden_states, gate[:, None, :
-            ], enc_gate[:, None, :]
+    def forward(
+        self, hidden_states: paddle.Tensor, encoder_hidden_states: paddle.Tensor, temb: paddle.Tensor
+    ) -> Tuple[paddle.Tensor, paddle.Tensor]:
+        shift, scale, gate, enc_shift, enc_scale, enc_gate = self.linear(self.silu(temb)).chunk(chunks=6, axis=1)
+        hidden_states = self.norm(hidden_states) * (1 + scale)[:, None, :] + shift[:, None, :]
+        encoder_hidden_states = self.norm(encoder_hidden_states) * (1 + enc_scale)[:, None, :] + enc_shift[:, None, :]
+        return hidden_states, encoder_hidden_states, gate[:, None, :], enc_gate[:, None, :]
 
 
 class MochiRMSNorm(nn.Layer):
@@ -431,16 +433,13 @@ class MochiRMSNorm(nn.Layer):
         self.dim = dim
 
         if elementwise_affine:
-            self.weight = self.create_parameter(
-                shape=dim,
-                default_initializer=nn.initializer.Constant(value=1.0)
-            )
+            self.weight = self.create_parameter(shape=dim, default_initializer=nn.initializer.Constant(value=1.0))
         else:
             self.weight = None
 
     def forward(self, hidden_states):
         input_dtype = hidden_states.dtype
-        variance = paddle.pow(hidden_states.astype('float32'), 2).mean(axis=-1, keepdim=True)
+        variance = paddle.pow(hidden_states.astype("float32"), 2).mean(axis=-1, keepdim=True)
         hidden_states = hidden_states * paddle.rsqrt(variance + self.eps)
 
         if self.weight is not None:

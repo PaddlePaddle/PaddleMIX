@@ -18,15 +18,7 @@ import unittest
 
 import paddle
 
-from ppdiffusers import (
-    IFImg2ImgPipeline,
-    IFImg2ImgSuperResolutionPipeline,
-    IFInpaintingPipeline,
-    IFInpaintingSuperResolutionPipeline,
-    IFPipeline,
-    IFSuperResolutionPipeline,
-)
-from ppdiffusers.models.attention_processor import AttnAddedKVProcessor
+from ppdiffusers import IFPipeline
 from ppdiffusers.utils.testing_utils import (
     floats_tensor,
     load_numpy,

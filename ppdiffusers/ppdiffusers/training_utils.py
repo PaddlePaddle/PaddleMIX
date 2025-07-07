@@ -16,7 +16,7 @@
 import contextlib
 import copy
 import random
-from typing import Any, Dict, Optional, Union, List
+from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 import paddle
@@ -93,7 +93,7 @@ def cast_training_params(model: Union[paddle.nn.Layer, List[paddle.nn.Layer]], d
     for m in model:
         for param in m.parameters():
             # only upcast trainable parameters into fp32
-            if param.stop_gradient == False:
+            if not param.stop_gradient:
                 param.set_value(paddle.cast(param, dtype))
 
 

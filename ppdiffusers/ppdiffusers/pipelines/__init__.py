@@ -481,6 +481,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             LVDMUncondPipeline,
             VideoPipelineOutput,
         )
+        from .mochi import MochiPipeline
         from .musicldm import MusicLDMPipeline
         from .paint_by_example import PaintByExamplePipeline
         from .pixart_alpha import PixArtAlphaPipeline
@@ -573,7 +574,6 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             WuerstchenDecoderPipeline,
             WuerstchenPriorPipeline,
         )
-        from .mochi import MochiPipeline
 
         try:
             if not is_fastdeploy_available():

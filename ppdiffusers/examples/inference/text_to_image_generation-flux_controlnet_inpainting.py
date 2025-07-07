@@ -14,20 +14,26 @@
 
 import paddle
 
-from ppdiffusers.utils import load_image
 from ppdiffusers import FluxControlNetModel
 from ppdiffusers.pipelines import FluxControlNetInpaintPipeline
+from ppdiffusers.utils import load_image
 
-
-controlnet = FluxControlNetModel.from_pretrained("InstantX/FLUX.1-dev-Controlnet-Canny", 
-                                                 paddle_dtype=paddle.bfloat16)
+controlnet = FluxControlNetModel.from_pretrained("InstantX/FLUX.1-dev-Controlnet-Canny", paddle_dtype=paddle.bfloat16)
 pipe = FluxControlNetInpaintPipeline.from_pretrained(
-    "black-forest-labs/FLUX.1-dev", controlnet=controlnet, paddle_dtype=paddle.bfloat16, low_cpu_mem_usage=True, map_location="cpu",
+    "black-forest-labs/FLUX.1-dev",
+    controlnet=controlnet,
+    paddle_dtype=paddle.bfloat16,
+    low_cpu_mem_usage=True,
+    map_location="cpu",
 )
 
 control_image = load_image("https://huggingface.co/InstantX/FLUX.1-dev-Controlnet-Canny-alpha/resolve/main/canny.jpg")
-init_image = load_image("https://raw.githubusercontent.com/CompVis/latent-diffusion/main/data/inpainting_examples/overture-creations-5sI6fQgYIuo.png")
-mask_image = load_image("https://raw.githubusercontent.com/CompVis/latent-diffusion/main/data/inpainting_examples/overture-creations-5sI6fQgYIuo_mask.png")
+init_image = load_image(
+    "https://raw.githubusercontent.com/CompVis/latent-diffusion/main/data/inpainting_examples/overture-creations-5sI6fQgYIuo.png"
+)
+mask_image = load_image(
+    "https://raw.githubusercontent.com/CompVis/latent-diffusion/main/data/inpainting_examples/overture-creations-5sI6fQgYIuo_mask.png"
+)
 prompt = "A girl holding a sign that says InstantX"
 image = pipe(
     prompt,
@@ -40,6 +46,6 @@ image = pipe(
     strength=0.7,
     num_inference_steps=28,
     guidance_scale=3.5,
-    generator=paddle.Generator().manual_seed(42)
+    generator=paddle.Generator().manual_seed(42),
 ).images[0]
 image.save("text_to_image_generation-flux-dev-controlnet-inpaint-result.png")

@@ -75,7 +75,7 @@ def create_generator(checkpoint_path, base_model=None):
 def create_evaluator(detector_url):
     detector_kwargs = dict(return_features=True)
     feature_dim = 2048
-    
+
     from scripts.fid_clip_score.inception import InceptionV3
 
     block_idx = InceptionV3.BLOCK_INDEX_BY_DIM[feature_dim]

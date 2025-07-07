@@ -54,6 +54,7 @@ def tensor2vid(video: paddle.Tensor, processor, output_type="np"):
 
     return outputs
 
+
 def retrieve_timesteps(
     scheduler,
     num_inference_steps: Optional[int] = None,
@@ -108,6 +109,7 @@ def retrieve_timesteps(
         scheduler.set_timesteps(num_inference_steps, **kwargs)
         timesteps = scheduler.timesteps
     return timesteps, num_inference_steps
+
 
 @dataclass
 class StableVideoDiffusionPipelineOutput(BaseOutput):

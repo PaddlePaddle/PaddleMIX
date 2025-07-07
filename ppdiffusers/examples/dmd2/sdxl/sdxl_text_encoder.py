@@ -20,7 +20,7 @@ from ppdiffusers.transformers import CLIPTextModel, CLIPTextModelWithProjection
 class SDXLTextEncoder(paddle.nn.Layer):
     def __init__(self, args, accelerator, dtype=paddle.float32) -> None:
         super().__init__()
-        print('dddebug:', args.model_id)
+        print("dddebug:", args.model_id)
         self.text_encoder_one = (
             CLIPTextModel.from_pretrained(args.model_id, subfolder="text_encoder", revision=args.revision)
             .to(accelerator.device)

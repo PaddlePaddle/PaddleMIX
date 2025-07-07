@@ -17,7 +17,6 @@ import zipfile
 import numpy as np
 import paddle
 from coco_eval.cleanfid.resize import build_resizer
-
 from PIL import Image
 
 
@@ -72,7 +71,7 @@ class ResizeDataset(paddle.io.Dataset):
         img_resized = self.fn_resize(img_np)
 
         if img_resized.dtype == "uint8":
-            img_t = self.transforms(np.array(img_resized)) 
+            img_t = self.transforms(np.array(img_resized))
         elif img_resized.dtype == "float32":
             img_t = self.transforms(img_resized)
 

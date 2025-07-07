@@ -1,19 +1,34 @@
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import paddle
 import paddle.nn as nn
-import paddle.nn.functional as F
+
 
 class AttentionPool(nn.Layer):
     def __init__(self, spacial_dim: int, embed_dim: int, num_heads: int, output_dim: int = None):
         super().__init__()
-        out_0 = paddle.create_parameter(shape=(paddle.randn(shape=[
-            spacial_dim + 1, embed_dim]) / embed_dim ** 0.5).shape, dtype=(
-            paddle.randn(shape=[spacial_dim + 1, embed_dim]) / embed_dim **
-            0.5).numpy().dtype, default_initializer=paddle.nn.initializer.
-            Assign(paddle.randn(shape=[spacial_dim + 1, embed_dim]) / 
-            embed_dim ** 0.5))
+        out_0 = paddle.create_parameter(
+            shape=(paddle.randn(shape=[spacial_dim + 1, embed_dim]) / embed_dim**0.5).shape,
+            dtype=(paddle.randn(shape=[spacial_dim + 1, embed_dim]) / embed_dim**0.5).numpy().dtype,
+            default_initializer=paddle.nn.initializer.Assign(
+                paddle.randn(shape=[spacial_dim + 1, embed_dim]) / embed_dim**0.5
+            ),
+        )
         out_0.stop_gradient = not True
         self.positional_embedding = out_0
-        
+
         self.num_heads = num_heads
         self.embed_dim = embed_dim
         self.output_dim = output_dim or embed_dim
@@ -26,7 +41,7 @@ class AttentionPool(nn.Layer):
         self.q_proj = nn.Linear(embed_dim, embed_dim)
         self.k_proj = nn.Linear(embed_dim, embed_dim)
         self.v_proj = nn.Linear(embed_dim, embed_dim)
-        
+
         # Load pretrained weights into q_proj, k_proj, v_proj
         self._initialize_attention_weights()
 
@@ -38,7 +53,7 @@ class AttentionPool(nn.Layer):
             self.attention.q_proj.bias = self.q_proj.bias
             self.attention.k_proj.bias = self.k_proj.bias
             self.attention.v_proj.bias = self.v_proj.bias
-            
+
             self.attention.out_proj.weight = self.c_proj.weight
             self.attention.out_proj.bias = self.c_proj.bias
 

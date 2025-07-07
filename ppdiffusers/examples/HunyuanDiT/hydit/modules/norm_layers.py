@@ -1,3 +1,17 @@
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import paddle
 import paddle.nn as nn
 
@@ -19,10 +33,11 @@ class RMSNorm(nn.Layer):
         super().__init__()
         self.eps = eps
         if elementwise_affine:
-            out_6 = paddle.create_parameter(shape=paddle.ones(shape=dim).
-                shape, dtype=paddle.ones(shape=dim).numpy().dtype,
-                default_initializer=paddle.nn.initializer.Assign(paddle.
-                ones(shape=dim)))
+            out_6 = paddle.create_parameter(
+                shape=paddle.ones(shape=dim).shape,
+                dtype=paddle.ones(shape=dim).numpy().dtype,
+                default_initializer=paddle.nn.initializer.Assign(paddle.ones(shape=dim)),
+            )
             out_6.stop_gradient = not True
             self.weight = out_6
 
@@ -50,7 +65,7 @@ class RMSNorm(nn.Layer):
             paddle.Tensor: The output tensor after applying RMSNorm.
 
         """
-        output = self._norm(x.astype(dtype='float32')).astype(dtype=x.dtype)
+        output = self._norm(x.astype(dtype="float32")).astype(dtype=x.dtype)
         if hasattr(self, "weight"):
             output = output * self.weight
         return output
@@ -63,6 +78,7 @@ class GroupNorm32(nn.GroupNorm):
     def forward(self, x):
         y = super().forward(x).to(x.dtype)
         return y
+
 
 def normalization(channels, dtype=None):
     """

@@ -17,23 +17,24 @@ from .dit import DiT
 from .dit_llama import DiT_Llama
 from .respace import SpacedDiffusion, space_timesteps
 from .trainer import LatentDiffusionTrainer
+
 try:
     from paddlenlp.trainer.auto_trainer import AutoTrainer
+
     from .trainer_auto import LatentDiffusionAutoTrainer
 except:
-    print(f'please install paddlepaddle-gpu>=3.0.0b2 if using auto trainer')
+    print("please install paddlepaddle-gpu>=3.0.0b2 if using auto trainer")
 
+from .diffusion_utils import get_mesh, shard_w
 from .trainer_args import (
+    AutoTrainerArguments,
     DataArguments,
     ModelArguments,
     NoTrainerTrainingArguments,
     TrainerArguments,
-    AutoTrainerArguments,
 )
 from .trainer_model import DiTDiffusionModel
 from .trainer_model_auto import DiTDiffusionModelAuto
-
-from .diffusion_utils import get_mesh, shard_w
 
 # Modified from OpenAI's diffusion repos
 #     GLIDE: https://github.com/openai/glide-text2im/blob/main/glide_text2im/gaussian_diffusion.py

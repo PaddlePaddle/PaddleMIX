@@ -13,7 +13,7 @@
 # code is heavily based on https://github.com/tianweiy/DMD2
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, Union
 
 import paddle
 

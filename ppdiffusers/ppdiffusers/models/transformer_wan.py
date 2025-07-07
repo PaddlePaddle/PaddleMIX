@@ -89,7 +89,7 @@ class WanAttnProcessor2_0:
             key_img = attn.norm_added_k(key_img)
             value_img = attn.add_v_proj(encoder_hidden_states_img)
 
-            key_img = key_img.unflatten(2, (attn.heads, -1)) 
+            key_img = key_img.unflatten(2, (attn.heads, -1))
             value_img = value_img.unflatten(2, (attn.heads, -1))
 
             hidden_states_img = F.scaled_dot_product_attention(
@@ -105,7 +105,7 @@ class WanAttnProcessor2_0:
         hidden_states = F.scaled_dot_product_attention(
             query, key, value, attn_mask=attention_mask, dropout_p=0.0, is_causal=False
         )
- 
+
         hidden_states = hidden_states.flatten(2, 3)
         hidden_states = hidden_states.cast(query.dtype)
 

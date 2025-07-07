@@ -194,9 +194,13 @@ class Upsample2D(nn.Layer):
         # if `output_size` is passed we force the interpolation output
         # size and do not make use of `scale_factor=2`
         if output_size is None:
-            hidden_states = F.interpolate(hidden_states, scale_factor=2.0, mode="nearest", data_format=self.data_format)
+            hidden_states = F.interpolate(
+                hidden_states, scale_factor=2.0, mode="nearest", data_format=self.data_format
+            )
         else:
-            hidden_states = F.interpolate(hidden_states, size=output_size, mode="nearest", data_format=self.data_format)
+            hidden_states = F.interpolate(
+                hidden_states, size=output_size, mode="nearest", data_format=self.data_format
+            )
 
         # If the input is bfloat16, we cast back to bfloat16
         if dtype == paddle.bfloat16:
@@ -254,7 +258,9 @@ class Downsample2D(nn.Layer):
         conv_cls = nn.Conv2D if USE_PEFT_BACKEND else LoRACompatibleConv
 
         if use_conv:
-            conv = conv_cls(self.channels, self.out_channels, 3, stride=stride, padding=padding, data_format=data_format)
+            conv = conv_cls(
+                self.channels, self.out_channels, 3, stride=stride, padding=padding, data_format=data_format
+            )
         else:
             assert self.channels == self.out_channels
             conv = nn.AvgPool2D(kernel_size=stride, stride=stride, data_format=data_format)
@@ -664,7 +670,9 @@ class ResnetBlock2D(nn.Layer):
         elif self.time_embedding_norm == "spatial":
             self.norm1 = SpatialNorm(in_channels, temb_channels)
         else:
-            self.norm1 = nn.GroupNorm(num_groups=groups, num_channels=in_channels, epsilon=eps, data_format=data_format)
+            self.norm1 = nn.GroupNorm(
+                num_groups=groups, num_channels=in_channels, epsilon=eps, data_format=data_format
+            )
 
         self.conv1 = conv_cls(in_channels, out_channels, kernel_size=3, stride=1, padding=1, data_format=data_format)
 
@@ -685,11 +693,15 @@ class ResnetBlock2D(nn.Layer):
         elif self.time_embedding_norm == "spatial":
             self.norm2 = SpatialNorm(out_channels, temb_channels)
         else:
-            self.norm2 = nn.GroupNorm(num_groups=groups_out, num_channels=out_channels, epsilon=eps, data_format=data_format)
+            self.norm2 = nn.GroupNorm(
+                num_groups=groups_out, num_channels=out_channels, epsilon=eps, data_format=data_format
+            )
 
         self.dropout = nn.Dropout(dropout)
         conv_2d_out_channels = conv_2d_out_channels or out_channels
-        self.conv2 = conv_cls(out_channels, conv_2d_out_channels, kernel_size=3, stride=1, padding=1, data_format=data_format)
+        self.conv2 = conv_cls(
+            out_channels, conv_2d_out_channels, kernel_size=3, stride=1, padding=1, data_format=data_format
+        )
 
         self.nonlinearity = get_activation(non_linearity)
 
@@ -709,7 +721,9 @@ class ResnetBlock2D(nn.Layer):
             elif kernel == "sde_vp":
                 self.downsample = partial(F.avg_pool2d, kernel_size=2, stride=2)
             else:
-                self.downsample = Downsample2D(in_channels, use_conv=False, padding=1, name="op", data_format=data_format)
+                self.downsample = Downsample2D(
+                    in_channels, use_conv=False, padding=1, name="op", data_format=data_format
+                )
 
         self.use_in_shortcut = self.in_channels != conv_2d_out_channels if use_in_shortcut is None else use_in_shortcut
 

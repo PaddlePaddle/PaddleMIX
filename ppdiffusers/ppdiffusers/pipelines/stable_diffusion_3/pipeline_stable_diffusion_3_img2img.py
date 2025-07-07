@@ -16,8 +16,9 @@
 import inspect
 from typing import Callable, Dict, List, Optional, Union
 
-import PIL.Image
 import paddle
+import PIL.Image
+
 from ppdiffusers.transformers import (
     CLIPTextModelWithProjection,
     CLIPTokenizer,
@@ -29,15 +30,10 @@ from ...image_processor import PipelineImageInput, VaeImageProcessor
 from ...models.autoencoder_kl import AutoencoderKL
 from ...models.transformer_sd3 import SD3Transformer2DModel
 from ...schedulers import FlowMatchEulerDiscreteScheduler
-from ...utils import (
-    logging,
-    replace_example_docstring,
-)
+from ...utils import logging, replace_example_docstring
 from ...utils.paddle_utils import randn_tensor
 from ..pipeline_utils import DiffusionPipeline
 from .pipeline_output import StableDiffusion3PipelineOutput
-
-
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -232,7 +228,9 @@ class StableDiffusion3Img2ImgPipeline(DiffusionPipeline):
         text_input_ids = text_inputs.input_ids
         untruncated_ids = self.tokenizer_3(prompt, padding="longest", return_tensors="pd").input_ids
 
-        if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(text_input_ids, untruncated_ids):
+        if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(
+            text_input_ids, untruncated_ids
+        ):
             removed_text = self.tokenizer_3.batch_decode(untruncated_ids[:, self.tokenizer_max_length - 1 : -1])
             logger.warning(
                 "The following part of your input was truncated because CLIP can only handle sequences up to"
@@ -280,7 +278,10 @@ class StableDiffusion3Img2ImgPipeline(DiffusionPipeline):
 
         text_input_ids = text_inputs.input_ids
         untruncated_ids = tokenizer(prompt, padding="longest", return_tensors="pd").input_ids
-        if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(x=text_input_ids, y=untruncated_ids).item():
+        if (
+            untruncated_ids.shape[-1] >= text_input_ids.shape[-1]
+            and not paddle.equal_all(x=text_input_ids, y=untruncated_ids).item()
+        ):
             removed_text = tokenizer.batch_decode(untruncated_ids[:, self.tokenizer_max_length - 1 : -1])
             logger.warning(
                 "The following part of your input was truncated because CLIP can only handle sequences up to"
@@ -400,7 +401,9 @@ class StableDiffusion3Img2ImgPipeline(DiffusionPipeline):
             )
 
             clip_prompt_embeds = paddle.nn.functional.pad(
-                clip_prompt_embeds, (0, t5_prompt_embed.shape[-1] - clip_prompt_embeds.shape[-1]), data_format="NCL",
+                clip_prompt_embeds,
+                (0, t5_prompt_embed.shape[-1] - clip_prompt_embeds.shape[-1]),
+                data_format="NCL",
             )
 
             prompt_embeds = paddle.concat([clip_prompt_embeds, t5_prompt_embed], axis=-2)
@@ -447,7 +450,8 @@ class StableDiffusion3Img2ImgPipeline(DiffusionPipeline):
             negative_clip_prompt_embeds = paddle.concat([negative_prompt_embed, negative_prompt_2_embed], axis=-1)
 
             t5_negative_prompt_embed = self._get_t5_prompt_embeds(
-                prompt=negative_prompt_3, num_images_per_prompt=num_images_per_prompt,
+                prompt=negative_prompt_3,
+                num_images_per_prompt=num_images_per_prompt,
             )
 
             negative_clip_prompt_embeds = paddle.nn.functional.pad(
