@@ -18,6 +18,7 @@ import os
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
+from paddlenlp.transformers import BertTokenizer
 
 from ppdiffusers import (
     AutoencoderKL,
@@ -62,9 +63,14 @@ class LatentDiffusionModel(nn.Layer):
             if model_args.pretrained_model_name_or_path is None
             else os.path.join(model_args.pretrained_model_name_or_path, "tokenizer")
         )
-        self.tokenizer = AutoTokenizer.from_pretrained(
-            tokenizer_name_or_path, model_max_length=model_args.model_max_length
-        )
+        if tokenizer_name_or_path == "bert-base-uncased":
+            self.tokenizer = BertTokenizer.from_pretrained(
+                tokenizer_name_or_path, model_max_length=model_args.model_max_length
+            )
+        else:
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                tokenizer_name_or_path, model_max_length=model_args.model_max_length
+            )
 
         # init vae
         vae_name_or_path = (
