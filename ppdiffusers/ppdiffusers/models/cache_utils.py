@@ -23,6 +23,8 @@ class CacheMixin:
 
     Supported caching techniques:
         - [Pyramid Attention Broadcast](https://huggingface.co/papers/2408.12588)
+        - SortTaylor optimization
+        - TeaBlockCache + Taylor optimization
     """
 
     _cache_config = None
@@ -36,15 +38,17 @@ class CacheMixin:
         Enable caching techniques on the model.
 
         Args:
-            config (`Union[PyramidAttentionBroadcastConfig]`):
+            config (`Union[PyramidAttentionBroadcastConfig, SortBlockConfig, TeaBlockCacheTaylorConfig]`):
                 The configuration for applying the caching technique. Currently supported caching techniques are:
                     - [`~hooks.PyramidAttentionBroadcastConfig`]
+                    - [`~hooks.SortBlockConfig`]
+                    - [`~hooks.TeaBlockCacheTaylorConfig`]
 
         Example:
 
         ```python
         >>> import paddle
-        >>> from diffusers import CogVideoXPipeline, PyramidAttentionBroadcastConfig
+        >>> from ppdiffusers import CogVideoXPipeline, PyramidAttentionBroadcastConfig
 
         >>> pipe = CogVideoXPipeline.from_pretrained("THUDM/CogVideoX-5b", paddle_dtype=paddle.bfloat16)
 
@@ -54,21 +58,59 @@ class CacheMixin:
         ...     current_timestep_callback=lambda: pipe.current_timestep,
         ... )
         >>> pipe.transformer.enable_cache(config)
+
+        >>> # Or for SortBlock optimization:
+        >>> from ppdiffusers import FluxPipeline, SortBlockConfig
+        >>> pipe = FluxPipeline.from_pretrained("black-forest-labs/FLUX.1-dev", paddle_dtype=paddle.float16)
+        >>> config = SortBlockConfig(
+        ...     timestep_start=900,
+        ...     timestep_end=100,
+        ...     beta=0.3,
+        ...     current_timestep_callback=lambda: pipe._current_timestep,
+        ... )
+        >>> pipe.transformer.enable_cache(config)
+
+        >>> # Or for TeaBlockCache + Taylor optimization:
+        >>> from ppdiffusers import FluxPipeline, TeaBlockCacheTaylorConfig
+        >>> pipe = FluxPipeline.from_pretrained("black-forest-labs/FLUX.1-dev", paddle_dtype=paddle.bfloat16)
+        >>> config = TeaBlockCacheTaylorConfig(
+        ...     step_start=50,
+        ...     step_end=950,
+        ...     block_cache_start=1,
+        ...     single_block_cache_start=1,
+        ...     taylor_max_order=1,
+        ...     taylor_first_enhance=1,
+        ...     current_timestep_callback=lambda: pipe._current_timestep,
+        ... )
+        >>> pipe.transformer.enable_cache(config)
         ```
         """
         from ..hooks import (
             PyramidAttentionBroadcastConfig,
+            SortBlockConfig,
+            TeaBlockCacheTaylorConfig,
             apply_pyramid_attention_broadcast,
+            apply_sort_block,
+            apply_teablockcache_taylor,
         )
 
         if isinstance(config, PyramidAttentionBroadcastConfig):
             apply_pyramid_attention_broadcast(self, config)
+        elif isinstance(config, SortBlockConfig):
+            apply_sort_block(self, config)
+        elif isinstance(config, TeaBlockCacheTaylorConfig):
+            apply_teablockcache_taylor(self, config)
         else:
             raise ValueError(f"Cache config {type(config)} is not supported.")
         self._cache_config = config
 
     def disable_cache(self) -> None:
-        from ..hooks import HookRegistry, PyramidAttentionBroadcastConfig
+        from ..hooks import (
+            HookRegistry,
+            PyramidAttentionBroadcastConfig,
+            SortBlockConfig,
+            TeaBlockCacheTaylorConfig,
+        )
 
         if self._cache_config is None:
             logger.warning("Caching techniques have not been enabled, so there's nothing to disable.")
@@ -76,6 +118,12 @@ class CacheMixin:
         if isinstance(self._cache_config, PyramidAttentionBroadcastConfig):
             registry = HookRegistry.check_if_exists_or_initialize(self)
             registry.remove_hook("pyramid_attention_broadcast", recurse=True)
+        elif isinstance(self._cache_config, SortBlockConfig):
+            registry = HookRegistry.check_if_exists_or_initialize(self)
+            registry.remove_hook("sort_block", recurse=True)
+        elif isinstance(self._cache_config, TeaBlockCacheTaylorConfig):
+            registry = HookRegistry.check_if_exists_or_initialize(self)
+            registry.remove_hook("teablockcache_taylor", recurse=True)
         else:
             raise ValueError(f"Cache config {type(self._cache_config)} is not supported.")
         self._cache_config = None
