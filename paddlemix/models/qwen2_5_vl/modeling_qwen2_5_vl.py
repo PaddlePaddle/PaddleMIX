@@ -268,7 +268,6 @@ class Qwen2_5_VLRotaryEmbedding(nn.Layer):
 
         self.inv_freq, self.attention_scaling = self.rope_init_fn(self.config, device, **self.rope_kwargs)
         self.original_inv_freq = self.inv_freq
-        # torch: self.register_buffer("inv_freq", inv_freq, persistent=False)
         self._set_cos_sin_cache(seq_len=max_position_embeddings)
 
     def _set_cos_sin_cache(self, seq_len):
@@ -554,8 +553,6 @@ class Qwen2_5_VLVisionFlashAttention2(nn.Layer):
             .reshape([seq_length, -1])
         )
 
-        # print("attn_output type:", attn_output.dtype)
-        attn_output = attn_output.cast(paddle.float32)
         attn_output = self.proj(attn_output)
         return attn_output
 
@@ -681,7 +678,6 @@ class Qwen2RMSNorm(nn.Layer):
             dtype=paddle.get_default_dtype(),
             default_initializer=nn.initializer.Constant(1.0),
         )
-        # self.weight.stop_gradient = False # NOTE zhuyipin: create_parameter() should set stop_gradient to False in explicit way
         self.variance_epsilon = eps
 
     def forward(self, hidden_states):
@@ -695,7 +691,6 @@ class Qwen2RMSNorm(nn.Layer):
 
         if self.weight.dtype in [paddle.float16, paddle.bfloat16]:
             hidden_states = paddle.cast(hidden_states, self.weight.dtype)
-        self.weight.stop_gradient = False
         return hidden_states * self.weight
 
 
@@ -866,8 +861,7 @@ class Qwen2_5_VLAttention(paddle.nn.Layer):
             kv_seq_len += cache_position[0] + 1
             # kv_seq_len += past_key_value[0].shape[-2] # qwen2是 [-3]
 
-        # cos, sin = self.rotary_emb(value_states, position_ids)
-        cos, sin = position_embeddings  # sin cos 计算diff
+        cos, sin = position_embeddings
         query_states, key_states = apply_multimodal_rotary_pos_emb(
             query_states, key_states, cos, sin, self.rope_scaling["mrope_section"]
         )
@@ -961,7 +955,6 @@ class Qwen2_5_VLFlashAttention2(Qwen2_5_VLAttention):
             kv_seq_len += cache_position[0] + 1
 
         # Because the input can be padded, the absolute sequence length depends on the max position id.
-        # cos, sin = self.rotary_emb(value_states, position_ids)
         cos, sin = position_embeddings
         query_states, key_states = apply_multimodal_rotary_pos_emb(
             query_states, key_states, cos, sin, self.rope_scaling["mrope_section"]
@@ -970,9 +963,6 @@ class Qwen2_5_VLFlashAttention2(Qwen2_5_VLAttention):
         if past_key_value is not None:
             cache_kwargs = {"sin": sin, "cos": cos, "cache_position": cache_position}  # Specific to RoPE models
             key_states, value_states = past_key_value.update(key_states, value_states, self.layer_idx, cache_kwargs)
-            # key_states = paddle.concat([past_key_value[0], key_states], axis=2)  # qwen2是 axis=1, qwen2_vl是 axis=2
-            # value_states = paddle.concat([past_key_value[1], value_states], axis=2)  # qwen2是 axis=1
-        # past_key_value = (key_states, value_states) if use_cache else None
 
         # repeat k/v heads if n_kv_heads < n_heads
         key_states = repeat_kv(key_states, self.num_key_value_groups)
@@ -1141,19 +1131,6 @@ class Qwen2_5_VLFlashAttention2(Qwen2_5_VLAttention):
             causal=causal,
         )[0]
         attn_output = attn_output.cast(datatype)
-
-        # attn_output_unpad = flash_attn_varlen_func(  # TODO: flash_attn_unpadded
-        #     query_states,  # [5998, 16, 128]
-        #     key_states,  # [5998, 8, 128]
-        #     value_states,  # [5998, 8, 128]
-        #     cu_seqlens_q=cu_seqlens_q,
-        #     cu_seqlens_k=cu_seqlens_k,
-        #     max_seqlen_q=max_seqlen_in_batch_q,
-        #     max_seqlen_k=max_seqlen_in_batch_k,
-        #     scale=softmax_scale,  # not softmax_scale=
-        #     dropout=dropout,
-        #     causal=causal,
-        # )[0]
 
         attn_output = attn_output.unsqueeze(0)
         query_states = query_states.unsqueeze(0)
@@ -1380,8 +1357,6 @@ class Qwen2_5_VLDecoderLayer(nn.Layer):
         residual = hidden_states
 
         hidden_states = self.input_layernorm(hidden_states)
-        # hidden_state1_np = np.load("/root/paddlejob/workspace/env_run/zhuyipin/qwen25/Qwen2.5-VL/qwen-vl-finetune/hidden_states1.npy")
-        # hidden_states = paddle.to_tensor(hidden_state1_np)
         # Self Attention
         hidden_states, self_attn_weights, present_key_value = self.self_attn(
             hidden_states=hidden_states,
@@ -1393,8 +1368,6 @@ class Qwen2_5_VLDecoderLayer(nn.Layer):
             cache_position=cache_position,
             position_embeddings=position_embeddings,
         )
-        # hidden_state2_np = np.load("/root/paddlejob/workspace/env_run/zhuyipin/qwen25/Qwen2.5-VL/qwen-vl-finetune/hidden_states2.npy")
-        # hidden_states = paddle.to_tensor(hidden_state2_np)
         hidden_states = residual + hidden_states
 
         # Fully Connected
@@ -1774,11 +1747,6 @@ class Qwen2_5_VLModel(Qwen2_5_VLPreTrainedModel):
         # create position embeddings to be shared across the decoder layers # zhuyipin: missing position_embeddings
         position_embeddings = self.rotary_emb(hidden_states, position_ids)
 
-        # position_embeddings_0_np = np.load("/root/paddlejob/workspace/env_run/zhuyipin/qwen25/Qwen2.5-VL/qwen-vl-finetune/position_embeddings_0.npy")
-        # position_embeddings_1_np = np.load("/root/paddlejob/workspace/env_run/zhuyipin/qwen25/Qwen2.5-VL/qwen-vl-finetune/position_embeddings_1.npy")
-        # position_embeddings_0 = paddle.to_tensor(position_embeddings_0_np)
-        # position_embeddings_1 = paddle.to_tensor(position_embeddings_1_np)
-        # position_embeddings = (position_embeddings_0.cast("bfloat16"), position_embeddings_1.cast("bfloat16"))
         # decoder layers
         all_hidden_states = () if output_hidden_states else None
         all_self_attns = () if output_attentions else None
@@ -1812,7 +1780,6 @@ class Qwen2_5_VLModel(Qwen2_5_VLPreTrainedModel):
                     cache_position=cache_position,
                     position_embeddings=position_embeddings,
                 )
-                # print(layer_outputs)
 
             # NOTE: clear outdate cache after it has been used for memory saving
             past_key_value = past_key_values[idx] = None
@@ -2315,9 +2282,6 @@ class Qwen2_5_VLForConditionalGeneration(Qwen2_5_VLPreTrainedModel):
             if attention_mask is not None:
                 attention_mask = attention_mask
 
-        # inputs_embeds_np = np.load("/root/paddlejob/workspace/env_run/zhuyipin/qwen25/Qwen2.5-VL/qwen-vl-finetune/inputs_embeds.npy")
-        # inputs_embeds = paddle.to_tensor(inputs_embeds_np).cast('bfloat16')
-        # inputs_embeds.stop_gradient = False
         outputs = self.model(
             input_ids=None,
             position_ids=position_ids,
@@ -2349,10 +2313,6 @@ class Qwen2_5_VLForConditionalGeneration(Qwen2_5_VLPreTrainedModel):
             loss = loss_fct(shift_logits, shift_labels)
             label_sum = paddle.sum(shift_labels != -100).cast("float32")
             loss = loss / label_sum
-
-            # # Flatten the tokens
-            # loss_fct = nn.CrossEntropyLoss()
-            # loss = loss_fct(shift_logits, shift_labels)
 
         if not return_dict:
             # output = (logits,) + outputs[1:]
