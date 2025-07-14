@@ -1032,7 +1032,6 @@ class Qwen2VLFlashAttention2(Qwen2VLAttention):
                 max_seqlen_in_batch_q, max_seqlen_in_batch_k = max_seq_lens
 
                 query_dtype = query_states.dtype
-                print("query_dtype: ", query_dtype)
                 # 修改数据类型为bfloat16以支持flash_attn_varlen_func
                 query_states = query_states.astype("bfloat16")
                 key_states = key_states.astype("bfloat16")
