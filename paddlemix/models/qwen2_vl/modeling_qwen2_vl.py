@@ -1031,6 +1031,8 @@ class Qwen2VLFlashAttention2(Qwen2VLAttention):
                 cu_seqlens_q, cu_seqlens_k = cu_seq_lens
                 max_seqlen_in_batch_q, max_seqlen_in_batch_k = max_seq_lens
 
+                query_dtype = query_states.dtype
+                print("query_dtype: ", query_dtype)
                 # 修改数据类型为bfloat16以支持flash_attn_varlen_func
                 query_states = query_states.astype("bfloat16")
                 key_states = key_states.astype("bfloat16")
@@ -1049,15 +1051,18 @@ class Qwen2VLFlashAttention2(Qwen2VLAttention):
                     causal=causal,
                 )[0]
 
-                attn_output = pad_input(attn_output_unpad, indices_q, batch_size, query_length).astype("float32")
+                attn_output = pad_input(attn_output_unpad, indices_q, batch_size, query_length)
+                attn_output = attn_output.astype(query_dtype)
             else:
+                query_dtype = query_states.dtype
                 attn_output = flash_attn_func(
                     query_states.astype("bfloat16"),
                     key_states.astype("bfloat16"),
                     value_states.astype("bfloat16"),
                     dropout,
                     causal=causal,  # no softmax_scale=
-                )[0].astype("float32")
+                )[0]
+                attn_output = attn_output.astype(query_dtype)
 
         # # 修改这里的维度转换，考虑并行策略下的维度
         # batch_size = query_states.shape[0]
