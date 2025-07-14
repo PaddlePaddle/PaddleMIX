@@ -315,7 +315,7 @@ class Qwen2_5_VLRotaryEmbedding(nn.Layer):
         # Force float32 (see https://github.com/huggingface/transformers/pull/29285)
         device_type = paddle.get_device()
         device_type = device_type if isinstance(device_type, str) and device_type != "mps" else "cpu"
-        with paddle.amp.auto_cast(enable=False):  # NOTE: zhuyipin: missing enable = False
+        with paddle.amp.auto_cast(enable=False):
             # Compute frequencies by matrix multiplication and transpose
             # inv_freq_expanded shape: [3, bs, dim/2, 1]
             # position_ids_expanded shape: [3, bs, 1, positions]
@@ -1588,23 +1588,15 @@ class Qwen2_5_VLModel(Qwen2_5_VLPreTrainedModel):
                 self.hidden_size,
             )
 
-        # self.embed_tokens = nn.Embedding(config.vocab_size, config.hidden_size, self.padding_idx)
         self.layers = nn.LayerList(
             [Qwen2_5_VLDecoderLayer(config, layer_idx) for layer_idx in range(config.num_hidden_layers)]
         )
         self.norm = Qwen2RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-        # self.rotary_emb = Qwen2_5_VLRotaryEmbedding(config=config)
         self.rotary_emb = Qwen2_5_VLRotaryEmbedding(
             self.hidden_size // config.num_attention_heads,
             max_position_embeddings=config.max_position_embeddings,
             base=config.rope_theta,
         )
-
-        #         self.head_dim = self.hidden_size // self.num_heads
-        # self.num_key_value_heads = config.num_key_value_heads
-        # self.num_key_value_groups = self.num_heads // self.num_key_value_heads
-        # self.max_position_embeddings = config.max_position_embeddings
-        # self.rope_theta = config.rope_theta
 
         self.enable_recompute = False
 
@@ -1744,7 +1736,7 @@ class Qwen2_5_VLModel(Qwen2_5_VLPreTrainedModel):
 
         hidden_states = inputs_embeds
 
-        # create position embeddings to be shared across the decoder layers # zhuyipin: missing position_embeddings
+        # create position embeddings to be shared across the decoder layers
         position_embeddings = self.rotary_emb(hidden_states, position_ids)
 
         # decoder layers
