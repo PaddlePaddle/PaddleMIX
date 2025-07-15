@@ -30,8 +30,9 @@ import paddle
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from paddle import nn
 from paddle.io import Dataset
-from paddlenlp.transformers import PretrainedConfig
 from PIL import Image, ImageDraw, ImageFont
+
+from paddlenlp.transformers import PretrainedConfig
 
 
 def prepare_images_for_saving(images_tensor, resolution, grid_size=4, range_type="neg1pos1"):

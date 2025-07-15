@@ -29,11 +29,11 @@ from typing import List, Union
 import numpy as np
 import paddle
 from paddle.vision import transforms
-from paddlenlp.transformers import PretrainedConfig
 from PIL import Image
 from tqdm.auto import tqdm
 
 import ppdiffusers
+from paddlenlp.transformers import PretrainedConfig
 from ppdiffusers import (
     AutoencoderKL,
     FlowMatchEulerDiscreteScheduler,

@@ -30,6 +30,8 @@ import paddle.nn as nn
 from paddle.distributed.fleet.meta_parallel.sharding.group_sharded_stage2 import (
     GroupShardedStage2,
 )
+from tqdm import tqdm
+
 from paddlenlp.trainer import Trainer as NLPTrainer
 from paddlenlp.trainer import get_last_checkpoint
 from paddlenlp.trainer.trainer import (
@@ -90,7 +92,6 @@ from paddlenlp.trainer.trainer import (
     unwrap_model,
     visual,
 )
-from tqdm import tqdm
 
 from .wandb_callback import WandbCallback
 

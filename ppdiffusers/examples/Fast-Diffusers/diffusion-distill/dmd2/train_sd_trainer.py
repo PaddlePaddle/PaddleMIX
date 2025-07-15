@@ -19,13 +19,13 @@ import matplotlib
 
 matplotlib.use("Agg")
 import paddle
-from paddlenlp.trainer import PdArgumentParser, TrainingArguments
 from sd_image_dataset import SDImageDatasetLMDB
 from sd_unified_model import SDUniModel
 from sdxl.sdxl_trainer import DMD2Trainer
 from sdxl.trainer_args import ModelArguments
 from utils import SDTextDataset, cycle
 
+from paddlenlp.trainer import PdArgumentParser, TrainingArguments
 from ppdiffusers.accelerate import Accelerator
 from ppdiffusers.accelerate.utils import ProjectConfiguration, set_seed
 from ppdiffusers.optimization import get_scheduler
