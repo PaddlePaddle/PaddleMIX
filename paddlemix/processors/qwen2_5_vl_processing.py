@@ -127,9 +127,11 @@ class Qwen2_5_VLProcessor(ProcessorMixin):
 
     def __init__(self, image_processor, text_processor, **kwargs):
         super().__init__(image_processor, text_processor)
-        self.image_processor.min_pixels = kwargs.get("min_pixels", 3136)
-        self.image_processor.max_pixels = kwargs.get("max_pixels", 12845056)
-        # self.image_token = "<|image_pad|>" if not hasattr(tokenizer, "image_token") else tokenizer.image_token
+
+        # qwen2.5-vl training (liaojincheng) image_min_pixels is used for template get mm_input
+        self.image_min_pixels = kwargs.get("image_min_pixels", self.image_processor.min_pixels)
+        self.image_max_pixels = kwargs.get("image_max_pixels", self.image_processor.max_pixels)
+        # self.image_token = "" if not hasattr(tokenizer, "image_token") else tokenizer.image_token
         # self.video_token = "<|video_pad|>" if not hasattr(tokenizer, "video_token") else tokenizer.video_token
 
     def __call__(
@@ -359,8 +361,10 @@ class Qwen2_5_VLImageProcessor(BaseImageProcessor):
         image_mean: Optional[Union[float, List[float]]] = None,
         image_std: Optional[Union[float, List[float]]] = None,
         do_convert_rgb: bool = True,
+        size: Dict[str, int] = None,
         min_pixels: int = 56 * 56,
-        max_pixels: int = 28 * 28 * 1280,
+        # max_pixels: int = 28 * 28 * 1280,
+        max_pixels: int = 12845056,
         patch_size: int = 14,
         temporal_patch_size: int = 2,
         merge_size: int = 2,
@@ -374,12 +378,24 @@ class Qwen2_5_VLImageProcessor(BaseImageProcessor):
         self.do_normalize = do_normalize
         self.image_mean = image_mean if image_mean is not None else OPENAI_CLIP_MEAN
         self.image_std = image_std if image_std is not None else OPENAI_CLIP_STD
-        self.min_pixels = min_pixels
-        self.max_pixels = max_pixels
         self.patch_size = patch_size
         self.temporal_patch_size = temporal_patch_size
         self.merge_size = merge_size
-        self.size = {"min_pixels": min_pixels, "max_pixels": max_pixels}
+
+        # liaojincheng fix qwen2.5-vl image processor
+        if size is not None and ("shortest_edge" not in size or "longest_edge" not in size):
+            raise ValueError("size must contain 'shortest_edge' and 'longest_edge' keys.")
+        else:
+            size = {"shortest_edge": 56 * 56, "longest_edge": 28 * 28 * 1280}
+        # backward compatibility: override size with min_pixels and max_pixels if they are provided
+        if min_pixels is not None:
+            size["shortest_edge"] = min_pixels
+        if max_pixels is not None:
+            size["longest_edge"] = max_pixels
+        self.min_pixels = size["shortest_edge"]
+        self.max_pixels = size["longest_edge"]
+        self.size = size
+
         self.do_convert_rgb = do_convert_rgb
 
     def _preprocess(
@@ -453,7 +469,6 @@ class Qwen2_5_VLImageProcessor(BaseImageProcessor):
         processed_images = []
 
         for image in images:
-
             if do_resize:
                 resized_height, resized_width = smart_resize(
                     height,
@@ -513,6 +528,8 @@ class Qwen2_5_VLImageProcessor(BaseImageProcessor):
         videos: VideoInput = None,
         do_resize: bool = None,
         size: Dict[str, int] = None,
+        min_pixels: int = None,
+        max_pixels: int = None,
         resample: PILImageResampling = None,
         do_rescale: bool = None,
         rescale_factor: float = None,
@@ -571,6 +588,18 @@ class Qwen2_5_VLImageProcessor(BaseImageProcessor):
                 - `"none"` or `ChannelDimension.NONE`: image in (height, width) format.
 
         """
+        if size is not None:
+            if "shortest_edge" not in size or "longest_edge" not in size:
+                raise ValueError("size must contain 'shortest_edge' and 'longest_edge' keys.")
+            min_pixels = size["shortest_edge"]
+        else:
+            size = self.size
+        # backward compatibility: override size with min_pixels and max_pixels if they are provided
+        if min_pixels is not None:
+            size["shortest_edge"] = min_pixels
+        if max_pixels is not None:
+            size["longest_edge"] = max_pixels
+
         do_resize = do_resize if do_resize is not None else self.do_resize
         size = size if size is not None else self.size
         resample = resample if resample is not None else self.resample
@@ -653,31 +682,31 @@ def floor_by_factor(number: int, factor: int) -> int:
 
 
 def smart_resize(
-    height: int, width: int, factor: int = IMAGE_FACTOR, min_pixels: int = MIN_PIXELS, max_pixels: int = MAX_PIXELS
-) -> Tuple[int, int]:
-    """
-    Rescales the image so that the following conditions are met:
+    height: int, width: int, factor: int = 28, min_pixels: int = 56 * 56, max_pixels: int = 14 * 14 * 4 * 1280
+):
+    """Rescales the image so that the following conditions are met:
 
     1. Both dimensions (height and width) are divisible by 'factor'.
 
     2. The total number of pixels is within the range ['min_pixels', 'max_pixels'].
 
     3. The aspect ratio of the image is maintained as closely as possible.
+
     """
-    if max(height, width) / min(height, width) > MAX_RATIO:
+    if max(height, width) / min(height, width) > 200:
         raise ValueError(
-            f"absolute aspect ratio must be smaller than {MAX_RATIO}, got {max(height, width) / min(height, width)}"
+            f"absolute aspect ratio must be smaller than 200, got {max(height, width) / min(height, width)}"
         )
-    h_bar = max(factor, round_by_factor(height, factor))
-    w_bar = max(factor, round_by_factor(width, factor))
+    h_bar = round(height / factor) * factor
+    w_bar = round(width / factor) * factor
     if h_bar * w_bar > max_pixels:
         beta = math.sqrt((height * width) / max_pixels)
-        h_bar = floor_by_factor(height / beta, factor)
-        w_bar = floor_by_factor(width / beta, factor)
+        h_bar = math.floor(height / beta / factor) * factor
+        w_bar = math.floor(width / beta / factor) * factor
     elif h_bar * w_bar < min_pixels:
         beta = math.sqrt(min_pixels / (height * width))
-        h_bar = ceil_by_factor(height * beta, factor)
-        w_bar = ceil_by_factor(width * beta, factor)
+        h_bar = math.ceil(height * beta / factor) * factor
+        w_bar = math.ceil(width * beta / factor) * factor
     return h_bar, w_bar
 
 

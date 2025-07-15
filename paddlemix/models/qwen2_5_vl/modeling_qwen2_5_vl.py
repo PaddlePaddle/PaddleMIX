@@ -268,7 +268,6 @@ class Qwen2_5_VLRotaryEmbedding(nn.Layer):
 
         self.inv_freq, self.attention_scaling = self.rope_init_fn(self.config, device, **self.rope_kwargs)
         self.original_inv_freq = self.inv_freq
-
         self._set_cos_sin_cache(seq_len=max_position_embeddings)
 
     def _set_cos_sin_cache(self, seq_len):
@@ -316,7 +315,7 @@ class Qwen2_5_VLRotaryEmbedding(nn.Layer):
         # Force float32 (see https://github.com/huggingface/transformers/pull/29285)
         device_type = paddle.get_device()
         device_type = device_type if isinstance(device_type, str) and device_type != "mps" else "cpu"
-        with paddle.amp.auto_cast():
+        with paddle.amp.auto_cast(enable=False):
             # Compute frequencies by matrix multiplication and transpose
             # inv_freq_expanded shape: [3, bs, dim/2, 1]
             # position_ids_expanded shape: [3, bs, 1, positions]
@@ -832,6 +831,7 @@ class Qwen2_5_VLAttention(paddle.nn.Layer):
         output_attentions: bool = False,
         use_cache: bool = False,  # default true
         cache_position: Optional[paddle.Tensor] = None,
+        position_embeddings: Optional[Tuple[paddle.Tensor, paddle.Tensor]] = None,  # necessary, but kept here for BC
     ) -> Tuple[paddle.Tensor, Optional[paddle.Tensor], Optional[Tuple[paddle.Tensor]]]:
         bsz, q_len, _ = hidden_states.shape
 
@@ -861,7 +861,7 @@ class Qwen2_5_VLAttention(paddle.nn.Layer):
             kv_seq_len += cache_position[0] + 1
             # kv_seq_len += past_key_value[0].shape[-2] # qwen2是 [-3]
 
-        cos, sin = self.rotary_emb(value_states, position_ids)
+        cos, sin = position_embeddings
         query_states, key_states = apply_multimodal_rotary_pos_emb(
             query_states, key_states, cos, sin, self.rope_scaling["mrope_section"]
         )
@@ -925,6 +925,7 @@ class Qwen2_5_VLFlashAttention2(Qwen2_5_VLAttention):
         output_attentions: bool = False,
         use_cache: bool = False,  # default true
         cache_position: Optional[paddle.Tensor] = None,
+        position_embeddings: Optional[Tuple[paddle.Tensor, paddle.Tensor]] = None,  # necessary, but kept here for BC
     ) -> Tuple[paddle.Tensor, Optional[paddle.Tensor], Optional[Tuple[paddle.Tensor]]]:
         bsz, q_len, _ = tuple(hidden_states.shape)
         try:
@@ -954,17 +955,14 @@ class Qwen2_5_VLFlashAttention2(Qwen2_5_VLAttention):
             kv_seq_len += cache_position[0] + 1
 
         # Because the input can be padded, the absolute sequence length depends on the max position id.
-        cos, sin = self.rotary_emb(value_states, position_ids)
+        cos, sin = position_embeddings
         query_states, key_states = apply_multimodal_rotary_pos_emb(
             query_states, key_states, cos, sin, self.rope_scaling["mrope_section"]
         )
 
         if past_key_value is not None:
-            # cache_kwargs = {"sin": sin, "cos": cos, "cache_position": cache_position}  # Specific to RoPE models
-            # key_states, value_states = past_key_value.update(key_states, value_states, self.layer_idx, cache_kwargs)
-            key_states = paddle.concat([past_key_value[0], key_states], axis=2)  # qwen2是 axis=1, qwen2_vl是 axis=2
-            value_states = paddle.concat([past_key_value[1], value_states], axis=2)  # qwen2是 axis=1
-        past_key_value = (key_states, value_states) if use_cache else None
+            cache_kwargs = {"sin": sin, "cos": cos, "cache_position": cache_position}  # Specific to RoPE models
+            key_states, value_states = past_key_value.update(key_states, value_states, self.layer_idx, cache_kwargs)
 
         # repeat k/v heads if n_kv_heads < n_heads
         key_states = repeat_kv(key_states, self.num_key_value_groups)
@@ -976,14 +974,14 @@ class Qwen2_5_VLFlashAttention2(Qwen2_5_VLAttention):
         key_states = key_states.transpose(perm=[0, 2, 1, 3])
         value_states = value_states.transpose(perm=[0, 2, 1, 3])
 
-        attn_output = self._flash_attention_forward(
+        attn_output = self._flash_attention_forward2(
             query_states,
             key_states,
             value_states,
             attention_mask,
-            q_len
-            # dropout=0.0 if not self.training else self.attention_dropout,
-            # causal=self.is_causal,
+            q_len,
+            dropout=self.attention_dropout if self.training else 0.0,
+            is_causal=self.is_causal,
         )
 
         attn_output = attn_output.reshape([bsz, q_len, -1])
@@ -1054,6 +1052,90 @@ class Qwen2_5_VLFlashAttention2(Qwen2_5_VLAttention):
         # batch_size = query_states.shape[0]
         # hidden_size = self.num_heads * self.head_dim  # 计算实际的 hidden_size
         # attn_output = attn_output.reshape([batch_size, query_length, hidden_size])
+
+        return attn_output
+
+    def _flash_attention_forward2(
+        self,
+        query_states,
+        key_states,
+        value_states,
+        attention_mask,
+        query_length: int,
+        is_causal: bool,
+        dropout: float = 0.0,
+        softmax_scale: Optional[float] = None,
+        use_top_left_mask: bool = False,
+        softcap: Optional[float] = None,
+    ):
+        """
+        Calls the forward method of Flash Attention - if the input hidden states contain at least one padding token
+        first unpad the input, then computes the attention scores and pad the final attention scores.
+
+        Args:
+            query_states (`paddle.Tensor`):
+                Input query states to be passed to Flash Attention API
+            key_states (`paddle.Tensor`):
+                Input key states to be passed to Flash Attention API
+            value_states (`paddle.Tensor`):
+                Input value states to be passed to Flash Attention API
+            attention_mask (`paddle.Tensor`):
+                The padding mask - corresponds to a tensor of size `(batch_size, seq_len)` where 0 stands for the
+                position of padding tokens and 1 for the position of non-padding tokens.
+            dropout (`float`):
+                Attention dropout
+            softmax_scale (`float`, *optional*):
+                The scaling of QK^T before applying softmax. Default to 1 / sqrt(head_dim)
+            use_top_left_mask (`bool`, defaults to `False`):
+                flash_attn<2.1 generates top-left aligned causal mask, while what is needed here is bottom-right alignement, that was made default for flash_attn>=2.1. This attribute is used to handle this difference.
+            softcap (`float`, *optional*):
+                Softcap for the attention logits, used e.g. in gemma2.
+            deterministic (`bool`, *optional*):
+                Determines if the deterministic option introduced in flash_attn>=2.4.1 is enabled.
+        """
+        assert query_states.shape[0] == key_states.shape[0] == value_states.shape[0] == 1
+        query_states = query_states.squeeze(0)
+        key_states = key_states.squeeze(0)
+        value_states = value_states.squeeze(0)
+        cu_seqlens = attention_mask
+        head_dim = query_states.shape[-1]
+        softmax_scale = head_dim**-0.5
+
+        with paddle.no_grad():
+            max_seqlen = max([cu_seqlens[idx + 1] - cu_seqlens[idx] for idx in range(cu_seqlens.shape[0] - 1)]).item()
+
+        if not use_top_left_mask:
+            causal = is_causal
+        else:
+            # TODO: Remove the `query_length != 1` check once Flash Attention for RoCm is bumped to 2.1.
+            causal = is_causal and query_length != 1
+
+        # Assuming 4D tensors, key_states.shape[1] is the key/value sequence length (source length).
+        flash_kwargs = {}
+
+        if softcap is not None:
+            flash_kwargs["softcap"] = softcap
+
+        datatype = query_states.dtype
+        # query_states diff!
+        attn_output = flash_attn_varlen_func(
+            query_states.cast("bfloat16"),
+            key_states.cast("bfloat16"),
+            value_states.cast("bfloat16"),
+            cu_seqlens_q=cu_seqlens,
+            cu_seqlens_k=cu_seqlens,
+            max_seqlen_q=max_seqlen,
+            max_seqlen_k=max_seqlen,
+            dropout=dropout,
+            scale=softmax_scale,
+            causal=causal,
+        )[0]
+        attn_output = attn_output.cast(datatype)
+
+        attn_output = attn_output.unsqueeze(0)
+        query_states = query_states.unsqueeze(0)
+        key_states = key_states.unsqueeze(0)
+        value_states = value_states.unsqueeze(0)
 
         return attn_output
 
@@ -1248,6 +1330,7 @@ class Qwen2_5_VLDecoderLayer(nn.Layer):
         output_attentions: Optional[bool] = False,
         use_cache: Optional[bool] = False,
         cache_position: Optional[paddle.Tensor] = None,
+        position_embeddings: Optional[Tuple[paddle.Tensor, paddle.Tensor]] = None,  # necessary, but kept here for BC
         **kwargs,
     ):
         """
@@ -1283,6 +1366,7 @@ class Qwen2_5_VLDecoderLayer(nn.Layer):
             output_attentions=output_attentions,
             use_cache=use_cache,
             cache_position=cache_position,
+            position_embeddings=position_embeddings,
         )
         hidden_states = residual + hidden_states
 
@@ -1504,11 +1588,15 @@ class Qwen2_5_VLModel(Qwen2_5_VLPreTrainedModel):
                 self.hidden_size,
             )
 
-        # self.embed_tokens = nn.Embedding(config.vocab_size, config.hidden_size, self.padding_idx)
         self.layers = nn.LayerList(
             [Qwen2_5_VLDecoderLayer(config, layer_idx) for layer_idx in range(config.num_hidden_layers)]
         )
         self.norm = Qwen2RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.rotary_emb = Qwen2_5_VLRotaryEmbedding(
+            self.hidden_size // config.num_attention_heads,
+            max_position_embeddings=config.max_position_embeddings,
+            base=config.rope_theta,
+        )
 
         self.enable_recompute = False
 
@@ -1543,7 +1631,7 @@ class Qwen2_5_VLModel(Qwen2_5_VLPreTrainedModel):
                 past_key_values_length=past_key_values_length,
             )
         # Convert bool attention_mask to float attention mask, which will be added to attention_scores later
-        expanded_attn_mask = paddle.where(expanded_attn_mask, 0.0, paddle.finfo(dtype).min).astype(dtype)
+        expanded_attn_mask = paddle.where(expanded_attn_mask.cast("bool"), 0.0, paddle.finfo(dtype).min).astype(dtype)
         return expanded_attn_mask
 
     @paddle.jit.not_to_static
@@ -1557,6 +1645,7 @@ class Qwen2_5_VLModel(Qwen2_5_VLPreTrainedModel):
         past_key_value: paddle.Tensor,
         use_cache: bool,
         cache_position: Optional[paddle.Tensor] = None,
+        position_embeddings=None,
     ):
         def create_custom_forward(module):
             def custom_forward(*inputs):
@@ -1573,6 +1662,7 @@ class Qwen2_5_VLModel(Qwen2_5_VLPreTrainedModel):
             past_key_value,
             use_cache,
             cache_position,
+            position_embeddings,
             use_reentrant=self.config.recompute_use_reentrant,
         )
 
@@ -1646,6 +1736,9 @@ class Qwen2_5_VLModel(Qwen2_5_VLPreTrainedModel):
 
         hidden_states = inputs_embeds
 
+        # create position embeddings to be shared across the decoder layers
+        position_embeddings = self.rotary_emb(hidden_states, position_ids)
+
         # decoder layers
         all_hidden_states = () if output_hidden_states else None
         all_self_attns = () if output_attentions else None
@@ -1666,6 +1759,7 @@ class Qwen2_5_VLModel(Qwen2_5_VLPreTrainedModel):
                     output_attentions,
                     use_cache,
                     cache_position,
+                    position_embeddings,
                 )
             else:
                 layer_outputs = decoder_layer(
@@ -1676,6 +1770,7 @@ class Qwen2_5_VLModel(Qwen2_5_VLPreTrainedModel):
                     output_attentions=output_attentions,  # False
                     use_cache=use_cache,  # True
                     cache_position=cache_position,
+                    position_embeddings=position_embeddings,
                 )
 
             # NOTE: clear outdate cache after it has been used for memory saving
