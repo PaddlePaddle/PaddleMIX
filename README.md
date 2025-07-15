@@ -161,8 +161,8 @@ conda activate paddlemix
 
 #### 方法 1: 一键安装（GPU/CPU推荐）
 
-- CUDA 11.x或12.3
-- PaddlePaddle 3.0.0b2
+- CUDA 11.x或12.x
+- PaddlePaddle 3.1.0
 ```
 sh build_paddle_env.sh
 ```
@@ -193,9 +193,9 @@ cd ..
 sh check_env.sh
 
 环境和依赖推荐版本:
-- paddlepaddle: 3.0.0b2或develop版本
-- paddlenlp: 3.0.0b3
-- ppdiffusers: 0.29.1
+- paddlepaddle: 3.1.0或develop版本
+- paddlenlp: 3.0.0b4
+- ppdiffusers: 0.30.0
 - huggingface_hub: 0.23.0
 ```
 
