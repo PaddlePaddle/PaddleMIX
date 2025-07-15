@@ -20,11 +20,31 @@
 - [📰新闻](#新闻)
 - [📣最新进展](#最新进展)
 - [🌈简介](#简介)
+  - [特色应用效果示例如下（点击标题可快速跳转在线体验）：](#特色应用效果示例如下点击标题可快速跳转在线体验)
 - [✨主要特性](#主要特性)
+  - [📱丰富的多模态模型库](#丰富的多模态模型库)
+  - [🧩全流程开发体验](#全流程开发体验)
+  - [💡高性能分布式训推能力](#高性能分布式训推能力)
+  - [🔧特色模型与工具](#特色模型与工具)
 - [🔍安装](#安装)
+  - [1. 克隆PaddleMIX仓库](#1-克隆paddlemix仓库)
+  - [2. 创建虚拟环境](#2-创建虚拟环境)
+  - [3. ‼️安装PaddlePaddle](#3-️安装paddlepaddle)
+    - [方法 1: 一键安装（GPU/CPU推荐）](#方法-1-一键安装gpucpu推荐)
+    - [方法 2: 手动安装](#方法-2-手动安装)
+  - [4. ‼️安装依赖](#4-️安装依赖)
+    - [方法 1: 一键安装（推荐）](#方法-1-一键安装推荐)
+    - [方法 2: 手动安装](#方法-2-手动安装-1)
+  - [5. ‼️验证安装](#5-️验证安装)
+  - [6. 安装自定义算子（可选）](#6-安装自定义算子可选)
 - [🔥教程](#教程)
 - [📱模型库](#模型库)
-- [特色模型](#xxx)
+- [🏆特色模型|工具](#特色模型工具)
+  - [💎PP-DocBee文档理解特色模型](#pp-docbee文档理解特色模型)
+  - [💎PP-VCtrl视频生成控制模型](#pp-vctrl视频生成控制模型)
+  - [💎多模态数据处理工具箱DataCopilot](#多模态数据处理工具箱datacopilot)
+- [🤔FAQ](#faq)
+- [❤️致谢](#️致谢)
 - [📝许可证书](#许可证书)
 - [📌社区交流](#社区交流)
 - [🎯引用](#引用)
@@ -37,6 +57,10 @@
 
 
 ## 📣最新进展
+**🔥2025.07.14 发布[Fast-Diffusers](ppdiffusers/examples/Fast-Diffusers)扩散模型推理加速工具包**
+* Training-Free：新增[T-gate](ppdiffusers/examples/Fast-Diffusers/Training-Free/tgate)，[PAB](ppdiffusers/examples/Fast-Diffusers/Training-Free/pab)，[TeaCache](ppdiffusers/examples/Fast-Diffusers/Training-Free/teacache)，[TaylorSeer](ppdiffusers/examples/Fast-Diffusers/Training-Free/taylorseer)，[BlockDance](ppdiffusers/examples/Fast-Diffusers/Training-Free/blockdance)等SOTA Training-Free算法。发布了自研算法[SortBlock](ppdiffusers/examples/Fast-Diffusers/Training-Free/sortblock)，[TeaBlockCache](ppdiffusers/examples/Fast-Diffusers/Training-Free/teablockcache)和[FirstBlockTaylor](ppdiffusers/examples/Fast-Diffusers/Training-Free/firstblock_taylorseer)算法，在保证生成图像质量的同时，实现2倍以上的端到端推理加速效果
+* 扩散模型时间步蒸馏：新增[PCM](ppdiffusers/examples/Fast-Diffusers/diffusion-distill/phased_consistency_distillation),[DMD2](ppdiffusers/examples/Fast-Diffusers/diffusion-distill//dmd2)等蒸馏算法，并提供了多种蒸馏loss供开发者灵活搭配。同时基于上述蒸馏算法，发布了基于FLUX-dev的4步蒸馏模型，配合飞桨深度学习编译器，推理时延降低至1.66秒。
+
 
 **🔥2025.05.09 发布PaddleMIX v3.0-beta**
 * 多模态理解：新增Qwen2.5VL系列，DeepSeek-VL2等；发布自研[PP-DocBee](./paddlemix/examples/ppdocbee)文档理解多模态大模型，新增[Qwen2.5VL高性能推理部署](deploy/qwen2_5_vl)，性能领先vllm 11.5%
