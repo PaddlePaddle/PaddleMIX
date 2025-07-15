@@ -17,13 +17,12 @@ import os
 import paddle
 import wandb
 from paddle.distributed import fleet
+from paddlenlp.trainer.integrations import TrainerCallback
 from utils import (
     draw_probability_histogram,
     draw_valued_array,
     prepare_images_for_saving,
 )
-
-from paddlenlp.trainer.integrations import TrainerCallback
 
 
 class WandbCallback(TrainerCallback):
