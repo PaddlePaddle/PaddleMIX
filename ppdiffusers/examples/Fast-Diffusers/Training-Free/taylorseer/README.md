@@ -8,7 +8,7 @@
 
 ## 使用方法
 ```
-python diffusers_taylorseer_flux.py
+python text_to_image_generation_taylorseer_flux.py
 ```
 
 ## 参数详解
