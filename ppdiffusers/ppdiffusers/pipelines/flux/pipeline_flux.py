@@ -607,6 +607,10 @@ class FluxPipeline(
     def interrupt(self):
         return self._interrupt
 
+    @property
+    def current_timestep(self):
+        return self._current_timestep
+
     @paddle.no_grad()
     @replace_example_docstring(EXAMPLE_DOC_STRING)
     def __call__(
@@ -743,6 +747,7 @@ class FluxPipeline(
         self._guidance_scale = guidance_scale
         self._joint_attention_kwargs = joint_attention_kwargs
         self._interrupt = False
+        self._current_timestep = None
 
         # 2. Define call parameters
         if prompt is not None and isinstance(prompt, str):
@@ -851,7 +856,7 @@ class FluxPipeline(
                     self._joint_attention_kwargs["ip_adapter_image_embeds"] = image_embeds
                 # broadcast to batch dimension in a way that's compatible with ONNX/Core ML
                 timestep = t.expand(latents.shape[0]).astype(latents.dtype)
-
+                self._current_timestep = t
                 noise_pred = self.transformer(
                     hidden_states=latents,
                     timestep=timestep / 1000,
@@ -896,7 +901,7 @@ class FluxPipeline(
                 # call the callback, if provided
                 if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
                     progress_bar.update()
-
+        self._current_timestep = None
         if output_type == "latent":
             image = latents
 
