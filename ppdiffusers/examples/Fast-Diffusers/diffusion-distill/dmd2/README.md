@@ -35,7 +35,7 @@ wget https://paddlenlp.bj.bcebos.com/models/community/ppdiffusers/dmd2/edm-image
 #### 安装算子
 ```
 cd ops
-pip install -e .
+python setup.py install
 cd ..
 ```
 
