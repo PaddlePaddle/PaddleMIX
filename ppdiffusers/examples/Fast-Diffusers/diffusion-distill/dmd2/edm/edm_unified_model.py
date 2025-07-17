@@ -71,6 +71,10 @@ class EDMUniModel(nn.Layer):
                     generator_turn=True, guidance_turn=False, generator_data_dict=generator_data_dict
                 )
                 self.guidance_model.requires_grad_(True)
+                if isinstance(self.guidance_model, paddle.DataParallel):
+                    self.guidance_model._layers.real_unet.requires_grad_(False)
+                else:
+                    self.guidance_model.real_unet.requires_grad_(False)
             else:
                 loss_dict = {}
                 log_dict = {}

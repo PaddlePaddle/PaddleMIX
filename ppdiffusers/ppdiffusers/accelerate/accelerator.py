@@ -1026,10 +1026,8 @@ class Accelerator:
         if not evaluation_mode:
             if self.distributed_type in (DistributedType.MULTI_GPU,):
                 if any(not p.stop_gradient for p in model.parameters()):
-                    # kwargs = self.ddp_handler.to_kwargs() if self.ddp_handler is not None else {}
-                    model = paddle.DataParallel(
-                        model,
-                    )
+                    kwargs = self.ddp_handler.to_kwargs() if self.ddp_handler is not None else {}
+                    model = paddle.DataParallel(model, **kwargs)
                     # only dp model need do_gradient_checkpointing
                     if hasattr(model._layers, "is_gradient_checkpointing"):
                         model.do_gradient_checkpointing = model._layers.is_gradient_checkpointing
