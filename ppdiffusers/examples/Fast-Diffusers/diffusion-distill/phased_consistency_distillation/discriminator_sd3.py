@@ -20,6 +20,7 @@ import paddle.nn.functional as F
 
 from ppdiffusers import SD3Transformer2DModel
 from ppdiffusers.models.transformer_2d import Transformer2DModelOutput
+
 from ppdiffusers.utils import (
     USE_PEFT_BACKEND,
     logging,
@@ -27,7 +28,7 @@ from ppdiffusers.utils import (
     unscale_lora_layers,
 )
 
-logger = logging.getLogger(__name__)
+logger = logging.get_logger(__name__)
 
 
 def modified_forward(
