@@ -32,6 +32,13 @@ unzip $CHECKPOINT_PATH/imagenet-64x64_lmdb.zip -d $CHECKPOINT_PATH
 wget https://paddlenlp.bj.bcebos.com/models/community/ppdiffusers/dmd2/edm-imagenet-64x64-cond-adm.pdparams
 ```
 
+#### 安装算子
+```
+cd ops
+python setup.py install
+cd ..
+```
+
 #### 训练
 
 ```bash
@@ -115,7 +122,7 @@ unzip $CHECKPOINT_PATH/coco10k.zip -d $CHECKPOINT_PATH
 #### 训练命令
 ```bash
 USE_PEFT_BACKEND=1 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
-python -u train_sd.py \
+python -m paddle.distributed.launch train_sd.py \
     --generator_lr 5e-5 \
     --guidance_lr 5e-5 \
     --train_iters 200000 \
