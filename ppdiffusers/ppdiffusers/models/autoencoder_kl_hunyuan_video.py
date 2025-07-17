@@ -36,6 +36,7 @@ def prepare_causal_attention_mask(
     num_frames: int,
     height_width: int,
     dtype: paddle.dtype,
+    device: paddle.CPUPlace,
     batch_size: int = None,
 ) -> paddle.Tensor:
     seq_len = num_frames * height_width
