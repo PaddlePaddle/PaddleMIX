@@ -36,7 +36,11 @@ from utils import (
 )
 
 from ppdiffusers.accelerate import Accelerator
-from ppdiffusers.accelerate.utils import ProjectConfiguration, set_seed
+from ppdiffusers.accelerate.utils import (
+    DistributedDataParallelKwargs,
+    ProjectConfiguration,
+    set_seed,
+)
 from ppdiffusers.optimization import get_scheduler
 
 
@@ -46,13 +50,13 @@ class Trainer:
         self.args = args
 
         accelerator_project_config = ProjectConfiguration(logging_dir=args.output_path)
-
+        kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
         accelerator = Accelerator(
             gradient_accumulation_steps=1,  # no accumulation
             mixed_precision="no",
             log_with="wandb",
             project_config=accelerator_project_config,
-            kwargs_handlers=None,
+            kwargs_handlers=[kwargs],
         )
         set_seed(args.seed + accelerator.process_index)
         self._generator = paddle.Generator().manual_seed(args.seed + accelerator.process_index)

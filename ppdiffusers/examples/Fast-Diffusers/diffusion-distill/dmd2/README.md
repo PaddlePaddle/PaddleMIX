@@ -32,6 +32,13 @@ unzip $CHECKPOINT_PATH/imagenet-64x64_lmdb.zip -d $CHECKPOINT_PATH
 wget https://paddlenlp.bj.bcebos.com/models/community/ppdiffusers/dmd2/edm-imagenet-64x64-cond-adm.pdparams
 ```
 
+#### 安装算子
+```
+cd ops
+python setup.py install
+cd ..
+```
+
 #### 训练
 
 ```bash
@@ -115,7 +122,7 @@ unzip $CHECKPOINT_PATH/coco10k.zip -d $CHECKPOINT_PATH
 #### 训练命令
 ```bash
 USE_PEFT_BACKEND=1 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
-python -u train_sd.py \
+python -m paddle.distributed.launch train_sd.py \
     --generator_lr 5e-5 \
     --guidance_lr 5e-5 \
     --train_iters 200000 \
@@ -178,7 +185,7 @@ python -u sdxl/test_sdxl_single_ckpt.py  \
 
 这里提供了一个预训练好的[模型](https://paddlenlp.bj.bcebos.com/models/community/ppdiffusers/dmd2/sdxl_cond999_8node_lr5e-5_denoising4step_diffusion1000_gan5e-3_guidance8_noinit_noode_backsim_scratch_lora.pdparams)
 
-也可以将生成的文件保存成一个文件夹的形式，使用[该目录下的脚本](../../scripts/fid_clip_score/)获得fid.
+也可以将生成的文件保存成一个文件夹的形式，使用[该目录下的脚本](../../../../scripts/fid_clip_score/)获得fid.
 
 ## 参考
 - https://github.com/tianweiy/DMD2
