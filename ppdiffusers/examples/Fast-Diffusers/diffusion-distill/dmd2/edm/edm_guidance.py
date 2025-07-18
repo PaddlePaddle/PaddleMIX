@@ -302,8 +302,7 @@ class EDMGuidance(nn.Layer):
                 nn.Silu(),
                 nn.Conv2D(kernel_size=1, in_channels=768, out_channels=1, stride=1, padding=0),  # 1x1 -> 1x1
             )
-            print("DDDDebug!")
-            # reset_parameters(self.cls_pred_branch)
+
             self.cls_pred_branch.apply(reset_parameters)
             self.cls_pred_branch.requires_grad_(True)
 
