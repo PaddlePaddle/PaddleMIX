@@ -36,7 +36,7 @@ def try_import(module_name, func_name=None):
 
 
 fast_ln = try_import("fast_ln")
-fused_ln = try_import("fused_ln")
+fused_ln = paddle.incubate.nn.functional.fused_rms_norm_ext
 
 
 def check_normalized_shape(normalized_shape):
