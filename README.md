@@ -36,7 +36,6 @@
     - [方法 1: 一键安装（推荐）](#方法-1-一键安装推荐)
     - [方法 2: 手动安装](#方法-2-手动安装-1)
   - [5. ‼️验证安装](#5-️验证安装)
-  - [6. 安装自定义算子（可选）](#6-安装自定义算子可选)
 - [🔥教程](#教程)
 - [📱模型库](#模型库)
 - [🏆特色模型|工具](#特色模型工具)
@@ -59,7 +58,7 @@
 ## 📣最新进展
 **🔥2025.07.14 发布[Fast-Diffusers](ppdiffusers/examples/Fast-Diffusers)扩散模型推理加速工具包**
 * Training-Free：新增[T-gate](ppdiffusers/examples/Fast-Diffusers/Training-Free/tgate)，[PAB](ppdiffusers/examples/Fast-Diffusers/Training-Free/pab)，[TeaCache](ppdiffusers/examples/Fast-Diffusers/Training-Free/teacache)，[TaylorSeer](ppdiffusers/examples/Fast-Diffusers/Training-Free/taylorseer)，[BlockDance](ppdiffusers/examples/Fast-Diffusers/Training-Free/blockdance)等SOTA Training-Free算法。发布了自研算法[SortBlock](ppdiffusers/examples/Fast-Diffusers/Training-Free/sortblock)，[TeaBlockCache](ppdiffusers/examples/Fast-Diffusers/Training-Free/teablockcache)和[FirstBlockTaylor](ppdiffusers/examples/Fast-Diffusers/Training-Free/firstblock_taylorseer)算法，在保证生成图像质量的同时，实现2倍以上的端到端推理加速效果
-* 扩散模型时间步蒸馏：新增[PCM](ppdiffusers/examples/Fast-Diffusers/diffusion-distill/phased_consistency_distillation),[DMD2](ppdiffusers/examples/Fast-Diffusers/diffusion-distill//dmd2)等蒸馏算法，并提供了多种蒸馏loss供开发者灵活搭配。同时基于上述蒸馏算法，发布了基于FLUX-dev的4步蒸馏模型，配合飞桨深度学习编译器，推理时延降低至1.66秒。
+* 扩散模型时间步蒸馏：新增[PCM](ppdiffusers/examples/Fast-Diffusers/diffusion-distill/phased_consistency_distillation)，[DMD2](ppdiffusers/examples/Fast-Diffusers/diffusion-distill//dmd2)等蒸馏算法，并提供了多种蒸馏loss供开发者灵活搭配。同时基于上述蒸馏算法，发布了基于FLUX-dev的4步蒸馏模型，配合飞桨深度学习编译器，推理时延降低至1.66秒。
 
 
 **🔥2025.05.09 发布PaddleMIX v3.0-beta**
@@ -198,14 +197,6 @@ sh check_env.sh
 - paddlenlp: 3.0.0b3
 - ppdiffusers: 0.29.1
 - huggingface_hub: 0.23.0
-```
-
-### 6. 安装自定义算子（可选）
-* 部分模型需要安装自定义算子（FastLayerNorm、FusedLayerNorm），例如EVA-CLIP、DIT_LLAMA等。
-* 非CUDA环境（例如昇腾环境）则跳过
-```bash
-cd paddlemix/external_ops
-python setup.py install
 ```
 
 ## 🔥教程
