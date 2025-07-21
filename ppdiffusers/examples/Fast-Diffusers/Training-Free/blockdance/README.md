@@ -8,7 +8,7 @@
 
 ## 使用方法
 ```
-python text_to_image_generation-flux-blockdance.py
+python text_to_image_generation_blockdance_flux.py
 ```
 
 ## 参数详解

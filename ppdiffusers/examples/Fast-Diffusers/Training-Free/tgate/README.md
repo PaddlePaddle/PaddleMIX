@@ -9,7 +9,7 @@
 ## 使用方法
 - SD‑XL + TGATE
 ```
-python main.py \
+python text_to_image_generation_tgate.py \
 --prompt 'Astronaut in a jungle, cold color palette, muted colors, detailed, 8k' \
 --model 'sdxl' \
 --gate_step 10 \
@@ -23,7 +23,7 @@ python main.py \
 
 - Pixart‑Alpha + TGATE
 ```
-python main.py \
+python text_to_image_generation_tgate.py \
 --prompt 'An alpaca made of colorful building blocks, cyberpunk.' \
 --model 'pixart_alpha' \
 --gate_step 15 \
@@ -36,7 +36,7 @@ python main.py \
 
 - LCM‑SDXL + TGATE
 ```
-python main.py \
+python text_to_image_generation_tgate.py \
 --prompt 'Self-portrait oil painting, a beautiful cyborg with golden hair, 8k' \
 --model 'lcm_sdxl' \
 --gate_step 1 \

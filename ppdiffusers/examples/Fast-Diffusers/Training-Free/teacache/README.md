@@ -8,7 +8,7 @@
 
 ## 使用方法
 ```
-python text_to_image_generation-flux-teacache.py
+python text_to_image_generation_teacache_flux.py
 ```
 
 ## 参数详解
