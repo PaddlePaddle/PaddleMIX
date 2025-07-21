@@ -19,6 +19,7 @@ import numpy as np
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
+from paddle.distributed.fleet.utils import recompute
 
 from ..configuration_utils import ConfigMixin, register_to_config
 
@@ -36,13 +37,7 @@ from ..models.normalization import (
     AdaLayerNormZero,
     AdaLayerNormZeroSingle,
 )
-from ..utils import (
-    USE_PEFT_BACKEND,
-    is_torch_version,
-    logging,
-    scale_lora_layers,
-    unscale_lora_layers,
-)
+from ..utils import USE_PEFT_BACKEND, logging, scale_lora_layers, unscale_lora_layers
 from ..utils.paddle_utils import maybe_allow_in_graph
 from .embeddings import (
     CombinedTimestepGuidanceTextProjEmbeddings,
@@ -517,13 +512,14 @@ class FluxTransformer2DModel(
 
                     return custom_forward
 
-                ckpt_kwargs: Dict[str, Any] = {"use_reentrant": False} if is_torch_version(">=", "1.11.0") else {}
-                encoder_hidden_states, hidden_states = paddle.utils.checkpoint.checkpoint(
+                ckpt_kwargs = {"use_reentrant": False, "preserve_rng_state": True}
+                encoder_hidden_states, hidden_states = recompute(
                     create_custom_forward(block),
                     hidden_states,
                     encoder_hidden_states,
                     temb,
                     image_rotary_emb,
+                    joint_attention_kwargs,
                     **ckpt_kwargs,
                 )
 
@@ -561,12 +557,13 @@ class FluxTransformer2DModel(
 
                     return custom_forward
 
-                ckpt_kwargs: Dict[str, Any] = {"use_reentrant": False} if is_torch_version(">=", "1.11.0") else {}
-                hidden_states = paddle.utils.checkpoint.checkpoint(
+                ckpt_kwargs = {"use_reentrant": False, "preserve_rng_state": True}
+                hidden_states = recompute(
                     create_custom_forward(block),
                     hidden_states,
                     temb,
                     image_rotary_emb,
+                    joint_attention_kwargs,
                     **ckpt_kwargs,
                 )
 
