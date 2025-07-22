@@ -21,7 +21,6 @@ import paddle.nn.functional as F
 import paddle.nn.initializer as initializer
 from paddle.distributed import fleet
 from paddle.nn.functional.flash_attention import flash_attention
-from paddle.utils import try_import
 from paddlenlp.transformers.conversion_utils import ConversionMixin
 
 from ppdiffusers.configuration_utils import ConfigMixin
@@ -37,8 +36,7 @@ from .transformer_engine_utils import TransformerEngineHelper
 
 
 def rms_norm_fused(x_in, w, eps):
-    fused_ln = try_import("fused_ln")
-    return fused_ln.fused_rms_norm(x_in, w, eps)[0]
+    return paddle.incubate.nn.functional.fused_rms_norm_ext(x_in, w, eps)[0]
 
 
 def TypePromote(x, y):
