@@ -414,6 +414,7 @@ def tgate(
             "reuse": False,
         },
         keep_shape=True,
+        processor_name="tgate_processor",
     )
     with self.progress_bar(total=num_inference_steps) as progress_bar:
         for i, t in enumerate(timesteps):
@@ -446,7 +447,7 @@ def tgate(
                     warm_up=warm_up,
                 )
                 keep_shape = keep_shape if not lcm else lcm
-                register_forward(self.unet, "Attention", ca_kward=ca_kwards, sa_kward=sa_kwards, keep_shape=keep_shape)
+                register_forward(self.unet, "Attention", ca_kward=ca_kwards, sa_kward=sa_kwards, keep_shape=keep_shape, processor_name="tgate_processor",)
 
             noise_pred = self.unet(
                 latent_model_input,
@@ -457,10 +458,6 @@ def tgate(
                 added_cond_kwargs=added_cond_kwargs,
                 return_dict=False,
             )[0]
-            paddle.save(
-                latents,
-                "/root/paddlejob/workspace/env_run/output/zhangxu/pab/alignment/records/100003_" + str(i + 1) + "_.pd",
-            )
 
             # perform guidance
             if self.do_classifier_free_guidance and (i - num_warmup_steps) < gate_step:
@@ -497,7 +494,6 @@ def tgate(
                 if callback is not None and i % callback_steps == 0:
                     step_idx = i // getattr(self.scheduler, "order", 1)
                     callback(step_idx, t, latents)
-        paddle.save(latents, "/root/paddlejob/workspace/env_run/output/zhangxu/pab/alignment/records/100004.pd")
         if not output_type == "latent":
             # make sure the VAE is in float32 mode, as it overflows in float16
             needs_upcasting = self.vae.dtype == paddle.float16 and self.vae.config.force_upcast
@@ -510,14 +506,12 @@ def tgate(
             # denormalize with the mean and std if available and not None
             has_latents_mean = hasattr(self.vae.config, "latents_mean") and self.vae.config.latents_mean is not None
             has_latents_std = hasattr(self.vae.config, "latents_std") and self.vae.config.latents_std is not None
-            paddle.save(latents, "/root/paddlejob/workspace/env_run/output/zhangxu/pab/alignment/records/100005.pd")
             if has_latents_mean and has_latents_std:
                 latents_mean = paddle.to_tensor(self.vae.config.latents_mean).reshape([1, 4, 1, 1]).cast(latents.dtype)
                 latents_std = paddle.to_tensor(self.vae.config.latents_std).reshape([1, 4, 1, 1]).cast(latents.dtype)
                 latents = latents * latents_std / self.vae.config.scaling_factor + latents_mean
             else:
                 latents = latents / self.vae.config.scaling_factor
-            paddle.save(latents, "/root/paddlejob/workspace/env_run/output/zhangxu/pab/alignment/records/100002.pd")
 
             image = self.vae.decode(latents, return_dict=False)[0]
 
