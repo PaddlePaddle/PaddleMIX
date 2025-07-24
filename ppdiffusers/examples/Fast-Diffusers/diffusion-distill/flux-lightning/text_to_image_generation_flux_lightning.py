@@ -91,4 +91,4 @@ with paddle.no_grad():
         generator=paddle.Generator().manual_seed(args.seed),
         joint_attention_kwargs={"scale": args.lora_scale},
     ).images[0]
-result_image.save(os.path.join(args.output_dir, "test_flux_turbo.png"))
+result_image.save(os.path.join(args.output_dir, "test_flux_lightning.png"))
