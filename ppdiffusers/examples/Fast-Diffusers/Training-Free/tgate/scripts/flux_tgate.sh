@@ -14,7 +14,7 @@
 
 which python
 
-CUDA_VISIBLE_DEVICES=3 python ../text_to_image_generation_tgate.py \
+CUDA_VISIBLE_DEVICES=6 python ../text_to_image_generation_tgate.py \
 --prompt "A cat holding a sign that says hello world" \
 --model 'flux' \
 --gate_step 25 \

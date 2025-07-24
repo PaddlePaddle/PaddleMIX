@@ -16,15 +16,12 @@ import argparse
 import os
 
 import paddle
-from tgate import TgateFLUXLoader, TgatePixArtAlphaLoader, TgateSDXLLoader
+from tgate import TgateFLUXLoader, TgateSDXLLoader
 
 from ppdiffusers import (
     DPMSolverMultistepScheduler,
     FluxPipeline,
-    LCMScheduler,
-    PixArtAlphaPipeline,
     StableDiffusionXLPipeline,
-    UNet2DConditionModel,
 )
 
 
@@ -121,7 +118,9 @@ if __name__ == "__main__":
             paddle_dtype=paddle.float16,
             variant="fp16",
         )
+
         pipe = TgateSDXLLoader(pipe)
+
         pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
 
         image = pipe.tgate(
@@ -135,32 +134,32 @@ if __name__ == "__main__":
         ).images[0]
         image.save(saved_path)
 
-    elif args.model == "lcm_sdxl":
-        unet = UNet2DConditionModel.from_pretrained(
-            "latent-consistency/lcm-sdxl",
-            paddle_dtype=paddle.float16,
-            variant="fp16",
-        )
-        pipe = StableDiffusionXLPipeline.from_pretrained(
-            "stabilityai/stable-diffusion-xl-base-1.0",
-            unet=unet,
-            paddle_dtype=paddle.float16,
-            variant="fp16",
-        )
-        pipe.scheduler = LCMScheduler.from_config(pipe.scheduler.config)
-        pipe = TgateSDXLLoader(pipe)
+    # elif args.model == "lcm_sdxl":
+    #     unet = UNet2DConditionModel.from_pretrained(
+    #         "latent-consistency/lcm-sdxl",
+    #         paddle_dtype=paddle.float16,
+    #         variant="fp16",
+    #     )
+    #     pipe = StableDiffusionXLPipeline.from_pretrained(
+    #         "stabilityai/stable-diffusion-xl-base-1.0",
+    #         unet=unet,
+    #         paddle_dtype=paddle.float16,
+    #         variant="fp16",
+    #     )
+    #     pipe.scheduler = LCMScheduler.from_config(pipe.scheduler.config)
+    #     pipe = TgateSDXLLoader(pipe)
 
-        image = pipe.tgate(
-            prompt=args.prompt,
-            gate_step=args.gate_step,
-            sp_interval=1,
-            fi_interval=args.fi_interval,
-            warm_up=0,
-            num_inference_steps=args.inference_step,
-            lcm=True,
-            generator=generator,
-        ).images[0]
-        image.save(saved_path)
+    #     image = pipe.tgate(
+    #         prompt=args.prompt,
+    #         gate_step=args.gate_step,
+    #         sp_interval=1,
+    #         fi_interval=args.fi_interval,
+    #         warm_up=0,
+    #         num_inference_steps=args.inference_step,
+    #         lcm=True,
+    #         generator=generator,
+    #     ).images[0]
+    #     image.save(saved_path)
     elif args.model == "flux":
         pipe = FluxPipeline.from_pretrained("black-forest-labs/FLUX.1-dev", paddle_dtype=paddle.float16)
         pipe = TgateFLUXLoader(pipe)
@@ -177,43 +176,43 @@ if __name__ == "__main__":
         ).images[0]
         image.save(saved_path)
 
-    elif args.model == "pixart_alpha":
-        pipe = PixArtAlphaPipeline.from_pretrained(
-            "PixArt-alpha/PixArt-XL-2-1024-MS",
-            paddle_dtype=paddle.float16,
-        )
-        pipe = TgatePixArtAlphaLoader(pipe)
+    # elif args.model == "pixart_alpha":
+    #     pipe = PixArtAlphaPipeline.from_pretrained(
+    #         "PixArt-alpha/PixArt-XL-2-1024-MS",
+    #         paddle_dtype=paddle.float16,
+    #     )
+    #     pipe = TgatePixArtAlphaLoader(pipe)
 
-        image = pipe.tgate(
-            prompt=args.prompt,
-            gate_step=args.gate_step,
-            sp_interval=args.sp_interval,
-            fi_interval=args.fi_interval,
-            warm_up=args.warm_up,
-            num_inference_steps=args.inference_step,
-            generator=generator,
-        ).images[0]
-        image.save(saved_path)
+    #     image = pipe.tgate(
+    #         prompt=args.prompt,
+    #         gate_step=args.gate_step,
+    #         sp_interval=args.sp_interval,
+    #         fi_interval=args.fi_interval,
+    #         warm_up=args.warm_up,
+    #         num_inference_steps=args.inference_step,
+    #         generator=generator,
+    #     ).images[0]
+    #     image.save(saved_path)
 
-    elif args.model == "lcm_pixart":
-        pipe = PixArtAlphaPipeline.from_pretrained(
-            "PixArt-alpha/PixArt-LCM-XL-2-1024-MS",
-            paddle_dtype=paddle.float16,
-        )
-        pipe = TgatePixArtAlphaLoader(pipe)
+    # elif args.model == "lcm_pixart":
+    #     pipe = PixArtAlphaPipeline.from_pretrained(
+    #         "PixArt-alpha/PixArt-LCM-XL-2-1024-MS",
+    #         paddle_dtype=paddle.float16,
+    #     )
+    #     pipe = TgatePixArtAlphaLoader(pipe)
 
-        image = pipe.tgate(
-            args.prompt,
-            gate_step=args.gate_step,
-            sp_interval=1,
-            fi_interval=args.fi_interval,
-            warm_up=0,
-            num_inference_steps=args.inference_step,
-            lcm=True,
-            guidance_scale=0.0,
-            generator=generator,
-        ).images[0]
-        image.save(saved_path)
+    #     image = pipe.tgate(
+    #         args.prompt,
+    #         gate_step=args.gate_step,
+    #         sp_interval=1,
+    #         fi_interval=args.fi_interval,
+    #         warm_up=0,
+    #         num_inference_steps=args.inference_step,
+    #         lcm=True,
+    #         guidance_scale=0.0,
+    #         generator=generator,
+    #     ).images[0]
+    #     image.save(saved_path)
 
     # elif args.model == 'svd':
     #     pipe = StableVideoDiffusionPipeline.from_pretrained(
