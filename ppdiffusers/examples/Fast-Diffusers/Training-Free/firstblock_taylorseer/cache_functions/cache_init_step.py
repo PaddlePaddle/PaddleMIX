@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from diffusers.models import FluxTransformer2DModel
+from ppdiffusers.models import FluxTransformer2DModel
 
 
 def cache_init_step(self: FluxTransformer2DModel):

@@ -29,6 +29,7 @@ def register_forward(
     keep_shape: bool = True,
     sa_kward: dict = None,
     ca_kward: dict = None,
+    processor_name: str = "tgate_processor_flux",  # <-- New parameter
     **kwargs,
 ):
     """
@@ -46,6 +47,8 @@ def register_forward(
             A kwargs dictionary to pass along to the self attention for caching and reusing.
         ca_kward: (`dict`):
             A kwargs dictionary to pass along to the cross attention for caching and reusing.
+        processor_name (`str`):
+            The name of the t-gate processor to use ('tgate_processor' or 'tgate_processor_flux').
 
     Returns:
         count (`int`): The number of the cross attention layers used in the given model.
@@ -58,6 +61,7 @@ def register_forward(
         keep_shape: bool = True,
         ca_kward: dict = None,
         sa_kward: dict = None,
+        processor_name: str = "tgate_processor_flux",  # <-- Pass parameter down
         **kwargs,
     ):
         def forward(
@@ -73,24 +77,7 @@ def register_forward(
         ) -> paddle.Tensor:
             r"""
             The forward method of the `Attention` class.
-
-            Args:
-                hidden_states (`paddle.Tensor`):
-                    The hidden states of the query.
-                encoder_hidden_states (`paddle.Tensor`, *optional*):
-                    The hidden states of the encoder.
-                attention_mask (`paddle.Tensor`, *optional*):
-                    The attention mask to use. If `None`, no mask is applied.
-                **cross_attention_kwargs:
-                    Additional keyword arguments to pass along to the cross attention.
-
-            Returns:
-                `paddle.Tensor`: The output of the attention layer.
             """
-            # The `Attention` class can call different attention processors / attention functions
-            # here we simply pass along all tensors to the selected processor class
-            # For standard processors that are defined here, `**cross_attention_kwargs` is empty
-
             if not hasattr(self, "cache"):
                 self.cache = None
             if not hasattr(self, "cache1"):
@@ -105,20 +92,40 @@ def register_forward(
 
             cross_attention_kwargs = {k: w for k, w in cross_attention_kwargs.items() if k in attn_parameters}
 
-            states = tgate_processor_flux(
-                self,
-                hidden_states,
-                encoder_hidden_states=encoder_hidden_states,
-                attention_mask=attention_mask,
-                keep_shape=keep_shape,
-                cache=self.cache,
-                cache1=self.cache1,
-                ca_cache=ca_cache,
-                sa_cache=sa_cache,
-                ca_reuse=ca_reuse,
-                sa_reuse=sa_reuse,
+            # --- Start of Modified Section ---
+
+            # Prepare arguments for the processor call
+            processor_args = {
+                "attn": self,
+                "hidden_states": hidden_states,
+                "encoder_hidden_states": encoder_hidden_states,
+                "attention_mask": attention_mask,
+                "keep_shape": keep_shape,
+                "cache": self.cache,
+                "ca_cache": ca_cache,
+                "sa_cache": sa_cache,
+                "ca_reuse": ca_reuse,
+                "sa_reuse": sa_reuse,
                 **cross_attention_kwargs,
-            )
+            }
+
+            # Select processor and add processor-specific arguments
+            if processor_name == "tgate_processor_flux":
+                processor_func = tgate_processor_flux
+                processor_args["cache1"] = self.cache1
+            elif processor_name == "tgate_processor":
+                processor_func = tgate_processor
+                # tgate_processor does not use cache1, so we don't add it.
+            else:
+                raise ValueError(
+                    f"Unknown processor name: '{processor_name}'. "
+                    f"Available options are 'tgate_processor' and 'tgate_processor_flux'."
+                )
+
+            states = processor_func(**processor_args)
+
+            # --- End of Modified Section ---
+
             if len(states) == 4:
                 hidden_states, encoder_hidden_states, cache, cache1 = states
                 if cache1 is not None:
@@ -128,24 +135,40 @@ def register_forward(
                 return hidden_states, encoder_hidden_states
             elif len(states) == 2:
                 hidden_states, cache = states
-            if cache is not None:
-                self.cache = cache
-            return hidden_states
+                if cache is not None:
+                    self.cache = cache
+                return hidden_states
 
         return forward
 
     def register_recr(
-        net: paddle.nn.Layer, count: int = None, keep_shape: bool = True, ca_kward: dict = None, sa_kward: dict = None
+        net: paddle.nn.Layer,
+        count: int = None,
+        keep_shape: bool = True,
+        ca_kward: dict = None,
+        sa_kward: dict = None,
+        processor_name: str = None,  # <-- Pass parameter down
     ):
         if net.__class__.__name__ == filter_name:
-            net.forward = warp_custom(net, keep_shape=keep_shape, ca_kward=ca_kward, sa_kward=sa_kward)
+            net.forward = warp_custom(
+                net, keep_shape=keep_shape, ca_kward=ca_kward, sa_kward=sa_kward, processor_name=processor_name
+            )
             return count + 1
         elif hasattr(net, "children"):
             for net_child in net.children():
-                count = register_recr(net_child, count, keep_shape=keep_shape, ca_kward=ca_kward, sa_kward=sa_kward)
+                count = register_recr(
+                    net_child,
+                    count,
+                    keep_shape=keep_shape,
+                    ca_kward=ca_kward,
+                    sa_kward=sa_kward,
+                    processor_name=processor_name,
+                )
         return count
 
-    return register_recr(model, count, keep_shape=keep_shape, ca_kward=ca_kward, sa_kward=sa_kward)
+    return register_recr(
+        model, count, keep_shape=keep_shape, ca_kward=ca_kward, sa_kward=sa_kward, processor_name=processor_name
+    )
 
 
 def tgate_processor(
