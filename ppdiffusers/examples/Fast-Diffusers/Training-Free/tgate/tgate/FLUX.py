@@ -300,7 +300,12 @@ def tgate(
                 )
                 keep_shape = keep_shape if not lcm else lcm
                 register_forward(
-                    self.transformer, "Attention", ca_kward=ca_kwards, sa_kward=sa_kwards, keep_shape=keep_shape, processor_name="tgate_processor_flux",
+                    self.transformer,
+                    "Attention",
+                    ca_kward=ca_kwards,
+                    sa_kward=sa_kwards,
+                    keep_shape=keep_shape,
+                    processor_name="tgate_processor_flux",
                 )
 
             noise_pred = self.transformer(

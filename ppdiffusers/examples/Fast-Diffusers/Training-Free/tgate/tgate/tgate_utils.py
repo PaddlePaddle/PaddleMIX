@@ -91,9 +91,9 @@ def register_forward(
                 )
 
             cross_attention_kwargs = {k: w for k, w in cross_attention_kwargs.items() if k in attn_parameters}
-            
+
             # --- Start of Modified Section ---
-            
+
             # Prepare arguments for the processor call
             processor_args = {
                 "attn": self,
@@ -157,12 +157,18 @@ def register_forward(
         elif hasattr(net, "children"):
             for net_child in net.children():
                 count = register_recr(
-                    net_child, count, keep_shape=keep_shape, ca_kward=ca_kward, sa_kward=sa_kward, processor_name=processor_name
+                    net_child,
+                    count,
+                    keep_shape=keep_shape,
+                    ca_kward=ca_kward,
+                    sa_kward=sa_kward,
+                    processor_name=processor_name,
                 )
         return count
 
-    return register_recr(model, count, keep_shape=keep_shape, ca_kward=ca_kward, sa_kward=sa_kward, processor_name=processor_name)
-
+    return register_recr(
+        model, count, keep_shape=keep_shape, ca_kward=ca_kward, sa_kward=sa_kward, processor_name=processor_name
+    )
 
 
 def tgate_processor(

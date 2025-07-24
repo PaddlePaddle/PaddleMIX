@@ -447,7 +447,14 @@ def tgate(
                     warm_up=warm_up,
                 )
                 keep_shape = keep_shape if not lcm else lcm
-                register_forward(self.unet, "Attention", ca_kward=ca_kwards, sa_kward=sa_kwards, keep_shape=keep_shape, processor_name="tgate_processor",)
+                register_forward(
+                    self.unet,
+                    "Attention",
+                    ca_kward=ca_kwards,
+                    sa_kward=sa_kwards,
+                    keep_shape=keep_shape,
+                    processor_name="tgate_processor",
+                )
 
             noise_pred = self.unet(
                 latent_model_input,
