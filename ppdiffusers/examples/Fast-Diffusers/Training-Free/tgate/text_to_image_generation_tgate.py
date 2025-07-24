@@ -121,7 +121,9 @@ if __name__ == "__main__":
             paddle_dtype=paddle.float16,
             variant="fp16",
         )
+
         pipe = TgateSDXLLoader(pipe)
+        
         pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
 
         image = pipe.tgate(
