@@ -16,15 +16,12 @@ import argparse
 import os
 
 import paddle
-from tgate import TgateFLUXLoader, TgatePixArtAlphaLoader, TgateSDXLLoader
+from tgate import TgateFLUXLoader, TgateSDXLLoader
 
 from ppdiffusers import (
     DPMSolverMultistepScheduler,
     FluxPipeline,
-    LCMScheduler,
-    PixArtAlphaPipeline,
     StableDiffusionXLPipeline,
-    UNet2DConditionModel,
 )
 
 
@@ -123,7 +120,7 @@ if __name__ == "__main__":
         )
 
         pipe = TgateSDXLLoader(pipe)
-        
+
         pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
 
         image = pipe.tgate(
