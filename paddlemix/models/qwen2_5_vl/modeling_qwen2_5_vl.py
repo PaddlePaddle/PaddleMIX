@@ -538,6 +538,7 @@ class Qwen2_5_VLVisionFlashAttention2(nn.Layer):
         k = apply_rotary_pos_emb_flashatt(k.unsqueeze(axis=0), rotary_pos_emb).squeeze(axis=0)
         max_seqlen = (cu_seqlens[1:] - cu_seqlens[:-1]).max().item()
         softmax_scale = self.head_dim**-0.5  # TODO: 需要手动加上
+        data_type = q.dtype
         attn_output = (
             flash_attn_varlen_func(  # flash_attn_unpadded
                 q.astype("bfloat16"),  # 不支持float32
@@ -552,7 +553,7 @@ class Qwen2_5_VLVisionFlashAttention2(nn.Layer):
             .squeeze(0)
             .reshape([seq_length, -1])
         )
-
+        attn_output = attn_output.astype(data_type)
         attn_output = self.proj(attn_output)
         return attn_output
 
@@ -961,18 +962,13 @@ class Qwen2_5_VLFlashAttention2(Qwen2_5_VLAttention):
         )
 
         if past_key_value is not None:
-            cache_kwargs = {"sin": sin, "cos": cos, "cache_position": cache_position}  # Specific to RoPE models
-            key_states, value_states = past_key_value.update(key_states, value_states, self.layer_idx, cache_kwargs)
+            key_states = paddle.concat([past_key_value[0], key_states], axis=2)  # qwen2是 axis=1, qwen2_vl是 axis=2
+            value_states = paddle.concat([past_key_value[1], value_states], axis=2)  # qwen2是 axis=1
+        past_key_value = (key_states, value_states) if use_cache else None
 
         # repeat k/v heads if n_kv_heads < n_heads
         key_states = repeat_kv(key_states, self.num_key_value_groups)
         value_states = repeat_kv(value_states, self.num_key_value_groups)
-
-        # Reashape to the expected shape for Flash Attention
-        # [1, 3599, 12, 128]
-        query_states = query_states.transpose(perm=[0, 2, 1, 3])
-        key_states = key_states.transpose(perm=[0, 2, 1, 3])
-        value_states = value_states.transpose(perm=[0, 2, 1, 3])
 
         attn_output = self._flash_attention_forward2(
             query_states,
@@ -1093,17 +1089,6 @@ class Qwen2_5_VLFlashAttention2(Qwen2_5_VLAttention):
             deterministic (`bool`, *optional*):
                 Determines if the deterministic option introduced in flash_attn>=2.4.1 is enabled.
         """
-        assert query_states.shape[0] == key_states.shape[0] == value_states.shape[0] == 1
-        query_states = query_states.squeeze(0)
-        key_states = key_states.squeeze(0)
-        value_states = value_states.squeeze(0)
-        cu_seqlens = attention_mask
-        head_dim = query_states.shape[-1]
-        softmax_scale = head_dim**-0.5
-
-        with paddle.no_grad():
-            max_seqlen = max([cu_seqlens[idx + 1] - cu_seqlens[idx] for idx in range(cu_seqlens.shape[0] - 1)]).item()
-
         if not use_top_left_mask:
             causal = is_causal
         else:
@@ -1118,24 +1103,64 @@ class Qwen2_5_VLFlashAttention2(Qwen2_5_VLAttention):
 
         datatype = query_states.dtype
         # query_states diff!
-        attn_output = flash_attn_varlen_func(
-            query_states.cast("bfloat16"),
-            key_states.cast("bfloat16"),
-            value_states.cast("bfloat16"),
-            cu_seqlens_q=cu_seqlens,
-            cu_seqlens_k=cu_seqlens,
-            max_seqlen_q=max_seqlen,
-            max_seqlen_k=max_seqlen,
-            dropout=dropout,
-            scale=softmax_scale,
-            causal=causal,
-        )[0]
-        attn_output = attn_output.cast(datatype)
+        if attention_mask is not None:
+            # Reashape to the expected shape for Flash Attention
+            # [1, 3599, 12, 128]
+            query_states = query_states.transpose(perm=[0, 2, 1, 3])
+            key_states = key_states.transpose(perm=[0, 2, 1, 3])
+            value_states = value_states.transpose(perm=[0, 2, 1, 3])
 
-        attn_output = attn_output.unsqueeze(0)
-        query_states = query_states.unsqueeze(0)
-        key_states = key_states.unsqueeze(0)
-        value_states = value_states.unsqueeze(0)
+            assert query_states.shape[0] == key_states.shape[0] == value_states.shape[0] == 1
+            query_states = query_states.squeeze(0)
+            key_states = key_states.squeeze(0)
+            value_states = value_states.squeeze(0)
+            cu_seqlens = attention_mask
+            head_dim = query_states.shape[-1]
+            softmax_scale = head_dim**-0.5
+            with paddle.no_grad():
+                max_seqlen = max(
+                    [cu_seqlens[idx + 1] - cu_seqlens[idx] for idx in range(cu_seqlens.shape[0] - 1)]
+                ).item()
+            attn_output = flash_attn_varlen_func(
+                query_states.cast("bfloat16"),
+                key_states.cast("bfloat16"),
+                value_states.cast("bfloat16"),
+                cu_seqlens_q=cu_seqlens,
+                cu_seqlens_k=cu_seqlens,
+                max_seqlen_q=max_seqlen,
+                max_seqlen_k=max_seqlen,
+                dropout=dropout,
+                scale=softmax_scale,
+                causal=causal,
+            )[0]
+            attn_output = attn_output.unsqueeze(0)
+            query_states = query_states.unsqueeze(0)
+            key_states = key_states.unsqueeze(0)
+            value_states = value_states.unsqueeze(0)
+            attn_output = attn_output.cast(datatype)
+        elif query_states.shape[2] == key_states.shape[2]:
+            # Reashape to the expected shape for Flash Attention
+            # [1, 3599, 12, 128]
+            query_states = query_states.transpose(perm=[0, 2, 1, 3])
+            key_states = key_states.transpose(perm=[0, 2, 1, 3])
+            value_states = value_states.transpose(perm=[0, 2, 1, 3])
+
+            attn_output = flash_attn_func(
+                query_states.cast("bfloat16"),
+                key_states.cast("bfloat16"),
+                value_states.cast("bfloat16"),
+                dropout,
+                softmax_scale=softmax_scale,
+                causal=causal,
+                **flash_kwargs,
+            )[0]
+            attn_output = attn_output.cast(datatype)
+        else:
+            attn_weights = paddle.matmul(query_states, key_states.transpose([0, 1, 3, 2])) / math.sqrt(self.head_dim)
+            attn_weights = nn.functional.softmax(attn_weights, axis=-1)
+            attn_weights = nn.functional.dropout(x=attn_weights, p=self.attention_dropout, training=self.training)
+            attn_output = paddle.matmul(attn_weights.cast(self.config.dtype), value_states.cast(self.config.dtype))
+            attn_output = attn_output.transpose([0, 2, 1, 3])
 
         return attn_output
 
@@ -1720,7 +1745,10 @@ class Qwen2_5_VLModel(Qwen2_5_VLPreTrainedModel):
             attention_mask = paddle.ones((batch_size, seq_length_with_past), dtype=paddle.bool)
 
         if self.config._attn_implementation == "flash_attention_2":
-            causal_mask = attention_mask
+            if attention_mask is not None and len(attention_mask.shape) <= 1:
+                causal_mask = attention_mask
+            else:
+                causal_mask = None
         else:
             causal_mask = self._prepare_decoder_attention_mask(
                 attention_mask, (batch_size, seq_length), cache_length, inputs_embeds.dtype
