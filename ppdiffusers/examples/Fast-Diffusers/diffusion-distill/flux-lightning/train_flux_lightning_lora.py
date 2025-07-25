@@ -544,14 +544,6 @@ def parse_args(input_args=None):
         ),
     )
     parser.add_argument(
-        "--allow_tf32",
-        action="store_true",
-        help=(
-            "Whether or not to allow TF32 on Ampere GPUs. Can be used to speed up training. For more information, see"
-            " https://pytorch.org/docs/stable/notes/cuda.html#tensorfloat-32-tf32-on-ampere-devices"
-        ),
-    )
-    parser.add_argument(
         "--report_to",
         type=str,
         default="tensorboard",
@@ -565,21 +557,14 @@ def parse_args(input_args=None):
         type=str,
         default=None,
         choices=["no", "fp16", "bf16"],
-        help=(
-            "Whether to use mixed precision. Choose between fp16 and bf16 (bfloat16). Bf16 requires PyTorch >="
-            " 1.10.and an Nvidia Ampere GPU.  Default to the value of accelerate config of the current system or the"
-            " flag passed with the `accelerate.launch` command. Use this argument to override the accelerate config."
-        ),
+        help=("Whether to use mixed precision. Choose between fp16 and bf16 (bfloat16)."),
     )
     parser.add_argument(
         "--prior_generation_precision",
         type=str,
         default=None,
         choices=["no", "fp32", "fp16", "bf16"],
-        help=(
-            "Choose prior generation precision between fp32, fp16 and bf16 (bfloat16). Bf16 requires PyTorch >="
-            " 1.10.and an Nvidia Ampere GPU.  Default to  fp16 if a GPU is available else fp32."
-        ),
+        help=("Choose prior generation precision between fp32, fp16 and bf16 (bfloat16)."),
     )
     parser.add_argument(
         "--local_rank",
@@ -1055,11 +1040,6 @@ def main(args):
 
     accelerator.register_save_state_pre_hook(save_model_hook)
     accelerator.register_load_state_pre_hook(load_model_hook)
-
-    # Enable TF32 for faster training on Ampere GPUs,
-    # cf https://pytorch.org/docs/stable/notes/cuda.html#tensorfloat-32-tf32-on-ampere-devices
-    # if args.allow_tf32 and torch.cuda.is_available():
-    #     torch.backends.cuda.matmul.allow_tf32 = True
 
     if args.scale_lr:
         args.learning_rate = (
