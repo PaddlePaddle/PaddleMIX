@@ -13,6 +13,7 @@
 # limitations under the License.
 import paddle
 
+
 def force_scheduler(cache_dic, current):
     if cache_dic["fresh_ratio"] == 0:
         # FORA
