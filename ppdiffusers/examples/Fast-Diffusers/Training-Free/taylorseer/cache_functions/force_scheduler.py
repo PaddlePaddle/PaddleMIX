@@ -11,9 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-import torch
-
+import paddle
 
 def force_scheduler(cache_dic, current):
     if cache_dic["fresh_ratio"] == 0:
@@ -22,10 +20,10 @@ def force_scheduler(cache_dic, current):
     else:
         # TokenCache
         linear_step_weight = 0.0
-    step_factor = torch.tensor(
+    step_factor = paddle.to_tensor(
         1 - linear_step_weight + 2 * linear_step_weight * current["step"] / current["num_steps"]
     )
-    threshold = torch.round(cache_dic["fresh_threshold"] / step_factor)
+    threshold = paddle.round(cache_dic["fresh_threshold"] / step_factor)
 
     # no force constrain for sensitive steps, cause the performance is good enough.
     # you may have a try.
