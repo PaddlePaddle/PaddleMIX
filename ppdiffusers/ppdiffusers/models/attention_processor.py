@@ -2279,7 +2279,7 @@ class FluxAttnProcessor2_0:
             value = paddle.concat([encoder_hidden_states_value_proj, value], axis=2)
 
         if image_rotary_emb is not None:
-            from .embeddings import apply_rotary_emb
+            from ppdiffusers.models.embeddings import apply_rotary_emb
 
             query = apply_rotary_emb(query, image_rotary_emb)
             key = apply_rotary_emb(key, image_rotary_emb)
