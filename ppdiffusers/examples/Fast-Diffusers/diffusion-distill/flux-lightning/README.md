@@ -131,6 +131,15 @@ wget https://dataset.bj.bcebos.com/PaddleMIX/flux-lightning/202507112228_latest/
 python text_to_image_generation_flux_lightning.py --path_to_lora your_path/paddle_lora_weights.safetensors --prompt "a beautiful girl" --output_dir ./
 ```
 
+飞桨框架深度学习编译器CINN(Compiler Infrastructure for Neural Networks)加速推理，命令：
+```bash
+export FLAGS_use_cuda_managed_memory=true
+export FLAGS_prim_enable_dynamic=true
+export FLAGS_prim_all=true
+export FLAGS_use_cinn=1
+python text_to_image_generation_flux_lightning_cinn.py --path_to_lora your_path/paddle_lora_weights.safetensors --prompt "a beautiful girl" --output_dir ./ --inference_optimize
+```
+
 ## 参考论文
 - [FLUX](https://github.com/black-forest-labs/flux)
 - [Phased Consistency Models](https://arxiv.org/abs/2405.18407)
