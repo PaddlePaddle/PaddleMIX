@@ -12,15 +12,16 @@ FLUX-Lightning模型主要包含4个部分，区间一致性蒸馏（Phased Cons
   <img src="assets/flux-lightning-framework.png" align="middle" />
 </p>
 
-定量指标：
+下面给出了和其他基于FLUX的蒸馏加速模型的定量指标对比，评估指标包括FID-FLUX和CLIP。参与对比的竞品包括TDD (Target-Driven Distillation: Consistency Distillation with Target Timestep Selection and Decoupled Guidance)，SwD (Scale-wise Distillation of Diffusion Models)，Hyper-FLUX和FLUX schnell
 
 | Method                | FID-FLUX ↓ | CLIP ↑  |
 |-----------------------|------------|---------|
 | TDD                   | 18.383     | 0.3276  |
 | SwD                   | 9.7685     | 0.3302  |
-| hyper-flux            | 9.1534     | 0.3250  |
-| flux Schnell          | 13.8074    | 0.3429  |
-| flux-lightning (ours) | 8.0182     | 0.3294  |
+| Hyper-FLUX            | 9.1534     | 0.3250  |
+| FLUX schnell          | 13.8074    | 0.3429  |
+| FLUX-Lightning (ours) | 8.0182     | 0.3294  |
+
 
 ## 2. 数据准备
 
@@ -52,6 +53,7 @@ wget https://dataset.bj.bcebos.com/PaddleMIX/flux-lightning/filelist_hwge1024_pw
 ### 3.2 训练脚本
 
 ```bash
+export FLAGS_use_fused_rmsnorm="yes"
 python -u -m paddle.distributed.launch --gpus "0,1,2,3,4,5,6,7" train_flux_lightning_lora.py \
     --data_path "your_path/laion-45w" \
     --file_list_path "your_path/filelist_hwge1024_pwatermarkle0.5.txt" \

@@ -925,7 +925,7 @@ def main(args):
     text_encoder_one.requires_grad_(False)
     text_encoder_two.requires_grad_(False)
 
-    discriminator = Discriminator(transformer)
+    discriminator = Discriminator(transformer, args.resolution)
     discriminator_params = []
     for param in discriminator.heads.parameters():
         param.requires_grad = True

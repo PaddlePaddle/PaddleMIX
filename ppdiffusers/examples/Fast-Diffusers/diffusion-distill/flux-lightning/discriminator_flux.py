@@ -197,8 +197,9 @@ def modified_forward(
 
 
 class DiscriminatorHead(nn.Layer):
-    def __init__(self, input_channel, output_channel=1):
+    def __init__(self, resolution, input_channel, output_channel=1):
         super().__init__()
+        self.resolution = resolution
         self.conv1 = nn.Sequential(
             nn.Conv2D(input_channel, input_channel, 1, 1, 0),
             nn.GroupNorm(32, input_channel),
@@ -215,7 +216,7 @@ class DiscriminatorHead(nn.Layer):
     def forward(self, x):
         b, wh, c = x.shape
         x = x.permute(0, 2, 1)
-        x = x.reshape([b, c, 64, 64])
+        x = x.reshape([b, c, int(self.resolution / 16), int(self.resolution / 16)])
         x = self.conv1(x)
         x = self.conv2(x) + x
         x = self.conv_out(x)
@@ -244,6 +245,7 @@ class Discriminator(nn.Layer):
     def __init__(
         self,
         transformer,
+        resolution=1024,
         half_num_heads=False,
         num_h_per_head=1,
         adapter_channel_dims=[3072] * 57,
@@ -257,7 +259,7 @@ class Discriminator(nn.Layer):
             [
                 nn.LayerList(
                     [
-                        DiscriminatorHead(adapter_channel)
+                        DiscriminatorHead(resolution, adapter_channel)
                         # TransformerBasedDiscriminatorHead()
                         for _ in range(self.num_h_per_head)
                     ]
