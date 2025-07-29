@@ -126,7 +126,7 @@ python -u -m paddle.distributed.launch --gpus "0,1,2,3,4,5,6,7" train_flux_light
 
 下载模型权重
 ```bash
-wget https://dataset.bj.bcebos.com/PaddleMIX/flux-lightning/202507112228_latest/paddle_lora_weights.safetensors
+wget https://dataset.bj.bcebos.com/PaddleMIX/flux-lightning/paddle_lora_weights.safetensors
 ```
 推理命令
 ```bash
