@@ -13,6 +13,7 @@
 # limitations under the License.
 # uninstall ppdiffusers and install develop paddlemix
 python -m pip uninstall -y ppdiffusers
+pip install pyarrow==20.0.0   #20250718升级后报错
 cd ../ppdiffusers/
 python -m pip install -e .
 # 安装 stable diffusion 依赖
