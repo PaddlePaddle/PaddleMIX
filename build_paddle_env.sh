@@ -1,4 +1,19 @@
 #!/bin/bash
+
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+# 
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# 
+#     http://www.apache.org/licenses/LICENSE-2.0
+# 
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 # 设置错误时退出
 set -e
 
@@ -55,25 +70,17 @@ if command -v nvcc > /dev/null 2>&1; then
     echo "检测到CUDA版本: $cuda_version"
     
     case $cuda_version in
-        "11.2")
-            echo "安装CUDA 11.2版本的paddlepaddle..."
-            $PYTHON_CMD -m pip install paddlepaddle-gpu==3.0.0b2 -i https://www.paddlepaddle.org.cn/packages/stable/cu112/
-            ;;
-        "11.6")
-            echo "安装CUDA 11.6版本的paddlepaddle..."
-            $PYTHON_CMD -m pip install paddlepaddle-gpu==3.0.0b2 -i https://www.paddlepaddle.org.cn/packages/stable/cu116/
-            ;;
-        "11.7")
-            echo "安装CUDA 11.7版本的paddlepaddle..."
-            $PYTHON_CMD -m pip install paddlepaddle-gpu==3.0.0b2 -i https://www.paddlepaddle.org.cn/packages/stable/cu117/
-            ;;
         "11.8")
             echo "安装CUDA 11.8版本的paddlepaddle..."
-            $PYTHON_CMD -m pip install paddlepaddle-gpu==3.0.0b2 -i https://www.paddlepaddle.org.cn/packages/stable/cu118/
+            $PYTHON_CMD -m pip install paddlepaddle-gpu==3.1.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu118/
             ;;
-        "12.3")
+        "12.6")
             echo "安装CUDA 12.3版本的paddlepaddle..."
-            $PYTHON_CMD -m pip install paddlepaddle-gpu==3.0.0b2 -i https://www.paddlepaddle.org.cn/packages/stable/cu123/
+            $PYTHON_CMD -m pip install paddlepaddle-gpu==3.1.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu123/
+            ;;
+        "12.9")
+            echo "安装CUDA 12.9版本的paddlepaddle..."
+            $PYTHON_CMD -m pip install paddlepaddle-gpu==3.1.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu129/
             ;;
         *)
             echo "警告: 不支持的CUDA版本 ($cuda_version)"
@@ -83,14 +90,14 @@ if command -v nvcc > /dev/null 2>&1; then
     esac
 else
     echo "未检测到CUDA。安装CPU版本的paddlepaddle..."
-    $PYTHON_CMD -m pip install paddlepaddle==3.0.0b2
+    $PYTHON_CMD -m pip install paddlepaddle==3.1.0
 fi
 
 # 验证安装
-echo "验证PaddlePaddle 3.0.0b2安装..."
+echo "验证PaddlePaddle 3.1.0安装..."
 if $PYTHON_CMD -c "import paddle; paddle.utils.run_check()"; then
-    echo "PaddlePaddle 3.0.0b2安装成功！"
+    echo "PaddlePaddle 3.1.0安装成功！"
 else
-    echo "PaddlePaddle 3.0.0b2安装验证失败，请检查安装日志"
+    echo "PaddlePaddle 3.1.0安装验证失败，请检查安装日志"
     exit 1
 fi
