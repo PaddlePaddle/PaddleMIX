@@ -12,15 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import os
-from ppdiffusers import (
-    PyramidAttentionBroadcastConfig,
-    apply_pyramid_attention_broadcast,
-)
+
 import paddle
 from paddlenlp.transformers import LlamaModel
 from paddlenlp.transformers.llama.tokenizer_fast import LlamaTokenizerFast
 
-from ppdiffusers import HunyuanVideoPipeline, HunyuanVideoTransformer3DModel
+from ppdiffusers import (
+    HunyuanVideoPipeline,
+    HunyuanVideoTransformer3DModel,
+    PyramidAttentionBroadcastConfig,
+    apply_pyramid_attention_broadcast,
+)
 from ppdiffusers.utils import export_to_video
 
 os.environ["SKIP_PARENT_CLASS_CHECK"] = "True"

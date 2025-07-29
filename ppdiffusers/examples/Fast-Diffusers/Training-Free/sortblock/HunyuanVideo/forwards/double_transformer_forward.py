@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Optional, Tuple
+
 import paddle
 from taylorseer_utils import derivative_approximation, taylor_cache_init, taylor_formula
-from typing import Any, Dict, List, Optional, Tuple, Union
-from ppdiffusers.models.transformer_flux import FluxTransformerBlock
 
 
 def taylorseer_flux_double_block_forward(
@@ -25,7 +25,7 @@ def taylorseer_flux_double_block_forward(
     temb: paddle.Tensor,
     attention_mask: Optional[paddle.Tensor] = None,
     freqs_cis: Optional[Tuple[paddle.Tensor, paddle.Tensor]] = None,
-    joint_attention_kwargs=None
+    joint_attention_kwargs=None,
 ) -> Tuple[paddle.Tensor, paddle.Tensor]:
 
     norm_hidden_states, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.norm1(hidden_states, emb=temb)
@@ -62,7 +62,7 @@ def taylorseer_flux_double_block_forward(
 
         derivative_approximation(cache_dic=cache_dic, current=current, feature=attn_output)
         hidden_states = hidden_states + attn_output * gate_msa.unsqueeze(axis=1)
-        
+
         current["module"] = "img_mlp"
         taylor_cache_init(cache_dic=cache_dic, current=current)
         norm_hidden_states = self.norm2(hidden_states)

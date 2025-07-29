@@ -12,13 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import os
-from forwards import (
-    taylorseer_flux_double_block_forward,
-    taylorseer_hunyuan_forward,
-    taylorseer_flux_single_block_forward,
-)
 
 import paddle
+from forwards import (
+    taylorseer_flux_double_block_forward,
+    taylorseer_flux_single_block_forward,
+    taylorseer_hunyuan_forward,
+)
 from paddlenlp.transformers import LlamaModel
 from paddlenlp.transformers.llama.tokenizer_fast import LlamaTokenizerFast
 

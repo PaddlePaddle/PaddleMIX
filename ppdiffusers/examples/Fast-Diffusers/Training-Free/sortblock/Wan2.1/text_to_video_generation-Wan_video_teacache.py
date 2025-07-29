@@ -15,7 +15,7 @@
 import paddle
 from forwards import Teacache_forward
 
-from ppdiffusers import AutoencoderKLWan, WanPipeline, WanTransformer3DModel
+from ppdiffusers import AutoencoderKLWan, WanPipeline
 from ppdiffusers.schedulers.scheduling_unipc_multistep import UniPCMultistepScheduler
 from ppdiffusers.utils import export_to_video_2
 

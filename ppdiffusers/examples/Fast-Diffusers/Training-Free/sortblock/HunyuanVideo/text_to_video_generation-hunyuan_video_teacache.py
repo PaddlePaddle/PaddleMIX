@@ -16,10 +16,10 @@ import os
 import paddle
 from paddlenlp.transformers import LlamaModel
 from paddlenlp.transformers.llama.tokenizer_fast import LlamaTokenizerFast
+from teacache_forward import teacache_forward
 
 from ppdiffusers import HunyuanVideoPipeline, HunyuanVideoTransformer3DModel
 from ppdiffusers.utils import export_to_video
-from teacache_forward import teacache_forward
 
 os.environ["SKIP_PARENT_CLASS_CHECK"] = "True"
 model_id = "hunyuanvideo-community/HunyuanVideo"
@@ -41,7 +41,7 @@ pipe = HunyuanVideoPipeline.from_pretrained(
 pipe.transformer.enable_teacache = True
 pipe.transformer.cnt = 0
 pipe.transformer.num_steps = 50
-pipe.transformer.rel_l1_thresh = 0.15 # 0.1 for 1.6x speedup, 0.15 for 2.1x speedup
+pipe.transformer.rel_l1_thresh = 0.15  # 0.1 for 1.6x speedup, 0.15 for 2.1x speedup
 pipe.transformer.accumulated_rel_l1_distance = 0
 pipe.transformer.previous_modulated_input = None
 pipe.transformer.previous_residual = None

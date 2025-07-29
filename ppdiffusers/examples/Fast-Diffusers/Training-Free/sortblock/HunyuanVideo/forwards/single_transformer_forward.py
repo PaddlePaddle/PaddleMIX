@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Optional, Tuple
+
 import paddle
 from taylorseer_utils import derivative_approximation, taylor_cache_init, taylor_formula
-from typing import Any, Dict, List, Optional, Tuple, Union
-from ppdiffusers.models.transformer_flux import FluxSingleTransformerBlock
 
 
 def taylorseer_flux_single_block_forward(
@@ -25,7 +25,7 @@ def taylorseer_flux_single_block_forward(
     temb: paddle.Tensor,
     attention_mask: Optional[paddle.Tensor] = None,
     image_rotary_emb: Optional[Tuple[paddle.Tensor, paddle.Tensor]] = None,
-    joint_attention_kwargs=None
+    joint_attention_kwargs=None,
 ):
     text_seq_length = tuple(encoder_hidden_states.shape)[1]
     hidden_states = paddle.concat(x=[hidden_states, encoder_hidden_states], axis=1)
@@ -35,7 +35,6 @@ def taylorseer_flux_single_block_forward(
     joint_attention_kwargs = joint_attention_kwargs or {}
     cache_dic = joint_attention_kwargs["cache_dic"]
     current = joint_attention_kwargs["current"]
-
 
     norm_hidden_states, gate = self.norm(hidden_states, emb=temb)
 
@@ -73,8 +72,8 @@ def taylorseer_flux_single_block_forward(
     hidden_states = residual + hidden_states
 
     hidden_states, encoder_hidden_states = (
-            hidden_states[:, :-text_seq_length, :],
-            hidden_states[:, -text_seq_length:, :],
-        )
+        hidden_states[:, :-text_seq_length, :],
+        hidden_states[:, -text_seq_length:, :],
+    )
 
     return hidden_states, encoder_hidden_states

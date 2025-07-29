@@ -14,12 +14,12 @@
 import os
 
 import paddle
+from forwards import SortBlock_forward
 from paddlenlp.transformers import LlamaModel
 from paddlenlp.transformers.llama.tokenizer_fast import LlamaTokenizerFast
 
 from ppdiffusers import HunyuanVideoPipeline, HunyuanVideoTransformer3DModel
 from ppdiffusers.utils import export_to_video
-from forwards import SortBlock_forward
 
 os.environ["SKIP_PARENT_CLASS_CHECK"] = "True"
 model_id = "hunyuanvideo-community/HunyuanVideo"
