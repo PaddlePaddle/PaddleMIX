@@ -24,17 +24,24 @@ python install -e .
 
 ```shell
 cd Wan2.1
-python text2video.py
+python text_to_video_generation-Wan_video.py
 ```
-可以通过`text2video.py`文件中的`model_id`参数选择模型，支持以下模型:\
+可以通过`text_to_video_generation-Wan_video.py`文件中的`model_id`参数选择模型，支持以下模型:\
 model_id 当前支持: `Wan-AI/Wan2.1-T2V-14B-Diffusers`, `Wan-AI/Wan2.1-T2V-1.3B-Diffusers`\
 对应Wan2.1-T2V的14B版本与1.3B版本。
 
-#### 图像到视频
+```shell
+python text_to_video_generation-Wan_video_sort.py
+```
+使用Sortblock方法来加速Wan2.1模型的推理。
 
 ```shell
-python image2video.py
+python text_to_video_generation-Wan_video_pab.py
 ```
-可以通过`image2video.py`文件中的`model_id`参数选择模型，支持以下模型:\
-model_id 当前支持: `Wan-AI/Wan2.1-I2V-14B-480P-Diffusers`, `Wan-AI/Wan2.1-I2V-14B-720P-Diffusers`\
-对应Wan2.1-I2V 14B的480P版本与720P版本。
+使用PAB方法来加速Wan2.1模型的推理。
+
+```shell
+python text_to_video_generation-Wan_video_teacache.py
+```
+使用Teacache方法来加速Wan2.1模型的推理。
+

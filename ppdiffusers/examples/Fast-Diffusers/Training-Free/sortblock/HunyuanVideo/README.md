@@ -22,3 +22,22 @@ python install -e .
 ```shell
 python ppdiffusers/examples/inference/text_to_video_generation-hunyuan_video.py
 ```
+
+使用Sortblock方法来加速HunyuanVideo模型的推理。
+```shell
+python text_to_video_generation-hunyuan_video_sort.py
+```
+使用PAB方法来加速HunyuanVideo模型的推理。
+```shell
+python text_to_video_generation-hunyuan_video_pab.py
+```
+
+使用Teacache方法来加速HunyuanVideo模型的推理。
+```shell
+python text_to_video_generation-hunyuan_video_teacache.py
+```
+
+使用TaylorSeer方法来加速HunyuanVideo模型的推理。
+```shell
+python text_to_video_generation-hunyuan_video_taylorseer.py
+```
