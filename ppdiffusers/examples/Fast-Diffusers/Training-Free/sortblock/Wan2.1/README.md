@@ -44,4 +44,3 @@ python text_to_video_generation-Wan_video_pab.py
 python text_to_video_generation-Wan_video_teacache.py
 ```
 使用Teacache方法来加速Wan2.1模型的推理。
-
