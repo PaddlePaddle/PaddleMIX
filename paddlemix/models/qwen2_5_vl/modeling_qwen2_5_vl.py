@@ -2233,6 +2233,7 @@ class Qwen2_5_VLForConditionalGeneration(Qwen2_5_VLPreTrainedModel):
         video_grid_thw: Optional[paddle.Tensor] = None,
         rope_deltas: Optional[paddle.Tensor] = None,
         second_per_grid_ts: Optional[paddle.Tensor] = None,
+        **kwargs,
     ):
         """
         Args:
