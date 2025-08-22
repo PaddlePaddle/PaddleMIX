@@ -14,9 +14,7 @@
 
 import paddle
 
-from ppdiffusers.utils import logging
-
-logger = logging.get_logger(__name__)
+from paddlenlp.utils.log import logger
 
 
 # test if flash attention is available

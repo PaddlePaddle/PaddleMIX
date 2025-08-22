@@ -1,8 +1,0 @@
-paddlehub>=2.3.1
-paddleseg==2.7.0
-paddlenlp>=2.7.2
-opencv-python
-ppdiffusers>=0.24.0
-cchardet
-gradio==3.16.2
-basicsr==1.4.2

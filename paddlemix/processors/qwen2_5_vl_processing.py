@@ -54,11 +54,11 @@ from paddlenlp.transformers.tokenizer_utils_base import (
 )
 from PIL import Image
 
-from ppdiffusers.utils import logging
+from paddlenlp.utils.log import logger
 
 from .processing_utils import BaseImageProcessor
 
-logger = logging.get_logger(__name__)
+
 
 
 OPENAI_CLIP_MEAN = [0.48145466, 0.4578275, 0.40821073]

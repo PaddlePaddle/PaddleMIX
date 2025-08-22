@@ -37,12 +37,12 @@ from paddlemix.models.qwen2_vl.bert_padding import (
     unpad_input,
 )
 from paddlemix.utils.tools import get_env_device
-from ppdiffusers.utils import logging
+from paddlenlp.utils.log import logger
 
 from ...activations import ACT2FN
 from .configuration_qwen2_5_vl import Qwen2_5_VLConfig, Qwen2_5_VLVisionConfig
 
-logger = logging.get_logger(__name__)
+
 
 flash_attn_func, flash_attn_varlen_func = has_flash_attn_func()
 

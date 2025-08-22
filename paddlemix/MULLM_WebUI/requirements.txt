@@ -1,6 +1,0 @@
-gradio==4.44.1
-datasets
-pandas
-Pillow
-tqdm
-av

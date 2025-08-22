@@ -42,13 +42,13 @@ from paddlemix.models.flash_attn_utils import (
     create_attention_module,
     has_flash_attn_func,
 )
-from ppdiffusers.utils import logging
+
 
 from ...activations import ACT2FN
 from .bert_padding import index_first_axis, pad_input, unpad_input
 from .configuration_qwen2_vl import Qwen2VLConfig, Qwen2VLVisionConfig
 
-logger = logging.get_logger(__name__)
+from paddlenlp.utils.log import logger
 
 flash_attn_func, flash_attn_varlen_func = has_flash_attn_func()
 _IS_NPU = "npu" in paddle.get_device()
