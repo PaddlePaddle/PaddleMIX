@@ -153,7 +153,7 @@ class SortBlockHook(ModelHook):
         module.num_steps = self.config.num_inference_steps
         module.start = self.config.timestep_start
         module.end = self.config.timestep_end
-        module.precentage = self.config.percentage
+        module.percentage = self.config.percentage
         module.step_Num = self.config.step_num
         module.step_Num2 = self.config.step_num2
         module.beta = self.config.beta
@@ -303,7 +303,7 @@ class SortBlockHook(ModelHook):
             module.previous_single_block_residual = [None] * single_transformer_blocks_len
             module.previous_encoder_block_residual = [None] * transformer_blocks_len
             module.count = 0
-            module.precentage = 1.0
+            module.percentage = 1.0
             module.result_list = []
             module.result_single_list = []
 
@@ -417,7 +417,7 @@ class SortBlockHook(ModelHook):
         if module.count % module.step_Num == 1:
             coefficients = [5.67621e-14, -1.36659e-10, 1.16246e-7, -3.97725e-5, 0.00361, 0.56088]
             rescale_func = np.poly1d(coefficients)
-            module.precentage = rescale_func(timestep.item()) * module.beta
+            module.percentage = rescale_func(timestep.item()) * module.beta
 
             # Compute cosine similarities for transformer blocks
             cosine_similarities = []
@@ -438,7 +438,7 @@ class SortBlockHook(ModelHook):
 
             if cosine_similarities:
                 sorted_cos = sorted(cosine_similarities)
-                threshold = sorted_cos[int(len(module.transformer_blocks) * module.precentage)]
+                threshold = sorted_cos[int(len(module.transformer_blocks) * module.percentage)]
                 module.result_list = [1 if j <= threshold else 0 for j in cosine_similarities]
 
             # Compute cosine similarities for single transformer blocks
@@ -463,7 +463,7 @@ class SortBlockHook(ModelHook):
 
             if cosine_single_similarities:
                 sorted_cos = sorted(cosine_single_similarities)
-                threshold = sorted_cos[int(len(module.single_transformer_blocks) * module.precentage)]
+                threshold = sorted_cos[int(len(module.single_transformer_blocks) * module.percentage)]
                 module.result_single_list = [1 if j <= threshold else 0 for j in cosine_single_similarities]
 
         hidden_states = hidden_states[:, encoder_hidden_states.shape[1] :, ...]
