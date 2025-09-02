@@ -87,7 +87,7 @@ class UMT5LayerNorm(nn.Layer):
 
     def forward(self, hidden_states):
         # UMT5 uses a layer_norm which only scales and doesn't shift, which is also known as Root Mean
-        # Square Layer Normalization https://arxiv.org/abs/1910.07467 thus varience is calculated
+        # Square Layer Normalization https://arxiv.org/abs/1910.07467 thus variance is calculated
         # w/o mean and there is no bias. Additionally we want to make sure that the accumulation for
         # half-precision inputs is done in fp32
 
@@ -317,7 +317,7 @@ class UMT5Attention(nn.Layer):
             )
 
             if past_key_value is not None:
-                # save all key/value_states to cache to be re-used for fast auto-regressive generation
+                # save all key/value_states to cache to be reused for fast auto-regressive generation
                 cache_position = cache_position if not is_cross_attention else None
                 key_states, value_states = curr_past_key_value.update(
                     key_states, value_states, self.layer_idx, {"cache_position": cache_position}
@@ -950,7 +950,7 @@ class UMT5Stack(UMT5PreTrainedModel):
             dtype (`paddle.dtype`):
                 The dtype to use for the 4D attention mask.
             device (`paddle.device`):
-                The device to plcae the 4D attention mask on.
+                The device to place the 4D attention mask on.
             cache_position (`paddle.Tensor`):
                 Indices depicting the position of the input sequence tokens in the sequence.
             batch_size (`paddle.Tensor`):
