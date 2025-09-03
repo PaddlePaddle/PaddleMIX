@@ -30,6 +30,7 @@ from paddlenlp.transformers.linear_utils import Linear
 from paddlenlp.transformers.model_outputs import BaseModelOutputWithPast, ModelOutput
 from paddlenlp.transformers.model_utils import PretrainedModel
 from paddlenlp.transformers.qwen2.modeling import Qwen2MLP,Qwen2Attention
+from paddlenlp.transformers.qwen2.modeling import repeat_kv as qwen2repeat_kv
 
 
 from paddlemix.models.flash_attn_utils import has_flash_attn_func
@@ -344,7 +345,7 @@ def rotate_half(x):
     return paddle.concat([-x2, x1], axis=-1)  # shape is the same as x
 
 
-def apply_multimodal_rotary_pos_emb(q, k, cos, sin, mrope_section, unsqueeze_dim=1):
+def apply_multimodal_fuse_rotary_pos_emb(q, k, cos, sin, mrope_section,unsqueeze_dim=1):
     """Applies Rotary Position Embedding with Multimodal Sections to the query and key tensors (https://qwenlm.github.io/blog/qwen2-vl/).
 
     Explanation:
@@ -387,6 +388,69 @@ def apply_multimodal_rotary_pos_emb(q, k, cos, sin, mrope_section, unsqueeze_dim
         axis=unsqueeze_dim
     )
 
+    cos = cos.transpose([0,2,1,3])
+    sin = sin.transpose([0,2,1,3])
+
+    # if position_ids is None:
+    #     # Note: Only for Qwen2MoEForCausalLMPipe model pretraining
+    #     cos = cos[:, : q.shape[1], :, :]  # [bs, seq_len, 1, dim]
+    #     sin = sin[:, : q.shape[1], :, :]  # [bs, seq_len, 1, dim]
+    # else:
+    #     cos = cos.squeeze(axis=[0, 2])  # [seq_len, dim]
+    #     sin = sin.squeeze(axis=[0, 2])  # [seq_len, dim]
+    #     cos = cos[position_ids[0]].unsqueeze(2)  # [bs, seq_len, 1, dim]
+    #     sin = sin[position_ids[0]].unsqueeze(2)  # [bs, seq_len, 1, dim]]
+
+
+   
+    q_embed = (q * cos) + (rotate_half(q) * sin)
+    k_embed = (k * cos) + (rotate_half(k) * sin)
+ 
+    return q_embed, k_embed
+
+def apply_multimodal_rotary_pos_emb(q, k, cos, sin, mrope_section, unsqueeze_dim=1):
+    """Applies Rotary Position Embedding with Multimodal Sections to the query and key tensors (https://qwenlm.github.io/blog/qwen2-vl/).
+
+    Explanation:
+        Multimodal 3D rotary position embedding is an extension to 1D rotary position embedding. The input embedding
+        sequence contains vision (images / videos) embedding and text embedding or just contains text embedding. For
+        vision embedding part, we apply rotary position embedding on temporal, height and width dimension separately.
+        Here we split the channel dimension to 3 chunks for the temporal, height and width rotary position embedding.
+        For text embedding part, we just apply 1D rotary position embedding. The three rotary position index (temporal,
+        height and width) of text embedding is always the same, so the text embedding rotary position embedding has no
+        difference with modern LLMs.
+
+    Args:
+        q (`paddle.Tensor`): The query tensor.
+        k (`paddle.Tensor`): The key tensor.
+        cos (`paddle.Tensor`): The cosine part of the rotary embedding.
+        sin (`paddle.Tensor`): The sine part of the rotary embedding.
+        position_ids (`paddle.Tensor`):
+            The position indices of the tokens corresponding to the query and key tensors. For example, this can be
+            used to pass offsetted position ids when working with a KV-cache.
+        mrope_section(`List(int)`):
+            Multimodal rope section is for channel dimension of temporal, height and width in rope calculation.
+        unsqueeze_dim (`int`, *optional*, defaults to 1):
+            The 'unsqueeze_dim' argument specifies the dimension along which to unsqueeze cos[position_ids] and
+            sin[position_ids] so that they can be properly broadcasted to the dimensions of q and k. For example, note
+            that cos[position_ids] and sin[position_ids] have the shape [batch_size, seq_len, head_dim]. Then, if q and
+            k have the shape [batch_size, heads, seq_len, head_dim], then setting unsqueeze_dim=1 makes
+            cos[position_ids] and sin[position_ids] broadcastable to the shapes of q and k. Similarly, if q and k have
+            the shape [batch_size, seq_len, heads, head_dim], then set unsqueeze_dim=2.
+    Returns:
+        `tuple(paddle.Tensor)` comprising of the query and key tensors rotated using the Rotary Position Embedding.
+    """
+
+    # cos = cos[position_ids]
+    # sin = sin[position_ids]
+    mrope_section = mrope_section * 2
+    cos = paddle.concat(x=[m[i % 3] for i, m in enumerate(cos.split(mrope_section, axis=-1))], axis=-1).unsqueeze(
+        axis=unsqueeze_dim
+    )
+    sin = paddle.concat(x=[m[i % 3] for i, m in enumerate(sin.split(mrope_section, axis=-1))], axis=-1).unsqueeze(
+        axis=unsqueeze_dim
+    )
+   
     q_embed = (q * cos) + (rotate_half(q) * sin)
     k_embed = (k * cos) + (rotate_half(k) * sin)
     return q_embed, k_embed
@@ -851,6 +915,7 @@ class Qwen2_5_VLAttention(paddle.nn.Layer):
 
         target_query_shape = [0, 0, self.num_heads, self.head_dim]
         target_key_value_shape = [0, 0, self.num_key_value_heads, self.head_dim]
+    
         query_states = query_states.reshape(shape=target_query_shape)
         key_states = key_states.reshape(shape=target_key_value_shape)
         value_states = value_states.reshape(shape=target_key_value_shape)
@@ -859,13 +924,14 @@ class Qwen2_5_VLAttention(paddle.nn.Layer):
         query_states = query_states.transpose(new_perm)
         key_states = key_states.transpose(new_perm)
         value_states = value_states.transpose(new_perm)
-
+   
         kv_seq_len = key_states.shape[-2]  # q_len ######## [bs, num_head, seq_len, head_dim]      # qwen2是 [-3]
         if past_key_value is not None:
             kv_seq_len += cache_position[0] + 1
             # kv_seq_len += past_key_value[0].shape[-2] # qwen2是 [-3]
 
         cos, sin = position_embeddings
+
         query_states, key_states = apply_multimodal_rotary_pos_emb(
             query_states, key_states, cos, sin, self.rope_scaling["mrope_section"]
         )
@@ -874,10 +940,11 @@ class Qwen2_5_VLAttention(paddle.nn.Layer):
         if past_key_value is not None:
             # cache_kwargs = {"sin": sin, "cos": cos, "cache_position": cache_position}  # Specific to RoPE models
             # key_states, value_states = past_key_value.update(key_states, value_states, self.layer_idx, cache_kwargs)
+        
             key_states = paddle.concat([past_key_value[0], key_states], axis=2)  # qwen2是 axis=1, qwen2_vl是 axis=2
             value_states = paddle.concat([past_key_value[1], value_states], axis=2)  # qwen2是 axis=1
         past_key_value = (key_states, value_states) if use_cache else None
-
+   
         # repeat k/v heads if n_kv_heads < n_heads
         key_states = repeat_kv(key_states, self.num_key_value_groups)
         value_states = repeat_kv(value_states, self.num_key_value_groups)
@@ -906,6 +973,125 @@ class Qwen2_5_VLAttention(paddle.nn.Layer):
         if not output_attentions:
             attn_weights = None
         return attn_output, attn_weights, past_key_value
+
+
+class Qwen2_5_VLFuseAttention(Qwen2Attention):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.rope_scaling = self.config.rope_scaling
+
+    def forward(
+        self,
+        hidden_states: paddle.Tensor,
+        attention_mask: Optional[paddle.Tensor] = None,
+        position_ids: Optional[paddle.Tensor] = None,
+        past_key_value: Optional[Tuple[paddle.Tensor]] = None,  # Cache
+        output_attentions: bool = False,
+        use_cache: bool = False,  # default true
+        cache_position: Optional[paddle.Tensor] = None,
+        attn_mask_startend_row_indices: Optional[paddle.Tensor] = None,
+        position_embeddings: Optional[Tuple[paddle.Tensor, paddle.Tensor]] = None,  # necessary, but kept here for BC
+    ) -> Tuple[paddle.Tensor, Optional[paddle.Tensor], Optional[Tuple[paddle.Tensor]]]:
+        
+        if self.fuse_attention_qkv:
+            mix_layer = self.qkv_proj(hidden_states)
+            target_shape = [0, 0, self.num_key_value_heads, (self.num_key_value_groups + 2) * self.head_dim] #num_key_value_heads:4 num_key_value_groups:7
+            mix_layer = paddle.reshape_(mix_layer, target_shape)
+            query_states, key_states, value_states = paddle.split(
+                mix_layer,
+                num_or_sections=[self.num_key_value_groups * self.head_dim, self.head_dim, self.head_dim],
+                axis=-1,
+            )
+            if self.gqa_or_mqa:
+                query_states = paddle.reshape_(query_states, [0, 0, self.num_heads, self.head_dim])
+        else:
+            query_states = self.q_proj(hidden_states)
+            key_states = self.k_proj(hidden_states)
+            value_states = self.v_proj(hidden_states)
+
+            target_query_shape = [0, 0, self.num_heads, self.head_dim]
+            target_key_value_shape = [0, 0, self.num_key_value_heads, self.head_dim]
+            query_states = query_states.reshape(shape=target_query_shape)
+            key_states = key_states.reshape(shape=target_key_value_shape)
+            value_states = value_states.reshape(shape=target_key_value_shape)
+        
+
+        if position_ids is not None and not self.use_fused_rope:
+            kv_seq_len = position_ids.max().item() + 1
+        else:
+            kv_seq_len = key_states.shape[-3]
+            if past_key_value is not None:
+                kv_seq_len += past_key_value[0].shape[-3]
+      
+        if self.use_fused_rope: #TODO 待验证
+            assert past_key_value is None, "fuse rotary not support cache kv for now"
+            cos, sin = self.rotary_emb(value_states, seq_len=kv_seq_len)
+            query_states, key_states, _ = fused_rotary_position_embedding(
+                query_states,
+                key_states,
+                v=None,
+                sin=sin,
+                cos=cos,
+                position_ids=position_ids,
+                use_neox_rotary_style=False,
+            )
+        else:
+            cos, sin = position_embeddings
+            query_states, key_states = apply_multimodal_fuse_rotary_pos_emb(
+            query_states, key_states, cos, sin,self.rope_scaling["mrope_section"]
+            )
+
+        # [bs, seq_len, num_head, head_dim]
+        if past_key_value is not None:
+            key_states = paddle.concat([past_key_value[0], key_states], axis=1)
+            value_states = paddle.concat([past_key_value[1], value_states], axis=1)
+        past_key_value = (key_states, value_states) if use_cache else None
+
+        # TODO(wj-Mcat): use broadcast strategy when n_kv_heads = 1
+        # repeat k/v heads if n_kv_heads < n_heads
+        paddle_version = float(paddle.__version__[:3])
+        if not self.config.use_flash_attention or ((paddle_version != 0.0) and (paddle_version <= 2.6)):
+            key_states = qwen2repeat_kv(key_states, self.num_key_value_groups)
+            value_states = qwen2repeat_kv(value_states, self.num_key_value_groups)
+       
+        
+        outputs = self.attn_func(
+            query_states,
+            self.config,
+            key_states,
+            value_states,
+            attention_mask,
+            output_attentions,
+            attn_mask_startend_row_indices=attn_mask_startend_row_indices,
+            training=self.training,
+            sequence_parallel=self.sequence_parallel,
+        )
+
+        if output_attentions:
+            attn_output, attn_weights = outputs
+        else:
+            attn_output = outputs
+
+        # if sequence_parallel is true, out shape are [q_len / n, bs, num_head * head_dim]
+        # else their shape are [bs, q_len, num_head * head_dim], n is mp parallelism.
+        attn_output = self.o_proj(attn_output)
+     
+        if not output_attentions:
+            attn_weights = None
+
+        outputs = (attn_output,)
+
+        outputs += (attn_weights,)
+
+        if use_cache:
+            outputs += (past_key_value,)
+      
+        if type(outputs) is tuple and len(outputs) == 1:
+            outputs = outputs[0]
+
+        return outputs
+        
 
 
 class Qwen2_5_VLFlashAttention2(Qwen2_5_VLAttention):
@@ -944,6 +1130,7 @@ class Qwen2_5_VLFlashAttention2(Qwen2_5_VLAttention):
 
         target_query_shape = [0, 0, self.num_heads, self.head_dim]
         target_key_value_shape = [0, 0, self.num_key_value_heads, self.head_dim]
+
         query_states = query_states.reshape(shape=target_query_shape)
         key_states = key_states.reshape(shape=target_key_value_shape)
         value_states = value_states.reshape(shape=target_key_value_shape)
@@ -960,11 +1147,13 @@ class Qwen2_5_VLFlashAttention2(Qwen2_5_VLAttention):
 
         # Because the input can be padded, the absolute sequence length depends on the max position id.
         cos, sin = position_embeddings
+
         query_states, key_states = apply_multimodal_rotary_pos_emb(
             query_states, key_states, cos, sin, self.rope_scaling["mrope_section"]
         )
 
         if past_key_value is not None:
+
             key_states = paddle.concat([past_key_value[0], key_states], axis=2)  # qwen2是 axis=1, qwen2_vl是 axis=2
             value_states = paddle.concat([past_key_value[1], value_states], axis=2)  # qwen2是 axis=1
         past_key_value = (key_states, value_states) if use_cache else None
@@ -1344,8 +1533,12 @@ class Qwen2_5_VLDecoderLayer(nn.Layer):
                 f"Sliding Window Attention is enabled but not implemented for `{config.attn_implementation}`; "
                 "unexpected results may be encountered."
             )
-        # self.self_attn = QWEN2_5_VL_ATTENTION_CLASSES[config._attn_implementation](config, layer_idx)
-        self.self_attn = Qwen2Attention(config, layerwise_recompute=False)
+        
+        if config.fuse_attention_ffn:
+            self.self_attn = Qwen2_5_VLFuseAttention(config, layerwise_recompute=False)
+        else:
+            self.self_attn = QWEN2_5_VL_ATTENTION_CLASSES[config._attn_implementation](config, layer_idx)
+
         self.mlp = Qwen2MLP(config)
         self.input_layernorm = Qwen2RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.post_attention_layernorm = Qwen2RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
@@ -1386,6 +1579,7 @@ class Qwen2_5_VLDecoderLayer(nn.Layer):
         residual = hidden_states
 
         hidden_states = self.input_layernorm(hidden_states)
+
         # Self Attention
         hidden_states, self_attn_weights, present_key_value = self.self_attn(
             hidden_states=hidden_states,
@@ -1603,6 +1797,7 @@ class Qwen2_5_VLModel(Qwen2_5_VLPreTrainedModel):
         self.vocab_size = config.vocab_size
         self.hidden_size = config.hidden_size
         self.config = config
+
         # Recompute defaults to False and is controlled by Trainer
 
         if config.tensor_parallel_degree > 1 and config.vocab_size % config.tensor_parallel_degree == 0:
@@ -1715,7 +1910,7 @@ class Qwen2_5_VLModel(Qwen2_5_VLPreTrainedModel):
             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
         )
         use_cache = use_cache if use_cache is not None else self.config.use_cache
-
+    
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         if (input_ids is None) ^ (inputs_embeds is not None):
@@ -1780,7 +1975,7 @@ class Qwen2_5_VLModel(Qwen2_5_VLPreTrainedModel):
             if output_hidden_states:
                 all_hidden_states += (hidden_states,)
             past_key_value = past_key_values[idx] if past_key_values is not None else None
-
+           
             if self.enable_recompute and self.training:
                 layer_outputs = self.recompute_training_full(
                     decoder_layer,
@@ -2383,7 +2578,7 @@ class Qwen2_5_VLForConditionalGeneration(Qwen2_5_VLPreTrainedModel):
             attention_mask=attention_mask,
             past_key_values=past_key_values,
             inputs_embeds=inputs_embeds,
-            use_cache=use_cache,
+            use_cache=True,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
