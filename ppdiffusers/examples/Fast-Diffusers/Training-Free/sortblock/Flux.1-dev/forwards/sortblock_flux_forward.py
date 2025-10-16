@@ -135,7 +135,7 @@ def SortTaylor_forward(
         self.previous_single_block_residual = [None] * len(self.single_transformer_blocks)
         self.previous_encoder_block_residual = [None] * len(self.single_transformer_blocks)
         self.count = 0
-        self.precentage = 1
+        self.percentage = 1
         self.result_list = []
         self.result_single_list = []
 
@@ -290,7 +290,7 @@ def SortTaylor_forward(
     if self.count % self.step_Num == 1:
         coefficients = [5.67621e-14, -1.36659e-10, 1.16246e-7, -3.97725e-5, 0.00361, 0.56088]
         rescale_func = np.poly1d(coefficients)
-        self.precentage = rescale_func(timestep.item()) * self.beta
+        self.percentage = rescale_func(timestep.item()) * self.beta
         cosine_similarities = []
         cosine_single_similarities = []
         for i in range(len(self.transformer_blocks)):
@@ -305,7 +305,7 @@ def SortTaylor_forward(
             )
             cosine_similarities.append(cosine_similarity.mean().item())
         sorted_cos = sorted(cosine_similarities)
-        threshold = sorted_cos[int(len(self.transformer_blocks) * self.precentage)]
+        threshold = sorted_cos[int(len(self.transformer_blocks) * self.percentage)]
         self.result_list = []
         for j in cosine_similarities:
             if j <= threshold:
@@ -324,7 +324,7 @@ def SortTaylor_forward(
             )
             cosine_single_similarities.append(cosine_similarity.mean().item())
         sorted_cos = sorted(cosine_single_similarities)
-        threshold = sorted_cos[int(len(self.single_transformer_blocks) * self.precentage)]
+        threshold = sorted_cos[int(len(self.single_transformer_blocks) * self.percentage)]
         self.result_single_list = []
         for j in cosine_single_similarities:
             if j <= threshold:

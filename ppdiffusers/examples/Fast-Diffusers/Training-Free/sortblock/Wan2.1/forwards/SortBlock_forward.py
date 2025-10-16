@@ -82,7 +82,7 @@ def SortBlock_forward(
         self.current_single_block_residual = [None] * len(self.blocks)
         self.previous_single_block_residual = [None] * len(self.blocks)
         self.count = 0
-        self.precentage = 1
+        self.percentage = 1
         self.result_list = []
         self.result_single_list = []
     is_within_block_range = self.end <= timestep <= self.start
@@ -129,7 +129,7 @@ def SortBlock_forward(
     if self.count % self.step_Num == 1:
         coefficients = [-1.74367e-15, 1.20871e-11, -2.11429e-8, 1.49777e-5, -0.00453, 0.4971]
         rescale_func = np.poly1d(coefficients)
-        self.precentage = rescale_func(timestep.item()) * self.beta
+        self.percentage = rescale_func(timestep.item()) * self.beta
         cosine_single_similarities = []
         for i in range(len(self.blocks)):
             cosine_similarity = paddle.nn.functional.cosine_similarity(
@@ -143,7 +143,7 @@ def SortBlock_forward(
             )
             cosine_single_similarities.append(cosine_similarity.mean().item())
         sorted_cos = sorted(cosine_single_similarities)
-        threshold = sorted_cos[int(len(self.blocks) * self.precentage)]
+        threshold = sorted_cos[int(len(self.blocks) * self.percentage)]
         self.result_single_list = []
         for j in cosine_single_similarities:
             if j <= threshold:
