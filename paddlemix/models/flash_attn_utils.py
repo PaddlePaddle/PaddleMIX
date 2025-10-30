@@ -24,6 +24,8 @@ def is_flash_attn_available():
     try:
         import os
 
+        if "iluvatar_gpu" in paddle.get_device():
+            paddle.set_flags({"FLAGS_enable_ixattnbkd": True})
         if "npu" in paddle.get_device():  # NOTE: flash attn has not been tested yet
             for lib in os.listdir(os.getenv("CUSTOM_DEVICE_ROOT")):
                 if lib.endswith(".so"):
