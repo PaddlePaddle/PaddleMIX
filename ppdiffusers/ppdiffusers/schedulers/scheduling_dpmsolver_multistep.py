@@ -223,7 +223,7 @@ class DPMSolverMultistepScheduler(SchedulerMixin, ConfigMixin):
         """
         return self._step_index
 
-    def set_timesteps(self, num_inference_steps: int = None):
+    def set_timesteps(self, num_inference_steps: int = None, timesteps_list: List[int] = None):
         """
         Sets the discrete timesteps used for the diffusion chain (to be run before inference).
 
@@ -235,6 +235,7 @@ class DPMSolverMultistepScheduler(SchedulerMixin, ConfigMixin):
         """
         # Clipping the minimum of all lambda(t) for numerical stability.
         # This is critical for cosine (squaredcos_cap_v2) noise schedule.
+        # import ipdb; ipdb.set_trace()
         c = paddle.to_tensor(self.config.lambda_min_clipped)
         t = paddle.flip(self.lambda_t, [0])
         clipped_idx = paddle.searchsorted(t, c)
@@ -244,26 +245,29 @@ class DPMSolverMultistepScheduler(SchedulerMixin, ConfigMixin):
         last_timestep = ((self.config.num_train_timesteps - clipped_idx).numpy()).item()
 
         # "linspace", "leading", "trailing" corresponds to annotation of Table 2. of https://arxiv.org/abs/2305.08891
-        if self.config.timestep_spacing == "linspace":
-            timesteps = (
-                np.linspace(0, last_timestep - 1, num_inference_steps + 1).round()[::-1][:-1].copy().astype(np.int64)
-            )
-        elif self.config.timestep_spacing == "leading":
-            step_ratio = last_timestep // (num_inference_steps + 1)
-            # creates integer timesteps by multiplying by ratio
-            # casting to int to avoid issues when num_inference_step is power of 3
-            timesteps = (np.arange(0, num_inference_steps + 1) * step_ratio).round()[::-1][:-1].copy().astype(np.int64)
-            timesteps += self.config.steps_offset
-        elif self.config.timestep_spacing == "trailing":
-            step_ratio = self.config.num_train_timesteps / num_inference_steps
-            # creates integer timesteps by multiplying by ratio
-            # casting to int to avoid issues when num_inference_step is power of 3
-            timesteps = np.arange(last_timestep, 0, -step_ratio).round().copy().astype(np.int64)
-            timesteps -= 1
+        if timesteps_list is not None:
+            timesteps = np.array(timesteps_list, dtype=np.int64)
         else:
-            raise ValueError(
-                f"{self.config.timestep_spacing} is not supported. Please make sure to choose one of 'linspace', 'leading' or 'trailing'."
-            )
+            if self.config.timestep_spacing == "linspace":
+                timesteps = (
+                    np.linspace(0, last_timestep - 1, num_inference_steps + 1).round()[::-1][:-1].copy().astype(np.int64)
+                )
+            elif self.config.timestep_spacing == "leading":
+                step_ratio = last_timestep // (num_inference_steps + 1)
+                # creates integer timesteps by multiplying by ratio
+                # casting to int to avoid issues when num_inference_step is power of 3
+                timesteps = (np.arange(0, num_inference_steps + 1) * step_ratio).round()[::-1][:-1].copy().astype(np.int64)
+                timesteps += self.config.steps_offset
+            elif self.config.timestep_spacing == "trailing":
+                step_ratio = self.config.num_train_timesteps / num_inference_steps
+                # creates integer timesteps by multiplying by ratio
+                # casting to int to avoid issues when num_inference_step is power of 3
+                timesteps = np.arange(last_timestep, 0, -step_ratio).round().copy().astype(np.int64)
+                timesteps -= 1
+            else:
+                raise ValueError(
+                    f"{self.config.timestep_spacing} is not supported. Please make sure to choose one of 'linspace', 'leading' or 'trailing'."
+                )
 
         sigmas = np.array(((1 - self.alphas_cumprod) / self.alphas_cumprod) ** 0.5)
         log_sigmas = np.log(sigmas)
@@ -755,6 +759,7 @@ class DPMSolverMultistepScheduler(SchedulerMixin, ConfigMixin):
         lambda_s0 = paddle.log(alpha_s0) - paddle.log(sigma_s0)
         lambda_s1 = paddle.log(alpha_s1) - paddle.log(sigma_s1)
         lambda_s2 = paddle.log(alpha_s2) - paddle.log(sigma_s2)
+        # import ipdb; ipdb.set_trace()
 
         m0, m1, m2 = model_output_list[-1], model_output_list[-2], model_output_list[-3]
 
@@ -806,6 +811,7 @@ class DPMSolverMultistepScheduler(SchedulerMixin, ConfigMixin):
         sample: paddle.Tensor,
         generator=None,
         return_dict: bool = True,
+        order: int = None,
     ) -> Union[SchedulerOutput, Tuple]:
         """
         Predict the sample from the previous timestep by reversing the SDE. This function propagates the sample with
@@ -859,15 +865,23 @@ class DPMSolverMultistepScheduler(SchedulerMixin, ConfigMixin):
         else:
             noise = None
 
-        if self.config.solver_order == 1 or self.lower_order_nums < 1 or lower_order_final:
-            prev_sample = self.dpm_solver_first_order_update(model_output, sample=sample, noise=noise)
-        elif self.config.solver_order == 2 or self.lower_order_nums < 2 or lower_order_second:
-            prev_sample = self.multistep_dpm_solver_second_order_update(self.model_outputs, sample=sample, noise=noise)
+        if order is not None:
+            if order == 1:
+                prev_sample = self.dpm_solver_first_order_update(model_output, sample=sample, noise=noise)
+            elif order == 2:
+                prev_sample = self.multistep_dpm_solver_second_order_update(self.model_outputs, sample=sample, noise=noise)
+            elif order == 3:
+                prev_sample = self.multistep_dpm_solver_third_order_update(self.model_outputs, sample=sample)
         else:
-            prev_sample = self.multistep_dpm_solver_third_order_update(self.model_outputs, sample=sample)
+            if self.config.solver_order == 1 or self.lower_order_nums < 1 or lower_order_final:
+                prev_sample = self.dpm_solver_first_order_update(model_output, sample=sample, noise=noise)
+            elif self.config.solver_order == 2 or self.lower_order_nums < 2 or lower_order_second:
+                prev_sample = self.multistep_dpm_solver_second_order_update(self.model_outputs, sample=sample, noise=noise)
+            else:
+                prev_sample = self.multistep_dpm_solver_third_order_update(self.model_outputs, sample=sample)
 
-        if self.lower_order_nums < self.config.solver_order:
-            self.lower_order_nums += 1
+            if self.lower_order_nums < self.config.solver_order:
+                self.lower_order_nums += 1
 
         # upon completion increase step index by one
         self._step_index += 1
