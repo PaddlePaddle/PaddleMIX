@@ -95,10 +95,10 @@ def main(args):
             if i > 10:
                 total += time.time() - start
         print("s/it: ", total / 10)
-        print(f"GPU memory_allocated: {paddle.device.cuda.memory_allocated() / 1024 ** 3:.2f} GB")
-        print(f"GPU max_memory_allocated: {paddle.device.cuda.max_memory_allocated() / 1024 ** 3:.2f} GB")
-        print(f"GPU memory_reserved: {paddle.device.cuda.memory_reserved() / 1024 ** 3:.2f} GB")
-        print(f"GPU max_memory_reserved: {paddle.device.cuda.max_memory_reserved() / 1024 ** 3:.2f} GB")
+        print(f"GPU memory_allocated: {paddle.device.memory_allocated() / 1024 ** 3:.2f} GB")
+        print(f"GPU max_memory_allocated: {paddle.device.max_memory_allocated() / 1024 ** 3:.2f} GB")
+        print(f"GPU memory_reserved: {paddle.device.memory_reserved() / 1024 ** 3:.2f} GB")
+        print(f"GPU max_memory_reserved: {paddle.device.max_memory_reserved() / 1024 ** 3:.2f} GB")
         print("output_text:\n", output_text)
 
     else:
@@ -110,10 +110,10 @@ def main(args):
         output_text = processor.batch_decode(
             generated_ids[0], skip_special_tokens=True, clean_up_tokenization_spaces=False
         )
-        print(f"GPU memory_allocated: {paddle.device.cuda.memory_allocated() / 1024 ** 3:.2f} GB")
-        print(f"GPU max_memory_allocated: {paddle.device.cuda.max_memory_allocated() / 1024 ** 3:.2f} GB")
-        print(f"GPU memory_reserved: {paddle.device.cuda.memory_reserved() / 1024 ** 3:.2f} GB")
-        print(f"GPU max_memory_reserved: {paddle.device.cuda.max_memory_reserved() / 1024 ** 3:.2f} GB")
+        print(f"GPU memory_allocated: {paddle.device.memory_allocated() / 1024 ** 3:.2f} GB")
+        print(f"GPU max_memory_allocated: {paddle.device.max_memory_allocated() / 1024 ** 3:.2f} GB")
+        print(f"GPU memory_reserved: {paddle.device.memory_reserved() / 1024 ** 3:.2f} GB")
+        print(f"GPU max_memory_reserved: {paddle.device.max_memory_reserved() / 1024 ** 3:.2f} GB")
         print("output_text:\n", output_text)
 
 
