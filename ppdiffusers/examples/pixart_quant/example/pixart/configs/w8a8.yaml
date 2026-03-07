@@ -1,0 +1,25 @@
+model:
+  model_id: pixart_sigma
+remain_fp_regex: adaln_single|caption_projection|proj_out
+calib_data:
+  save_path: ./calib_data.pth
+#quarot:
+  #layer_name_regex: ff.net|to_v|to_k|to_q
+# smooth_quant:
+#   alpha: 0.99
+#   layer_name_regex: ff\.net|to_v|to_k|to_q
+# viditq:
+#   alpha: 0.99
+#   layer_name_regex: attn|ff
+weight:
+  n_bits: 8
+  sym: true
+act:
+  n_bits: 8
+  sym: true
+#mixed_precision:  # the unmentioned layers are remained the main bitwidth (n_bits[i_bitwidth])
+  #weight:
+    #layer_name_regex: ['','to_v|to_k|to_q|ff.net.2','']  # [FP, [n_bits]]
+  #act:
+    #layer_name_regex: ['','to_v|to_k|to_q|ff.net.2','']
+
