@@ -456,7 +456,7 @@ def convert_flux_transformer_checkpoint_to_diffusers(checkpoint, **kwargs):
             f"double_blocks.{i}.txt_attn.proj.bias"
         )
 
-    # single transfomer blocks
+    # single transformer blocks
     for i in range(num_single_layers):
         block_prefix = f"single_transformer_blocks.{i}."
         # norm.linear  <- single_blocks.0.modulation.lin

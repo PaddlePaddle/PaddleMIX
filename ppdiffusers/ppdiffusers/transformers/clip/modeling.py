@@ -307,7 +307,7 @@ class CLIPAttention(nn.Layer):
         attn_weights = F.softmax(attn_weights, axis=-1)
 
         if output_attentions:
-            # this operation is a bit akward, but it's required to
+            # this operation is a bit awkward, but it's required to
             # make sure that attn_weights keeps its gradient.
             # In order to do so, attn_weights have to reshaped
             # twice and have to be reused in the following

@@ -67,7 +67,7 @@ def calculate_psnr(videos1, videos2):
         "value": psnr,
         "value_std": psnr_std,
         "video_setting": video1.shape,
-        "video_setting_name": "time, channel, heigth, width",
+        "video_setting_name": "time, channel, height, width",
     }
 
     return result
