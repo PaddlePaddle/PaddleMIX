@@ -256,6 +256,9 @@ sh check_env.sh
       <td>
         <b>多模态大一统</b>
       </td>
+      <td>
+        <b>多模态数据</b>
+      </td>
     </tr>
     <tr valign="top">
       <td>
@@ -351,6 +354,24 @@ sh check_env.sh
           <li><a href="paddlemix/examples/janus">Janus</a></li>
           <li><a href="paddlemix/examples/showo">Showo</a></li>
           <li><a href="paddlemix/examples/emu3">Emu3</a></li>
+        </ul>
+      </td>
+      <td>
+        <ul>
+        </ul>
+          <li><b>数据处理工具箱</b></li>
+        <ul>
+          <li><a href="./paddlemix/datacopilot">DataCopilot</a></li>
+        </ul>
+        </ul>
+          <li><b>数据分析模型</b></li>
+        <ul>
+          <li><a href="./paddlemix/datacopilot/example/pp_inscaptagger/">PP-InsCapTagger</a></li>
+        </ul>
+        </ul>
+          <li><b>数据生成方案</b></li>
+        <ul>
+          <li><a href="./paddlemix/datacopilot/example/">PP-InfinityDocData</a></li>
         </ul>
       </td>
     </tr>
