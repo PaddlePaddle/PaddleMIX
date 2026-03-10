@@ -106,6 +106,9 @@ class DiTPipeline(DiffusionPipeline):
         num_inference_steps: int = 50,
         output_type: Optional[str] = "pil",
         return_dict: bool = True,
+        order_list: Optional[List[int]] = None,
+        timesteps_list: Optional[List[int]] = None,
+        fixed_noise: Optional[paddle.Tensor] = None,
     ) -> Union[ImagePipelineOutput, Tuple]:
         r"""
         The call function to the pipeline for generation.
@@ -158,12 +161,15 @@ class DiTPipeline(DiffusionPipeline):
         batch_size = len(class_labels)
         latent_size = self.transformer.config.sample_size
         latent_channels = self.transformer.config.in_channels
-
-        latents = randn_tensor(
-            shape=(batch_size, latent_channels, latent_size, latent_size),
-            generator=generator,
-            dtype=self.transformer.dtype,
-        )
+        # import ipdb; ipdb.set_trace()
+        if fixed_noise is not None:
+            latents = fixed_noise
+        else:
+            latents = randn_tensor(
+                shape=(batch_size, latent_channels, latent_size, latent_size),
+                generator=generator,
+                dtype=self.transformer.dtype,
+            )
         latent_model_input = paddle.concat([latents] * 2) if guidance_scale > 1 else latents
 
         class_labels = paddle.to_tensor(class_labels).reshape(
@@ -175,7 +181,12 @@ class DiTPipeline(DiffusionPipeline):
         class_labels_input = paddle.concat([class_labels, class_null], 0) if guidance_scale > 1 else class_labels
 
         # set step values
-        self.scheduler.set_timesteps(num_inference_steps)
+        if timesteps_list is not None:
+            self.scheduler.set_timesteps(num_inference_steps, timesteps_list=timesteps_list)
+        else:
+            self.scheduler.set_timesteps(num_inference_steps)
+        # import ipdb; ipdb.set_trace()
+        orderindex = 0
         for t in self.progress_bar(self.scheduler.timesteps):
             if guidance_scale > 1:
                 half = latent_model_input[: len(latent_model_input) // 2]
@@ -225,7 +236,11 @@ class DiTPipeline(DiffusionPipeline):
                 model_output = noise_pred
 
             # compute previous image: x_t -> x_t-1
-            latent_model_input = self.scheduler.step(model_output, t, latent_model_input).prev_sample
+            if order_list is not None:
+                latent_model_input = self.scheduler.step(model_output, t, latent_model_input, order=order_list[orderindex]).prev_sample
+                orderindex = orderindex + 1
+            else:
+                latent_model_input = self.scheduler.step(model_output, t, latent_model_input).prev_sample
 
         if guidance_scale > 1:
             latents, _ = latent_model_input.chunk(2, axis=0)
